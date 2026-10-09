@@ -49,7 +49,7 @@ export class ImpersonationController {
    * (`consent_required`, `consent_read_only`, `not_allowed`, …).
    */
   @Post('tenants/:tenantId/users/:userId/impersonate')
-  @UseGuards(AuthGuard, new PermissionsGuard(['user.impersonate']))
+  @UseGuards(AuthGuard, new PermissionsGuard(['platform.impersonate']))
   async impersonateResellerUser(
     @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
     @Param('userId', new ParseUUIDPipe()) userId: string,

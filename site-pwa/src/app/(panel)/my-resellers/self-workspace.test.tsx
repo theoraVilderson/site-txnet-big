@@ -43,7 +43,7 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: () => ({ me
 vi.mock("../not-found", () => ({ default: () => <p>not-found</p> }));
 vi.mock("@/context/LocaleContext", () => ({ useLocale: () => ({ t: (_ns: string, key: string) => key }) }));
 
-const PLATFORM = { userId: "u-staff", tenant: { id: "t-platform", type: "platform_owner", isOwner: true }, permissions: ["tenant.manage"] };
+const PLATFORM = { userId: "u-staff", tenant: { id: "t-platform", type: "platform_owner", isOwner: true }, permissions: ["platform.tenant.manage"] };
 /** The owner on their reseller's domain, after the handoff: the platform's tenant, the door's `here`. */
 const ARIAN_OWNER = { userId: "u-ali", tenant: { id: "t-platform", type: "platform_owner", isOwner: false }, permissions: [] };
 const OWNS_ARIAN_HERE = [{ id: "r-1", slug: "arian", here: true, hasPanel: true, live: true }];
@@ -168,15 +168,19 @@ describe("PlatformOnlyWorkspace (/my-resellers/:id on a reseller's domain)", () 
 
 describe("the menu's users entry", () => {
   const usersHref = (type: "platform_owner" | "reseller", id: string) =>
-    visibleMenu(PANEL_MENU, ["tenant.manage"], type, false, false, id)
+    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["tenant.manage"], type, false, false, id)
       .flatMap((e) => (isMenuGroup(e) ? e.children : [e]))
       .find((l) => l.id === "users")?.href;
 
   // The session's own users are `/users` on either host (2026-10-09); the
   // workspace's `/reseller/users` is the reseller menu's, not this entry's.
-  it("opens /users for the session's own users on either host", () => {
-    expect(usersHref("reseller", "r-1")).toBe("/users");
+  it("opens /users for the session's own users on the platform", () => {
     expect(usersHref("platform_owner", "t-platform")).toBe("/users");
+  });
+
+  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
+  it.skip("AC-1-e2: opens /users for a reseller seat's own users", () => {
+    expect(usersHref("reseller", "r-1")).toBe("/users");
   });
 
   it("places /users/:id in the breadcrumb under it", () => {

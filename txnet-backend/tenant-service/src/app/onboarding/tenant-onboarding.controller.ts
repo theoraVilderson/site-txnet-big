@@ -16,7 +16,7 @@ const STATUS: Record<OnboardingRejection, 403 | 404 | 409> = {
 /**
  * The configuration console's checklist (F-018-l): `GET /api/tenants/:id/onboarding`.
  *
- * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`
+ * No `PlatformPermissionGuard`: the reseller's owner holds no platform key
  * and is let in by `ResellerAccess`, as its staff and the platform owner's are.
  * A `read`, so a suspended reseller still sees what it would have to do.
  */

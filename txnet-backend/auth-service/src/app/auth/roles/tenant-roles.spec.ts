@@ -20,7 +20,7 @@ import { TenantRolesRefused, TenantRolesService } from './tenant-roles.service';
 describe('TenantRolesService', () => {
   const reseller = 'aaaaaaaa-0000-4000-8000-000000000001';
   const owner = { userId: 'u-owner', tenantId: 'platform', permissions: ['self.read'] };
-  const member = { userId: 'u-member', tenantId: reseller, permissions: ['tenant.manage', 'support.agent'] };
+  const member = { userId: 'u-member', tenantId: reseller, permissions: ['platform.tenant.manage', 'support.agent'] };
 
   const keys = (...k: string[]) => k.map((key) => ({ permission: { key } }));
   const TEMPLATES = [
@@ -104,7 +104,7 @@ describe('TenantRolesService', () => {
       expect(grantable).toEqual([...ceiling].sort());
       // No template is granted the reseller keys, and they are grantable anyway.
       expect(grantable).toEqual(expect.arrayContaining(['domain.manage', 'theme.manage', 'staff.manage', 'role.manage']));
-      expect(grantable).not.toContain('tenant.manage');
+      expect(grantable).not.toContain('platform.tenant.manage');
       expect(grantable).not.toContain('*');
     });
 
@@ -129,7 +129,7 @@ describe('TenantRolesService', () => {
 
     it('refuses an owner who creates a role with a key past the ceiling', async () => {
       const { service } = build({ as: 'owner' });
-      await expect(service.create(owner, reseller, { name: 'Boss', permissions: ['tenant.manage'] })).rejects.toBeInstanceOf(
+      await expect(service.create(owner, reseller, { name: 'Boss', permissions: ['platform.tenant.manage'] })).rejects.toBeInstanceOf(
         ForbiddenException,
       );
     });
@@ -188,7 +188,7 @@ describe('TenantRolesService', () => {
     });
 
     it('refuses a member with no authority over a peer who holds as much', async () => {
-      const peer = { id: 'u-peer', roleId: 'role-desk', role: { name: 'Desk', rolePermissions: keys('tenant.manage', 'support.agent') } };
+      const peer = { id: 'u-peer', roleId: 'role-desk', role: { name: 'Desk', rolePermissions: keys('platform.tenant.manage', 'support.agent') } };
       const { service, order } = build({ as: 'member', target: peer });
       await expect(service.assign(member, reseller, 'u-peer', 'role-desk', '10.0.0.1')).rejects.toBeInstanceOf(TenantRolesRefused);
       expect(order).not.toContain('update');

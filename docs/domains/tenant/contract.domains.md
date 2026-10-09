@@ -17,7 +17,7 @@ the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
 
 | Route | Who | Answer |
 |---|---|---|
-| `POST /api/tenants/:id/domains` `{domainValue, purpose?}` | the reseller's owner, a member with `domain.manage` (AC-1-e), or platform staff with `tenant.manage` | `201` the domain, `pending`, with its TXT record and CNAME target |
+| `POST /api/tenants/:id/domains` `{domainValue, purpose?}` | the reseller's owner, a member with `domain.manage` (AC-1-e), or platform staff with `platform.tenant.manage` | `201` the domain, `pending`, with its TXT record and CNAME target |
 | `GET /api/tenants/:id/domains` | same | the reseller's custom domains, each with its last check |
 | `POST /api/tenants/:id/domains/:domainId/check` | same | `pending` / `failed` -> `verifying`; any other status is returned as is |
 | `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, edgeRegistered, edgeIssued, edgeWaiting, edgeFailed, edgeRemoved, errors}` |

@@ -17,7 +17,7 @@ rows. Rendering it: the panel is F-066-v, the landing site F-040.
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/branding` | the reseller's owner, a member with `theme.manage` (AC-1-e), or platform staff with `tenant.manage` | the branding view |
+| `GET /api/tenants/:id/branding` | the reseller's owner, a member with `theme.manage` (AC-1-e), or platform staff with `platform.tenant.manage` | the branding view |
 | `PUT /api/tenants/:id/branding` | same, `staffWrite` | the text, **whole**: a field left out is cleared; the images are untouched |
 | `PUT /api/tenants/:id/branding/assets/:slot` | same | multipart, one field `file`; stores the image and points the slot at it |
 | `DELETE /api/tenants/:id/branding/assets/:slot` | same | clears the slot, then deletes the file; repeats safely |

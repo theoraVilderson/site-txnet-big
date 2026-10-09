@@ -5,17 +5,17 @@ import { canPinRates, canSetPlatformCurrency } from "./settings";
 const me = (type: string, permissions: string[]) => ({ tenant: { type }, permissions }) as unknown as Me;
 
 describe("canSetPlatformCurrency", () => {
-  it("admits the platform's staff holding tenant.manage", () => {
-    expect(canSetPlatformCurrency(me("platform_owner", ["tenant.manage"]))).toBe(true);
+  it("admits the platform's staff holding settings.manage (AC-1-e)", () => {
+    expect(canSetPlatformCurrency(me("platform_owner", ["settings.manage"]))).toBe(true);
   });
 
   it("admits the platform's SuperAdmin, whose one key is *", () => {
     expect(canSetPlatformCurrency(me("platform_owner", ["*"]))).toBe(true);
   });
 
-  it("refuses a reseller even with * or tenant.manage — it can grant itself either", () => {
+  it("refuses a reseller even with * or settings.manage — its own settings are not the platform's", () => {
     expect(canSetPlatformCurrency(me("reseller", ["*"]))).toBe(false);
-    expect(canSetPlatformCurrency(me("reseller", ["tenant.manage"]))).toBe(false);
+    expect(canSetPlatformCurrency(me("reseller", ["settings.manage"]))).toBe(false);
   });
 
   it("refuses platform staff without the key, and no session", () => {
@@ -32,7 +32,7 @@ describe("canPinRates", () => {
   });
 
   it("refuses without the key, and no session", () => {
-    expect(canPinRates(me("platform_owner", ["tenant.manage"]))).toBe(false);
+    expect(canPinRates(me("platform_owner", ["settings.manage"]))).toBe(false);
     expect(canPinRates(null)).toBe(false);
   });
 });

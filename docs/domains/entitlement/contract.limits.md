@@ -83,7 +83,7 @@ tenant, counts nothing.
 
 `GrantLimitsController` / `GrantLimitsService` (`billing-service/.../payment/gift/`),
 on the users-admin door, `ResellerAccess.runIncludingPlatform`: the
-platform's staff (`tenant.manage`) on any tenant and on the platform's own; a
+platform's staff (`platform.tenant.manage`, AC-1-d) on any tenant and on the platform's own; a
 reseller's owner and its staff on theirs. The tenant is the path's, never the
 caller's session.
 

@@ -30,8 +30,8 @@ describe('TenantStaffService', () => {
   const LATER = new Date('2026-10-19T10:00:00Z');
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const platformStaff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
-  const member = { userId: MEMBER, tenantId: RESELLER, permissions: ['tenant.manage'] };
+  const platformStaff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
+  const member = { userId: MEMBER, tenantId: RESELLER, permissions: ['platform.tenant.manage'] };
 
   type Row = {
     id: string;

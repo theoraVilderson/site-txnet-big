@@ -19,7 +19,7 @@ wins for a user is identity's:
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/timezone` | a reseller: its owner, a staff member with `settings.manage` (AC-1-e), or platform staff with `tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `settings.manage` | `{timezone}` — an IANA name |
+| `GET /api/tenants/:id/timezone` | a reseller: its owner, a staff member with `settings.manage` (AC-1-e), or platform staff with `platform.tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `settings.manage` | `{timezone}` — an IANA name |
 | `PUT /api/tenants/:id/timezone` | same, `staffWrite` | `{zone}` (strict, an IANA name) → `{timezone}`, the canonical form |
 
 Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`

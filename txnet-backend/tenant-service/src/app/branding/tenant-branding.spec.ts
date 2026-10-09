@@ -23,7 +23,7 @@ describe('TenantBrandingService', () => {
   const STAFF = '55555555-5555-5555-5555-555555555555';
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
   const stranger = { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] };
 
   const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);

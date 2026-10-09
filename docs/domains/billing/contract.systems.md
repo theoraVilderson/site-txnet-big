@@ -21,7 +21,7 @@ a hold's release goes to `metering-service` through the outbox.
 
 | Door | Boundary |
 |---|---|
-| `PanelPermissionGuard`: `panel.manage` (migration `20260924000100`; granted to no role, so SuperAdmin via `*`) | `panelScopeOf` (`panel-scope.ts`): the caller's tenant is `platform_owner`, else 403 `not_platform_owner` |
+| `PanelPermissionGuard`: `platform.node.manage` (was `panel.manage`; migration `20261009000400`, AC-1-d; granted to no role, so SuperAdmin via `*`) | `panelScopeOf` (`panel-scope.ts`): the caller's tenant is `platform_owner`, else 403 `not_platform_owner` |
 
 Every route opens with `panelScopeOf`, which answers the `where` of every read
 and the ownership of every write: for the owner, the **platform's** panels

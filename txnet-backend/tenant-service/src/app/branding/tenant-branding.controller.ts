@@ -66,7 +66,7 @@ const STATUS: Record<BrandingRejection, 403 | 404 | 409 | 413 | 415> = {
  * image (multipart, field `file`), `PUT .../line-name-template` and its
  * `POST .../preview` for the default name of a served config line (F-307-j).
  *
- * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
+ * No `PlatformPermissionGuard`: the reseller's owner holds no platform key,
  * and is let in by `ResellerAccess` (F-061-h), as the platform owner's staff are.
  */
 @Controller('tenants/:id/branding')

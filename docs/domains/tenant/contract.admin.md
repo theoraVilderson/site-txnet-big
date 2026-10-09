@@ -20,7 +20,7 @@ F-018-y, ADR-0058).
 
 ## Routes
 
-All three need `tenant.manage` (`TenantPermissionGuard`, on the identity
+Creating needs `platform.tenant.create`, listing and reading `platform.tenant.manage` (`PlatformPermissionGuard`, AC-1-d, ADR-0135, on the identity
 `forward-auth` forwarded), and the service admits only a caller whose own
 tenant is the `platform_owner`. `SuperAdmin` holds the key through `*`; no
 other role is granted it (migration `20260917001100_tenant_create`), because
@@ -88,7 +88,7 @@ Refusals: `not_platform_user` 403; `package_not_found` 404; `buyer_inactive`,
 
 Code: `tenant-service/src/app/packages/` (moved out of `auth-service` with
 F-018-u, ADR-0058). The caller is the identity `forward-auth` forwarded, holding
-`tenant.manage`, and the owner check is the service's own, as above.
+`platform.plan.assign` (AC-1-d), and the owner check is the service's own, as above.
 `tenant_feature_package` has no `tenantId` and no RLS, so the app pool serves
 it; the audit row carries the platform owner's tenant.
 

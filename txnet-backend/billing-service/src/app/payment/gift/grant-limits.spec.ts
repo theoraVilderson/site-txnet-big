@@ -29,7 +29,7 @@ const CUSTOMER = '66666666-6666-4666-8666-666666666666';
 const LATE_CUSTOMER = '77777777-7777-4777-8777-777777777777';
 
 const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.7' };
-const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['tenant.manage'], ip: '203.0.113.8' };
+const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'], ip: '203.0.113.8' };
 const stranger = { userId: CUSTOMER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.9' };
 
 function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string | null }; open?: number; ceiling?: number | null } = {}) {

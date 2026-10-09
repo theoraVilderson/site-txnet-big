@@ -28,7 +28,7 @@ const STATUS: Record<OperatingCurrencyRejection, 403 | 404 | 409 | 503> = {
  * `GET` / `PUT /api/tenants/:id/operating-currency`. `:id` is a reseller, or
  * the platform owner's own tenant for its staff.
  *
- * No `TenantPermissionGuard`: a reseller's owner holds no `tenant.manage`; the
+ * No `PlatformPermissionGuard`: a reseller's owner holds no platform key; the
  * service admits (`ResellerAccess`, or the platform's own staff).
  */
 @Controller('tenants/:id/operating-currency')

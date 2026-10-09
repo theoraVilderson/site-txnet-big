@@ -76,6 +76,11 @@ describe("the registry (D5, D6)", () => {
     expect(seen({ held: [], tenantType: "platform_owner", menuIds: new Set(["dashboard", "support"]) })).toEqual([]);
     const platformMenu = new Set(["manual-payments", "support-inbox", "users", "systems"]);
     expect(seen({ held: ["*"], tenantType: "platform_owner", menuIds: platformMenu })).toEqual(["revenue", "manual-payments", "support-queue", "users", "systems"]);
+    expect(seen({ held: ["platform.report.read"], tenantType: "platform_owner", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
+  });
+
+  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
+  it.skip("AC-1-e2: shows a reseller's staff the revenue widget by `report.read`", () => {
     expect(seen({ held: ["tenant.manage"], tenantType: "reseller", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
   });
 });

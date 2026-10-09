@@ -17,7 +17,7 @@ billing's: [billing/contract.currency-change.md](../billing/contract.currency-ch
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/operating-currency` | a reseller: its owner, a staff member with `settings.manage` (AC-1-e), or platform staff with `tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `settings.manage` | `{code, choices: [{code, name, symbol, decimalPlaces}]}` |
+| `GET /api/tenants/:id/operating-currency` | a reseller: its owner, a staff member with `settings.manage` (AC-1-e), or platform staff with `platform.tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `settings.manage` | `{code, choices: [{code, name, symbol, decimalPlaces}]}` |
 | `PUT /api/tenants/:id/operating-currency` | same, `staffWrite` | `{code}` (`^[A-Z]{3}$`, strict) → `{code, choices, conversion}`; `conversion` is `{changeId, fromCode, rate, summary}` (what was converted, by kind), `null` when the code was already the tenant's |
 
 Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`

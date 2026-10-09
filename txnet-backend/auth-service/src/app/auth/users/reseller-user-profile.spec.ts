@@ -11,7 +11,7 @@ import { ResellerUsersRefused, ResellerUsersService } from './reseller-users.ser
  * one audit row with what it was and what it became; no change writes nothing.
  */
 describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
-  const actor = { userId: 'u-admin', tenantId: 'platform', permissions: ['tenant.manage'] };
+  const actor = { userId: 'u-admin', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
   const reseller = 'aaaaaaaa-0000-4000-8000-000000000001';
 
   const aUser = (over: Partial<Record<string, unknown>> = {}) => ({
@@ -140,7 +140,7 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
 
     const peer = build({
       as: 'member',
-      user: aUser({ role: { id: 'r', name: 'admin', rolePermissions: [{ permission: { key: 'tenant.manage' } }] } }),
+      user: aUser({ role: { id: 'r', name: 'admin', rolePermissions: [{ permission: { key: 'platform.tenant.manage' } }] } }),
     });
     expect(await refusal(peer.service.editProfile(actor, reseller, 'u-1', 'ip', { fullName: 'X Y' }))).toBe('no_authority');
     expect(peer.adminAuditLog.create).not.toHaveBeenCalled();

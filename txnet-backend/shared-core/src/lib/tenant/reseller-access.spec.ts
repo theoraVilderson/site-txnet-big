@@ -33,7 +33,7 @@ describe('ResellerAccess', () => {
   const LONG_AGO = new Date('2026-09-01T10:00:00Z');
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
 
   /** A member of the reseller: their session is the reseller's, unlike the owner's. */
   type Seat = { tenantId: string; userId: string; joinedAt: Date | null; accessExpiresAt: Date | null; revokedAt: Date | null };
@@ -103,7 +103,7 @@ describe('ResellerAccess', () => {
 
   it('never admits by the ambient tenant: being in the reseller is not owning it', async () => {
     const access = build();
-    const insider = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['*', 'tenant.manage'] };
+    const insider = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['*', 'platform.tenant.manage'] };
     await expect(access.admit(insider, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
 
@@ -178,7 +178,7 @@ describe('ResellerAccess', () => {
       { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] },
       owner,
       { userId: CUSTOMER, tenantId: PLATFORM, permissions: ['user.read'] },
-      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] },
+      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['platform.tenant.manage'] },
     ]) {
       await expect(build('active', [seat()]).admitIncludingPlatform(caller, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     }
@@ -197,6 +197,11 @@ describe('ResellerAccess', () => {
 
   it("admits the platform's own tenant to its staff on a figures route, and a reseller exactly as `admit` does — no consent (UX-1-r2)", async () => {
     const access = build();
+    // A figures route asks the report key (AC-1-d): `platform.tenant.manage` alone is refused there.
+    await expect(access.admitFiguresIncludingPlatform(staff, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    const staff_ = staff;
+    {
+    const staff = { ...staff_, permissions: ['platform.report.read'] };
     await expect(access.admitFiguresIncludingPlatform(staff, PLATFORM, 'read', T0)).resolves.toEqual({
       id: PLATFORM,
       slug: 'platform_owner',
@@ -207,7 +212,7 @@ describe('ResellerAccess', () => {
     for (const caller of [
       { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] },
       owner,
-      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] },
+      { userId: CUSTOMER, tenantId: RESELLER, permissions: ['platform.tenant.manage'] },
     ]) {
       await expect(build('active', [seat()]).admitFiguresIncludingPlatform(caller, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     }
@@ -217,6 +222,7 @@ describe('ResellerAccess', () => {
     await expect(build('suspended').admitFiguresIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
     // The work runs in the admitted tenant's scope.
     await expect(access.runFiguresIncludingPlatform(staff, PLATFORM, 'read', async () => TenantContext.current().id, T0)).resolves.toBe(PLATFORM);
+    }
   });
 
   it("admits platform staff to a reseller's people only under its live consent; `read` refuses writes (F-117-b, ADR-0104 (4))", async () => {

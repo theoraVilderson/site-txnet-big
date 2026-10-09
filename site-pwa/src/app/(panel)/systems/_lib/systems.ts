@@ -22,7 +22,7 @@ export const SYSTEMS_KEYS = FrontendI18nKeys.common.systems;
 const K = SYSTEMS_KEYS;
 
 /** billing's `PANEL_MANAGE` — the menu entry needs it (F-027-ar). */
-export const PANEL_MANAGE = "panel.manage";
+export const PANEL_MANAGE = "platform.node.manage";
 
 /** gateway-service's `TENANT_CHANNEL_PERMISSION`: the `tenant:` channel needs it. */
 export const REALTIME_TENANT_READ = "realtime.tenant.read";

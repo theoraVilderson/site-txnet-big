@@ -21,7 +21,7 @@ import { Button, useConfirm } from "../../../_components/kit";
  * wholesale VPN rate. Create and edit are one sheet; withdraw / offer again is
  * `isActive`; "apply" forces the package's features on every subscriber now.
  *
- * Who may see it is tenant-service's to decide (`tenant.manage` + the platform
+ * Who may see it is tenant-service's to decide (`platform.plan.assign` + the platform
  * owner); the check here only spares a reseller who typed the path.
  */
 export function PackagesView() {

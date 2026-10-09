@@ -18,7 +18,7 @@ describe("impersonating a reseller's user", () => {
   const TARGET = 'user-9';
   const REASON = 'customer reports a failed top-up, ticket 4417';
   const now = new Date('2026-10-04T10:00:00Z');
-  const actor = { userId: STAFF, tenantId: 'platform', permissions: ['tenant.manage', 'user.impersonate'] };
+  const actor = { userId: STAFF, tenantId: 'platform', permissions: ['platform.tenant.manage', 'user.impersonate'] };
 
   const build = (support: { tier: 'consent' | 'emergency'; consentId?: string; entryId?: string; endsAt: Date } | Error) => {
     const tx = {
@@ -40,6 +40,9 @@ describe("impersonating a reseller's user", () => {
     const tokens = { signImpersonatedToken: vi.fn(() => 'impersonated-token') };
     const access = {
       for() {
+        return this;
+      },
+      asStaff() {
         return this;
       },
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: string, capability: string, work: (r: unknown) => Promise<unknown>) => {

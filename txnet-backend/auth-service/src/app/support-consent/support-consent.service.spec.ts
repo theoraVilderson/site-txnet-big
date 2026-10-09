@@ -15,7 +15,7 @@ describe('SupportConsentService', () => {
   const now = new Date('2026-10-04T10:00:00Z');
   const hour = 3600_000;
   const owner = { userId: 'owner-1', tenantId: 'platform', permissions: [] };
-  const staff = { userId: 'staff-1', tenantId: 'platform', permissions: ['tenant.manage'] };
+  const staff = { userId: 'staff-1', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
 
   type Row = Record<string, unknown> & { id: string };
 

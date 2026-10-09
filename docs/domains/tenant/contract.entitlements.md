@@ -64,6 +64,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 |---|---|
 | `ResellerAccess.admit(actor, tenantId, capability)` | `{id, slug, as: 'owner' \| 'member' \| 'staff'}`, or throws `ResellerAccessRefused` with `reason` |
 | `ResellerAccess.run(actor, tenantId, capability, work)` | `admit`, then `work(reseller)` inside `runWithTenant({id})`: the app pool's RLS sees the **reseller's** rows, never the caller's. A refusal throws before `work` starts |
+| `ResellerAccess.asStaff(key)` (AC-1-d) | the same door, the platform's staff admitted by `key` instead of the default `platform.tenant.manage` (`platform.report.read` on a figures route). Impersonation asks `platform.impersonate` |
 | `ResellerAccess.for(...keys)` (AC-1-e) | the same door, opened also to a seated member holding **any one** of `keys` — `RESELLER_KEYS` in `shared-core/.../tenant/reseller-keys.ts`. The bare door names none and admits **no member**, `*` included; the owner and platform staff are admitted as before, whatever the keys |
 
 - `actor` is `{userId, tenantId, permissions}` as `forward-auth` sent them;
@@ -84,7 +85,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 
 | call | answer |
 |---|---|
-| `admitIncludingPlatform(actor, tenantId, capability)` | `admit`, except the `platform_owner` tenant is also found: platform staff (`tenant.manage` or `*`) get `{id, slug, as: 'staff', platform: true}` — `platform` only here, for a read whose rows name the platform as `tenantId` null (F-311-ab1); everyone else `not_allowed`, its `ownerUserId` and a seat on it included |
+| `admitIncludingPlatform(actor, tenantId, capability)` | `admit`, except the `platform_owner` tenant is also found: platform staff (`platform.tenant.manage` or `*`) get `{id, slug, as: 'staff', platform: true}` — `platform` only here, for a read whose rows name the platform as `tenantId` null (F-311-ab1); everyone else `not_allowed`, its `ownerUserId` and a seat on it included |
 | `runIncludingPlatform(actor, tenantId, capability, work)` | the same, then `work` in that tenant's scope — `run`'s rule |
 | `admitFiguresIncludingPlatform` / `runFiguresIncludingPlatform` (UX-1-r2) | for a route that answers figures, not people (billing's revenue): the platform's tenant to its staff exactly as `admitIncludingPlatform`, and a reseller exactly as `admit` — **no** consent, since a figure's small cells are hidden instead (ADR-0104 (3)) |
 

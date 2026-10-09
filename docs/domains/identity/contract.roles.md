@@ -104,8 +104,9 @@ The platform's staff set is the `platform.` namespace —
 `.report.read`, `.impersonate` (`shared-core/.../tenant/platform-keys.ts`),
 under `SuperAdmin` alone in the policy file. No tenant role may be given one
 (above), and `isPlatformStaff` admits a key only for a caller of the platform
-owner's tenant, so a reseller's `*` is not the platform's. AC-1-d moves the
-platform's routes from `tenant.manage` and `panel.manage` onto them.
+owner's tenant, so a reseller's `*` is not the platform's. AC-1-d moved the
+platform's routes from `tenant.manage` and `panel.manage` onto them and
+retired both keys (migration `20261009000400`).
 
 ## Every query is tenant-bound
 

@@ -33,7 +33,7 @@ import {
  *    slug, a status that cannot be set (`trial`, or anything on a terminated
  *    reseller), a package with no price for the period;
  *  - **the menu entry shown to a reseller.** A reseller administers its own
- *    roles and can grant itself `tenant.manage`, so the key alone is not enough
+ *    roles, and a platform key counts only on the platform's tenant (ADR-0135), so the key alone is not enough
  *    (`panel-menu.ts`): the entry names the platform owner's tenant type too.
  */
 const REPO = join(__dirname, "../../../../..");
@@ -54,8 +54,8 @@ const OWNER: Me = {
   email: null,
   isImpersonated: false,
 };
-const OWNER_STAFF: Me = { ...OWNER, role: { id: "r3", name: "Support" }, permissions: ["tenant.manage"] };
-const RESELLER: Me = { ...OWNER, role: { id: "r2", name: "Admin" }, permissions: ["tenant.manage", "tenant_billing.adjust"], tenant: { id: "t-res", type: "reseller", isOwner: true } };
+const OWNER_STAFF: Me = { ...OWNER, role: { id: "r3", name: "Support" }, permissions: ["platform.tenant.manage"] };
+const RESELLER: Me = { ...OWNER, role: { id: "r2", name: "Admin" }, permissions: ["platform.tenant.manage", "tenant_billing.adjust"], tenant: { id: "t-res", type: "reseller", isOwner: true } };
 const UUID = "22222222-2222-4222-8222-222222222222";
 
 describe("what the services behind this page can refuse", () => {
@@ -80,7 +80,7 @@ describe("what the services behind this page can refuse", () => {
 });
 
 describe("who sees the page", () => {
-  it("is the platform owner's tenant holding tenant.manage, never a reseller", () => {
+  it("is the platform owner's tenant holding platform.tenant.manage, never a reseller", () => {
     expect(canAdministerResellers(OWNER)).toBe(true);
     expect(canAdministerResellers(OWNER_STAFF)).toBe(true);
     expect(canAdministerResellers(RESELLER)).toBe(false);

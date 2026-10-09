@@ -18,7 +18,7 @@ describe('platform access trail', () => {
   const T0 = new Date('2026-10-04T10:00:00Z');
 
   const trace = { act: 'GET /api/auth/tenants/:tenantId/users', target: {}, ip: '203.0.113.7' };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'], trace };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'], trace };
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[], trace };
 
   type Entry = { id: string; userId: string; expiresAt: Date };
@@ -106,7 +106,7 @@ describe('platform access trail', () => {
 
   it('admits a running emergency entry as `act` for its entrant alone, recorded as tier C (F-117-d)', async () => {
     const entry = { id: 'entry-1', userId: STAFF, expiresAt: new Date('2026-10-04T10:30:00Z') };
-    const emergency = { ...staff, permissions: ['tenant.manage', 'tenant.emergency_access'] };
+    const emergency = { ...staff, permissions: ['platform.tenant.manage', 'tenant.emergency_access'] };
     const { access, rows } = build('read', [entry]);
     await access.admitIncludingPlatform(emergency, RESELLER, 'staffWrite', T0);
     expect(rows[0].data['newValue']).toMatchObject({ tier: 'emergency', entryId: 'entry-1', scope: 'act', capability: 'staffWrite' });

@@ -53,7 +53,7 @@ describe('PlatformSupportDoor', () => {
 
   it('refuses a caller without support.agent', async () => {
     const { door } = build({ consent: { scope: 'act' } });
-    await expect(door.run({ ...staff, permissions: ['tenant.manage'] }, RESELLER, 'read', async () => 'x', now)).rejects.toEqual(
+    await expect(door.run({ ...staff, permissions: ['platform.tenant.manage'] }, RESELLER, 'read', async () => 'x', now)).rejects.toEqual(
       refusal('not_platform_staff'),
     );
   });

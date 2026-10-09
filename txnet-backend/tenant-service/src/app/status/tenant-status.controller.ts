@@ -15,7 +15,7 @@ import {
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { ChangeTenantStatusInput, changeTenantStatusSchema } from './tenant-status.schema';
 import {
@@ -45,7 +45,8 @@ const STATUS: Record<TenantStatusRejection, 403 | 404 | 409> = {
  * the subscription routes.
  */
 @Controller()
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.tenant.manage')
 export class TenantStatusController {
   constructor(private readonly statuses: TenantStatusService) {}
 

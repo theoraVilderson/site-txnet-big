@@ -150,7 +150,8 @@ describe("palette data groups (N7)", () => {
     expect(push).toHaveBeenCalledWith(panelUserPath("user-7"));
   });
 
-  it("asks a reseller's own users route for its staff", async () => {
+  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
+  it.skip("AC-1-e2: asks a reseller's own users route for its staff", async () => {
     me = RESELLER_STAFF;
     await open();
     type("sara");

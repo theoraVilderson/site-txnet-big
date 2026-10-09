@@ -15,7 +15,7 @@ export const RESELLER_KEYS = FrontendI18nKeys.common.resellers;
 const K = RESELLER_KEYS;
 
 /** The key tenant-service's reseller, subscription and status routes gate on. */
-export const RESELLERS_MANAGE = "tenant.manage";
+export const RESELLERS_MANAGE = "platform.tenant.manage";
 /** The key auth-service's user search gates on (F-018-ad); the spec reads it from the service. */
 export const USER_SEARCH = "user.search";
 /** The key billing's manual adjustment gates on (F-019-a). */
@@ -78,7 +78,7 @@ const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /**
  * Who may open the page — the menu entry's rule, for a visitor who typed the
- * path. Both halves: a reseller can grant itself `tenant.manage`, and the
+ * path. Both halves: a platform key counts only on the platform's tenant (ADR-0135), and the
  * service would refuse it anyway (`not_platform_owner`).
  */
 export const canAdministerResellers = (me: Me | null) => onPlatform(me) && holds(me, RESELLERS_MANAGE);

@@ -75,8 +75,8 @@ import { PanelAlreadyRegistered } from './panel-address';
 import { SystemsReadService, SystemsRefused, SystemsRejection } from './systems-read';
 import { UsageHoldsService } from './usage-holds';
 
-/** The permission the systems surface needs (F-027-ar). SuperAdmin holds it as `*`. */
-export const PANEL_MANAGE = 'panel.manage';
+/** The permission the systems surface needs (F-027-ar; `panel.manage` until AC-1-d, ADR-0135). SuperAdmin holds it as `*`. */
+export const NODE_MANAGE = 'platform.node.manage';
 
 /**
  * The first door, like `GatewayPermissionGuard`, and like it **not the
@@ -86,8 +86,8 @@ export const PANEL_MANAGE = 'panel.manage';
 export class PanelPermissionGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    if (!holdsPermission(identityOf(req).permissions, PANEL_MANAGE)) {
-      throw new ForbiddenException(`${PANEL_MANAGE} is required`);
+    if (!holdsPermission(identityOf(req).permissions, NODE_MANAGE)) {
+      throw new ForbiddenException(`${NODE_MANAGE} is required`);
     }
     return true;
   }

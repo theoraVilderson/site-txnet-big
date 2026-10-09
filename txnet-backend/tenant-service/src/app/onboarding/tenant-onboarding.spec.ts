@@ -107,7 +107,7 @@ describe('TenantStatusListener — the computed column', () => {
 
 describe('TenantOnboardingService', () => {
   const RESELLER = '44444444-4444-4444-4444-444444444444';
-  const actor = { userId: 'u1', tenantId: 'platform', permissions: ['tenant.manage'] };
+  const actor = { userId: 'u1', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
 
   const build = (rows: { domain?: boolean; gateway?: boolean; bot?: boolean; price?: boolean }) => {
     const first = (present: boolean | undefined) =>

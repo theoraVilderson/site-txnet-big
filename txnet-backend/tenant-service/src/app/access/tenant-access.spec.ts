@@ -32,7 +32,7 @@ describe('TenantAccessService', () => {
 
   /** The owner's session is their own platform tenant's, on either domain (ADR-0059). */
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
   /** A user of the reseller itself — a customer, or a seat, depending on the seats built. */
   const insider = (permissions: string[] = []) => ({ userId: CUSTOMER, tenantId: RESELLER, permissions });
 
@@ -81,7 +81,7 @@ describe('TenantAccessService', () => {
       canWrite: true,
     });
     // A seat is the membership; a key is what administers. Neither alone — `tenant.manage` is no reseller key.
-    await expect(build('active', [seat()]).verdict(insider(['tenant.manage']), RESELLER, T0)).resolves.toEqual({
+    await expect(build('active', [seat()]).verdict(insider(['platform.tenant.manage']), RESELLER, T0)).resolves.toEqual({
       tenantId: RESELLER,
       canRead: false,
       canWrite: false,
@@ -92,7 +92,7 @@ describe('TenantAccessService', () => {
   it('answers the platform owner’s staff yes, and a customer of the reseller no', async () => {
     await expect(build().verdict(staff, RESELLER, T0)).resolves.toMatchObject({ canRead: true, canWrite: true });
     // Being inside the reseller is not administering it, however wide the role.
-    await expect(build().verdict(insider(['*', 'tenant.manage']), RESELLER, T0)).resolves.toMatchObject({
+    await expect(build().verdict(insider(['*', 'platform.tenant.manage']), RESELLER, T0)).resolves.toMatchObject({
       canRead: false,
       reason: 'not_allowed',
     });

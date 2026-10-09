@@ -101,7 +101,7 @@ A paid upgrade applies at once and deletes the period's lock rows, so the new pa
 
 ## The platform owner's routes (`tenant-service/src/app/limits/`)
 
-`TenantPermissionGuard` (`tenant.manage`), then the caller's tenant must be
+`PlatformPermissionGuard` (`platform.plan.assign`, AC-1-d), then the caller's tenant must be
 the platform owner's (`not_platform_owner` **403**), as for packages. Every
 path has three segments or more, so none is read as `GET /api/tenants/:id`.
 

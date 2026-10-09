@@ -15,7 +15,7 @@ import { ResellerUsersService } from './reseller-users.service';
  * the same transaction that writes its trail.
  */
 describe('ResellerUsersService', () => {
-  const actor = { userId: 'u-admin', tenantId: 'platform', permissions: ['tenant.manage'] };
+  const actor = { userId: 'u-admin', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
   const reseller = 'aaaaaaaa-0000-4000-8000-000000000001';
 
   const aUser = (over: Partial<Record<string, unknown>> = {}) => ({
@@ -159,12 +159,12 @@ describe('ResellerUsersService', () => {
     });
 
     it("answers `canAct` per row by the authority rule, and marks staff (ADR-0103)", async () => {
-      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['tenant.manage'] };
+      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['platform.tenant.manage'] };
       const { service } = build({
         as: 'member',
         rows: [
           aUser({ id: 'u-owner' }),
-          aUser({ id: 'u-peer', ...keys('tenant.manage') }),
+          aUser({ id: 'u-peer', ...keys('platform.tenant.manage') }),
           aUser({ id: 'u-customer' }),
         ],
       });
@@ -245,10 +245,10 @@ describe('ResellerUsersService', () => {
     });
 
     it('refuses a peer who does not hold more than the target, with no write (ADR-0103)', async () => {
-      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['tenant.manage'] };
+      const member = { userId: 'u-admin', tenantId: reseller, permissions: ['platform.tenant.manage'] };
       const { service, user, adminAuditLog, sessions } = build({
         as: 'member',
-        user: aUser({ id: 'u-peer', ...keys('tenant.manage') }),
+        user: aUser({ id: 'u-peer', ...keys('platform.tenant.manage') }),
       });
 
       await expect(service.block(member, reseller, 'u-peer', '10.0.0.1')).rejects.toMatchObject({

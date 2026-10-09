@@ -30,7 +30,7 @@ platform's global permission keys, and seats people here.
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/staff` | the reseller's owner, a member with `staff.manage`, or platform staff with `tenant.manage` | the team, newest invitation first |
+| `GET /api/tenants/:id/staff` | the reseller's owner, a member with `staff.manage`, or platform staff with `platform.tenant.manage` | the team, newest invitation first |
 | `POST /api/tenants/:id/staff` `{userId, accessExpiresAt?}` | same | `201` the seat, `invited` |
 | `POST /api/tenants/:id/staff/accept` | the invited user, themselves | `200` the seat, `active` |
 | `PATCH /api/tenants/:id/staff/:memberId` `{accessExpiresAt: date \| null}` | the owner, a member with `staff.manage`, or platform staff | `200` the seat, its end moved or cleared (F-1201-b) |

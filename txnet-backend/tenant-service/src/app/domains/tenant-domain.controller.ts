@@ -35,7 +35,7 @@ const STATUS: Record<DomainRejection, 403 | 404 | 409> = {
  * A reseller's custom domains (F-018-i): `GET` / `POST /api/tenants/:id/domains`
  * and `POST /api/tenants/:id/domains/:domainId/check`.
  *
- * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
+ * No `PlatformPermissionGuard`: the reseller's owner holds no platform key,
  * and is let in by `ResellerAccess` (F-061-h), as the platform owner's staff are.
  */
 @Controller('tenants/:id/domains')

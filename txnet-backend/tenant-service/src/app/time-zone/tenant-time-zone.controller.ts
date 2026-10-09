@@ -19,7 +19,7 @@ const STATUS: Record<TenantTimeZoneRejection, 403 | 404 | 409> = {
  * `GET` / `PUT /api/tenants/:id/timezone`. `:id` is a reseller, or the
  * platform owner's own tenant for its staff.
  *
- * No `TenantPermissionGuard`: a reseller's owner holds no `tenant.manage`; the
+ * No `PlatformPermissionGuard`: a reseller's owner holds no platform key; the
  * service admits (`ResellerAccess`, or the platform's own staff).
  */
 @Controller('tenants/:id/timezone')

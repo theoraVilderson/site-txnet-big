@@ -37,7 +37,7 @@ behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.m
 ## Rules
 
 1. **The platform owner's alone, by two conditions.** The menu entry (top level,
-   after the financial group) `requires: ["tenant.manage"]` **and**
+   after the financial group) `requires: ["platform.tenant.manage"]` (AC-1-d) **and**
    `tenantTypes: ["platform_owner"]`: a reseller administers its own roles and
    can grant itself the key. The page applies the same pair
    (`canAdministerResellers`) before its first read; tenant-service's

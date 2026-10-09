@@ -9,10 +9,10 @@ import { PermissionRegistryService } from './permission-registry.service';
  */
 describe('PermissionRegistryService', () => {
   const tree = {
-    areas: { support: { label: 'پشتیبانی' }, tenant: { label: 'نمایندگی‌ها' } },
+    areas: { support: { label: 'پشتیبانی' }, platform: { label: 'پلتفرم' } },
     keys: {
       support: { agent: { label: 'پاسخ به پشتیبانی', description: 'خواندن و پاسخ دادن.' } },
-      tenant: { manage: { label: 'مدیریت نمایندگی‌ها', description: 'فقط برای پلتفرم.' } },
+      platform: { tenant: { manage: { label: 'اداره‌ی نماینده‌ها', description: 'فقط برای پلتفرم.' } } },
     },
   };
   const locale = { getNamespace: vi.fn((lang: string, ns: string) => (lang === 'fa' && ns === 'permissions' ? tree : undefined)) };
@@ -27,11 +27,11 @@ describe('PermissionRegistryService', () => {
 
   it('labels a key and its area in the caller language, and says which keys only the platform holds', () => {
     const { areas } = service.list('fa');
-    const tenant = areas.find((a) => a.area === 'tenant');
-    expect(tenant?.label).toBe('نمایندگی‌ها');
-    expect(tenant?.permissions.find((p) => p.key === 'tenant.manage')).toEqual({
-      key: 'tenant.manage',
-      label: 'مدیریت نمایندگی‌ها',
+    const platform = areas.find((a) => a.area === 'platform');
+    expect(platform?.label).toBe('پلتفرم');
+    expect(platform?.permissions.find((p) => p.key === 'platform.tenant.manage')).toEqual({
+      key: 'platform.tenant.manage',
+      label: 'اداره‌ی نماینده‌ها',
       description: 'فقط برای پلتفرم.',
       platformOnly: true,
     });

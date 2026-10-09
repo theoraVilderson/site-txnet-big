@@ -21,7 +21,7 @@ The *why* is **ADR-0080**.
 ## Rules
 
 1. **The platform owner's page.** The menu entry (top level, `systems`)
-   `requires: ["panel.manage"]` and `tenantTypes: ["platform_owner"]`: billing
+   `requires: ["platform.node.manage"]` (AC-1-d) and `tenantTypes: ["platform_owner"]`: billing
    refuses anyone else (`panelScopeOf`, 403 `not_platform_owner`), so a
    reseller holding the key does not see a page that could only refuse it.
 2. **Nothing here is a verdict of its own.** Every figure is what

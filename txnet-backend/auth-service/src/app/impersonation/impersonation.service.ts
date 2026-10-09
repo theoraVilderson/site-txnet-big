@@ -39,7 +39,8 @@ export class ImpersonationService {
   /**
    * The platform's staff become a reseller's user (F-117-e, ADR-0104 (4)(5),
    * catalog §3.6 layer 6): `POST /api/auth/tenants/:tenantId/users/:userId/impersonate`.
-   * Admitted only by the consent door with capability `staffWrite` — a live
+   * Admitted only by the consent door with capability `staffWrite`, the staff
+   * holding `platform.impersonate` (AC-1-d, ADR-0135) — a live
    * `act` consent, or the caller's own emergency entry — which also records the
    * request in the reseller's trail. The session ends no later than what
    * admitted it (and never later than the 30 minutes), is tied to it, so a
@@ -61,7 +62,7 @@ export class ImpersonationService {
     // The admin is a user of the platform's tenant: read before the reseller's scope opens.
     const admin = await this.prisma.user.findUnique({ where: { id: actor.userId }, include: { role: true } });
     try {
-      return await this.access.for('user.impersonate').runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
+      return await this.access.asStaff('platform.impersonate').runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
         if (admitted.as !== 'staff') throw new ForbiddenException('Only the platform impersonates here');
         const target = await this.prisma.user.findUnique({
           where: { id: targetUserId },

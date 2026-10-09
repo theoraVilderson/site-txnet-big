@@ -340,7 +340,7 @@ describe('ResellerRevenueService.totals', () => {
  * the platform's own people, so no split is hidden from them.
  */
 describe("ResellerRevenueService.totals — the platform's own tenant (UX-1-r2)", () => {
-  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['platform.report.read'] };
   const sales = [
     { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30, currencyCode: 'USD' },
     { reasonType: WalletReasonType.product_purchase, sum: '80.00', count: 2, currencyCode: 'EUR' },
@@ -401,7 +401,7 @@ describe("ResellerRevenueService.totals — the platform's own tenant (UX-1-r2)"
 });
 
 describe('ResellerRevenueService.totals — the currency split for the platform (F-117-k)', () => {
-  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['platform.report.read'] };
   const sales = [
     { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30, currencyCode: 'USD' },
     { reasonType: WalletReasonType.product_purchase, sum: '100000', count: 3, currencyCode: 'IRR' },
@@ -455,7 +455,7 @@ describe('ResellerRevenueService.totals — the currency split for the platform 
  * `sales.total` and `topUps.total` stay.
  */
 describe('ResellerRevenueService.totals — reasons and top-ups for the platform (F-117-l)', () => {
-  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: '66666666-6666-4666-8666-666666666666', tenantId: PLATFORM, permissions: ['platform.report.read'] };
   const sales = [
     { reasonType: WalletReasonType.product_purchase, sum: '300.00', count: 30 },
     { reasonType: WalletReasonType.traffic_consumption, sum: '20.00', count: 4 },

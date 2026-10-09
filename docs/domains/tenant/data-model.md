@@ -105,4 +105,4 @@ job writes them since EDGE-1-e.
 `tenant_domain`.
 
 `20260917001100_tenant_create` (F-018-c) adds the audit values `tenant_create` /
-`tenant` and the `tenant.manage` permission — no tenant table changes.
+`tenant` and the `tenant.manage` permission (retired by AC-1-d for the `platform.` keys) — no tenant table changes.

@@ -15,7 +15,7 @@ import { ResellerBotRefused, ResellerBotService } from './reseller-bot.service';
  * that a refusal stops the work before anything is written.
  */
 describe('ResellerBotService', () => {
-  const actor = { userId: 'u-1', tenantId: 'platform', permissions: ['tenant.manage'] };
+  const actor = { userId: 'u-1', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
   const reseller = 'aaaaaaaa-0000-4000-8000-000000000001';
 
   const build = (options: {

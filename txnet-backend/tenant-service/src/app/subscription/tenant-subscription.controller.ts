@@ -21,7 +21,7 @@ import type { Request } from 'express';
 import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
-import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   GrantGraceInput,
@@ -73,7 +73,8 @@ const ACCESS_STATUS: Record<ResellerAccessRejection, 403 | 404 | 409> = {
  * `forward-auth` proved, as on the package routes.
  */
 @Controller()
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.plan.assign')
 export class TenantSubscriptionController {
   constructor(private readonly subscriptions: TenantSubscriptionService) {}
 
@@ -126,8 +127,8 @@ export class TenantSubscriptionController {
  * The reseller changes its own package (F-019-v7, ADR-0107 point 9):
  * `GET /api/tenants/:id/subscription/change?packageId&billingModel` answers
  * what it would do — at once and for how much, or at the renewal — and `POST`
- * the same body does it. No `TenantPermissionGuard`: the reseller's owner holds
- * no `tenant.manage` and is let in by `ResellerAccess`, as on its limits.
+ * the same body does it. No `PlatformPermissionGuard`: the reseller's owner holds
+ * no platform key and is let in by `ResellerAccess`, as on its limits.
  */
 @Controller('tenants/:id/subscription/change')
 export class ResellerSubscriptionChangeController {

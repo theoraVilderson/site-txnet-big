@@ -15,7 +15,7 @@ import { TenantAccessActor, TenantAccessService, TenantAccessView } from './tena
  * to offer a screen must not have to read an error to find out, and a bot menu
  * must not fail because the chat is an ordinary customer.
  *
- * No `TenantPermissionGuard`, as on every reseller-named route: a reseller's
+ * No `PlatformPermissionGuard`, as on every reseller-named route: a reseller's
  * owner holds no operator permission, and `ResellerAccess` is the door
  * (invariant 21). A `read` by method, so a suspended reseller still gets its
  * answer — which is the answer that says it may no longer write.

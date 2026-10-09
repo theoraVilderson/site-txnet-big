@@ -161,7 +161,7 @@ export class RolesService {
    * The keys a caller may put on a role are the keys it holds itself; `*`
    * (SuperAdmin) may grant any key that exists. Without this, `role.manage`
    * alone would be the whole platform: a reseller writes the grants of the
-   * roles its own staff hold, so it could mint `tenant.manage` for itself.
+   * roles its own staff hold, so it could mint a key no tenant role may hold for itself.
    *
    * A key with no `permission` row is refused for everyone — a typo must not
    * become a grant that silently means nothing.

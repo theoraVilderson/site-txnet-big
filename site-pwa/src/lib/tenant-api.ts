@@ -516,7 +516,7 @@ export interface OperatingCurrencyChange extends OperatingCurrency {
 /**
  * A tenant's operating currency (F-116-a/f, ADR-0098). The same two routes
  * serve a reseller — admitted by the path's reseller (invariant 21) — and the
- * platform's own tenant, which only its staff with `tenant.manage` may read.
+ * platform's own tenant, which only its staff with `settings.manage` may read.
  */
 export const operatingCurrencyApi = {
   async get(tenantId: string): Promise<OperatingCurrency> {
@@ -539,7 +539,7 @@ export interface TenantTimeZone {
 /**
  * A tenant's time zone. The same two routes serve a reseller — admitted by the
  * path's reseller (invariant 21) — and the platform's own tenant, for its
- * staff with `tenant.manage`, like the operating currency.
+ * staff with `settings.manage`, like the operating currency.
  */
 export const tenantTimeZoneApi = {
   async get(tenantId: string): Promise<TenantTimeZone> {
@@ -607,7 +607,7 @@ export const resellerDomainsApi = {
  * `tenant/contract.admin.md` "A platform user buys a reseller"). Its own
  * object, not a member of {@link tenantApi}: these four routes take no
  * permission key and admit any user of the platform owner's tenant, where
- * every route above wants `tenant.manage`.
+ * every route above wants a platform key (AC-1-d).
  */
 export const resellerPurchaseApi = {
   /** The packages on sale, by name. Shares a rate-limit budget with {@link suggestSlug}. */

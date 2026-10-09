@@ -35,7 +35,7 @@ const PRODUCT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[] };
 const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as string[] };
-const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.report.read'] };
 
 const FROM = new Date('2026-09-01T00:00:00.000Z');
 const TO = new Date('2026-09-30T00:00:00.000Z');

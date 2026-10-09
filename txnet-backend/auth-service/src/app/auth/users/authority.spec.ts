@@ -31,33 +31,33 @@ describe('authorityOver', () => {
   });
 
   it("allows platform staff over a reseller's people, whatever those hold", () => {
-    expect(authorityOver(me(['tenant.manage'], 'staff'), them(['*']), reseller)).toBeNull();
+    expect(authorityOver(me(['platform.tenant.manage'], 'staff'), them(['*']), reseller)).toBeNull();
   });
 
   it("treats platform staff on the platform's own tenant as peers, not as authority", () => {
-    expect(authorityOver(me(['tenant.manage'], 'staff'), them(['tenant.manage']), platform)).toBe('not_above');
+    expect(authorityOver(me(['platform.tenant.manage'], 'staff'), them(['platform.tenant.manage']), platform)).toBe('not_above');
   });
 
   it('allows a peer holding every key of the target and one more', () => {
-    expect(authorityOver(me(['tenant.manage', 'user.block']), them(['user.block']), reseller)).toBeNull();
+    expect(authorityOver(me(['platform.tenant.manage', 'user.block']), them(['user.block']), reseller)).toBeNull();
   });
 
   it('refuses a peer with exactly the same keys — two admins cannot lock each other out', () => {
-    expect(authorityOver(me(['tenant.manage']), them(['tenant.manage']), reseller)).toBe('not_above');
+    expect(authorityOver(me(['platform.tenant.manage']), them(['platform.tenant.manage']), reseller)).toBe('not_above');
     expect(authorityOver(me(['*']), them(['*']), platform)).toBe('not_above');
   });
 
   it('refuses a peer missing one of the target’s keys, even holding more of others', () => {
-    expect(authorityOver(me(['tenant.manage', 'a', 'b']), them(['tenant.manage', 'c']), reseller)).toBe('not_above');
+    expect(authorityOver(me(['platform.tenant.manage', 'a', 'b']), them(['platform.tenant.manage', 'c']), reseller)).toBe('not_above');
   });
 
   it('reads `*` through holdsPermission: it covers every key and outranks any finite set', () => {
-    expect(authorityOver(me(['*']), them(['tenant.manage', 'user.impersonate']), reseller)).toBeNull();
-    expect(authorityOver(me(['tenant.manage', 'x']), them(['*']), reseller)).toBe('not_above');
+    expect(authorityOver(me(['*']), them(['platform.tenant.manage', 'user.impersonate']), reseller)).toBeNull();
+    expect(authorityOver(me(['platform.tenant.manage', 'x']), them(['*']), reseller)).toBe('not_above');
   });
 
   it('lets any admitted admin act on a customer, who holds no keys', () => {
-    expect(authorityOver(me(['tenant.manage']), them([]), reseller)).toBeNull();
+    expect(authorityOver(me(['platform.tenant.manage']), them([]), reseller)).toBeNull();
   });
 });
 

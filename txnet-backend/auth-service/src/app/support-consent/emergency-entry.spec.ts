@@ -13,7 +13,7 @@ describe('emergency entry', () => {
   const reseller = 'aaaaaaaa-0000-4000-8000-000000000001';
   const now = new Date('2026-10-04T10:00:00Z');
   const hour = 3600_000;
-  const staff = { userId: 'staff-1', tenantId: 'platform', permissions: ['tenant.manage', EMERGENCY_ENTRY_PERMISSION] };
+  const staff = { userId: 'staff-1', tenantId: 'platform', permissions: ['platform.tenant.manage', EMERGENCY_ENTRY_PERMISSION] };
   const owner = { userId: 'owner-1', tenantId: 'platform', permissions: [] as string[] };
   const reason = 'abuse report 4411: phishing links sent from this reseller';
 
@@ -91,7 +91,7 @@ describe('emergency entry', () => {
 
   it('refuses without the permission of its own, or to anyone but the platform — and writes nothing', async () => {
     const plain = build();
-    await expect(plain.service.enterEmergency({ ...staff, permissions: ['tenant.manage'] }, reseller, { reason }, '1.1.1.1', now)).rejects.toEqual(
+    await expect(plain.service.enterEmergency({ ...staff, permissions: ['platform.tenant.manage'] }, reseller, { reason }, '1.1.1.1', now)).rejects.toEqual(
       new SupportConsentRefused('emergency_not_permitted'),
     );
     const theirs = build('owner');

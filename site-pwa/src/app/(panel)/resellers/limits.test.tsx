@@ -71,7 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as unknown as ReturnType<typeof useLocale>);
   vi.mocked(usePanelSession).mockReturnValue({
-    me: { tenant: { id: "p", type: "platform_owner" }, permissions: ["tenant.manage"] },
+    me: { tenant: { id: "p", type: "platform_owner" }, permissions: ["platform.tenant.manage"] },
     isLoading: false,
   } as unknown as ReturnType<typeof usePanelSession>);
   vi.mocked(tenantApi.packages).mockResolvedValue([{ id: "pkg-1", name: "Growth" }] as never);

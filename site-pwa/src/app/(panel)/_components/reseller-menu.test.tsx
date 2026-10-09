@@ -199,7 +199,8 @@ describe("one reseller button that opens", () => {
     expect(screen.queryByRole("button", { name: (n) => n === N.groupLabel || n === N.scope })).toBeNull();
   });
 
-  it("draws a reseller staff seat's users once, where the account menu has it", async () => {
+  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
+  it.skip("AC-1-e2: draws a reseller staff seat's users once, where the account menu has it", async () => {
     me = { ...ON_DOMAIN, permissions: ["tenant.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
     owned = [];
     renderSidebar();

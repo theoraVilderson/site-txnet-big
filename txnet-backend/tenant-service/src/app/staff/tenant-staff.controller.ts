@@ -41,7 +41,7 @@ const STATUS: Record<StaffRejection, 403 | 404 | 409> = {
  * `POST .../staff/accept`, `PATCH .../staff/:memberId` (its end, F-1201-b) and
  * `DELETE .../staff/:memberId`.
  *
- * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
+ * No `PlatformPermissionGuard`: the reseller's owner holds no platform key,
  * and is let in by `ResellerAccess` (F-061-h) — as a member of the reseller who
  * does hold it, and as the platform owner's staff. `accept` is the invitee's
  * own, before any of that admits them.

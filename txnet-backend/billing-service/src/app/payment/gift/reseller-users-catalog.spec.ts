@@ -24,7 +24,7 @@ const STAFF_USER = '55555555-5555-4555-8555-555555555555';
 const STRANGER = '66666666-6666-4666-8666-666666666666';
 
 const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[] };
-const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
 const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as string[] };
 
 type Product = { id: string; tenantId: string | null; nameKey: string; isActive: boolean; archivedAt: Date | null; key: string };

@@ -21,7 +21,7 @@ import type { Request } from 'express';
 import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
-import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   ClearResellersLimitInput,
@@ -70,7 +70,8 @@ const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
  * `value` null is no limit. Writes answer `204`; the table is read again.
  */
 @Controller('tenants/limits')
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.plan.assign')
 export class ResellerLimitsController {
   constructor(private readonly limits: ResellerLimitsService) {}
 
@@ -177,8 +178,8 @@ const ACCESS_STATUS: Record<ResellerAccessRejection, 403 | 404 | 409> = {
 
 /**
  * One reseller's limits in effect, where each comes from and how much is used
- * (F-019-r, F-019-s): `GET /api/tenants/:id/limits`. No `TenantPermissionGuard`:
- * the reseller's owner holds no `tenant.manage` and is let in by
+ * (F-019-r, F-019-s): `GET /api/tenants/:id/limits`. No `PlatformPermissionGuard`:
+ * the reseller's owner holds no platform key and is let in by
  * `ResellerAccess`, as its team and the platform's staff are.
  */
 @Controller('tenants/:id/limits')
@@ -217,7 +218,8 @@ export class ResellerLimitsOfController {
  * platform's is `404 product_not_found`. Writes answer `204`.
  */
 @Controller('tenants/limits/packages/:packageId/products')
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.plan.assign')
 export class PackageProductsController {
   constructor(private readonly products: PackageProductsService) {}
 

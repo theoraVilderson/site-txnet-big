@@ -6,6 +6,7 @@ import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
 import { AccessTrace, PlatformAccessTier, recordPlatformAccess } from './platform-access-trail';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
+import type { PlatformKey } from './platform-keys';
 import type { ResellerKey } from './reseller-keys';
 import { liveEmergencyEntry, liveSupportConsent } from './support-consent';
 
@@ -111,6 +112,9 @@ export class ResellerAccess {
   /** The keys that admit a member; none on the bare door, which is owner-only. Not a constructor parameter: Nest injects this class. */
   private keys: readonly ResellerKey[] = [];
 
+  /** The platform key that admits the platform's staff, when the route asks another than its default ({@link asStaff}). */
+  private staffKey: PlatformKey | null = null;
+
   constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
 
   /**
@@ -121,6 +125,19 @@ export class ResellerAccess {
   for(...keys: ResellerKey[]): ResellerAccess {
     const door = new ResellerAccess(this.prisma);
     door.keys = keys;
+    door.staffKey = this.staffKey;
+    return door;
+  }
+
+  /**
+   * This door, with the platform's staff admitted by `key` instead of the
+   * default — `platform.tenant.manage`, or `platform.report.read` on a figures
+   * route (AC-1-d, ADR-0135). Impersonation asks `platform.impersonate`.
+   */
+  asStaff(key: PlatformKey): ResellerAccess {
+    const door = new ResellerAccess(this.prisma);
+    door.keys = this.keys;
+    door.staffKey = key;
     return door;
   }
 
@@ -132,7 +149,7 @@ export class ResellerAccess {
    * {@link admit}, on a route that may also name the platform's own tenant
    * (F-311-aa, D-55): the users-admin routes, one page for every tenant's
    * users, the platform's direct users included. The platform's tenant is
-   * admitted to **its staff only** (`tenant.manage` or `*`) and to nobody
+   * admitted to **its staff only** (`platform.tenant.manage` or `*`) and to nobody
    * else, who learns nothing — its `ownerUserId` and a seat on it are no door.
    * A reseller is answered as {@link admit} answers it, with one more rule
    * for the platform's staff (F-117-b, ADR-0104 (4)): these routes name a
@@ -177,7 +194,9 @@ export class ResellerAccess {
         select: { id: true, slug: true, tenantType: true, ownerUserId: true, status: true, graceEndsAt: true },
       }),
     ]);
-    const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, 'tenant.manage');
+    // The platform's staff door asks a platform key (AC-1-d, ADR-0135): figures are a cross-tenant report.
+    const staffKey: PlatformKey = this.staffKey ?? (route === 'figures' ? 'platform.report.read' : 'platform.tenant.manage');
+    const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, staffKey);
     if (platform && tenant?.tenantType === TenantType.platform_owner) {
       if (!staff) throw new ResellerAccessRefused('not_allowed', tenantId);
       return { id: tenant.id, slug: tenant.slug, as: 'staff', platform: true };

@@ -77,7 +77,7 @@ vi.mock("@/lib/notification-api", () => ({
 }));
 
 const USER = { permissions: [], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
-const PLATFORM_STAFF = { permissions: ["tenant.manage"], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
+const PLATFORM_STAFF = { permissions: ["settings.manage"], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
 const RESELLER_STAFF = { permissions: ["currency.pin"], tenant: { id: "t-2", type: "reseller", isOwner: false } };
 
 const PREFS = { muted: [], quietHours: null, timezone: null };

@@ -14,7 +14,7 @@ import { UserStatusService } from './user-status.service';
 describe('UserStatusService.set', () => {
   const TENANT = 'aaaaaaaa-0000-4000-8000-000000000001';
   const agent = { userId: 'u-agent', tenantId: TENANT, permissions: ['support.agent', 'restriction.assign'] };
-  const admin = { userId: 'u-admin', tenantId: TENANT, permissions: ['restriction.assign', 'user.ban', 'support.agent', 'tenant.manage'] };
+  const admin = { userId: 'u-admin', tenantId: TENANT, permissions: ['restriction.assign', 'user.ban', 'support.agent', 'platform.tenant.manage'] };
 
   const person = (over: Record<string, unknown> = {}) => ({
     id: 'u-1',

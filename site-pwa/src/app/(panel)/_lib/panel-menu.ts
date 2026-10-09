@@ -235,29 +235,29 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
   // reseller's staff on its domain the reseller's — at `/users`, which ignores
-  // the id but keeps the function so the tenant-id gate applies. `tenant.manage` hides it;
+  // the id but keeps the function so the tenant-id gate applies. `platform.tenant.manage` hides it (AC-1-d; a seat's own keys are AC-1-e2);
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["tenant.manage"] },
+  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["platform.tenant.manage"] },
   // F-1201-c. The team on the session's tenant: the platform's staff, or a
   // reseller's seats for a seated admin. The same door as users.
-  { section: "people", id: "team", label: M.team, icon: Contact, href: () => PANEL_TEAM, requires: ["tenant.manage"] },
+  { section: "people", id: "team", label: M.team, icon: Contact, href: () => PANEL_TEAM, requires: ["platform.tenant.manage"] },
   // F-1201-d. The same door as users (ADR-0134): the session's tenant, by its
   // path — the platform's roles for its staff, a reseller's for a seated admin.
-  { section: "people", id: "roles", label: M.roles, icon: KeyRound, href: () => PANEL_ROLES, requires: ["tenant.manage"] },
+  { section: "people", id: "roles", label: M.roles, icon: KeyRound, href: () => PANEL_ROLES, requires: ["platform.tenant.manage"] },
   // F-114-m. Every tenant has its own groups: the permission hides it, and
   // auth-service answers each tenant its own (F-114-j).
   { section: "people", id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
   // F-018-k. Administration of other tenants is the platform owner's alone: a
-  // reseller can grant itself `tenant.manage`, so the tenant type gates it too.
+  // platform key counts only on the platform's tenant (ADR-0135), so the tenant type gates it too.
   // Packages (F-118-n5) and limits (F-019-r) sit under the same gate.
   {
     section: "people",
     id: "resellers",
     label: M.resellers,
     icon: Store,
-    requires: ["tenant.manage"],
+    requires: ["platform.tenant.manage"],
     tenantTypes: ["platform_owner"],
     children: [
       { id: "reseller-list", label: M.resellerList, icon: List, href: PANEL_RESELLERS },
@@ -269,7 +269,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // ── infra ──
   // F-027-ad. The platform's own panels. billing refuses anyone but the
   // platform owner (`panelScopeOf`), so the tenant type gates it here too.
-  { section: "infra", id: "systems", label: M.systems, icon: Server, href: PANEL_SYSTEMS, requires: ["panel.manage"], tenantTypes: ["platform_owner"] },
+  { section: "infra", id: "systems", label: M.systems, icon: Server, href: PANEL_SYSTEMS, requires: ["platform.node.manage"], tenantTypes: ["platform_owner"] },
 
   // ── support ──
   // F-033-p. RLS keeps an agent to its own tenant's threads; the permission hides the page.
@@ -369,7 +369,7 @@ export function admits(
 
 /**
  * The tenant id `visibleMenu` builds the caller's own pages on (F-311-ab), or
- * `null` to hide them. On the platform, `tenant.manage` (or `*`) is the whole of
+ * `null` to hide them. On the platform, `platform.tenant.manage` (or `*`) is the whole of
  * the users-admin door's rule for its staff, and `requires` already holds it. On
  * a reseller it is not: the door also needs a live seat (invariant 21), which a
  * role outlives — so `canRead` is the door's own verdict (`GET /tenants/:id/access`),

@@ -19,7 +19,7 @@ describe('TenantTimeZoneService', () => {
   const STAFF = '55555555-5555-5555-5555-555555555555';
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage', 'settings.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage', 'settings.manage'] };
   const stranger = { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] };
   const resellerAdmin = { userId: OWNER, tenantId: OTHER, permissions: ['settings.manage'] };
 

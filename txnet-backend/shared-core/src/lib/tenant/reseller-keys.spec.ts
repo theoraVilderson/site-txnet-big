@@ -28,7 +28,7 @@ describe('ResellerAccess keys (AC-1-e)', () => {
   const T0 = new Date('2026-10-09T10:00:00Z');
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
   const member = (...permissions: string[]) => ({ userId: MEMBER, tenantId: RESELLER, permissions });
 
   const access = () => {

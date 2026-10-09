@@ -299,7 +299,7 @@ describe('bulk act by filter, as a job (F-311-u2)', () => {
     expect((e as ResellerLimitReached).facts).toEqual({ key: 'bulk_job_grants_max', limit: 2, used: 3 });
     expect(jobs).toHaveLength(0);
 
-    const staff = { userId: OWNER.replace('5555', '7777'), tenantId: PLATFORM, permissions: ['tenant.manage'], ip: '203.0.113.8' };
+    const staff = { userId: OWNER.replace('5555', '7777'), tenantId: PLATFORM, permissions: ['platform.tenant.manage'], ip: '203.0.113.8' };
     await expect(service.start(staff, RESELLER, days({ panelId: PANEL }))).resolves.toMatchObject({ total: 3 });
     // At the limit is not past it.
     await expect(build(200, 3).service.start(owner, RESELLER, days({ panelId: PANEL }))).resolves.toMatchObject({ total: 3 });

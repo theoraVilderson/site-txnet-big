@@ -18,7 +18,7 @@ import {
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CreateResellerInput, ListResellersInput, createResellerSchema, listResellersSchema } from './reseller.schema';
 import { ResellerActor, ResellerRefused, ResellerRejection, ResellerService, ResellerView } from './reseller.service';
@@ -41,11 +41,13 @@ const STATUS: Record<ResellerRejection, 403 | 404 | 409> = {
  * names an existing user as the owner instead of creating one.
  */
 @Controller('tenants')
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.tenant.manage')
 export class ResellerController {
   constructor(private readonly resellers: ResellerService) {}
 
   @Post()
+  @PlatformRoute('platform.tenant.create')
   @HttpCode(HttpStatus.CREATED)
   async create(
     @Req() req: Request,

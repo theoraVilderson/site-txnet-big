@@ -9,7 +9,7 @@ export const SUPPORT_CONSENT_DEFAULT_HOURS = 4;
 
 /**
  * Tier C (F-117-d, ADR-0104 (5)): the permission of its own an emergency entry
- * needs, beside the platform staff's `tenant.manage`; its fixed length; and the
+ * needs, beside the platform staff's `platform.tenant.manage`; its fixed length; and the
  * least a reason may say. No extension: a new entry once this one has ended.
  */
 export const EMERGENCY_ENTRY_PERMISSION = 'tenant.emergency_access';

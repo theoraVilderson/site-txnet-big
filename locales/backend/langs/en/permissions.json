@@ -42,9 +42,6 @@
     "guide": {
       "label": "Guides"
     },
-    "panel": {
-      "label": "Servers"
-    },
     "payment": {
       "label": "Payments"
     },
@@ -189,12 +186,6 @@
         "description": "Write and publish help guides."
       }
     },
-    "panel": {
-      "manage": {
-        "label": "Register servers",
-        "description": "Register and remove VPN servers. Platform only."
-      }
-    },
     "payment": {
       "confirm_manual": {
         "label": "Confirm payments by hand",
@@ -303,10 +294,6 @@
       "emergency_access": {
         "label": "Emergency entry",
         "description": "Enter a reseller's panel without its consent, for a limited time. Platform only."
-      },
-      "manage": {
-        "label": "Manage resellers",
-        "description": "Create resellers and change their packages and status. Platform only."
       }
     },
     "tenant_billing": {

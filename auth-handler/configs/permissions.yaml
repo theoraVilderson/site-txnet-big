@@ -32,30 +32,19 @@ roles:
   SuperAdmin:
     permissions:
       - *
-      # Tenant administration — resellers, the packages sold to them, their
-      # subscription and status (F-018, ADR-0058). Listed although `*` already
-      # allows it, because it is the one permission **no named role holds**:
-      # the platform owner's own staff reach reseller administration as
-      # SuperAdmin and nobody else (user, 2026-09-17). `TenantPackageService`
-      # and its siblings still refuse any tenant but the platform owner's, so
-      # this line is the outer door, never the boundary.
-      - tenant.manage
-      # The systems surface — registering a panel (F-027-ar, ADR-0080). Held by
-      # no named role for `tenant.manage`'s reason: the collector dials what is
-      # registered, and only the platform owner registers.
-      # `PanelRegistrationService` refuses any other tenant regardless.
-      - panel.manage
       # Tier C, emergency entry into a reseller without its consent (F-117-d,
-      # ADR-0104 (5)). Beside `tenant.manage` and for its reason: held by no
-      # named role, and a line under `Admin` would let every tenant grant it
-      # to its own roles. Given by hand, one person at a time.
+      # ADR-0104 (5)). Held by no named role, as the platform set below is: a
+      # line under `Admin` would let every tenant grant it to its own roles.
+      # Given by hand, one person at a time.
       - tenant.emergency_access
       # The platform's staff set (AC-1-c, catalog §3.3, ADR-0135): its own
       # `platform.` namespace, apart from every tenant key, under no role but
       # this one — so outside the tenant ceiling, and the role editor refuses
       # it on any tenant-made role. `shared-core/.../tenant/platform-keys.ts`
       # says what each opens; a platform key counts only for a caller signed in
-      # to the platform owner's tenant.
+      # to the platform owner's tenant. They replace `tenant.manage` and
+      # `panel.manage` (AC-1-d); the services still refuse any tenant but the
+      # platform owner's, so a line here is the outer door, never the boundary.
       - platform.tenant.create
       - platform.tenant.manage
       - platform.plan.assign

@@ -29,7 +29,7 @@ import { TimeZoneSection } from "./_components/TimeZoneSection";
  * - `appearance` — theme, language, their time zone (TZ-1-e) and the motion
  *   level (`ui.motion`, UX-1-l);
  * - `workspace` — the platform's operating currency (F-116-h) and time zone,
- *   for its staff with `tenant.manage` (or `*`) only: a reseller can grant
+ *   for its staff with `settings.manage` (or `*`) only: a reseller can grant
  *   itself that key, so the tenant type gates it as well. A reseller's
  *   currency is in its workspace, because its owner's session carries the
  *   platform tenant (invariant 21). The manual-rate card (F-116-l) is here for

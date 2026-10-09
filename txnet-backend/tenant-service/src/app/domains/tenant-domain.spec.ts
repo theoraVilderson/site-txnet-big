@@ -33,7 +33,7 @@ describe('TenantDomainService', () => {
   const at = (hours: number) => new Date(T0.getTime() + hours * HOUR);
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
   const stranger = { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] };
 
   type Row = Record<string, unknown> & { id: string; tenantId: string; domainValue: string };

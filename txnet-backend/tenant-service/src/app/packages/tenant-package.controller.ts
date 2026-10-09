@@ -20,7 +20,7 @@ import {
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { TenantPermissionGuard } from '../request/tenant-permission.guard';
+import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   CreatePackageInput,
@@ -60,7 +60,8 @@ const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
  * proved, not a token this service reads.
  */
 @Controller('tenant-packages')
-@UseGuards(TenantPermissionGuard)
+@UseGuards(PlatformPermissionGuard)
+@PlatformRoute('platform.plan.assign')
 export class TenantPackageController {
   constructor(private readonly packages: TenantPackageService) {}
 

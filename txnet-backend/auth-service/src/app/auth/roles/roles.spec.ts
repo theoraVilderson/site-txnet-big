@@ -64,7 +64,7 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
       findMany: vi.fn().mockImplementation(({ where }: { where: { key: { in: string[] } } }) =>
         Promise.resolve(
           where.key.in
-            .filter((key) => ['user.view', 'wallet.view', 'role.manage', 'tenant.manage', 'platform.report.read'].includes(key))
+            .filter((key) => ['user.view', 'wallet.view', 'role.manage', 'support.agent', 'platform.report.read'].includes(key))
             .map((key) => ({ id: `perm-${key}`, key })),
         ),
       ),
@@ -126,16 +126,16 @@ describe('RolesService', () => {
     it('refuses a permission key the caller does not hold', async () => {
       const { prisma, service } = harness();
       await expect(
-        service.create(RESELLER, { name: 'Support', permissions: ['tenant.manage'] }),
+        service.create(RESELLER, { name: 'Support', permissions: ['support.agent'] }),
       ).rejects.toBeInstanceOf(ForbiddenException);
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('lets `*` grant any key that exists', async () => {
       const { tx, service } = harness();
-      await service.create(SUPER, { name: 'Ops', permissions: ['tenant.manage'] });
+      await service.create(SUPER, { name: 'Ops', permissions: ['support.agent'] });
       expect(tx.rolePermission.createMany.mock.calls[0][0].data).toEqual([
-        { roleId: 'role-new', permissionId: 'perm-tenant.manage' },
+        { roleId: 'role-new', permissionId: 'perm-support.agent' },
       ]);
     });
 
