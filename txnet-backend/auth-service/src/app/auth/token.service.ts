@@ -53,6 +53,12 @@ export type AuthClaims = {
    */
   personal?: boolean;
   /**
+   * A personal answer of someone signed in to the platform owner's tenant
+   * (ADR-0139 (4)): the gate admits a `platform.` key outside the role's entry
+   * only on a token carrying this. Absent otherwise.
+   */
+  platformTenant?: boolean;
+  /**
    * The account is restricted (`suspended`, ADR-0133): `permissions` is empty
    * and the gate and `AuthGuard` admit the token only on their allow-lists —
    * the person's own support conversations, `me`, sign-out. Absent otherwise.
@@ -103,7 +109,7 @@ export class TokenService {
    * applies to, and for anyone else refused at once as stale, never wider.
    */
   signAccessToken(user: any, sessionId: string, access?: UserAccess): string {
-    const { keys: permissions, personal } = access ?? roleAccessOf(user);
+    const { keys: permissions, personal, platformTenant } = access ?? roleAccessOf(user);
     // Anything but `active` is restricted — a caller that forgot to read the
     // status gets the narrow token, never the whole one (ADR-0133). A banned
     // account never reaches here: every sign-in path refuses it first.
@@ -119,6 +125,7 @@ export class TokenService {
       // staleness rule would answer `permissionsChanged` on every request.
       permHash: permissionFingerprint(permissions),
       ...(personal ? { personal: true } : {}),
+      ...(platformTenant ? { platformTenant: true } : {}),
       ...(restricted ? { restricted: true } : {}),
       sessionId,
     });

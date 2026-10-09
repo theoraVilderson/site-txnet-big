@@ -13,8 +13,11 @@ export type AccessSources = {
 /**
  * The answer: the keys a token carries, and whether anything beyond the role
  * applies — the one case the gate compares a per-person fingerprint for.
+ * `platformTenant`: a personal answer of someone signed in to the platform
+ * owner's tenant, the one place a `platform.` key may come from a group
+ * (ADR-0139 (4)); the gate admits such a key only on a token marked so.
  */
-export type UserAccess = { keys: string[]; personal: boolean };
+export type UserAccess = { keys: string[]; personal: boolean; platformTenant?: true };
 
 const WILDCARD = '*';
 

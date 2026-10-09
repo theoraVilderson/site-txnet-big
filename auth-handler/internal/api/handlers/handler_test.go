@@ -221,7 +221,7 @@ func newHandler(t *testing.T, redisReply func(string) string, engine *auth.Engin
 func testEngine(t *testing.T) *auth.Engine {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "permissions.yaml")
-	policy := "roles:\n  root:\n    permissions:\n      - *\n  admin:\n    permissions:\n      - user.read\n      - user.write\n  user:\n    permissions:\n      - self.read\n"
+	policy := "roles:\n  root:\n    permissions:\n      - *\n      - platform.report.read\n  admin:\n    permissions:\n      - user.read\n      - user.write\n  user:\n    permissions:\n      - self.read\n"
 	if err := os.WriteFile(path, []byte(policy), 0o600); err != nil {
 		t.Fatalf("write policy: %v", err)
 	}
@@ -553,6 +553,44 @@ func TestValidateHoldsAPersonalTokenToTheCeiling(t *testing.T) {
 		}, http.StatusForbidden},
 		{"a personal user claiming the wildcard", map[string]any{
 			"roleName": "user", "personal": true, "permissions": []string{"self.read", "*"},
+		}, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, sessionActive, testEngine(t))
+			if w := call(t, h, sign(t, validClaims(tc.claims), testSecret)); w.Code != tc.want {
+				t.Errorf("status = %d, want %d (body %q)", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+}
+
+// ADR-0139 (4): the platform's own group may give a `platform.` key to the
+// platform's own user. The gate cannot read a tenant's type, so it admits such
+// a key, outside the ceiling, only on a personal token the signer marked as the
+// platform's — and only a key the file lists.
+func TestValidateAdmitsAPlatformKeyOnlyOnThePlatformsPersonalToken(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		claims map[string]any
+		want   int
+	}{
+		{"the platform's personal user given a platform key", map[string]any{
+			"roleName": "user", "personal": true, "platformTenant": true, "permissions": []string{"self.read", "platform.report.read"},
+		}, http.StatusOK},
+		{"the same on a role the platform made", map[string]any{
+			"roleName": "Desk", "roleScope": "tenant", "personal": true, "platformTenant": true, "permissions": []string{"user.read", "platform.report.read"},
+		}, http.StatusOK},
+		{"a reseller's personal user claiming one", map[string]any{
+			"roleName": "user", "personal": true, "permissions": []string{"self.read", "platform.report.read"},
+		}, http.StatusForbidden},
+		{"the mark without personal", map[string]any{
+			"roleName": "user", "platformTenant": true, "permissions": []string{"self.read", "platform.report.read"},
+		}, http.StatusForbidden},
+		{"a platform key the file does not list", map[string]any{
+			"roleName": "user", "personal": true, "platformTenant": true, "permissions": []string{"platform.everything"},
+		}, http.StatusForbidden},
+		{"the wildcard, still", map[string]any{
+			"roleName": "user", "personal": true, "platformTenant": true, "permissions": []string{"*"},
 		}, http.StatusForbidden},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

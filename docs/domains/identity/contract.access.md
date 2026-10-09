@@ -22,13 +22,14 @@ Code: `auth-service/src/app/auth/permissions/access.ts` (`accessOf`, pure) and
 |---|---|
 | **Keys** | the role's keys, plus every group's role keys and extra keys (a membership that has ended counts for nothing), plus the keys given to the person, **minus the keys taken from them**. A removal wins over every source, the role included (user, 2026-10-08) |
 | **Personal** | true when anything beyond the role applies: a key given or taken, or a membership of a group that gives access. Everyone else's answer is exactly their role's |
+| **`platform.` keys** | from a group only for a person of the platform owner's tenant (GR-1-e, ADR-0139 (4)); dropped for anyone else, whatever the group holds. Such a personal answer carries `platformTenant` |
 | **`*`** | the role's alone. A `*` role is neither widened nor narrowed; `*` from any other source is dropped |
 
 ## Where it is read
 
 | Reader | How |
 |---|---|
-| A token mint (sign-in, refresh, switch, impersonation) | `AccessReader.ofLoaded(user)`, then `TokenService` mints `permissions` = the keys, `permHash` = their fingerprint, `personal: true` when personal |
+| A token mint (sign-in, refresh, switch, impersonation) | `AccessReader.ofLoaded(user)`, then `TokenService` mints `permissions` = the keys, `permHash` = their fingerprint, `personal: true` when personal, `platformTenant: true` when also of the platform owner's tenant (the gate's only way to know, forward-auth v5) |
 | The Redis writer (`PermissionNotificationsListener`) | `AccessReader.ofIds` for each person a notification reaches; writes `user:<id>:permissions` for a personal person, **deletes** it otherwise |
 | The gate and `AuthGuard` | the token, compared against the person's key when present, the role's key when not (ADR-0138 (4)) |
 | The authority rule (ADR-0103) | the target's whole answer, read on the writer's transaction: impersonation, role assignment, block, profile edit, a key write, and the users list's `canAct` (AC-1-l) |

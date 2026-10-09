@@ -32,7 +32,8 @@ const ROLES: Record<string, { id: string; tenantId: string | null; name: string;
   user: { id: 'role-user', tenantId: null, name: 'user', rolePermissions: [] },
 };
 
-function harness(start: { roleId?: string | null; keys?: string[]; members?: string[]; allTenants?: boolean } = {}) {
+function harness(start: { roleId?: string | null; keys?: string[]; members?: string[]; allTenants?: boolean; platform?: boolean } = {}) {
+  const tenantType = start.platform ? 'platform_owner' : 'reseller';
   const group = { id: GROUP, tenantId: TENANT, name: 'Desk crew', kind: 'manual', allTenants: start.allTenants ?? false, roleId: start.roleId ?? null, createdAt: new Date(), updatedAt: new Date() };
   const groupKeys = new Set(start.keys ?? []);
   const members = new Set(start.members ?? [ALI]);
@@ -49,7 +50,7 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
 
   const tx = {
     $executeRaw: vi.fn(async () => undefined),
-    tenant: { findUnique: vi.fn(async () => ({ tenantType: 'reseller', ownerUserId: 'u-owner' })) },
+    tenant: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === TENANT ? tenantType : 'reseller', ownerUserId: 'u-owner' })) },
     role: { findFirst: vi.fn(async ({ where }: { where: { id: string } }) => roleOf(where.id)) },
     permission: { findMany: vi.fn(async ({ where }: { where: { key: { in: string[] } } }) => where.key.in.filter((k) => k !== 'no.such').map((key) => ({ id: `perm-${key}`, key }))) },
     userGroup: {
@@ -90,7 +91,9 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
     },
     user: {
       findMany: vi.fn(async ({ where }: { where: { id: { in: string[] } } }) =>
-        where.id.in.filter((id) => people[id]).map((id) => ({ ...people[id], role: roleOf(people[id].roleId) })),
+        where.id.in
+          .filter((id) => people[id])
+          .map((id) => ({ ...people[id], role: roleOf(people[id].roleId), tenant: { tenantType: people[id].tenantId === TENANT ? tenantType : 'reseller' } })),
       ),
     },
     userPermission: { findMany: vi.fn(async () => []) },
@@ -190,5 +193,44 @@ describe('a group holds access (AC-1-m)', () => {
 
     const receives = Object.fromEntries(page.items.map((m) => [m.userId, m.receivesAccess]));
     expect(receives).toEqual({ [ALI]: true, [FAR]: false });
+  });
+});
+
+describe("the platform's own groups give platform keys (GR-1-e, ADR-0139 (4))", () => {
+  const staff = (extra: string[] = []) => lead(['user_group.manage', 'platform.tenant.manage', 'platform.report.read', ...extra]);
+
+  it("gives its own users a platform key the writer holds, and marks their answer the platform's", async () => {
+    const h = harness({ platform: true });
+    await inTenant(() => h.service.setAccess(staff(), GROUP, { roleId: null, keys: ['platform.report.read'] }));
+
+    expect(await h.answer(ALI)).toEqual({ keys: ['platform.report.read'], personal: true, platformTenant: true });
+  });
+
+  it("never reaches another tenant's member of a platform group", async () => {
+    const h = harness({ platform: true, keys: ['platform.report.read'], members: [ALI, FAR] });
+    expect((await h.answer(FAR))?.keys).toEqual([]);
+    expect((await h.answer(FAR))?.platformTenant).toBeUndefined();
+  });
+
+  it('refuses a platform key the writer does not hold', async () => {
+    const h = harness({ platform: true });
+    await expect(reason(inTenant(() => h.service.setAccess(staff(), GROUP, { roleId: null, keys: ['platform.impersonate'] })))).resolves.toBe('key_not_held');
+  });
+
+  it("refuses one on a reseller's group, whoever writes it", async () => {
+    const h = harness();
+    await expect(reason(inTenant(() => h.service.setAccess(lead(['*']), GROUP, { roleId: null, keys: ['platform.report.read'] })))).resolves.toBe(
+      'key_not_grantable',
+    );
+  });
+
+  it("drops a platform key a reseller's group holds anyway — the answer, not only the writer, keeps the line", async () => {
+    const h = harness({ keys: ['platform.report.read', 'coupon.manage'] });
+    expect(await h.answer(ALI)).toEqual({ keys: ['coupon.manage'], personal: true });
+  });
+
+  it('still refuses `*`, on the platform too', async () => {
+    const h = harness({ platform: true });
+    await expect(reason(inTenant(() => h.service.setAccess(staff(['*']), GROUP, { roleId: 'role-super', keys: [] })))).resolves.toBe('key_not_grantable');
   });
 });

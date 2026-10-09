@@ -45,6 +45,10 @@ type Claims struct {
 	// fingerprint, and a key outside the role's policy entry is held to the
 	// tenant ceiling instead of refused.
 	Personal bool `json:"personal"`
+	// PlatformTenant marks a personal token of the platform owner's tenant
+	// (ADR-0139 (4)): a `platform.` key the policy file lists is then admitted
+	// beyond the ceiling. The signer reads the tenant; the gate cannot.
+	PlatformTenant bool `json:"platformTenant"`
 	// Restricted marks a restricted account (`suspended`, ADR-0133): its
 	// permissions are empty and the gate admits it only on its allow-list.
 	Restricted     bool   `json:"restricted"`

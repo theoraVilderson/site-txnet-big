@@ -358,8 +358,10 @@ export class UserGroupAdminService {
    * What the group gives its user members of this tenant: a role (this
    * tenant's or a template) and/or extra keys — the **whole** set (AC-1-m,
    * ADR-0138 (7)). Only what the writer holds: every key of the role and every
-   * extra key, never `*` or a `platform.` key. Not on "every reseller": its
-   * members are resellers, not people. The same set again writes nothing.
+   * extra key, never `*`. A `platform.` key only on the platform's own group,
+   * which gives it only to the platform's own users (ADR-0139 (4)). Not on
+   * "every reseller": its members are resellers, not people. The same set
+   * again writes nothing.
    *
    * The triggers move each member's token after commit; each member whose
    * answer moved is told what it gained and lost (`access.changed`).
@@ -370,7 +372,9 @@ export class UserGroupAdminService {
     return tenantTransaction(this.prisma, async (tx) => {
       const row = await this.mustFind(tx, id);
       if (row.allTenants) throw new UserGroupRefused('access_on_resellers', id);
-      if (keys.some((k) => k === '*' || isPlatformKey(k))) throw new UserGroupRefused('key_not_grantable');
+      const platform = await this.isPlatform(tx, tenant.id);
+      const grantable = (k: string) => k !== '*' && (platform || !isPlatformKey(k));
+      if (!keys.every(grantable)) throw new UserGroupRefused('key_not_grantable');
 
       let roleKeys: string[] = [];
       if (input.roleId) {
@@ -380,7 +384,7 @@ export class UserGroupAdminService {
         });
         if (!role) throw new UserGroupRefused('role_not_found', input.roleId);
         roleKeys = role.rolePermissions.map((rp) => rp.permission.key);
-        if (roleKeys.some((k) => k === '*' || isPlatformKey(k))) throw new UserGroupRefused('key_not_grantable', input.roleId);
+        if (!roleKeys.every(grantable)) throw new UserGroupRefused('key_not_grantable', input.roleId);
       }
       const known = keys.length > 0 ? await tx.permission.findMany({ where: { key: { in: keys } }, select: { id: true, key: true } }) : [];
       if (known.length !== keys.length) throw new UserGroupRefused('key_unknown', keys.filter((k) => !known.some((p) => p.key === k)).join(','));

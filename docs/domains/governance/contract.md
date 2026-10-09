@@ -64,7 +64,7 @@ their answer (identity `contract.access.md`). Set by
 |---|---|
 | Only the group's **own tenant's** user members hold it. A platform group's reseller customer, or a reseller member, gets nothing | `AccessReader` counts a membership only when the person's tenant is the group's |
 | Not on "every reseller" (`allTenants`): `access_on_resellers` | `setAccess` |
-| The role is this tenant's or a template (`role_not_found`); no `*` and no `platform.` key, in the role or the keys (`key_not_grantable`); every key exists (`key_unknown`) and the writer holds it (`key_not_held`) | `setAccess` |
+| The role is this tenant's or a template (`role_not_found`); no `*`, and no `platform.` key but on the platform's own group (GR-1-e, ADR-0139 (4)), in the role or the keys (`key_not_grantable`); every key exists (`key_unknown`) and the writer holds it (`key_not_held`) | `setAccess` |
 | Joining or leaving a group that gives access is a grant: the writer holds every key it gives (`key_not_held`) and has authority over the person (ADR-0103, `no_authority` — yourself included) | `UserGroupAdminService.mayMove` |
 | A role a group gives is `role.inUse` to a delete | FK RESTRICT; `RolesService.remove` |
 | Every member whose answer moved is told: `access.changed`, cause `group_access`, with the keys gained and lost — on access set, member add or remove, and group delete. `user_group_access_set` is audited with the set before and after | `UserGroupAdminService.tell` |

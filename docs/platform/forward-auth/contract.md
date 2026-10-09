@@ -2,7 +2,7 @@
 id: forward-auth
 layer: platform
 status: active
-version: 4
+version: 5
 updated: 2026-10-09
 ---
 
@@ -173,6 +173,10 @@ before the claim, is looked up by name as above.
 in a group that holds access — is checked by its role's entry first, and only
 the keys that entry lacks are then held to the ceiling. A token without the
 mark is checked exactly as above, so the file still bounds every grant.
+A personal token also marked `platformTenant: true` (v5, GR-1-e, ADR-0139 (4))
+— the signer read that its holder is of the platform owner's tenant, which the
+gate cannot — may then hold, beyond the ceiling, a `platform.` key the file
+lists by name. `*` never counts as a listing.
 
 The ceiling is the outer door. The inner one is `auth-service`'s rule that a
 role is granted only what its writer holds (identity `contract.roles.md`), and

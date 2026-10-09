@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 49
+version: 50
 updated: 2026-10-09
 ---
 
@@ -64,7 +64,7 @@ removal path, so neither id can be read as the other.
 | `access_on_resellers` | 409 | access on an every-reseller group (v46) |
 | `role_not_found` | 404 | the role is neither this tenant's nor a template |
 | `key_unknown` | 400 | a key with no `permission` row |
-| `key_not_grantable` | 403 | `*` or a `platform.` key, in the keys or the role |
+| `key_not_grantable` | 403 | `*`, or a `platform.` key on any group but the platform's own (v50, GR-1-e), in the keys or the role |
 | `key_not_held` | 403 | the caller does not hold a key the group would give — on setting access, and on adding or removing a member of a group that gives it |
 | `expiry_past` | 400 | a membership's end at or before now, on add or on a move (v49) |
 | `reseller_limit_reached` | 409 | a member add or access set on a reseller's group that would make more people hold a reseller key through its groups than `staff_members_max` (GR-1-b); body adds `facts {key, limit, used}` |

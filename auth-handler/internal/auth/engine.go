@@ -15,7 +15,13 @@ type Engine struct {
 	// most a role a tenant made may claim (F-018-n2). Computed once at load,
 	// so a permission added to a system role widens it with no second list.
 	tenantCeiling RolePolicy
+	// platformSet is every `platform.` key the file lists: what the platform's
+	// own group may give its own user (ADR-0139 (4)), outside the ceiling.
+	platformSet RolePolicy
 }
+
+// PlatformKeyPrefix starts every key of the platform's staff set (AC-1-c).
+const PlatformKeyPrefix = "platform."
 
 // LoadFile parses a permissions file with the following simple format:
 // roles:
@@ -74,7 +80,7 @@ func LoadFile(path string) (*Engine, error) {
 		return nil, fmt.Errorf("policy: no roles defined in %s", path)
 	}
 
-	return &Engine{roles: roles, tenantCeiling: ceilingOf(roles)}, nil
+	return &Engine{roles: roles, tenantCeiling: ceilingOf(roles), platformSet: platformSetOf(roles)}, nil
 }
 
 // ceilingOf is the union of every role that does not hold `*`. The wildcard
@@ -91,6 +97,20 @@ func ceilingOf(roles map[string]RolePolicy) RolePolicy {
 		}
 	}
 	return ceiling
+}
+
+// platformSetOf is every listed key with the platform prefix, in any role.
+// Listed by name, so `*` never stands in for one.
+func platformSetOf(roles map[string]RolePolicy) RolePolicy {
+	set := RolePolicy{Permissions: make(map[string]struct{})}
+	for _, role := range roles {
+		for p := range role.Permissions {
+			if strings.HasPrefix(p, PlatformKeyPrefix) {
+				set.Permissions[p] = struct{}{}
+			}
+		}
+	}
+	return set
 }
 
 // Check verifies that roleName exists and that every permission in
@@ -119,6 +139,18 @@ func (e *Engine) Check(roleName string, claimedPermissions []string) (unauthoriz
 func (e *Engine) CheckTenantRole(claimedPermissions []string) (unauthorized []string, ok bool) {
 	for _, p := range claimedPermissions {
 		if !e.tenantCeiling.Allows(p) {
+			unauthorized = append(unauthorized, p)
+		}
+	}
+	return unauthorized, len(unauthorized) == 0
+}
+
+// CheckPlatformKeys admits a key of the platform's set listed in the file
+// (ADR-0139 (4)). The caller asks it only for a personal token the signer
+// marked as the platform owner's tenant; the gate cannot read a tenant's type.
+func (e *Engine) CheckPlatformKeys(claimedPermissions []string) (unauthorized []string, ok bool) {
+	for _, p := range claimedPermissions {
+		if _, listed := e.platformSet.Permissions[p]; !listed {
 			unauthorized = append(unauthorized, p)
 		}
 	}

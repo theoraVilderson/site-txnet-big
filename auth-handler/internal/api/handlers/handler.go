@@ -125,6 +125,11 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 				// to this person, and is admitted inside the tenant ceiling.
 				unauthorized, ok = h.engine.CheckTenantRole(unauthorized)
 			}
+			if !ok && claims.Personal && claims.PlatformTenant {
+				// ADR-0139 (4): the platform's own group gave a `platform.` key
+				// to the platform's own user — the signer read the tenant.
+				unauthorized, ok = h.engine.CheckPlatformKeys(unauthorized)
+			}
 			if !ok {
 				h.logger.Warn("token claims unauthorized permissions",
 					"role", claims.RoleName, "role_id", claims.RoleID, "user_id", claims.Sub, "unauthorized", unauthorized)

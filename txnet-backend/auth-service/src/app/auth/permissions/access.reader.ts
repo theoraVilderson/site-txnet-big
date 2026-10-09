@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
-import { liveMembership } from '@txnet-backend/shared-core';
+import { TenantType, type Prisma } from '@prisma/client';
+import { isPlatformKey, liveMembership } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { accessOf, type AccessSources, type UserAccess } from './access';
 
@@ -13,7 +13,7 @@ const ROLE_KEYS = { role: { select: { rolePermissions: { select: { permission: {
 type GroupSource = { id: string; name: string; roleKeys: string[]; keys: string[] };
 
 /** Sources beyond the role, per person; empty for anyone nothing else applies to. */
-type Personal = Omit<AccessSources, 'roleKeys' | 'groups'> & { groups: GroupSource[] };
+type Personal = Omit<AccessSources, 'roleKeys' | 'groups'> & { groups: GroupSource[]; platformTenant: boolean };
 
 /** The client a read runs on: the cross-tenant pool by default, or a writer's own transaction. */
 type Reader = Pick<Prisma.TransactionClient, 'userPermission' | 'userGroupMember' | 'user'>;
@@ -52,7 +52,13 @@ export class AccessReader {
    */
   async ofLoadedMany(users: readonly LoadedUser[], client: Reader = this.prisma, at: Date = new Date()): Promise<Map<string, UserAccess>> {
     const personal = await this.personalOf(users, client, at);
-    return new Map(users.map((u) => [u.id, accessOf({ roleKeys: roleKeysOf(u), ...personal.get(u.id) })]));
+    return new Map(
+      users.map((u) => {
+        const { platformTenant, ...sources } = personal.get(u.id) ?? { platformTenant: false };
+        const access = accessOf({ roleKeys: roleKeysOf(u), ...sources });
+        return [u.id, access.personal && platformTenant ? { ...access, platformTenant: true } : access];
+      }),
+    );
   }
 
   /**
@@ -112,10 +118,12 @@ export class AccessReader {
    * What applies to each person beyond their role: the keys given to and
    * taken from them (AC-1-l), and every group of **their own tenant** that
    * gives access (AC-1-m), while the membership lasts (ADR-0139 (3)). A platform group may hold another tenant's user;
-   * the platform's keys are not theirs, so that membership counts for nothing.
+   * the platform's keys are not theirs, so that membership counts for nothing. A group's `platform.` key counts only
+   * for someone of the platform owner's tenant (ADR-0139 (4)): the writer refuses it elsewhere, and this drops it
+   * elsewhere, so a row written past the writer still reaches no reseller's token.
    */
   private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader, at: Date = new Date()): Promise<Map<string, Personal>> {
-    type Entry = { given: string[]; taken: string[]; groups: GroupSource[] };
+    type Entry = Personal & { given: string[]; taken: string[] };
     const out = new Map<string, Entry>();
     if (users.length === 0) return out;
     const ids = users.map((u) => u.id);
@@ -132,18 +140,21 @@ export class AccessReader {
           group: { select: { id: true, name: true, role: ROLE_KEYS.role, permissions: { select: { permission: { select: { key: true } } } } } },
         },
       }),
-      client.user.findMany({ where: { id: { in: ids } }, select: { id: true, tenantId: true } }),
+      client.user.findMany({ where: { id: { in: ids } }, select: { id: true, tenantId: true, tenant: { select: { tenantType: true } } } }),
     ]);
-    const entry = (id: string) => out.get(id) ?? (out.set(id, { given: [], taken: [], groups: [] }).get(id) as Entry);
+    const platformHome = new Set(tenants.filter((u) => u.tenant?.tenantType === TenantType.platform_owner).map((u) => u.id));
+    const entry = (id: string) =>
+      out.get(id) ?? (out.set(id, { given: [], taken: [], groups: [], platformTenant: platformHome.has(id) }).get(id) as Entry);
     for (const row of rows) (row.effect === 'take' ? entry(row.userId).taken : entry(row.userId).given).push(row.permission.key);
     const tenantOf = new Map(tenants.map((u) => [u.id, u.tenantId]));
     for (const m of memberships) {
       if (!m.userId || tenantOf.get(m.userId) !== m.tenantId) continue;
+      const counts = (k: string) => platformHome.has(m.userId as string) || !isPlatformKey(k);
       entry(m.userId).groups.push({
         id: m.group.id,
         name: m.group.name,
-        roleKeys: m.group.role?.rolePermissions.map((rp) => rp.permission.key) ?? [],
-        keys: m.group.permissions.map((p) => p.permission.key),
+        roleKeys: (m.group.role?.rolePermissions.map((rp) => rp.permission.key) ?? []).filter(counts),
+        keys: m.group.permissions.map((p) => p.permission.key).filter(counts),
       });
     }
     return out;
