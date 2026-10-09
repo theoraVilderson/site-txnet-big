@@ -1,4 +1,5 @@
 import {
+  holdsPermission,
   RedisTtl,
   ResellerAccess,
   ResellerAccessRefused,
@@ -6,7 +7,7 @@ import {
   SupportConsentRefused,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
-import type { Prisma } from '@prisma/client';
+import { TenantType, type Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ForbiddenException,
@@ -17,6 +18,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session/session.service';
 import { SessionStore } from '../auth/session/session.store';
+import { authorityOver, permissionsOf } from '../auth/users/authority';
 
 /**
  * An impersonated session is short-lived by design (invariant #7).
@@ -25,6 +27,10 @@ import { SessionStore } from '../auth/session/session.store';
  * invariant is written about should not live somewhere no catalogue can see.
  */
 const IMPERSONATION_TTL_SEC = RedisTtl.impersonation;
+
+/** A user read with their role's keys — both sides of the authority rule. */
+const WITH_KEYS = { role: { include: { rolePermissions: { include: { permission: true } } } } } as const;
+type UserWithKeys = Prisma.UserGetPayload<{ include: typeof WITH_KEYS }>;
 
 @Injectable()
 export class ImpersonationService {
@@ -60,18 +66,16 @@ export class ImpersonationService {
       throw new BadRequestException('Reason note must be at least 10 characters');
     }
     // The admin is a user of the platform's tenant: read before the reseller's scope opens.
-    const admin = await this.prisma.user.findUnique({ where: { id: actor.userId }, include: { role: true } });
+    const admin = await this.prisma.user.findUnique({ where: { id: actor.userId }, include: WITH_KEYS });
     try {
       return await this.access.asStaff('platform.impersonate').runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
         if (admitted.as !== 'staff') throw new ForbiddenException('Only the platform impersonates here');
-        const target = await this.prisma.user.findUnique({
-          where: { id: targetUserId },
-          include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
-        });
+        const target = await this.prisma.user.findUnique({ where: { id: targetUserId }, include: WITH_KEYS });
         const leftSec = admitted.support ? Math.floor((admitted.support.endsAt.getTime() - now.getTime()) / 1000) : IMPERSONATION_TTL_SEC;
         if (leftSec <= 0) throw new ForbiddenException('The consent has ended');
         return this.begin(actor.userId, targetUserId, admin, target, reasonNote, ip, userAgent, {
           expiresInSec: Math.min(IMPERSONATION_TTL_SEC, leftSec),
+          authority: { as: 'staff', tenantId: admitted.id },
           tenantId: admitted.id,
           ground: {
             consentId: admitted.support?.consentId ?? null,
@@ -97,21 +101,12 @@ export class ImpersonationService {
     ip: string,
     userAgent: string,
   ) {
-    const admin = await this.prisma.user.findUnique({
-      where: { id: adminId },
-      include: { role: true },
-    });
-    const target = await this.prisma.user.findUnique({
-      where: { id: targetUserId },
-      include: {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      },
-    });
+    const admin = await this.prisma.user.findUnique({ where: { id: adminId }, include: WITH_KEYS });
+    const target = await this.prisma.user.findUnique({ where: { id: targetUserId }, include: WITH_KEYS });
 
     return this.begin(adminId, targetUserId, admin, target, reasonNote, ip, userAgent, {
       expiresInSec: IMPERSONATION_TTL_SEC,
+      authority: { as: 'member', tenantId: admin?.tenantId ?? null },
       transact: (fn) => this.prisma.$transaction(fn),
     });
   }
@@ -119,13 +114,15 @@ export class ImpersonationService {
   private async begin(
     adminId: string,
     targetUserId: string,
-    admin: Prisma.UserGetPayload<{ include: { role: true } }> | null,
-    target: Prisma.UserGetPayload<{ include: { role: { include: { rolePermissions: { include: { permission: true } } } } } }> | null,
+    admin: UserWithKeys | null,
+    target: UserWithKeys | null,
     reasonNote: string,
     ip: string,
     userAgent: string,
     opts: {
       expiresInSec: number;
+      /** Who the actor is to the tenant the target is in — `authorityOver`'s inputs (ADR-0103). */
+      authority: { as: 'member' | 'staff'; tenantId: string | null };
       /** A reseller's user (F-117-e): whose log the start is written to, and what admitted the platform. */
       tenantId?: string;
       ground?: { consentId: string | null; emergencyEntryId: string | null };
@@ -135,9 +132,25 @@ export class ImpersonationService {
     if (!admin || !target) throw new BadRequestException('User not found');
     if (target.status !== 'active')
       throw new BadRequestException('Target user is not active');
+    // AC-1-h (§3.6 layer 1): the authority rule every act on another person
+    // asks (ADR-0103) — a peer holds every key the target holds and one more;
+    // never self, never the tenant's owner — and never anyone holding `*`,
+    // whoever asks (`'*'` is held only by a holder of `*`). No name is ranked,
+    // so a tenant-made role falls into the order by what it holds.
+    const tenant = opts.authority.tenantId
+      ? await this.prisma.tenant.findUnique({
+          where: { id: opts.authority.tenantId },
+          select: { ownerUserId: true, tenantType: true },
+        })
+      : null;
+    const targetKeys = permissionsOf(target).filter((k) => !k.startsWith('self.'));
     if (
-      target.roleId === admin.roleId ||
-      this.isRoleHigher(target.role, admin.role)
+      holdsPermission(targetKeys, '*') ||
+      authorityOver(
+        { userId: admin.id, permissions: permissionsOf(admin), as: opts.authority.as },
+        { userId: target.id, permissions: targetKeys },
+        { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
+      )
     ) {
       throw new ForbiddenException('You cannot impersonate this user');
     }
@@ -244,15 +257,5 @@ export class ImpersonationService {
     // `revokeSession` here would re-run the Postgres update a second time,
     // overwriting `revokedAt` outside that transaction.
     await this.sessions.drop(sessionId, session.userId);
-  }
-
-  private isRoleHigher(roleA: any, roleB: any): boolean {
-    const rank: Record<string, number> = {
-      SuperAdmin: 4,
-      Admin: 3,
-      Support: 2,
-      User: 1,
-    };
-    return (rank[roleA.name] ?? 0) >= (rank[roleB.name] ?? 0);
   }
 }

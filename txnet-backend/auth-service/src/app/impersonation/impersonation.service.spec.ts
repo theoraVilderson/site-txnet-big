@@ -4,19 +4,24 @@ import { ImpersonationService } from './impersonation.service';
 /**
  * Impersonation hands one account another account's session, so the only thing
  * standing between "support helps a customer" and "an admin becomes their own
- * boss" is the rank comparison in `isRoleHigher`. It is private, so it is
- * exercised through `startImpersonation` — the only caller — together with the
- * audit trail and the transaction boundary that trail depends on.
+ * boss" is the authority rule (`authorityOver`, ADR-0103) plus §3.6's "never a
+ * SuperAdmin" (AC-1-h). Both are exercised through `startImpersonation`
+ * together with the audit trail and the transaction boundary that trail
+ * depends on.
  */
 
+type TestRole = { id: string; name: string; perms: string[] };
 const ROLES = {
-  superAdmin: { id: 'role-super', name: 'SuperAdmin' },
-  admin: { id: 'role-admin', name: 'Admin' },
-  otherAdmin: { id: 'role-admin-2', name: 'Admin' },
-  support: { id: 'role-support', name: 'Support' },
-  user: { id: 'role-user', name: 'User' },
-  unknown: { id: 'role-x', name: 'TenantOwner' },
-};
+  superAdmin: { id: 'role-super', name: 'SuperAdmin', perms: ['*'] },
+  admin: { id: 'role-admin', name: 'Admin', perms: ['user.read', 'user.write', 'user.impersonate'] },
+  otherAdmin: { id: 'role-admin-2', name: 'Admin', perms: ['user.read', 'user.write', 'user.impersonate'] },
+  support: { id: 'role-support', name: 'Support', perms: ['user.read', 'user.impersonate'] },
+  user: { id: 'role-user', name: 'User', perms: [] },
+  // Tenant-made roles (F-018-n): the name is the reseller's choice and ranks nothing.
+  desk: { id: 'role-desk', name: 'Billing desk', perms: ['user.read'] },
+  wallet: { id: 'role-wallet', name: 'Billing desk', perms: ['user.read', 'wallet.manual_adjust'] },
+  calledSuper: { id: 'role-called-super', name: 'SuperAdmin', perms: ['user.read'] },
+} satisfies Record<string, TestRole>;
 
 const REASON = 'customer reported a failed top-up, ticket 4417';
 
@@ -32,6 +37,8 @@ function harness() {
   };
   const prisma = {
     user: { findUnique: vi.fn() },
+    // The admin's tenant: who owns it (ADR-0103 rules 2-3). Nobody here, unless a test says so.
+    tenant: { findUnique: vi.fn().mockResolvedValue({ ownerUserId: 'owner-0', tenantType: 'reseller' }) },
     session: {
       findUnique: vi.fn(),
       update: vi.fn((args: unknown) => ({ __op: 'session.update', args })),
@@ -84,23 +91,20 @@ function harness() {
   };
 }
 
-const userWith = (
-  role: { id: string; name: string },
-  over: Record<string, unknown> = {},
-) => ({
+const userWith = (role: TestRole, over: Record<string, unknown> = {}) => ({
   id: 'u',
   tenantId: 'tenant-1',
   roleId: role.id,
   status: 'active',
-  role: { ...role, rolePermissions: [] },
+  role: { id: role.id, name: role.name, rolePermissions: role.perms.map((key) => ({ permission: { key } })) },
   ...over,
 });
 
 /** `findUnique` is called for the admin first, then the target. */
 function actors(
   h: Harness,
-  adminRole: { id: string; name: string },
-  targetRole: { id: string; name: string },
+  adminRole: TestRole,
+  targetRole: TestRole,
   targetOver: Record<string, unknown> = {},
 ) {
   h.prisma.user.findUnique
@@ -117,7 +121,7 @@ const start = (h: Harness, reason = REASON) =>
     'jest-ua',
   );
 
-describe('ImpersonationService.startImpersonation — rank', () => {
+describe('ImpersonationService.startImpersonation — authority (AC-1-h)', () => {
   let h: Harness;
 
   beforeEach(() => {
@@ -130,7 +134,9 @@ describe('ImpersonationService.startImpersonation — rank', () => {
     ['Admin', 'User', ROLES.admin, ROLES.user],
     ['SuperAdmin', 'Admin', ROLES.superAdmin, ROLES.admin],
     ['Support', 'User', ROLES.support, ROLES.user],
-  ])('lets a %s impersonate a %s', async (_a, _t, adminRole, targetRole) => {
+    ['Admin', 'a tenant-made role inside what they hold', ROLES.admin, ROLES.desk],
+    ['Admin', 'a tenant-made role named SuperAdmin', ROLES.admin, ROLES.calledSuper],
+  ])('lets a %s impersonate %s', async (_a, _t, adminRole, targetRole) => {
     actors(h, adminRole, targetRole);
 
     await expect(start(h)).resolves.toEqual({
@@ -140,9 +146,13 @@ describe('ImpersonationService.startImpersonation — rank', () => {
   });
 
   it.each([
-    ['equal rank under a different role row', ROLES.admin, ROLES.otherAdmin],
-    ['a strictly higher rank', ROLES.admin, ROLES.superAdmin],
-    ['a higher rank, from Support', ROLES.support, ROLES.admin],
+    ['the same set under a different role row', ROLES.admin, ROLES.otherAdmin],
+    ['a SuperAdmin', ROLES.admin, ROLES.superAdmin],
+    ['a SuperAdmin, by a SuperAdmin', ROLES.superAdmin, ROLES.superAdmin],
+    ['someone holding more, from Support', ROLES.support, ROLES.admin],
+    // Ranked 0 by the old name table and so open to every admin: now refused,
+    // because the admin does not hold `wallet.manual_adjust`.
+    ['a tenant-made role holding a key the admin lacks', ROLES.admin, ROLES.wallet],
   ])('refuses %s', async (_label, adminRole, targetRole) => {
     actors(h, adminRole, targetRole);
 
@@ -150,7 +160,7 @@ describe('ImpersonationService.startImpersonation — rank', () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
-  it('refuses the same role row outright, before rank is consulted', async () => {
+  it('refuses the same role row outright', async () => {
     actors(h, ROLES.admin, ROLES.admin);
     await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
   });
@@ -171,25 +181,21 @@ describe('ImpersonationService.startImpersonation — rank', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  /**
-   * An unranked role name scores 0. Because the comparison is `>=`, two
-   * unranked roles refuse each other, and any ranked target outranks an
-   * unranked admin — the failure direction is "deny", which is the one we
-   * want when a new role is added and the table is not updated with it.
-   */
-  it('denies rather than allows when a role name is not in the rank table', async () => {
-    actors(h, ROLES.unknown, ROLES.user);
-    await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
-
-    vi.clearAllMocks();
-    actors(h, ROLES.unknown, { id: 'role-y', name: 'Auditor' });
+  it("refuses the tenant's owner, to everyone", async () => {
+    h.prisma.tenant.findUnique.mockResolvedValue({ ownerUserId: 'target-1', tenantType: 'reseller' });
+    actors(h, ROLES.superAdmin, ROLES.user);
     await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
-  it('lets a ranked admin impersonate an unranked role', async () => {
-    // rank(TenantOwner)=0 >= rank(SuperAdmin)=4 is false, so this is allowed.
-    actors(h, ROLES.superAdmin, ROLES.unknown);
+  it("lets the tenant's owner impersonate anyone but a SuperAdmin", async () => {
+    h.prisma.tenant.findUnique.mockResolvedValue({ ownerUserId: 'admin-1', tenantType: 'reseller' });
+    actors(h, ROLES.user, ROLES.wallet);
     await expect(start(h)).resolves.toMatchObject({ expiresIn: 1800 });
+
+    vi.clearAllMocks();
+    h.prisma.tenant.findUnique.mockResolvedValue({ ownerUserId: 'admin-1', tenantType: 'reseller' });
+    actors(h, ROLES.superAdmin, ROLES.superAdmin);
+    await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
   });
 });
 
@@ -234,10 +240,10 @@ describe('ImpersonationService.startImpersonation — preconditions', () => {
 
   /**
    * Ordering matters for what an attacker learns: a forbidden target is
-   * refused on rank even when the reason note is also missing, so a missing
-   * note never reveals that the rank check would have passed.
+   * refused on authority even when the reason note is also missing, so a missing
+   * note never reveals that the authority check would have passed.
    */
-  it('checks rank before the reason note', async () => {
+  it('checks authority before the reason note', async () => {
     actors(h, ROLES.admin, ROLES.superAdmin);
     await expect(start(h, '')).rejects.toBeInstanceOf(ForbiddenException);
   });

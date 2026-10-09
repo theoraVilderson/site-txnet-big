@@ -27,11 +27,13 @@ describe("impersonating a reseller's user", () => {
       adminAuditLog: { create: vi.fn(async () => ({})) },
     };
     const users: Record<string, unknown> = {
-      [STAFF]: { id: STAFF, roleId: 'r-super', role: { name: 'SuperAdmin' } },
+      [STAFF]: { id: STAFF, roleId: 'r-super', role: { name: 'SuperAdmin', rolePermissions: [{ permission: { key: '*' } }] } },
       [TARGET]: { id: TARGET, roleId: 'r-user', status: 'active', role: { name: 'User', rolePermissions: [] } },
     };
     const prisma = {
       user: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => users[where.id] ?? null) },
+      // The reseller, whose owner is someone else (ADR-0103 rule 2).
+      tenant: { findUnique: vi.fn(async () => ({ ownerUserId: 'reseller-owner', tenantType: 'reseller' })) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
     const sessionService = {
