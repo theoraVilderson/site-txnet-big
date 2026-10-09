@@ -133,6 +133,16 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			return response.Err(keyAccountRestricted, map[string]string{"reason": reasonAccountRestricted}), nil
 		}
 
+		// AC-1-g (§3.6, ADR-0136): an impersonated token reaches only the
+		// routes on the impersonation list; one nobody listed is closed.
+		if claims.IsImpersonated &&
+			!impersonationMayReach(r.Header.Get("X-Forwarded-Method"), r.Header.Get("X-Forwarded-Uri")) {
+			h.logger.Warn("impersonated token refused a route",
+				"user_id", claims.Sub, "impersonated_by", claims.ImpersonatedBy,
+				"method", r.Header.Get("X-Forwarded-Method"), "uri", r.Header.Get("X-Forwarded-Uri"))
+			return response.Err(keyImpersonationBlocked, map[string]string{"reason": reasonImpersonationBlocked}), nil
+		}
+
 		// Success: set identity headers.
 		w.Header().Set(HeaderUserID, claims.Sub)
 		w.Header().Set(HeaderTenantID, claims.TenantID)
@@ -330,14 +340,15 @@ func tokenFrom(r *http.Request) string {
 // `errors.json` is now a build failure in both languages, not a raw key shown
 // to a user of whichever side was missed.
 const (
-	keyAuthRequired       = i18nkeys.ErrorsAuthAuthorizationRequired
-	keyInvalidToken       = i18nkeys.ErrorsAuthInvalidToken
-	keyTokenExpired       = i18nkeys.ErrorsAuthTokenExpired
-	keySessionRevoked     = i18nkeys.ErrorsAuthSessionRevoked
-	keyPermissionsChanged = i18nkeys.ErrorsAuthPermissionsChanged
-	keyForbidden          = i18nkeys.ErrorsPermissionsForbidden
-	keyAccountRestricted  = i18nkeys.ErrorsAuthAccountRestricted
-	keyUnexpected         = i18nkeys.ErrorsSystemUnexpected
+	keyAuthRequired         = i18nkeys.ErrorsAuthAuthorizationRequired
+	keyInvalidToken         = i18nkeys.ErrorsAuthInvalidToken
+	keyTokenExpired         = i18nkeys.ErrorsAuthTokenExpired
+	keySessionRevoked       = i18nkeys.ErrorsAuthSessionRevoked
+	keyPermissionsChanged   = i18nkeys.ErrorsAuthPermissionsChanged
+	keyForbidden            = i18nkeys.ErrorsPermissionsForbidden
+	keyAccountRestricted    = i18nkeys.ErrorsAuthAccountRestricted
+	keyImpersonationBlocked = i18nkeys.ErrorsImpersonationBlockedAction
+	keyUnexpected           = i18nkeys.ErrorsSystemUnexpected
 )
 
 // msgSuccess is the `msg` of a 2xx. **It is not a translation key**, and was
@@ -359,7 +370,7 @@ func statusForKey(ok bool, msgKey string) int {
 		return http.StatusOK
 	}
 	switch msgKey {
-	case keyForbidden, keyAccountRestricted:
+	case keyForbidden, keyAccountRestricted, keyImpersonationBlocked:
 		return http.StatusForbidden
 	case keyUnexpected:
 		return http.StatusInternalServerError

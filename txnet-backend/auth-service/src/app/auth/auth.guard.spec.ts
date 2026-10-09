@@ -327,3 +327,48 @@ describe('AuthGuard — a restricted token (ADR-0133)', () => {
     await expect(at({}, Marked, 'shut')).resolves.toBe(true);
   });
 });
+
+/**
+ * AC-1-g (catalog §3.6 layer 4, ADR-0136). auth-service is not behind the
+ * gate, so its guard holds the impersonation list for its own routes: an
+ * impersonated token reaches only a listed `/api/auth` route, and the password,
+ * the account switcher, the sessions and every route nobody listed answer
+ * `403 impersonation.blockedAction`.
+ */
+describe('AuthGuard — an impersonated token (AC-1-g)', () => {
+  const tokens = new TokenService(configStub);
+  const guard = new AuthGuard(
+    tokens,
+    { read: vi.fn().mockResolvedValue({ userId: 'user-1', scopeKey: null }) } as unknown as SessionStore,
+    { isStale: vi.fn().mockResolvedValue(false) } as unknown as PermissionStateStore,
+    new Reflector(),
+  );
+  const at = (claims: object, method: string, originalUrl: string) => {
+    const { context, request } = contextWith(`Bearer ${tokens.sign({ ...accessClaims, ...claims })}`);
+    Object.assign(request, { method, originalUrl });
+    return guard.canActivate(context);
+  };
+  const impersonated = { isImpersonated: true, impersonatedBy: 'support-7' };
+
+  it('admits it on a listed route', async () => {
+    await expect(at(impersonated, 'GET', '/api/auth/me')).resolves.toBe(true);
+    await expect(at(impersonated, 'POST', '/api/auth/impersonate/end')).resolves.toBe(true);
+  });
+
+  it.each([
+    ['POST', '/api/auth/me/password'],
+    ['POST', '/api/auth/accounts/switch'],
+    ['GET', '/api/auth/sessions'],
+    ['GET', '/api/auth/roles'],
+  ])('refuses %s %s with impersonationBlocked', async (method, url) => {
+    const refusal = at(impersonated, method, url);
+    await expect(refusal).rejects.toThrow(ForbiddenException);
+    await expect(refusal).rejects.toMatchObject({
+      response: { i18nKey: 'impersonation.blockedAction', reason: 'impersonationBlocked' },
+    });
+  });
+
+  it('leaves an own token alone everywhere', async () => {
+    await expect(at({}, 'POST', '/api/auth/me/password')).resolves.toBe(true);
+  });
+});

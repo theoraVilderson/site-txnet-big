@@ -3,7 +3,7 @@ id: forward-auth
 layer: platform
 status: active
 version: 4
-updated: 2026-10-03
+updated: 2026-10-09
 ---
 
 # Contract — forward-auth
@@ -184,6 +184,21 @@ not already clean (`..`, `%`-encoding, `//`) is **403** `auth.accountRestricted`
 with `error.reason: accountRestricted`. Checked after the session and
 staleness checks, so a revoked token is still told to sign in. The agent and
 settings routes of support-service are siblings of these, never children.
+
+## An impersonated token (AC-1-g, ADR-0136)
+
+A token with `isImpersonated: true` is admitted only when `X-Forwarded-Method`
++ `X-Forwarded-Uri` is a row of `contracts/http/impersonation.json` — the
+user's own panel, never a staff route or §3.6's forbidden ones. `:name` matches
+one segment; the query is dropped; a missing method or URI, or a path not
+already clean, is refused. Anything else is **403**
+`impersonation.blockedAction` with `error.reason: impersonationBlocked`, after
+the session and staleness checks. The copy is `impersonationReach`
+(`internal/api/handlers/impersonation.go`), pinned to the file by
+`TestContractImpersonationReachIsTheFixture`; auth-service, not behind this
+gate, holds the same list in its `AuthGuard` (shared-core
+`http/impersonation.ts`). `tools/contracts.py` fails on a row naming no route
+or a forbidden one.
 
 ## Guarantees
 

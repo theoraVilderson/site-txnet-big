@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
+import { IMPERSONATION_BLOCKED_REASON, impersonationMayReach } from '@txnet-backend/shared-core';
 import { ALLOW_RESTRICTED } from './decorators/allow-restricted.decorator';
 import { TokenService } from './token.service';
 import { SessionStore } from './session/session.store';
@@ -85,6 +86,19 @@ export class AuthGuard implements CanActivate {
       throw new ForbiddenException({
         i18nKey: 'auth.accountRestricted',
         reason: 'accountRestricted',
+      });
+    }
+
+    // AC-1-g (§3.6, ADR-0136): an impersonated token reaches only the routes
+    // on the impersonation list — the same list the gate holds for the
+    // services behind it. A route nobody listed is closed.
+    if (
+      claims.isImpersonated &&
+      !impersonationMayReach(request.method, request.originalUrl ?? '')
+    ) {
+      throw new ForbiddenException({
+        i18nKey: 'impersonation.blockedAction',
+        reason: IMPERSONATION_BLOCKED_REASON,
       });
     }
 

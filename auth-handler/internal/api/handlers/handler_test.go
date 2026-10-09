@@ -512,7 +512,7 @@ func TestValidateForwardsImpersonation(t *testing.T) {
 		"impersonatedBy": "support-7",
 	}), testSecret)
 
-	w := call(t, h, token)
+	w := callAs(t, h, token, http.MethodGet, "/api/billing/offers") // a listed route (AC-1-g)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", w.Code)
 	}

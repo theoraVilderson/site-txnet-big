@@ -7,6 +7,7 @@ keywords: [forward auth, traefik, gateway, identity headers, wire contract, head
 source:
   - auth-handler/**
   - contracts/http/wire.json
+  - contracts/http/impersonation.json
   - tools/contracts.py
   - txnet-backend/shared-core/src/lib/http/**
 owns_tables: []

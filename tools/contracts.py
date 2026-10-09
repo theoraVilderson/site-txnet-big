@@ -406,6 +406,67 @@ def check_permission_registry() -> None:
     errors.extend(f"permissions.json {p}" for p in gen.missing_texts())
 
 
+IMPERSONATION = ROOT / "contracts" / "http" / "impersonation.json"
+_ROUTE = re.compile(r"@(Get|Post|Put|Patch|Delete)\(\s*(?:['`]([^'`]*)['`])?")
+
+
+def nest_routes() -> set[tuple[str, str]]:
+    """Every (METHOD, public path) a Nest controller declares, `:name` as `:`.
+
+    The global prefix is `api` in every service; a controller already spelled
+    `api/...` keeps one. A file may hold several controllers, so it is split at
+    each `@Controller(` and a route takes the prefix above it.
+    """
+    out: set[tuple[str, str]] = set()
+    for f in (ROOT / "txnet-backend").glob("*/src/**/*.controller.ts"):
+        if "node_modules" in f.parts:
+            continue
+        for part in re.split(r"(?=@Controller\()", f.read_text(encoding="utf-8"))[1:]:
+            m = re.match(r"@Controller\(\s*(?:['`]([^'`]*)['`])?", part)
+            prefix = (m.group(1) or "").strip("/")
+            for r in _ROUTE.finditer(part):
+                tail = (r.group(2) or "").strip("/")
+                p = "/api/" + "/".join(x for x in (prefix, tail) if x)
+                if p.startswith("/api/api/"):
+                    p = p[4:]
+                out.add((r.group(1).upper(), _shape(p)))
+    return out
+
+
+def _shape(path: str) -> str:
+    return "/".join(":" if s.startswith(":") else s for s in path.split("/"))
+
+
+def _under(path: str, prefix: str) -> bool:
+    want, got = _shape(prefix).split("/"), _shape(path).split("/")
+    return len(got) >= len(want) and all(w == ":" or w == g for w, g in zip(want, got))
+
+
+def check_impersonation() -> None:
+    """The impersonation list names real routes and nothing forbidden (AC-1-g, ADR-0136).
+
+    `contracts/http/impersonation.json` is what an impersonated token may
+    reach; auth-handler and shared-core each hold a copy pinned by a test. A
+    row naming no route is a renamed route the list silently closed; a row
+    under `never` — or holding a `neverWords` word — is one of §3.6's forbidden
+    paths opened.
+    """
+    data = json.loads(IMPERSONATION.read_text(encoding="utf-8"))
+    routes = nest_routes()
+    words = [w.lower() for w in data.get("neverWords", [])]
+    for row in data.get("allow", []):
+        method, path = row["method"], row["path"]
+        label = f"impersonation.json allow {method} {path}"
+        if not row.get("socket") and (method, _shape(path)) not in routes:
+            errors.append(f"{label}: no Nest controller declares this route")
+        for never in data.get("never", []):
+            if _under(path, never["prefix"]) and never.get("method", method) == method:
+                errors.append(f"{label}: under never {never['prefix']} ({never['why']})")
+        for w in words:
+            if w in path.lower():
+                errors.append(f"{label}: holds the forbidden word {w!r}")
+
+
 def main() -> int:
     show = "--list" in sys.argv
 
@@ -438,6 +499,7 @@ def main() -> int:
     check_default_role()
     check_generated_wire()
     check_permission_registry()
+    check_impersonation()
 
     for e in errors:
         print(f"ERROR {e}")

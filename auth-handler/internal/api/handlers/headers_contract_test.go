@@ -164,10 +164,11 @@ func TestContractImpersonatedResponseCarriesThePair(t *testing.T) {
 	fixture := loadWireFixture(t)
 
 	h, _ := newHandler(t, sessionActive, testEngine(t))
-	w := call(t, h, sign(t, validClaims(map[string]any{
+	// A listed route: anything else is refused before headers are set (AC-1-g).
+	w := callAs(t, h, sign(t, validClaims(map[string]any{
 		"isImpersonated": true,
 		"impersonatedBy": "support-7",
-	}), testSecret))
+	}), testSecret), http.MethodGet, "/api/billing/offers")
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200 (body %q)", w.Code, w.Body.String())
 	}
