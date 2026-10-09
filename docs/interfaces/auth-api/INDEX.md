@@ -57,9 +57,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-09 | Contract v48 -> **v49** (additive, GR-1-d): a reseller's groups by path — every `/auth/user-groups` write under `/auth/tenants/:tenantId/user-groups`; a membership's `expiresAt` on add, on the member page and moved by `PATCH …/members/users/:userId`; `expiry_past`. [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web (GR-1-f) |
 | 2026-10-09 | Contract v47 -> **v48** (additive, AC-1-p): a person's access history and the tenant's access log — `GET /auth/tenants/:tenantId[/users/:userId]/access-history`. [contract.roles.md](contract.roles.md); rules: audit `contract.md`. Consumer: panel-web |
 | 2026-10-09 | Contract v46 -> **v47** (additive, AC-1-n/o): a person's keys read names each group that gives access (`groups`); a group member carries `receivesAccess`. [contract.roles.md](contract.roles.md), [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web |
 | 2026-10-09 | Contract v45 -> **v46** (additive, AC-1-m): `PUT /auth/user-groups/:id/access`; a `group` carries `access`; six new refusals. [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web (AC-1-o) |
 | 2026-10-09 | Contract v44 -> **v45** (additive, AC-1-l): read, give or take, and lift one key on one person on a tenant's path — `/auth/tenants/:tenantId/users/:userId/keys[/:key]`. [contract.roles.md](contract.roles.md); rules: identity `contract.access.md`. Consumer: panel-web (AC-1-n) |
-| 2026-10-09 | Contract v43 -> **v44** (additive, AC-1-a): `GET`/`PATCH /auth/tenants/:tenantId/users/:userId` — one user with `emailMasked`; edit `fullName`, `username`, `email: null` only; `username_taken` 409. [contract.reseller-users.md](contract.reseller-users.md). Consumer: panel-web (AC-1-b) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

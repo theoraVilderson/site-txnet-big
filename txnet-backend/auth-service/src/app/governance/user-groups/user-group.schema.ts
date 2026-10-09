@@ -20,11 +20,21 @@ export const updateUserGroupSchema = z
   .strict()
   .refine((b) => b.name !== undefined || b.allTenants !== undefined, { message: 'name or allTenants is required' });
 
-/** At most 500 of each per call: a larger list is several calls, each its own audit row. */
+/**
+ * At most 500 of each per call: a larger list is several calls, each its own audit row.
+ * `expiresAt` (GR-1-d): when every membership this call adds ends; one in the past is the service's `expiry_past`.
+ */
 export const addUserGroupMembersSchema = z
-  .object({ userIds: z.array(uuid('userIds')).max(500).optional(), tenantIds: z.array(uuid('tenantIds')).max(500).optional() })
+  .object({
+    userIds: z.array(uuid('userIds')).max(500).optional(),
+    tenantIds: z.array(uuid('tenantIds')).max(500).optional(),
+    expiresAt: z.coerce.date().nullable().optional(),
+  })
   .strict()
   .refine((b) => (b.userIds?.length ?? 0) + (b.tenantIds?.length ?? 0) > 0, { message: 'userIds or tenantIds must name someone' });
+
+/** A membership's end moved, or cleared with `null` (GR-1-d, ADR-0139 (3)). */
+export const setUserGroupMemberEndSchema = z.object({ expiresAt: z.coerce.date().nullable() }).strict();
 
 export const userGroupMemberPageSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -46,6 +56,7 @@ export const setUserGroupAccessSchema = z
 export type CreateUserGroupBody = z.infer<typeof createUserGroupSchema>;
 export type UpdateUserGroupBody = z.infer<typeof updateUserGroupSchema>;
 export type AddUserGroupMembersBody = z.infer<typeof addUserGroupMembersSchema>;
+export type SetUserGroupMemberEndBody = { expiresAt: Date | null };
 export type UserGroupMemberPageQuery = z.infer<typeof userGroupMemberPageSchema>;
 /** `Required`: both fields are mandatory in the schema; this project's non-strict inference reads them optional. */
 export type SetUserGroupAccessBody = Required<z.infer<typeof setUserGroupAccessSchema>>;

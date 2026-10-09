@@ -37,11 +37,13 @@ import {
   AddUserGroupMembersBody,
   CreateUserGroupBody,
   SetUserGroupAccessBody,
+  SetUserGroupMemberEndBody,
   UpdateUserGroupBody,
   UserGroupMemberPageQuery,
   addUserGroupMembersSchema,
   createUserGroupSchema,
   setUserGroupAccessSchema,
+  setUserGroupMemberEndSchema,
   updateUserGroupSchema,
   userGroupMemberPageSchema,
 } from './user-group.schema';
@@ -66,14 +68,15 @@ export const USER_GROUP_REFUSAL_STATUS: Record<UserGroupRejection, 400 | 403 | 4
   key_not_grantable: 403,
   key_not_held: 403,
   no_authority: 403,
+  expiry_past: 400,
 };
 
-const READ = {
+export const USER_GROUP_READ = {
   key: (req: Request & { user?: AuthClaims }) => rateLimitBucketKey(RateLimitBucket.USER_GROUP_READ, req?.user?.sub ?? req?.ip),
   configKey: 'USER_GROUP_READ_RATE_LIMIT' as const,
   windowSec: 900,
 };
-const WRITE = {
+export const USER_GROUP_WRITE = {
   key: (req: Request & { user?: AuthClaims }) => rateLimitBucketKey(RateLimitBucket.USER_GROUP_WRITE, req?.user?.sub ?? req?.ip),
   configKey: 'USER_GROUP_WRITE_RATE_LIMIT' as const,
   windowSec: 900,
@@ -95,14 +98,14 @@ export class UserGroupController {
   constructor(private readonly groups: UserGroupAdminService) {}
 
   @Get()
-  @RateLimit(READ)
+  @RateLimit(USER_GROUP_READ)
   list(@Req() req: Request) {
     return this.refusing(() => this.groups.list(this.actor(req)));
   }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   create(@Body(new ZodValidationPipe(createUserGroupSchema)) body: CreateUserGroupBody, @Req() req: Request) {
     // The schema requires `name`; the cast is for this project's non-strict
     // tsconfig, under which zod infers every key as optional.
@@ -110,19 +113,19 @@ export class UserGroupController {
   }
 
   @Patch(':id')
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   update(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(updateUserGroupSchema)) body: UpdateUserGroupBody, @Req() req: Request) {
     return this.refusing(() => this.groups.update(this.actor(req), id, body));
   }
 
   @Delete(':id')
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   remove(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     return this.refusing(() => this.groups.remove(this.actor(req), id));
   }
 
   @Get(':id/members')
-  @RateLimit(READ)
+  @RateLimit(USER_GROUP_READ)
   members(@Param('id', new ParseUUIDPipe()) id: string, @Query(new ZodValidationPipe(userGroupMemberPageSchema)) query: UserGroupMemberPageQuery, @Req() req: Request) {
     const q = query as Required<UserGroupMemberPageQuery>;
     return this.refusing(() => this.groups.members(this.actor(req), id, q.page, q.pageSize));
@@ -130,26 +133,38 @@ export class UserGroupController {
 
   /** What the group gives its user members: a role and/or keys, the whole set (AC-1-m, ADR-0138). */
   @Put(':id/access')
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   setAccess(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(setUserGroupAccessSchema)) body: SetUserGroupAccessBody, @Req() req: Request) {
     return this.refusing(() => this.groups.setAccess(this.actor(req), id, body));
   }
 
   @Post(':id/members')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   addMembers(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(addUserGroupMembersSchema)) body: AddUserGroupMembersBody, @Req() req: Request) {
     return this.refusing(() => this.groups.addMembers(this.actor(req), id, body));
   }
 
+  /** A membership's end moved or cleared in place (GR-1-d). */
+  @Patch(':id/members/users/:userId')
+  @RateLimit(USER_GROUP_WRITE)
+  setMemberEnd(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Body(new ZodValidationPipe(setUserGroupMemberEndSchema)) body: SetUserGroupMemberEndBody,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.groups.setMemberEnd(this.actor(req), id, userId, body.expiresAt ?? null));
+  }
+
   @Delete(':id/members/users/:userId')
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   removeUser(@Param('id', new ParseUUIDPipe()) id: string, @Param('userId', new ParseUUIDPipe()) userId: string, @Req() req: Request) {
     return this.refusing(() => this.groups.removeMember(this.actor(req), id, { userId }));
   }
 
   @Delete(':id/members/tenants/:tenantId')
-  @RateLimit(WRITE)
+  @RateLimit(USER_GROUP_WRITE)
   removeTenant(@Param('id', new ParseUUIDPipe()) id: string, @Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
     return this.refusing(() => this.groups.removeMember(this.actor(req), id, { tenantId }));
   }
@@ -161,25 +176,33 @@ export class UserGroupController {
     return { adminId: user.sub, tenantId: user.tenantId, ip: req.ip ?? '0.0.0.0', permissions: user.permissions };
   }
 
-  /** One refusal type in, one HTTP status out — the reason travels as the body's `reason`. */
-  private async refusing<T>(work: () => Promise<T>): Promise<T> {
-    try {
-      return await work();
-    } catch (err) {
-      // Past the reseller's staff_members_max (GR-1-b): the figures say what to raise.
-      if (err instanceof ResellerLimitReached) throw new ConflictException({ reason: err.reason, message: err.message, facts: err.facts });
-      if (!(err instanceof UserGroupRefused)) throw err;
-      const body = { reason: err.reason, message: err.message };
-      switch (USER_GROUP_REFUSAL_STATUS[err.reason]) {
-        case 403:
-          throw new ForbiddenException(body);
-        case 404:
-          throw new NotFoundException(body);
-        case 409:
-          throw new ConflictException(body);
-        default:
-          throw new BadRequestException(body);
-      }
+  private refusing<T>(work: () => Promise<T>): Promise<T> {
+    return answeringRefusals(work);
+  }
+}
+
+/**
+ * One refusal type in, one HTTP status out — the reason travels as the body's
+ * `reason`. Both paths answer with it: the session's tenant here, a reseller's
+ * by path in `ResellerUserGroupsController`.
+ */
+export async function answeringRefusals<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    // Past the reseller's staff_members_max (GR-1-b): the figures say what to raise.
+    if (err instanceof ResellerLimitReached) throw new ConflictException({ reason: err.reason, message: err.message, facts: err.facts });
+    if (!(err instanceof UserGroupRefused)) throw err;
+    const body = { reason: err.reason, message: err.message };
+    switch (USER_GROUP_REFUSAL_STATUS[err.reason]) {
+      case 403:
+        throw new ForbiddenException(body);
+      case 404:
+        throw new NotFoundException(body);
+      case 409:
+        throw new ConflictException(body);
+      default:
+        throw new BadRequestException(body);
     }
   }
 }

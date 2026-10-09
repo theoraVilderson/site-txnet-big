@@ -59,7 +59,8 @@ export type UserGroupAccessInput = { roleId: string | null; keys: string[] };
 
 export type UserGroupInput = { name: string; allTenants?: boolean };
 export type UserGroupPatch = Partial<UserGroupInput>;
-export type UserGroupMembersInput = { userIds?: string[]; tenantIds?: string[] };
+/** `expiresAt`: when each membership this call adds ends (ADR-0139 (3)); absent or null, never. */
+export type UserGroupMembersInput = { userIds?: string[]; tenantIds?: string[]; expiresAt?: Date | null };
 
 export type UserGroupView = {
   id: string;
@@ -82,6 +83,8 @@ export type UserGroupMemberView = {
   /** A user of the group's own tenant: they hold whatever access the group gives (AC-1-m/o). */
   receivesAccess: boolean;
   addedAt: Date;
+  /** When the membership ends (ADR-0139 (3)); null, never. Past it, it gives and admits nothing. */
+  expiresAt: Date | null;
 };
 
 export type UserGroupMemberPage = { items: UserGroupMemberView[]; total: number; page: number; pageSize: number };
@@ -255,6 +258,7 @@ export class UserGroupAdminService {
         label: names.get((r.userId ?? r.memberTenantId) as string) ?? null,
         receivesAccess: r.userId !== null && here.has(r.userId),
         addedAt: r.createdAt,
+        expiresAt: r.expiresAt,
       }));
       return { items, total, page, pageSize };
     });
@@ -265,7 +269,10 @@ export class UserGroupAdminService {
     const tenant = TenantContext.current('user group member add');
     const userIds = [...new Set(input.userIds ?? [])];
     const tenantIds = [...new Set(input.tenantIds ?? [])];
+    const expiresAt = input.expiresAt ?? null;
     return tenantTransaction(this.prisma, async (tx) => {
+      // An end already past is a mistake, not a policy: they would hold nothing from the start.
+      if (expiresAt && expiresAt <= new Date()) throw new UserGroupRefused('expiry_past', expiresAt.toISOString());
       const row = await this.mustFind(tx, id);
       const platform = await this.isPlatform(tx, tenant.id);
       const group = { tenantId: tenant.id, platform, allTenants: row.allTenants };
@@ -289,7 +296,7 @@ export class UserGroupAdminService {
       const people = await this.mayMove(tx, actor, row, tenant.id, userIds);
       const before = await this.answers.ofLoadedMany(people, tx);
 
-      const base = { groupId: id, tenantId: tenant.id, addedByAdminId: actor.adminId };
+      const base = { groupId: id, tenantId: tenant.id, addedByAdminId: actor.adminId, expiresAt };
       const staff = givesAccess(row) && userIds.length > 0 && makesStaff(keysGiven(row));
       const { count } = await this.withinStaffLimit(tx, actor, tenant.id, staff, () =>
         tx.userGroupMember.createMany({
@@ -300,7 +307,7 @@ export class UserGroupAdminService {
           skipDuplicates: true,
         }),
       );
-      const act = count > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds }) : null;
+      const act = count > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds, expiresAt: expiresAt?.toISOString() ?? null }) : null;
       await this.tell(tx, tenant.id, people, before, actor, act);
       return { added: count };
     });
@@ -319,6 +326,31 @@ export class UserGroupAdminService {
       const act = await this.audit(tx, actor, tenant.id, 'user_group_member_remove', id, where, null);
       await this.tell(tx, tenant.id, people, before, actor, act);
       return { removed: true as const };
+    });
+  }
+
+  /**
+   * Move or clear a user member's end in place (GR-1-d, ADR-0139 (3)): the
+   * row and its history stay. A grant like joining (`mayMove`), since moving
+   * an ended membership's end later gives its access back — the member is
+   * then told (`group_access`), and it is bounded by `staff_members_max` as an
+   * add is. Moving the end of a live one changes nothing they hold now.
+   */
+  setMemberEnd(actor: UserGroupActor, id: string, userId: string, expiresAt: Date | null): Promise<{ userId: string; expiresAt: Date | null }> {
+    const tenant = TenantContext.current('user group member end');
+    return tenantTransaction(this.prisma, async (tx) => {
+      if (expiresAt && expiresAt <= new Date()) throw new UserGroupRefused('expiry_past', expiresAt.toISOString());
+      const row = await this.mustFind(tx, id);
+      const member = await tx.userGroupMember.findFirst({ where: { groupId: id, userId }, select: { id: true, expiresAt: true } });
+      if (!member) throw new UserGroupRefused('member_not_found', userId);
+      const people = await this.mayMove(tx, actor, row, tenant.id, [userId]);
+      const before = await this.answers.ofLoadedMany(people, tx);
+      const staff = givesAccess(row) && makesStaff(keysGiven(row));
+      await this.withinStaffLimit(tx, actor, tenant.id, staff, () => tx.userGroupMember.update({ where: { id: member.id }, data: { expiresAt } }));
+      const iso = (d: Date | null) => d?.toISOString() ?? null;
+      const act = await this.audit(tx, actor, tenant.id, 'user_group_member_end_set', id, { userId, expiresAt: iso(member.expiresAt) }, { userId, expiresAt: iso(expiresAt) });
+      await this.tell(tx, tenant.id, people, before, actor, act);
+      return { userId, expiresAt };
     });
   }
 
@@ -517,6 +549,7 @@ export class UserGroupAdminService {
       | 'user_group_delete'
       | 'user_group_member_add'
       | 'user_group_member_remove'
+      | 'user_group_member_end_set'
       | 'user_group_access_set',
     id: string,
     before: Record<string, unknown> | null,

@@ -32,7 +32,8 @@ export type UserGroupRejection =
   | 'key_unknown'
   | 'key_not_grantable'
   | 'key_not_held'
-  | 'no_authority';
+  | 'no_authority'
+  | 'expiry_past';
 
 export type MemberRow = { memberType: UserGroupMemberType; userId: string | null; memberTenantId: string | null };
 

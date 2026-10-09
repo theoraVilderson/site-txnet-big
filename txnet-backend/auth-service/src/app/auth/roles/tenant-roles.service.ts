@@ -77,8 +77,8 @@ type Tx = Prisma.TransactionClient;
 /** A person as a key write reads them: their role and its keys, inside the tenant's scope. */
 const PERSON = { id: true, tenantId: true, roleId: true, role: { select: { name: true, rolePermissions: { select: { permission: { select: { key: true } } } } } } } as const;
 
-/** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). */
-const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
+/** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). A reseller's group gives from the same ceiling (GR-1-d). */
+export const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
 
 const KEYS = { rolePermissions: { select: { permission: { select: { key: true } } } } } as const;
 

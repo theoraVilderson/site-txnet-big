@@ -118,6 +118,8 @@ enum AdminAction {
   user_group_delete
   user_group_member_add
   user_group_member_remove
+  // GR-1-d: a membership's end moved or cleared in place (ADR-0139 (3)).
+  user_group_member_end_set
   // F-311-r — an admin's acts on a user's Grant and its configs, one value
   // each: the Grant's history answers "who froze this and why", and a freeze
   // and an unfreeze are opposite acts the trail must tell apart.

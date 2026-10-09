@@ -23,7 +23,7 @@ campaigns and restrictions share (built). Low-traffic key/value config for users
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | manage user groups — **built** (F-114-j) | `user_group.manage`; name (≤ 80, unique in the tenant), `allTenants` | the caller's tenant's group, audited | sync | `name_taken`, `platform_only`, `all_tenants_conflict`, `group_in_use` |
-| manage a group's members — **built** | user ids and/or reseller ids (≤ 500 each per call) | added (idempotent) or removed, audited | sync | `user_not_found`, `tenant_not_found`, `not_a_reseller`, `platform_only`, `member_not_found` |
+| manage a group's members — **built** | user ids and/or reseller ids (≤ 500 each per call), an end (`expiresAt`, GR-1-d) | added (idempotent), end moved, or removed, audited | sync | `user_not_found`, `tenant_not_found`, `not_a_reseller`, `platform_only`, `member_not_found`, `expiry_past` |
 | is this person / this reseller in group G — **built** | a member list, a user id or a tenant id | `admitsUser` / `admitsTenant` (`user-group.ts`) | sync | — |
 | read / write the caller's display preferences — **built** (UX-1-k) | the token's user; any subset of `ui.motion`, `ui.dashboard`, `ui.pins`, `ui.sidebar` | every key, defaults filled in | sync | `unknown_preference`, `invalid_preference`, `preference_too_large` |
 | get/set any other user setting (intended) | userId, key, JSON value | row | sync | — |
@@ -46,7 +46,9 @@ auth-service, beside the users it groups. Wire shapes:
 | `allTenants` and named resellers exclude each other | `all_tenants_conflict` on add and on switching it on |
 | Membership is `manual` (`kind`); a computed kind is a new `UserGroupKind`, and consumers ask `admitsUser` / `admitsTenant`, never the rows' shape | schema; `user-group.ts` |
 | A group a discount rule names is not deleted (`group_in_use`); deleting one removes its members | `discount_rule` FK RESTRICT; member FK CASCADE |
-| Every write leaves an `admin_audit_log` row, target `user_group`: `user_group_create` / `_update` / `_delete` / `_member_add` / `_member_remove` | `UserGroupAdminService.audit` |
+| Every write leaves an `admin_audit_log` row, target `user_group`: `user_group_create` / `_update` / `_delete` / `_member_add` / `_member_remove` / `_member_end_set` | `UserGroupAdminService.audit` |
+| A membership's end is set on add and moved or cleared in place, never in the past (`expiry_past`); moving it is a grant like joining (`mayMove`, the staff limit, `group_access` told when the answer moved) (GR-1-d, ADR-0139 (3)) | `addMembers` / `setMemberEnd` (`member-end.spec.ts`) |
+| A reseller's groups are reached by its path too (ADR-0139 (5)): every write, through `ResellerAccess.for('user_group.manage')`, in its scope — the owner gives the whole tenant ceiling, the platform's staff the part they hold, its member their own keys | `ResellerUserGroupsController` (`reseller-user-groups.spec.ts`) |
 
 Consumers: billing's discount rules (`groupId`, user members only — billing
 `contract.purchase.md`). Campaigns and restrictions will target groups; neither does yet.
