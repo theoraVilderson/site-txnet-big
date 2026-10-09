@@ -39,6 +39,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: { audience: ['user'], fields: [] },
   /** F-019-c2: a reseller's status changed, by hand or by the platform — its owner's My services re-reads. */
   [OutboxEventType.TENANT_STATUS_CHANGED]: { audience: ['user'], fields: [] },
+  /** AC-1-q: what this person may do moved — their panel refreshes its token and re-reads `me`; the cause is for the notice (AC-1-s). */
+  [OutboxEventType.ACCESS_CHANGED]: { audience: ['user'], fields: [] },
   /** F-019-c3: the platform owner moved the renewal deadline — the section shows the new date. */
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: { audience: ['user'], fields: [] },
 };

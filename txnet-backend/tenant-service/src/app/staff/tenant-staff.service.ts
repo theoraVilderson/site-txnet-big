@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, UserStatus } from '@prisma/client';
 import {
+  accessChanged,
   assertUnderLimit,
   RESELLER_LIMIT_USAGE,
   ResellerAccess,
@@ -185,7 +186,12 @@ export class TenantStaffService {
     const seat = await this.all.tenantStaffMember.findFirst({ where: { id: memberId, tenantId: reseller.id, revokedAt: null } });
     if (!seat) throw new StaffRefused('staff_not_found', memberId);
 
-    const revoked = await this.all.tenantStaffMember.update({ where: { id: seat.id }, data: { revokedAt: now } });
+    const revoked = await this.all.$transaction(async (tx) => {
+      const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { revokedAt: now } });
+      // AC-1-q: the member's panel loses this reseller now, not on the next refused call.
+      await tx.outboxEvent.create({ data: accessChanged(seat.userId, reseller.id, 'seat_removed'), select: { id: true } });
+      return row;
+    });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} removed by ${actor.userId}`);
     return (await this.withUsers([revoked], now))[0];
   }

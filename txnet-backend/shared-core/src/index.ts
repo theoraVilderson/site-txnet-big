@@ -4,6 +4,7 @@ export * from './lib/automation/confirm-publish';
 export * from './lib/automation/bot-update';
 export * from './lib/automation/outbox';
 export * from './lib/automation/routing-keys';
+export * from './lib/automation/access-changed';
 export * from './lib/automation/retention-levels';
 export * from './lib/automation/retention-kinds';
 export * from './lib/automation/notice-classes';

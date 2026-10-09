@@ -46,6 +46,7 @@ corrected, per "Decide once".
 | `billing.wallet.changed` | `user:` | billing → live-push | useWalletBalance |
 | `notification.created` | `user:` | notification → consumer | useNotifications, useMenuBadges |
 | `entitlement.grant.delivered` / `refunded`, `network.grant.linksCaptured`, `entitlement.grant.usage` | `user:` | billing, network → live-push | useGrantsPage |
+| `identity.access.changed` | `user:` | identity (role set, role keys edited), tenant (seat removed) → live-push | AC-1-r (not built yet) |
 | `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
 | `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |

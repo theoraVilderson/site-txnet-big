@@ -69,7 +69,11 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
         ),
       ),
     },
-    user: { count: vi.fn().mockResolvedValue(0) },
+    user: {
+      count: vi.fn().mockResolvedValue(0),
+      findMany: vi.fn().mockResolvedValue([{ id: 'u-1' }, { id: 'u-2' }]),
+    },
+    outboxEvent: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
   };
   for (const [model, fns] of Object.entries(overrides)) Object.assign(models[model as keyof typeof models], fns);
   // One set of model mocks behind both the client and the transaction:
@@ -175,9 +179,24 @@ describe('RolesService', () => {
       ]);
     });
 
+    it('tells every holder of an edited grant set, in the same transaction (AC-1-q)', async () => {
+      const { tx, service } = harness();
+      await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] });
+      expect(tx.user.findMany.mock.calls[0][0]).toMatchObject({ where: { roleId: 'role-staff', deletedAt: null } });
+      expect(tx.outboxEvent.createMany.mock.calls[0][0].data).toEqual(
+        ['u-1', 'u-2'].map((userId) => ({
+          aggregate: 'identity.access',
+          aggregateId: userId,
+          type: 'identity.access.changed',
+          payload: { userId, tenantId: 'tenant-reseller', cause: 'role_edited' },
+        })),
+      );
+    });
+
     it('leaves the grants alone when only the name changes', async () => {
       const { tx, service } = harness();
       await service.update(RESELLER, 'role-staff', { name: 'Helpdesk' });
+      expect(tx.outboxEvent.createMany).not.toHaveBeenCalled();
       expect(tx.rolePermission.deleteMany).not.toHaveBeenCalled();
       expect(tx.role.update.mock.calls[0][0].data).toEqual({ name: 'Helpdesk' });
     });

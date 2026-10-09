@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { BackendI18nKeys, holdsPermission, ok, tenantTransaction } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, accessChanged, holdsPermission, ok, tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 
@@ -109,7 +109,10 @@ export class RolesService {
         input.name === undefined
           ? existing
           : ((await tx.role.update({ where: { id }, data: { name: input.name }, select: ROLE_VIEW })) as RoleRow);
-      if (permissionIds) await this.setGrants(tx, id, permissionIds);
+      if (permissionIds) {
+        await this.setGrants(tx, id, permissionIds);
+        await this.tellHolders(tx, scope, id);
+      }
       return updated;
     });
 
@@ -173,6 +176,17 @@ export class RolesService {
       }
     }
     return rows.map((row) => row.id);
+  }
+
+  /**
+   * AC-1-q: everyone holding a role whose keys were replaced hears it, one
+   * outbox row each, in the edit's transaction. A rename moves no access and
+   * tells no one. In the tenant's scope, so the holders are this tenant's.
+   */
+  private async tellHolders(tx: Prisma.TransactionClient, scope: RoleScope, roleId: string): Promise<void> {
+    const holders = await tx.user.findMany({ where: { roleId, deletedAt: null }, select: { id: true } });
+    if (holders.length === 0) return;
+    await tx.outboxEvent.createMany({ data: holders.map((h) => accessChanged(h.id, scope.tenantId, 'role_edited')) });
   }
 
   /** The whole grant set, replaced: the fingerprint is over a set, not a diff. */

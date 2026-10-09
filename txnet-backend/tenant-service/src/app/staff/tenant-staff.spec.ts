@@ -114,6 +114,7 @@ describe('TenantStaffService', () => {
       packageLimit: { findMany: vi.fn(async () => []) },
       resellerLimitSetting: { findMany: vi.fn(async () => []) },
       $executeRaw: vi.fn(async () => 0),
+      outboxEvent: { create: vi.fn(async () => ({ id: 'evt-1' })) },
       $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(all)),
       user: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, any> }) => {
@@ -227,6 +228,21 @@ describe('TenantStaffService', () => {
     expect(rows.filter((r) => r.userId === THIRD)).toHaveLength(0);
     // The platform's staff acting on the reseller are never bounded (ADR-0106 point 4).
     await expect(service.invite(platformStaff, RESELLER, { userId: THIRD }, LATER)).resolves.toMatchObject({ userId: THIRD });
+  });
+
+  it('tells the removed member at once, in the removal\'s transaction (AC-1-q)', async () => {
+    const { service, all } = build({ rows: [{ joinedAt: T0 }] });
+    await service.remove(owner, RESELLER, 'row-1', T0);
+    expect(all.$transaction).toHaveBeenCalled();
+    expect((all.outboxEvent as { create: ReturnType<typeof vi.fn> }).create).toHaveBeenCalledWith({
+      data: {
+        aggregate: 'identity.access',
+        aggregateId: MEMBER,
+        type: 'identity.access.changed',
+        payload: { userId: MEMBER, tenantId: RESELLER, cause: 'seat_removed' },
+      },
+      select: { id: true },
+    });
   });
 
   it('names every refusal', () => {

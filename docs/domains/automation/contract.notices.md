@@ -37,7 +37,7 @@ in `LIVE_PUSH_FIELDS` plus its binding in `BrokerService`, and
 |---|---|
 | `live` only, on each channel the row's `audience` names — `user:<payload.userId>`, `tenant:<payload.tenantId>` (RT-1-b) — with one marker per audience (`live-push`, `live-push-tenant`); never `person` | a Grant with three configs captured would be three bot messages about one purchase; the one person notice, for a panel-side change only, is below (F-027-eo) |
 | The body is `{type}` plus exactly the fields the row names — `network.grant.linksCaptured` carries `grantId`, `billing.wallet.changed` nothing (F-111-m) | a payload holds what its producer needed; that is not the browser's |
-| A payload without the id an audience needs or a named field, or a type with no row, throws and dead-letters. `tenant.domain.changed` goes to both: the reseller owner and the platform's staff (RT-1-e); `tenant.subscription.renewed`, `tenant.status.changed` and `tenant.subscription.grace_extended` to the owner only, body `{type}` (F-019-c1, -c2, -c3) | whose page it is is never guessed |
+| A payload without the id an audience needs or a named field, or a type with no row, throws and dead-letters. `tenant.domain.changed` goes to both: the reseller owner and the platform's staff (RT-1-e); `tenant.subscription.renewed`, `tenant.status.changed` and `tenant.subscription.grace_extended` to the owner only, body `{type}` (F-019-c1, -c2, -c3); `identity.access.changed` to the person whose access moved, body `{type}` (AC-1-q) | whose page it is is never guessed |
 
 ## Lines a panel-side change replaced (F-027-eo)
 

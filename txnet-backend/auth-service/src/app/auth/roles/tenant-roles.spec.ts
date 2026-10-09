@@ -32,7 +32,7 @@ describe('TenantRolesService', () => {
 
   const build = (options: { as?: 'owner' | 'member' | 'staff'; platform?: boolean; target?: unknown; role?: unknown } = {}) => {
     const order: string[] = [];
-    const written: { update?: unknown; audit?: { data: Record<string, unknown> } } = {};
+    const written: { update?: unknown; audit?: { data: Record<string, unknown> }; outbox?: { data: Record<string, unknown> } } = {};
     const user = {
       findFirst: vi.fn(async () =>
         'target' in options
@@ -63,7 +63,14 @@ describe('TenantRolesService', () => {
     const $executeRaw = vi.fn(async () => {
       order.push('bind');
     });
-    const tx = { user, adminAuditLog, $executeRaw, role };
+    const outboxEvent = {
+      create: vi.fn(async (args: { data: Record<string, unknown> }) => {
+        order.push('outbox');
+        written.outbox = args;
+        return {};
+      }),
+    };
+    const tx = { user, adminAuditLog, $executeRaw, role, outboxEvent };
     const prisma = {
       ...tx,
       permission: {
@@ -125,7 +132,7 @@ describe('TenantRolesService', () => {
       const { service, order, written } = build({ as: 'owner' });
       const result = await service.assign(owner, reseller, 'u-ali', 'role-desk', '10.0.0.1');
       expect(result).toEqual({ userId: 'u-ali', role: { id: 'role-desk', name: 'Desk' } });
-      expect(order).toEqual(['admit:staffWrite', 'bind', 'update', 'audit']);
+      expect(order).toEqual(['admit:staffWrite', 'bind', 'update', 'audit', 'outbox']);
       expect(written.update).toMatchObject({ where: { id: 'u-ali' }, data: { roleId: 'role-desk' } });
       expect(written.audit?.data).toMatchObject({
         tenantId: reseller,
@@ -134,6 +141,17 @@ describe('TenantRolesService', () => {
         targetEntityId: 'u-ali',
         oldValue: { roleId: 'tpl-user', roleName: 'user' },
         newValue: { roleId: 'role-desk', roleName: 'Desk' },
+      });
+    });
+
+    it('tells the person in the same transaction: identity.access.changed on their channel (AC-1-q)', async () => {
+      const { service, written } = build({ as: 'owner' });
+      await service.assign(owner, reseller, 'u-ali', 'role-desk', '10.0.0.1');
+      expect(written.outbox?.data).toEqual({
+        aggregate: 'identity.access',
+        aggregateId: 'u-ali',
+        type: 'identity.access.changed',
+        payload: { userId: 'u-ali', tenantId: reseller, cause: 'role_set' },
       });
     });
 

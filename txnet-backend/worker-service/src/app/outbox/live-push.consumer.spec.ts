@@ -163,6 +163,12 @@ describe('tenant.status.changed (F-019-c2)', () => {
     expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.TENANT_STATUS_CHANGED } }]);
   });
 
+  it('pushes an access change to the person whose access moved, and only them (AC-1-q)', async () => {
+    const { consumer, published } = build();
+    await consumer.handle({ ...event(), aggregate: 'identity.access', type: OutboxEventType.ACCESS_CHANGED, payload: { tenantId: TENANT, userId: USER, cause: 'role_set' } });
+    expect(published).toEqual([{ channel: `user:${USER}`, payload: { type: OutboxEventType.ACCESS_CHANGED } }]);
+  });
+
   it('so does a grace the platform owner extends (F-019-c3)', async () => {
     const { consumer, published } = build();
     await consumer.handle({ ...event(), aggregate: 'tenant.subscription', type: OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, payload: { tenantId: TENANT, userId: USER } });

@@ -10,6 +10,7 @@ import {
   SupportConsentRefused,
   SupportConsentRejection,
   TenantCapabilityName,
+  accessChanged,
   holdsPermission,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -171,6 +172,8 @@ export class TenantRolesService {
             adminIpAddress: ip,
           },
         });
+        // AC-1-q: their panel moves now, not on the next refused call (F-101-c).
+        await tx.outboxEvent.create({ data: accessChanged(userId, admitted.id, 'role_set'), select: { id: true } });
         return answer;
       });
     });

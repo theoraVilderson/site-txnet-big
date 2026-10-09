@@ -76,7 +76,8 @@ reseller exists), `reseller_suspended` 403, `reseller_terminated` 409,
 ## Removal is immediate, and it is not a sign-out
 
 A revoked member's token keeps working — their role did not change, and nothing
-here touches `identity`. What they lose at once is this reseller: every
+here touches `identity`. The removal writes `identity.access.changed`
+(`seat_removed`) in its transaction (AC-1-q), so their panel hears it at once. What they lose at once is this reseller: every
 `/api/tenants/:id/...` route asks `ResellerAccess`, which reads the seat on the
 request. To take their *permissions* away, give them another role
 (`PUT /api/auth/tenants/:id/users/:userId/role`). That moves their token
