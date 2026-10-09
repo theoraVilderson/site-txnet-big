@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
-import { authApi } from "@/lib/auth-api";
+import { authApi, ImpersonationEnded } from "@/lib/auth-api";
 import { AUTH_LOGIN } from "@/lib/routes";
 import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
 import { createRealtimeClient, type RealtimeClient } from "@/lib/realtime";
@@ -106,7 +106,10 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
         // a live token — the shared refresh, not `ensureSession()` (memoised per
         // page load, the same dead token) and not a second `refresh()` racing a
         // refused call with the same cookie, which would sign one of them out.
-        authApi.refreshCredential().catch(() => {
+        authApi.refreshCredential().catch((e: unknown) => {
+          // AC-1-i: an impersonation that ran out came back to the admin; the
+          // identity remount opens the admin's socket. Not a lost session.
+          if (e instanceof ImpersonationEnded) return;
           // No cookie either. Retrying would ask a question already answered.
           if (!alive) return;
           socket.close();

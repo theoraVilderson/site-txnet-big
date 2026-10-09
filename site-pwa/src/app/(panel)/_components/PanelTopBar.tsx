@@ -6,6 +6,7 @@ import { ThemeDropdown } from "@auth/auth/_components/ThemeDropdown";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
+import { useImpersonation } from "../_hooks/useImpersonation";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { PaletteButton } from "./CommandPalette";
 import { HelpButton } from "./guide/HelpButton";
@@ -47,6 +48,7 @@ export function PanelTopBar() {
   const { t } = useLocale();
   const drawerOpen = usePanelUiStore((s) => s.drawerOpen);
   const setDrawerOpen = usePanelUiStore((s) => s.setDrawerOpen);
+  const impersonating = useImpersonation() !== null;
 
   return (
     <header className="sticky top-4 z-20 mx-4 mt-4 flex h-16 shrink-0 items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg px-3 backdrop-blur-xl sm:px-6">
@@ -66,7 +68,8 @@ export function PanelTopBar() {
         <NotificationsButton />
         <HelpButton />
         <Divider className="hidden lg:block" />
-        <AccountSwitcher />
+        {/* AC-1-i: signed in as someone, the banner's "end" is the way out; the switcher is the admin's. */}
+        {!impersonating && <AccountSwitcher />}
         {/* Language and theme return at `lg`, not at `sm`. They belong to the
             drawer for exactly as long as the drawer exists, and the drawer
             exists below `lg`. Splitting the two breakpoints is what left the

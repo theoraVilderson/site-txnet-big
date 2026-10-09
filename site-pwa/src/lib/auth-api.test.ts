@@ -770,3 +770,89 @@ describe('one refresh for every call, socket and tab', () => {
   });
 });
 
+
+/**
+ * AC-1-i: "sign in as this user". The impersonated token lives in this tab's
+ * memory beside the admin's own, never in storage; it has no refresh token, so
+ * a refusal a refresh would mend instead ends it — and the call is never sent
+ * again as the admin.
+ */
+describe('impersonation', () => {
+  const jwt = (sub: string) => `h.${btoa(JSON.stringify({ sub }))}.s`;
+  const OWN = jwt('admin-1');
+  const AS_USER = jwt('user-9');
+
+  async function signedIn() {
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { accessToken: OWN, expiresIn: 900 } }));
+    await authApi.verifyLoginOtp('09120000000', '123456');
+  }
+
+  async function impersonating(tenantId: string | null = null) {
+    await signedIn();
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { accessToken: AS_USER, expiresIn: 1800 } }));
+    await authApi.impersonate({ userId: 'user-9', name: 'Sara', reasonNote: 'ticket 4417: top-up fails', tenantId, returnTo: '/users/user-9' });
+  }
+
+  it("starts on the caller's own tenant, carrying the reason, and holds the user's token", async () => {
+    const changed = vi.fn();
+    authApi.onImpersonationChange(changed);
+    await impersonating();
+
+    const { url, init, headers } = lastCall();
+    expect(url).toBe(`${ORIGIN}/api/auth/users/user-9/impersonate`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ reasonNote: 'ticket 4417: top-up fails' });
+    expect(headers.get('authorization')).toBe(`Bearer ${OWN}`);
+    expect(authApi.getAccessToken()).toBe(AS_USER);
+    expect(authApi.impersonation()).toMatchObject({ userId: 'user-9', name: 'Sara', returnTo: '/users/user-9' });
+    expect(authApi.impersonation()!.endsAt).toBeGreaterThan(Date.now() + 1790_000);
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts on a reseller's user through the reseller's path", async () => {
+    await impersonating('t-1');
+    expect(lastCall().url).toBe(`${ORIGIN}/api/auth/tenants/t-1/users/user-9/impersonate`);
+  });
+
+  it('ends on the server as the user, then sends the own token again', async () => {
+    await impersonating();
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { success: true } }));
+    await authApi.endImpersonation();
+
+    expect(lastCall().url).toBe(`${ORIGIN}/api/auth/impersonate/end`);
+    expect(lastCall().headers.get('authorization')).toBe(`Bearer ${AS_USER}`);
+    expect(authApi.getAccessToken()).toBe(OWN);
+    expect(authApi.impersonation()).toBeNull();
+  });
+
+  it('comes back to the own token even when the server end fails', async () => {
+    await impersonating();
+    fetchMock.mockResolvedValueOnce(envelope({ ok: false, msg: 'expired', error: { reason: 'tokenExpired' } }, 401));
+    await authApi.endImpersonation();
+    expect(authApi.getAccessToken()).toBe(OWN);
+    expect(authApi.impersonation()).toBeNull();
+  });
+
+  it('ends it on an expired token, and never retries the call as the admin', async () => {
+    await impersonating();
+    const before = fetchMock.mock.calls.length;
+    fetchMock.mockResolvedValueOnce(envelope({ ok: false, msg: 'expired', error: { reason: 'tokenExpired' } }, 401));
+
+    await expect(authApi.me()).rejects.toMatchObject({ reason: 'tokenExpired' });
+
+    const sent = fetchMock.mock.calls.slice(before).map(([url]) => url);
+    expect(sent).toEqual([`${ORIGIN}/api/auth/me`]);
+    expect(authApi.getAccessToken()).toBe(OWN);
+    expect(authApi.impersonation()).toBeNull();
+  });
+
+  it('leaves a route closed to impersonation to the page: no refresh, no sign-out', async () => {
+    await impersonating();
+    fetchMock.mockResolvedValueOnce(
+      envelope({ ok: false, msg: 'Not allowed while signed in as a user', error: { reason: 'impersonationBlocked' } }, 403),
+    );
+    await expect(authApi.listAccounts()).rejects.toMatchObject({ reason: 'impersonationBlocked', status: 403 });
+    expect(authApi.getAccessToken()).toBe(AS_USER);
+    expect(authApi.impersonation()).not.toBeNull();
+  });
+});

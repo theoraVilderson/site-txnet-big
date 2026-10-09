@@ -13,6 +13,7 @@ import { usePanelSession } from "../_context/PanelSessionContext";
 import { useAccessLive, useAccessLost } from "../_hooks/useAccessLive";
 import { useVisibleMenu } from "../_hooks/useVisibleMenu";
 import { menuHrefs } from "../_lib/panel-menu";
+import { ImpersonationBanner } from "./ImpersonationBanner";
 
 /**
  * The frame every panel page renders inside (F-093-a): the sidebar at the
@@ -46,6 +47,8 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
           collapsed ? "lg:ms-20" : "lg:ms-72"
         }`}
       >
+        {/* AC-1-i: "you are signed in as …", the time left and "end", above every page. */}
+        <ImpersonationBanner />
         <PanelTopBar />
         <main className="relative z-10 w-full flex-1">{lost ? <AccessLostNotice /> : children}</main>
       </div>

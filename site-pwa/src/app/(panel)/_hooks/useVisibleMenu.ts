@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { holdsAnyResellerKey } from "@/lib/permissions";
 import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
-import { PANEL_MENU, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
+import { PANEL_MENU, impersonationMenu, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
 import { withResellerMenu } from "../_lib/reseller-menu";
 import { useResellerWorkspace } from "../_context/ResellerWorkspaceContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
@@ -80,9 +80,13 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
   const wsSelf = workspace?.self ?? false;
   // A staff seat on its own reseller sees the workspace rows its keys open (AC-1-e2).
   const seatHeld = tenantType === "reseller" && !isOwner && wsId !== null && wsId === me?.tenant.id ? (held ?? []) : null;
+  const impersonated = me?.isImpersonated ?? false;
   return useMemo(
     () =>
-      withResellerMenu(
+      // AC-1-i: signed in as someone, the account section alone — no reseller block either.
+      impersonated
+        ? impersonationMenu(visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, false, null))
+        : withResellerMenu(
         visibleMenu(PANEL_MENU, held ?? [], tenantType, isOwner, ownsReseller, tenantId),
         wsId === null ? null : { id: wsId, self: wsSelf },
         slug,
@@ -90,6 +94,6 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
         tenantId,
         seatHeld,
       ),
-    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup, seatHeld],
+    [impersonated, held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup, seatHeld],
   );
 }

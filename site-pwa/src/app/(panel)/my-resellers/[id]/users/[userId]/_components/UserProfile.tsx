@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useLocale } from "@/context/LocaleContext";
 import {
   resellerUsersApi,
@@ -21,6 +22,8 @@ import {
   useConfirm,
 } from "../../../../../_components/kit";
 import { formatInstant } from "../../../../../_lib/datetime";
+import { SignInAsUser, mayImpersonate } from "../../../../../_components/SignInAsUser";
+import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { ConsentNeeded } from "../../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../../_lib/support-access";
 import { assignableRoles, teamRefusalKey } from "../../../../_lib/team";
@@ -48,7 +51,11 @@ const P = K.profile;
  *    (`roleEditable`): a role without a seat admits nothing there, and the
  *    seat is the Team page's;
  *  - **a save sends only what changed** (`profileChanges`), and the answer
- *    replaces what is shown.
+ *    replaces what is shown;
+ *  - **"sign in as this user"** (AC-1-i) on the caller's own tenant, or for
+ *    platform staff on a reseller's user under its consent — `mayImpersonate`:
+ *    `canAct` (never the owner, ADR-0137) and the route's key. A reseller's own
+ *    workspace has no such route, so no button.
  */
 export function UserProfile({
   id,
@@ -69,6 +76,8 @@ export function UserProfile({
   const confirm = useConfirm();
   const userMessage = useUserMessage();
   const self = useWorkspaceSelf(id);
+  const { me } = usePanelSession();
+  const here = usePathname();
   const message = (e: unknown) => {
     const key = teamRefusalKey(e);
     return key ? t("common", key) : userMessage(e);
@@ -162,9 +171,15 @@ export function UserProfile({
     });
 
   const editable = person.canAct;
+  const impersonable = (own || platform) && mayImpersonate(person, me, !own);
 
   return (
     <div className="space-y-6">
+      {impersonable && (
+        <div className="flex justify-end">
+          <SignInAsUser userId={userId} name={person.fullName} tenantId={own ? null : id} returnTo={here ?? "/"} />
+        </div>
+      )}
       {!editable && <Alert tone="info">{t("common", P.readOnly)}</Alert>}
       {actionError !== null && (
         <Alert tone="error">{message(actionError)}</Alert>

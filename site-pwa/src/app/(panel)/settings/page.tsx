@@ -46,15 +46,17 @@ export default function SettingsPage() {
   const { t } = useLocale();
   const { me } = usePanelSession();
   const tabs = settingsTabs(me);
+  // AC-1-i: signed in as someone, their password, email and sessions stay theirs (ADR-0136).
+  const own = !me?.isImpersonated;
   const [visited, setVisited] = useState<ReadonlySet<SettingsTab>>(new Set());
   const visit = useCallback((tab: SettingsTab) => setVisited((v) => (v.has(tab) ? v : new Set(v).add(tab))), []);
 
   const panels: Record<SettingsTab, () => ReactNode> = {
     profile: () => (
       <>
-        <ProfileSection />
-        <EmailSection />
-        <SessionsSection />
+        <ProfileSection password={own} />
+        {own && <EmailSection />}
+        {own && <SessionsSection />}
       </>
     ),
     notifications: () => (

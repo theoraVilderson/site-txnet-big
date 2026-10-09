@@ -5923,5 +5923,20 @@
       "staff_not_found": "that seat is gone — refresh.",
       "reseller_limit_reached": "the team is full for this reseller's package."
     }
+  },
+  "impersonation": {
+    "start": "Sign in as this user",
+    "dialogTitle": "Sign in as {{name}}",
+    "dialogBody": "For up to 30 minutes you see and use {{name}}'s own panel. Staff pages, the password, sessions and connection links stay closed. It is recorded under your name, with the reason below.",
+    "reason": "Reason",
+    "reasonHint": "At least 10 characters, e.g. the ticket number and the problem.",
+    "confirm": "Sign in as this user",
+    "cancel": "Cancel",
+    "banner": "You are signed in as {{name}}",
+    "timeLeft": "{{time}} left",
+    "end": "End and go back",
+    "ended": "You are back in your own account.",
+    "expired": "The 30 minutes are over. You are back in your own account.",
+    "reloadEnds": "Reloading the page also ends it."
   }
 }

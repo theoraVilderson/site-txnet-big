@@ -512,3 +512,13 @@ export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string):
   if (active === "/" && trimSlash(pathname) !== "/") return [];
   return trails.find((t) => trimSlash(t.href) === active)?.trail ?? [];
 }
+
+/**
+ * The menu while an admin is signed in as someone (AC-1-i): the account
+ * section and the footer's settings alone. Every other section is a staff or
+ * reseller route, which an impersonated token never reaches (ADR-0136),
+ * whatever the person holds.
+ */
+export function impersonationMenu<T extends { section?: string }>(entries: readonly T[]): T[] {
+  return entries.filter((e) => e.section === undefined || e.section === "account" || e.section === "footer");
+}

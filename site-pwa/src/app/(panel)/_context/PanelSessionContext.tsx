@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -84,6 +85,23 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  // AC-1-i: "sign in as this user" changes who the caller is in this tab. `me`
+  // is read as the new person and only then is everything below remounted
+  // under the new identity — the socket, the bell, the wallet and the page all
+  // start again as that person, never a mix of the two.
+  const [identity, setIdentity] = useState<string>("own");
+  useEffect(
+    () =>
+      authApi.onImpersonationChange(() => {
+        const next = authApi.impersonation()?.userId ?? "own";
+        void readMe().then((who) => {
+          setMe(who);
+          setIdentity(next);
+        });
+      }),
+    [],
+  );
+
   // A switch changes who the caller is, so `me` is re-read with the group.
   const reload = useCallback(async () => {
     const [next, who] = await Promise.all([authApi.listAccounts(), readMe()]);
@@ -140,7 +158,7 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <PanelSessionContext.Provider value={{ group, me, isLoading, timeZone, zoneChanged, reload }}>
-      {children}
+      <Fragment key={identity}>{children}</Fragment>
     </PanelSessionContext.Provider>
   );
 }

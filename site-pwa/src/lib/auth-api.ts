@@ -10,6 +10,39 @@ import type { ResolvedTimeZone, TimeZoneSource } from "./time-zone";
 const API_URL = API_BASE;
 let accessToken: string | null = null;
 
+/** "Sign in as this user" (AC-1-i): whom this tab is signed in as, until when, and the page to come back to. */
+export type Impersonation = { userId: string; name: string; endsAt: number; returnTo: string };
+
+/**
+ * The impersonation this tab holds, and the admin's own token beside it.
+ *
+ * Memory only, like `accessToken` — a reload ends it, and the refresh cookie
+ * (still the admin's: impersonation mints none) brings the admin back. It has
+ * no refresh token, so a refusal a refresh would mend ends it instead
+ * (`refreshCredential`), and the refused call is never sent again: a retry
+ * would carry the admin's token and run the user's click as the admin.
+ */
+let impersonation: Impersonation | null = null;
+/** The admin's own token, kept beside the user's while `impersonation` is set. */
+let ownToken: string | null = null;
+const impersonationListeners = new Set<() => void>();
+
+/** The impersonation is over, on purpose or because its token was refused. */
+export class ImpersonationEnded extends Error {
+  constructor() {
+    super("impersonation ended");
+    this.name = "ImpersonationEnded";
+  }
+}
+
+function backToOwnToken(): void {
+  if (!impersonation) return;
+  accessToken = ownToken;
+  ownToken = null;
+  impersonation = null;
+  for (const listener of impersonationListeners) listener();
+}
+
 /**
  * **One refresh for the whole browser.** Refresh *rotates* the session: the one
  * it replaces is revoked on the spot. So two refreshes racing with the same
@@ -91,8 +124,14 @@ function subjectOf(token: string | null): string | null {
 if (channel) {
   channel.onmessage = (event: MessageEvent) => {
     const next = (event.data as { accessToken?: unknown } | null)?.accessToken;
+    if (typeof next !== "string") return;
+    // Another tab rotated the admin's session: the token to come back to, not the one in use.
+    if (impersonation) {
+      if (ownToken && subjectOf(next) === subjectOf(ownToken)) ownToken = next;
+      return;
+    }
     // Another user's token is another account signed in elsewhere, not a rotation of ours.
-    if (typeof next === "string" && accessToken && subjectOf(next) === subjectOf(accessToken)) {
+    if (accessToken && subjectOf(next) === subjectOf(accessToken)) {
       accessToken = next;
     }
   };
@@ -109,6 +148,12 @@ function withRefreshLock(fn: () => Promise<void>): Promise<void> {
  * refresh, and refreshing anyway would rotate the session again.
  */
 function refreshCredential(stale: string | null = null): Promise<void> {
+  // An impersonated token is never refreshed (it has no refresh token) and a
+  // refused call is never retried on the admin's: it ends here (AC-1-i).
+  if (impersonation) {
+    backToOwnToken();
+    return Promise.reject(new ImpersonationEnded());
+  }
   // Replaced already — or the call carried none and a token has arrived since:
   // a sidebar call sent before the page-load refresh started, refused after it
   // finished. Rotating again would revoke the token that refresh just handed out.
@@ -513,6 +558,57 @@ export const authApi = {
     const result = await request<{ userId: string; removed: boolean; switchedTo?: { userId: string; fullName: string } } & Partial<AuthResult>>("/auth/accounts/remove", { method: "POST", body: JSON.stringify({ userId }) });
     if (result.accessToken) accessToken = result.accessToken;
     return result;
+  },
+  /**
+   * Sign in as `userId` for at most 30 minutes (AC-1-i, catalog §3.6): the
+   * caller's own tenant, or — `tenantId` — a reseller's user under its consent
+   * (F-117-e). The reason, at least 10 characters, goes in the audit row.
+   */
+  async impersonate(input: { userId: string; name: string; reasonNote: string; tenantId?: string | null; returnTo: string }) {
+    const path = input.tenantId
+      ? `/auth/tenants/${encodeURIComponent(input.tenantId)}/users/${encodeURIComponent(input.userId)}/impersonate`
+      : `/auth/users/${encodeURIComponent(input.userId)}/impersonate`;
+    const result = await request<AuthResult>(path, { method: "POST", body: JSON.stringify({ reasonNote: input.reasonNote }) });
+    impersonation = { userId: input.userId, name: input.name, endsAt: Date.now() + result.expiresIn * 1000, returnTo: input.returnTo };
+    ownToken = accessToken;
+    accessToken = result.accessToken;
+    for (const listener of impersonationListeners) listener();
+  },
+  /** End it on the server, as the user, then come back to the own token whatever the server said. */
+  async endImpersonation() {
+    if (!impersonation) return;
+    try {
+      await rawRequest("/auth/impersonate/end", { method: "POST", body: JSON.stringify({}) });
+    } catch {
+      // Expired or already ended: the server's session is over either way.
+    } finally {
+      backToOwnToken();
+    }
+  },
+  /**
+   * The end, for a page being unloaded: `keepalive` outlives the document, and
+   * nothing waits for it. The reload that follows starts from the cookie.
+   */
+  endImpersonationOnUnload() {
+    if (!impersonation || typeof fetch === "undefined") return;
+    void fetch(`${API_URL}/auth/impersonate/end`, {
+      method: "POST",
+      keepalive: true,
+      credentials: "include",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: "{}",
+    }).catch(() => undefined);
+  },
+  /** What this tab is signed in as, or null for the caller's own account. The same object until it changes. */
+  impersonation(): Impersonation | null {
+    return impersonation;
+  },
+  /** Run `listener` when an impersonation starts or ends; returns the unsubscribe. */
+  onImpersonationChange(listener: () => void) {
+    impersonationListeners.add(listener);
+    return () => {
+      impersonationListeners.delete(listener);
+    };
   },
   getAccessToken() { return accessToken; },
   // Server-verified slide challenge (F-0201) — see docs/interfaces/auth-api/contract.md

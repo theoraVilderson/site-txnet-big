@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 38
-updated: 2026-09-28
+updated: 2026-10-09
 ---
 
 # Contract — panel-web: a reseller's users and one user's services (F-311-v, -w, -x, -x1)
@@ -70,6 +70,9 @@ over its "by a pasted line" (F-311-t) and [contract.reseller-grants-bulk.md](../
 | 27 | **The email is only removed**, after a confirm that says they get no more mail until they add one; it is never typed here | a stored address is one its owner proved (identity invariant 15, user 2026-10-09) |
 | 28 | Without the server's `canAct` the tab is read-only and says why; `username_taken` has its sentence (`USER_REFUSAL_KEYS`) | ADR-0103 decides on the server; the page only avoids offering what will be refused |
 | 29 | **The role is changed here only for someone on the team** (`roleEditable`: `canAct`, and `staff` unless the tenant is the platform), from the roles the caller may grant whole (`assignableRoles`). Otherwise it is shown, with a link to the Team page | on a reseller a role admits nothing without a seat, which only the Team page gives (`contract.team.md` rule 3) |
+| 30 | **"Sign in as this user"** (AC-1-i, `SignInAsUser`) on the Profile tab, only where `mayImpersonate` holds: the server's `canAct` (so never the owner, ADR-0137, nor yourself), an `active` person, and the route's key — `user.impersonate` on the caller's own `/users` (`POST /auth/users/:userId/impersonate`), `platform.impersonate` for platform staff on a reseller's user (`…/tenants/:tenantId/users/:userId/impersonate`, the consent the server's). A reseller's own workspace gets none. A reason of at least 10 characters (trimmed); a refusal is the server's sentence in the dialog; then the home page as that person | identity invariant 7 decides on the server; the reseller's own staff have no route into it from the platform's panel |
+| 31 | **The impersonated token is in this tab's memory only**, beside the admin's (`authApi.impersonate`). Every client sends it; an `impersonationBlocked` 403 is the page's sentence like any refusal, never a refresh or a sign-out. A refusal a refresh would mend **ends it** and is not retried — a retry would carry the admin's token and run the user's click as the admin. A reload ends it too (the cookie is the admin's), and the unload tells the server (`keepalive`) | no refresh token is issued (§3.6 layer 3); another tab's rotation of the admin's token is kept for the way back, not adopted |
+| 32 | **While it lasts** (`me.isImpersonated`): a banner above the top bar on every page (`ImpersonationBanner`) — whose panel this is, `mm:ss` left in the page's digits, "end and go back"; at zero it ends by itself. The menu is the account section and settings only (`impersonationMenu`), the account switcher is hidden, and Settings drops the password, email and sessions. The session provider re-reads `me` and remounts the panel under the new identity, so the socket, bell and wallet are that person's; ending comes back to the page it started from | an impersonated token reaches the user's own panel alone (ADR-0136); staff pages would only answer 403 |
 
 **Not covered:** re-dating to a picked day (billing takes `endsAt`; the sheet
 sends ±days), the panels a speed cap's refusal names (not flat, so not in

@@ -20,12 +20,16 @@ import { sessionsChanged } from "../_lib/sessions";
 
 const P = FrontendI18nKeys.common.settings.profile;
 
-/** Settings > Profile's own cards (UX-1-u, `contract.ux.md` S3–S4): the name, then the password. */
-export function ProfileSection() {
+/**
+ * Settings > Profile's own cards (UX-1-u, `contract.ux.md` S3–S4): the name,
+ * then the password — not while an admin is signed in as this person (AC-1-i):
+ * a credential is the account's own.
+ */
+export function ProfileSection({ password = true }: { password?: boolean }) {
   return (
     <>
       <NameCard />
-      <PasswordCard />
+      {password && <PasswordCard />}
     </>
   );
 }
