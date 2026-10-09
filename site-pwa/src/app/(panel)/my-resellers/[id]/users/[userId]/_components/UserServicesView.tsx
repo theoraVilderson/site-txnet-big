@@ -23,12 +23,16 @@ import { consentRefusal } from "../../../../_lib/support-access";
 import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
 import { GrantHistory } from "./GrantHistory";
+import { UserProfile } from "./UserProfile";
 import { useUserMessage } from "./useUserMessage";
-import { Alert, Button, PageHeader } from "../../../../../_components/kit";
+import { Alert, Button, PageHeader, Tabs } from "../../../../../_components/kit";
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { isPlatformTenant } from "../../../../_lib/users";
 
 const S = K.services;
+/** The page's two tabs, kept in `?tab=` (AC-1-b); none, or a value naming no tab, is the services. */
+const TABS = ["services", "profile"] as const;
+type Tab = (typeof TABS)[number];
 const PAGE_SIZE = 20;
 
 /**
@@ -51,7 +55,9 @@ const PAGE_SIZE = 20;
 export function UserServicesView({ id, userId }: { id: string; userId: string }) {
   const { t, lang } = useLocale();
   const message = useUserMessage();
-  const name = useSearchParams().get("name");
+  const query = useSearchParams();
+  const name = query.get("name");
+  const tab: Tab = query.get("tab") === "profile" ? "profile" : "services";
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
@@ -113,57 +119,72 @@ export function UserServicesView({ id, userId }: { id: string; userId: string })
         subtitle={t("common", S.subtitle)}
         tail={name ?? t("common", S.titlePlain)}
         actions={
-          <>
-            <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
-              {t("common", K.refresh)}
-            </Button>
-            <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
-          </>
+          tab === "services" && (
+            <>
+              <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+                {t("common", K.refresh)}
+              </Button>
+              <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
+            </>
+          )
         }
       />
 
       {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
       <PlatformAccessBanner tenantId={id} onChange={retry} />
 
-      {/* Read again with the list: an issue or a refresh changes how many are open. */}
-      <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
+      <Tabs<Tab>
+        ariaLabel={t("common", K.tabs.label)}
+        urlParam="tab"
+        variant="pills"
+        tabs={TABS.map((value) => ({ value, label: t("common", K.tabs[value]) }))}
+      />
 
-      {consentRefusal(loadError) ? (
-        <ConsentNeeded error={loadError} />
-      ) : loadError !== null ? (
-        <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-          <Alert tone="error">{message(loadError)}</Alert>
-          <Button variant="primary" size="sm" onClick={retry}>
-            {t("common", K.reload)}
-          </Button>
-        </div>
-      ) : answer === null ? (
-        <TableSkeleton rows={3} columns={2} />
+      {tab === "profile" ? (
+        <UserProfile id={id} userId={userId} platform={platform} />
       ) : (
         <>
-          {answer.rows.length === 0 ? (
-            <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
-              {t("common", scope === "current" && answer.hidden > 0 ? S.noCurrent : S.empty)}
-            </p>
+          {/* Read again with the list: an issue or a refresh changes how many are open. */}
+          <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
+
+          {consentRefusal(loadError) ? (
+            <ConsentNeeded error={loadError} />
+          ) : loadError !== null ? (
+            <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
+              <Alert tone="error">{message(loadError)}</Alert>
+              <Button variant="primary" size="sm" onClick={retry}>
+                {t("common", K.reload)}
+              </Button>
+            </div>
+          ) : answer === null ? (
+            <TableSkeleton rows={3} columns={2} />
           ) : (
-            <ul className="space-y-3">
-              {answer.rows.map((row) => (
-                <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
-              ))}
-            </ul>
+            <>
+              {answer.rows.length === 0 ? (
+                <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
+                  {t("common", scope === "current" && answer.hidden > 0 ? S.noCurrent : S.empty)}
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {answer.rows.map((row) => (
+                    <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
+                  ))}
+                </ul>
+              )}
+              {(answer.hidden > 0 || scope === "all") && (
+                <Button variant="quiet" size="sm" onClick={toggleScope}>
+                  {scope === "current" ? t("common", S.showEnded, { count: answer.hidden }) : t("common", S.hideEnded)}
+                </Button>
+              )}
+              <Pagination
+                page={page}
+                totalPages={Math.max(1, Math.ceil(answer.total / PAGE_SIZE))}
+                totalItems={answer.total}
+                pageSize={PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </>
           )}
-          {(answer.hidden > 0 || scope === "all") && (
-            <Button variant="quiet" size="sm" onClick={toggleScope}>
-              {scope === "current" ? t("common", S.showEnded, { count: answer.hidden }) : t("common", S.hideEnded)}
-            </Button>
-          )}
-          <Pagination
-            page={page}
-            totalPages={Math.max(1, Math.ceil(answer.total / PAGE_SIZE))}
-            totalItems={answer.total}
-            pageSize={PAGE_SIZE}
-            onPageChange={setPage}
-          />
         </>
       )}
     </div>

@@ -4109,7 +4109,8 @@
       "cannot_block_self": "you cannot block yourself.",
       "no_authority": "you cannot act on this person: they are the owner, or hold as much authority as you do.",
       "consent_required": "The reseller has not given the platform access to its users. Ask the reseller for it.",
-      "consent_read_only": "The reseller's permission is view only. Ask the reseller for permission to act."
+      "consent_read_only": "The reseller's permission is view only. Ask the reseller for permission to act.",
+      "username_taken": "this username is taken. Pick another one."
     },
     "block": "restrict",
     "unblock": "lift restriction",
@@ -4366,7 +4367,35 @@
     "unban": "lift ban",
     "banConfirm": "Ban {{name}} completely? They can no longer sign in, and see the reason when they try.",
     "unbanConfirm": "Lift the ban on {{name}}? They can sign in again.",
-    "reasonLabel": "Reason (shown to the user)"
+    "reasonLabel": "Reason (shown to the user)",
+    "tabs": {
+      "services": "Services",
+      "profile": "Profile",
+      "label": "This user's pages"
+    },
+    "profile": {
+      "title": "Profile",
+      "fullName": "Full name",
+      "username": "Username",
+      "phone": "Mobile number",
+      "phoneHint": "The number is how they sign in; only they can change it.",
+      "email": "Email",
+      "noEmail": "no email",
+      "removeEmail": "Remove email",
+      "removeEmailConfirm": "Remove {{name}}'s email?",
+      "removeEmailHint": "They will get no more mail from you until they add and confirm an address themselves.",
+      "status": "Status",
+      "joined": "Joined",
+      "role": "Role",
+      "noRole": "no role",
+      "roleSave": "Change role",
+      "roleOnTeam": "To give them a staff role, add them on the Team page.",
+      "save": "Save",
+      "saved": "Saved.",
+      "emailRemoved": "The email was removed.",
+      "roleSaved": "The role was changed.",
+      "readOnly": "You can see this person but not change them: they are the owner, yourself, or hold as much authority as you do."
+    }
   },
   "operatingCurrency": {
     "title": "Operating currency",

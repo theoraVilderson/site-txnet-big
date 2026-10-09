@@ -599,6 +599,15 @@ export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encod
  * suspended reseller still lists its customers. Block and unblock are
  * `staffWrite`: a suspended reseller is refused them.
  */
+/** One user as the admin's user page reads them (AC-1-a): the list's row, and whether they have an email — masked. */
+export type ResellerUserProfile = ResellerUser & { emailMasked: string | null; canAct: boolean; staff: boolean };
+
+/** What the Profile tab may change (AC-1-a): name, username, and the email only removed — never written by staff. */
+export type ResellerUserProfileEdit = { fullName?: string; username?: string; email?: null };
+
+/** One user of the path's reseller (AC-1-a): `GET` reads them, `PATCH` edits their profile. */
+export const resellerUserPath = (tenantId: string, userId: string) => `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}`;
+
 /** One user's block (F-311-a): `POST` blocks, `DELETE` lifts it — unblock is the deletion of the block. */
 export const resellerUserBlockPath = (tenantId: string, userId: string) => `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/block`;
 
@@ -614,6 +623,12 @@ export const resellerUsersApi = {
   async block(tenantId: string, userId: string, reason?: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "POST", body: JSON.stringify(reason ? { reason } : {}) }); },
   /** Answers the user at `active`. */
   async unblock(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "DELETE" }); },
+  /** One person, with `emailMasked` (AC-1-a). Admitted under `read`. */
+  async profile(tenantId: string, userId: string) { return request<ResellerUserProfile>(resellerUserPath(tenantId, userId), { method: "GET" }); },
+  /** Only changed fields; `{}` is a 400. `staffWrite` and authority over the person (ADR-0103). */
+  async editProfile(tenantId: string, userId: string, body: ResellerUserProfileEdit) {
+    return request<ResellerUserProfile>(resellerUserPath(tenantId, userId), { method: "PATCH", body: JSON.stringify(body) });
+  },
 };
 
 /** A role as a tenant's page reads it (F-1201-a): a template is read-only; `members` counts this tenant's holders. */

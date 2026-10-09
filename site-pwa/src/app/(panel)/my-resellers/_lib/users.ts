@@ -26,7 +26,8 @@ export type UserRefusal =
   | "cannot_block_self"
   | "no_authority"
   | "consent_required"
-  | "consent_read_only";
+  | "consent_read_only"
+  | "username_taken";
 
 export const USER_REFUSAL_KEYS: Record<UserRefusal, string> = K.refusals;
 
@@ -34,6 +35,33 @@ export const USER_REFUSAL_KEYS: Record<UserRefusal, string> = K.refusals;
 export function userRefusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;
   return typeof reason === "string" && reason in USER_REFUSAL_KEYS ? USER_REFUSAL_KEYS[reason as UserRefusal] : null;
+}
+
+/**
+ * The Profile tab's body (AC-1-a): only the fields that changed, trimmed, or
+ * `null` when nothing did — the route refuses `{}`. An emptied username is
+ * no edit: the route has none that clears it.
+ */
+export function profileChanges(
+  current: { fullName: string; username: string | null },
+  form: { fullName: string; username: string },
+): { fullName?: string; username?: string } | null {
+  const edit: { fullName?: string; username?: string } = {};
+  const fullName = form.fullName.trim();
+  const username = form.username.trim();
+  if (fullName && fullName !== current.fullName) edit.fullName = fullName;
+  if (username && username !== (current.username ?? "")) edit.username = username;
+  return Object.keys(edit).length > 0 ? edit : null;
+}
+
+/**
+ * Whether the Profile tab changes this person's role (AC-1-b): only where the
+ * caller has authority over them, and on a reseller only for someone already
+ * on the team — a role there admits nothing without a seat, which is the Team
+ * page's to give (`contract.team.md` rule 3). The platform has no seats.
+ */
+export function roleEditable(person: { canAct: boolean; staff: boolean }, platform: boolean): boolean {
+  return person.canAct && (platform || person.staff);
 }
 
 /** `GET /auth/tenants/:id/users` takes `q` of 3-64 characters (F-311-a). */
