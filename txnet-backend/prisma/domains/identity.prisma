@@ -151,6 +151,8 @@ model User {
   deviceFingerprints   DeviceFingerprint[]
   otpCodes             OtpCode[]
   grants               Grant[]
+  /// Keys given to or taken from this person on top of their role (AC-1-l).
+  permissionOverrides  UserPermission[]
 
   /// ADR-0023: a person is identified *within* a tenant. Two resellers selling
   /// to the same human are two rows, in two tenants, and neither can see the
@@ -248,8 +250,44 @@ model Permission {
   key  String @unique // مثل wallet.manual_adjust, gateway.toggle, user.impersonate
 
   rolePermissions RolePermission[]
+  userPermissions UserPermission[]
 
   @@map("permission")
+  @@schema("identity")
+}
+
+/// Whether a key is added to a person's answer or removed from it (ADR-0138).
+enum UserPermissionEffect {
+  give
+  take
+
+  @@schema("identity")
+}
+
+/// One key given to or taken from one person on top of their role (AC-1-l,
+/// ADR-0138): permanent until lifted by hand, one row per person and key, so
+/// a give and a take of one key cannot both stand. A take wins over every
+/// source of the key, the role included. `tenantId` is the person's (strict
+/// RLS); a trigger notifies `identity_permissions_changed` with
+/// `{kind:"person"}` on every write.
+model UserPermission {
+  userId          String               @db.Uuid
+  permissionId    String               @db.Uuid
+  tenantId        String               @db.Uuid
+  effect          UserPermissionEffect
+  /// Why, as the giver wrote it; shown to staff and kept in the audit row.
+  reason          String               @db.VarChar(500)
+  grantedByUserId String               @db.Uuid
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @default(now()) @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([userId, permissionId])
+  @@index([tenantId])
+  @@index([permissionId])
+  @@map("user_permission")
   @@schema("identity")
 }
 

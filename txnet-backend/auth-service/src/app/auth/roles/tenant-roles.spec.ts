@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { PERMISSION_REGISTRY, runWithTenant } from '@txnet-backend/shared-core';
+import { AccessReader } from '../permissions/access.reader';
 import { RolesService } from './roles.service';
 import { TenantRolesRefused, TenantRolesService } from './tenant-roles.service';
 
@@ -70,7 +71,9 @@ describe('TenantRolesService', () => {
         return {};
       }),
     };
-    const tx = { user, adminAuditLog, $executeRaw, role, outboxEvent };
+    // Nobody here has a key given or taken (AC-1-l): their answer is their role's.
+    const userPermission = { findMany: vi.fn(async () => []) };
+    const tx = { user, adminAuditLog, $executeRaw, role, outboxEvent, userPermission };
     const prisma = {
       ...tx,
       permission: {
@@ -92,7 +95,7 @@ describe('TenantRolesService', () => {
         );
       }),
     };
-    const service = new TenantRolesService(prisma as never, access as never, new RolesService(prisma as never));
+    const service = new TenantRolesService(prisma as never, access as never, new RolesService(prisma as never), new AccessReader(prisma as never));
     return { service, order, user, role, adminAuditLog, written, access };
   };
 

@@ -1,3 +1,4 @@
+import { UserPermissionEffect } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -37,3 +38,17 @@ export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
 /** `PUT /auth/tenants/:tenantId/users/:userId/role` (F-1201-a): the whole of it is which role. */
 export const assignRoleSchema = z.object({ roleId: z.string().uuid() });
 export type AssignRoleInput = z.infer<typeof assignRoleSchema>;
+
+/** The `:key` of `/auth/tenants/:tenantId/users/:userId/keys/:key` (AC-1-l): shape only. */
+export const keyParamSchema = permissionKey;
+
+/**
+ * `PUT .../keys/:key` (AC-1-l): give or take, and why. The reason is
+ * required — it is what staff read later, and what the audit row keeps.
+ */
+export const setKeySchema = z.object({
+  effect: z.nativeEnum(UserPermissionEffect),
+  reason: z.string().trim().min(3).max(500),
+});
+/** `Required`: both fields are mandatory in the schema; this project's non-strict inference reads them optional. */
+export type SetKeyInput = Required<z.infer<typeof setKeySchema>>;

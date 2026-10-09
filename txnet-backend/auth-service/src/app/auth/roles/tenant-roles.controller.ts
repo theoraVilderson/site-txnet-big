@@ -27,9 +27,12 @@ import type { AuthClaims } from '../token.service';
 import {
   assignRoleSchema,
   createRoleSchema,
+  keyParamSchema,
+  setKeySchema,
   updateRoleSchema,
   type AssignRoleInput,
   type CreateRoleInput,
+  type SetKeyInput,
   type UpdateRoleInput,
 } from './role.schema';
 import { TenantRolesRefused, TenantRolesRejection, TenantRolesService } from './tenant-roles.service';
@@ -46,6 +49,18 @@ const STATUS: Record<TenantRolesRejection, 400 | 403 | 404 | 409> = {
   role_not_found: 404,
   role_not_held: 403,
   no_authority: 403,
+  key_unknown: 400,
+  key_not_grantable: 403,
+  key_not_held: 403,
+  key_on_wildcard: 409,
+  key_not_found: 404,
+};
+
+/** An act on a person, so it spends the users-admin's per-caller budget, as block does. */
+const PERSON_WRITE: RateLimitOptions = {
+  key: (req) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_WRITE, req?.user?.sub ?? req?.ip),
+  configKey: 'RESELLER_USER_WRITE_RATE_LIMIT',
+  windowSec: 900,
 };
 
 /** A role write is the tenant's, so its budget is the path's tenant (as `ROLE_WRITE` on `/auth/roles`). */
@@ -109,13 +124,8 @@ export class TenantRolesController {
     return this.refusing(() => this.roles.remove(actorOf(req), tenantId, id));
   }
 
-  /** An act on a person, so it spends the users-admin's per-caller budget, as block does. */
   @Put('users/:userId/role')
-  @RateLimit({
-    key: (req) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_WRITE, req?.user?.sub ?? req?.ip),
-    configKey: 'RESELLER_USER_WRITE_RATE_LIMIT',
-    windowSec: 900,
-  })
+  @RateLimit(PERSON_WRITE)
   assign(
     @Param('tenantId', ParseUUIDPipe) tenantId: string,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -123,6 +133,42 @@ export class TenantRolesController {
     @Body(new ZodValidationPipe(assignRoleSchema)) body: AssignRoleInput,
   ) {
     return this.refusing(() => this.roles.assign(actorOf(req), tenantId, userId, body.roleId, req.ip ?? '0.0.0.0'));
+  }
+
+  /** A person's keys by source — role, given, taken — and their answer (AC-1-l). */
+  @Get('users/:userId/keys')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_READ, req?.user?.sub ?? req?.ip),
+    configKey: 'RESELLER_USER_READ_RATE_LIMIT',
+    windowSec: 900,
+  })
+  keysOf(@Param('tenantId', ParseUUIDPipe) tenantId: string, @Param('userId', ParseUUIDPipe) userId: string, @Req() req: Request) {
+    return this.refusing(() => this.roles.keysOf(actorOf(req), tenantId, userId));
+  }
+
+  /** Give or take one key on one person, with a reason (AC-1-l, ADR-0138). */
+  @Put('users/:userId/keys/:key')
+  @RateLimit(PERSON_WRITE)
+  setKey(
+    @Param('tenantId', ParseUUIDPipe) tenantId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('key', new ZodValidationPipe(keyParamSchema)) key: string,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(setKeySchema)) body: SetKeyInput,
+  ) {
+    return this.refusing(() => this.roles.setKey(actorOf(req), tenantId, userId, key, body, req.ip ?? '0.0.0.0'));
+  }
+
+  /** Lift a key given or taken: the role decides it again (AC-1-l). */
+  @Delete('users/:userId/keys/:key')
+  @RateLimit(PERSON_WRITE)
+  liftKey(
+    @Param('tenantId', ParseUUIDPipe) tenantId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('key', new ZodValidationPipe(keyParamSchema)) key: string,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.roles.liftKey(actorOf(req), tenantId, userId, key, req.ip ?? '0.0.0.0'));
   }
 
   /** One refusal type in, one HTTP status out — the reason travels as the body's `reason`. */

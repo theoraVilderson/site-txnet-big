@@ -83,6 +83,14 @@ describe('AccessNoticeConsumer.handle', () => {
     expect(calls.joined).toEqual([{ burst: burst('accessKeysChanged'), params: { given: 'coupon.manage' } }]);
   });
 
+  it('a key given or taken on the person (AC-1-l) is told the same way, and only when it moved one', async () => {
+    const { consumer, calls } = build();
+    await consumer.handle(event({ cause: 'keys_set', given: [], taken: ['user.write'] }));
+    await consumer.handle(event({ cause: 'keys_set', given: [], taken: [] }));
+
+    expect(calls.joined).toEqual([{ burst: burst('accessKeysChanged'), params: { taken: 'user.write' } }]);
+  });
+
   it('a role edit that moved no key of theirs tells no one', async () => {
     const { consumer, calls } = build();
     await consumer.handle(event({ cause: 'role_edited', given: [], taken: [] }));

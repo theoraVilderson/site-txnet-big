@@ -4,7 +4,8 @@ import { holdsPermission, tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionService } from '../session/session.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
-import { TARGET_PERMISSIONS_SELECT, authorityOver, permissionsOf } from './authority';
+import { TARGET_PERMISSIONS_SELECT, authorityOver } from './authority';
+import { AccessReader } from '../permissions/access.reader';
 
 /** Restrict to support, and lift a restriction (ADR-0133 decision 6). */
 export const RESTRICTION_ASSIGN = 'restriction.assign';
@@ -48,6 +49,7 @@ export class UserStatusService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: SessionService,
+    private readonly answers: AccessReader,
   ) {}
 
   /** Where the person stands — for a screen about to offer a change. Either key reads it. */
@@ -91,7 +93,8 @@ export class UserStatusService {
 
       const refused = authorityOver(
         { userId: actor.userId, permissions: actor.permissions, as: 'member' },
-        { userId: user.id, permissions: permissionsOf(user).filter((k) => !k.startsWith('self.')) },
+        // Their whole answer (ADR-0138): a key given to them counts as theirs.
+        { userId: user.id, permissions: (await this.answers.ofLoaded(user, tx)).keys.filter((k) => !k.startsWith('self.')) },
         { ownerUserId: owner?.ownerUserId ?? null, platform: owner?.tenantType === TenantType.platform_owner },
       );
       if (refused) throw new UserStatusRefused(refused, userId);

@@ -1,6 +1,15 @@
 import { UserStatus } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 import { UserStatusService } from './user-status.service';
+import { accessOf } from '../permissions/access';
+
+/** Nobody here has a key given or taken (ADR-0138): each answer is the role's. */
+const ROLE_ONLY = {
+  ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }),
+  ofLoadedMany: async (us: any[]) =>
+    new Map(us.map((u) => [u.id, accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] })])),
+} as never;
+
 
 /**
  * BAN-1-d (ADR-0133 decisions 5–7): staff restrict, ban and lift, with a
@@ -42,7 +51,7 @@ describe('UserStatusService.set', () => {
       $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)),
     };
     const sessions = { revokeAllSessionsForUser: vi.fn(async () => order.push('revoke')) };
-    const service = new UserStatusService(prisma as never, sessions as never);
+    const service = new UserStatusService(prisma as never, sessions as never, ROLE_ONLY);
     const set = (actor: typeof agent, status: UserStatus, reason?: string, userId = 'u-1') =>
       runWithTenant({ id: TENANT } as never, () => service.set(actor, userId, { status, reason }, '1.2.3.4'));
     return { set, tx, sessions, order };
@@ -123,7 +132,7 @@ describe('UserStatusService.read', () => {
         work({ $executeRaw: vi.fn(), user: { findFirst: vi.fn(async () => row) } }),
       ),
     };
-    const service = new UserStatusService(prisma as never, {} as never);
+    const service = new UserStatusService(prisma as never, {} as never, ROLE_ONLY);
     return (actor: { userId: string; tenantId: string; permissions: string[] }) =>
       runWithTenant({ id: TENANT } as never, () => service.read(actor, 'u-1'));
   };

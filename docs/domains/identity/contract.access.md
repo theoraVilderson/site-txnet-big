@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 32
+version: 33
 updated: 2026-10-09
 ---
 
@@ -31,7 +31,7 @@ Code: `auth-service/src/app/auth/permissions/access.ts` (`accessOf`, pure) and
 | A token mint (sign-in, refresh, switch, impersonation) | `AccessReader.ofLoaded(user)`, then `TokenService` mints `permissions` = the keys, `permHash` = their fingerprint, `personal: true` when personal |
 | The Redis writer (`PermissionNotificationsListener`) | `AccessReader.ofIds` for each person a notification reaches; writes `user:<id>:permissions` for a personal person, **deletes** it otherwise |
 | The gate and `AuthGuard` | the token, compared against the person's key when present, the role's key when not (ADR-0138 (4)) |
-| Impersonation's authority check | both people's answers (AC-1-k); block, role assignment and the users list follow with AC-1-l |
+| The authority rule (ADR-0103) | the target's whole answer, read on the writer's transaction: impersonation, role assignment, block, profile edit, a key write, and the users list's `canAct` (AC-1-l) |
 
 A mint site that passes no answer gets the role's keys. For a personal person
 that token is refused at once as stale, so a missed site costs one refresh and
@@ -48,3 +48,25 @@ never grants more.
 
 Holders who are not personal cost nothing: the role's key already describes
 them.
+
+## Giving or taking one key (AC-1-l)
+
+On a tenant's own path, through the role door (`ResellerAccess.for('role.manage')`,
+as **assign** in [contract.roles.md](contract.roles.md)). Code: `TenantRolesService`.
+
+| Operation | Input | Output | Refuses |
+|---|---|---|---|
+| read a person's keys | userId | `{userId, keys, role:{id,name,keys}, given:[{key,reason,by,at}], taken:[…]}` | `user_not_found` |
+| give or take | userId, key, `{effect: give\|take, reason}` | the same view, after | `key_not_grantable` (`*`, `platform.`), `key_unknown` (no `permission` row), `key_not_held` (outside the writer's grant scope), `key_on_wildcard` (the person holds `*`), `no_authority`, `user_not_found` |
+| lift | userId, key | the same view, after | `key_not_found` (nothing given or taken), and the checks above |
+
+One row per person and key (`identity.user_permission`): a give replaces a
+take of the same key and the reverse. The same effect and reason again writes
+nothing. Each write is one `user_permission_set` / `user_permission_lift` audit
+row in the tenant's trail (`newValue`/`oldValue` `{key, effect, reason}`) and one
+`access.changed` with cause `keys_set`, whose `given`/`taken` are what the
+person's answer gained and lost — a gift of a key the role already gives moves
+nothing and tells no one. The trigger moves the token; nothing here touches Redis.
+
+A key given to someone makes them staff on the users list (`staff`), as a role
+holding keys does.

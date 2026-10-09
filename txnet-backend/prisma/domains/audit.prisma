@@ -180,6 +180,10 @@ enum AdminAction {
   // AC-1-a — staff edited a person's name, username or email (removal only).
   // `oldValue`/`newValue` hold just the fields that changed; an address masked.
   user_profile_update
+  // AC-1-l — a key given to or taken from one person (`user_permission_set`,
+  // `newValue` {key, effect, reason}) and lifted (`user_permission_lift`).
+  user_permission_set
+  user_permission_lift
 
   @@schema("audit")
 }

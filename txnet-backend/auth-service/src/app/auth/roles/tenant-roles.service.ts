@@ -12,10 +12,14 @@ import {
   TenantCapabilityName,
   accessChanged,
   holdsPermission,
+  isPlatformKey,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
+import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
+import { AccessReader } from '../permissions/access.reader';
+import type { UserAccess } from '../permissions/access';
 import { authorityOver, permissionsOf } from '../users/authority';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 import { RoleScope, RoleView, RolesService } from './roles.service';
@@ -27,7 +31,12 @@ export type TenantRolesRejection =
   | 'user_not_found'
   | 'role_not_found'
   | 'role_not_held'
-  | 'no_authority';
+  | 'no_authority'
+  | 'key_unknown'
+  | 'key_not_grantable'
+  | 'key_not_held'
+  | 'key_on_wildcard'
+  | 'key_not_found';
 
 export class TenantRolesRefused extends Error {
   constructor(
@@ -46,6 +55,25 @@ export type TenantRoleView = RoleView & { members: number };
 export type TenantRolesList = { roles: TenantRoleView[]; grantable: string[] };
 
 export type RoleAssignment = { userId: string; role: { id: string; name: string } };
+
+/** A key given or taken: which, why, by whom, since when (AC-1-l). */
+export type KeyOverride = { key: string; reason: string; by: string; at: string };
+
+/** A person's keys by where each comes from (AC-1-l), and the answer they add up to (ADR-0138). */
+export type PersonKeys = {
+  userId: string;
+  keys: string[];
+  role: { id: string; name: string; keys: string[] };
+  given: KeyOverride[];
+  taken: KeyOverride[];
+};
+
+export type KeyEffect = 'give' | 'take';
+
+type Tx = Prisma.TransactionClient;
+
+/** A person as a key write reads them: their role and its keys, inside the tenant's scope. */
+const PERSON = { id: true, tenantId: true, roleId: true, role: { select: { name: true, rolePermissions: { select: { permission: { select: { key: true } } } } } } } as const;
 
 /** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). */
 const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
@@ -81,6 +109,8 @@ export class TenantRolesService {
     private readonly prisma: PrismaService,
     private readonly access: ResellerAccess,
     private readonly roles: RolesService,
+    /** A person's whole answer (ADR-0138): what the authority rule weighs, and what a key write moves. */
+    private readonly answers: AccessReader,
   ) {}
 
   list(actor: ResellerActor, tenantId: string): Promise<TenantRolesList> {
@@ -149,12 +179,12 @@ export class TenantRolesService {
         // In the tenant's scope: someone of another tenant is simply not found.
         const user = await tx.user.findFirst({
           where: { id: userId, deletedAt: null },
-          select: { id: true, roleId: true, role: { select: { name: true, ...KEYS } } },
+          select: { id: true, tenantId: true, roleId: true, role: { select: { name: true, ...KEYS } } },
         });
         if (!user) throw new TenantRolesRefused('user_not_found', userId);
         const refused = authorityOver(
           { userId: actor.userId, permissions: actor.permissions, as: admitted.as },
-          { userId: user.id, permissions: permissionsOf(user) },
+          { userId: user.id, permissions: (await this.answers.ofLoaded(user, tx)).keys },
           { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
         );
         if (refused) throw new TenantRolesRefused('no_authority', `${userId}: ${refused}`);
@@ -181,6 +211,148 @@ export class TenantRolesService {
         return answer;
       });
     });
+  }
+
+  /** One person's keys by source (AC-1-l): what the Permissions section shows (AC-1-n). */
+  keysOf(actor: ResellerActor, tenantId: string, userId: string): Promise<PersonKeys> {
+    return this.run(actor, tenantId, 'read', () =>
+      tenantTransaction(this.prisma, async (tx) => this.personKeys(tx, await this.person(tx, userId))),
+    );
+  }
+
+  /**
+   * Give or take one key on one person, permanently, with a reason (AC-1-l,
+   * ADR-0138 (7)). The key must exist, be neither `*` nor a `platform.` key,
+   * and be one this writer may grant — a take too, or a member could strip a
+   * key they could never give back. The person must not hold `*`, and the
+   * writer must have authority over their whole answer (ADR-0103). The same
+   * key, effect and reason again writes nothing.
+   */
+  setKey(
+    actor: ResellerActor,
+    tenantId: string,
+    userId: string,
+    key: string,
+    input: { effect: KeyEffect; reason: string },
+    ip: string,
+  ): Promise<PersonKeys> {
+    return this.writingKey(actor, tenantId, userId, key, ip, async (tx, person, permissionId) => {
+      const current = await tx.userPermission.findUnique({ where: { userId_permissionId: { userId, permissionId } } });
+      if (current && current.effect === input.effect && current.reason === input.reason) return null;
+      const data = { effect: input.effect, reason: input.reason, grantedByUserId: actor.userId };
+      await tx.userPermission.upsert({
+        where: { userId_permissionId: { userId, permissionId } },
+        create: { userId, permissionId, tenantId: person.tenantId, ...data },
+        update: data,
+      });
+      return {
+        action: AdminAction.user_permission_set,
+        before: current ? { key, effect: current.effect, reason: current.reason } : null,
+        after: { key, ...input },
+      };
+    });
+  }
+
+  /** Lift a key given or taken, by hand (AC-1-l). The person's role decides that key again. */
+  liftKey(actor: ResellerActor, tenantId: string, userId: string, key: string, ip: string): Promise<PersonKeys> {
+    return this.writingKey(actor, tenantId, userId, key, ip, async (tx, _person, permissionId) => {
+      const current = await tx.userPermission.findUnique({ where: { userId_permissionId: { userId, permissionId } } });
+      if (!current) throw new TenantRolesRefused('key_not_found', `${userId}: ${key}`);
+      await tx.userPermission.deleteMany({ where: { userId, permissionId } });
+      return { action: AdminAction.user_permission_lift, before: { key, effect: current.effect, reason: current.reason }, after: null };
+    });
+  }
+
+  /**
+   * The checks every key write asks, the write, its audit row and the person's
+   * `access.changed` — carrying what their answer actually gained and lost, so
+   * a gift of a key the role already gives tells them nothing new.
+   */
+  private writingKey(
+    actor: ResellerActor,
+    tenantId: string,
+    userId: string,
+    key: string,
+    ip: string,
+    write: (
+      tx: Tx,
+      person: Prisma.UserGetPayload<{ select: typeof PERSON }>,
+      permissionId: string,
+    ) => Promise<{ action: AdminAction; before: Record<string, string> | null; after: Record<string, string> | null } | null>,
+  ): Promise<PersonKeys> {
+    return this.run(actor, tenantId, 'staffWrite', async (admitted) => {
+      if (key === '*' || isPlatformKey(key)) throw new TenantRolesRefused('key_not_grantable', key);
+      const scope = await this.grantScope(actor, admitted);
+      const tenant = await this.prisma.tenant.findUnique({ where: { id: admitted.id }, select: { ownerUserId: true, tenantType: true } });
+
+      return tenantTransaction(this.prisma, async (tx) => {
+        // A typo is named as one, even to a `*` writer who holds every key that exists.
+        const permission = await tx.permission.findUnique({ where: { key }, select: { id: true } });
+        if (!permission) throw new TenantRolesRefused('key_unknown', key);
+        if (!holdsPermission(scope.permissions, key)) throw new TenantRolesRefused('key_not_held', key);
+        const person = await this.person(tx, userId);
+        if (holdsPermission(permissionsOf(person), '*')) throw new TenantRolesRefused('key_on_wildcard', userId);
+        const before = await this.answers.ofLoaded(person, tx);
+        const refused = authorityOver(
+          { userId: actor.userId, permissions: actor.permissions, as: admitted.as },
+          { userId, permissions: before.keys },
+          { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
+        );
+        if (refused) throw new TenantRolesRefused('no_authority', `${userId}: ${refused}`);
+
+        const change = await write(tx, person, permission.id);
+        if (change) {
+          await tx.adminAuditLog.create({
+            data: {
+              tenantId: admitted.id,
+              adminId: actor.userId,
+              action: change.action,
+              targetEntityType: AuditTargetType.user,
+              targetEntityId: userId,
+              oldValue: change.before ?? undefined,
+              newValue: change.after ?? undefined,
+              adminIpAddress: ip,
+            },
+          });
+          const after = await this.answers.ofLoaded(person, tx);
+          // AC-1-q: their panel moves now; the trigger moves their token (ADR-0138 (5)).
+          await tx.outboxEvent.create({
+            data: accessChanged(userId, admitted.id, 'keys_set', moved(before, after)),
+            select: { id: true },
+          });
+        }
+        return this.personKeys(tx, person);
+      });
+    });
+  }
+
+  /** In the tenant's scope: someone of another tenant is simply not found. */
+  private async person(tx: Tx, userId: string) {
+    const person = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: PERSON });
+    if (!person) throw new TenantRolesRefused('user_not_found', userId);
+    return person;
+  }
+
+  private async personKeys(tx: Tx, person: Prisma.UserGetPayload<{ select: typeof PERSON }>): Promise<PersonKeys> {
+    const [answer, rows] = await Promise.all([
+      this.answers.ofLoaded(person, tx),
+      tx.userPermission.findMany({
+        where: { userId: person.id },
+        select: { effect: true, reason: true, grantedByUserId: true, updatedAt: true, permission: { select: { key: true } } },
+      }),
+    ]);
+    const of = (effect: KeyEffect): KeyOverride[] =>
+      rows
+        .filter((r) => r.effect === effect)
+        .map((r) => ({ key: r.permission.key, reason: r.reason, by: r.grantedByUserId, at: r.updatedAt.toISOString() }))
+        .sort((a, b) => a.key.localeCompare(b.key));
+    return {
+      userId: person.id,
+      keys: answer.keys,
+      role: { id: person.roleId, name: person.role?.name ?? '', keys: permissionsOf(person) },
+      given: of('give'),
+      taken: of('take'),
+    };
   }
 
   /**
@@ -224,4 +396,11 @@ export class TenantRolesService {
       throw err;
     }
   }
+}
+
+/** What an answer gained and lost between two reads — what the person is told (AC-1-s). */
+function moved(before: UserAccess, after: UserAccess): { given: string[]; taken: string[] } {
+  const was = new Set(before.keys);
+  const now = new Set(after.keys);
+  return { given: after.keys.filter((k) => !was.has(k)).sort(), taken: before.keys.filter((k) => !now.has(k)).sort() };
 }

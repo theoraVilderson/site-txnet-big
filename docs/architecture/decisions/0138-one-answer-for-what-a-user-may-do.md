@@ -78,8 +78,10 @@ Three facts shape the answer.
   reads four keys instead of three, in the same `MGET`.
 - A role edit now does work proportional to its personal holders. Holders that
   are not personal cost nothing new.
-- `access.changed` (AC-1-q) gains the causes `key_given`, `key_taken`,
-  `key_lifted`, `group_access` and `group_membership`. The page re-reads as before.
+- `access.changed` (AC-1-q) gains one cause per source: `keys_set` for a key
+  given, taken or lifted (AC-1-l), and one for group access and membership
+  (AC-1-m). Each carries what the person's answer gained and lost, so the notice
+  names what moved. The page re-reads as before.
 - Not chosen: **a per-user fingerprint for everyone** (the row's literal shape).
   It is simpler to read but costs one write per customer per template edit, and
   the gap between that and (4) only grows with tenants. **A second claim listing

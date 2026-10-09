@@ -16,6 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { maskPhone } from '../../common/validation/phone.schema';
 import { SessionService } from '../session/session.service';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
+import { AccessReader } from '../permissions/access.reader';
 import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, permissionsOf } from './authority';
 import { matchers } from './user-search.service';
 
@@ -100,7 +101,13 @@ const PROFILE_SELECT = { ...SELECT, email: true } as const;
 type ProfileRow = Prisma.UserGetPayload<{ select: typeof PROFILE_SELECT }>;
 
 /** What `view` needs to answer `canAct`: who asks, how they were admitted, and the tenant's owner. */
-type ViewContext = { actor: ResellerUsersActor; admitted: AdmittedReseller; tenant: AuthorityTenant };
+type ViewContext = {
+  actor: ResellerUsersActor;
+  admitted: AdmittedReseller;
+  tenant: AuthorityTenant;
+  /** Each viewed person's whole answer (ADR-0138), filled by `weigh` before `view` reads it. */
+  answers: Map<string, readonly string[]>;
+};
 
 /**
  * A reseller's own users (F-311-a, spec F-311): read a page of them, and block
@@ -129,17 +136,26 @@ export class ResellerUsersService {
     private readonly access: ResellerAccess,
     private readonly sessions: SessionService,
     private readonly owners: SurfaceOwnerService,
+    private readonly answers: AccessReader,
   ) {}
+
+  /** Read these people's answers into `ctx` — on the writer's transaction when there is one. */
+  private async weigh(ctx: ViewContext, rows: readonly UserRow[], tx?: Prisma.TransactionClient): Promise<void> {
+    for (const [id, access] of await this.answers.ofLoadedMany(rows.map((r) => ({ id: r.id, role: r.role })), tx)) {
+      ctx.answers.set(id, access.keys);
+    }
+  }
 
   /** One page of this reseller's users, newest first. `q` is F-018-ad's matcher, asked inside this scope. */
   list(actor: ResellerUsersActor, tenantId: string, input: ResellerUserListInput): Promise<ResellerUserPage> {
     return this.run(actor, tenantId, 'read', async (admitted) => {
-      const ctx = { actor, admitted, tenant: await this.tenantOf(admitted.id) };
+      const ctx: ViewContext = { actor, admitted, tenant: await this.tenantOf(admitted.id), answers: new Map() };
       const where: Prisma.UserWhereInput = { deletedAt: null };
       if (input.q) where.OR = matchers(input.q);
       // The team (F-1201-c): the same rule as `staff` on a row, less the owner,
-      // who is in another tenant and never on this list.
-      if (input.staff) where.role = { rolePermissions: { some: {} } };
+      // who is in another tenant and never on this list. A key given to a
+      // person makes them staff as their role would (ADR-0138).
+      if (input.staff) where.AND = [{ OR: [{ role: { rolePermissions: { some: {} } } }, { permissionOverrides: { some: { effect: 'give' } } }] }];
 
       const [rows, total] = await Promise.all([
         this.prisma.user.findMany({
@@ -152,6 +168,7 @@ export class ResellerUsersService {
         this.prisma.user.count({ where }),
       ]);
 
+      await this.weigh(ctx, rows);
       return { items: rows.map((row) => view(row, ctx)), total, page: input.page, pageSize: input.pageSize };
     });
   }
@@ -185,7 +202,7 @@ export class ResellerUsersService {
       // Blocking yourself locks the reseller out of its own panel with a button.
       // Rule 1 of the authority rule, answered with this surface's older reason.
       if (userId === actor.userId) throw new ResellerUsersRefused('cannot_block_self', userId);
-      const ctx = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id) };
+      const ctx: ViewContext = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id), answers: new Map() };
 
       // tenantTransaction, not a bare $transaction: the scope refuses `User`
       // queries in a transaction that bound no tenant (F-095).
@@ -196,7 +213,8 @@ export class ResellerUsersService {
         if (!user) throw new ResellerUsersRefused('user_not_found', userId);
         // ADR-0103: the admission says who may administer this tenant; this says
         // whether they may act on this one person. The target's keys are read
-        // here, at the act, from their role.
+        // here, at the act — their whole answer, not only their role (ADR-0138).
+        await this.weigh(ctx, [user], tx);
         if (!view(user, ctx).canAct) throw new ResellerUsersRefused('no_authority', userId);
         if (user.status === UserStatus.banned) throw new ResellerUsersRefused('user_banned', userId);
         // Idempotent: the second click of a button is not a second audit row.
@@ -238,9 +256,10 @@ export class ResellerUsersService {
   /** One of this reseller's users, as the admin's user page shows them (AC-1-a). */
   profile(actor: ResellerUsersActor, tenantId: string, userId: string): Promise<ResellerUserProfile> {
     return this.run(actor, tenantId, 'read', async (admitted) => {
-      const ctx = { actor, admitted, tenant: await this.tenantOf(admitted.id) };
+      const ctx: ViewContext = { actor, admitted, tenant: await this.tenantOf(admitted.id), answers: new Map() };
       const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null }, select: PROFILE_SELECT });
       if (!user) throw new ResellerUsersRefused('user_not_found', userId);
+      await this.weigh(ctx, [user]);
       return profileView(user, ctx);
     });
   }
@@ -265,11 +284,12 @@ export class ResellerUsersService {
     edit: ResellerUserProfileEdit,
   ): Promise<ResellerUserProfile> {
     return this.run(actor, tenantId, 'staffWrite', async (reseller) => {
-      const ctx = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id) };
+      const ctx: ViewContext = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id), answers: new Map() };
 
       const row = await tenantTransaction(this.prisma, async (tx) => {
         const user = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: PROFILE_SELECT });
         if (!user) throw new ResellerUsersRefused('user_not_found', userId);
+        await this.weigh(ctx, [user], tx);
         if (!view(user, ctx).canAct) throw new ResellerUsersRefused('no_authority', userId);
         if (user.status === UserStatus.banned) throw new ResellerUsersRefused('user_banned', userId);
 
@@ -368,7 +388,7 @@ export class ResellerUsersService {
 }
 
 function view(row: UserRow, ctx: ViewContext): ResellerUserView {
-  const permissions = permissionsOf(row);
+  const permissions = ctx.answers.get(row.id) ?? permissionsOf(row);
   const refusal = authorityOver(
     { userId: ctx.actor.userId, permissions: ctx.actor.permissions, as: ctx.admitted.as },
     { userId: row.id, permissions },

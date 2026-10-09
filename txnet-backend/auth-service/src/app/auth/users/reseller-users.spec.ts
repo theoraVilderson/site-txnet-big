@@ -1,6 +1,15 @@
 import { UserStatus } from '@prisma/client';
 import { ResellerAccessRefused, runWithTenant } from '@txnet-backend/shared-core';
 import { ResellerUsersService } from './reseller-users.service';
+import { accessOf } from '../permissions/access';
+
+/** Nobody here has a key given or taken (ADR-0138): each answer is the role's. */
+const ROLE_ONLY = {
+  ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }),
+  ofLoadedMany: async (us: any[]) =>
+    new Map(us.map((u) => [u.id, accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] })])),
+} as never;
+
 
 /**
  * The invariant this item turns on (F-311-a): a reseller reads and blocks
@@ -102,7 +111,7 @@ describe('ResellerUsersService', () => {
       }),
     };
 
-    const service = new ResellerUsersService(prisma as never, access as never, sessions as never, {} as never);
+    const service = new ResellerUsersService(prisma as never, access as never, sessions as never, {} as never, ROLE_ONLY);
     return { service, order, prisma, user, adminAuditLog, sessions, access, asked, bound };
   };
 
@@ -140,12 +149,15 @@ describe('ResellerUsersService', () => {
       expect(JSON.stringify(page)).not.toContain('+989121234567');
     });
 
-    it('narrows to the team when asked: people whose role holds any permission (F-1201-c)', async () => {
+    it('narrows to the team when asked: people whose role holds any permission, or given one (F-1201-c, AC-1-l)', async () => {
       const { service, asked } = build();
 
       await service.list(actor, reseller, { page: 1, pageSize: 20, staff: true });
 
-      expect(asked.findMany?.where).toEqual({ deletedAt: null, role: { rolePermissions: { some: {} } } });
+      expect(asked.findMany?.where).toEqual({
+        deletedAt: null,
+        AND: [{ OR: [{ role: { rolePermissions: { some: {} } } }, { permissionOverrides: { some: { effect: 'give' } } }] }],
+      });
     });
 
     it('never names the tenant itself — the scope the door opened is the whole filter', async () => {

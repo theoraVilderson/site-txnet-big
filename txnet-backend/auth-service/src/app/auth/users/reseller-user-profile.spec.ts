@@ -2,6 +2,15 @@ import { Prisma, UserStatus } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 import { resellerUserProfileSchema } from './reseller-users.schema';
 import { ResellerUsersRefused, ResellerUsersService } from './reseller-users.service';
+import { accessOf } from '../permissions/access';
+
+/** Nobody here has a key given or taken (ADR-0138): each answer is the role's. */
+const ROLE_ONLY = {
+  ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }),
+  ofLoadedMany: async (us: any[]) =>
+    new Map(us.map((u) => [u.id, accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] })])),
+} as never;
+
 
 /**
  * The invariant AC-1-a turns on: staff edit a person's name, username and
@@ -65,7 +74,7 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
       }),
     };
     const owners = { ownerHoldsUsername: vi.fn(async () => options.ownerHolds ?? false) };
-    const service = new ResellerUsersService(prisma as never, access as never, {} as never, owners as never);
+    const service = new ResellerUsersService(prisma as never, access as never, {} as never, owners as never, ROLE_ONLY);
     return { service, order, user, adminAuditLog, owners, written };
   };
 
