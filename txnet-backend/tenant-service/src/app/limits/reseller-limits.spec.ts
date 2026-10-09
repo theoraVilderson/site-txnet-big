@@ -134,9 +134,10 @@ function build(
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
     grant: { count: async ({ where }: { where: { source?: string } }) => (where.source === 'admin_grant' ? usage.issued : usage.open) },
     tenantDomain: { count: async () => usage.domains },
-    tenantStaffMember: { count: async () => usage.staff },
+    // GR-1-b: staff are the people holding a reseller key through a group, each once.
+    userGroupMember: { findMany: async () => Array.from({ length: usage.staff }, (_, i) => ({ userId: `staff-${i}` })) },
     notificationCampaign: { count: async () => usage.sends },
-    user: { count: async () => usage.users },
+    user: { count: async ({ where }: { where: { id?: { in: string[] } } }) => (where.id ? where.id.in.length : usage.users) },
     trafficDailyAggregate: { aggregate: async () => ({ _sum: { totalUploadBytes: BigInt(usage.gib) * BigInt(1024 ** 3), totalDownloadBytes: BigInt(0) } }) },
     // F-414-m: 2.5 MiB of admins' files, shown as 3 — whole MiB, rounded up.
     storedObject: { aggregate: async () => ({ _sum: { size: 2.5 * 1024 * 1024 } }) },

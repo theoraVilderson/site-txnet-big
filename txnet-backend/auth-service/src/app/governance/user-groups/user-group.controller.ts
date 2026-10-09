@@ -18,7 +18,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, ResellerLimitReached, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -166,6 +166,8 @@ export class UserGroupController {
     try {
       return await work();
     } catch (err) {
+      // Past the reseller's staff_members_max (GR-1-b): the figures say what to raise.
+      if (err instanceof ResellerLimitReached) throw new ConflictException({ reason: err.reason, message: err.message, facts: err.facts });
       if (!(err instanceof UserGroupRefused)) throw err;
       const body = { reason: err.reason, message: err.message };
       switch (USER_GROUP_REFUSAL_STATUS[err.reason]) {

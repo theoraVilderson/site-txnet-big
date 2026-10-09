@@ -2,14 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, UserStatus } from '@prisma/client';
 import {
   AccessHistoryCause,
-  assertUnderLimit,
-  RESELLER_LIMIT_USAGE,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
   recordAccessChange,
-  resellerLimitOf,
   runWithTenant,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -137,7 +134,6 @@ export class TenantStaffService {
     // A removed member is re-invited **in place**: `(tenantId, userId)` is
     // unique, so the alternative is not a second row but a lost history.
     const seat = await this.all.$transaction(async (tx) => {
-      await this.assertRoomForOneMore(tx, reseller, now);
       const row = existing
         ? await tx.tenantStaffMember.update({
             where: { id: existing.id },
@@ -190,8 +186,9 @@ export class TenantStaffService {
   /**
    * A seat's end moved or cleared, without re-inviting (F-1201-b): the row,
    * its acceptance and its history stay. An expired seat given a later end (or
-   * none) is a seat again, so it counts against `staff_members_max` as an
-   * invite would, and the member is told their access is back (AC-1-q). Moving
+   * none) is a seat again, and the member is told their access is back (AC-1-q).
+   * A seat is not counted against `staff_members_max` — it admits nobody since
+   * GR-1-a; the limit counts who holds a reseller key through a group (GR-1-b). Moving
    * the end of a seat that still admits them changes nothing they can see now.
    */
   async setExpiry(actor: StaffActor, tenantId: string, memberId: string, accessExpiresAt: Date | null, now = new Date()): Promise<StaffView> {
@@ -202,7 +199,6 @@ export class TenantStaffService {
 
     const restored = staffState(seat, now) === 'expired';
     const updated = await this.all.$transaction(async (tx) => {
-      if (restored) await this.assertRoomForOneMore(tx, reseller, now);
       const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { accessExpiresAt } });
       // A seat brought back is told (AC-1-q); an end moved is only remembered (AC-1-p).
       const cause = restored && row.joinedAt ? 'seat_restored' : 'seat_end_set';
@@ -254,19 +250,6 @@ export class TenantStaffService {
       select: { id: true },
     });
     await recordAccessChange(tx, [{ userId: seat.userId, tenantId, cause, actorUserId: actor.userId, auditLogId: act.id }]);
-  }
-
-  /**
-   * One more seat is bounded by the reseller's limit (F-019-t1, ADR-0106): its
-   * own people are refused past it; the platform's staff are not. Under a
-   * per-reseller lock, so two invites cannot both take the last seat.
-   */
-  private async assertRoomForOneMore(tx: Prisma.TransactionClient, reseller: { id: string; as: string }, now: Date): Promise<void> {
-    if (reseller.as === 'staff') return;
-    const inEffect = await resellerLimitOf(tx, reseller.id, 'staff_members_max');
-    if (inEffect.limit === null) return;
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:staff_members_max:${reseller.id}`}))`;
-    assertUnderLimit('staff_members_max', inEffect, await RESELLER_LIMIT_USAGE.staff_members_max(tx, reseller.id, now));
   }
 
   private async admit(actor: StaffActor, tenantId: string, capability: 'read' | 'staffWrite', now: Date) {

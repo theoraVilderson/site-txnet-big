@@ -1,4 +1,4 @@
-import { ResellerAccess, ResellerLimitReached } from '@txnet-backend/shared-core';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 import { inviteStaffSchema, seatExpirySchema } from './tenant-staff.schema';
 import { StaffRefused, TenantStaffService } from './tenant-staff.service';
 
@@ -225,22 +225,9 @@ describe('TenantStaffService', () => {
     expect(inviteStaffSchema.safeParse({ userId: MEMBER, accessExpiresAt: 'soon' }).success).toBe(false);
   });
 
-  it('refuses a seat past the reseller\'s staff_members_max to its own people only; removed and expired seats do not count (F-019-t1)', async () => {
-    const { service, rows } = build({
-      staffLimit: 2,
-      rows: [
-        { userId: SECOND, joinedAt: T0 },
-        { userId: OUTSIDER, revokedAt: T0 },
-        { userId: OWNER, accessExpiresAt: T0 },
-      ],
-    });
-    await service.invite(owner, RESELLER, { userId: MEMBER }, LATER);
-    const e = await service.invite(owner, RESELLER, { userId: THIRD }, LATER).catch((x: unknown) => x);
-    expect(e).toBeInstanceOf(ResellerLimitReached);
-    expect((e as ResellerLimitReached).facts).toEqual({ key: 'staff_members_max', limit: 2, used: 2 });
-    expect(rows.filter((r) => r.userId === THIRD)).toHaveLength(0);
-    // The platform's staff acting on the reseller are never bounded (ADR-0106 point 4).
-    await expect(service.invite(platformStaff, RESELLER, { userId: THIRD }, LATER)).resolves.toMatchObject({ userId: THIRD });
+  it('does not bound a seat by staff_members_max: a seat admits nobody, the limit counts group key holders (GR-1-b)', async () => {
+    const { service } = build({ staffLimit: 1, rows: [{ userId: SECOND, joinedAt: T0 }] });
+    await expect(service.invite(owner, RESELLER, { userId: MEMBER }, LATER)).resolves.toMatchObject({ userId: MEMBER });
   });
 
   it('tells the removed member at once, in the removal\'s transaction (AC-1-q)', async () => {
@@ -294,11 +281,8 @@ describe('TenantStaffService', () => {
       await expect(service.setExpiry(stranger, RESELLER, 'row-1', LATER, T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     });
 
-    it('restores an expired seat only under staff_members_max, and tells the member (AC-1-q)', async () => {
+    it('restores an expired seat and tells the member (AC-1-q)', async () => {
       const expired = { userId: MEMBER, joinedAt: T0, accessExpiresAt: T0 };
-      const full = build({ staffLimit: 1, rows: [expired, { userId: SECOND, joinedAt: T0 }] });
-      await expect(full.service.setExpiry(owner, RESELLER, 'row-1', null, LATER)).rejects.toBeInstanceOf(ResellerLimitReached);
-
       const { service, all } = build({ staffLimit: 2, rows: [expired, { userId: SECOND, joinedAt: T0 }] });
       await expect(service.setExpiry(owner, RESELLER, 'row-1', null, LATER)).resolves.toMatchObject({ state: 'active' });
       const create = (all.outboxEvent as { create: ReturnType<typeof vi.fn> }).create;

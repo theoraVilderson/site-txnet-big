@@ -1,6 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, TenantType, UserGroupKind, UserGroupMemberType } from '@prisma/client';
-import { TenantContext, holdsPermission, isPlatformKey, recordAccessChange, tenantTransaction } from '@txnet-backend/shared-core';
+import {
+  RESELLER_KEYS,
+  ResellerLimitReached,
+  TenantContext,
+  holdsPermission,
+  isPlatformKey,
+  recordAccessChange,
+  resellerLimitOf,
+  resellerUsageOf,
+  tenantTransaction,
+} from '@txnet-backend/shared-core';
 
 import { AccessReader } from '../../auth/permissions/access.reader';
 import type { UserAccess } from '../../auth/permissions/access';
@@ -36,8 +46,12 @@ export class UserGroupRefused extends Error {
   }
 }
 
-/** `permissions`: the caller's answer — what they may attach to a group (AC-1-m), and what authority weighs. */
-export type UserGroupActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
+/**
+ * `permissions`: the caller's answer — what they may attach to a group (AC-1-m), and what authority weighs.
+ * `as`: how `ResellerAccess` admitted them on a reseller's path (GR-1-d); absent on the ambient
+ * path, where the caller is one of the tenant's own people.
+ */
+export type UserGroupActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[]; as?: 'owner' | 'member' | 'staff' };
 
 /** What a group gives its user members of its own tenant (AC-1-m, ADR-0138). */
 export type UserGroupAccess = { roleId: string | null; roleName: string | null; keys: string[] };
@@ -100,6 +114,11 @@ const accessOf = (g: GroupRow): UserGroupAccess => ({
 
 /** Every key a group gives: its role's and its own. */
 const keysGiven = (g: GroupRow): string[] => [...(g.role?.rolePermissions.map((rp) => rp.permission.key) ?? []), ...accessOf(g).keys];
+
+const RESELLER_KEY: ReadonlySet<string> = new Set(RESELLER_KEYS);
+
+/** Whether these keys make their holder a reseller's staff — what `staff_members_max` counts (GR-1-b). */
+const makesStaff = (keys: readonly string[]): boolean => keys.some((k) => RESELLER_KEY.has(k));
 
 const givesAccess = (g: GroupRow): boolean => !g.allTenants && (!!g.roleId || (g.permissions?.length ?? 0) > 0);
 
@@ -271,13 +290,16 @@ export class UserGroupAdminService {
       const before = await this.answers.ofLoadedMany(people, tx);
 
       const base = { groupId: id, tenantId: tenant.id, addedByAdminId: actor.adminId };
-      const { count } = await tx.userGroupMember.createMany({
-        data: [
-          ...userIds.map((userId) => ({ ...base, memberType: UserGroupMemberType.user, userId })),
-          ...tenantIds.map((memberTenantId) => ({ ...base, memberType: UserGroupMemberType.tenant, memberTenantId })),
-        ],
-        skipDuplicates: true,
-      });
+      const staff = givesAccess(row) && userIds.length > 0 && makesStaff(keysGiven(row));
+      const { count } = await this.withinStaffLimit(tx, actor, tenant.id, staff, () =>
+        tx.userGroupMember.createMany({
+          data: [
+            ...userIds.map((userId) => ({ ...base, memberType: UserGroupMemberType.user, userId })),
+            ...tenantIds.map((memberTenantId) => ({ ...base, memberType: UserGroupMemberType.tenant, memberTenantId })),
+          ],
+          skipDuplicates: true,
+        }),
+      );
       const act = count > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds }) : null;
       await this.tell(tx, tenant.id, people, before, actor, act);
       return { added: count };
@@ -338,11 +360,13 @@ export class UserGroupAdminService {
 
       const people = await this.membersHere(tx, id, tenant.id);
       const before = await this.answers.ofLoadedMany(people, tx);
-      await tx.userGroup.update({ where: { id }, data: { roleId: input.roleId ?? null } });
-      await tx.userGroupPermission.deleteMany({ where: { groupId: id } });
-      if (known.length > 0) {
-        await tx.userGroupPermission.createMany({ data: known.map((p) => ({ groupId: id, tenantId: tenant.id, permissionId: p.id })) });
-      }
+      await this.withinStaffLimit(tx, actor, tenant.id, makesStaff([...roleKeys, ...keys]), async () => {
+        await tx.userGroup.update({ where: { id }, data: { roleId: input.roleId ?? null } });
+        await tx.userGroupPermission.deleteMany({ where: { groupId: id } });
+        if (known.length > 0) {
+          await tx.userGroupPermission.createMany({ data: known.map((p) => ({ groupId: id, tenantId: tenant.id, permissionId: p.id })) });
+        }
+      });
       const act = await this.audit(tx, actor, tenant.id, 'user_group_access_set', id, { roleId: was.roleId, keys: was.keys }, { roleId: input.roleId ?? null, keys });
       await this.tell(tx, tenant.id, people, before, actor, act);
       return this.view(tx, await this.mustFind(tx, id));
@@ -369,13 +393,36 @@ export class UserGroupAdminService {
     ]);
     for (const person of people) {
       const refused = authorityOver(
-        { userId: actor.adminId, permissions: actor.permissions, as: 'member' },
+        { userId: actor.adminId, permissions: actor.permissions, as: actor.as ?? 'member' },
         { userId: person.id, permissions: answers.get(person.id)?.keys ?? [] },
         { ownerUserId: owner?.ownerUserId ?? null, platform: owner?.tenantType === TenantType.platform_owner },
       );
       if (refused) throw new UserGroupRefused('no_authority', person.id);
     }
     return people;
+  }
+
+  /**
+   * A write that may make someone the reseller's staff — a member added to, or
+   * a reseller key put on, a group that gives one — stays inside its
+   * `staff_members_max` (GR-1-b, ADR-0139): the count after `work` against the
+   * count before, under the per-reseller lock the seat took, so two writes
+   * cannot both take the last place. A write that adds nobody passes even past
+   * a lowered limit. The platform's staff are not bounded, and the platform's
+   * own tenant has no limit (`exempt`).
+   */
+  private async withinStaffLimit<T>(tx: Tx, actor: UserGroupActor, tenantId: string, makesStaff: boolean, work: () => Promise<T>): Promise<T> {
+    if (!makesStaff || actor.as === 'staff') return work();
+    const inEffect = await resellerLimitOf(tx, tenantId, 'staff_members_max');
+    if (inEffect.limit === null) return work();
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:staff_members_max:${tenantId}`}))`;
+    const now = new Date();
+    const before = (await resellerUsageOf(tx, tenantId, 'staff_members_max', now)) ?? 0;
+    const out = await work();
+    const after = (await resellerUsageOf(tx, tenantId, 'staff_members_max', now)) ?? 0;
+    // Thrown inside the transaction, so the write rolls back with it.
+    if (after > before && after > inEffect.limit) throw new ResellerLimitReached('staff_members_max', inEffect.limit, before);
+    return out;
   }
 
   /** The group's user members who are this tenant's people — the only ones it gives anything. */

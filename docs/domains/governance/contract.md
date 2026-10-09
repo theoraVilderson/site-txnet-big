@@ -66,6 +66,7 @@ their answer (identity `contract.access.md`). Set by
 | Joining or leaving a group that gives access is a grant: the writer holds every key it gives (`key_not_held`) and has authority over the person (ADR-0103, `no_authority` — yourself included) | `UserGroupAdminService.mayMove` |
 | A role a group gives is `role.inUse` to a delete | FK RESTRICT; `RolesService.remove` |
 | Every member whose answer moved is told: `access.changed`, cause `group_access`, with the keys gained and lost — on access set, member add or remove, and group delete. `user_group_access_set` is audited with the set before and after | `UserGroupAdminService.tell` |
+| A reseller's staff are bounded (GR-1-b, ADR-0139): a member add to, or access set on, a group giving a reseller key (`reseller-keys.ts`) that raises the count of people holding one through its groups past `staff_members_max` is 409 `reseller_limit_reached`, `facts {key, limit, used}`, rolled back; under the per-reseller lock; the platform's staff and the platform's own tenant pass | `UserGroupAdminService.withinStaffLimit`, `RESELLER_LIMIT_USAGE.staff_members_max` (`staff-limit.spec.ts`) |
 | Tokens move after commit by trigger: `{kind:"group"}` on the role or keys, `{kind:"person"}` on a user member added or removed | migration `20261009000600` |
 
 ## Display preferences (UX-1-k)
@@ -92,7 +93,7 @@ identity's are. Postgres `NOTIFY identity_permissions_changed` from the triggers
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `userId`; base role/permissions to combine with grants; a group's user member, its `tenantId` and `fullName` | access evaluation falls back to base role only; a user member cannot be added |
-| tenant | `tenant.tenantType` — whether the caller is the platform owner; a reseller member's id and `slug` | no group may reach past its tenant |
+| tenant | `tenant.tenantType` — whether the caller is the platform owner; a reseller member's id and `slug`; `staff_members_max` in effect (`resellerLimitOf`, GR-1-b) | no group may reach past its tenant; a staff-making write is refused rather than unbounded |
 
 ## Guarantees (intended)
 

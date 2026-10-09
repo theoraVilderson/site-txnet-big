@@ -62,6 +62,7 @@ removal path, so neither id can be read as the other.
 | `key_unknown` | 400 | a key with no `permission` row |
 | `key_not_grantable` | 403 | `*` or a `platform.` key, in the keys or the role |
 | `key_not_held` | 403 | the caller does not hold a key the group would give — on setting access, and on adding or removing a member of a group that gives it |
+| `reseller_limit_reached` | 409 | a member add or access set on a reseller's group that would make more people hold a reseller key through its groups than `staff_members_max` (GR-1-b); body adds `facts {key, limit, used}` |
 | `no_authority` | 403 | a member add or removal on a group that gives access, on someone the caller has no authority over (ADR-0103), themselves included |
 
 ## Consumers

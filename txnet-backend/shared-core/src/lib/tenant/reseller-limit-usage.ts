@@ -1,5 +1,7 @@
 import { GrantSource, GrantStatus, PanelOwnershipType, TenantDomainType, type Prisma } from '@prisma/client';
 
+import { liveMembership } from '../http/key-holders';
+import { RESELLER_KEYS } from './reseller-keys';
 import { RESELLER_LIMIT_KEYS, type ResellerLimitKey } from './reseller-limits';
 
 /** What holds a seat: every state but the three that end a Grant. */
@@ -10,7 +12,32 @@ const GIB = BigInt(1024 ** 3);
 const MIB = 1024 * 1024;
 
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
-export type ResellerUsageReader = Pick<Prisma.TransactionClient, 'grant' | 'tenantDomain' | 'tenantStaffMember' | 'user' | 'trafficDailyAggregate' | 'storedObject'>;
+export type ResellerUsageReader = Pick<
+  Prisma.TransactionClient,
+  'grant' | 'tenantDomain' | 'userGroupMember' | 'user' | 'trafficDailyAggregate' | 'storedObject'
+>;
+
+/** A group that gives at least one reseller key, through its role or its own keys (ADR-0139). */
+const GIVES_RESELLER_KEY: Prisma.UserGroupWhereInput = (() => {
+  const some = { some: { permission: { key: { in: [...RESELLER_KEYS] } } } };
+  return { allTenants: false, OR: [{ role: { rolePermissions: some } }, { permissions: some }] };
+})();
+
+/**
+ * The reseller's people who hold one of its keys through one of its groups,
+ * while the membership lasts — once each, however many such groups they are
+ * in (GR-1-b, ADR-0139). Not deleted. A group that gives no reseller key
+ * ("VIP", a discount audience) holds customers, not staff, and is not counted.
+ */
+async function staffThroughGroups(tx: ResellerUsageReader, tenantId: string, now: Date): Promise<number> {
+  const rows = await tx.userGroupMember.findMany({
+    where: { ...liveMembership(now), tenantId, memberType: 'user', group: GIVES_RESELLER_KEY },
+    select: { userId: true },
+    distinct: ['userId'],
+  });
+  const ids = rows.flatMap((r) => (r.userId ? [r.userId] : []));
+  return ids.length === 0 ? 0 : tx.user.count({ where: { id: { in: ids }, tenantId, deletedAt: null } });
+}
 
 /**
  * Where a reseller's admins' files live, under its own storage prefix — what
@@ -60,9 +87,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
     tx.grant.count({ where: { tenantId, source: GrantSource.admin_grant, createdAt: { gt: new Date(now.getTime() - 30 * DAY_MS) } } }),
   /** Its custom domains, proved or not — each asks a certificate (F-019-q). */
   custom_domains_max: (tx, tenantId) => tx.tenantDomain.count({ where: { tenantId, domainType: TenantDomainType.custom_domain } }),
-  /** Seats invited or accepted, neither removed nor expired — tenant's `staffState` other than `revoked`/`expired` (F-019-t1). */
-  staff_members_max: (tx, tenantId, now) =>
-    tx.tenantStaffMember.count({ where: { tenantId, revokedAt: null, OR: [{ accessExpiresAt: null }, { accessExpiresAt: { gt: now } }] } }),
+  /** People holding a reseller key through its groups, not seats — a seat admits nobody since GR-1-a (GR-1-b, ADR-0139). */
+  staff_members_max: staffThroughGroups,
   /** A ceiling on one job's size, checked against the job (F-019-t5). */
   bulk_job_grants_max: null,
   /** Per user, not per reseller: counted for the buyer at the buy (F-019-t7). */
