@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { TenantStatus, TenantType, type PrismaClient } from '@prisma/client';
 
-import { holdsPermission } from '../http/permissions';
+import { ALL_PERMISSIONS, holdsPermission } from '../http/permissions';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
 import { AccessTrace, PlatformAccessTier, recordPlatformAccess } from './platform-access-trail';
@@ -89,15 +89,17 @@ export class ResellerAccessRefused extends Error {
  * capability the route names. Platform staff administer a suspended reseller;
  * a terminated one is closed to everyone.
  *
- * **The reseller's own staff are the third door** (F-018-j). A member holds an
- * accepted, unexpired, unrevoked `tenant_staff_member` seat of *this* reseller,
- * signs in to it — so unlike the owner their ambient tenant is the reseller —
- * and holds, through a role of that tenant (F-018-n), **the key the route
- * names** (AC-1-e): `for('domain.manage')` admits a member holding it and no
- * other. The bare door names no key and admits no member, so a route is the
- * owner's alone until it says otherwise. A seat alone grants nothing. They are
- * held to their reseller's matrix as the owner is, which `TenantStatusGuard`
- * would do for them anyway.
+ * **The reseller's own people are the third door** (ADR-0139 (2)). A member is
+ * a user of *this* reseller, signed in to it — so unlike the owner their
+ * ambient tenant is the reseller — holding **the key the route names** (AC-1-e)
+ * from any source: a group of that reseller, a key given to them, their role
+ * (ADR-0138's one answer, in the token) — the key by name; `*` admits no member. `for('domain.manage')` admits a member
+ * holding it and no other. The bare door names no key and admits no member, so
+ * a route is the owner's alone until it says otherwise. No seat is asked; a
+ * seat that is not live still refuses, because a removed seat kept its role
+ * (GR-1-g moves those people to groups and drops that check). They are held to
+ * their reseller's matrix as the owner is, which `TenantStatusGuard` would do
+ * for them anyway.
  *
  * Every fact is read on the app pool — `tenant.tenant` has no RLS, and a
  * member's seat is their own tenant's row — before a caller touches the
@@ -287,17 +289,21 @@ export class ResellerAccess {
   }
 
   /**
-   * A live seat on this reseller, held by a caller signed in to it with one of
-   * this door's keys. Both halves are required: the seat says they are on the
-   * team, the key says this team member may do what this route does.
+   * A caller signed in to this reseller holding one of this door's keys — the
+   * key is what says they may do what this route does (ADR-0139 (2)). A seat
+   * of theirs that is not live (invited and not accepted, expired, removed)
+   * refuses: a removed seat kept its role and so its keys. GR-1-g drops this.
    */
   private async isMember(actor: ResellerActor, resellerId: string, now: Date): Promise<boolean> {
     if (actor.tenantId !== resellerId) return false;
-    if (!this.keys.some((key) => holdsPermission(actor.permissions, key))) return false;
+    // A named key, never `*`: a reseller's user holding `*` is a mistake, not a grant (groups cannot give it, ADR-0138 (7)).
+    const named = actor.permissions.filter((key) => key !== ALL_PERMISSIONS);
+    if (!this.keys.some((key) => holdsPermission(named, key))) return false;
     const seat = await this.prisma.tenantStaffMember.findFirst({
-      where: { tenantId: resellerId, userId: actor.userId, revokedAt: null, joinedAt: { not: null } },
-      select: { accessExpiresAt: true },
+      where: { tenantId: resellerId, userId: actor.userId },
+      select: { joinedAt: true, accessExpiresAt: true, revokedAt: true },
     });
-    return !!seat && (seat.accessExpiresAt === null || seat.accessExpiresAt > now);
+    if (!seat) return true;
+    return seat.revokedAt === null && seat.joinedAt !== null && (seat.accessExpiresAt === null || seat.accessExpiresAt > now);
   }
 }

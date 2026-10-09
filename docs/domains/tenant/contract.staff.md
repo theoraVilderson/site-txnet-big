@@ -13,6 +13,12 @@ and takes them off (F-018-j, catalog F-1201, D-42 (2)). Code:
 `txnet-backend/tenant-service/src/app/staff/`. What those people may *do* is
 their role, which is `identity`'s: [contract.roles.md](../identity/contract.roles.md).
 
+**Being retired (ADR-0139).** Since GR-1-a a seat no longer admits anyone: the
+route's key does, from any source, and a person gets keys by being put in a
+group. A seat that is not live still **refuses**, because a removed seat kept
+its role. GR-1-g moves seated people into groups and drops that check; these
+routes then only answer history.
+
 ## Membership is not a role
 
 `tenant_staff_member` says **who is on the team, from when, until when**, and
@@ -48,14 +54,13 @@ it is the answer to "what can this person do". It is set at
 
 | state | the row | admits them? |
 |---|---|---|
-| `invited` | `joinedAt IS NULL` | no — an invitation is not access |
-| `active` | joined, not expired, not revoked | **yes** |
-| `expired` | `accessExpiresAt <= now` | no |
-| `revoked` | `revokedAt` set | no |
+| `invited` | `joinedAt IS NULL` | no — refuses even with the key, until GR-1-g |
+| `active` | joined, not expired, not revoked | when they hold the route's key, as without a seat |
+| `expired` | `accessExpiresAt <= now` | no — refuses even with the key, until GR-1-g |
+| `revoked` | `revokedAt` set | no — refuses even with the key, until GR-1-g |
 
 `revoked` wins over the dates: a removed seat is removed whatever its expiry
-says. The same reading is what `ResellerAccess` admits on, so the list and the
-door can never disagree — one function, `staffState`.
+says. `ResellerAccess` reads the same three columns (ADR-0139 (2)).
 
 ## Rules
 

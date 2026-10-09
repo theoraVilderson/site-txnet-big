@@ -10,10 +10,10 @@ import { ResellerAccess } from './reseller-access';
  * owner's own domain the ambient tenant is their platform account's, so:
  *
  * - the owner is admitted from either domain with the same session;
- * - a user of the reseller's own tenant is not its owner by being there, even
- *   holding `tenant.manage` in that tenant — they need a live staff seat
- *   (F-018-j), which is the third door and the only one the reseller itself
- *   opens;
+ * - a user of the reseller's own tenant is not its owner by being there; they
+ *   are a member when they hold the key the route names, from any source — a
+ *   group, a key given to them, their role (ADR-0139 (2)). That is the third
+ *   door and the only one the reseller itself opens;
  * - what the owner may do is the **reseller's** status matrix (rules.md), not
  *   their own tenant's, which `TenantStatusGuard` judges and is always active;
  * - admitted work runs in the **reseller's** scope, never the caller's
@@ -69,8 +69,9 @@ describe('ResellerAccess', () => {
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
       },
       tenantStaffMember: {
+        // Any seat of theirs, live or not: a dead one still refuses (ADR-0139, until GR-1-g).
         findFirst: vi.fn(async ({ where }: { where: { tenantId: string; userId: string } }) =>
-          seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId && s.revokedAt === null && s.joinedAt !== null) ?? null,
+          seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId) ?? null,
         ),
       },
       // The consent table is under RLS: it is read in a tenant transaction bound to the reseller.
@@ -107,31 +108,36 @@ describe('ResellerAccess', () => {
     await expect(access.admit(insider, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
 
-  it("admits a live staff seat holding the door's key, and nothing less (F-018-j, AC-1-e)", async () => {
+  it("admits the reseller's own user holding the door's key, from any source, with no seat (ADR-0139 (2), AC-1-e)", async () => {
+    // The key may come from a group, a key given to them or their role: the token carries the one answer (ADR-0138).
     const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['domain.manage'] };
-    await expect(build('active', [seat()]).for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).resolves.toEqual({
+    await expect(build('active').for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).resolves.toEqual({
       id: RESELLER,
       slug: 'ali',
       as: 'member',
     });
+    // A live seat changes nothing.
+    await expect(build('active', [seat()]).for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'member' });
 
-    // The seat is the membership; the key is what administers. Neither alone.
+    // The key is the door. A customer in a group that gives nothing holds none.
     const noPermission = { ...member, permissions: ['user.read'] };
-    await expect(build('active', [seat()]).for('domain.manage').admit(noPermission, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(build('active').for('domain.manage').admit(noPermission, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    // `*` is not a named key: a reseller's user holding it is a mistake, and admits nothing.
+    await expect(build('active').for('domain.manage').admit({ ...member, permissions: ['*'] }, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    // The bare door names no key and admits no member.
+    await expect(build('active').admit(member, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
 
-    // Invited and not yet accepted, expired, and removed: three seats that admit nobody.
+    // Until GR-1-g moves them to groups, a removed seat keeps its role: a dead seat still refuses.
     for (const dead of [seat({ joinedAt: null }), seat({ accessExpiresAt: LONG_AGO }), seat({ revokedAt: LONG_AGO })]) {
       await expect(build('active', [dead]).for('domain.manage').admit(member, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     }
 
-    // A seat on one reseller is not a seat on another.
-    await expect(build('active', [seat()]).for('domain.manage').admit({ ...member, tenantId: OTHER }, OTHER, 'read', T0)).rejects.toMatchObject({
-      reason: 'not_allowed',
-    });
+    // A user of one reseller is no member of another, keys or not.
+    await expect(build('active').for('domain.manage').admit(member, OTHER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
 
     // And a member is held to their reseller's matrix, as the owner is.
-    await expect(build('suspended', [seat()]).for('domain.manage').admit(member, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'member' });
-    await expect(build('suspended', [seat()]).for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    await expect(build('suspended').for('domain.manage').admit(member, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'member' });
+    await expect(build('suspended').for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
   });
 
   it('admits platform staff, and tells only them that a reseller does not exist', async () => {

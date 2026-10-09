@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { findKeyHolders } from './key-holders';
+import { findKeyHolders, liveMembership } from './key-holders';
 
 /**
  * Who in a tenant holds one key (ADR-0138), for a query that picks people by
@@ -48,7 +48,7 @@ describe('findKeyHolders', () => {
     const { tx, asked } = fakeTx();
     await findKeyHolders(tx, TENANT, 'engagement.manage');
 
-    expect(asked.members?.['where']).toEqual({
+    expect(asked.members?.['where']).toMatchObject({
       tenantId: TENANT,
       memberType: 'user',
       group: {
@@ -65,5 +65,20 @@ describe('findKeyHolders', () => {
     const { tx, asked } = fakeTx();
     await findKeyHolders(tx, TENANT, 'engagement.manage', { deletedAt: null, status: 'active' });
     expect(asked.users).toMatchObject({ where: { AND: [{ deletedAt: null, status: 'active' }] }, select: { id: true }, orderBy: { id: 'asc' } });
+  });
+});
+
+/** A membership may end (ADR-0139 (3)): an ended one gives nothing, wherever membership is asked. */
+describe('liveMembership', () => {
+  const NOW = new Date('2026-10-09T12:00:00Z');
+
+  it('is a membership with no end, or one ending after now', () => {
+    expect(liveMembership(NOW)).toEqual({ OR: [{ expiresAt: null }, { expiresAt: { gt: NOW } }] });
+  });
+
+  it('is part of who holds a key through a group', async () => {
+    const { tx, asked } = fakeTx();
+    await findKeyHolders(tx, TENANT, 'engagement.manage', {}, NOW);
+    expect(asked.members?.['where']).toMatchObject(liveMembership(NOW));
   });
 });

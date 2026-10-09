@@ -1,5 +1,5 @@
 import { DiscountRuleKind, Prisma, UserGroupMemberType } from '@prisma/client';
-import { categoryChainInclude } from '@txnet-backend/shared-core';
+import { categoryChainInclude, liveMembership } from '@txnet-backend/shared-core';
 
 /**
  * A discount with no code (F-114-h, D-45, ADR-0087): which rule a purchase
@@ -123,7 +123,7 @@ export async function discountRuleFor(
 
   // The buyer's groups, asked only when a rule targets one — RLS keeps them this tenant's.
   const groupIds = rows.some((r) => r.groupId !== null)
-    ? (await tx.userGroupMember.findMany({ where: { userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })).map((m) => m.groupId)
+    ? (await tx.userGroupMember.findMany({ where: { ...liveMembership(), userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })).map((m) => m.groupId)
     : [];
 
   const facts = rows.map((r) => ({ ...r, userIds: r.users.map((u) => u.userId) }));

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
+import { liveMembership } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { accessOf, type AccessSources, type UserAccess } from './access';
 
@@ -80,7 +81,7 @@ export class AccessReader {
     const [given, members] = await Promise.all([
       this.prisma.userPermission.findMany({ where: roleId ? { user: { roleId } } : {}, select: { userId: true }, distinct: ['userId'] }),
       this.prisma.userGroupMember.findMany({
-        where: { memberType: 'user', userId: { not: null }, group: GIVES_ACCESS },
+        where: { ...liveMembership(), memberType: 'user', userId: { not: null }, group: GIVES_ACCESS },
         select: { userId: true, group: { select: { roleId: true } } },
       }),
     ]);
@@ -106,7 +107,7 @@ export class AccessReader {
   /**
    * What applies to each person beyond their role: the keys given to and
    * taken from them (AC-1-l), and every group of **their own tenant** that
-   * gives access (AC-1-m). A platform group may hold another tenant's user;
+   * gives access (AC-1-m), while the membership lasts (ADR-0139 (3)). A platform group may hold another tenant's user;
    * the platform's keys are not theirs, so that membership counts for nothing.
    */
   private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader): Promise<Map<string, Personal>> {
@@ -120,7 +121,7 @@ export class AccessReader {
         select: { userId: true, effect: true, permission: { select: { key: true } } },
       }),
       client.userGroupMember.findMany({
-        where: { userId: { in: ids }, memberType: 'user', group: GIVES_ACCESS },
+        where: { ...liveMembership(), userId: { in: ids }, memberType: 'user', group: GIVES_ACCESS },
         select: {
           userId: true,
           tenantId: true,

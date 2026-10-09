@@ -65,7 +65,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 | `ResellerAccess.admit(actor, tenantId, capability)` | `{id, slug, as: 'owner' \| 'member' \| 'staff'}`, or throws `ResellerAccessRefused` with `reason` |
 | `ResellerAccess.run(actor, tenantId, capability, work)` | `admit`, then `work(reseller)` inside `runWithTenant({id})`: the app pool's RLS sees the **reseller's** rows, never the caller's. A refusal throws before `work` starts |
 | `ResellerAccess.asStaff(key)` (AC-1-d) | the same door, the platform's staff admitted by `key` instead of the default `platform.tenant.manage` (`platform.report.read` on a figures route). Impersonation asks `platform.impersonate` |
-| `ResellerAccess.for(...keys)` (AC-1-e) | the same door, opened also to a seated member holding **any one** of `keys` — `RESELLER_KEYS` in `shared-core/.../tenant/reseller-keys.ts`. The bare door names none and admits **no member**, `*` included; the owner and platform staff are admitted as before, whatever the keys |
+| `ResellerAccess.for(...keys)` (AC-1-e) | the same door, opened also to the reseller's own signed-in user holding **any one** of `keys`, from any source, no seat asked (ADR-0139 (2); a seat that is not live still refuses until GR-1-g) — `RESELLER_KEYS` in `shared-core/.../tenant/reseller-keys.ts`. The bare door names none and admits **no member**, `*` included; the owner and platform staff are admitted as before, whatever the keys |
 
 - `actor` is `{userId, tenantId, permissions}` as `forward-auth` sent them;
   `capability` a `TenantCapabilityName`, judged against the **reseller's**
@@ -125,7 +125,7 @@ reading it out of a data route's refusal answers "give me", not "may I".
 | answer | `200 {tenantId, canRead, canWrite, reason}` — `canRead` is `read` admitted, `canWrite` is `staffWrite` admitted, `reason` one of the door's four and **only** when nothing is allowed |
 | door | `ResellerAccess.admit` twice, one `now` for both. Not `run`: it reads no row of the reseller's and opens no scope |
 | **never refuses** | asking whether you may is not doing it, so a refused caller gets the same 200 with `canRead: false`. Which callers may learn that a reseller exists stays the door's rule — `reason` is relayed, never widened |
-| no cache | the answer is about the caller, and a seat revoked a second ago must stop administering (ADR-0033's reasoning) |
+| no cache | the answer is about the caller, and a key or a seat taken a second ago must stop administering (ADR-0033's reasoning) |
 
 Two verdicts rather than one because the status matrix answers them
 differently: a suspended reseller still reads and no longer writes

@@ -20,7 +20,7 @@ Code: `auth-service/src/app/auth/permissions/access.ts` (`accessOf`, pure) and
 
 | | |
 |---|---|
-| **Keys** | the role's keys, plus every group's role keys and extra keys, plus the keys given to the person, **minus the keys taken from them**. A removal wins over every source, the role included (user, 2026-10-08) |
+| **Keys** | the role's keys, plus every group's role keys and extra keys (a membership that has ended counts for nothing), plus the keys given to the person, **minus the keys taken from them**. A removal wins over every source, the role included (user, 2026-10-08) |
 | **Personal** | true when anything beyond the role applies: a key given or taken, or a membership of a group that gives access. Everyone else's answer is exactly their role's |
 | **`*`** | the role's alone. A `*` role is neither widened nor narrowed; `*` from any other source is dropped |
 
@@ -43,7 +43,7 @@ never grants more.
 |---|---|
 | a role's keys | the role's key, then its **personal** holders — directly or through a group (`AccessReader.personalPeople(roleId)`) |
 | a person's role | `user:<id>:role` and that person's key |
-| `{kind:"person"}` | that person's key — a key written on them, or they joined or left a group (AC-1-m) |
+| `{kind:"person"}` | that person's key — a key written on them, they joined or left a group (AC-1-m), or their membership's end moved (ADR-0139 (3)) |
 | `{kind:"group"}` | every user member of the group (`AccessReader.membersOf`): its role or keys changed |
 | `{kind:"all"}` / every connect | every role, then every personal person |
 

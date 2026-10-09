@@ -6,6 +6,15 @@ const grantedBy = (key: string) => ({ rolePermissions: { some: { permission: { k
 const roleGrants = (key: string): Prisma.UserWhereInput => ({ role: grantedBy(key) });
 
 /**
+ * A group membership that still counts: no end, or an end after `now`
+ * (ADR-0139 (3)). Every read that asks "is this person a member" adds it, so
+ * an ended membership gives nothing before the sweep removes it (GR-1-c).
+ */
+export function liveMembership(now: Date = new Date()): Prisma.UserGroupMemberWhereInput {
+  return { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] };
+}
+
+/**
  * The people of `tenantId` who hold `key` (ADR-0138), ordered by id — for a
  * query that picks people by a key rather than checking one caller's token
  * (that is `holdsPermission`). Every such query asks this; `conventions.py`
@@ -25,9 +34,11 @@ export async function findKeyHolders(
   tenantId: string,
   key: string,
   where: Prisma.UserWhereInput = {},
+  now: Date = new Date(),
 ): Promise<string[]> {
   const members = await tx.userGroupMember.findMany({
     where: {
+      ...liveMembership(now),
       tenantId,
       memberType: 'user',
       group: {

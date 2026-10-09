@@ -42,9 +42,8 @@ describe('ResellerAccess keys (AC-1-e)', () => {
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
       },
       tenantStaffMember: {
-        findFirst: vi.fn(async ({ where }: { where: { tenantId: string; userId: string } }) =>
-          where.tenantId === RESELLER && where.userId === MEMBER ? { accessExpiresAt: null } : null,
-        ),
+        // No seat: the key admits a member on its own (ADR-0139 (2)); dead seats are reseller-access.spec.ts's.
+        findFirst: vi.fn(async () => null),
       },
       $transaction: vi.fn(),
     };

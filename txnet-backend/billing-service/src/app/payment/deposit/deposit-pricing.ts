@@ -1,5 +1,6 @@
 import { FeeCalcMode, Prisma, TenantType, UserGroupMemberType } from '@prisma/client';
 
+import { liveMembership } from '@txnet-backend/shared-core';
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 import type { PaymentProvider } from '../gateway/payment-provider';
@@ -90,7 +91,7 @@ async function forPayer(tx: Prisma.TransactionClient, offers: GatewayOffer[], us
   });
   if (rows.length === 0) return offers;
   const memberOf = (
-    await tx.userGroupMember.findMany({ where: { userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })
+    await tx.userGroupMember.findMany({ where: { ...liveMembership(), userId, memberType: UserGroupMemberType.user }, select: { groupId: true } })
   ).map((m) => m.groupId);
   const audienceOf = (g: GatewayOffer) =>
     rows.filter((r) => (g.source === 'platform' ? r.gatewayId : r.tenantGatewayConfigId) === g.id).map((r) => r.groupId);

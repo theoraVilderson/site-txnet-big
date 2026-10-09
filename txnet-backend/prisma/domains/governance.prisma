@@ -175,6 +175,9 @@ model UserGroupMember {
   memberTenantId String?             @db.Uuid
   addedByAdminId String              @db.Uuid
   createdAt      DateTime            @default(now())
+  /// When the membership ends (ADR-0139 (3)); null = no end. An ended one
+  /// counts for nothing anywhere membership is asked (`liveMembership`).
+  expiresAt      DateTime?
 
   group UserGroup @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Cascade)
 
@@ -182,6 +185,7 @@ model UserGroupMember {
   @@unique([groupId, memberTenantId])
   @@index([userId])
   @@index([memberTenantId])
+  @@index([expiresAt])
   @@map("user_group_member")
   @@schema("governance")
 }

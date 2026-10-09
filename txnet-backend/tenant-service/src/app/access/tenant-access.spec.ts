@@ -59,7 +59,7 @@ describe('TenantAccessService', () => {
       },
       tenantStaffMember: {
         findFirst: vi.fn(async ({ where }: { where: { tenantId: string; userId: string } }) =>
-          seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId && s.revokedAt === null && s.joinedAt !== null) ?? null,
+          seats.find((s) => s.tenantId === where.tenantId && s.userId === where.userId) ?? null,
         ),
       },
     };

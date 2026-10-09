@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { FraudSubjectType, GrantStatus, InvoiceStatus, Prisma, RewardSource, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { liveMembership, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
 import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
@@ -454,7 +454,7 @@ export class WheelSpinService {
       tx.grant.count({ where: { userId: actor.userId, status: GrantStatus.active } }),
       tx.invoice.aggregate({ where: { userId: actor.userId, status: InvoiceStatus.paid, currencyCode: cfg.currencyCode }, _sum: { total: true }, _count: { _all: true } }),
       tx.fraudFlag.count({ where: { subjectType: FraudSubjectType.user, subjectId: actor.userId, resolvedAt: null } }),
-      cfg.userGroupId ? tx.userGroupMember.findFirst({ where: { groupId: cfg.userGroupId, userId: actor.userId }, select: { id: true } }) : Promise.resolve(undefined),
+      cfg.userGroupId ? tx.userGroupMember.findFirst({ where: { ...liveMembership(), groupId: cfg.userGroupId, userId: actor.userId }, select: { id: true } }) : Promise.resolve(undefined),
       tx.spinWheelAttempt.findMany({
         where: { tenantId: actor.tenantId, userId: actor.userId, tenantDay: day, status: SpinAttemptStatus.awarded },
         select: { attemptedAt: true },
