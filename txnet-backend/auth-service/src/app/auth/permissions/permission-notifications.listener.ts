@@ -81,6 +81,9 @@ export class PermissionNotificationsListener extends PgNotificationListener {
         await this.recomputePeople([event.userId]);
       } else if (event.kind === 'person' && typeof event.userId === 'string') {
         await this.recomputePeople([event.userId]);
+      } else if (event.kind === 'group' && typeof event.groupId === 'string') {
+        // What a group gives moved (AC-1-m): every member it reaches.
+        await this.recomputePeople(await this.access.membersOf(event.groupId));
       } else if (event.kind === 'all') {
         await this.recomputeAll();
       } else {

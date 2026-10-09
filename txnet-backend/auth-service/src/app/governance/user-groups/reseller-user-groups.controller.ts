@@ -82,6 +82,7 @@ export class ResellerUserGroupsController {
           adminId: user.sub,
           tenantId,
           ip: req.ip ?? '0.0.0.0',
+          permissions: user.permissions,
         }),
       );
     } catch (err) {

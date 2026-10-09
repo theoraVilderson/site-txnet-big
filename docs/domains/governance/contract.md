@@ -2,7 +2,7 @@
 id: governance
 layer: domain
 status: active
-version: 3
+version: 4
 updated: 2026-10-05
 ---
 
@@ -51,6 +51,23 @@ auth-service, beside the users it groups. Wire shapes:
 Consumers: billing's discount rules (`groupId`, user members only — billing
 `contract.purchase.md`). Campaigns and restrictions will target groups; neither does yet.
 
+## A group holds access (AC-1-m, ADR-0138)
+
+A group may give its user members a role (`user_group.roleId`) and/or extra
+keys (`user_group_permission`); they hold them while members, as part of
+their answer (identity `contract.access.md`). Set by
+`PUT /auth/user-groups/:id/access` with the **whole** `{roleId, keys}`.
+
+| Rule | Held by |
+|---|---|
+| Only the group's **own tenant's** user members hold it. A platform group's reseller customer, or a reseller member, gets nothing | `AccessReader` counts a membership only when the person's tenant is the group's |
+| Not on "every reseller" (`allTenants`): `access_on_resellers` | `setAccess` |
+| The role is this tenant's or a template (`role_not_found`); no `*` and no `platform.` key, in the role or the keys (`key_not_grantable`); every key exists (`key_unknown`) and the writer holds it (`key_not_held`) | `setAccess` |
+| Joining or leaving a group that gives access is a grant: the writer holds every key it gives (`key_not_held`) and has authority over the person (ADR-0103, `no_authority` — yourself included) | `UserGroupAdminService.mayMove` |
+| A role a group gives is `role.inUse` to a delete | FK RESTRICT; `RolesService.remove` |
+| Every member whose answer moved is told: `access.changed`, cause `group_access`, with the keys gained and lost — on access set, member add or remove, and group delete. `user_group_access_set` is audited with the set before and after | `UserGroupAdminService.tell` |
+| Tokens move after commit by trigger: `{kind:"group"}` on the role or keys, `{kind:"person"}` on a user member added or removed | migration `20261009000600` |
+
 ## Display preferences (UX-1-k)
 
 Code: `txnet-backend/auth-service/src/app/governance/ui-preferences/`. Wire
@@ -65,7 +82,9 @@ what each key means: [panel-web/contract.ux.md](../../interfaces/panel-web/contr
 
 ## Emits (events)
 
-None planned yet — no message bus is wired up.
+`identity.access.changed` (AC-1-q's outbox row, cause `group_access`), in the
+group write's own transaction — built by shared-core `accessChanged`, consumed as
+identity's are. Postgres `NOTIFY identity_permissions_changed` from the triggers above.
 
 ## Consumes
 

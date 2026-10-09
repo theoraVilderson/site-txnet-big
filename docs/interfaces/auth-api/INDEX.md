@@ -56,9 +56,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-09 | Contract v45 -> **v46** (additive, AC-1-m): `PUT /auth/user-groups/:id/access`; a `group` carries `access`; six new refusals. [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web (AC-1-o) |
 | 2026-10-09 | Contract v44 -> **v45** (additive, AC-1-l): read, give or take, and lift one key on one person on a tenant's path — `/auth/tenants/:tenantId/users/:userId/keys[/:key]`. [contract.roles.md](contract.roles.md); rules: identity `contract.access.md`. Consumer: panel-web (AC-1-n) |
 | 2026-10-09 | Contract v43 -> **v44** (additive, AC-1-a): `GET`/`PATCH /auth/tenants/:tenantId/users/:userId` — one user with `emailMasked`; edit `fullName`, `username`, `email: null` only; `username_taken` 409. [contract.reseller-users.md](contract.reseller-users.md). Consumer: panel-web (AC-1-b) |
 | 2026-10-09 | Contract v42 -> **v43** (additive, AC-1-f): `GET /auth/permissions` — the registry generated from `permissions.yaml`, grouped by area, texts in the request's language. [contract.roles.md](contract.roles.md). Consumer: panel-web (F-1201-d) |
 | 2026-10-09 | Contract v41 -> **v42** (additive, F-1201-a, ADR-0134): `/auth/tenants/:tenantId/roles` (CRUD, list adds `members` + `grantable`) and `PUT /auth/tenants/:tenantId/users/:userId/role`, through `ResellerAccess`. [contract.roles.md](contract.roles.md). Consumers: panel-web (F-1201-c/d) |
-| 2026-10-05 | Contract v40 -> **v41** (additive, UX-1-t): `PUT /auth/me/name`, `POST /auth/me/password` — a wrong current password is 400 `wrong_password`; `ME_NAME` 30/900s, `ME_PASSWORD` 5/900s. [contract.account.md](contract.account.md). Consumer: panel-web (UX-1-u) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

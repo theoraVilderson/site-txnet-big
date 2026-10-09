@@ -26,7 +26,13 @@ export type UserGroupRejection =
   | 'not_a_reseller'
   | 'all_tenants_conflict'
   | 'member_not_found'
-  | 'group_in_use';
+  | 'group_in_use'
+  | 'access_on_resellers'
+  | 'role_not_found'
+  | 'key_unknown'
+  | 'key_not_grantable'
+  | 'key_not_held'
+  | 'no_authority';
 
 export type MemberRow = { memberType: UserGroupMemberType; userId: string | null; memberTenantId: string | null };
 

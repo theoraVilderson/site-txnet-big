@@ -184,6 +184,9 @@ enum AdminAction {
   // `newValue` {key, effect, reason}) and lifted (`user_permission_lift`).
   user_permission_set
   user_permission_lift
+  // AC-1-m — a group's role and extra keys replaced (`oldValue`/`newValue`
+  // {roleId, keys}).
+  user_group_access_set
 
   @@schema("audit")
 }

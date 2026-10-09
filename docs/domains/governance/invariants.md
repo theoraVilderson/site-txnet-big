@@ -19,7 +19,8 @@ Rows 1–4 are **draft** — extracted from schema comments, not enforced in cod
 | 6 | Only the platform owner's group holds another tenant's user, a reseller, or `allTenants` | `memberRefusal` / `groupRefusal`; trigger `user_group_scope_ok()` | a reseller targets people it does not serve |
 | 7 | A member row names exactly one subject, matching `memberType`; once per group | CHECK `user_group_member_one_subject`; uniques `(groupId, userId)`, `(groupId, memberTenantId)` | a member counted twice, or as both |
 | 8 | A group a discount rule names is not deleted | `discount_rule_groupId_tenantId_fkey` RESTRICT -> `group_in_use` | a rule silently serves nobody |
+| 9 | A group's access (role and keys, AC-1-m) reaches only its own tenant's user members; it is never on `allTenants`, never `*` or `platform.`, and only what the writer holds — attaching it, and adding or removing a member of a group that has it, alike (with authority over that member) | `AccessReader.personalOf`; `setAccess` / `mayMove` (`group-access.spec.ts`) | `user_group.manage` alone hands out keys its holder lacks, or a platform group gives a reseller's customer the platform's keys |
 
 ## How to test
 
-User groups: `auth-service/src/app/governance/user-groups/user-group.spec.ts` (rules 5–8 at the service; the trigger and RLS by hand against a database built from the migrations, F-114-j).
+User groups: `auth-service/src/app/governance/user-groups/user-group.spec.ts` (rules 5–8; group access, rule 9: `group-access.spec.ts` at the service; the trigger and RLS by hand against a database built from the migrations, F-114-j).

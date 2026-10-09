@@ -134,7 +134,10 @@ export class RolesService {
     await tenantTransaction(this.prisma, async (tx) => {
       await this.ownRole(tx, scope, id);
       const held = await tx.user.count({ where: { roleId: id } });
-      if (held > 0) throw new ConflictException(BackendI18nKeys.errors.role.inUse);
+      // A group giving the role (AC-1-m) holds it too: its members would lose
+      // it silently. A tenant's own role is only ever its own groups'.
+      const given = await tx.userGroup.count({ where: { roleId: id } });
+      if (held > 0 || given > 0) throw new ConflictException(BackendI18nKeys.errors.role.inUse);
       await tx.rolePermission.deleteMany({ where: { roleId: id } });
       await tx.role.delete({ where: { id } });
     });

@@ -6,14 +6,16 @@ export const ACCESS_AGGREGATE = 'identity.access';
 /**
  * Why a person's access moved (AC-1-q). Carried for the notice (AC-1-s); the
  * page only re-reads. `keys_set` is a key given, taken or lifted on the person
- * (AC-1-l). A producer added later (group access, a temporal window) adds its
- * cause here.
+ * (AC-1-l); `group_access` a group's access changed, or they joined or left one
+ * that gives some (AC-1-m). A producer added later (a temporal window) adds
+ * its cause here.
  */
-export type AccessChangeCause = 'role_set' | 'role_edited' | 'keys_set' | 'seat_removed' | 'seat_restored';
+export type AccessChangeCause = 'role_set' | 'role_edited' | 'keys_set' | 'group_access' | 'seat_removed' | 'seat_restored';
 
 /**
  * What the notice names (AC-1-s): `role_set` the role now held, by its name;
- * `role_edited` and `keys_set` the keys the person's answer gained and lost.
+ * `role_edited`, `keys_set` and `group_access` the keys the person's answer
+ * gained and lost.
  * The page reads none of it.
  */
 export type AccessChangeDetail = { role?: string; given?: string[]; taken?: string[] };

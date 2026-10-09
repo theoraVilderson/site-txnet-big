@@ -74,6 +74,8 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
       findMany: vi.fn().mockResolvedValue([{ id: 'u-1' }, { id: 'u-2' }]),
     },
     outboxEvent: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
+    // No group gives the role (AC-1-m).
+    userGroup: { count: vi.fn().mockResolvedValue(0) },
   };
   for (const [model, fns] of Object.entries(overrides)) Object.assign(models[model as keyof typeof models], fns);
   // One set of model mocks behind both the client and the transaction:

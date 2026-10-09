@@ -43,7 +43,8 @@ never grants more.
 |---|---|
 | a role's keys | the role's key, then its **personal** holders — directly or through a group (`AccessReader.personalPeople(roleId)`) |
 | a person's role | `user:<id>:role` and that person's key |
-| `{kind:"person"}` | that person's key |
+| `{kind:"person"}` | that person's key — a key written on them, or they joined or left a group (AC-1-m) |
+| `{kind:"group"}` | every user member of the group (`AccessReader.membersOf`): its role or keys changed |
 | `{kind:"all"}` / every connect | every role, then every personal person |
 
 Holders who are not personal cost nothing: the role's key already describes

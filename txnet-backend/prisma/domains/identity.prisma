@@ -235,6 +235,8 @@ model Role {
 
   users           User[]
   rolePermissions RolePermission[]
+  /// Groups whose members hold this role's keys (AC-1-m).
+  userGroups      UserGroup[]
 
   /// One name per tenant. NULLs are distinct in Postgres, so the templates are
   /// held apart by a partial unique index the migration adds by hand —
@@ -249,8 +251,9 @@ model Permission {
   id   String @id @default(uuid()) @db.Uuid
   key  String @unique // مثل wallet.manual_adjust, gateway.toggle, user.impersonate
 
-  rolePermissions RolePermission[]
-  userPermissions UserPermission[]
+  rolePermissions      RolePermission[]
+  userPermissions      UserPermission[]
+  userGroupPermissions UserGroupPermission[]
 
   @@map("permission")
   @@schema("identity")

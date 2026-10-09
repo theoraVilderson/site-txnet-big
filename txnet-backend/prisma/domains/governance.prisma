@@ -127,7 +127,13 @@ model UserGroup {
   createdByAdminId String        @db.Uuid
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @default(now()) @updatedAt
+  /// A role whose keys the group's user members hold while members (AC-1-m,
+  /// ADR-0138): this tenant's or a template, never one holding `*`.
+  roleId           String?       @db.Uuid
 
+  role          Role?                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  /// Extra keys its user members hold while members (AC-1-m).
+  permissions   UserGroupPermission[]
   members       UserGroupMember[]
   discountRules DiscountRule[]
   /// Gateways offered only to this group's users (F-102-g).
@@ -138,6 +144,23 @@ model UserGroup {
   /// name another tenant's group.
   @@unique([id, tenantId])
   @@map("user_group")
+  @@schema("governance")
+}
+
+/// One extra key a group gives its user members (AC-1-m, ADR-0138). Only the
+/// group's own tenant's user members hold it; a trigger notifies
+/// `{kind:"group"}` so each member's token moves.
+model UserGroupPermission {
+  groupId      String @db.Uuid
+  tenantId     String @db.Uuid
+  permissionId String @db.Uuid
+
+  group      UserGroup  @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, permissionId])
+  @@index([tenantId])
+  @@map("user_group_permission")
   @@schema("governance")
 }
 

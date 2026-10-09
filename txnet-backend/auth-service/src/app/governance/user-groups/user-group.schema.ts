@@ -31,7 +31,21 @@ export const userGroupMemberPageSchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(50),
 });
 
+/**
+ * `PUT /auth/user-groups/:id/access` (AC-1-m): the **whole** of what the group
+ * gives — a role (or none) and extra keys. A partial edit would race two
+ * admins into a half-applied group, as a role's keys would.
+ */
+export const setUserGroupAccessSchema = z
+  .object({
+    roleId: uuid('roleId').nullable(),
+    keys: z.array(z.string().trim().min(3).max(64).regex(/^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/)).max(200),
+  })
+  .strict();
+
 export type CreateUserGroupBody = z.infer<typeof createUserGroupSchema>;
 export type UpdateUserGroupBody = z.infer<typeof updateUserGroupSchema>;
 export type AddUserGroupMembersBody = z.infer<typeof addUserGroupMembersSchema>;
 export type UserGroupMemberPageQuery = z.infer<typeof userGroupMemberPageSchema>;
+/** `Required`: both fields are mandatory in the schema; this project's non-strict inference reads them optional. */
+export type SetUserGroupAccessBody = Required<z.infer<typeof setUserGroupAccessSchema>>;

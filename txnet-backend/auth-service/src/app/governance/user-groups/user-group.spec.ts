@@ -123,11 +123,11 @@ describe('UserGroupAdminService', () => {
       user: { findMany: userFindMany(false) },
       tenant: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => tenantRows.filter((id) => where.id.in.includes(id)).map((id) => ({ id })) },
     };
-    return { service: new UserGroupAdminService(prisma as never, all as never), audits, groups, members };
+    return { service: new UserGroupAdminService(prisma as never, all as never, { ofLoadedMany: async () => new Map() } as never), audits, groups, members };
   }
 
   const as = (tenant: string) => <T>(fn: () => Promise<T>) => runWithTenant({ id: tenant }, fn);
-  const actorOf = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '203.0.113.9' });
+  const actorOf = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '203.0.113.9', permissions: ['user_group.manage'] });
   const group = (tenantId: string, allTenants = false) => ({ id: GROUP, tenantId, name: 'VIP', kind: UserGroupKind.manual, allTenants, createdAt: AT, updatedAt: AT });
 
   it('a reseller creates a group of its own and audits it; "every reseller" is refused', async () => {

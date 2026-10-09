@@ -73,7 +73,8 @@ describe('TenantRolesService', () => {
     };
     // Nobody here has a key given or taken (AC-1-l): their answer is their role's.
     const userPermission = { findMany: vi.fn(async () => []) };
-    const tx = { user, adminAuditLog, $executeRaw, role, outboxEvent, userPermission };
+    const userGroupMember = { findMany: vi.fn(async () => []) };
+    const tx = { user: { ...user, findMany: vi.fn(async () => []) }, adminAuditLog, $executeRaw, role, outboxEvent, userPermission, userGroupMember };
     const prisma = {
       ...tx,
       permission: {

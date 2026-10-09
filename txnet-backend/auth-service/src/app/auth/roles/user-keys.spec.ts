@@ -29,7 +29,9 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
     const target = { id: 'u-agent', tenantId: reseller, roleId: 'role-support', role: { name: 'Support', rolePermissions: keys(...(options.roleKeys ?? ['user.read', 'user.write'])) } };
     const tx = {
       $executeRaw: vi.fn(async () => undefined),
-      user: { findFirst: vi.fn(async () => target) },
+      user: { findFirst: vi.fn(async () => target), findMany: vi.fn(async () => [{ id: target.id, tenantId: reseller }]) },
+      // In no group that gives access (AC-1-m).
+      userGroupMember: { findMany: vi.fn(async () => []) },
       permission: { findUnique: vi.fn(async ({ where }: { where: { key: string } }) => (where.key === 'no.such' ? null : { id: `perm-${where.key}`, key: where.key })) },
       userPermission: {
         findMany: vi.fn(async () => rows.map((r) => ({ userId: 'u-agent', ...r }))),

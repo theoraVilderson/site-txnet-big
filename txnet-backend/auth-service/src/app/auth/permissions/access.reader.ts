@@ -12,7 +12,13 @@ const ROLE_KEYS = { role: { select: { rolePermissions: { select: { permission: {
 type Personal = Omit<AccessSources, 'roleKeys'>;
 
 /** The client a read runs on: the cross-tenant pool by default, or a writer's own transaction. */
-type Reader = Pick<Prisma.TransactionClient, 'userPermission'>;
+type Reader = Pick<Prisma.TransactionClient, 'userPermission' | 'userGroupMember' | 'user'>;
+
+/**
+ * A group gives access when it names a role or holds a key, and never when it
+ * is "every reseller" — its members are resellers, not people (AC-1-m).
+ */
+const GIVES_ACCESS: Prisma.UserGroupWhereInput = { allTenants: false, OR: [{ roleId: { not: null } }, { permissions: { some: {} } }] };
 
 /**
  * Reads what decides one person's answer (ADR-0138) and asks `accessOf`.
@@ -56,26 +62,67 @@ export class AccessReader {
    * group. What the writer recomputes after a role edit (ADR-0138 (5)).
    */
   async personalPeople(roleId?: string): Promise<string[]> {
-    const rows = await this.prisma.userPermission.findMany({
-      where: roleId ? { user: { roleId } } : {},
-      select: { userId: true },
-      distinct: ['userId'],
-    });
-    return rows.map((r) => r.userId);
+    const [given, members] = await Promise.all([
+      this.prisma.userPermission.findMany({ where: roleId ? { user: { roleId } } : {}, select: { userId: true }, distinct: ['userId'] }),
+      this.prisma.userGroupMember.findMany({
+        where: { memberType: 'user', userId: { not: null }, group: GIVES_ACCESS },
+        select: { userId: true, group: { select: { roleId: true } } },
+      }),
+    ]);
+    const people = new Set(given.map((r) => r.userId));
+    if (!roleId) for (const m of members) people.add(m.userId as string);
+    else {
+      // Reached through the group's role, or holding the role themselves.
+      for (const m of members) if (m.group.roleId === roleId) people.add(m.userId as string);
+      const rest = members.map((m) => m.userId as string).filter((id) => !people.has(id));
+      if (rest.length > 0) {
+        for (const u of await this.prisma.user.findMany({ where: { id: { in: rest }, roleId }, select: { id: true } })) people.add(u.id);
+      }
+    }
+    return [...people];
   }
 
-  /** What applies to each person beyond their role: the keys given to and taken from them (AC-1-l). */
+  /** Each of a group's user members — what the writer recomputes when the group's access moves. */
+  async membersOf(groupId: string): Promise<string[]> {
+    const rows = await this.prisma.userGroupMember.findMany({ where: { groupId, memberType: 'user' }, select: { userId: true } });
+    return rows.flatMap((r) => (r.userId ? [r.userId] : []));
+  }
+
+  /**
+   * What applies to each person beyond their role: the keys given to and
+   * taken from them (AC-1-l), and every group of **their own tenant** that
+   * gives access (AC-1-m). A platform group may hold another tenant's user;
+   * the platform's keys are not theirs, so that membership counts for nothing.
+   */
   private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader): Promise<Map<string, Personal>> {
-    const out = new Map<string, { given: string[]; taken: string[] }>();
+    type Entry = { given: string[]; taken: string[]; groups: { roleKeys: string[]; keys: string[] }[] };
+    const out = new Map<string, Entry>();
     if (users.length === 0) return out;
-    const rows = await client.userPermission.findMany({
-      where: { userId: { in: users.map((u) => u.id) } },
-      select: { userId: true, effect: true, permission: { select: { key: true } } },
-    });
-    for (const row of rows) {
-      const entry = out.get(row.userId) ?? { given: [], taken: [] };
-      (row.effect === 'take' ? entry.taken : entry.given).push(row.permission.key);
-      out.set(row.userId, entry);
+    const ids = users.map((u) => u.id);
+    const [rows, memberships, tenants] = await Promise.all([
+      client.userPermission.findMany({
+        where: { userId: { in: ids } },
+        select: { userId: true, effect: true, permission: { select: { key: true } } },
+      }),
+      client.userGroupMember.findMany({
+        where: { userId: { in: ids }, memberType: 'user', group: GIVES_ACCESS },
+        select: {
+          userId: true,
+          tenantId: true,
+          group: { select: { role: ROLE_KEYS.role, permissions: { select: { permission: { select: { key: true } } } } } },
+        },
+      }),
+      client.user.findMany({ where: { id: { in: ids } }, select: { id: true, tenantId: true } }),
+    ]);
+    const entry = (id: string) => out.get(id) ?? (out.set(id, { given: [], taken: [], groups: [] }).get(id) as Entry);
+    for (const row of rows) (row.effect === 'take' ? entry(row.userId).taken : entry(row.userId).given).push(row.permission.key);
+    const tenantOf = new Map(tenants.map((u) => [u.id, u.tenantId]));
+    for (const m of memberships) {
+      if (!m.userId || tenantOf.get(m.userId) !== m.tenantId) continue;
+      entry(m.userId).groups.push({
+        roleKeys: m.group.role?.rolePermissions.map((rp) => rp.permission.key) ?? [],
+        keys: m.group.permissions.map((p) => p.permission.key),
+      });
     }
     return out;
   }

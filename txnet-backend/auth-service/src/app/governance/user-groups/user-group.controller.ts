@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -35,10 +36,12 @@ import {
 import {
   AddUserGroupMembersBody,
   CreateUserGroupBody,
+  SetUserGroupAccessBody,
   UpdateUserGroupBody,
   UserGroupMemberPageQuery,
   addUserGroupMembersSchema,
   createUserGroupSchema,
+  setUserGroupAccessSchema,
   updateUserGroupSchema,
   userGroupMemberPageSchema,
 } from './user-group.schema';
@@ -57,6 +60,12 @@ export const USER_GROUP_REFUSAL_STATUS: Record<UserGroupRejection, 400 | 403 | 4
   name_taken: 409,
   all_tenants_conflict: 409,
   group_in_use: 409,
+  access_on_resellers: 409,
+  role_not_found: 404,
+  key_unknown: 400,
+  key_not_grantable: 403,
+  key_not_held: 403,
+  no_authority: 403,
 };
 
 const READ = {
@@ -119,6 +128,13 @@ export class UserGroupController {
     return this.refusing(() => this.groups.members(this.actor(req), id, q.page, q.pageSize));
   }
 
+  /** What the group gives its user members: a role and/or keys, the whole set (AC-1-m, ADR-0138). */
+  @Put(':id/access')
+  @RateLimit(WRITE)
+  setAccess(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(setUserGroupAccessSchema)) body: SetUserGroupAccessBody, @Req() req: Request) {
+    return this.refusing(() => this.groups.setAccess(this.actor(req), id, body));
+  }
+
   @Post(':id/members')
   @HttpCode(HttpStatus.OK)
   @RateLimit(WRITE)
@@ -142,7 +158,7 @@ export class UserGroupController {
   private actor(req: Request): UserGroupActor {
     const user = (req as Request & { user: AuthClaims }).user;
     // `admin_audit_log.adminIpAddress` is `NOT NULL`; an unresolvable peer is recorded as such.
-    return { adminId: user.sub, tenantId: user.tenantId, ip: req.ip ?? '0.0.0.0' };
+    return { adminId: user.sub, tenantId: user.tenantId, ip: req.ip ?? '0.0.0.0', permissions: user.permissions };
   }
 
   /** One refusal type in, one HTTP status out — the reason travels as the body's `reason`. */
