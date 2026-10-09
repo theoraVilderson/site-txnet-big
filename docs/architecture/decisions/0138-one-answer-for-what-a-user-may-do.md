@@ -87,7 +87,7 @@ Three facts shape the answer.
   the gap between that and (4) only grows with tenants. **A second claim listing
   only the extra keys** was also rejected. It would split the one answer back
   into two, and every reader would have to merge them the same way.
-- A query that finds holders of a key by role rows alone (the engagement wheel
-  report) does not see personal grants. That is acceptable while such queries
-  pick report recipients, not who may act. A new one that decides access must
-  ask `accessOf`.
+- A query that picks people by a key asks shared-core's `findKeyHolders`:
+  `accessOf`'s rule for one key, as a query. The wheel's 80% alert read role
+  rows alone and was moved onto it the same day (2026-10-09); C-15 fails on a
+  new query that reads role rows alone.

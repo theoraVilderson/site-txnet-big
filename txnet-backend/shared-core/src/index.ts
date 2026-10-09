@@ -18,6 +18,7 @@ export * from './lib/http/service-only.guard';
 export * from './lib/http/trust-proxy';
 export * from './lib/http/cookies';
 export * from './lib/http/permissions';
+export * from './lib/http/key-holders';
 export * from './lib/http/impersonation';
 export * from './lib/http/permission-registry.generated';
 export * from './lib/redis/keyspace';

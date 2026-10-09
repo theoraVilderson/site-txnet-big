@@ -44,7 +44,7 @@ draw made once and checkable from what is published.
 | Event | When | Payload |
 |---|---|---|
 | `engagement.lottery.won` (F-707-m) | a winner place `delivered`, in the delivery's transaction; once per place | `{tenantId, userId, lotteryId, title, prize, rank}`; worker-service tells `lotteryWon` (automation `contract.outbox.md`) |
-| `tenant.engagement.wheel_cap_nearing` (F-707-e) | the spin whose prize brings the tenant day to 80% of the cap; once a day (`spin_wheel_day.capAlertedAt`, set under the day lock), one event per active user whose role holds `engagement.manage` or `*` | `{tenantId, userId, day, spent, cap, currencyCode}`; worker-service tells `wheelCapNearing` (automation `contract.outbox.md`) |
+| `tenant.engagement.wheel_cap_nearing` (F-707-e) | the spin whose prize brings the tenant day to 80% of the cap; once a day (`spin_wheel_day.capAlertedAt`, set under the day lock), one event per active user who holds `engagement.manage` — by role (`*` included), a key given, or a group, less a key taken (`findKeyHolders`, ADR-0138) | `{tenantId, userId, day, spent, cap, currencyCode}`; worker-service tells `wheelCapNearing` (automation `contract.outbox.md`) |
 
 ## Consumes
 

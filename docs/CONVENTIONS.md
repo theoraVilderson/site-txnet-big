@@ -34,6 +34,7 @@ needs to move up that table.
 |---|---|---|
 | C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
 | C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
+| C-15 | Who holds a key is asked of `findKeyHolders` (shared-core, ADR-0138) — a role, a key given, a group of the tenant, less a key taken. A Prisma filter on `rolePermissions: { some: { permission: ... } }` outside it is a violation: it misses a key given to one person and tells someone it was taken from. | check |
 | C-14 | A page never polls the server for state that someone else's work changes — it subscribes and re-reads (`useLiveReread`, ADR-0121). Under `site-pwa/src/app/` and `site-pwa/src/hooks/`, a `setInterval(` is a violation unless it is a clock (`setNow(`, `setSeconds(`) or carries a `live-exempt: <reason>` comment on its line. | check |
 | C-13 | A panel control is a kit primitive (`(panel)/_components/kit`, `contract.ux.md` K3–K14). Under `site-pwa/src/app/(panel)/`, outside the kit, `window.confirm(` (use `useConfirm`), a local button or input class constant (`primaryButton`, `quietButton`, `secondaryButton`, `dangerButton`, `input`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`) and `text-white` beside `bg-primary` (use `text-on-accent`) are violations. | check |
 | C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
@@ -502,4 +503,23 @@ forbid: \bsetInterval\((?!.*\bset(?:Now|Seconds)\()(?!.*live-exempt:)
 in: site-pwa/src/app/**/*.ts, site-pwa/src/app/**/*.tsx, site-pwa/src/hooks/**/*.ts, site-pwa/src/hooks/**/*.tsx
 except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/app/(panel)/_hooks/useMenuBadges.ts, site-pwa/src/app/(panel)/payment/_components/PaymentPendingView.tsx, site-pwa/src/app/(panel)/support/_components/SupportInboxView.tsx, site-pwa/src/app/(panel)/my-resellers/*/users/_components/BulkByFilter.tsx, site-pwa/src/app/(auth)/auth/_hooks/useBotLink.ts, site-pwa/src/hooks/useLocaleVersion.ts
 message: subscribe and re-read with useLiveReread (C-14, ADR-0121); the producer owes an outbox event — a clock or a beat the page sends is marked `// live-exempt: <reason>`
+```
+
+## C-15 — who holds a key is one question
+
+**Rule.** A query that picks people by a key — who to tell, who to list —
+calls `findKeyHolders(tx, tenantId, key, where)`. Checking one caller's own
+token stays `holdsPermission`.
+
+**Why.** ADR-0138 made a person's keys their role's, plus keys given and a
+group's, minus keys taken. On 2026-10-09 the wheel's 80% alert still read role
+rows alone, so a person given `engagement.manage` was never told and a person
+it was taken from still was. The rule is `accessOf`'s for one key, written
+once as a query.
+
+```check C-15
+forbid: rolePermissions:\s*\{\s*some:\s*\{\s*permission:
+in: txnet-backend/**/*.ts
+except: txnet-backend/**/*.spec.ts, txnet-backend/shared-core/src/lib/http/key-holders.ts
+message: ask findKeyHolders (shared-core, C-15, ADR-0138) — role rows alone miss a key given or taken, and a group's
 ```

@@ -28,6 +28,7 @@ function alertTx(admins = [ADMIN_A, ADMIN_B]) {
   const tx = {
     spinWheelDay: { updateMany: async (a: Record<string, unknown>) => (marks.push(a), { count: 1 }) },
     user: { findMany: async (a: Record<string, unknown>) => (userQueries.push(a), admins.map((id) => ({ id }))) },
+    userGroupMember: { findMany: async () => [] },
     outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => (events.push(data), { id: `ev-${events.length}` }) },
   };
   return { tx: tx as unknown as Prisma.TransactionClient, events, marks, userQueries };

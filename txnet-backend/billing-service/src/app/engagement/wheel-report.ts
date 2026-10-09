@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { OutboxEventType, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, findKeyHolders, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ENGAGEMENT_MANAGE } from './engagement-permission.guard';
@@ -22,8 +22,9 @@ export const TENANT_ENGAGEMENT_AGGREGATE = 'tenant.engagement';
  * Called by the spin, after it charged the day, in its transaction and under
  * the day row's lock — so the spin that crosses 80% is the only one that
  * tells, and a rolled-back spin tells nothing. Marks the day, then writes one
- * outbox event per active user of the tenant whose role holds
- * `engagement.manage` (or `*`): the notice sender keeps one person per event.
+ * outbox event per active user of the tenant who holds `engagement.manage`
+ * (`findKeyHolders`: by role, a key given, or a group; `*` included): the
+ * notice sender keeps one person per event.
  * Returns how many were told.
  */
 export async function alertCapCrossing(
@@ -33,23 +34,15 @@ export async function alertCapCrossing(
   if (a.alertedAt !== null || a.cap.lte(0) || a.spent.lt(a.cap.mul(WHEEL_CAP_ALERT_SHARE))) return 0;
   const marked = await tx.spinWheelDay.updateMany({ where: { tenantId: a.tenantId, tenantDay: a.tenantDay, capAlertedAt: null }, data: { capAlertedAt: a.at } });
   if (marked.count !== 1) return 0;
-  const admins = await tx.user.findMany({
-    where: {
-      tenantId: a.tenantId,
-      deletedAt: null,
-      status: UserStatus.active,
-      role: { rolePermissions: { some: { permission: { key: { in: [ENGAGEMENT_MANAGE, '*'] } } } } },
-    },
-    select: { id: true },
-    orderBy: { id: 'asc' },
-  });
-  for (const admin of admins) {
+  // Everyone who holds the key, however (ADR-0138): a role, a key given, a group.
+  const admins = await findKeyHolders(tx, a.tenantId, ENGAGEMENT_MANAGE, { deletedAt: null, status: UserStatus.active });
+  for (const adminId of admins) {
     await tx.outboxEvent.create({
       data: {
         aggregate: TENANT_ENGAGEMENT_AGGREGATE,
         aggregateId: a.tenantId,
         type: OutboxEventType.TENANT_WHEEL_CAP_NEARING,
-        payload: { tenantId: a.tenantId, userId: admin.id, day: isoDay(a.tenantDay), spent: a.spent.toFixed(2), cap: a.cap.toFixed(2), currencyCode: a.currencyCode },
+        payload: { tenantId: a.tenantId, userId: adminId, day: isoDay(a.tenantDay), spent: a.spent.toFixed(2), cap: a.cap.toFixed(2), currencyCode: a.currencyCode },
       },
       select: { id: true },
     });
