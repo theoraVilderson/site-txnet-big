@@ -132,5 +132,6 @@ a reseller's user: RLS hides them from the platform's scope.
   early: a revoke, a grant superseding the consent, the entry ended. The rows
   are marked first, then the Redis markers are dropped, so the next request
   is refused.
-- Rank ceiling and reason are invariant 7's; the start's audit row is in the
+- **Never the reseller's owner** (ADR-0137), under consent or emergency alike:
+  403. Authority and reason are invariant 7's; the start's audit row is in the
   **reseller's** log (`tenantId`), written in a transaction bound to it.

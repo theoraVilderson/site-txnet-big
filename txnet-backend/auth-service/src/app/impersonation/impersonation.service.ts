@@ -134,9 +134,10 @@ export class ImpersonationService {
       throw new BadRequestException('Target user is not active');
     // AC-1-h (§3.6 layer 1): the authority rule every act on another person
     // asks (ADR-0103) — a peer holds every key the target holds and one more;
-    // never self, never the tenant's owner — and never anyone holding `*`,
-    // whoever asks (`'*'` is held only by a holder of `*`). No name is ranked,
-    // so a tenant-made role falls into the order by what it holds.
+    // never self, never the tenant's owner (ADR-0137, the platform included)
+    // — and never anyone holding `*`, whoever asks (`'*'` is held only by a
+    // holder of `*`). No name is ranked, so a tenant-made role falls into the
+    // order by what it holds.
     const tenant = opts.authority.tenantId
       ? await this.prisma.tenant.findUnique({
           where: { id: opts.authority.tenantId },

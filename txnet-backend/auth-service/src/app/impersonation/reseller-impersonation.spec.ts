@@ -20,7 +20,10 @@ describe("impersonating a reseller's user", () => {
   const now = new Date('2026-10-04T10:00:00Z');
   const actor = { userId: STAFF, tenantId: 'platform', permissions: ['platform.tenant.manage', 'user.impersonate'] };
 
-  const build = (support: { tier: 'consent' | 'emergency'; consentId?: string; entryId?: string; endsAt: Date } | Error) => {
+  const build = (
+    support: { tier: 'consent' | 'emergency'; consentId?: string; entryId?: string; endsAt: Date } | Error,
+    owner = 'reseller-owner',
+  ) => {
     const tx = {
       $executeRaw: vi.fn(async () => 1),
       impersonationSession: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ({ id: 'imp-1', ...data })) },
@@ -32,8 +35,8 @@ describe("impersonating a reseller's user", () => {
     };
     const prisma = {
       user: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => users[where.id] ?? null) },
-      // The reseller, whose owner is someone else (ADR-0103 rule 2).
-      tenant: { findUnique: vi.fn(async () => ({ ownerUserId: 'reseller-owner', tenantType: 'reseller' })) },
+      // The reseller, whose owner is someone else unless a test says so (ADR-0137).
+      tenant: { findUnique: vi.fn(async () => ({ ownerUserId: owner, tenantType: 'reseller' })) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
     const sessionService = {
@@ -83,6 +86,19 @@ describe("impersonating a reseller's user", () => {
     await service.startForReseller(actor, RESELLER, TARGET, REASON, '1.1.1.1', 'ua', now);
     expect(sessionService.createSession).toHaveBeenCalledWith(TARGET, '1.1.1.1', 'ua', expect.objectContaining({ expiresInSec: 1800 }));
     expect(tx.impersonationSession.create).toHaveBeenCalledWith({ data: expect.objectContaining({ consentId: null, emergencyEntryId: 'entry-1' }) });
+  });
+
+  // ADR-0137: the account that holds a tenant is never impersonated — not under
+  // an `act` consent, not under an emergency entry. Support reaches the owner's
+  // tenant through tier B in its own name instead.
+  it.each([
+    ['an act consent', { tier: 'consent' as const, consentId: 'consent-1', endsAt: new Date(now.getTime() + 60 * 60_000) }],
+    ['an emergency entry', { tier: 'emergency' as const, entryId: 'entry-1', endsAt: new Date(now.getTime() + 60 * 60_000) }],
+  ])("never becomes the reseller's owner, even under %s", async (_label, support) => {
+    const { service, tx, sessionService } = build(support, TARGET);
+    await expect(service.startForReseller(actor, RESELLER, TARGET, REASON, '1.1.1.1', 'ua', now)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(sessionService.createSession).not.toHaveBeenCalled();
+    expect(tx.impersonationSession.create).not.toHaveBeenCalled();
   });
 
   it('a revoked consent or an ended entry kills its running sessions at once', async () => {
