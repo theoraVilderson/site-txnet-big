@@ -15,14 +15,16 @@
     "otpChannel": "otp:channel:<id>",
     "userSessions": "user:<id>:sessions",
     "rolePermissions": "role:<id>:permissions",
-    "userRole": "user:<id>:role"
+    "userRole": "user:<id>:role",
+    "userPermissions": "user:<id>:permissions"
   },
   "keyCases": [
     { "builder": "session", "id": "sess-1", "key": "session:sess-1" },
     { "builder": "otpChannel", "id": "chan-1", "key": "otp:channel:chan-1" },
     { "builder": "userSessions", "id": "user-1", "key": "user:user-1:sessions" },
     { "builder": "rolePermissions", "id": "role-1", "key": "role:role-1:permissions" },
-    { "builder": "userRole", "id": "user-1", "key": "user:user-1:role" }
+    { "builder": "userRole", "id": "user-1", "key": "user:user-1:role" },
+    { "builder": "userPermissions", "id": "user-1", "key": "user:user-1:permissions" }
   ],
   "subKeys": {
     "note": "The keys written in TypeScript and read in Go by sub-service: the `sub:` families, and `tenant:status:` for the tenant gate (F-113-e). Kept apart from `keys`/`keyCases`, which auth-handler's keys_contract_test.go requires to be exactly the builders auth-handler has. Read by shared-core/src/lib/redis/keyspace.contract.spec.ts; sub-service's reader holds its Go builder to the same cases (F-609-b, F-113-e).",

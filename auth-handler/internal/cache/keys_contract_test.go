@@ -45,6 +45,7 @@ func TestContractKeyNames(t *testing.T) {
 		"userSessions":    UserSessionsKey,
 		"rolePermissions": RolePermissionsKey,
 		"userRole":        UserRoleKey,
+		"userPermissions": UserPermissionsKey,
 	}
 
 	const prefix = "txnet:auth:v2:"

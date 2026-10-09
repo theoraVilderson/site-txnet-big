@@ -53,6 +53,13 @@ func UserRoleKey(prefix, userID string) string {
 	return prefix + "user:" + userID + ":role"
 }
 
+// UserPermissionsKey holds the fingerprint of one person's own answer
+// (ADR-0138), present only while something beyond their role applies to them.
+// Present, it decides alone; missing, RolePermissionsKey decides.
+func UserPermissionsKey(prefix, userID string) string {
+	return prefix + "user:" + userID + ":permissions"
+}
+
 // OtpChannelKey is the token authorizing one OTP realtime subscription.
 //
 // Written by `auth-service`, read by `gateway-service`. Declared here for the

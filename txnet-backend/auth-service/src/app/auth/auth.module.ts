@@ -63,6 +63,7 @@ import { MeEmailService } from './me/me-email.service';
 import { MeMessengerService } from './me/me-messenger.service';
 import { MeTimeZoneService } from './me/me-time-zone.service';
 import { MeAccountService } from './me/me-account.service';
+import { AccessReader } from './permissions/access.reader';
 import { PermissionStateStore } from './permissions/permission-state.store';
 import {
   PERMISSIONS_LISTEN_CLIENT,
@@ -132,6 +133,7 @@ import { ConfigService } from '@nestjs/config';
     SurfaceOwnerService,
     AuthGuard,
     PermissionStateStore,
+    AccessReader,
     PermissionNotificationsListener,
     // One `pg` client per connection attempt, as the running service's own
     // least-privileged login (`DATABASE_APP_URL`) — LISTEN needs no grant, and
@@ -191,6 +193,6 @@ import { ConfigService } from '@nestjs/config';
   // PermissionStateStore is exported with AuthGuard for the reason TokenService
   // and SessionStore are: a module that puts AuthGuard on a controller has to
   // be able to resolve every one of its dependencies (F-031-b).
-  exports: [AuthGuard, TokenService, SessionService, SessionStore, PermissionStateStore, AuthService, SurfaceOwnerService],
+  exports: [AuthGuard, TokenService, SessionService, SessionStore, PermissionStateStore, AccessReader, AuthService, SurfaceOwnerService],
 })
 export class AuthModule {}

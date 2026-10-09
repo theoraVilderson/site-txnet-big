@@ -72,6 +72,12 @@ export const UnscopedRedisKeys = {
    * role's own fingerprint cannot notice a user leaving it for another.
    */
   userRole: (userId: string) => `user:${userId}:role`,
+  /**
+   * The fingerprint of one person's own answer (ADR-0138), written only while
+   * something beyond their role applies to them and deleted when nothing does.
+   * Present, it decides alone; absent, `rolePermissions` decides.
+   */
+  userPermissions: (userId: string) => `user:${userId}:permissions`,
 
   /**
    * The token that authorizes a subscription to one OTP delivery's realtime

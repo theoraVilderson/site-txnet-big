@@ -56,6 +56,7 @@ describe('the key catalogue', () => {
       userSessions: UnscopedRedisKeys.userSessions('user-1'),
       rolePermissions: UnscopedRedisKeys.rolePermissions('role-1'),
       userRole: UnscopedRedisKeys.userRole('user-1'),
+      userPermissions: UnscopedRedisKeys.userPermissions('user-1'),
       otpChannel: UnscopedRedisKeys.otpChannel('chan-1'),
       supportChannel: UnscopedRedisKeys.supportChannel('conv-1', 'user-1'),
       realtimeFanout: UnscopedRedisKeys.realtimeFanout('user:user-1'),
@@ -128,6 +129,7 @@ describe('the families auth-handler also builds', () => {
     userSessions: UnscopedRedisKeys.userSessions,
     rolePermissions: UnscopedRedisKeys.rolePermissions,
     userRole: UnscopedRedisKeys.userRole,
+    userPermissions: UnscopedRedisKeys.userPermissions,
   };
 
   it.each(fixture.keyCases)(

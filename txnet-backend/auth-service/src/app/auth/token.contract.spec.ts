@@ -68,6 +68,9 @@ describe('TokenService — auth-handler wire contract', () => {
         roleName: 'Admin',
         permissions: ['user.read', 'billing.read'],
         permHash: 'contract-perm-hash-1',
+        // Someone given a key beyond their role (ADR-0138): the gate holds
+        // what the role's entry lacks to the ceiling only when it reads this.
+        personal: true,
         sessionId: 'session-contract-1',
       },
       ttl,

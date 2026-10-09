@@ -449,13 +449,15 @@ func TestValidateSetsIdentityHeadersOnSuccess(t *testing.T) {
 	}
 
 	// Every key must be the prefix plus the family plus the claim, or the
-	// gateway reads a keyspace auth-service never writes. Three keys, one
-	// decision: the session, the role's fingerprint, the user's role (ADR-0043).
+	// gateway reads a keyspace auth-service never writes. Four keys, one
+	// decision: the session, the role's fingerprint, the user's role (ADR-0043)
+	// and the person's own fingerprint (ADR-0138).
 	cmds := redis.commands()
 	wantCmds := []string{
 		"GET txnet:session:sess-1",
 		"GET txnet:role:" + realRoleID + ":permissions",
 		"GET txnet:user:user-1:role",
+		"GET txnet:user:user-1:permissions",
 	}
 	if strings.Join(cmds, "|") != strings.Join(wantCmds, "|") {
 		t.Errorf("redis commands = %v, want %v", cmds, wantCmds)
@@ -501,6 +503,65 @@ func TestValidatePermissionFingerprint(t *testing.T) {
 			t.Errorf("error = %v, want reason %q", body["error"], reasonPermissionsChanged)
 		}
 	})
+}
+
+// ADR-0138: a person something beyond their role applies to has their own
+// fingerprint, and when it is present it decides alone — the role's key no
+// longer describes them. When it is absent the role's key decides, as before.
+func TestValidatePersonFingerprint(t *testing.T) {
+	mine := sign(t, validClaims(map[string]any{"permHash": "person-hash"}), testSecret)
+	roleKey := "role:" + realRoleID + ":permissions"
+
+	for _, tc := range []struct {
+		name  string
+		redis map[string]string
+		want  int
+	}{
+		{"the person's key matches though the role's differs", map[string]string{
+			":session:sess-1": "active", roleKey: "role-hash", "user-1:permissions": "person-hash",
+		}, http.StatusOK},
+		{"the person's key moved though the role's matches", map[string]string{
+			":session:sess-1": "active", roleKey: "person-hash", "user-1:permissions": "person-later",
+		}, http.StatusUnauthorized},
+		{"no person key: a token carrying what was lifted no longer matches the role", map[string]string{
+			":session:sess-1": "active", roleKey: "role-hash",
+		}, http.StatusUnauthorized},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, redisWith(tc.redis), testEngine(t))
+			if w := call(t, h, mine); w.Code != tc.want {
+				t.Errorf("status = %d, want %d (body %q)", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
+}
+
+// ADR-0138 (6): a key given to one person need not be in their role's policy
+// entry, only in the tenant ceiling. A token not marked personal is checked by
+// its role's entry exactly as before, and `*` is never in the ceiling.
+func TestValidateHoldsAPersonalTokenToTheCeiling(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		claims map[string]any
+		want   int
+	}{
+		{"a personal user given admin's key", map[string]any{
+			"roleName": "user", "personal": true, "permissions": []string{"self.read", "user.write"},
+		}, http.StatusOK},
+		{"the same keys without the mark", map[string]any{
+			"roleName": "user", "permissions": []string{"self.read", "user.write"},
+		}, http.StatusForbidden},
+		{"a personal user claiming the wildcard", map[string]any{
+			"roleName": "user", "personal": true, "permissions": []string{"self.read", "*"},
+		}, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, _ := newHandler(t, sessionActive, testEngine(t))
+			if w := call(t, h, sign(t, validClaims(tc.claims), testSecret)); w.Code != tc.want {
+				t.Errorf("status = %d, want %d (body %q)", w.Code, tc.want, w.Body.String())
+			}
+		})
+	}
 }
 
 // An impersonated request must be labelled as such all the way down, or an

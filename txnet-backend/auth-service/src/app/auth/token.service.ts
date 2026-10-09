@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { permissionFingerprint } from './permissions/permission-fingerprint';
+import { accessOf, type UserAccess } from './permissions/access';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
@@ -45,6 +46,13 @@ export type AuthClaims = {
    */
   permHash?: string;
   /**
+   * Something beyond the role applies to this person (ADR-0138): a key given or
+   * taken, or a group's access. `permHash` is then their own fingerprint, and
+   * the gate holds a key outside the role's policy entry to the tenant ceiling
+   * instead of refusing it. Absent otherwise.
+   */
+  personal?: boolean;
+  /**
    * The account is restricted (`suspended`, ADR-0133): `permissions` is empty
    * and the gate and `AuthGuard` admit the token only on their allow-lists —
    * the person's own support conversations, `me`, sign-out. Absent otherwise.
@@ -58,6 +66,10 @@ export type AuthClaims = {
   iat: number;
   exp: number;
 };
+
+/** A loaded user's role keys as an answer: what a token carries when no `access` is passed. */
+const roleAccessOf = (user: any): UserAccess =>
+  accessOf({ roleKeys: user.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] });
 
 @Injectable()
 export class TokenService {
@@ -85,9 +97,13 @@ export class TokenService {
     return this.signPayload(payload);
   }
 
-  signAccessToken(user: any, sessionId: string): string {
-    const permissions =
-      user.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [];
+  /**
+   * `access` is the person's answer (ADR-0138), from `AccessReader`. Without
+   * it the token carries the role's keys — right for anyone nothing else
+   * applies to, and for anyone else refused at once as stale, never wider.
+   */
+  signAccessToken(user: any, sessionId: string, access?: UserAccess): string {
+    const { keys: permissions, personal } = access ?? roleAccessOf(user);
     // Anything but `active` is restricted — a caller that forgot to read the
     // status gets the narrow token, never the whole one (ADR-0133). A banned
     // account never reaches here: every sign-in path refuses it first.
@@ -99,9 +115,10 @@ export class TokenService {
       roleName: user.role?.name ?? '',
       roleScope: roleScopeOf(user.role),
       permissions: restricted ? [] : permissions,
-      // The role's own fingerprint even when restricted, or ADR-0043's
+      // The answer's fingerprint even when restricted, or ADR-0043's
       // staleness rule would answer `permissionsChanged` on every request.
       permHash: permissionFingerprint(permissions),
+      ...(personal ? { personal: true } : {}),
       ...(restricted ? { restricted: true } : {}),
       sessionId,
     });
@@ -141,10 +158,9 @@ export class TokenService {
     targetUser: any,
     sessionId: string,
     adminId: string,
+    access?: UserAccess,
   ): string {
-    const permissions =
-      targetUser.role?.rolePermissions?.map((rp: any) => rp.permission.key) ??
-      [];
+    const { keys: permissions, personal } = access ?? roleAccessOf(targetUser);
     return this.sign(
       {
         sub: targetUser.id,
@@ -154,6 +170,7 @@ export class TokenService {
         roleScope: roleScopeOf(targetUser.role),
         permissions,
         permHash: permissionFingerprint(permissions),
+        ...(personal ? { personal: true } : {}),
         sessionId,
         isImpersonated: true,
         impersonatedBy: adminId,

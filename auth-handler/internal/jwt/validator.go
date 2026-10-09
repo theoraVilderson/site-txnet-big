@@ -39,7 +39,12 @@ type Claims struct {
 	// The gate compares it to the role's current fingerprint in Redis, so a
 	// changed role is refused at once rather than after the token expires
 	// (ADR-0043). Empty on a token minted before that shipped.
-	PermHash       string `json:"permHash"`
+	PermHash string `json:"permHash"`
+	// Personal marks a person something beyond their role applies to — a key
+	// given or taken, or a group's access (ADR-0138). PermHash is then their own
+	// fingerprint, and a key outside the role's policy entry is held to the
+	// tenant ceiling instead of refused.
+	Personal bool `json:"personal"`
 	// Restricted marks a restricted account (`suspended`, ADR-0133): its
 	// permissions are empty and the gate admits it only on its allow-list.
 	Restricted     bool   `json:"restricted"`

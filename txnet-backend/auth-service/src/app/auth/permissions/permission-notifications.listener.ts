@@ -3,6 +3,7 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { NotificationClientFactory, PgNotificationListener } from '@txnet-backend/shared-core';
 import { permissionFingerprint } from './permission-fingerprint';
 import { PermissionStateStore } from './permission-state.store';
+import { AccessReader } from './access.reader';
 
 export type { NotificationClient, NotificationClientFactory } from '@txnet-backend/shared-core';
 
@@ -54,13 +55,14 @@ export class PermissionNotificationsListener extends PgNotificationListener {
     private readonly store: PermissionStateStore,
     @Inject(PERMISSIONS_LISTEN_CLIENT)
     newClient: NotificationClientFactory,
+    private readonly access: AccessReader,
   ) {
     super(newClient);
   }
 
   /** What one notification means. An unreadable one is logged and dropped, never thrown. */
   async handle(payload: string | undefined): Promise<void> {
-    let event: { kind?: unknown; roleId?: unknown; userId?: unknown };
+    let event: { kind?: unknown; roleId?: unknown; userId?: unknown; groupId?: unknown };
     try {
       event = JSON.parse(payload ?? '');
     } catch {
@@ -76,6 +78,9 @@ export class PermissionNotificationsListener extends PgNotificationListener {
         typeof event.roleId === 'string'
       ) {
         await this.store.writeUserRole(event.userId, event.roleId);
+        await this.recomputePeople([event.userId]);
+      } else if (event.kind === 'person' && typeof event.userId === 'string') {
+        await this.recomputePeople([event.userId]);
       } else if (event.kind === 'all') {
         await this.recomputeAll();
       } else {
@@ -91,12 +96,32 @@ export class PermissionNotificationsListener extends PgNotificationListener {
   async recomputeAll(): Promise<void> {
     const roles = await this.prisma.role.findMany({ select: ROLE_PERMISSIONS });
     for (const role of roles) await this.store.writeRole(role.id, fingerprintOf(role));
+    await this.recomputePeople(await this.access.personalPeople());
   }
 
+  /**
+   * The role's key, then the personal holders it reaches (ADR-0138 (5)): their
+   * own fingerprint includes the role's keys, and the role's key no longer
+   * decides for them. Everyone else needs nothing.
+   */
   private async recomputeRole(roleId: string): Promise<void> {
     const role = await this.prisma.role.findUnique({ where: { id: roleId }, select: ROLE_PERMISSIONS });
     // A role deleted in the same transaction has no users left to hold a token.
     if (role) await this.store.writeRole(role.id, fingerprintOf(role));
+    await this.recomputePeople(await this.access.personalPeople(roleId));
+  }
+
+  /**
+   * Each person's own fingerprint, or none once nothing beyond their role
+   * applies (ADR-0138 (4)). A person who no longer exists keeps no key.
+   */
+  private async recomputePeople(userIds: readonly string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    const answers = await this.access.ofIds(userIds);
+    for (const userId of userIds) {
+      const access = answers.get(userId);
+      await this.store.writePerson(userId, access?.personal ? permissionFingerprint(access.keys) : null);
+    }
   }
 }
 

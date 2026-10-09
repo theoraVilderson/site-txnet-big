@@ -1,4 +1,5 @@
 import type { Mock } from 'vitest';
+import { accessOf } from './permissions/access';
 import * as argon2Module from 'argon2';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
@@ -132,6 +133,8 @@ function harness() {
     sessions as never,
     deliveries as never,
     surfaceOwners as never,
+    // Nobody here has access beyond their role (ADR-0138): the role's keys.
+    { ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }) } as never,
   );
 
   return {
@@ -1608,6 +1611,7 @@ describe('AuthService sign-in — a blocked account (ADR-0133)', () => {
     expect(h.tokens.signAccessToken).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'suspended' }),
       'session-new',
+      { keys: [], personal: false },
     );
   });
 

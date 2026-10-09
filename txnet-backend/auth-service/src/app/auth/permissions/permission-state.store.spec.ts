@@ -55,12 +55,12 @@ describe('PermissionStateStore.isStale', () => {
     await expect(storeKnowing('hash-now', null).store.isStale(legacy)).resolves.toBe(true);
   });
 
-  it("reads the role's key and the user's key, in one round trip", async () => {
+  it("reads the role's key and the user's keys, in one round trip", async () => {
     const { store, mget } = storeKnowing(null, null);
 
     await store.isStale(CLAIMS);
 
     expect(mget).toHaveBeenCalledTimes(1);
-    expect(mget).toHaveBeenCalledWith('role:role-1:permissions', 'user:user-1:role');
+    expect(mget).toHaveBeenCalledWith('role:role-1:permissions', 'user:user-1:role', 'user:user-1:permissions');
   });
 });

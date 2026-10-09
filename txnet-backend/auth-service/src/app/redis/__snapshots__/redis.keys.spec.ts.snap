@@ -63,6 +63,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
   "tenantRuns",
   "tenantStatus",
   "tenantStatusChanged",
+  "userPermissions",
   "userRole",
   "userSessions",
 ]

@@ -86,13 +86,15 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			return response.Err(keyInvalidToken, nil), nil
 		}
 
-		// One round trip for the three things a decision reads: whether the
-		// session lives, what the token's role grants now, and which role the
-		// user holds now (ADR-0043).
+		// One round trip for the four things a decision reads: whether the
+		// session lives, what the token's role grants now, which role the user
+		// holds now (ADR-0043), and the person's own answer if they have one
+		// (ADR-0138).
 		values, err := h.redis.GetMany(
 			cache.SessionKey(h.keyPrefix, claims.SessionID),
 			cache.RolePermissionsKey(h.keyPrefix, claims.RoleID),
 			cache.UserRoleKey(h.keyPrefix, claims.Sub),
+			cache.UserPermissionsKey(h.keyPrefix, claims.Sub),
 		)
 		if err != nil {
 			h.logger.Error("session lookup failed", "error", err, "session_id", claims.SessionID)
@@ -104,7 +106,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			// client tries its refresh cookie once; a real sign-out fails there.
 			return response.Err(keySessionRevoked, map[string]string{"reason": reasonSessionRevoked}), nil
 		}
-		if stalePermissions(claims, values[1], values[2]) {
+		if stalePermissions(claims, values[1], values[2], values[3]) {
 			h.logger.Info("token permissions are stale",
 				"user_id", claims.Sub, "role_id", claims.RoleID)
 			return response.Err(keyPermissionsChanged, map[string]string{
@@ -118,6 +120,10 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			unauthorized, ok := h.engine.Check(claims.RoleName, claims.Permissions)
 			if claims.RoleScope == jwt.RoleScopeTenant {
 				unauthorized, ok = h.engine.CheckTenantRole(claims.Permissions)
+			} else if !ok && claims.Personal {
+				// ADR-0138 (6): what the role's entry does not hold was given
+				// to this person, and is admitted inside the tenant ceiling.
+				unauthorized, ok = h.engine.CheckTenantRole(unauthorized)
 			}
 			if !ok {
 				h.logger.Warn("token claims unauthorized permissions",
@@ -448,13 +454,18 @@ func restrictedMayReach(uri string) bool {
 }
 
 // stalePermissions reports whether what the token says the caller may do is no
-// longer true (ADR-0043): the user holds another role now, or the role's set
-// has changed since the token was minted. An empty value means Redis knows
-// nothing, and knowing nothing is never a reason to refuse — the session check
-// above is the one that fails closed.
-func stalePermissions(claims jwt.Claims, currentHash, currentRole string) bool {
+// longer true (ADR-0043): the user holds another role now, or their answer has
+// changed since the token was minted — the person's own fingerprint when they
+// have one (ADR-0138), the role's when they do not. An empty value means Redis
+// knows nothing, and knowing nothing is never a reason to refuse — the session
+// check above is the one that fails closed.
+func stalePermissions(claims jwt.Claims, roleHash, currentRole, personHash string) bool {
 	if currentRole != "" && currentRole != claims.RoleID {
 		return true
+	}
+	currentHash := roleHash
+	if personHash != "" {
+		currentHash = personHash
 	}
 	return currentHash != "" && currentHash != claims.PermHash
 }

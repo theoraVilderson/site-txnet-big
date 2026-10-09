@@ -18,18 +18,21 @@ export class PermissionStateStore {
 
   /**
    * Whether the permissions a token was minted with are no longer true: the
-   * user holds another role now, or that role's set has a new fingerprint.
+   * user holds another role now, or their answer has a new fingerprint — their
+   * own when they have one (ADR-0138), else their role's (ADR-0043).
    *
    * **A missing key is not a change.** Nothing refuses a token because Redis
    * knows nothing — an empty keyspace, a flush, or a role Postgres has not yet
    * reported. The session check is the one that fails closed.
    */
   async isStale(claims: Pick<AuthClaims, 'sub' | 'roleId' | 'permHash'>): Promise<boolean> {
-    const [currentHash, currentRole] = await this.redis.client.mget(
+    const [roleHash, currentRole, personHash] = await this.redis.client.mget(
       RedisKeys.rolePermissions(claims.roleId),
       RedisKeys.userRole(claims.sub),
+      RedisKeys.userPermissions(claims.sub),
     );
     if (currentRole && currentRole !== claims.roleId) return true;
+    const currentHash = personHash || roleHash;
     return !!currentHash && currentHash !== (claims.permHash ?? '');
   }
 
@@ -45,5 +48,16 @@ export class PermissionStateStore {
   /** Record the role a user holds now (F-101-b). No TTL, for the same reason. */
   async writeUserRole(userId: string, roleId: string): Promise<void> {
     await this.redis.set(RedisKeys.userRole(userId), roleId);
+  }
+
+  /**
+   * Record a person's own fingerprint, or delete it when nothing beyond their
+   * role applies any more (ADR-0138 (4)). Deleting, not overwriting, is what
+   * refuses a token that still carries what was lifted: it no longer matches
+   * the role's fingerprint.
+   */
+  async writePerson(userId: string, fingerprint: string | null): Promise<void> {
+    if (fingerprint === null) await this.redis.client.del(RedisKeys.userPermissions(userId));
+    else await this.redis.set(RedisKeys.userPermissions(userId), fingerprint);
   }
 }

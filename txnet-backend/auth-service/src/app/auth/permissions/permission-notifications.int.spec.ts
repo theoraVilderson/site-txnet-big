@@ -29,12 +29,16 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { permissionFingerprint } from './permission-fingerprint';
 import { PermissionNotificationsListener } from './permission-notifications.listener';
 import type { PermissionStateStore } from './permission-state.store';
+import type { AccessReader } from './access.reader';
 import {
   HARNESS_TIMEOUT_MS,
   PostgresFixture,
   prismaAt,
   startPostgresFixture,
 } from '../../../../../test-support/postgres-fixture';
+
+/** Nobody has access beyond their role here: AC-1-k's own spec covers the person key. */
+const NO_PERSONAL_ACCESS = { personalPeople: async () => [], ofIds: async () => new Map() } as unknown as AccessReader;
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
@@ -56,6 +60,7 @@ const userWrites: Array<[string, string]> = [];
 const store = {
   writeRole: async (roleId: string, fingerprint: string) => void roleWrites.push([roleId, fingerprint]),
   writeUserRole: async (userId: string, roleId: string) => void userWrites.push([userId, roleId]),
+  writePerson: async () => undefined,
 } as unknown as PermissionStateStore;
 
 beforeAll(async () => {
@@ -89,6 +94,7 @@ beforeAll(async () => {
     prisma,
     store,
     () => new Client({ connectionString: pg.appUrl }),
+    NO_PERSONAL_ACCESS,
   );
   await listener.start();
 });

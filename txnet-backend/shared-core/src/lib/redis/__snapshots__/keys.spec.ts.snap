@@ -52,6 +52,7 @@ exports[`the key catalogue > builds every unscoped family 1`] = `
   "tenantRuns": "automation:tenant-runs:tenant-1",
   "tenantStatus": "tenant:status:tenant-1",
   "tenantStatusChanged": "tenant:status-changed",
+  "userPermissions": "user:user-1:permissions",
   "userRole": "user:user-1:role",
   "userSessions": "user:user-1:sessions",
 }
@@ -103,6 +104,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "tenantRuns",
   "tenantStatus",
   "tenantStatusChanged",
+  "userPermissions",
   "userRole",
   "userSessions",
 ]

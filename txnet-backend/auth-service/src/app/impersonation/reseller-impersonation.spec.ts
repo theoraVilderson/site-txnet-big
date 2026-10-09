@@ -3,6 +3,10 @@ import { runWithTenant, SupportConsentRefused } from '@txnet-backend/shared-core
 
 import { ImpersonationLeash } from './impersonation-leash';
 import { ImpersonationService } from './impersonation.service';
+import { accessOf } from '../auth/permissions/access';
+
+/** Nobody here has access beyond their role (ADR-0138). */
+const ROLE_ONLY = { ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }) } as never;
 
 /**
  * The invariant F-117-e turns on (ADR-0104 (4)(5), catalog §3.6 layer 6):
@@ -56,7 +60,7 @@ describe("impersonating a reseller's user", () => {
         return runWithTenant({ id: RESELLER }, () => work({ id: RESELLER, slug: 'shop', as: 'staff', support }));
       }),
     };
-    const service = new ImpersonationService(prisma as never, tokens as never, sessionService as never, {} as never, access as never);
+    const service = new ImpersonationService(prisma as never, tokens as never, sessionService as never, {} as never, access as never, ROLE_ONLY);
     return { service, tx, sessionService };
   };
 

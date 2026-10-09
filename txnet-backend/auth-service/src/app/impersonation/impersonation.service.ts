@@ -18,7 +18,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session/session.service';
 import { SessionStore } from '../auth/session/session.store';
-import { authorityOver, permissionsOf } from '../auth/users/authority';
+import { authorityOver } from '../auth/users/authority';
+import { AccessReader } from '../auth/permissions/access.reader';
 
 /**
  * An impersonated session is short-lived by design (invariant #7).
@@ -40,6 +41,8 @@ export class ImpersonationService {
     private readonly sessionService: SessionService,
     private readonly sessions: SessionStore,
     private readonly access: ResellerAccess,
+    /** What each of the two may do (ADR-0138) — the authority rule's input and the token's keys. */
+    private readonly answers: AccessReader,
   ) {}
 
   /**
@@ -144,11 +147,12 @@ export class ImpersonationService {
           select: { ownerUserId: true, tenantType: true },
         })
       : null;
-    const targetKeys = permissionsOf(target).filter((k) => !k.startsWith('self.'));
+    const [adminAccess, targetAccess] = await Promise.all([this.answers.ofLoaded(admin), this.answers.ofLoaded(target)]);
+    const targetKeys = targetAccess.keys.filter((k) => !k.startsWith('self.'));
     if (
       holdsPermission(targetKeys, '*') ||
       authorityOver(
-        { userId: admin.id, permissions: permissionsOf(admin), as: opts.authority.as },
+        { userId: admin.id, permissions: adminAccess.keys, as: opts.authority.as },
         { userId: target.id, permissions: targetKeys },
         { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
       )
@@ -212,6 +216,7 @@ export class ImpersonationService {
       target,
       result.session.id,
       adminId,
+      targetAccess,
     );
 
     return {

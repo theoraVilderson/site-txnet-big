@@ -65,6 +65,11 @@ func TestContractAccessTokenFromTypeScript(t *testing.T) {
 			t.Errorf("%s = %q, want %q", tc.field, tc.got, tc.want)
 		}
 	}
+	// ADR-0138: a rename on either side checks a personal token by its role's
+	// entry alone, refusing every call of someone given a key.
+	if !claims.Personal {
+		t.Error("Personal = false, want true")
+	}
 
 	want := []string{"user.read", "billing.read"}
 	if len(claims.Permissions) != len(want) {

@@ -37,6 +37,7 @@ import {
 } from './otp/otp-delivery.store';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link/bot-link.service';
+import { AccessReader } from './permissions/access.reader';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
@@ -126,6 +127,7 @@ export class AuthService {
     private readonly sessions: SessionStore,
     private readonly deliveries: OtpDeliveryStore,
     private readonly surfaceOwners: SurfaceOwnerService,
+    private readonly access: AccessReader,
   ) {}
 
   /**
@@ -554,6 +556,7 @@ export class AuthService {
       const accessToken = this.tokens.signAccessToken(
         user,
         result.session.id,
+        await this.access.ofLoaded(user),
       );
       return ok(
         {
@@ -1200,7 +1203,7 @@ export class AuthService {
     await issued.activateCache();
 
     return {
-      accessToken: this.tokens.signAccessToken(toUser, issued.session.id),
+      accessToken: this.tokens.signAccessToken(toUser, issued.session.id, await this.access.ofLoaded(toUser)),
       refreshToken: issued.refreshToken,
       expiresIn: this.config.get<number>('JWT_ACCESS_TTL_SEC', 900),
     };
@@ -1226,7 +1229,7 @@ export class AuthService {
       { scopeKey, deviceLabel },
     );
     return {
-      accessToken: this.tokens.signAccessToken(user, result.session.id),
+      accessToken: this.tokens.signAccessToken(user, result.session.id, await this.access.ofLoaded(user)),
       refreshToken: result.refreshToken,
       expiresIn: this.config.get<number>('JWT_ACCESS_TTL_SEC', 900),
     };

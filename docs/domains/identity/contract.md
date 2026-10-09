@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 31
+version: 32
 updated: 2026-10-09
 ---
 
@@ -55,10 +55,10 @@ Surfaced over HTTP by the `auth-api` interface — see
 
 Access-token claims (consumed by `forward-auth` and upstream services):
 `sub`, `tenantId`, `roleId`, `roleName`, `roleScope` (`system`|`tenant`, F-018-n2), `permissions[]`,
-`permHash`, `sessionId`, `isImpersonated?`, `impersonatedBy?`, `iat`, `exp`. HMAC-SHA256 (ADR-0004).
-`permHash` is `permissionFingerprint(permissions)` at mint (ADR-0043): a token is
-refused with `auth.permissionsChanged` once Redis holds a different fingerprint for
-`roleId`, or a different role for `sub`. A missing key refuses nothing.
+`permHash`, `personal?`, `sessionId`, `isImpersonated?`, `impersonatedBy?`, `iat`, `exp`. HMAC-SHA256.
+`permissions[]` is the person's answer, not their role's (`contract.access.md`, ADR-0138); `permHash` is its
+fingerprint: refused with `auth.permissionsChanged` once Redis holds another for the person
+(else for `roleId`), or another role for `sub`. A missing key refuses nothing (ADR-0043).
 `permissions[]` may be `["*"]`: that is `SuperAdmin`, which holds every permission
 (v13, F-101-d). A consumer asks `holdsPermission` — shared-core's, or the panel's
 `@/lib/permissions` — and never `includes`: that refuses SuperAdmin (`contracts.py`).
@@ -70,7 +70,7 @@ An access change is an outbox row (below). Impersonation start/end write an
 
 | channel | when | payload | consumer |
 |---|---|---|---|
-| Postgres `NOTIFY identity_permissions_changed` (F-101-b, ADR-0043) | after commit of a `role_permission` write, a `user.roleId` change, or a `permission.key` rename — from triggers, so SQL and migrations count | JSON, ids only: `{kind:"role",roleId}`, `{kind:"user",userId,roleId}`, `{kind:"all"}` | auth-service `PermissionNotificationsListener`, which rewrites `role:<id>:permissions` / `user:<id>:role`. Not queued: a listener that was away recomputes every role on connect |
+| Postgres `NOTIFY identity_permissions_changed` (F-101-b, ADR-0043) | after commit of a `role_permission` write, a `user.roleId` change, or a `permission.key` rename — from triggers, so SQL and migrations count | JSON, ids only: `{kind:"role",roleId}`, `{kind:"user",userId,roleId}`, `{kind:"person",userId}`, `{kind:"all"}` | auth-service `PermissionNotificationsListener`, which rewrites `role:<id>:permissions` / `user:<id>:role` and the personal holders' `user:<id>:permissions` (`contract.access.md`). Not queued: a listener that was away recomputes every role and personal holder on connect |
 | outbox `identity.access.changed` (AC-1-q, ADR-0121) | in the transaction that set a person's role (`TenantRolesService.assign`) or replaced the keys of a role they hold (`RolesService.update`, one row per holder); tenant writes it when a seat is removed or restored | `{userId, tenantId, cause}` (`role_set` / `role_edited` / `seat_removed` / `seat_restored`) + `role` (role_set: its name) or `given`/`taken` (role_edited: keys), built by shared-core `accessChanged` | worker live-push -> `user:<userId>` (`{type}` only); panel-web refreshes and re-reads `me` (AC-1-r, `contract.session-guard.md`); worker `AccessNoticeConsumer` -> inbox + bot (AC-1-s, automation `contract.notices.md`) |
 
 ## Consumes

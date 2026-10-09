@@ -8,6 +8,10 @@ import {
 import type { PermissionStateStore } from './permission-state.store';
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { TokenService } from '../token.service';
+import type { AccessReader } from './access.reader';
+
+/** Nobody has access beyond their role here: AC-1-k's own spec covers the person key. */
+const NO_PERSONAL_ACCESS = { personalPeople: async () => [], ofIds: async () => new Map() } as unknown as AccessReader;
 
 /**
  * The writer half of ADR-0043 (F-101-b). The gate compares a token's `permHash`
@@ -57,6 +61,7 @@ function harness(clients: FakeClient[] = [new FakeClient()]) {
   const store = {
     writeRole: vi.fn(async (roleId: string, hash: string) => void written.set(`role:${roleId}`, hash)),
     writeUserRole: vi.fn(async (userId: string, roleId: string) => void written.set(`user:${userId}`, roleId)),
+    writePerson: vi.fn(async () => undefined),
   };
   let next = 0;
   const factory = vi.fn(() => {
@@ -72,6 +77,7 @@ function harness(clients: FakeClient[] = [new FakeClient()]) {
     prisma as unknown as CrossTenantPrismaService,
     store as unknown as PermissionStateStore,
     factory,
+    NO_PERSONAL_ACCESS,
   );
   return { listener, prisma, store, written, order, factory };
 }

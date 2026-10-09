@@ -1,5 +1,9 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ImpersonationService } from './impersonation.service';
+import { accessOf } from '../auth/permissions/access';
+
+/** Nobody here has access beyond their role (ADR-0138). */
+const ROLE_ONLY = { ofLoaded: async (u: any) => accessOf({ roleKeys: u.role?.rolePermissions?.map((rp: any) => rp.permission.key) ?? [] }) } as never;
 
 /**
  * Impersonation hands one account another account's session, so the only thing
@@ -78,6 +82,7 @@ function harness() {
     sessionService as never,
     sessions as never,
     {} as never,
+    ROLE_ONLY,
   );
 
   return {
@@ -312,6 +317,7 @@ describe('ImpersonationService.startImpersonation — transaction and audit', ()
       expect.objectContaining({ id: 'target-1' }),
       'session-imp',
       'admin-1',
+      { keys: [], personal: false },
     );
     expect(
       h.txClient.adminAuditLog.create.mock.invocationCallOrder[0],

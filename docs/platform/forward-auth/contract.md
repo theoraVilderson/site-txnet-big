@@ -98,10 +98,11 @@ at ~200 lines (§10); it is one self-contained topic with its own gate.
   no credential at all — usually a page that called before its session was
   established. The panel gets a token from the cookie and sends again.
 - 401 `auth.permissionsChanged` with `error: {reason: "permissionsChanged"}` when
-  Redis holds a different fingerprint for the token's role or a different role
-  for its user (ADR-0043). A client refreshes once and retries on the `reason`,
-  never on `msg`. A missing key is not a mismatch. All three keys are read in one
-  pipelined round trip.
+  Redis holds a different fingerprint for the token's user — their own
+  `user:<id>:permissions` when present (ADR-0138), else their role's — or a
+  different role for its user (ADR-0043). A client refreshes once and retries on
+  the `reason`, never on `msg`. A missing key is not a mismatch. All four keys are
+  read in one pipelined round trip.
   403 policy denies a claimed permission (`permissions.forbidden`). 500 Redis
   lookup error / unexpected (`system.unexpected`). 503 the request outlived the
   gateway's timeout (`system.unavailable`). The key is mapped to the status
@@ -167,6 +168,11 @@ the **tenant ceiling** — the union of every file role that does not hold `*`
 `SuperAdmin` gets the ceiling, not `*`; nothing a tenant holds can exceed what
 some system role below the platform owner may. `system`, or a token minted
 before the claim, is looked up by name as above.
+
+**A personal token** (`personal: true`, ADR-0138 (6)) — someone given a key or
+in a group that holds access — is checked by its role's entry first, and only
+the keys that entry lacks are then held to the ceiling. A token without the
+mark is checked exactly as above, so the file still bounds every grant.
 
 The ceiling is the outer door. The inner one is `auth-service`'s rule that a
 role is granted only what its writer holds (identity `contract.roles.md`), and

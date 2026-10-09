@@ -108,12 +108,11 @@ values are the documented exception and stay at their call sites, because a
 window is part of a route's published limit rather than a property of the
 keyspace (`auth-api/contract.rate-limits.md`).
 
-Several of these lifetimes are **relationships** rather than values, and
-`ttl.spec.ts` asserts them: a pending registration must outlast the code that
-unlocks it, a delivery status must not outlast the code it describes, and a
-realtime channel must not outlast the result it carries. None of those fails
-loudly — they surface as a valid OTP that verifies nothing, or a socket held
-open for an event that can never come.
+Several lifetimes are **relationships**, asserted by `ttl.spec.ts`: a pending
+registration outlasts the code that unlocks it, a delivery status does not
+outlast its code, and a realtime channel does not outlast its result. None
+fails loudly — a valid OTP that verifies nothing, or a socket held open for an
+event that never comes.
 
 | Key | Type | TTL | Written by | Read by |
 |---|---|---|---|---|
@@ -121,6 +120,7 @@ open for an event that can never come.
 | `user:<userId>:sessions` | set of sessionIds | = session lifetime | auth-service `SessionStore` | auth-service (bulk revoke) |
 | `role:<roleId>:permissions` | string — fingerprint of the role's permission set (ADR-0043) | none | auth-service, on a Postgres notification (F-101-b) | auth-handler `/validate`, auth-service `PermissionStateStore` — **missing means unknown, never changed** |
 | `user:<userId>:role` | string — the role the user holds now (ADR-0043) | none | auth-service, on a Postgres notification (F-101-b) | auth-handler `/validate`, auth-service `PermissionStateStore` — missing means unknown |
+| `user:<userId>:permissions` | string — fingerprint of the person's own answer, only while something beyond their role applies (ADR-0138) | none | auth-service, on a Postgres notification; **deleted** when nothing beyond the role applies | auth-handler `/validate`, auth-service `PermissionStateStore` — present, it decides alone; missing, the role's key decides |
 | `otp:code:<tenantId>:<purpose>:<phone>` | string (JSON `{codeHash,attemptCount}`) | 300s | auth-service `OtpStore.save` | auth-service verify Lua script |
 | `otp:lock:<tenantId>:<purpose>:<phone>` | string | 2s | `OtpStore.acquireLock` (`SET NX`) | — |
 | `otp:cooldown:<tenantId>:<purpose>:<phone>` | string | 60s | `OtpStore.startCooldown` | `OtpStore.isCoolingDown` |
