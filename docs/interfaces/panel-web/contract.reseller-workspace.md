@@ -72,7 +72,7 @@ each reseller page in the section it belongs to — first built as a
    (the group holding the current page is open). Under it, short labels
    in working order: home, setup (while incomplete), catalog, gateways
    (only those it sells with — its billing with the platform is the
-   session's tenant), users, domains, bot, brand, settings. The full label
+   session's tenant), users, roles (F-1201-d), domains, bot, brand, settings. The full label
    ("reseller catalog") stays wherever the button is not around it: pins,
    the palette, the breadcrumb ("my account › reseller › …",
    `RESELLER_MENU_GROUP`). A page the account menu already holds (a staff

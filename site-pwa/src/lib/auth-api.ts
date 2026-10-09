@@ -603,6 +603,68 @@ export const resellerUsersApi = {
   async unblock(tenantId: string, userId: string) { return request<ResellerUser>(resellerUserBlockPath(tenantId, userId), { method: "DELETE" }); },
 };
 
+/** A role as a tenant's page reads it (F-1201-a): a template is read-only; `members` counts this tenant's holders. */
+export interface TenantRole {
+  id: string;
+  name: string;
+  isTemplate: boolean;
+  isSystemRole: boolean;
+  permissions: string[];
+  members: number;
+}
+
+/** One permission as `GET /auth/permissions` answers it (AC-1-f), texts in the request's language. */
+export interface PermissionEntry {
+  key: string;
+  label: string;
+  description: string;
+  platformOnly: boolean;
+}
+
+/** One area of the registry: the keys' first segment, labelled. */
+export interface PermissionArea {
+  area: string;
+  label: string;
+  permissions: PermissionEntry[];
+}
+
+export const tenantRolesApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/roles`;
+
+/**
+ * A tenant's roles on its own path (F-1201-a, ADR-0134,
+ * [auth-api/contract.roles.md](../../../docs/interfaces/auth-api/contract.roles.md)):
+ * the path's tenant, admitted by `ResellerAccess` — the owner of a reseller,
+ * its seated admins, or platform staff (the platform's own tenant included).
+ * `grantable` is what this caller may tick; `*` means every key.
+ */
+export const tenantRolesApi = {
+  async list(tenantId: string) {
+    return request<{ roles: TenantRole[]; grantable: string[] }>(tenantRolesApiPath(tenantId), { method: "GET" });
+  },
+  async create(tenantId: string, body: { name: string; permissions: string[] }) {
+    return request<{ role: Omit<TenantRole, "members"> }>(tenantRolesApiPath(tenantId), { method: "POST", body: JSON.stringify(body) });
+  },
+  /** `permissions` is the whole set, never a diff. */
+  async update(tenantId: string, roleId: string, body: { name?: string; permissions?: string[] }) {
+    return request<{ role: Omit<TenantRole, "members"> }>(`${tenantRolesApiPath(tenantId)}/${encodeURIComponent(roleId)}`, { method: "PATCH", body: JSON.stringify(body) });
+  },
+  /** 409 `role.inUse` while anyone holds it. */
+  async remove(tenantId: string, roleId: string) {
+    return request<{ id: string }>(`${tenantRolesApiPath(tenantId)}/${encodeURIComponent(roleId)}`, { method: "DELETE" });
+  },
+  /** One person's role: a role of this tenant or a template, held whole by the caller, over someone they have authority over. */
+  async assign(tenantId: string, userId: string, roleId: string) {
+    return request<{ userId: string; role: { id: string; name: string } }>(`${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ roleId }),
+    });
+  },
+  /** The registry (AC-1-f): every key the platform knows, by area, labelled in the request's language. */
+  async permissions() {
+    return request<{ areas: PermissionArea[] }>("/auth/permissions", { method: "GET" });
+  },
+};
+
 /** Prisma's `SupportConsentScope`: `read` sees a reseller's people, `act` also acts on them. */
 export type ConsentScope = "read" | "act";
 

@@ -191,6 +191,12 @@ export const myResellerUsersPath = (id: string, self = false) => `${resellerWork
 /** One user's services, as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
 export const myResellerUserPath = (id: string, userId: string, self = false) =>
   `${myResellerUsersPath(id, self)}/${encodeURIComponent(userId)}`;
+/**
+ * A tenant's roles (F-1201-d, over F-1201-a): its own, with how many hold each,
+ * and the templates. By the path's tenant — a reseller's for its owner, the
+ * platform's for its staff — never the session's.
+ */
+export const myResellerRolesPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/roles`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
 export const myResellerCatalogTranslationsPath = (id: string, self = false) => `${myResellerCatalogPath(id, self)}/translations`;
 /**

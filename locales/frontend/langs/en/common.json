@@ -38,7 +38,8 @@
       "wallet": "Wallet",
       "resellerList": "Reseller list",
       "resellerPackages": "Reseller packages",
-      "resellerLimits": "Reseller limits"
+      "resellerLimits": "Reseller limits",
+      "roles": "Roles"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1939,7 +1940,8 @@
       "bot": "Reseller bot",
       "settings": "Reseller settings",
       "branding": "Reseller brand",
-      "setup": "Reseller setup"
+      "setup": "Reseller setup",
+      "roles": "Reseller roles"
     },
     "scope": "Reseller",
     "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
@@ -1953,7 +1955,8 @@
       "gateways": "Gateways",
       "users": "Users",
       "domains": "Domains",
-      "bot": "Bot"
+      "bot": "Bot",
+      "roles": "Roles"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -5796,5 +5799,34 @@
     "body": "Until the restriction is lifted you can only talk to support. If you think this is a mistake, message support right here.",
     "reason": "Reason",
     "noReason": "No reason was recorded. Ask support."
+  },
+  "tenantRoles": {
+    "title": "roles",
+    "titleOf": "{{slug}}'s roles",
+    "subtitle": "what each person on the team may do. a role is a set of permissions; give one to a person on the team page.",
+    "refresh": "refresh",
+    "reload": "try again",
+    "own": "this team's roles",
+    "empty": "no roles yet — make one for each kind of job on the team.",
+    "templates": "ready-made roles",
+    "templatesHint": "shared by every team; they cannot be changed.",
+    "members": "{{count}} people",
+    "noPermissions": "no permissions",
+    "create": "new role",
+    "edit": "edit",
+    "delete": "delete",
+    "deleteConfirm": "delete the role {{name}}?",
+    "inUse": "someone holds this role — give them another one first.",
+    "dialogCreate": "new role",
+    "dialogEdit": "edit {{name}}",
+    "name": "name",
+    "nameHint": "2 to 40 characters",
+    "permissions": "permissions",
+    "onlyYours": "you can give only the permissions you may grant here.",
+    "noneGrantable": "there is nothing you may grant here.",
+    "save": "save",
+    "cancel": "cancel",
+    "platformOnly": "platform only",
+    "other": "other"
   }
 }
