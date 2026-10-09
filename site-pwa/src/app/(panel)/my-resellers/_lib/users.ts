@@ -58,8 +58,8 @@ export function profileChanges(
 /**
  * Whether the Profile tab changes this person's role (AC-1-b): only where the
  * caller has authority over them, and on a reseller only for someone already
- * on the team — a role there admits nothing without a seat, which is the Team
- * page's to give (`contract.team.md` rule 3). The platform has no seats.
+ * on the team. Access beyond that is given by a group (ADR-0139 (1),
+ * `contract.user-groups.md`). The platform has no seats.
  */
 export function roleEditable(person: { canAct: boolean; staff: boolean }, platform: boolean): boolean {
   return person.canAct && (platform || person.staff);

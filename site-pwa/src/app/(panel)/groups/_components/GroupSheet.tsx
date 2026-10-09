@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
+import type { UserGroup } from "@/lib/auth-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import {
   USER_GROUP_KEYS as K,
@@ -14,7 +14,7 @@ import {
   type Errors,
   type GroupForm,
 } from "../_lib/user-groups";
-import { Alert, Field, Sheet, useMessage } from "./user-groups-ui";
+import { Alert, Field, Sheet, useGroupsScope, useMessage } from "./user-groups-ui";
 import { Button, Checkbox, Input } from "../../_components/kit";
 
 /**
@@ -25,6 +25,7 @@ import { Button, Checkbox, Input } from "../../_components/kit";
 export function GroupSheet({ group, onClose, onSaved }: { group: UserGroup | null; onClose: () => void; onSaved: (g: UserGroup | null) => void }) {
   const { t } = useLocale();
   const { me } = usePanelSession();
+  const { tenantId, api } = useGroupsScope();
   const message = useMessage();
   const was: GroupForm = group ? { name: group.name, allTenants: group.allTenants } : emptyGroupForm;
   const [form, setForm] = useState<GroupForm>(was);
@@ -38,11 +39,11 @@ export function GroupSheet({ group, onClose, onSaved }: { group: UserGroup | nul
     if (Object.keys(found).length > 0) return;
     setFailure(null);
     if (group) {
-      const body = updateGroupBody(form, was, me);
+      const body = updateGroupBody(form, was, me, tenantId);
       if (!body) return onSaved(null);
       setBusy(true);
       try {
-        onSaved(await userGroupsApi.update(group.id, body));
+        onSaved(await api.update(group.id, body));
       } catch (e) {
         setFailure(message(e));
       } finally {
@@ -52,7 +53,7 @@ export function GroupSheet({ group, onClose, onSaved }: { group: UserGroup | nul
     }
     setBusy(true);
     try {
-      onSaved(await userGroupsApi.create(createGroupBody(form, me)));
+      onSaved(await api.create(createGroupBody(form, me, tenantId)));
     } catch (e) {
       setFailure(message(e));
     } finally {
@@ -73,7 +74,7 @@ export function GroupSheet({ group, onClose, onSaved }: { group: UserGroup | nul
       <Field label={t("common", K.form.name)} hint={t("common", K.form.nameHint)} error={errors.name}>
         <Input value={form.name} maxLength={80} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
       </Field>
-      {canNameResellers(me) && (
+      {canNameResellers(me, tenantId) && (
         <Checkbox
           checked={form.allTenants}
           onChange={(allTenants) => setForm((f) => ({ ...f, allTenants }))}

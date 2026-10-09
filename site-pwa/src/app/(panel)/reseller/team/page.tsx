@@ -1,9 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
+import { myResellerGroupsPath } from "@/lib/routes";
 
-import { TeamView } from "../../my-resellers/[id]/team/_components/TeamView";
-import { SelfWorkspace } from "../_components/SelfWorkspace";
-
-/** `/reseller/team` on a reseller's own domain (F-061-n): its team, as `/my-resellers/:id/team` (F-1201-c). */
+/** `/reseller/team` on a reseller's own domain — the old team page (F-061-n); its groups now (GR-1-f, ADR-0139 (1)). */
 export default function Page() {
-  return <SelfWorkspace>{(id) => <TeamView id={id} />}</SelfWorkspace>;
+  redirect(myResellerGroupsPath("", true));
 }

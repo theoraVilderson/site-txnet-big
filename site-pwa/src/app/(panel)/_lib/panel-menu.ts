@@ -8,9 +8,7 @@ import {
   HandCoins,
   Headphones,
   Home,
-  Contact,
   Inbox,
-  KeyRound,
   Landmark,
   List,
   Gauge,
@@ -32,7 +30,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, PANEL_ROLES, PANEL_TEAM, PANEL_USERS, panelSectionPath } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, PANEL_USERS, panelSectionPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -248,15 +246,10 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
   { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["platform.tenant.manage"], resellerRequires: ["user.read"] },
-  // F-1201-c. The team on the session's tenant: the platform's staff, or a
-  // reseller's seats for a seated admin. The same door as users.
-  { section: "people", id: "team", label: M.team, icon: Contact, href: () => PANEL_TEAM, requires: ["platform.tenant.manage"], resellerRequires: ["staff.manage"] },
-  // F-1201-d. The same door as users (ADR-0134): the session's tenant, by its
-  // path — the platform's roles for its staff, a reseller's for a seated admin.
-  { section: "people", id: "roles", label: M.roles, icon: KeyRound, href: () => PANEL_ROLES, requires: ["platform.tenant.manage"], resellerRequires: ["role.manage"] },
-  // F-114-m. Every tenant has its own groups: the permission hides it, and
-  // auth-service answers each tenant its own (F-114-j).
-  { section: "people", id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
+  // F-114-m, GR-1-f. Every tenant has its own groups: the permission hides it,
+  // and auth-service answers each tenant its own (F-114-j). The one place the
+  // panel gives access (ADR-0139 (1)): Team and Roles left the menu for it.
+  { section: "people", id: "groups", label: M.groups, icon: Users, href: PANEL_GROUPS, requires: ["user_group.manage"] },
   // F-018-k. Administration of other tenants is the platform owner's alone: a
   // platform key counts only on the platform's tenant (ADR-0135), so the tenant type gates it too.
   // Packages (F-118-n5) and limits (F-019-r) sit under the same gate.

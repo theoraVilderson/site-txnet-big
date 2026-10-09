@@ -8,8 +8,8 @@ import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { Toggle } from "../../_components/kit/Toggle";
-import { UserSearch } from "../../user-groups/_components/UserSearch";
-import { memberSearchOf } from "../../user-groups/_lib/user-groups";
+import { UserSearch } from "../../groups/_components/UserSearch";
+import { memberSearchOf } from "../../groups/_lib/user-groups";
 import {
   RULE_KEYS as K,
   createRuleBody,

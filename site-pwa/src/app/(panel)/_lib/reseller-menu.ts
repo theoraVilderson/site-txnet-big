@@ -1,12 +1,11 @@
-import { Bot, Contact, Globe, History, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
+import { Bot, Globe, History, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, UsersRound, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MY_RESELLERS,
   PANEL_RESELLER_SELF,
-  PANEL_ROLES,
-  PANEL_TEAM,
+  PANEL_GROUPS,
   PANEL_USERS,
   resellerWorkspaceRoot,
   myResellerBotPath,
@@ -16,8 +15,7 @@ import {
   myResellerDomainsPath,
   myResellerGatewaysPath,
   myResellerAccessLogPath,
-  myResellerRolesPath,
-  myResellerTeamPath,
+  myResellerGroupsPath,
   myResellerSettingsPath,
   myResellerSetupPath,
   myResellerUsersPath,
@@ -55,8 +53,7 @@ export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath, key: "catalog.manage" },
   { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath, key: "gateway.manage" },
   { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath, key: "user.read" },
-  { id: "reseller-team", label: R.menu.team, short: R.short.team, icon: Contact, href: myResellerTeamPath, key: "staff.manage" },
-  { id: "reseller-roles", label: R.menu.roles, short: R.short.roles, icon: KeyRound, href: myResellerRolesPath, key: "role.manage" },
+  { id: "reseller-groups", label: R.menu.groups, short: R.short.groups, icon: UsersRound, href: myResellerGroupsPath, key: "user_group.manage" },
   { id: "reseller-access-log", label: R.menu.accessLog, short: R.short.accessLog, icon: History, href: myResellerAccessLogPath, key: "audit.read" },
   { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath, key: "domain.manage" },
   { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath, key: "bot.manage" },
@@ -173,7 +170,7 @@ export function withResellerMenu(
   };
   const held = new Set(menuHrefs(menu));
   if (ws.id === ownTenantId)
-    for (const own of [PANEL_USERS, PANEL_TEAM, PANEL_ROLES])
+    for (const own of [PANEL_USERS, PANEL_GROUPS])
       if (held.has(own)) held.add(`${resellerWorkspaceRoot(ws.id, ws.self)}${own}`);
   const group = resellerMenu(ws, slug, setup);
   return [...menu, { ...group, children: group.children.filter((l) => !held.has(l.href) && seatMay(l.id)) }];

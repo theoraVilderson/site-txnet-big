@@ -1,18 +1,7 @@
-import { Suspense } from "react";
-import { TableSkeleton } from "../_components/kit/TableSkeleton";
-import { OwnTenantView } from "../my-resellers/_components/OwnTenantView";
+import { redirect } from "next/navigation";
+import { PANEL_GROUPS } from "@/lib/routes";
 
-/** `/team` — the session's own team (F-1201); the menu's entry. */
+/** `/team` — the old team page (F-1201-c). Access is given by groups alone now (GR-1-f, ADR-0139 (1)). */
 export default function TeamPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-          <TableSkeleton rows={5} columns={3} />
-        </div>
-      }
-    >
-      <OwnTenantView screen="team" />
-    </Suspense>
-  );
+  redirect(PANEL_GROUPS);
 }

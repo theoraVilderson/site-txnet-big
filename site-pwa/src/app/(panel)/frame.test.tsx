@@ -66,8 +66,8 @@ describe("menuTrail", () => {
 
   it("matches a tenant's own page on the tenant the path names", () => {
     const workspace = [RESELLER_MENU_GROUP, ...PANEL_MENU];
-    expect(menuTrail(workspace, "/my-resellers/t-9/team/s-1").at(-1)).toEqual({ label: R.menu.team, href: "/my-resellers/t-9/team" });
-    expect(menuTrail(workspace, "/my-resellers/t-9/teamx").some((c) => c.href?.endsWith("/team"))).toBe(false);
+    expect(menuTrail(workspace, "/my-resellers/t-9/groups/s-1").at(-1)).toEqual({ label: R.menu.groups, href: "/my-resellers/t-9/groups" });
+    expect(menuTrail(workspace, "/my-resellers/t-9/groupsx").some((c) => c.href?.endsWith("/groups"))).toBe(false);
   });
 
   it("is empty on a path no menu entry owns", () => {

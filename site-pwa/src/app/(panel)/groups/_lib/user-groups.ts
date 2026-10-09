@@ -1,4 +1,6 @@
-import type { Me, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
+import type { Me, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
+import { groupsApiPath } from "@/lib/auth-api";
+import { endOfDay } from "../../my-resellers/_lib/team";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
@@ -22,6 +24,8 @@ export const MEMBER_IDS_MAX = 500;
  * spec reads the service's union, so a new reason does not ship without its
  * sentence.
  */
+export { groupsApiPath };
+
 export type UserGroupRefusal =
   | "group_not_found"
   | "name_taken"
@@ -37,7 +41,8 @@ export type UserGroupRefusal =
   | "key_unknown"
   | "key_not_grantable"
   | "key_not_held"
-  | "no_authority";
+  | "no_authority"
+  | "expiry_past";
 
 export const REFUSAL_KEYS: Record<UserGroupRefusal, string> = K.refusals;
 
@@ -50,15 +55,19 @@ export function refusalKey(e: unknown): string | null {
 const holds = (me: Me | null, key: string) => holdsPermission(me?.permissions, key);
 const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
-/** Who may open the page — the menu entry's rule, for a visitor who typed the path. */
-export const canManageGroups = (me: Me | null) => holds(me, USER_GROUP_MANAGE);
+/**
+ * Who may open the page — the menu entry's rule, for a visitor who typed the
+ * path. A tenant's page by its path is `ResellerAccess`'s to admit (GR-1-d):
+ * the page asks, and shows its refusal.
+ */
+export const canManageGroups = (me: Me | null, tenantId: string | null = null) => (tenantId === null ? holds(me, USER_GROUP_MANAGE) : me !== null);
 
 /**
  * Resellers as members, and "every reseller", are the platform owner's alone
- * (`platform_only`). The tenant type decides, never `*`: a reseller
- * administers its own roles and can hold every key.
+ * (`platform_only`), on its own groups. The tenant type decides, never `*`: a
+ * reseller administers its own access and can hold every key.
  */
-export const canNameResellers = (me: Me | null) => onPlatform(me);
+export const canNameResellers = (me: Me | null, tenantId: string | null = null) => isPlatformGroup(me, tenantId);
 
 /**
  * How the caller finds a user to add. The group routes do not search; each
@@ -69,8 +78,10 @@ export const canNameResellers = (me: Me | null) => onPlatform(me);
  * - `ids` — neither: the ids are typed.
  */
 export type MemberSearch = "platform" | "reseller" | "ids";
-export function memberSearchOf(me: Me | null): MemberSearch {
+export function memberSearchOf(me: Me | null, tenantId: string | null = null): MemberSearch {
   if (!me) return "ids";
+  // A tenant's page by its path searches that tenant's users, through the same door the page came in by.
+  if (tenantId !== null && tenantId !== me.tenant.id) return "reseller";
   if (onPlatform(me)) return holds(me, USER_SEARCH) ? "platform" : "ids";
   return me.tenant.isOwner || holds(me, USER_READ) ? "reseller" : "ids";
 }
@@ -90,20 +101,20 @@ export function validateGroupForm(form: GroupForm): Errors<GroupForm> {
 }
 
 /** The create body; `allTenants` only from the platform owner. Call after {@link validateGroupForm}. */
-export function createGroupBody(form: GroupForm, me: Me | null): { name: string; allTenants?: boolean } {
+export function createGroupBody(form: GroupForm, me: Me | null, tenantId: string | null = null): { name: string; allTenants?: boolean } {
   const name = form.name.trim();
-  return canNameResellers(me) ? { name, allTenants: form.allTenants } : { name };
+  return canNameResellers(me, tenantId) ? { name, allTenants: form.allTenants } : { name };
 }
 
 /**
  * Only what changed — the schema refuses an empty patch, so an edit that
  * restates everything answers `null` and is not sent.
  */
-export function updateGroupBody(form: GroupForm, was: GroupForm, me: Me | null): { name?: string; allTenants?: boolean } | null {
+export function updateGroupBody(form: GroupForm, was: GroupForm, me: Me | null, tenantId: string | null = null): { name?: string; allTenants?: boolean } | null {
   const body: { name?: string; allTenants?: boolean } = {};
   const name = form.name.trim();
   if (name !== was.name) body.name = name;
-  if (canNameResellers(me) && form.allTenants !== was.allTenants) body.allTenants = form.allTenants;
+  if (canNameResellers(me, tenantId) && form.allTenants !== was.allTenants) body.allTenants = form.allTenants;
   return Object.keys(body).length > 0 ? body : null;
 }
 
@@ -127,15 +138,28 @@ export function parseIds(text: string): { ids: string[]; bad: string[] } {
  * The add body, or `null` when it names no one. A reseller's reseller ids are
  * dropped — the field is never shown to it. More than {@link MEMBER_IDS_MAX}
  * of either is a caller bug: the form says so before this is reached.
+ * `endDay` (`YYYY-MM-DD`) ends every membership the call adds at that day's
+ * last moment (GR-1-c); none, and they last until removed.
  */
-export function membersBody(userIds: readonly string[], tenantIds: readonly string[], me: Me | null): { userIds?: string[]; tenantIds?: string[] } | null {
-  const tenants = canNameResellers(me) ? tenantIds : [];
+export function membersBody(
+  userIds: readonly string[],
+  tenantIds: readonly string[],
+  me: Me | null,
+  endDay: string | null = null,
+  tenantId: string | null = null,
+): { userIds?: string[]; tenantIds?: string[]; expiresAt?: string } | null {
+  const tenants = canNameResellers(me, tenantId) ? tenantIds : [];
   if (userIds.length > MEMBER_IDS_MAX || tenants.length > MEMBER_IDS_MAX) throw new Error(`at most ${MEMBER_IDS_MAX} ids of each`);
-  const body: { userIds?: string[]; tenantIds?: string[] } = {};
+  const body: { userIds?: string[]; tenantIds?: string[]; expiresAt?: string } = {};
   if (userIds.length > 0) body.userIds = [...userIds];
   if (tenants.length > 0) body.tenantIds = [...tenants];
-  return Object.keys(body).length > 0 ? body : null;
+  if (Object.keys(body).length === 0) return null;
+  if (endDay) body.expiresAt = endOfDay(endDay);
+  return body;
 }
+
+/** A member's end moved to a day's last moment, or cleared (`PATCH …/members/users/:userId`). */
+export const endBody = (day: string | null): { expiresAt: string | null } => ({ expiresAt: day ? endOfDay(day) : null });
 
 // ------------------------------------------------------------------ the access
 
@@ -143,15 +167,38 @@ export function membersBody(userIds: readonly string[], tenantIds: readonly stri
 export const ACCESS_KEYS_MAX = 200;
 
 /**
- * The `PUT …/access` body — the **whole** set (AC-1-m), keys once each and
- * sorted — or `null` when it restates what the group already gives, so an
- * untouched form sends nothing.
+ * What a group gives, as the keys ticked on it (ADR-0139 (1)): its own keys,
+ * plus the keys of a role an older group was given (AC-1-o) — the sheet
+ * shows them all as ticks, and the panel never picks a role.
  */
-export function accessBody(was: UserGroupAccess, roleId: string | null, keys: readonly string[]): { roleId: string | null; keys: string[] } | null {
+export const givenKeys = (was: UserGroupAccess, roleKeys: readonly string[]) => [...new Set([...roleKeys, ...was.keys])].sort();
+
+/**
+ * The `PUT …/access` body — the **whole** set (AC-1-m), keys once each and
+ * sorted, and never a role: a role the group held is folded into its keys
+ * the first time it is saved. `null` when it restates what the group already
+ * gives, so an untouched sheet sends nothing.
+ */
+export function accessBody(was: UserGroupAccess, roleKeys: readonly string[], keys: readonly string[]): { roleId: null; keys: string[] } | null {
   const next = [...new Set(keys)].sort();
   if (next.length > ACCESS_KEYS_MAX) throw new Error(`at most ${ACCESS_KEYS_MAX} keys`);
-  const same = (was.roleId ?? null) === roleId && next.join() === [...was.keys].sort().join();
-  return same ? null : { roleId, keys: next };
+  const same = next.join() === givenKeys(was, roleKeys).join();
+  return same ? null : { roleId: null, keys: next };
+}
+
+/**
+ * The platform's own group — the session's on the platform, or the platform
+ * by its path — the one group that may give a `platform.` key, and only to
+ * the platform's own users (GR-1-e, ADR-0139 (4)).
+ */
+export const isPlatformGroup = (me: Me | null, tenantId: string | null) => onPlatform(me) && (tenantId === null || tenantId === me?.tenant.id);
+
+/** The registry as a group's sheet offers it: a `platform.` key only on the platform's own group. */
+export function groupKeyAreas(registry: readonly PermissionArea[], platformGroup: boolean): PermissionArea[] {
+  if (platformGroup) return [...registry];
+  return registry
+    .map((area) => ({ ...area, permissions: area.permissions.filter((p) => !p.platformOnly) }))
+    .filter((area) => area.permissions.length > 0);
 }
 
 /** Whether the group gives anything: a role or one key. */

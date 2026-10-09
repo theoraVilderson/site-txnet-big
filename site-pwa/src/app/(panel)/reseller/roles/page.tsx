@@ -1,9 +1,7 @@
-"use client";
+import { redirect } from "next/navigation";
+import { myResellerGroupsPath } from "@/lib/routes";
 
-import { RolesView } from "../../my-resellers/[id]/roles/_components/RolesView";
-import { SelfWorkspace } from "../_components/SelfWorkspace";
-
-/** `/reseller/roles` on a reseller's own domain (F-061-n): its roles, as `/my-resellers/:id/roles` (F-1201-d). */
+/** `/reseller/roles` on a reseller's own domain — the old roles page (F-061-n); its groups now (GR-1-f, ADR-0139 (1)). */
 export default function Page() {
-  return <SelfWorkspace>{(id) => <RolesView id={id} />}</SelfWorkspace>;
+  redirect(myResellerGroupsPath("", true));
 }

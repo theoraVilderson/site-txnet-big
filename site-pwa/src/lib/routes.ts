@@ -199,22 +199,25 @@ export const myResellerUsersPath = (id: string, self = false) => `${resellerWork
 /** One user's page — services and profile — as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
 export const myResellerUserPath = (id: string, userId: string, self = false) =>
   `${myResellerUsersPath(id, self)}/${encodeURIComponent(userId)}`;
-/**
- * A tenant's roles (F-1201-d, over F-1201-a): its own, with how many hold each,
- * and the templates. By the path's tenant — a reseller's for its owner, the
- * platform's for its staff — never the session's.
- */
+/** A tenant's roles page's old address (F-1201-d); redirects to {@link myResellerGroupsPath} (GR-1-f). */
 export const myResellerRolesPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/roles`;
 /** A tenant's access log (AC-1-p): every act that moved someone's access, behind `audit.read`. */
 export const myResellerAccessLogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/access-log`;
-/** The session's own team and roles (F-1201-c/-d) — like {@link PANEL_USERS}, not "my reseller". */
+/**
+ * The old addresses of the session's own team and roles (F-1201-c/-d). Each
+ * now redirects to {@link PANEL_GROUPS}: a group is the only way to give
+ * access in the panel (GR-1-f, ADR-0139 (1)).
+ */
 export const PANEL_TEAM = "/team";
 export const PANEL_ROLES = "/roles";
-/**
- * A tenant's team (F-1201-c): a reseller's seats — role, state, end — or the
- * platform's staff, by the path's tenant.
- */
+/** A tenant's team's old address, by the path's tenant; redirects to {@link myResellerGroupsPath}. */
 export const myResellerTeamPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/team`;
+/**
+ * A tenant's groups by its path (GR-1-f, ADR-0139 (5)): members with an end,
+ * and the keys each group gives. A reseller's for its owner and its people
+ * who hold `user_group.manage`, and for the platform's staff.
+ */
+export const myResellerGroupsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/groups`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
 export const myResellerCatalogTranslationsPath = (id: string, self = false) => `${myResellerCatalogPath(id, self)}/translations`;
 /**
@@ -239,9 +242,12 @@ export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */
 export const PANEL_SYSTEMS = "/systems";
 /**
- * An admin's user groups and their members (F-114-m). One route for every
- * audience: auth-service answers each tenant its own groups (F-114-j).
+ * The session's own groups (F-114-m, GR-1-f): members, their end, and the
+ * keys each group gives. One route for every audience: auth-service answers
+ * each tenant its own groups (F-114-j).
  */
+export const PANEL_GROUPS = "/groups";
+/** The groups page's old address; redirects to {@link PANEL_GROUPS}. */
 export const PANEL_USER_GROUPS = "/user-groups";
 /** The user's lucky wheel: public odds, a spin the server decides, their own history (F-707-g). */
 export const PANEL_WHEEL = "/wheel";

@@ -25,7 +25,7 @@
       "resellers": "Resellers",
       "buyReseller": "Become a reseller",
       "systems": "Systems",
-      "userGroups": "User groups",
+      "groups": "Groups",
       "users": "Users",
       "ai": "AI",
       "wheel": "Lucky wheel",
@@ -38,9 +38,7 @@
       "wallet": "Wallet",
       "resellerList": "Reseller list",
       "resellerPackages": "Reseller packages",
-      "resellerLimits": "Reseller limits",
-      "roles": "Roles",
-      "team": "Team"
+      "resellerLimits": "Reseller limits"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1947,8 +1945,7 @@
       "settings": "Reseller settings",
       "branding": "Reseller brand",
       "setup": "Reseller setup",
-      "roles": "Reseller roles",
-      "team": "Reseller team",
+      "groups": "Groups",
       "accessLog": "Access log"
     },
     "scope": "Reseller",
@@ -1964,8 +1961,7 @@
       "users": "Users",
       "domains": "Domains",
       "bot": "Bot",
-      "roles": "Roles",
-      "team": "Team",
+      "groups": "Groups",
       "accessLog": "Access log"
     }
   },
@@ -3953,12 +3949,12 @@
     }
   },
   "userGroups": {
-    "title": "User groups",
-    "subtitle": "Named sets of users, for discounts and campaigns to target.",
+    "title": "Groups",
+    "subtitle": "Named sets of people. A group gives its members the permissions ticked on it, until the day their membership ends; discounts and campaigns can target it too.",
     "new": "New group",
     "empty": "No groups yet.",
     "retry": "Try again",
-    "notAllowed": "Your role cannot manage user groups.",
+    "notAllowed": "You cannot manage groups.",
     "prev": "Newer",
     "next": "Older",
     "columns": {
@@ -3977,7 +3973,7 @@
     "confirmDelete": "Delete the group \"{{name}}\"? Its members are removed with it.",
     "deleted": "The group \"{{name}}\" was deleted.",
     "form": {
-      "createTitle": "New user group",
+      "createTitle": "New group",
       "editTitle": "Edit group",
       "name": "Name",
       "nameHint": "Up to 80 characters, unique among your groups.",
@@ -4010,7 +4006,15 @@
       "allTenantsNote": "Every reseller is already a member of this group.",
       "addSubmit": "Add members",
       "added": "{{count}} added. Anyone already in the group was left as they were.",
-      "total": "{{count}} members"
+      "total": "{{count}} members",
+      "end": "Membership ends",
+      "endHint": "Leave it empty and the membership lasts until removed. Anyone already in the group keeps their own end.",
+      "endsOn": "ends {{date}}",
+      "noEnd": "no end",
+      "changeEnd": "End date",
+      "saveEnd": "Save end date",
+      "cancel": "Cancel",
+      "endSaved": "End date saved."
     },
     "errors": {
       "nameRequired": "Enter a name.",
@@ -4030,22 +4034,21 @@
       "member_not_found": "That member is no longer in this group.",
       "group_in_use": "A discount rule serves this group. Point the rule elsewhere first.",
       "access_on_resellers": "A group of every reseller cannot hold access.",
-      "role_not_found": "That role no longer exists — refresh.",
+      "role_not_found": "Something this group gave no longer exists — refresh.",
       "key_unknown": "A permission you chose does not exist.",
       "key_not_grantable": "A permission you chose cannot be given by a group.",
       "key_not_held": "You may only give what you may give yourself — on access, and on adding or removing a member of a group that holds it.",
-      "no_authority": "You cannot add or remove this person: they hold as much as you, or it is you."
+      "no_authority": "You cannot add or remove this person: they hold as much as you, or it is you.",
+      "expiry_past": "An end date must be after today."
     },
     "access": {
       "title": "Access of {{name}}",
-      "hint": "Every member of this group holds this role and these permissions while they are a member.",
-      "role": "Role",
-      "noRole": "No role",
-      "keys": "Extra permissions",
+      "hint": "Every member of this group holds these permissions while they are a member.",
+      "keys": "Permissions",
       "receivers": "Who receives them",
       "receiversNone": "No member receives them yet.",
       "receiversMore": "and {{count}} more",
-      "receiversHint": "Only users of this group's own team. Resellers and other teams' users receive nothing.",
+      "receiversHint": "Only this group's own users. Resellers, and users of anyone else, receive nothing.",
       "everyReseller": "A group of every reseller cannot hold access: its members are resellers, not people.",
       "save": "Save",
       "saved": "Access saved.",
@@ -4413,7 +4416,7 @@
       "role": "Role",
       "noRole": "no role",
       "roleSave": "Change role",
-      "roleOnTeam": "To give them a staff role, add them on the Team page.",
+      "roleOnTeam": "To give them access, add them to a group.",
       "save": "Save",
       "saved": "Saved.",
       "emailRemoved": "The email was removed.",

@@ -1,14 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { Me, UserGroupMember } from "@/lib/auth-api";
-import { PANEL_USER_GROUPS } from "@/lib/routes";
+import { PANEL_GROUPS, PANEL_ROLES, PANEL_TEAM, PANEL_USER_GROUPS, myResellerGroupsPath } from "@/lib/routes";
+import { RESELLER_MENU } from "../_lib/reseller-menu";
+import { endOfDay } from "../my-resellers/_lib/team";
 import { PANEL_MENU, isMenuGroup, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
   ACCESS_KEYS_MAX,
   GROUP_NAME_MAX,
   accessBody,
+  endBody,
+  groupKeyAreas,
+  groupsApiPath,
+  isPlatformGroup,
   receivers,
   MEMBER_IDS_MAX,
   REFUSAL_KEYS,
@@ -78,11 +84,22 @@ describe("who sees the page", () => {
     expect(canManageGroups(RESELLER)).toBe(true);
     expect(canManageGroups(SUPPORT)).toBe(false);
     expect(canManageGroups(null)).toBe(false);
-    expect(hrefs(OWNER)).toContain(PANEL_USER_GROUPS);
-    expect(hrefs(RESELLER)).toContain(PANEL_USER_GROUPS);
-    expect(hrefs(SUPPORT)).not.toContain(PANEL_USER_GROUPS);
+    expect(hrefs(OWNER)).toContain(PANEL_GROUPS);
+    expect(hrefs(RESELLER)).toContain(PANEL_GROUPS);
+    expect(hrefs(SUPPORT)).not.toContain(PANEL_GROUPS);
     const links = PANEL_MENU.flatMap((e) => (isMenuGroup(e) ? e.children : [e]));
-    expect(links.find((l) => l.href === PANEL_USER_GROUPS)?.requires).toEqual([USER_GROUP_MANAGE]);
+    expect(links.find((l) => l.href === PANEL_GROUPS)?.requires).toEqual([USER_GROUP_MANAGE]);
+  });
+
+  it("is the only people page that gives access: Team and Roles have left both menus (GR-1-f, ADR-0139 (1))", () => {
+    const links = PANEL_MENU.flatMap((e) => (isMenuGroup(e) ? e.children : [e])).map((l) => (typeof l.href === "function" ? l.href("t-owner", false) : l.href));
+    expect(links).not.toContain(PANEL_TEAM);
+    expect(links).not.toContain(PANEL_ROLES);
+    expect(links).not.toContain(PANEL_USER_GROUPS);
+    const workspace = RESELLER_MENU.map((l) => l.href("r-1", false));
+    expect(workspace).toContain(myResellerGroupsPath("r-1"));
+    expect(workspace.filter((h) => /\/(team|roles)$/.test(h))).toEqual([]);
+    expect(RESELLER_MENU.find((l) => l.href("r-1", false) === myResellerGroupsPath("r-1"))?.key).toBe(USER_GROUP_MANAGE);
   });
 
   it("offers resellers and every-reseller to the platform owner only", () => {
@@ -129,6 +146,13 @@ describe("naming members", () => {
     expect(parseIds("")).toEqual({ ids: [], bad: [] });
   });
 
+  it("ends every membership an add makes on the day picked, at its last moment, or never", () => {
+    expect(membersBody([A], [], OWNER, "2026-12-31")).toEqual({ userIds: [A], expiresAt: endOfDay("2026-12-31") });
+    expect(membersBody([A], [], OWNER, null)).toEqual({ userIds: [A] });
+    expect(endBody("2026-12-31")).toEqual({ expiresAt: endOfDay("2026-12-31") });
+    expect(endBody(null)).toEqual({ expiresAt: null });
+  });
+
   it("builds a body with at least one id, at most 500 of each, and no reseller for a reseller", () => {
     expect(membersBody([A], [], OWNER)).toEqual({ userIds: [A] });
     expect(membersBody([], [B], OWNER)).toEqual({ tenantIds: [B] });
@@ -167,19 +191,38 @@ describe("every key this page can reach", () => {
 describe("a group's access", () => {
   const none = { roleId: null, roleName: null, keys: [] };
 
-  it("sends the whole set, each key once, and nothing when nothing changed", () => {
-    expect(accessBody(none, "r-desk", ["ticket.reply", "coupon.manage", "ticket.reply"])).toEqual({ roleId: "r-desk", keys: ["coupon.manage", "ticket.reply"] });
-    expect(accessBody({ roleId: "r-desk", roleName: "Desk", keys: ["b.x", "a.x"] }, "r-desk", ["a.x", "b.x"])).toBeNull();
-    expect(accessBody({ roleId: "r-desk", roleName: "Desk", keys: [] }, null, [])).toEqual({ roleId: null, keys: [] });
+  it("is keys ticked on the group: the whole set, each once, never a role, and nothing when nothing changed", () => {
+    expect(accessBody(none, [], ["ticket.reply", "coupon.manage", "ticket.reply"])).toEqual({ roleId: null, keys: ["coupon.manage", "ticket.reply"] });
+    expect(accessBody({ roleId: null, roleName: null, keys: ["b.x", "a.x"] }, [], ["a.x", "b.x"])).toBeNull();
+  });
+
+  it("folds a role an older group gives into its keys, the first time it is saved", () => {
+    const desk = { roleId: "r-desk", roleName: "Desk", keys: ["coupon.manage"] };
+    // Untouched: what it gives already is the role's keys and its own.
+    expect(accessBody(desk, ["ticket.read"], ["coupon.manage", "ticket.read"])).toBeNull();
+    expect(accessBody(desk, ["ticket.read"], ["ticket.read"])).toEqual({ roleId: null, keys: ["ticket.read"] });
   });
 
   it("holds the schema's cap on keys", () => {
     expect(read(`${SERVICE}/user-group.schema.ts`)).toMatch(new RegExp(`setUserGroupAccessSchema[\\s\\S]*?\\.max\\(${ACCESS_KEYS_MAX}\\)`));
-    expect(() => accessBody(none, null, Array.from({ length: ACCESS_KEYS_MAX + 1 }, (_, i) => `k.k${i}`))).toThrow();
+    expect(() => accessBody(none, [], Array.from({ length: ACCESS_KEYS_MAX + 1 }, (_, i) => `k.k${i}`))).toThrow();
+  });
+
+  it("offers platform keys only on the platform's own group (GR-1-e)", () => {
+    const registry = [
+      { area: "platform", label: "Platform", permissions: [{ key: "platform.report.read", label: "Figures", description: "", platformOnly: true }] },
+      { area: "coupons", label: "Coupons", permissions: [{ key: "coupon.manage", label: "Coupons", description: "", platformOnly: false }] },
+    ];
+    expect(isPlatformGroup(OWNER, null)).toBe(true);
+    expect(isPlatformGroup(OWNER, "t-owner")).toBe(true);
+    expect(isPlatformGroup(OWNER, "t-res")).toBe(false);
+    expect(isPlatformGroup(RESELLER, null)).toBe(false);
+    expect(groupKeyAreas(registry, true).map((a) => a.area)).toEqual(["platform", "coupons"]);
+    expect(groupKeyAreas(registry, false).map((a) => a.area)).toEqual(["coupons"]);
   });
 
   it("names as receiving only the members the server says receive it", () => {
-    const m = (over: Partial<UserGroupMember>): UserGroupMember => ({ memberType: "user", userId: "u", tenantId: null, label: "x", receivesAccess: false, addedAt: "", ...over });
+    const m = (over: Partial<UserGroupMember>): UserGroupMember => ({ memberType: "user", userId: "u", tenantId: null, label: "x", receivesAccess: false, addedAt: "", expiresAt: null, ...over });
     const here = m({ userId: "u-here", receivesAccess: true });
     expect(receivers([here, m({ userId: "u-far" }), m({ memberType: "tenant", userId: null, tenantId: "t-1" })])).toEqual([here]);
   });
@@ -187,5 +230,55 @@ describe("a group's access", () => {
   it("is served by the controller and the member view carries receivesAccess", () => {
     expect(read(`${SERVICE}/user-group.controller.ts`)).toContain("@Put(':id/access')");
     expect(read(`${SERVICE}/user-group-admin.service.ts`)).toMatch(/receivesAccess: boolean/);
+  });
+});
+
+/** One page for every tenant (GR-1-d/-f): the session's own groups, or a reseller's by its path. */
+describe("whose groups", () => {
+  it("are the session's on the own page and the path's reseller's on its workspace", () => {
+    expect(groupsApiPath(null)).toBe("/auth/user-groups");
+    expect(groupsApiPath("r 1")).toBe("/auth/tenants/r%201/user-groups");
+  });
+
+  it("is reached from every old address: Team, Roles and user groups redirect here", async () => {
+    vi.resetModules();
+    vi.doMock("next/navigation", () => ({
+      redirect: (to: string) => {
+        throw new Error(`redirect:${to}`);
+      },
+    }));
+    const to = async (load: () => Promise<{ default: (p: never) => unknown }>, props: unknown = {}) => {
+      try {
+        await (await load()).default(props as never);
+      } catch (e) {
+        return String((e as Error).message).replace("redirect:", "");
+      }
+      return "rendered";
+    };
+    const params = { params: Promise.resolve({ id: "r-1" }) };
+    expect(await to(() => import("../team/page"))).toBe(PANEL_GROUPS);
+    expect(await to(() => import("../roles/page"))).toBe(PANEL_GROUPS);
+    expect(await to(() => import("../user-groups/page"))).toBe(PANEL_GROUPS);
+    expect(await to(() => import("../my-resellers/[id]/team/page"), params)).toBe(myResellerGroupsPath("r-1"));
+    expect(await to(() => import("../my-resellers/[id]/roles/page"), params)).toBe(myResellerGroupsPath("r-1"));
+    vi.doUnmock("next/navigation");
+  });
+});
+
+/** ADR-0139 (1): the page says *group*, never *team* or *role*. */
+describe("one word", () => {
+  const words = (lang: string) => {
+    const all = JSON.parse(readFileSync(join(LOCALES, lang, "common.json"), "utf8"));
+    const pick = (path: string) => path.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], all);
+    const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v).flatMap(flat) : []);
+    return flat(USER_GROUP_KEYS).map(pick).filter((v): v is string => typeof v === "string");
+  };
+
+  it("in English", () => {
+    expect(words("en").filter((w) => /\b(team|role)s?\b/i.test(w))).toEqual([]);
+  });
+
+  it("in Persian", () => {
+    expect(words("fa").filter((w) => /تیم|نقش/.test(w))).toEqual([]);
   });
 });

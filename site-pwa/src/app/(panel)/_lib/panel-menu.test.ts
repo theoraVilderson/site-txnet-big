@@ -251,9 +251,9 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => h.endsWith("/users"));
   const people = (type: "reseller" | "platform_owner", tenantId: string | null = "T1") =>
-    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["user.read", "staff.manage", "role.manage"], type, false, null, tenantId).flatMap((e) =>
+    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage", "user_group.manage"] : ["user.read", "user_group.manage"], type, false, null, tenantId).flatMap((e) =>
       "children" in e ? e.children.map((c) => c.href) : [e.href],
-    ).filter((h) => /\/(users|team|roles)$/.test(h));
+    ).filter((h) => /\/(users|groups|team|roles)$/.test(h));
 
   // The session's own users are not a reseller's workspace: `/users`, never
   // `/my-resellers/<own id>/users`, which read as "my reseller" (2026-10-09).
@@ -262,16 +262,17 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(users("platform_owner", ["*"])).toEqual(["/users"]);
   });
 
-  it("puts the team and the roles at /team and /roles too, still hidden while the tenant is unknown", () => {
-    expect(people("platform_owner")).toEqual(["/users", "/team", "/roles"]);
-    expect(people("platform_owner", null)).toEqual([]);
+  // GR-1-f (ADR-0139 (1)): groups are the one place access is given; no Team, no Roles.
+  it("puts the groups at /groups beside the users, and no team or roles page", () => {
+    expect(people("platform_owner")).toEqual(["/users", "/groups"]);
+    expect(people("platform_owner", null)).toEqual(["/groups"]);
   });
 
-  // A seat sees each by its own key (AC-1-e2): users `user.read`, team
-  // `staff.manage`, roles `role.manage` — never the platform's.
-  it("links a reseller's staff to /users, /team and /roles by their own keys", () => {
+  // A seat sees each by its own key (AC-1-e2): users `user.read`, groups
+  // `user_group.manage` — never the platform's.
+  it("links a reseller's staff to /users and /groups by their own keys", () => {
     expect(users("reseller", ["user.read"], "R 1")).toEqual(["/users"]);
-    expect(people("reseller", "R 1")).toEqual(["/users", "/team", "/roles"]);
+    expect(people("reseller", "R 1")).toEqual(["/users", "/groups"]);
     expect(users("reseller", ["platform.tenant.manage"], "R 1")).toEqual([]);
     expect(users("platform_owner", ["user.read"])).toEqual([]);
   });

@@ -2,68 +2,75 @@
 
 import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { tenantRolesApi, userGroupsApi, type PermissionArea, type TenantRole, type UserGroup, type UserGroupMember } from "@/lib/auth-api";
+import { tenantRolesApi, type PermissionArea, type UserGroup, type UserGroupMember } from "@/lib/auth-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { KeyPicker } from "../../_components/KeyPicker";
-import { assignableRoles } from "../../my-resellers/_lib/team";
-import { USER_GROUP_KEYS as K, accessBody, receivers } from "../_lib/user-groups";
-import { Alert, Field, Sheet, useMessage } from "./user-groups-ui";
-import { Button, NativeSelect } from "../../_components/kit";
+import { USER_GROUP_KEYS as K, accessBody, givenKeys, groupKeyAreas, isPlatformGroup, receivers } from "../_lib/user-groups";
+import { Alert, Sheet, useGroupsScope, useMessage } from "./user-groups-ui";
+import { Button } from "../../_components/kit";
 
 const A = K.access;
 /** The members read for "who receives them": one page; the rest are counted. */
 const RECEIVERS_PAGE = 50;
 
-type Loaded = { roles: TenantRole[]; grantable: string[]; registry: PermissionArea[]; members: { items: UserGroupMember[]; total: number } };
+type Loaded = { roleKeys: string[]; grantable: string[]; registry: PermissionArea[]; members: { items: UserGroupMember[]; total: number } };
 
 /**
- * One group's Access (AC-1-o) over `PUT /auth/user-groups/:id/access`
+ * One group's Access (GR-1-f, ADR-0139 (1)) over `PUT …/user-groups/:id/access`
  * (AC-1-m, governance `contract.md`):
  *
- *  - **a role for the group**, from the roles this caller may give whole
- *    (`assignableRoles`, as the Team page offers them) — the one it holds
- *    stays listed even when this caller may not give it;
- *  - **extra keys**, with the Roles page's own picker (F-1201-d);
+ *  - **keys ticked on the group itself**, with the shared `KeyPicker` — no
+ *    role is picked. A role an older group was given (AC-1-o) shows as its
+ *    keys, ticked, and is folded into them the first time the sheet saves;
+ *  - a `platform.` key is offered only on the platform's own group (GR-1-e);
  *  - **who receives them**: the members the server marks `receivesAccess`
  *    — this tenant's users; a reseller, or another tenant's user in the
  *    platform's group, gets nothing;
  *  - **the whole set is sent** (`accessBody`); an untouched sheet sends nothing.
  *
- * Roles and `grantable` come through the role door, so a caller without
- * `role.manage` is told why instead of being offered a form the server refuses.
+ * What this caller may tick (`grantable`) comes through the tenant's key
+ * door, so a caller it refuses is told why instead of being offered a form
+ * the server refuses.
  */
 export function AccessSheet({ group, onClose, onSaved }: { group: UserGroup; onClose: () => void; onSaved: (g: UserGroup | null) => void }) {
   const { t } = useLocale();
   const { me } = usePanelSession();
+  const { tenantId, api } = useGroupsScope();
   const message = useMessage();
-  const tenantId = me?.tenant.id ?? "";
+  const keyTenant = tenantId ?? me?.tenant.id ?? "";
+  const platformGroup = isPlatformGroup(me, tenantId);
 
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [roleId, setRoleId] = useState<string | null>(group.access.roleId);
   const [keys, setKeys] = useState<string[]>(group.access.keys);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (group.allTenants || !tenantId) return;
+    if (group.allTenants || !keyTenant) return;
     let alive = true;
-    Promise.all([tenantRolesApi.list(tenantId), tenantRolesApi.permissions(), userGroupsApi.members(group.id, 1, RECEIVERS_PAGE)])
-      .then(([list, reg, members]) => alive && setLoaded({ roles: list.roles, grantable: list.grantable, registry: reg.areas, members }))
+    Promise.all([tenantRolesApi.list(keyTenant), tenantRolesApi.permissions(), api.members(group.id, 1, RECEIVERS_PAGE)])
+      .then(([list, reg, members]) => {
+        if (!alive) return;
+        const roleKeys = list.roles.find((r) => r.id === group.access.roleId)?.permissions ?? [];
+        setLoaded({ roleKeys, grantable: list.grantable, registry: reg.areas, members });
+        setKeys(givenKeys(group.access, roleKeys));
+      })
       .catch((e) => alive && setLoadError(e));
     return () => {
       alive = false;
     };
-  }, [group.id, group.allTenants, tenantId]);
+  }, [api, group.id, group.allTenants, group.access, keyTenant]);
 
   async function save() {
-    const body = accessBody(group.access, roleId, keys);
+    if (!loaded) return;
+    const body = accessBody(group.access, loaded.roleKeys, keys);
     if (!body) return onSaved(null);
     setBusy(true);
     setFailure(null);
     try {
-      onSaved(await userGroupsApi.setAccess(group.id, body));
+      onSaved(await api.setAccess(group.id, body));
     } catch (e) {
       setFailure(message(e));
     } finally {
@@ -71,7 +78,6 @@ export function AccessSheet({ group, onClose, onSaved }: { group: UserGroup; onC
     }
   }
 
-  const roles = loaded ? assignableRoles(loaded.roles, loaded.grantable) : [];
   const shown = loaded ? receivers(loaded.members.items) : [];
   // Members past the first page are not read; at most this many more could receive it.
   const unread = loaded ? Math.max(0, loaded.members.total - loaded.members.items.length) : 0;
@@ -97,24 +103,11 @@ export function AccessSheet({ group, onClose, onSaved }: { group: UserGroup; onC
       ) : (
         <div className="space-y-5">
           <p className="text-xs text-text-secondary">{t("common", A.hint)}</p>
-          <Field label={t("common", A.role)}>
-            <NativeSelect value={roleId ?? ""} onChange={(e) => setRoleId(e.target.value || null)}>
-              <option value="">{t("common", A.noRole)}</option>
-              {group.access.roleId && !roles.some((r) => r.id === group.access.roleId) && (
-                <option value={group.access.roleId}>{group.access.roleName ?? group.access.roleId}</option>
-              )}
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
           <KeyPicker
             label={t("common", A.keys)}
-            registry={loaded.registry}
+            registry={groupKeyAreas(loaded.registry, platformGroup)}
             grantable={loaded.grantable}
-            held={group.access.keys}
+            held={givenKeys(group.access, loaded.roleKeys)}
             value={keys}
             onChange={setKeys}
           />

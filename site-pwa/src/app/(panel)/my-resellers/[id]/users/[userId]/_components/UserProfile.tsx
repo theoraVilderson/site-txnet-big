@@ -10,7 +10,7 @@ import {
   type ResellerUserProfile,
   type TenantRole,
 } from "@/lib/auth-api";
-import { PANEL_TEAM, myResellerTeamPath } from "@/lib/routes";
+import { PANEL_GROUPS, myResellerGroupsPath } from "@/lib/routes";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import {
   Alert,
@@ -304,7 +304,7 @@ export function UserProfile({
             <p>{person.role?.name ?? t("common", P.noRole)}</p>
             {editable && !platform && (
               <Link
-                href={own ? PANEL_TEAM : myResellerTeamPath(id, self)}
+                href={own ? PANEL_GROUPS : myResellerGroupsPath(id, self)}
                 className="mt-2 inline-block text-xs font-bold text-primary hover:underline"
               >
                 {t("common", P.roleOnTeam)}

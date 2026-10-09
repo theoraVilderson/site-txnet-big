@@ -22,7 +22,7 @@ import {
   PANEL_SUPPORT_SETTINGS,
   PANEL_SYSTEMS,
   PANEL_TENANT_BILLING,
-  PANEL_USER_GROUPS,
+  PANEL_GROUPS,
   PANEL_WHEEL,
   myResellerBotPath,
   myResellerBrandingPath,
@@ -75,7 +75,7 @@ export const GUIDE_SECTION_ROUTES: Readonly<Record<GuidePanelSection, string>> =
   reseller_users: myResellerUsersPath(ID),
   manual_payments: PANEL_MANUAL_PAYMENTS,
   systems: PANEL_SYSTEMS,
-  user_groups: PANEL_USER_GROUPS,
+  user_groups: PANEL_GROUPS,
   guides: PANEL_GUIDES,
 };
 
