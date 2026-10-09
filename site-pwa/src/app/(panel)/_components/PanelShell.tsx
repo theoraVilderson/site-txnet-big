@@ -1,13 +1,18 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
 import { CommandPalette } from "./CommandPalette";
 import { PanelSidebar } from "./PanelSidebar";
 import { PanelTopBar } from "./PanelTopBar";
 import { RouteProgress } from "./RouteProgress";
 import { RestrictedShell } from "./RestrictedShell";
+import { AccessLostNotice } from "./AccessLostNotice";
 import { usePanelSession } from "../_context/PanelSessionContext";
+import { useAccessLive, useAccessLost } from "../_hooks/useAccessLive";
+import { useVisibleMenu } from "../_hooks/useVisibleMenu";
+import { menuHrefs } from "../_lib/panel-menu";
 
 /**
  * The frame every panel page renders inside (F-093-a): the sidebar at the
@@ -21,6 +26,11 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
   const collapsed = useUiPreferences((s) => s.prefs["ui.sidebar"].collapsed);
   // ADR-0133: a restricted account gets one screen, not the panel.
   const { me } = usePanelSession();
+  // AC-1-r: an access change arrives over the socket, and an open page it took away says so.
+  useAccessLive();
+  const menu = useVisibleMenu();
+  const hrefs = useMemo(() => menuHrefs(menu), [menu]);
+  const lost = useAccessLost(me, hrefs, usePathname());
   if (me?.restriction) return <RestrictedShell reason={me.restriction.reason}>{children}</RestrictedShell>;
 
   return (
@@ -37,7 +47,7 @@ export function PanelShell({ children }: { children: React.ReactNode }) {
         }`}
       >
         <PanelTopBar />
-        <main className="relative z-10 w-full flex-1">{children}</main>
+        <main className="relative z-10 w-full flex-1">{lost ? <AccessLostNotice /> : children}</main>
       </div>
     </div>
   );

@@ -459,6 +459,12 @@ export const authApi = {
   async terminateOtherSessions() { return request<{ terminated: number }>("/auth/sessions/terminate-others", { method: "POST" }); },
   /** The one refresh every client and the socket run (see `credentialRefresh`). */
   refreshCredential,
+  /**
+   * Rotate the token this tab holds because the person's access moved
+   * (`identity.access.changed`, AC-1-r) — the same single-flight refresh as a
+   * refused call, so `onPermissionsRefreshed` re-reads `me` after it.
+   */
+  refreshAccess: () => refreshCredential(accessToken),
   /** Hold every tokenless call until `releaseSessionHold` — the panel's page load (see `sessionHold`). */
   holdUntilSession,
   releaseSessionHold,

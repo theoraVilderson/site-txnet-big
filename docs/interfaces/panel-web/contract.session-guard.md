@@ -136,7 +136,20 @@ the caller's role changed after its token was minted. The user never sees it:
    listeners run; `PanelSessionProvider` re-reads `me`, so a gated menu entry
    appears or disappears with the gate rather than on the next page load.
 
-An idle panel changes nothing until it next calls: there is no push.
+An idle panel does not wait for its next call (AC-1-r, ADR-0121, C-14):
+
+4. **`identity.access.changed` moves it at once.** `_hooks/useAccessLive.ts`,
+   mounted by `PanelShell`, listens on `user:<userId>` with `useLiveReread` and
+   calls `authApi.refreshAccess()` — the same single-flight refresh as step 2,
+   so step 3 re-reads `me`, and the menu, buttons and page guards follow. The
+   event's `cause` is not read. A reconnect refreshes too; a failed refresh is
+   dropped, and the next call's 401 ends the session as any other does.
+5. **An open page that went with it says so.** When a new `me` replaces
+   another and the open page's menu entry (`activeHref`) has left the menu,
+   `PanelShell` draws `AccessLostNotice` ("you no longer have access",
+   `common.shell.accessLost`) in the page's place until the entry returns or
+   the path changes. The first `me` of a page load never does — a page no
+   entry owns, or one opened without the key, is its own guard's answer.
 
 ## Return-to-intent on the login redirect (F-093-i, ADR-0042)
 

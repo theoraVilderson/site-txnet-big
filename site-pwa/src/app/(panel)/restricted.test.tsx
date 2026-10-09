@@ -30,6 +30,8 @@ vi.mock("./_components/PanelSidebar", () => ({ PanelSidebar: () => <nav>full sid
 vi.mock("./_components/PanelTopBar", () => ({ PanelTopBar: () => <header>full top bar</header> }));
 vi.mock("./_components/CommandPalette", () => ({ CommandPalette: () => null }));
 vi.mock("./_components/RouteProgress", () => ({ RouteProgress: () => null }));
+vi.mock("./_hooks/useAccessLive", () => ({ useAccessLive: () => {}, useAccessLost: () => false }));
+vi.mock("./_hooks/useVisibleMenu", () => ({ useVisibleMenu: () => [] }));
 vi.mock("./_components/AccountSwitcher", () => ({ AccountSwitcher: () => <div>switcher</div> }));
 vi.mock("./_components/LogoutButton", () => ({ LogoutButton: () => <button type="button">logout</button> }));
 

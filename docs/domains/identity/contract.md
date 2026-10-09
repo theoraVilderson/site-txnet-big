@@ -71,7 +71,7 @@ An access change is an outbox row (below). Impersonation start/end write an
 | channel | when | payload | consumer |
 |---|---|---|---|
 | Postgres `NOTIFY identity_permissions_changed` (F-101-b, ADR-0043) | after commit of a `role_permission` write, a `user.roleId` change, or a `permission.key` rename — from triggers, so SQL and migrations count | JSON, ids only: `{kind:"role",roleId}`, `{kind:"user",userId,roleId}`, `{kind:"all"}` | auth-service `PermissionNotificationsListener`, which rewrites `role:<id>:permissions` / `user:<id>:role`. Not queued: a listener that was away recomputes every role on connect |
-| outbox `identity.access.changed` (AC-1-q, ADR-0121) | in the transaction that set a person's role (`TenantRolesService.assign`) or replaced the keys of a role they hold (`RolesService.update`, one row per holder); tenant writes it when a seat is removed or restored | `{userId, tenantId, cause}` (`role_set` / `role_edited` / `seat_removed` / `seat_restored`), built by shared-core `accessChanged` | worker live-push -> `user:<userId>` (`{type}` only); panel-web (AC-1-r), notification (AC-1-s) — not built yet |
+| outbox `identity.access.changed` (AC-1-q, ADR-0121) | in the transaction that set a person's role (`TenantRolesService.assign`) or replaced the keys of a role they hold (`RolesService.update`, one row per holder); tenant writes it when a seat is removed or restored | `{userId, tenantId, cause}` (`role_set` / `role_edited` / `seat_removed` / `seat_restored`), built by shared-core `accessChanged` | worker live-push -> `user:<userId>` (`{type}` only); panel-web refreshes and re-reads `me` (AC-1-r, `contract.session-guard.md`); notification (AC-1-s) |
 
 ## Consumes
 
