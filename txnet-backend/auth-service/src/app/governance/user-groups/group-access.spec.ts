@@ -45,6 +45,7 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
   const roleOf = (id: string | null) => Object.values(ROLES).find((r) => r.id === id) ?? null;
   const outbox: Record<string, unknown>[] = [];
   const audits: string[] = [];
+  const history: Record<string, unknown>[] = [];
 
   const tx = {
     $executeRaw: vi.fn(async () => undefined),
@@ -93,14 +94,18 @@ function harness(start: { roleId?: string | null; keys?: string[]; members?: str
       ),
     },
     userPermission: { findMany: vi.fn(async () => []) },
-    adminAuditLog: { create: vi.fn(async ({ data }: { data: { action: string } }) => void audits.push(data.action)) },
-    outboxEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => void outbox.push(data)) },
+    adminAuditLog: { create: vi.fn(async ({ data }: { data: { action: string } }) => (audits.push(data.action), { id: `act-${audits.length}` })) },
+    outboxEvent: {
+      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => void outbox.push(data)),
+      createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => void outbox.push(...data)),
+    },
+    accessHistory: { createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => void history.push(...data)) },
   };
   const prisma = { ...tx, $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)) };
   const service = new UserGroupAdminService(prisma as never, prisma as never, new AccessReader(prisma as never));
   const reader = new AccessReader(prisma as never);
   const answer = async (id: string) => (await reader.ofIds([id])).get(id);
-  return { service, outbox, audits, answer, members, group, groupKeys };
+  return { service, outbox, audits, history, answer, members, group, groupKeys };
 }
 
 const lead = (permissions: string[] = ['user_group.manage', 'ticket.read', 'ticket.reply', 'coupon.manage']) => ({
@@ -122,6 +127,8 @@ describe('a group holds access (AC-1-m)', () => {
     expect(h.audits).toEqual(['user_group_access_set']);
     expect(h.outbox).toHaveLength(1);
     expect(h.outbox[0]).toMatchObject({ aggregateId: ALI, payload: { cause: 'group_access', given: ['coupon.manage', 'ticket.read', 'ticket.reply'], taken: [] } });
+    // AC-1-p: the one person moved remembers it, against the act's audit row.
+    expect(h.history).toEqual([expect.objectContaining({ userId: ALI, cause: 'group_access', auditLogId: `act-${h.audits.length}`, given: ['coupon.manage', 'ticket.read', 'ticket.reply'] })]);
   });
 
   it('gives nothing to a member of another tenant', async () => {

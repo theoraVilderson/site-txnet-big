@@ -121,6 +121,7 @@ describe("the reseller's links", () => {
       "/my-resellers/r-9/users",
       "/my-resellers/r-9/team",
       "/my-resellers/r-9/roles",
+      "/my-resellers/r-9/access-log",
       "/my-resellers/r-9/domains",
       "/my-resellers/r-9/bot",
       "/my-resellers/r-9/branding",

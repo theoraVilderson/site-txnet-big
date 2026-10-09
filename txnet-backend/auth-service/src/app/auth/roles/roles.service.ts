@@ -5,8 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { BackendI18nKeys, accessChanged, holdsPermission, isPlatformKey, ok, tenantTransaction } from '@txnet-backend/shared-core';
+import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
+import { BackendI18nKeys, holdsPermission, isPlatformKey, ok, recordAccessChange, tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 
@@ -20,6 +20,9 @@ export const ROLE_MANAGE = 'role.manage';
  * ceiling on a reseller (ADR-0134).
  */
 export type RoleScope = { tenantId: string; permissions: readonly string[] };
+
+/** Who made an edit, and from where: what its audit row records (AC-1-p). */
+export type RoleEditor = { userId: string; ip: string };
 
 /** One role as the caller sees it. A template is readable by everyone and writable by no one. */
 export type RoleView = {
@@ -100,7 +103,7 @@ export class RolesService {
     return ok({ role: toView({ ...role, rolePermissions: keysOf(input.permissions) }) }, BackendI18nKeys.errors.role.created);
   }
 
-  async update(scope: RoleScope, id: string, input: UpdateRoleInput) {
+  async update(scope: RoleScope, id: string, input: UpdateRoleInput, by: RoleEditor) {
     const permissionIds = input.permissions ? await this.grantable(scope, input.permissions) : null;
 
     const role = await tenantTransaction(this.prisma, async (tx) => {
@@ -113,10 +116,24 @@ export class RolesService {
         await this.setGrants(tx, id, permissionIds);
         const before = new Set(existing.rolePermissions.map((rp) => rp.permission.key));
         const after = new Set(input.permissions);
-        await this.tellHolders(tx, scope, id, {
-          given: [...after].filter((key) => !before.has(key)),
-          taken: [...before].filter((key) => !after.has(key)),
-        });
+        const keys = { given: [...after].filter((key) => !before.has(key)), taken: [...before].filter((key) => !after.has(key)) };
+        // The same set again moves nobody: no audit row, nobody told.
+        if (keys.given.length > 0 || keys.taken.length > 0) {
+          const act = await tx.adminAuditLog.create({
+            data: {
+              tenantId: scope.tenantId,
+              adminId: by.userId,
+              action: AdminAction.role_keys_set,
+              targetEntityType: AuditTargetType.role,
+              targetEntityId: id,
+              oldValue: { keys: [...before].sort() },
+              newValue: { keys: [...after].sort() },
+              adminIpAddress: by.ip,
+            },
+            select: { id: true },
+          });
+          await this.tellHolders(tx, scope, id, keys, by, act.id);
+        }
       }
       return updated;
     });
@@ -197,14 +214,24 @@ export class RolesService {
 
   /**
    * AC-1-q: everyone holding a role whose keys were replaced hears it, one
-   * outbox row each, in the edit's transaction. A rename moves no access and
+   * outbox row each, in the edit's transaction; AC-1-p: and one history row
+   * each, pointing at the edit's audit row. A rename moves no access and
    * tells no one. In the tenant's scope, so the holders are this tenant's.
    * `keys` is what the edit gave and took, for the notice (AC-1-s).
    */
-  private async tellHolders(tx: Prisma.TransactionClient, scope: RoleScope, roleId: string, keys: { given: string[]; taken: string[] }): Promise<void> {
+  private async tellHolders(
+    tx: Prisma.TransactionClient,
+    scope: RoleScope,
+    roleId: string,
+    keys: { given: string[]; taken: string[] },
+    by: RoleEditor,
+    auditLogId: string,
+  ): Promise<void> {
     const holders = await tx.user.findMany({ where: { roleId, deletedAt: null }, select: { id: true } });
-    if (holders.length === 0) return;
-    await tx.outboxEvent.createMany({ data: holders.map((h) => accessChanged(h.id, scope.tenantId, 'role_edited', keys)) });
+    await recordAccessChange(
+      tx,
+      holders.map((h) => ({ userId: h.id, tenantId: scope.tenantId, cause: 'role_edited' as const, actorUserId: by.userId, auditLogId, detail: keys })),
+    );
   }
 
   /** The whole grant set, replaced: the fingerprint is over a set, not a diff. */

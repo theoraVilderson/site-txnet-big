@@ -3,7 +3,7 @@ id: auth-api
 layer: interface
 status: active
 version: 16
-keywords: [ui preferences endpoint, display preferences endpoint, active sessions endpoint, terminate session endpoint, auth api, time zone endpoint, timezone endpoint, messenger endpoint, notice messenger endpoint, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
+keywords: [access history endpoint, access log endpoint, ui preferences endpoint, display preferences endpoint, active sessions endpoint, terminate session endpoint, auth api, time zone endpoint, timezone endpoint, messenger endpoint, notice messenger endpoint, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
   - txnet-backend/auth-service/src/app/auth/auth.controller.ts
@@ -15,6 +15,7 @@ source:
   - txnet-backend/auth-service/src/app/governance/user-groups/user-group.schema.ts
   - txnet-backend/auth-service/src/app/auth/roles/roles.controller.ts
   - txnet-backend/auth-service/src/app/auth/roles/tenant-roles.controller.ts
+  - txnet-backend/auth-service/src/app/access-history/access-history.controller.ts
   - txnet-backend/auth-service/src/app/auth/permissions/permission-registry.controller.ts
   - txnet-backend/auth-service/src/app/auth/roles/role.schema.ts
   - txnet-backend/auth-service/src/app/auth/auth.guard.ts
@@ -56,9 +57,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-09 | Contract v47 -> **v48** (additive, AC-1-p): a person's access history and the tenant's access log — `GET /auth/tenants/:tenantId[/users/:userId]/access-history`. [contract.roles.md](contract.roles.md); rules: audit `contract.md`. Consumer: panel-web |
 | 2026-10-09 | Contract v46 -> **v47** (additive, AC-1-n/o): a person's keys read names each group that gives access (`groups`); a group member carries `receivesAccess`. [contract.roles.md](contract.roles.md), [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web |
 | 2026-10-09 | Contract v45 -> **v46** (additive, AC-1-m): `PUT /auth/user-groups/:id/access`; a `group` carries `access`; six new refusals. [contract.user-groups.md](contract.user-groups.md). Consumer: panel-web (AC-1-o) |
 | 2026-10-09 | Contract v44 -> **v45** (additive, AC-1-l): read, give or take, and lift one key on one person on a tenant's path — `/auth/tenants/:tenantId/users/:userId/keys[/:key]`. [contract.roles.md](contract.roles.md); rules: identity `contract.access.md`. Consumer: panel-web (AC-1-n) |
 | 2026-10-09 | Contract v43 -> **v44** (additive, AC-1-a): `GET`/`PATCH /auth/tenants/:tenantId/users/:userId` — one user with `emailMasked`; edit `fullName`, `username`, `email: null` only; `username_taken` 409. [contract.reseller-users.md](contract.reseller-users.md). Consumer: panel-web (AC-1-b) |
-| 2026-10-09 | Contract v42 -> **v43** (additive, AC-1-f): `GET /auth/permissions` — the registry generated from `permissions.yaml`, grouped by area, texts in the request's language. [contract.roles.md](contract.roles.md). Consumer: panel-web (F-1201-d) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -10,9 +10,9 @@ import {
   SupportConsentRefused,
   SupportConsentRejection,
   TenantCapabilityName,
-  accessChanged,
   holdsPermission,
   isPlatformKey,
+  recordAccessChange,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 import type { Prisma } from '@prisma/client';
@@ -140,9 +140,9 @@ export class TenantRolesService {
     );
   }
 
-  update(actor: ResellerActor, tenantId: string, id: string, input: UpdateRoleInput) {
+  update(actor: ResellerActor, tenantId: string, id: string, input: UpdateRoleInput, ip: string) {
     return this.run(actor, tenantId, 'staffWrite', async (admitted) =>
-      this.roles.update(await this.grantScope(actor, admitted), id, input),
+      this.roles.update(await this.grantScope(actor, admitted), id, input, { userId: actor.userId, ip }),
     );
   }
 
@@ -196,7 +196,7 @@ export class TenantRolesService {
         if (user.roleId === role.id) return answer;
 
         await tx.user.update({ where: { id: userId }, data: { roleId: role.id } });
-        await tx.adminAuditLog.create({
+        const act = await tx.adminAuditLog.create({
           data: {
             tenantId: admitted.id,
             adminId: actor.userId,
@@ -207,9 +207,12 @@ export class TenantRolesService {
             newValue: { roleId: role.id, roleName: role.name },
             adminIpAddress: ip,
           },
+          select: { id: true },
         });
-        // AC-1-q: their panel moves now, not on the next refused call (F-101-c).
-        await tx.outboxEvent.create({ data: accessChanged(userId, admitted.id, 'role_set', { role: role.name }), select: { id: true } });
+        // AC-1-q: their panel moves now, not on the next refused call (F-101-c); AC-1-p: their history keeps it.
+        await recordAccessChange(tx, [
+          { userId, tenantId: admitted.id, cause: 'role_set', actorUserId: actor.userId, auditLogId: act.id, detail: { role: role.name } },
+        ]);
         return answer;
       });
     });
@@ -304,7 +307,7 @@ export class TenantRolesService {
 
         const change = await write(tx, person, permission.id);
         if (change) {
-          await tx.adminAuditLog.create({
+          const act = await tx.adminAuditLog.create({
             data: {
               tenantId: admitted.id,
               adminId: actor.userId,
@@ -313,15 +316,16 @@ export class TenantRolesService {
               targetEntityId: userId,
               oldValue: change.before ?? undefined,
               newValue: change.after ?? undefined,
+              reason: change.after?.['reason'] ?? null,
               adminIpAddress: ip,
             },
-          });
-          const after = await this.answers.ofLoaded(person, tx);
-          // AC-1-q: their panel moves now; the trigger moves their token (ADR-0138 (5)).
-          await tx.outboxEvent.create({
-            data: accessChanged(userId, admitted.id, 'keys_set', moved(before, after)),
             select: { id: true },
           });
+          const after = await this.answers.ofLoaded(person, tx);
+          // AC-1-q: their panel moves now; the trigger moves their token (ADR-0138 (5)). AC-1-p: their history keeps it.
+          await recordAccessChange(tx, [
+            { userId, tenantId: admitted.id, cause: 'keys_set', actorUserId: actor.userId, auditLogId: act.id, detail: moved(before, after) },
+          ]);
         }
         return this.personKeys(tx, person);
       });

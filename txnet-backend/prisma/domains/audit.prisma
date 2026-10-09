@@ -187,6 +187,13 @@ enum AdminAction {
   // AC-1-m — a group's role and extra keys replaced (`oldValue`/`newValue`
   // {roleId, keys}).
   user_group_access_set
+  // AC-1-p — the access history's acts that had no row: a role's keys
+  // replaced (`oldValue`/`newValue` {keys}), and a reseller's staff seat
+  // invited, its end moved or cleared ({accessExpiresAt}), and removed.
+  role_keys_set
+  staff_seat_invite
+  staff_seat_end_set
+  staff_seat_remove
 
   @@schema("audit")
 }
@@ -247,6 +254,9 @@ enum AuditTargetType {
   support_consent
   // F-117-d. One emergency entry of a platform staff member into a reseller.
   emergency_entry
+  // AC-1-p. A role of a tenant, and a seat on a reseller's team.
+  role
+  staff_seat
 
   @@schema("audit")
 }
@@ -287,6 +297,32 @@ model SupportAccessConsent {
 }
 
 /// F-117-d (ADR-0104 (5)) — tier C: one platform staff member in one reseller
+/// AC-1-p — one person's access moved by one act: the row their history reads.
+/// Written with the act, in its transaction, by `recordAccessChange`
+/// (shared-core) — the same call that writes their `access.changed` event — so
+/// an act that reaches many people (a group's access, a role's keys) is one
+/// row per person, and who was moved stays answerable after membership moves
+/// on. `auditLogId` is the act's `admin_audit_log` row (who, before, after,
+/// reason); null only where the act is the person's own (a seat accepted).
+/// `given`/`taken` are what *their* answer gained and lost. Append-only.
+model AccessHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  userId      String   @db.Uuid
+  actorUserId String   @db.Uuid
+  /// An `AccessHistoryCause` (shared-core `access-changed.ts`).
+  cause       String
+  auditLogId  String?  @db.Uuid
+  given       String[]
+  taken       String[]
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, userId, createdAt(sort: Desc)])
+  @@index([auditLogId])
+  @@map("access_history")
+  @@schema("audit")
+}
+
 /// without its consent, for an emergency (abuse, legal order, incident). A
 /// reason always; exactly one hour from `startedAt` (CHECK), never extended — a
 /// new entry once this one has ended; `endedAt` when its entrant left early.

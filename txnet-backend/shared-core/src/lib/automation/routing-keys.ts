@@ -43,7 +43,7 @@ export const RealtimeEventType = {
   TENANT_STATUS_CHANGED: 'tenant.status.changed',
   /** F-019-c3: the platform owner moved a reseller's renewal deadline (`graceUntil`), status changed or not (`TenantSubscriptionService.grantGrace`). */
   TENANT_SUBSCRIPTION_GRACE_EXTENDED: 'tenant.subscription.grace_extended',
-  /** AC-1-q: what a person may do moved — a role set or edited, a seat removed (`accessChanged`, shared-core). */
+  /** AC-1-q: what a person may do moved — a role set or edited, a seat removed (`recordAccessChange`, shared-core). */
   ACCESS_CHANGED: 'identity.access.changed',
 } as const;
 

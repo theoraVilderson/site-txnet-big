@@ -205,6 +205,8 @@ export const myResellerUserPath = (id: string, userId: string, self = false) =>
  * platform's for its staff — never the session's.
  */
 export const myResellerRolesPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/roles`;
+/** A tenant's access log (AC-1-p): every act that moved someone's access, behind `audit.read`. */
+export const myResellerAccessLogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/access-log`;
 /** The session's own team and roles (F-1201-c/-d) — like {@link PANEL_USERS}, not "my reseller". */
 export const PANEL_TEAM = "/team";
 export const PANEL_ROLES = "/roles";

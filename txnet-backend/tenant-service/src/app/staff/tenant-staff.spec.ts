@@ -98,7 +98,18 @@ describe('TenantStaffService', () => {
       }),
     };
 
-    const appPrisma = {
+    // AC-1-p: every seat act's audit row and history rows, whichever pool wrote them.
+    const audits: Record<string, any>[] = [];
+    const history: Record<string, any>[] = [];
+    const adminAuditLog = { create: vi.fn(async ({ data }: { data: Record<string, any> }) => (audits.push(data), { id: `act-${audits.length}` })) };
+    const accessHistory = { createMany: vi.fn(async ({ data }: { data: Record<string, any>[] }) => (history.push(...data), { count: data.length })) };
+
+    const appPrisma: Record<string, unknown> = {
+      adminAuditLog,
+      accessHistory,
+      outboxEvent: { create: vi.fn(async () => ({ id: 'evt-0' })) },
+      $executeRaw: vi.fn(async () => 0),
+      $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(appPrisma)),
       tenant: {
         findUnique: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
         findFirst: vi.fn(async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null),
@@ -115,6 +126,8 @@ describe('TenantStaffService', () => {
       resellerLimitSetting: { findMany: vi.fn(async () => []) },
       $executeRaw: vi.fn(async () => 0),
       outboxEvent: { create: vi.fn(async () => ({ id: 'evt-1' })) },
+      adminAuditLog,
+      accessHistory,
       $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(all)),
       user: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, any> }) => {
@@ -130,7 +143,7 @@ describe('TenantStaffService', () => {
     const access = new ResellerAccess(appPrisma as never);
     // The app pool is the invitee's own tenant (accept); the cross-tenant pool
     // is every other read, which is another tenant's rows.
-    return { service: new TenantStaffService(appPrisma as never, all as never, access), rows, all, staffMember };
+    return { service: new TenantStaffService(appPrisma as never, all as never, access), rows, all, staffMember, audits, history };
   };
 
   it('seats a user of the reseller, and only the owner or platform staff may', async () => {
@@ -243,6 +256,25 @@ describe('TenantStaffService', () => {
       },
       select: { id: true },
     });
+  });
+
+  it('remembers every seat act in the holder\'s access history, against its audit row (AC-1-p)', async () => {
+    const { service, audits, history } = build();
+    await service.invite(owner, RESELLER, { userId: MEMBER }, T0);
+    await service.accept({ userId: MEMBER, tenantId: RESELLER, permissions: [] }, RESELLER, T0);
+    await service.setExpiry(owner, RESELLER, 'row-1', LATER, T0);
+    await service.remove(owner, RESELLER, 'row-1', T0);
+    expect(audits.map((a) => [a.action, a.targetEntityType, a.newValue.userId])).toEqual([
+      ['staff_seat_invite', 'staff_seat', MEMBER],
+      ['staff_seat_end_set', 'staff_seat', MEMBER],
+      ['staff_seat_remove', 'staff_seat', MEMBER],
+    ]);
+    expect(history.map((h) => [h.userId, h.cause, h.auditLogId])).toEqual([
+      [MEMBER, 'seat_invited', 'act-1'],
+      [MEMBER, 'seat_joined', null],
+      [MEMBER, 'seat_end_set', 'act-2'],
+      [MEMBER, 'seat_removed', 'act-3'],
+    ]);
   });
 
   describe('a seat\'s expiry, changed or cleared without re-inviting (F-1201-b)', () => {

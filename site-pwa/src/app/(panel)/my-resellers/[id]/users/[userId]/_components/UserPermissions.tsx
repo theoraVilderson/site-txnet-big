@@ -32,7 +32,7 @@ type Draft = { key: string; effect: "give" | "take"; reason: string };
  *    role door refuses (no `role.manage`) is shown nothing — the section is
  *    not theirs, and the tab above it still is.
  */
-export function UserPermissions({ id, userId, canAct }: { id: string; userId: string; canAct: boolean }) {
+export function UserPermissions({ id, userId, canAct, onChange }: { id: string; userId: string; canAct: boolean; onChange?: () => void }) {
   const { t, lang } = useLocale();
   const confirm = useConfirm();
   const userMessage = useUserMessage();
@@ -80,6 +80,7 @@ export function UserPermissions({ id, userId, canAct }: { id: string; userId: st
     setActionError(null);
     try {
       setView(await work());
+      onChange?.();
       setDraft(null);
       notify.success(t("common", done));
     } catch (e) {

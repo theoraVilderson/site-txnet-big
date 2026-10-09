@@ -10,9 +10,9 @@ import type { RegisteredPermission } from '../http/permission-registry.generated
  * which is what puts it inside the tenant ceiling (F-018-n2). No template is
  * granted one in the database: the templates keep what they held.
  *
- * Four have no reseller route yet — `wallet.manual_adjust`, `credential.manage`,
- * `audit.read`, `export.request`. They are grantable now so a role made today
- * already carries them when their route lands.
+ * Three have no reseller route yet — `wallet.manual_adjust`, `credential.manage`,
+ * `export.request`. They are grantable now so a role made today already
+ * carries them when their route lands. `audit.read` opens the access log (AC-1-p).
  */
 export const RESELLER_KEYS = [
   'audit.read',

@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 45
+version: 48
 updated: 2026-10-09
 ---
 
@@ -52,6 +52,8 @@ Role-level refusals are the ones above, unchanged. Code:
 | GET `/auth/tenants/:tenantId/users/:userId/keys` (v45, AC-1-l) | — | 200 `{userId, keys, role:{id,name,keys}, groups:[{id,name,keys}] (v47), given:[{key,reason,by,at}], taken:[…]}`. 404 `user_not_found` | `RESELLER_USER_READ` per caller |
 | PUT `/auth/tenants/:tenantId/users/:userId/keys/:key` (v45) | `{effect: "give"\|"take", reason}` (3-500) | 200 the view above. 400 `key_unknown`; 403 `key_not_grantable` / `key_not_held` / `no_authority`; 404 `user_not_found`; 409 `key_on_wildcard` | `RESELLER_USER_WRITE` per caller |
 | DELETE `/auth/tenants/:tenantId/users/:userId/keys/:key` (v45) | — | 200 the view above. 404 `key_not_found`; otherwise as `PUT` | same |
+| GET `/auth/tenants/:tenantId/users/:userId/access-history?page=` (v48, AC-1-p) | — | 200 `{page, items:[{id, at, cause, given, taken, actor:{id,name}, act:{action, target:{type,id,name}, before, after, reason} \| null}], more}`, 50 a page, newest first. Door `role.manage` or `audit.read`; 404 `user_not_found`; 400 a `page` off 1–10000 | `RESELLER_USER_READ` per caller |
+| GET `/auth/tenants/:tenantId/access-history?page=` (v48) | — | 200 the same page of acts, each `{id, at, action, actor, target, before, after, reason, moved}`. Door `audit.read`. Rules: audit `contract.md` "Access history" | `RESELLER_USER_READ` per caller |
 
 ## Why the write budget is per tenant
 

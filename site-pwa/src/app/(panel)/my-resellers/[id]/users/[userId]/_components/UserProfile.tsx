@@ -33,6 +33,7 @@ import {
   roleEditable,
 } from "../../../../_lib/users";
 import { useWorkspaceSelf } from "../../../../_lib/workspace";
+import { AccessHistory } from "./AccessHistory";
 import { UserPermissions } from "./UserPermissions";
 import { useUserMessage } from "./useUserMessage";
 
@@ -55,6 +56,8 @@ const P = K.profile;
  *    replaces what is shown;
  *  - **every key they hold and where it comes from**, give / take / lift one
  *    (AC-1-n): `UserPermissions`, below the role;
+ *  - **who changed their access, when and why** (AC-1-p): `AccessHistory`,
+ *    below the permissions, re-read after a role or key written here;
  *  - **"sign in as this user"** (AC-1-i) on the caller's own tenant, or for
  *    platform staff on a reseller's user under its consent — `mayImpersonate`:
  *    `canAct` (never the owner, ADR-0137) and the route's key. A reseller's own
@@ -93,6 +96,8 @@ export function UserProfile({
   const [roleId, setRoleId] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
+  /** Bumped by a role or key written here, so the open access history re-reads (AC-1-p). */
+  const [accessMoved, setAccessMoved] = useState(0);
 
   const show = (p: ResellerUserProfile) => {
     setPerson(p);
@@ -169,6 +174,7 @@ export function UserProfile({
   const changeRole = () =>
     run(async () => {
       await tenantRolesApi.assign(id, userId, roleId);
+      setAccessMoved((n) => n + 1);
       show(await resellerUsersApi.profile(id, userId));
       notify.success(t("common", P.roleSaved));
     });
@@ -308,7 +314,8 @@ export function UserProfile({
         )}
       </section>
 
-      <UserPermissions id={id} userId={userId} canAct={editable} />
+      <UserPermissions id={id} userId={userId} canAct={editable} onChange={() => setAccessMoved((n) => n + 1)} />
+      <AccessHistory id={id} userId={userId} refresh={accessMoved} />
     </div>
   );
 }

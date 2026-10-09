@@ -2,8 +2,8 @@
 id: audit
 layer: domain
 status: active
-version: 3
-keywords: [audit log, grant history, who froze this, admin action history, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group, support consent, support access, consent for support, رضایت پشتیبانی, what did the platform do, platform activity, platform access history, emergency entry, emergency access, ورود اضطراری]
+version: 4
+keywords: [audit log, grant history, who froze this, admin action history, impersonation, settlement, payout, grant a gateway, withdraw a grant, what is owed, operator surface, account switch, account switching, multi account, multiple accounts, switch account, linked accounts, account group, switch scope, per device accounts, per chat accounts, remove an account, leave a group, support consent, support access, consent for support, رضایت پشتیبانی, what did the platform do, platform activity, platform access history, emergency entry, emergency access, ورود اضطراری, access history, who gave whom what, access log, تاریخچه دسترسی]
 source:
   - txnet-backend/prisma/domains/audit.prisma
   - txnet-backend/auth-service/src/app/account-switch/**
@@ -20,9 +20,11 @@ source:
   - txnet-backend/shared-core/src/lib/tenant/platform-access-trail.ts
   - txnet-backend/prisma/domains/migrations/20261004000200_platform_access_is_recorded/**
   - txnet-backend/prisma/domains/migrations/20261004000300_emergency_entry/**
-owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member, support_access_consent, support_consent_policy, emergency_access_entry]
+  - txnet-backend/auth-service/src/app/access-history/**
+  - txnet-backend/prisma/domains/migrations/20261009000700_access_history/**
+owns_tables: [admin_audit_log, impersonation_session, linked_account_group, linked_account_member, support_access_consent, support_consent_policy, emergency_access_entry, access_history]
 depends_on: [identity]
-updated: 2026-10-04
+updated: 2026-10-09
 ---
 
 # Audit
@@ -42,10 +44,10 @@ updated: 2026-10-04
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-09 | Contract v3 -> **v4** (additive, AC-1-p): access history — table `access_history`, written by shared-core `recordAccessChange`; a person's history and the tenant's access log on auth-service. [contract.md](contract.md) "Access history" |
 | 2026-09-18 | Contract v2 -> **v3** (break, F-061-g, ADR-0059 (5)): a chat's scope is `bot:<tenantId>:<platform>:<chatId>` (migration `20260918000200`, existing rows rewritten; `forward-auth` updated in the same change, reads both). Invariant #6 is now "the door admits": a reseller's owner switches among their reseller's accounts on its domain |
 | 2026-09-12 | **The settlement operator surface (F-096-e, ADR-0041 §5/§6)** — `contract.settlement.md`, additive, no version bump. Five routes under `/api/billing/admin/settlement/*`: grant a gateway, withdraw one, list grants, what is owed per tenant, record a manual payout. Invariants **#9–#11** added, the unit's first enforced outside `auth-service`. Two new `AdminAction`s and `AuditTargetType`s; `billing-service` becomes the second writer of `admin_audit_log` |
 | 2026-09-06 | **ADR-0015 — a group belongs to the surface it was built on, not to the person.** `linked_account_member` gains `scopeKey` (`bot:<platform>:<chatId>` or `device:<uuid>`); `userId @unique` becomes `@@unique([scopeKey, userId])`. Contract v1 -> **v2**, breaking every switch-group operation. Invariant #3 rewritten, #8 added; #4/#6/#7 untouched. F-0208 (removing an account, from either side) ships with it and revokes only that scope's sessions (`account_unlinked`) |
 | 2026-09-06 | The group is complete for a user: F-0206 (`GET /auth/accounts`) and F-0207 (`POST /auth/accounts/switch`) join F-0205. Invariants #6 and #7 stop being intent — the list and the switch both filter on the caller's `tenantId`, and the handover is one transaction in `identity` (`AuthService.switchSession`). `panel-web` renders it (F-0209). Still open in this area: F-0208 (leaving a group) |
-| 2026-09-06 | First service: `account-switch/` implements F-0205 (add an account to the group, proved by OTP or password). Unit flips `draft` -> `active` — the switch-group half is live; `admin_audit_log` and `impersonation_session` are still written by identity's impersonation module and remain unserviced here |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

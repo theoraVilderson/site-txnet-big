@@ -83,7 +83,8 @@ what each key means: [panel-web/contract.ux.md](../../interfaces/panel-web/contr
 ## Emits (events)
 
 `identity.access.changed` (AC-1-q's outbox row, cause `group_access`), in the
-group write's own transaction — built by shared-core `accessChanged`, consumed as
+group write's own transaction with each moved member's `access_history` row, both by
+shared-core `recordAccessChange` against the act's audit row (AC-1-p); consumed as
 identity's are. Postgres `NOTIFY identity_permissions_changed` from the triggers above.
 
 ## Consumes

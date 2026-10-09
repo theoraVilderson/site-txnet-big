@@ -1,14 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, UserStatus } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma, UserStatus } from '@prisma/client';
 import {
-  accessChanged,
+  AccessHistoryCause,
   assertUnderLimit,
   RESELLER_LIMIT_USAGE,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
+  recordAccessChange,
   resellerLimitOf,
+  runWithTenant,
+  tenantTransaction,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -44,7 +47,8 @@ import type { InviteStaffInput } from './tenant-staff.schema';
  * `ResellerAccess` has refused on the app pool (ADR-0053's order).
  */
 
-export type StaffActor = ResellerActor;
+/** `ip` is what a seat's audit row records (AC-1-p). */
+export type StaffActor = ResellerActor & { ip?: string };
 
 /** What a seat is, at a moment: the four states `list` reports. */
 export type StaffState = 'invited' | 'active' | 'expired' | 'revoked';
@@ -134,14 +138,17 @@ export class TenantStaffService {
     // unique, so the alternative is not a second row but a lost history.
     const seat = await this.all.$transaction(async (tx) => {
       await this.assertRoomForOneMore(tx, reseller, now);
-      return existing
-        ? tx.tenantStaffMember.update({
+      const row = existing
+        ? await tx.tenantStaffMember.update({
             where: { id: existing.id },
             data: { invitedByUserId: actor.userId, invitedAt: now, joinedAt: null, accessExpiresAt: input.accessExpiresAt ?? null, revokedAt: null },
           })
-        : tx.tenantStaffMember.create({
+        : await tx.tenantStaffMember.create({
             data: { tenantId: reseller.id, userId: person.id, invitedByUserId: actor.userId, invitedAt: now, accessExpiresAt: input.accessExpiresAt ?? null },
           });
+      // AC-1-p: no access until accepted, so nobody is told — but the history keeps who invited.
+      await this.audited(tx, actor, reseller.id, row, 'seat_invited', AdminAction.staff_seat_invite, existing ? seatValues(existing) : null, seatValues(row));
+      return row;
     });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} invited ${person.id} by ${actor.userId}`);
     return this.view(seat, person, now);
@@ -167,7 +174,15 @@ export class TenantStaffService {
     if (!seat) throw new StaffRefused('no_invite', tenantId);
     if (seat.accessExpiresAt && seat.accessExpiresAt <= now) throw new StaffRefused('no_invite', tenantId);
 
-    const joined = await this.prisma.tenantStaffMember.update({ where: { id: seat.id }, data: { joinedAt: now } });
+    // Bound to the path's tenant, which is the caller's own (checked above).
+    const joined = await runWithTenant({ id: tenantId }, () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { joinedAt: now } });
+        // AC-1-p: the person's own act, so no audit row; their own panel refreshes on the answer.
+        await recordAccessChange(tx, [{ userId: actor.userId, tenantId, cause: 'seat_joined', actorUserId: actor.userId, auditLogId: null }]);
+        return row;
+      }),
+    );
     this.logger.log(`staff seat ${seat.id} accepted by ${actor.userId}`);
     return (await this.withUsers([joined], now))[0];
   }
@@ -189,9 +204,9 @@ export class TenantStaffService {
     const updated = await this.all.$transaction(async (tx) => {
       if (restored) await this.assertRoomForOneMore(tx, reseller, now);
       const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { accessExpiresAt } });
-      if (restored && row.joinedAt) {
-        await tx.outboxEvent.create({ data: accessChanged(seat.userId, reseller.id, 'seat_restored'), select: { id: true } });
-      }
+      // A seat brought back is told (AC-1-q); an end moved is only remembered (AC-1-p).
+      const cause = restored && row.joinedAt ? 'seat_restored' : 'seat_end_set';
+      await this.audited(tx, actor, reseller.id, row, cause, AdminAction.staff_seat_end_set, seatValues(seat), seatValues(row));
       return row;
     });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} now ends ${accessExpiresAt?.toISOString() ?? 'never'}, by ${actor.userId}`);
@@ -207,11 +222,38 @@ export class TenantStaffService {
     const revoked = await this.all.$transaction(async (tx) => {
       const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { revokedAt: now } });
       // AC-1-q: the member's panel loses this reseller now, not on the next refused call.
-      await tx.outboxEvent.create({ data: accessChanged(seat.userId, reseller.id, 'seat_removed'), select: { id: true } });
+      await this.audited(tx, actor, reseller.id, row, 'seat_removed', AdminAction.staff_seat_remove, seatValues(seat), seatValues(row));
       return row;
     });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} removed by ${actor.userId}`);
     return (await this.withUsers([revoked], now))[0];
+  }
+
+  /** A seat act's audit row, and the seat holder's history row (and notice, for a told cause) against it (AC-1-p). */
+  private async audited(
+    tx: Prisma.TransactionClient,
+    actor: StaffActor,
+    tenantId: string,
+    seat: { id: string; userId: string },
+    cause: AccessHistoryCause,
+    action: AdminAction,
+    before: Prisma.InputJsonValue | null,
+    after: Prisma.InputJsonValue,
+  ): Promise<void> {
+    const act = await tx.adminAuditLog.create({
+      data: {
+        tenantId,
+        adminId: actor.userId,
+        action,
+        targetEntityType: AuditTargetType.staff_seat,
+        targetEntityId: seat.id,
+        oldValue: before ?? Prisma.DbNull,
+        newValue: after,
+        adminIpAddress: actor.ip ?? '0.0.0.0',
+      },
+      select: { id: true },
+    });
+    await recordAccessChange(tx, [{ userId: seat.userId, tenantId, cause, actorUserId: actor.userId, auditLogId: act.id }]);
   }
 
   /**
@@ -270,4 +312,9 @@ export function staffState(
   if (row.revokedAt) return 'revoked';
   if (row.accessExpiresAt && row.accessExpiresAt <= now) return 'expired';
   return row.joinedAt ? 'active' : 'invited';
+}
+
+/** What a seat's audit row records: whose it is and when it ends (AC-1-p). */
+function seatValues(seat: { userId: string; accessExpiresAt: Date | null; revokedAt: Date | null }): Prisma.InputJsonValue {
+  return { userId: seat.userId, accessExpiresAt: seat.accessExpiresAt?.toISOString() ?? null, revokedAt: seat.revokedAt?.toISOString() ?? null };
 }

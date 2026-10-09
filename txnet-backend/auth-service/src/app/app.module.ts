@@ -10,6 +10,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { AutomationModule } from './automation/automation.module';
 import { WebhookRotationModule } from './automation/webhook-rotation.module';
 import { ResellerBotModule } from './automation/reseller-bot.module';
+import { AccessHistoryModule } from './access-history/access-history.module';
 import { SupportConsentModule } from './support-consent/support-consent.module';
 import { VaultModule } from './tenant/vault/vault.module';
 import { UserGroupModule } from './governance/user-groups/user-group.module';
@@ -34,6 +35,7 @@ import { TenantContextMiddleware } from './tenant-context/tenant-context.middlew
     WebhookRotationModule,
     ResellerBotModule,
     SupportConsentModule,
+    AccessHistoryModule,
     UserGroupModule,
     UiPreferencesModule,
   ],

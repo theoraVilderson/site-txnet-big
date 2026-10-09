@@ -2,8 +2,8 @@
 id: audit
 layer: domain
 status: active
-version: 3
-updated: 2026-09-28
+version: 4
+updated: 2026-10-09
 ---
 
 # Contract — audit
@@ -60,6 +60,35 @@ every write; the route is `GET …/users/:userId/grants/:grantId/history`.
 
 Not recorded: the system's own acts (the unfreeze sweep, a quota stop) — they
 are not an admin's. Telling the user is the next section's.
+
+## Access history (built — AC-1-p)
+
+Who gave whom what, answerable without the database (user, 2026-10-08). One
+`access_history` row per person an act moved, beside the act's
+`admin_audit_log` row (user, 2026-10-09: a group's or a role's edit is one row
+**per person**, so who was moved stays true after membership moves on).
+
+| Rule | Why |
+|---|---|
+| Written **only** by shared-core `recordAccessChange(tx, changes)`, in the act's transaction: the history rows, and for a told cause the `identity.access.changed` event (AC-1-q). `accessChanged` is not exported | a producer cannot tell a person without the history remembering it |
+| Producers: role set on a person (`role_set`), a key given/taken/lifted (`keys_set`), a role's keys replaced (`role_edited`, audited `role_keys_set` on target `role`), a group's access, members or delete (`group_access`, only people whose answer moved), a staff seat invited / accepted / end moved / restored / removed (`seat_*`, audited `staff_seat_invite` / `_end_set` / `_remove` on target `staff_seat`) | every act ADR-0138 counts as access |
+| A row: `userId`, `actorUserId`, `cause`, `auditLogId`, `given`/`taken` (what **their** answer gained and lost). `auditLogId` is null only for the person's own act (a seat accepted) | the act's row already holds who, before, after and why |
+| Acts before 2026-10-09 have no history row (no backfill); the tenant log still lists them, `moved: 0` | the audit rows were all there was |
+| A temporal grant (F-030) writes through the same call when it is built | — |
+
+Routes (auth-service `access-history/`, auth-api `contract.roles.md`):
+
+- `GET /auth/tenants/:tenantId/users/:userId/access-history?page=` — the
+  person's rows, newest first, 50 a page, `{page, items, more}`; each `{id, at,
+  cause, given, taken, actor:{id,name}, act:{action, target:{type,id,name},
+  before, after, reason} | null}`. Door `role.manage` or `audit.read`; 404
+  `user_not_found` for someone not of the path's tenant.
+- `GET /auth/tenants/:tenantId/access-history?page=` — the acts (the
+  `ACCESS_ACTIONS` list), each as `act` above plus `moved` (people it moved).
+  Door `audit.read`.
+- Names: users through the cross-tenant pool, name only (an owner and the
+  platform's staff are platform-tenant users, ADR-0059); a deleted group by
+  its delete row's `name`. No IP is answered.
 
 ## Support consent (built — F-117-a)
 

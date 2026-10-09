@@ -115,7 +115,7 @@ export class TenantRolesController {
     @Req() req: Request,
     @Body(new ZodValidationPipe(updateRoleSchema)) body: UpdateRoleInput,
   ) {
-    return this.refusing(() => this.roles.update(actorOf(req), tenantId, id, body));
+    return this.refusing(() => this.roles.update(actorOf(req), tenantId, id, body, req.ip ?? '0.0.0.0'));
   }
 
   @Delete('roles/:id')

@@ -27,7 +27,7 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
 
   const build = (options: { roleKeys?: string[]; rows?: Row[]; as?: 'owner' | 'member'; groups?: Membership[] } = {}) => {
     const rows: Row[] = [...(options.rows ?? [])];
-    const written: { audit?: Record<string, unknown>; outbox?: Record<string, unknown> } = {};
+    const written: { audit?: Record<string, unknown>; outbox?: Record<string, unknown>; history?: Record<string, unknown>[] } = {};
     const target = { id: 'u-agent', tenantId: reseller, roleId: 'role-support', role: { name: 'Support', rolePermissions: keys(...(options.roleKeys ?? ['user.read', 'user.write'])) } };
     const tx = {
       $executeRaw: vi.fn(async () => undefined),
@@ -59,7 +59,8 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
           return { count: 1 };
         }),
       },
-      adminAuditLog: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => void (written.audit = data)) },
+      adminAuditLog: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => ((written.audit = data), { id: 'act-1' })) },
+      accessHistory: { createMany: vi.fn(async ({ data }: { data: Record<string, unknown>[] }) => ((written.history = data), { count: data.length })) },
       outboxEvent: { create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => void (written.outbox = data)) },
     };
     const prisma = {

@@ -74,6 +74,8 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
       findMany: vi.fn().mockResolvedValue([{ id: 'u-1' }, { id: 'u-2' }]),
     },
     outboxEvent: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
+    adminAuditLog: { create: vi.fn().mockResolvedValue({ id: 'act-1' }) },
+    accessHistory: { createMany: vi.fn().mockResolvedValue({ count: 2 }) },
     // No group gives the role (AC-1-m).
     userGroup: { count: vi.fn().mockResolvedValue(0) },
   };
@@ -94,6 +96,9 @@ function harness(overrides: Record<string, Record<string, unknown>> = {}) {
   });
   return { prisma, tx, service };
 }
+
+/** The editor an audit row names (AC-1-p). */
+const BY = { userId: 'admin-1', ip: '10.0.0.1' };
 
 describe('RolesService', () => {
   describe('list', () => {
@@ -146,7 +151,7 @@ describe('RolesService', () => {
       await expect(service.create(SUPER, { name: 'Ops', permissions: ['user.view', 'platform.report.read'] })).rejects.toMatchObject({
         message: 'role.permissionPlatformOnly',
       });
-      await expect(service.update(SUPER, 'role-staff', { permissions: ['platform.report.read'] })).rejects.toBeInstanceOf(
+      await expect(service.update(SUPER, 'role-staff', { permissions: ['platform.report.read'] }, BY)).rejects.toBeInstanceOf(
         ForbiddenException,
       );
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -169,7 +174,7 @@ describe('RolesService', () => {
   describe('update and delete', () => {
     it('looks the role up in the caller tenant, so a template is not writable', async () => {
       const { prisma, service } = harness();
-      await service.update(RESELLER, 'role-staff', { name: 'Helpdesk' });
+      await service.update(RESELLER, 'role-staff', { name: 'Helpdesk' }, BY);
       expect(prisma.role.findFirst.mock.calls[0][0].where).toEqual({
         id: 'role-staff',
         tenantId: 'tenant-reseller',
@@ -178,13 +183,13 @@ describe('RolesService', () => {
 
     it('answers notFound for a template and for another tenant`s role alike', async () => {
       const { service } = harness({ role: { findFirst: vi.fn().mockResolvedValue(null), findMany: vi.fn() } });
-      await expect(service.update(RESELLER, 'role-user', { name: 'x' })).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.update(RESELLER, 'role-user', { name: 'x' }, BY)).rejects.toBeInstanceOf(NotFoundException);
       await expect(service.remove(RESELLER, 'role-user')).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('replaces the whole grant set in one transaction', async () => {
       const { prisma, tx, service } = harness();
-      await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] });
+      await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] }, BY);
       expect(prisma.$transaction).toHaveBeenCalledOnce();
       expect(tx.rolePermission.deleteMany.mock.calls[0][0].where).toEqual({ roleId: 'role-staff' });
       expect(tx.rolePermission.createMany.mock.calls[0][0].data).toEqual([
@@ -194,7 +199,7 @@ describe('RolesService', () => {
 
     it('tells every holder of an edited grant set, in the same transaction, with the keys given and taken (AC-1-q, AC-1-s)', async () => {
       const { tx, service } = harness();
-      await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] });
+      await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] }, BY);
       expect(tx.user.findMany.mock.calls[0][0]).toMatchObject({ where: { roleId: 'role-staff', deletedAt: null } });
       expect(tx.outboxEvent.createMany.mock.calls[0][0].data).toEqual(
         ['u-1', 'u-2'].map((userId) => ({
@@ -204,11 +209,23 @@ describe('RolesService', () => {
           payload: { userId, tenantId: 'tenant-reseller', cause: 'role_edited', given: ['wallet.view'], taken: ['user.view'] },
         })),
       );
+      // AC-1-p: one audit row for the edit, and each holder's history points at it.
+      expect(tx.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({
+        action: 'role_keys_set',
+        targetEntityType: 'role',
+        targetEntityId: 'role-staff',
+        adminId: 'admin-1',
+        newValue: { keys: ['wallet.view'] },
+      });
+      expect(tx.accessHistory.createMany.mock.calls[0][0].data.map((r: { userId: string; auditLogId: string }) => [r.userId, r.auditLogId])).toEqual([
+        ['u-1', 'act-1'],
+        ['u-2', 'act-1'],
+      ]);
     });
 
     it('leaves the grants alone when only the name changes', async () => {
       const { tx, service } = harness();
-      await service.update(RESELLER, 'role-staff', { name: 'Helpdesk' });
+      await service.update(RESELLER, 'role-staff', { name: 'Helpdesk' }, BY);
       expect(tx.outboxEvent.createMany).not.toHaveBeenCalled();
       expect(tx.rolePermission.deleteMany).not.toHaveBeenCalled();
       expect(tx.role.update.mock.calls[0][0].data).toEqual({ name: 'Helpdesk' });

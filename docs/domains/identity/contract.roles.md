@@ -47,6 +47,7 @@ permission is the door; the tenant on the caller's claims is the boundary.
 | A `platform.` key is refused on every role, `*` included: `role.permissionPlatformOnly` (AC-1-c, invariant 20) | the platform's staff set is never a tenant role's (catalog §3.3, ADR-0135); every role written here is tenant-made, and the gate would refuse the claim anyway |
 | A template, another tenant's role and a non-existent id all answer `role.notFound` | one answer, so a write is not an oracle for role ids elsewhere on the platform. It is also what enforces invariant #9 — a write path never finds an `isSystemRole` row |
 | `permissions` on an edit is the **whole** set, never a diff | the fingerprint is over a set; a partial edit would race two admins into a half-applied role |
+| An edit that changes the key set writes one `role_keys_set` audit row (target `role`, `{keys}` before and after, the editor and their IP) and each holder's `access.changed` + `access_history` row against it; the same set again writes neither (AC-1-p) | a role edit moves every holder's access, and the history must say who did it |
 | A role a user still holds is `role.inUse`, not a cascade | `user.roleId` is a NOT NULL FK (invariant #5) and this endpoint has no role it could move those users to on the caller's behalf |
 
 ## On a tenant's own path (F-1201-a, ADR-0134)
@@ -89,8 +90,8 @@ lists them — `domain.manage`, `theme.manage`, `bot.manage`, `grant.assign`,
 onboarding), `report.read` (revenue), and the existing `user.read`,
 `user.write`, `user.impersonate`, `user_group.manage`, `catalog.manage`,
 `gateway.manage`, `campaign.manage`, `restriction.assign`. `wallet.manual_adjust`,
-`credential.manage`, `audit.read` and `export.request` are registered and
-grantable with no reseller route yet. A subscription, limits and support
+`credential.manage` and `export.request` are registered and grantable with no
+reseller route yet; `audit.read` opens the access log (AC-1-p, audit `contract.md`). A subscription, limits and support
 consent name no key: they are the owner's contract with the platform.
 
 The keys sit under `Admin` in `permissions.yaml`, which is what puts them in

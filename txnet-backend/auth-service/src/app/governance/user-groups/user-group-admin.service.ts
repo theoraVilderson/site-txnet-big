@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, TenantType, UserGroupKind, UserGroupMemberType } from '@prisma/client';
-import { TenantContext, accessChanged, holdsPermission, isPlatformKey, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, holdsPermission, isPlatformKey, recordAccessChange, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { AccessReader } from '../../auth/permissions/access.reader';
 import type { UserAccess } from '../../auth/permissions/access';
@@ -192,8 +192,8 @@ export class UserGroupAdminService {
           const people = givesAccess(row) ? await this.membersHere(tx, id, tenant.id) : [];
           const before = await this.answers.ofLoadedMany(people, tx);
           await tx.userGroup.delete({ where: { id } });
-          await this.audit(tx, actor, tenant.id, 'user_group_delete', id, snapshot(row), null);
-          await this.tell(tx, tenant.id, people, before);
+          const act = await this.audit(tx, actor, tenant.id, 'user_group_delete', id, snapshot(row), null);
+          await this.tell(tx, tenant.id, people, before, actor, act);
           return { id, deleted: true as const };
         }),
       );
@@ -278,8 +278,8 @@ export class UserGroupAdminService {
         ],
         skipDuplicates: true,
       });
-      if (count > 0) await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds });
-      await this.tell(tx, tenant.id, people, before);
+      const act = count > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds }) : null;
+      await this.tell(tx, tenant.id, people, before, actor, act);
       return { added: count };
     });
   }
@@ -294,8 +294,8 @@ export class UserGroupAdminService {
       const where = 'userId' in member ? { groupId: id, userId: member.userId } : { groupId: id, memberTenantId: member.tenantId };
       const { count } = await tx.userGroupMember.deleteMany({ where });
       if (count === 0) throw new UserGroupRefused('member_not_found', 'userId' in member ? member.userId : member.tenantId);
-      await this.audit(tx, actor, tenant.id, 'user_group_member_remove', id, where, null);
-      await this.tell(tx, tenant.id, people, before);
+      const act = await this.audit(tx, actor, tenant.id, 'user_group_member_remove', id, where, null);
+      await this.tell(tx, tenant.id, people, before, actor, act);
       return { removed: true as const };
     });
   }
@@ -343,8 +343,8 @@ export class UserGroupAdminService {
       if (known.length > 0) {
         await tx.userGroupPermission.createMany({ data: known.map((p) => ({ groupId: id, tenantId: tenant.id, permissionId: p.id })) });
       }
-      await this.audit(tx, actor, tenant.id, 'user_group_access_set', id, { roleId: was.roleId, keys: was.keys }, { roleId: input.roleId ?? null, keys });
-      await this.tell(tx, tenant.id, people, before);
+      const act = await this.audit(tx, actor, tenant.id, 'user_group_access_set', id, { roleId: was.roleId, keys: was.keys }, { roleId: input.roleId ?? null, keys });
+      await this.tell(tx, tenant.id, people, before, actor, act);
       return this.view(tx, await this.mustFind(tx, id));
     });
   }
@@ -393,15 +393,26 @@ export class UserGroupAdminService {
     return rows.filter((u) => u.tenantId === tenantId);
   }
 
-  /** Each person whose answer moved is told (AC-1-q, cause `group_access`); the rest, nothing. */
-  private async tell(tx: Tx, tenantId: string, people: readonly { id: string; role: { rolePermissions: { permission: { key: string } }[] } | null }[], before: Map<string, UserAccess>) {
+  /**
+   * Each person whose answer moved is told (AC-1-q, cause `group_access`) and
+   * remembers it, against the act's audit row (AC-1-p); the rest, nothing.
+   */
+  private async tell(
+    tx: Tx,
+    tenantId: string,
+    people: readonly { id: string; role: { rolePermissions: { permission: { key: string } }[] } | null }[],
+    before: Map<string, UserAccess>,
+    actor: UserGroupActor,
+    auditLogId: string | null,
+  ) {
     if (people.length === 0) return;
     const after = await this.answers.ofLoadedMany(people, tx);
-    for (const person of people) {
+    const changes = people.flatMap((person) => {
       const change = moved(before.get(person.id), after.get(person.id));
-      if (change.given.length === 0 && change.taken.length === 0) continue;
-      await tx.outboxEvent.create({ data: accessChanged(person.id, tenantId, 'group_access', change), select: { id: true } });
-    }
+      if (change.given.length === 0 && change.taken.length === 0) return [];
+      return [{ userId: person.id, tenantId, cause: 'group_access' as const, actorUserId: actor.adminId, auditLogId, detail: change }];
+    });
+    await recordAccessChange(tx, changes);
   }
 
   private async view(tx: Tx, row: GroupRow): Promise<UserGroupView> {
@@ -463,8 +474,8 @@ export class UserGroupAdminService {
     id: string,
     before: Record<string, unknown> | null,
     after: Record<string, unknown> | null,
-  ): Promise<void> {
-    await tx.adminAuditLog.create({
+  ): Promise<string> {
+    const row = await tx.adminAuditLog.create({
       data: {
         tenantId,
         adminId: actor.adminId,
@@ -475,6 +486,8 @@ export class UserGroupAdminService {
         newValue: after ? (after as Prisma.InputJsonValue) : Prisma.DbNull,
         adminIpAddress: actor.ip,
       },
+      select: { id: true },
     });
+    return row.id;
   }
 }

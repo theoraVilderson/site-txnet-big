@@ -33,7 +33,7 @@ describe('TenantRolesService', () => {
 
   const build = (options: { as?: 'owner' | 'member' | 'staff'; platform?: boolean; target?: unknown; role?: unknown } = {}) => {
     const order: string[] = [];
-    const written: { update?: unknown; audit?: { data: Record<string, unknown> }; outbox?: { data: Record<string, unknown> } } = {};
+    const written: { update?: unknown; audit?: { data: Record<string, unknown> }; outbox?: { data: Record<string, unknown> }; history?: { data: Record<string, unknown>[] } } = {};
     const user = {
       findFirst: vi.fn(async () =>
         'target' in options
@@ -52,7 +52,7 @@ describe('TenantRolesService', () => {
       create: vi.fn(async (args: { data: Record<string, unknown> }) => {
         order.push('audit');
         written.audit = args;
-        return {};
+        return { id: 'act-1' };
       }),
     };
     const role = {
@@ -74,7 +74,14 @@ describe('TenantRolesService', () => {
     // Nobody here has a key given or taken (AC-1-l): their answer is their role's.
     const userPermission = { findMany: vi.fn(async () => []) };
     const userGroupMember = { findMany: vi.fn(async () => []) };
-    const tx = { user: { ...user, findMany: vi.fn(async () => []) }, adminAuditLog, $executeRaw, role, outboxEvent, userPermission, userGroupMember };
+    const accessHistory = {
+      createMany: vi.fn(async (args: { data: Record<string, unknown>[] }) => {
+        order.push('history');
+        written.history = args;
+        return { count: args.data.length };
+      }),
+    };
+    const tx = { user: { ...user, findMany: vi.fn(async () => []) }, adminAuditLog, $executeRaw, role, outboxEvent, accessHistory, userPermission, userGroupMember };
     const prisma = {
       ...tx,
       permission: {
@@ -144,7 +151,7 @@ describe('TenantRolesService', () => {
       const { service, order, written } = build({ as: 'owner' });
       const result = await service.assign(owner, reseller, 'u-ali', 'role-desk', '10.0.0.1');
       expect(result).toEqual({ userId: 'u-ali', role: { id: 'role-desk', name: 'Desk' } });
-      expect(order).toEqual(['admit:staffWrite', 'bind', 'update', 'audit', 'outbox']);
+      expect(order).toEqual(['admit:staffWrite', 'bind', 'update', 'audit', 'history', 'outbox']);
       expect(written.update).toMatchObject({ where: { id: 'u-ali' }, data: { roleId: 'role-desk' } });
       expect(written.audit?.data).toMatchObject({
         tenantId: reseller,

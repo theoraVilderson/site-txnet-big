@@ -1,4 +1,4 @@
-import { Bot, Contact, Globe, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
+import { Bot, Contact, Globe, History, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -15,6 +15,7 @@ import {
   myResellerConsolePath,
   myResellerDomainsPath,
   myResellerGatewaysPath,
+  myResellerAccessLogPath,
   myResellerRolesPath,
   myResellerTeamPath,
   myResellerSettingsPath,
@@ -56,6 +57,7 @@ export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath, key: "user.read" },
   { id: "reseller-team", label: R.menu.team, short: R.short.team, icon: Contact, href: myResellerTeamPath, key: "staff.manage" },
   { id: "reseller-roles", label: R.menu.roles, short: R.short.roles, icon: KeyRound, href: myResellerRolesPath, key: "role.manage" },
+  { id: "reseller-access-log", label: R.menu.accessLog, short: R.short.accessLog, icon: History, href: myResellerAccessLogPath, key: "audit.read" },
   { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath, key: "domain.manage" },
   { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath, key: "bot.manage" },
   { id: "reseller-branding", label: R.menu.branding, short: R.short.branding, icon: Palette, href: myResellerBrandingPath, key: "theme.manage" },

@@ -1948,7 +1948,8 @@
       "branding": "Reseller brand",
       "setup": "Reseller setup",
       "roles": "Reseller roles",
-      "team": "Reseller team"
+      "team": "Reseller team",
+      "accessLog": "Access log"
     },
     "scope": "Reseller",
     "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
@@ -1964,7 +1965,8 @@
       "domains": "Domains",
       "bot": "Bot",
       "roles": "Roles",
-      "team": "Team"
+      "team": "Team",
+      "accessLog": "Access log"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -5997,6 +5999,44 @@
       "key_on_wildcard": "They hold every permission; there is nothing to give or take.",
       "key_not_found": "That exception is already gone — refresh.",
       "no_authority": "You cannot change this person's permissions: they hold as much as you, or own the reseller."
+    }
+  },
+  "accessHistory": {
+    "title": "Access history",
+    "hint": "Who changed what they may do, when and why.",
+    "open": "Show access history",
+    "close": "Hide access history",
+    "empty": "Nothing has changed their access yet.",
+    "by": "by {{actor}}",
+    "someone": "someone",
+    "reason": "Reason: {{reason}}",
+    "gained": "Gained",
+    "lost": "Lost",
+    "moved": "{{count}} people affected",
+    "older": "Older",
+    "newer": "Newer",
+    "noEnd": "no end date",
+    "logTitle": "Access log",
+    "logTitleOf": "Access log — {{slug}}",
+    "logSubtitle": "Every change to who may do what here: roles, permissions given or taken, groups and the team.",
+    "logEmpty": "No access change has been made yet.",
+    "refresh": "Refresh",
+    "reload": "Try again",
+    "acts": {
+      "role_change": "{{target}}: role changed from {{from}} to {{to}}",
+      "user_permission_set_give": "{{target}}: {{key}} given",
+      "user_permission_set_take": "{{target}}: {{key}} taken away",
+      "user_permission_lift": "{{target}}: the exception on {{key}} lifted",
+      "user_group_access_set": "Group {{target}}: what it gives changed",
+      "user_group_member_add": "Group {{target}}: members added",
+      "user_group_member_remove": "Group {{target}}: a member removed",
+      "user_group_delete": "Group {{target}} deleted",
+      "role_keys_set": "Role {{target}}: its permissions changed",
+      "staff_seat_invite": "{{target}} invited to the team",
+      "staff_seat_end_set": "{{target}}: team access now ends {{end}}",
+      "staff_seat_remove": "{{target}} removed from the team",
+      "seat_joined": "Joined the team",
+      "unknown": "Access changed"
     }
   }
 }

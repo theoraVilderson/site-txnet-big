@@ -114,5 +114,5 @@ export class TenantStaffController {
 
 function actorOf(req: Request): StaffActor {
   const { userId, tenantId, permissions } = identityOf(req);
-  return { userId, tenantId, permissions };
+  return { userId, tenantId, permissions, ip: req.ip };
 }

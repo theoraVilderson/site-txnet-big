@@ -826,6 +826,58 @@ export const tenantRolesApi = {
   },
 };
 
+/** A user, or the platform's staff, named; `name` null when they have none on record. */
+export type NamedActor = { id: string; name: string | null };
+
+/**
+ * One act that moved someone's access (AC-1-p, audit `contract.md` "Access
+ * history"): who, what (`action` on `target`), the target's state before and
+ * after, and the reason typed. `before`/`after` are the act's own shape — a
+ * role change `{roleId, roleName}`, a key `{key, effect, reason}`, a group or
+ * a role `{roleId?, roleName?, keys}`, a seat `{userId, accessExpiresAt}`.
+ */
+export type AccessAct = {
+  id: string;
+  at: string;
+  action: string;
+  actor: NamedActor;
+  target: { type: string; id: string; name: string | null };
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+  reason: string | null;
+};
+
+/** A row of one person's history: what their answer gained and lost, and the act (null for their own, a seat accepted). */
+export type AccessHistoryItem = {
+  id: string;
+  at: string;
+  cause: string;
+  given: string[];
+  taken: string[];
+  actor: NamedActor;
+  act: Omit<AccessAct, "id" | "at" | "actor"> | null;
+};
+
+export type AccessHistoryPage<T> = { page: number; items: T[]; more: boolean };
+
+export const accessHistoryPath = (tenantId: string, userId: string) =>
+  `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/access-history`;
+export const accessLogPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/access-history`;
+
+/**
+ * Who gave whom what (AC-1-p). A person's history is read by whoever reads
+ * their keys (`role.manage`) or an auditor (`audit.read`); the tenant's log by
+ * `audit.read` alone. 50 a page, newest first.
+ */
+export const accessHistoryApi = {
+  async ofPerson(tenantId: string, userId: string, page: number) {
+    return request<AccessHistoryPage<AccessHistoryItem>>(`${accessHistoryPath(tenantId, userId)}?page=${page}`, { method: "GET" });
+  },
+  async ofTenant(tenantId: string, page: number) {
+    return request<AccessHistoryPage<AccessAct & { moved: number }>>(`${accessLogPath(tenantId)}?page=${page}`, { method: "GET" });
+  },
+};
+
 /** Prisma's `SupportConsentScope`: `read` sees a reseller's people, `act` also acts on them. */
 export type ConsentScope = "read" | "act";
 

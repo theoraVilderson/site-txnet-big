@@ -63,7 +63,7 @@ export class RolesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body(new ZodValidationPipe(updateRoleSchema)) body: UpdateRoleInput,
   ) {
-    return this.roles.update(claimsOf(req), id, body);
+    return this.roles.update(claimsOf(req), id, body, { userId: claimsOf(req).sub, ip: req.ip ?? '0.0.0.0' });
   }
 
   @Delete(':id')
