@@ -389,6 +389,23 @@ def check_generated_wire() -> None:
                       f"run python3 tools/wire-gen.py and commit it")
 
 
+def check_permission_registry() -> None:
+    """The registry `auth-service` answers is generated from the policy (AC-1-f, §3.4).
+
+    `tools/permissions-gen.py` writes it from `permissions.yaml` and holds every
+    key and area to an English and a Persian text. A key added to the policy
+    without regenerating, or without its texts, fails here.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("permissions_gen", Path(__file__).parent / "permissions-gen.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    if not gen.OUT.exists() or gen.OUT.read_text(encoding="utf-8") != gen.render():
+        errors.append(f"{gen.OUT.relative_to(ROOT)} is stale or missing — "
+                      f"run python3 tools/permissions-gen.py and commit it")
+    errors.extend(f"permissions.json {p}" for p in gen.missing_texts())
+
+
 def main() -> int:
     show = "--list" in sys.argv
 
@@ -420,6 +437,7 @@ def main() -> int:
     check_panel_permission_checks()
     check_default_role()
     check_generated_wire()
+    check_permission_registry()
 
     for e in errors:
         print(f"ERROR {e}")

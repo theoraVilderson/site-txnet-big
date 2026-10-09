@@ -50,6 +50,10 @@ roles:
       # named role, and a line under `Admin` would let every tenant grant it
       # to its own roles. Given by hand, one person at a time.
       - tenant.emergency_access
+      # A tenant's own roles at `/api/auth/roles` (F-018-n). `*` already allows
+      # it; listed so the permission registry (AC-1-f) names and labels it. A
+      # reseller administers its roles on its own path (ADR-0134), not by this key.
+      - role.manage
   Admin:
     permissions:
       - user.read

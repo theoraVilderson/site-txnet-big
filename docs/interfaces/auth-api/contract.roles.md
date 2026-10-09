@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 42
+version: 43
 updated: 2026-10-09
 ---
 
@@ -60,6 +60,12 @@ permission listener, which is platform-wide work
 
 ## Not here
 
-There is no route that lists the whole permission vocabulary. On
-`/auth/roles` a caller composes from the keys its own `/auth/me` returns; on a
-tenant's path, from `grantable`.
+## The permission registry (v43, AC-1-f)
+
+| Route | Answers | Auth |
+|---|---|---|
+| GET `/auth/permissions` | 200 `{areas:[{area, label, permissions:[{key, label, description, platformOnly}]}]}`, texts in the request's language (`Accept-Language`) | Bearer, any caller — the vocabulary is not a secret |
+
+What a caller may tick is `grantable` on a tenant's path; on `/auth/roles`, the
+keys its own `/auth/me` returns. Code: `.../permissions/permission-registry.controller.ts`.
+Semantics: [identity/contract.roles.md](../../domains/identity/contract.roles.md).

@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 29
+version: 30
 updated: 2026-10-09
 ---
 
@@ -61,6 +61,21 @@ writes to `RolesService`, so the rules above live once.
 | **What may be granted** | the platform's tenant: the caller's keys, `*` included. A reseller: the **tenant ceiling** (every concrete key the templates name, `*` excepted), whole for its owner, and the part they hold for anyone else |
 | **list** | adds `members` (how many of *this* tenant's people hold each role, templates included) and `grantable` (the keys above) |
 | **assign** | the role is this tenant's or a template, else `role_not_found`. The writer holds every key of it, else `role_not_held`. `authorityOver` allows the act on this person (ADR-0103), else `no_authority`. Writes `user.roleId` with a `role_change` audit row in the tenant's trail; the same role again writes nothing. The trigger moves the token (F-101-b) |
+
+## The permission registry (AC-1-f, catalog §3.4)
+
+What the role editor shows. The list is `auth-handler/configs/permissions.yaml`,
+the file the gate enforces: `tools/permissions-gen.py` generates
+`shared-core/.../permission-registry.generated.ts` from it. Each key gets its
+`area` (its first segment) and `platformOnly` (held by no role but
+`SuperAdmin`, so outside the tenant ceiling). Its texts are the `permissions`
+namespace of the backend locale scope: `areas.<area>.label` and
+`keys.<key>.{label,description}`. `contracts.py` fails on a stale file or a key
+without English or Persian text. A missing text at runtime shows the key.
+
+The registry is what can be *shown*. `identity.permission` rows are still what
+can be *granted* (a key with no row is refused). A key in one and not the other
+is shown raw, or not offered.
 
 ## Every query is tenant-bound
 

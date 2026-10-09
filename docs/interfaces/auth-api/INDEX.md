@@ -15,6 +15,7 @@ source:
   - txnet-backend/auth-service/src/app/governance/user-groups/user-group.schema.ts
   - txnet-backend/auth-service/src/app/auth/roles/roles.controller.ts
   - txnet-backend/auth-service/src/app/auth/roles/tenant-roles.controller.ts
+  - txnet-backend/auth-service/src/app/auth/permissions/permission-registry.controller.ts
   - txnet-backend/auth-service/src/app/auth/roles/role.schema.ts
   - txnet-backend/auth-service/src/app/auth/auth.guard.ts
   - txnet-backend/auth-service/src/app/auth/auth.module.ts
@@ -55,9 +56,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-09 | Contract v42 -> **v43** (additive, AC-1-f): `GET /auth/permissions` — the registry generated from `permissions.yaml`, grouped by area, texts in the request's language. [contract.roles.md](contract.roles.md). Consumer: panel-web (F-1201-d) |
 | 2026-10-09 | Contract v41 -> **v42** (additive, F-1201-a, ADR-0134): `/auth/tenants/:tenantId/roles` (CRUD, list adds `members` + `grantable`) and `PUT /auth/tenants/:tenantId/users/:userId/role`, through `ResellerAccess`. [contract.roles.md](contract.roles.md). Consumers: panel-web (F-1201-c/d) |
 | 2026-10-05 | Contract v40 -> **v41** (additive, UX-1-t): `PUT /auth/me/name`, `POST /auth/me/password` — a wrong current password is 400 `wrong_password`; `ME_NAME` 30/900s, `ME_PASSWORD` 5/900s. [contract.account.md](contract.account.md). Consumer: panel-web (UX-1-u) |
 | 2026-10-05 | Contract v39 -> **v40** (additive, UX-1-k): `GET`/`PATCH /auth/me/ui-preferences` — motion, dashboard, pins, sidebar over governance `user_setting`; `unknown_preference` / `invalid_preference` / `preference_too_large` (400); `ME_UI_PREFERENCES` 120/900s. [contract.ui-preferences.md](contract.ui-preferences.md). Consumer: panel-web (UX-1-l) — not built yet |
 | 2026-10-05 | Contract v38 -> **v39** (additive, SES-1-a): `GET /auth/sessions`, `POST /auth/sessions/terminate`, `POST /auth/sessions/terminate-others` — the caller's places and ending the others; `ME_SESSIONS` 30/900s. [contract.sessions.md](contract.sessions.md). Consumer: panel-web (SES-1-b, same change) |
-| 2026-10-02 | Contract v37 -> **v38** (additive, TZ-1-c, ADR-0108): `GET`/`PUT /auth/me/timezone` — the caller's zone, `user` or `browser`, and the resolved one; a browser report never overwrites a choice; a non-IANA zone is 400. [contract.time-zone.md](contract.time-zone.md). Consumers: panel-web (TZ-1-e), bot-app (TZ-1-h) — not built yet |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

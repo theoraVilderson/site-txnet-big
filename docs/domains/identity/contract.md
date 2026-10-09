@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 29
+version: 30
 updated: 2026-10-09
 ---
 
@@ -10,7 +10,7 @@ updated: 2026-10-09
 
 The **only** legal way other units interact with identity. If it is not here, it
 is private. Topic files: [contract.roles.md](contract.roles.md) (a tenant's roles
-and the templates, v29) and [contract.reseller-users.md](contract.reseller-users.md)
+and the templates, v30) and [contract.reseller-users.md](contract.reseller-users.md)
 (a reseller's own users, v23).
 
 ## TL;DR

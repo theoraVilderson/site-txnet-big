@@ -48,6 +48,8 @@ import { HandoffController } from './handoff/handoff.controller';
 import { HandoffService } from './handoff/handoff.service';
 import { RolesController } from './roles/roles.controller';
 import { TenantRolesController } from './roles/tenant-roles.controller';
+import { PermissionRegistryController } from './permissions/permission-registry.controller';
+import { PermissionRegistryService } from './permissions/permission-registry.service';
 import { TenantRolesService } from './roles/tenant-roles.service';
 import { RolesService } from './roles/roles.service';
 import { UserSearchController } from './users/user-search.controller';
@@ -100,6 +102,7 @@ import { ConfigService } from '@nestjs/config';
     HandoffController,
     RolesController,
     TenantRolesController,
+    PermissionRegistryController,
     UserSearchController,
     ResellerUsersController,
     UserStatusController,
@@ -114,6 +117,7 @@ import { ConfigService } from '@nestjs/config';
     HandoffService,
     RolesService,
     TenantRolesService,
+    PermissionRegistryService,
     UserSearchService,
     ResellerUsersService,
     UserStatusService,

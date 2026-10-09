@@ -1,0 +1,234 @@
+{
+  "areas": {
+    "ai": {
+      "label": "AI"
+    },
+    "bot": {
+      "label": "Bots"
+    },
+    "campaign": {
+      "label": "Campaigns"
+    },
+    "catalog": {
+      "label": "Products"
+    },
+    "coupon": {
+      "label": "Coupons"
+    },
+    "currency": {
+      "label": "Currency"
+    },
+    "engagement": {
+      "label": "Engagement"
+    },
+    "gateway": {
+      "label": "Payment gateways"
+    },
+    "guide": {
+      "label": "Guides"
+    },
+    "panel": {
+      "label": "Servers"
+    },
+    "payment": {
+      "label": "Payments"
+    },
+    "realtime": {
+      "label": "Live updates"
+    },
+    "restriction": {
+      "label": "Restrictions"
+    },
+    "role": {
+      "label": "Roles"
+    },
+    "self": {
+      "label": "Own account"
+    },
+    "settlement": {
+      "label": "Settlements"
+    },
+    "support": {
+      "label": "Support"
+    },
+    "tenant": {
+      "label": "Resellers"
+    },
+    "tenant_billing": {
+      "label": "Reseller billing"
+    },
+    "user": {
+      "label": "Users"
+    },
+    "user_group": {
+      "label": "User groups"
+    },
+    "worker": {
+      "label": "Background jobs"
+    }
+  },
+  "keys": {
+    "ai": {
+      "manage": {
+        "label": "Manage AI",
+        "description": "Set up the AI assistant and its provider."
+      }
+    },
+    "bot": {
+      "webhook_rotate": {
+        "label": "Renew bot connection",
+        "description": "Renew a bot's webhook secret."
+      }
+    },
+    "campaign": {
+      "manage": {
+        "label": "Manage campaigns",
+        "description": "Create, send and stop message campaigns."
+      }
+    },
+    "catalog": {
+      "manage": {
+        "label": "Manage products",
+        "description": "Add and edit the products and plans on sale."
+      }
+    },
+    "coupon": {
+      "manage": {
+        "label": "Manage coupons",
+        "description": "Create and withdraw discount codes."
+      }
+    },
+    "currency": {
+      "pin": {
+        "label": "Pin exchange rates",
+        "description": "Fix an exchange rate by hand."
+      }
+    },
+    "engagement": {
+      "manage": {
+        "label": "Manage engagement",
+        "description": "Set up rewards, lotteries and reminders for users."
+      }
+    },
+    "gateway": {
+      "manage": {
+        "label": "Manage payment gateways",
+        "description": "Connect, switch on and switch off payment gateways."
+      }
+    },
+    "guide": {
+      "manage": {
+        "label": "Manage guides",
+        "description": "Write and publish help guides."
+      }
+    },
+    "panel": {
+      "manage": {
+        "label": "Register servers",
+        "description": "Register and remove VPN servers. Platform only."
+      }
+    },
+    "payment": {
+      "confirm_manual": {
+        "label": "Confirm payments by hand",
+        "description": "Approve a card-to-card or other manual payment."
+      }
+    },
+    "realtime": {
+      "tenant": {
+        "read": {
+          "label": "See live updates",
+          "description": "Receive live updates about this team's work."
+        }
+      }
+    },
+    "restriction": {
+      "assign": {
+        "label": "Restrict users",
+        "description": "Limit an account to support only, and lift it."
+      }
+    },
+    "role": {
+      "manage": {
+        "label": "Manage roles",
+        "description": "Create and edit the platform's roles. Platform only."
+      }
+    },
+    "self": {
+      "read": {
+        "label": "See own account",
+        "description": "See their own account and services."
+      },
+      "write": {
+        "label": "Change own account",
+        "description": "Change their own account details."
+      }
+    },
+    "settlement": {
+      "manage": {
+        "label": "Manage settlements",
+        "description": "Settle balances with resellers and partners."
+      }
+    },
+    "support": {
+      "agent": {
+        "label": "Answer support",
+        "description": "Read and answer support conversations."
+      },
+      "manage": {
+        "label": "Manage support",
+        "description": "Set up support categories, hours and agents."
+      }
+    },
+    "tenant": {
+      "emergency_access": {
+        "label": "Emergency entry",
+        "description": "Enter a reseller's panel without its consent, for a limited time. Platform only."
+      },
+      "manage": {
+        "label": "Manage resellers",
+        "description": "Create resellers and change their packages and status. Platform only."
+      }
+    },
+    "tenant_billing": {
+      "adjust": {
+        "label": "Adjust reseller balance",
+        "description": "Add to or take from a reseller's balance by hand."
+      },
+      "topup": {
+        "label": "Top up reseller balance",
+        "description": "Add credit to a reseller's balance."
+      }
+    },
+    "user": {
+      "ban": {
+        "label": "Ban users",
+        "description": "Ban an account, and lift a ban."
+      },
+      "impersonate": {
+        "label": "Sign in as a user",
+        "description": "Sign in as another user to help them."
+      },
+      "read": {
+        "label": "See users",
+        "description": "See users and their details."
+      },
+      "write": {
+        "label": "Edit users",
+        "description": "Change users' details."
+      }
+    },
+    "user_group": {
+      "manage": {
+        "label": "Manage user groups",
+        "description": "Create groups and move users between them."
+      }
+    },
+    "worker": {
+      "manage": {
+        "label": "Manage background jobs",
+        "description": "See, schedule, pause and run background jobs."
+      }
+    }
+  }
+}
