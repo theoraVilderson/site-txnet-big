@@ -36,7 +36,7 @@ export const WIDGETS: readonly WidgetDef[] = [
   // decides — the users page's seat check, systems' platform-only gate. Revenue
   // links to no page: F-311-b's figures door admits a reseller's staff and,
   // since UX-1-r2, the platform's own staff to the platform's tenant.
-  { id: "revenue", titleKey: W.revenue, size: 2, requires: ["platform.report.read"], component: lazy(() => import("../_components/dashboard/widgets/RevenueWidget")) },
+  { id: "revenue", titleKey: W.revenue, size: 2, requires: ["platform.report.read"], resellerRequires: ["report.read"], component: lazy(() => import("../_components/dashboard/widgets/RevenueWidget")) },
   { id: "manual-payments", titleKey: W.manualPayments, size: 1, page: "manual-payments", component: lazy(() => import("../_components/dashboard/widgets/ManualPaymentsWidget")) },
   { id: "support-queue", titleKey: W.supportQueue, size: 1, page: "support-inbox", component: lazy(() => import("../_components/dashboard/widgets/SupportQueueWidget")) },
   { id: "users", titleKey: W.users, size: 1, page: "users", component: lazy(() => import("../_components/dashboard/widgets/UsersWidget")) },

@@ -37,7 +37,7 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  * first, and a way into each one's services.
  *
  *  - **no permission is judged here.** `ResellerAccess` admits the owner, a
- *    seat with `tenant.manage` or platform staff; anyone else gets its
+ *    seat with `user.read` / `user.write` or platform staff; anyone else gets its
  *    sentence;
  *  - **a search is 3 characters or none** (`usersQuery`) — fewer keep the
  *    unfiltered list, never a 400;

@@ -21,3 +21,36 @@ export function holdsPermission(held: readonly string[] | null | undefined, key:
 export function holdsEveryPermission(held: readonly string[] | null | undefined, keys: readonly string[]): boolean {
   return !!held && (held.includes(ALL_PERMISSIONS) || keys.every((key) => held.includes(key)));
 }
+
+/**
+ * Every key that opens a reseller surface to one of its own staff (AC-1-e,
+ * AC-1-e2) — the panel's twin of shared-core's `RESELLER_KEYS`, which the API's
+ * member door reads. `permissions.test.ts` fails when the two lists differ.
+ */
+export const RESELLER_KEYS = [
+  "audit.read",
+  "bot.manage",
+  "campaign.manage",
+  "catalog.manage",
+  "credential.manage",
+  "domain.manage",
+  "export.request",
+  "gateway.manage",
+  "grant.assign",
+  "report.read",
+  "restriction.assign",
+  "role.manage",
+  "settings.manage",
+  "staff.manage",
+  "theme.manage",
+  "user.impersonate",
+  "user.read",
+  "user.write",
+  "user_group.manage",
+  "wallet.manual_adjust",
+] as const;
+
+/** Any one reseller key, or `*`: a seat that administers some part of its reseller. */
+export function holdsAnyResellerKey(held: readonly string[] | null | undefined): boolean {
+  return RESELLER_KEYS.some((key) => holdsPermission(held, key));
+}

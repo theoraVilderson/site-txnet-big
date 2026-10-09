@@ -93,7 +93,7 @@ describe("who sees the page", () => {
     expect(memberSearchOf({ ...OWNER, permissions: ["user_group.manage"] })).toBe("ids");
     expect(memberSearchOf(RESELLER)).toBe("reseller");
     expect(memberSearchOf({ ...RESELLER, tenant: { ...RESELLER.tenant, isOwner: false } })).toBe("ids");
-    expect(memberSearchOf({ ...RESELLER, tenant: { ...RESELLER.tenant, isOwner: false }, permissions: ["user_group.manage", "tenant.manage"] })).toBe("reseller");
+    expect(memberSearchOf({ ...RESELLER, tenant: { ...RESELLER.tenant, isOwner: false }, permissions: ["user_group.manage", "user.read"] })).toBe("reseller");
   });
 });
 

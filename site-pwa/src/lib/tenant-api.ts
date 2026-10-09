@@ -435,7 +435,7 @@ export interface ResellerDomain {
 
 /**
  * A reseller's custom domains (F-018-i), by the reseller the path names
- * (ADR-0064): the owner, a staff seat with `tenant.manage`, or platform staff
+ * (ADR-0064): the owner, a staff seat with `domain.manage`, or platform staff
  * are admitted there (invariant 21) — so no permission key is checked here.
  */
 /** A step of the checklist (`tenant/contract.onboarding.md` "The checklist"). */
@@ -649,7 +649,7 @@ const staffPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)
 
 /**
  * A reseller's seats (F-018-j, F-1201-b): the owner, a seated admin with
- * `tenant.manage`, or platform staff. Resellers only — the platform's team is
+ * `staff.manage` (AC-1-e), or platform staff. Resellers only — the platform's team is
  * people holding a staff role, with no seat (`contract.team.md`).
  */
 export const resellerStaffApi = {

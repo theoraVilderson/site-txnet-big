@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { authApi, type Me, type OwnedReseller } from "@/lib/auth-api";
-import { holdsPermission } from "@/lib/permissions";
+import { holdsAnyResellerKey } from "@/lib/permissions";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 
 /**
@@ -36,7 +36,7 @@ type Owned = readonly (Pick<OwnedReseller, "id"> & { here?: boolean; live?: bool
  * while unknown.
  *
  * - **A staff seat of a reseller** signs in to the reseller's tenant: `me`
- *   says it — the reseller's owner, or a seat holding `tenant.manage`.
+ *   says it — the reseller's owner, or a seat holding any reseller key (AC-1-e2).
  * - **Its owner** is a user of the platform's tenant everywhere — on the
  *   reseller's own domain too (ADR-0059: the handoff signs the same account
  *   in, branded by the door). There the door's `here` (`GET /auth/handoff`)
@@ -50,7 +50,7 @@ type Owned = readonly (Pick<OwnedReseller, "id"> & { here?: boolean; live?: bool
 export function selfResellerOf(me: Pick<Me, "tenant" | "permissions"> | null, owned: Owned | null): string | null | undefined {
   if (!me) return null;
   if (me.tenant.type === "reseller") {
-    return me.tenant.isOwner || holdsPermission(me.permissions, "tenant.manage") ? me.tenant.id : null;
+    return me.tenant.isOwner || holdsAnyResellerKey(me.permissions) ? me.tenant.id : null;
   }
   if (owned === null) return undefined;
   return (owned.find((r) => r.here) ?? owned.find((r) => r.live))?.id ?? null;

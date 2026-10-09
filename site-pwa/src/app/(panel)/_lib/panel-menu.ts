@@ -74,6 +74,13 @@ export type MenuPlacement = MenuSectionId | "footer";
 export type PermissionGated = {
   requires?: readonly string[];
   /**
+   * What a caller signed in to a **reseller** needs instead of `requires`
+   * (AC-1-e2): the page's own reseller key (`RESELLER_KEYS`), where `requires`
+   * is the platform's key for the same page — a seat's users are `user.read`,
+   * the platform staff's `platform.tenant.manage`. Absent, `requires` serves both.
+   */
+  resellerRequires?: readonly string[];
+  /**
    * The tenant types the entry exists in, when not all of them (F-019-d). A
    * permission a role holds in every tenant can still name a surface only one
    * kind of tenant has — a reseller's billing wallet. Compared against
@@ -235,17 +242,18 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
   // reseller's staff on its domain the reseller's — at `/users`, which ignores
-  // the id but keeps the function so the tenant-id gate applies. `platform.tenant.manage` hides it (AC-1-d; a seat's own keys are AC-1-e2);
+  // the id but keeps the function so the tenant-id gate applies. The key hides it: `platform.tenant.manage`
+  // on the platform (AC-1-d), the page's own on a reseller (AC-1-e2);
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["platform.tenant.manage"] },
+  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["platform.tenant.manage"], resellerRequires: ["user.read"] },
   // F-1201-c. The team on the session's tenant: the platform's staff, or a
   // reseller's seats for a seated admin. The same door as users.
-  { section: "people", id: "team", label: M.team, icon: Contact, href: () => PANEL_TEAM, requires: ["platform.tenant.manage"] },
+  { section: "people", id: "team", label: M.team, icon: Contact, href: () => PANEL_TEAM, requires: ["platform.tenant.manage"], resellerRequires: ["staff.manage"] },
   // F-1201-d. The same door as users (ADR-0134): the session's tenant, by its
   // path — the platform's roles for its staff, a reseller's for a seated admin.
-  { section: "people", id: "roles", label: M.roles, icon: KeyRound, href: () => PANEL_ROLES, requires: ["platform.tenant.manage"] },
+  { section: "people", id: "roles", label: M.roles, icon: KeyRound, href: () => PANEL_ROLES, requires: ["platform.tenant.manage"], resellerRequires: ["role.manage"] },
   // F-114-m. Every tenant has its own groups: the permission hides it, and
   // auth-service answers each tenant its own (F-114-j).
   { section: "people", id: "user-groups", label: M.userGroups, icon: Users, href: PANEL_USER_GROUPS, requires: ["user_group.manage"] },
@@ -363,7 +371,8 @@ export function admits(
   return (
     !hidden &&
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
-    ((isOwner && e.ownerSuffices === true) || holdsEveryPermission(held, e.requires ?? []))
+    ((isOwner && e.ownerSuffices === true) ||
+      holdsEveryPermission(held, (tenantType === "reseller" ? e.resellerRequires : undefined) ?? e.requires ?? []))
   );
 }
 

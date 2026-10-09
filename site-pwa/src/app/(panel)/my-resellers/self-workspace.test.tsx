@@ -49,7 +49,7 @@ const ARIAN_OWNER = { userId: "u-ali", tenant: { id: "t-platform", type: "platfo
 const OWNS_ARIAN_HERE = [{ id: "r-1", slug: "arian", here: true, hasPanel: true, live: true }];
 /** The same owner on the platform's panel: no door, its one live reseller. */
 const OWNS_ARIAN = [{ id: "r-old", slug: "old", here: false, hasPanel: false, live: false }, { ...OWNS_ARIAN_HERE[0], here: false }];
-const ARIAN_STAFF = { userId: "u-sara", tenant: { id: "r-1", type: "reseller", isOwner: false }, permissions: ["tenant.manage"] };
+const ARIAN_STAFF = { userId: "u-sara", tenant: { id: "r-1", type: "reseller", isOwner: false }, permissions: ["user.read"] };
 const ARIAN_CUSTOMER = { userId: "u-cust", tenant: { id: "r-1", type: "reseller", isOwner: false }, permissions: [] };
 
 beforeEach(() => {
@@ -168,7 +168,7 @@ describe("PlatformOnlyWorkspace (/my-resellers/:id on a reseller's domain)", () 
 
 describe("the menu's users entry", () => {
   const usersHref = (type: "platform_owner" | "reseller", id: string) =>
-    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["tenant.manage"], type, false, false, id)
+    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["user.read"], type, false, false, id)
       .flatMap((e) => (isMenuGroup(e) ? e.children : [e]))
       .find((l) => l.id === "users")?.href;
 
@@ -178,8 +178,7 @@ describe("the menu's users entry", () => {
     expect(usersHref("platform_owner", "t-platform")).toBe("/users");
   });
 
-  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
-  it.skip("AC-1-e2: opens /users for a reseller seat's own users", () => {
+  it("opens /users for a reseller seat's own users, by `user.read` (AC-1-e2)", () => {
     expect(usersHref("reseller", "r-1")).toBe("/users");
   });
 

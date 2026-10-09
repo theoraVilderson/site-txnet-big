@@ -35,9 +35,9 @@ const OWNER: Me = {
   email: null,
   isImpersonated: false,
 };
-const SUPPORT: Me = { ...OWNER, role: { id: "r3", name: "Support" }, permissions: ["tenant.manage", "tenant_billing.read"] };
-const ADJUSTER: Me = { ...OWNER, role: { id: "r4", name: "Admin" }, permissions: ["tenant.manage", "tenant_billing.adjust"] };
-const PLAIN: Me = { ...OWNER, role: { id: "r5", name: "Support" }, permissions: ["tenant.manage"] };
+const SUPPORT: Me = { ...OWNER, role: { id: "r3", name: "Support" }, permissions: ["platform.tenant.manage", "tenant_billing.read"] };
+const ADJUSTER: Me = { ...OWNER, role: { id: "r4", name: "Admin" }, permissions: ["platform.tenant.manage", "tenant_billing.adjust"] };
+const PLAIN: Me = { ...OWNER, role: { id: "r5", name: "Support" }, permissions: ["platform.tenant.manage"] };
 const RESELLER: Me = { ...OWNER, permissions: ["*"], tenant: { id: "t-res", type: "reseller", isOwner: true } };
 
 describe("the reseller's page and the list that opens it", () => {

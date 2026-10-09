@@ -251,7 +251,7 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => h.endsWith("/users"));
   const people = (type: "reseller" | "platform_owner", tenantId: string | null = "T1") =>
-    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["tenant.manage"], type, false, null, tenantId).flatMap((e) =>
+    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["user.read", "staff.manage", "role.manage"], type, false, null, tenantId).flatMap((e) =>
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => /\/(users|team|roles)$/.test(h));
 
@@ -267,11 +267,13 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(people("platform_owner", null)).toEqual([]);
   });
 
-  // `tenant.manage` is retired (AC-1-d); a seat sees its pages again by its own
-  // keys (`user.read`, `staff.manage`, `role.manage`) in AC-1-e2, which turns this back on.
-  it.skip("AC-1-e2: links a reseller's staff to /users, /team and /roles by their own keys", () => {
-    expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/users"]);
+  // A seat sees each by its own key (AC-1-e2): users `user.read`, team
+  // `staff.manage`, roles `role.manage` — never the platform's.
+  it("links a reseller's staff to /users, /team and /roles by their own keys", () => {
+    expect(users("reseller", ["user.read"], "R 1")).toEqual(["/users"]);
     expect(people("reseller", "R 1")).toEqual(["/users", "/team", "/roles"]);
+    expect(users("reseller", ["platform.tenant.manage"], "R 1")).toEqual([]);
+    expect(users("platform_owner", ["user.read"])).toEqual([]);
   });
 
   it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {
@@ -280,7 +282,7 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(users("platform_owner", ["*"], null)).toEqual([]);
   });
 
-  // A reseller's staff hold `tenant.manage` in a role, but the seat is the other
+  // A reseller's staff hold its keys in a role, but the seat is the other
   // half of the door (invariant 21): a revoked or expired one keeps the role.
   // So on a reseller the door is asked; the platform's rule is the permission.
   it("opens a reseller's own pages only once the door admits the caller", () => {

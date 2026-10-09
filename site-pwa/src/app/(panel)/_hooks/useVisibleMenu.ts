@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { holdsPermission } from "@/lib/permissions";
+import { holdsAnyResellerKey } from "@/lib/permissions";
 import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
 import { PANEL_MENU, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
 import { withResellerMenu } from "../_lib/reseller-menu";
@@ -70,14 +70,16 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
   const tenantType = me?.tenant.type ?? null;
   const isOwner = me?.tenant.isOwner ?? false;
   const ownsReseller = useHoldsLiveReseller(me ? tenantType === "platform_owner" && !isOwner : null);
-  // Asked only where it can change the answer: a reseller's user holding the key.
+  // Asked only where it can change the answer: a reseller's user holding a reseller key (AC-1-e2).
   const canAdminister = useCanAdminister(
-    me && tenantType === "reseller" && holdsPermission(held, "tenant.manage") ? me.tenant.id : null,
+    me && tenantType === "reseller" && holdsAnyResellerKey(held) ? me.tenant.id : null,
   );
   const tenantId = ownTenantOf(me?.tenant ?? null, canAdminister);
   const { workspace, slug, setup } = useResellerWorkspace();
   const wsId = workspace?.id ?? null;
   const wsSelf = workspace?.self ?? false;
+  // A staff seat on its own reseller sees the workspace rows its keys open (AC-1-e2).
+  const seatHeld = tenantType === "reseller" && !isOwner && wsId !== null && wsId === me?.tenant.id ? (held ?? []) : null;
   return useMemo(
     () =>
       withResellerMenu(
@@ -86,7 +88,8 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
         slug,
         setup,
         tenantId,
+        seatHeld,
       ),
-    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup],
+    [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup, seatHeld],
   );
 }

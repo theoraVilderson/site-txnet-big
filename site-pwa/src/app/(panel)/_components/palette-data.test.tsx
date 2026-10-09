@@ -56,7 +56,7 @@ vi.mock("@/lib/support-api", () => ({ supportApi: { search: vi.fn() } }));
 
 const USER = { userId: "u-1", permissions: [], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
 const PLATFORM_STAFF = { userId: "u-2", permissions: ["*"], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
-const RESELLER_STAFF = { userId: "u-3", permissions: ["tenant.manage"], tenant: { id: "t-9", type: "reseller", isOwner: false } };
+const RESELLER_STAFF = { userId: "u-3", permissions: ["user.read"], tenant: { id: "t-9", type: "reseller", isOwner: false } };
 
 const GRANT = { id: "g-1", label: "Home VPN", variant: { id: "v-1", sku: "VPN-30", nameKey: "vpn" } };
 const TICKET = { id: "c-1", subject: "Slow connection", status: "open" };
@@ -150,8 +150,7 @@ describe("palette data groups (N7)", () => {
     expect(push).toHaveBeenCalledWith(panelUserPath("user-7"));
   });
 
-  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
-  it.skip("AC-1-e2: asks a reseller's own users route for its staff", async () => {
+  it("asks a reseller's own users route for its staff holding `user.read` (AC-1-e2)", async () => {
     me = RESELLER_STAFF;
     await open();
     type("sara");

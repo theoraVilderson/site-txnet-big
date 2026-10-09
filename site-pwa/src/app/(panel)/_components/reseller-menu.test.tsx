@@ -199,9 +199,8 @@ describe("one reseller button that opens", () => {
     expect(screen.queryByRole("button", { name: (n) => n === N.groupLabel || n === N.scope })).toBeNull();
   });
 
-  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
-  it.skip("AC-1-e2: draws a reseller staff seat's users once, where the account menu has it", async () => {
-    me = { ...ON_DOMAIN, permissions: ["tenant.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
+  it("draws a reseller staff seat's users once, where the account menu has it, and only the rows its keys open (AC-1-e2)", async () => {
+    me = { ...ON_DOMAIN, permissions: ["user.read", "catalog.manage"], tenant: { ...ON_DOMAIN.tenant, isOwner: false } };
     owned = [];
     renderSidebar();
     // The account's own users page arrives a moment later and redraws the menu: click after it.
@@ -209,6 +208,9 @@ describe("one reseller button that opens", () => {
     fireEvent.click(await resellerButton());
     expect(await screen.findByRole("link", { name: N.short.catalog })).toHaveAttribute("href", "/reseller/catalog");
     expect(screen.queryByRole("link", { name: N.short.users })).toBeNull();
+    // No `domain.manage`, no domains row; the home is every seat's.
+    expect(screen.queryByRole("link", { name: N.short.domains })).toBeNull();
+    expect(screen.getByRole("link", { name: N.short.home })).toBeInTheDocument();
   });
 
   it("keeps the full label where the button is not around it — a pinned page", async () => {

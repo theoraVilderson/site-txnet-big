@@ -45,7 +45,7 @@ vi.mock("./_lib/widgets", async (importOriginal) => {
   });
   return {
     ...real,
-    WIDGETS: [def("alpha", Alpha), def("beta", Beta), def("gamma", Gamma, { requires: ["tenant.manage"] })],
+    WIDGETS: [def("alpha", Alpha), def("beta", Beta), def("gamma", Gamma, { requires: ["platform.tenant.manage"] })],
   };
 });
 

@@ -175,7 +175,7 @@ every rule behind them is [tenant/contract.domains.md](../../domains/tenant/cont
 A purchase's last step links here (`BuyResellerView`, "add your domain").
 
 18. **No permission is judged by the page.** tenant-service admits the owner,
-    a staff seat with `tenant.manage` or platform support (invariant 21); the
+    a staff seat holding the page's key (AC-1-e) or platform support (inv. 21); the
     page makes its calls and shows the refusal's sentence. The domains screen,
     like every workspace page, is an entry of the reseller menu (UX-2-a).
 19. **One sentence per refusal** (`DOMAIN_REFUSAL_KEYS`, namespace

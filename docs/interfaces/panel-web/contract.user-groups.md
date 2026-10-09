@@ -35,13 +35,13 @@ group may hold is governance's
    refuses an empty patch.
 5. **Finding a user goes through the caller's own door, not the group
    routes** (`memberSearchOf`): the platform owner with `user.search` searches
-   `GET /auth/users`; a reseller's owner, or a seat holding `tenant.manage`,
+   `GET /auth/users`; a reseller's owner, or a seat holding `user.read` (AC-1-e2),
    searches its own `GET /auth/tenants/:own/users` (`ResellerAccess`). Anyone
    else types ids. Typed ids are split on spaces, commas or lines, each kept
    once; one that is not a uuid is named and nothing is sent; more than 500 of
    either kind is refused before the call.
 6. **A reseller is picked from the list** (`tenantApi.resellers`, first 100)
-   when the caller holds `tenant.manage`, else typed as an id. A group of every
+   on the platform (the list asks `platform.tenant.manage`), else typed as an id. A group of every
    reseller offers no reseller field and says so.
 7. **Nothing is patched from an answer.** Every add, remove, rename and delete
    re-reads the members page and the list (the counts). `added` is shown as

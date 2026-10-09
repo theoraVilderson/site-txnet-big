@@ -48,7 +48,7 @@ const STATUS_TONE: Record<ResellerBot["status"], { icon: LucideIcon; className: 
  * configure the platform's own bot.
  *
  *  - **no permission is judged here.** auth-service admits the owner, a staff
- *    seat with `tenant.manage` or platform support; any other visitor gets its
+ *    seat with `bot.manage` or platform support; any other visitor gets its
  *    sentence;
  *  - **a connect that the messenger did not register is still a connect.** The
  *    answer's `registered: false` is said out loud and nothing is retried: the

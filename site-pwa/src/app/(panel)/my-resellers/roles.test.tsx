@@ -37,7 +37,7 @@ const REGISTRY = {
       { key: "support.agent", label: "Answer support", description: "", platformOnly: false },
       { key: "support.manage", label: "Manage support", description: "", platformOnly: false },
     ] },
-    { area: "tenant", label: "Resellers", permissions: [{ key: "tenant.manage", label: "Manage resellers", description: "", platformOnly: true }] },
+    { area: "tenant", label: "Resellers", permissions: [{ key: "platform.tenant.manage", label: "Manage resellers", description: "", platformOnly: true }] },
   ],
 };
 

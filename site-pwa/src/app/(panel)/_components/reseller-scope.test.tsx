@@ -31,7 +31,7 @@ let owned: unknown[] = [];
 vi.mock("@/lib/auth-api", () => ({ authApi: { ownedResellers: vi.fn(async () => ({ resellers: owned })) } }));
 
 const OWNER_ADMIN = { userId: "u-1", permissions: ["*"], tenant: { id: "t-platform", type: "platform_owner", isOwner: true } };
-const SEAT = { userId: "u-2", permissions: ["tenant.manage"], tenant: { id: "r-1", type: "reseller", isOwner: false } };
+const SEAT = { userId: "u-2", permissions: ["domain.manage"], tenant: { id: "r-1", type: "reseller", isOwner: false } };
 const ARIAN = { id: "r-1", slug: "arian", here: false, hasPanel: true, live: true };
 
 const header = (tail?: string) =>

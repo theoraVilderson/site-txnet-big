@@ -41,7 +41,7 @@ vi.mock("@/lib/support-api", () => ({ supportAgentApi: { inbox: vi.fn() } }));
 vi.mock("@/lib/auth-api", () => ({ resellerUsersApi: { list: vi.fn() } }));
 
 const NOW = new Date("2026-10-05T12:00:00Z"); // 15:30 in Tehran
-const RESELLER_STAFF = { userId: "u-3", permissions: ["tenant.manage"], tenant: { id: "t-9", type: "reseller", isOwner: false } };
+const RESELLER_STAFF = { userId: "u-3", permissions: ["report.read", "user.read"], tenant: { id: "t-9", type: "reseller", isOwner: false } };
 const PLATFORM_STAFF = { userId: "u-2", permissions: ["*"], tenant: { id: "t-1", type: "platform_owner", isOwner: false } };
 
 const STAFF = ["revenue", "manual-payments", "support-queue", "users", "systems"];
@@ -79,9 +79,9 @@ describe("the registry (D5, D6)", () => {
     expect(seen({ held: ["platform.report.read"], tenantType: "platform_owner", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
   });
 
-  // `tenant.manage` is retired (AC-1-d); AC-1-e2 gives a seat its pages by its own keys and turns this back on.
-  it.skip("AC-1-e2: shows a reseller's staff the revenue widget by `report.read`", () => {
-    expect(seen({ held: ["tenant.manage"], tenantType: "reseller", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
+  it("shows a reseller's staff the revenue widget by `report.read` (AC-1-e2)", () => {
+    expect(seen({ held: ["report.read"], tenantType: "reseller", menuIds: new Set(["users"]) })).toEqual(["revenue", "users"]);
+    expect(seen({ held: ["platform.report.read"], tenantType: "reseller", menuIds: new Set() })).toEqual([]);
   });
 });
 

@@ -26,8 +26,9 @@ addresses it has and how the one menu leads through it.
    branded by the door). On that domain `here` on `GET /auth/handoff` names it;
    on the platform's panel it is the owner's one `live` reseller
    (`already_reseller` allows no second). A staff seat signs in to the
-   reseller's tenant, so for it `me` says it, with `tenant.manage`
-   (`selfResellerOf`). Read once per account and shared (`ownedResellersOf`),
+   reseller's tenant, so for it `me` says it, with any reseller key
+   (`selfResellerOf`, AC-1-e2). It sees the rows whose page's key it holds
+   (`withResellerMenu`'s `seatHeld`); the home always. Read once per account and shared (`ownedResellersOf`),
    cleared after a purchase. The first build read `me.tenant` alone; the
    owner still saw `/my-resellers/<uuid>`, on its domain and then on the
    platform's panel (user, 2026-10-08).

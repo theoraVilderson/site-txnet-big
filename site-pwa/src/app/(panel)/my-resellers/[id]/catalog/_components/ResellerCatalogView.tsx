@@ -20,7 +20,7 @@ import { useWorkspaceSelf } from "../../../_lib/workspace";
  * **platform's** products and answer 200 doing it.
  *
  * No permission is judged here. Billing admits the reseller's owner, a staff
- * seat of it holding `tenant.manage`, or platform support (invariant 21), and
+ * seat of it holding `catalog.manage`, or platform support (invariant 21), and
  * a refusal is shown as its own sentence.
  *
  * `embedded`: the setup wizard's pricing step (UX-2-d) — the same screen

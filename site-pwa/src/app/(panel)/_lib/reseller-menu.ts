@@ -1,5 +1,6 @@
 import { Bot, Contact, Globe, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
+import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MY_RESELLERS,
@@ -30,6 +31,12 @@ interface ResellerMenuLink extends PanelMenuLink {
   /** The label inside the "reseller" button, which already says whose. */
   short: string;
   href: (id: string, self: boolean) => string;
+  /**
+   * The reseller key its page's routes ask a seat for (AC-1-e, AC-1-e2). A
+   * seat sees the row only holding it; the owner and the platform's staff see
+   * every row. Absent (the home, setup): every seat that reaches the workspace.
+   */
+  key?: string;
 }
 
 /**
@@ -44,15 +51,15 @@ interface ResellerMenuLink extends PanelMenuLink {
  */
 export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-home", label: R.menu.home, short: R.short.home, icon: Store, href: myResellerConsolePath },
-  { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath },
-  { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath },
-  { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath },
-  { id: "reseller-team", label: R.menu.team, short: R.short.team, icon: Contact, href: myResellerTeamPath },
-  { id: "reseller-roles", label: R.menu.roles, short: R.short.roles, icon: KeyRound, href: myResellerRolesPath },
-  { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath },
-  { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath },
-  { id: "reseller-branding", label: R.menu.branding, short: R.short.branding, icon: Palette, href: myResellerBrandingPath },
-  { id: "reseller-settings", label: R.menu.settings, short: R.short.settings, icon: Settings2, href: myResellerSettingsPath },
+  { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath, key: "catalog.manage" },
+  { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath, key: "gateway.manage" },
+  { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath, key: "user.read" },
+  { id: "reseller-team", label: R.menu.team, short: R.short.team, icon: Contact, href: myResellerTeamPath, key: "staff.manage" },
+  { id: "reseller-roles", label: R.menu.roles, short: R.short.roles, icon: KeyRound, href: myResellerRolesPath, key: "role.manage" },
+  { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath, key: "domain.manage" },
+  { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath, key: "bot.manage" },
+  { id: "reseller-branding", label: R.menu.branding, short: R.short.branding, icon: Palette, href: myResellerBrandingPath, key: "theme.manage" },
+  { id: "reseller-settings", label: R.menu.settings, short: R.short.settings, icon: Settings2, href: myResellerSettingsPath, key: "settings.manage" },
 ];
 
 /**
@@ -143,6 +150,10 @@ export function resellerMenu(
  * staff seat (F-311-ab) the workspace is the session's own tenant
  * (`ownTenantId`), so its `/reseller/users` is the account's `/users` — and
  * the same for the team and the roles.
+ *
+ * `seatHeld` is a staff seat's keys, when the viewer is one (AC-1-e2): then a
+ * row is drawn only when its page's key is held, as the API admits the seat.
+ * `null` — the owner or the platform's staff — draws every row.
  */
 export function withResellerMenu(
   menu: readonly VisibleMenuEntry[],
@@ -150,12 +161,18 @@ export function withResellerMenu(
   slug: string | null = null,
   setup: SetupProgress | null = null,
   ownTenantId: string | null = null,
+  seatHeld: readonly string[] | null = null,
 ): VisibleMenuEntry[] {
   if (!ws) return [...menu];
+  const keyOf = new Map(RESELLER_MENU.map((row) => [row.id, row.key]));
+  const seatMay = (id: string) => {
+    const key = keyOf.get(id);
+    return seatHeld === null || key === undefined || holdsPermission(seatHeld, key);
+  };
   const held = new Set(menuHrefs(menu));
   if (ws.id === ownTenantId)
     for (const own of [PANEL_USERS, PANEL_TEAM, PANEL_ROLES])
       if (held.has(own)) held.add(`${resellerWorkspaceRoot(ws.id, ws.self)}${own}`);
   const group = resellerMenu(ws, slug, setup);
-  return [...menu, { ...group, children: group.children.filter((l) => !held.has(l.href)) }];
+  return [...menu, { ...group, children: group.children.filter((l) => !held.has(l.href) && seatMay(l.id)) }];
 }

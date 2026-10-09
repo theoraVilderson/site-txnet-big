@@ -19,7 +19,7 @@ import { RESELLER_GATEWAY_KEYS as K, gatewayRefusalKey } from "../../../_lib/gat
  * gateways and answer 200 doing it.
  *
  * No permission is judged here. Billing admits the reseller's owner, a staff
- * seat of it holding `tenant.manage`, or platform support (invariant 21), and
+ * seat of it holding `gateway.manage`, or platform support (invariant 21), and
  * a refusal is shown as its own sentence.
  *
  * `embedded`: the setup wizard's gateway step (UX-2-d) — the same screen

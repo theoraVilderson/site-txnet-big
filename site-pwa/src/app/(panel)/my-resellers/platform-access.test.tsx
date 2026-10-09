@@ -48,7 +48,7 @@ const PLATFORM = "11111111-1111-4111-8111-111111111111";
 const RESELLER = "22222222-2222-4222-8222-222222222222";
 const NOW = Date.parse("2026-10-04T10:00:00Z");
 
-const staff = (permissions: string[] = ["tenant.manage"]): Me => ({
+const staff = (permissions: string[] = ["platform.tenant.manage"]): Me => ({
   userId: "staff-1",
   fullName: "Support",
   role: { id: "r", name: "support" },
@@ -142,7 +142,7 @@ describe("PlatformAccessBanner", () => {
     expect(screen.queryByRole("button", { name: `${S}.staff.emergency.submit` })).toBeNull();
     unmount();
 
-    vi.mocked(usePanelSession).mockReturnValue({ me: staff(["tenant.manage", "tenant.emergency_access"]) } as never);
+    vi.mocked(usePanelSession).mockReturnValue({ me: staff(["platform.tenant.manage", "tenant.emergency_access"]) } as never);
     vi.mocked(supportConsentApi.enterEmergency).mockResolvedValue({ id: "e1" } as never);
     render(<PlatformAccessBanner tenantId={RESELLER} />);
     const enter = await screen.findByRole("button", { name: `${S}.staff.emergency.submit` });

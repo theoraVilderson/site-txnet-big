@@ -11,7 +11,7 @@ export const USER_GROUP_MANAGE = "user_group.manage";
 /** The key the platform owner's user search gates on (F-018-ad). */
 const USER_SEARCH = "user.search";
 /** A reseller seat that holds this passes `ResellerAccess` for its own users (F-311-a). */
-const TENANT_MANAGE = "tenant.manage";
+const USER_READ = "user.read";
 
 /** The schema's bounds; the spec reads both from `user-group.schema.ts`. */
 export const GROUP_NAME_MAX = 80;
@@ -59,14 +59,14 @@ export const canNameResellers = (me: Me | null) => onPlatform(me);
  * tenant has its own door to its users, and neither is `user_group.manage`:
  * - `platform` — `GET /auth/users` (`user.search`, platform owner);
  * - `reseller` — `GET /auth/tenants/:own/users` (`ResellerAccess`: the owner,
- *   or a seat holding `tenant.manage`);
+ *   or a seat holding `user.read`, AC-1-e2);
  * - `ids` — neither: the ids are typed.
  */
 export type MemberSearch = "platform" | "reseller" | "ids";
 export function memberSearchOf(me: Me | null): MemberSearch {
   if (!me) return "ids";
   if (onPlatform(me)) return holds(me, USER_SEARCH) ? "platform" : "ids";
-  return me.tenant.isOwner || holds(me, TENANT_MANAGE) ? "reseller" : "ids";
+  return me.tenant.isOwner || holds(me, USER_READ) ? "reseller" : "ids";
 }
 
 // ------------------------------------------------------------------- the group
