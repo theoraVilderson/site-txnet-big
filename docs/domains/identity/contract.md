@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 28
-updated: 2026-10-05
+version: 29
+updated: 2026-10-09
 ---
 
 # Contract — identity

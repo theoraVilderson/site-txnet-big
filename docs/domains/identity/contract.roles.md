@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 22
-updated: 2026-09-19
+version: 29
+updated: 2026-10-09
 ---
 
 # Contract — roles and permissions
@@ -48,6 +48,27 @@ permission is the door; the tenant on the caller's claims is the boundary.
 | `permissions` on an edit is the **whole** set, never a diff | the fingerprint is over a set; a partial edit would race two admins into a half-applied role |
 | A role a user still holds is `role.inUse`, not a cascade | `user.roleId` is a NOT NULL FK (invariant #5) and this endpoint has no role it could move those users to on the caller's behalf |
 
+## On a tenant's own path (F-1201-a, ADR-0134)
+
+The same four operations, plus assigning a role to a person, on the **path's**
+tenant rather than the caller's. A reseller's owner is a user of the platform's
+tenant, so this is the only way they reach their reseller's roles. The door is
+`ResellerAccess.runIncludingPlatform`, and `TenantRolesService` delegates role
+writes to `RolesService`, so the rules above live once.
+
+| | |
+|---|---|
+| **What may be granted** | the platform's tenant: the caller's keys, `*` included. A reseller: the **tenant ceiling** (every concrete key the templates name, `*` excepted), whole for its owner, and the part they hold for anyone else |
+| **list** | adds `members` (how many of *this* tenant's people hold each role, templates included) and `grantable` (the keys above) |
+| **assign** | the role is this tenant's or a template, else `role_not_found`. The writer holds every key of it, else `role_not_held`. `authorityOver` allows the act on this person (ADR-0103), else `no_authority`. Writes `user.roleId` with a `role_change` audit row in the tenant's trail; the same role again writes nothing. The trigger moves the token (F-101-b) |
+
+## Every query is tenant-bound
+
+`role` is policied shared-read, so a query with no `app.tenant_id` bound sees
+the templates alone, and an insert is refused by `WITH CHECK`. Every
+`RolesService` query therefore runs in `tenantTransaction` (fixed with
+F-1201-a: before that, the writes on `/auth/roles` failed on the real database).
+
 ## What did not change
 
 `role_permission` is still the one relation `permissionFingerprint` runs over,
@@ -78,6 +99,7 @@ identity and none of them.
 Staff membership is `tenant.tenant_staff_member` (F-018-j,
 [tenant/contract.staff.md](../tenant/contract.staff.md)): who is on a reseller's
 team, from when and until when. It names **no** role — a member's role is their
-`user.roleId`, one of these — and holds nothing about permissions itself. That
+`user.roleId`, one of these, set by **assign** above — and holds nothing about
+permissions itself. That
 is D-42 (2): the seat says they are on the team, a role of that tenant says what
 they may do, and `tenant.manage` in it is what administers the reseller.

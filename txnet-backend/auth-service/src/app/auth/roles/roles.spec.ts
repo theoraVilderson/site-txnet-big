@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { runWithTenant } from '@txnet-backend/shared-core';
 import { RolesService } from './roles.service';
 import type { AuthClaims } from '../token.service';
 
@@ -46,9 +47,11 @@ const TEMPLATE = {
   rolePermissions: [],
 };
 
-function harness(overrides: Record<string, unknown> = {}) {
-  const tx = {
+function harness(overrides: Record<string, Record<string, unknown>> = {}) {
+  const models = {
     role: {
+      findMany: vi.fn().mockResolvedValue([OWN_ROLE, TEMPLATE]),
+      findFirst: vi.fn().mockResolvedValue(OWN_ROLE),
       create: vi.fn().mockResolvedValue({ ...OWN_ROLE, id: 'role-new' }),
       update: vi.fn().mockResolvedValue(OWN_ROLE),
       delete: vi.fn().mockResolvedValue(OWN_ROLE),
@@ -56,12 +59,6 @@ function harness(overrides: Record<string, unknown> = {}) {
     rolePermission: {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
       createMany: vi.fn().mockResolvedValue({ count: 1 }),
-    },
-  };
-  const prisma = {
-    role: {
-      findMany: vi.fn().mockResolvedValue([OWN_ROLE, TEMPLATE]),
-      findFirst: vi.fn().mockResolvedValue(OWN_ROLE),
     },
     permission: {
       findMany: vi.fn().mockImplementation(({ where }: { where: { key: { in: string[] } } }) =>
@@ -73,10 +70,23 @@ function harness(overrides: Record<string, unknown> = {}) {
       ),
     },
     user: { count: vi.fn().mockResolvedValue(0) },
-    $transaction: vi.fn().mockImplementation((fn: (t: typeof tx) => unknown) => fn(tx)),
-    ...overrides,
   };
-  return { prisma, tx, service: new RolesService(prisma as never) };
+  for (const [model, fns] of Object.entries(overrides)) Object.assign(models[model as keyof typeof models], fns);
+  // One set of model mocks behind both the client and the transaction:
+  // every query runs in a `tenantTransaction` (RLS shape B), which binds first.
+  const tx = { ...models, $executeRaw: vi.fn().mockResolvedValue(1) };
+  const prisma = { ...models, $transaction: vi.fn().mockImplementation((fn: (t: typeof tx) => unknown) => fn(tx)) };
+  const raw = new RolesService(prisma as never);
+  // The ambient tenant `tenantTransaction` binds, as the gate leaves it on a request.
+  const service = new Proxy(raw, {
+    get: (target, key) => {
+      const value = Reflect.get(target, key);
+      return typeof value === 'function'
+        ? (...args: unknown[]) => runWithTenant({ id: 'tenant-reseller' }, () => value.apply(target, args))
+        : value;
+    },
+  });
+  return { prisma, tx, service };
 }
 
 describe('RolesService', () => {
@@ -173,9 +183,9 @@ describe('RolesService', () => {
     });
 
     it('refuses to delete a role a user still holds', async () => {
-      const { prisma, service } = harness({ user: { count: vi.fn().mockResolvedValue(3) } });
+      const { tx, service } = harness({ user: { count: vi.fn().mockResolvedValue(3) } });
       await expect(service.remove(RESELLER, 'role-staff')).rejects.toBeInstanceOf(ConflictException);
-      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(tx.role.delete).not.toHaveBeenCalled();
     });
 
     it('deletes the grants with the role', async () => {

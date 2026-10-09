@@ -33,3 +33,7 @@ export const updateRoleSchema = z
   })
   .refine((body) => body.name !== undefined || body.permissions !== undefined);
 export type UpdateRoleInput = z.infer<typeof updateRoleSchema>;
+
+/** `PUT /auth/tenants/:tenantId/users/:userId/role` (F-1201-a): the whole of it is which role. */
+export const assignRoleSchema = z.object({ roleId: z.string().uuid() });
+export type AssignRoleInput = z.infer<typeof assignRoleSchema>;

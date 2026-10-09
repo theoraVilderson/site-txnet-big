@@ -38,7 +38,8 @@ platform's global permission keys, and seats people here.
 The seat: `{id, userId, state, invitedByUserId, invitedAt, joinedAt,
 accessExpiresAt, revokedAt, user: {id, fullName, username, phoneNumber},
 role: {id, name}}`. `role` is the member's `identity` role — shown here because
-it is the answer to "what can this person do", and read-only on these routes.
+it is the answer to "what can this person do". It is set at
+`PUT /api/auth/tenants/:id/users/:userId/role` (F-1201-a, ADR-0134), not here.
 
 ## The four states
 
@@ -77,9 +78,9 @@ reseller exists), `reseller_suspended` 403, `reseller_terminated` 409,
 A revoked member's token keeps working — their role did not change, and nothing
 here touches `identity`. What they lose at once is this reseller: every
 `/api/tenants/:id/...` route asks `ResellerAccess`, which reads the seat on the
-request. To take their *permissions* away, change or reassign their role
-(`/api/auth/roles`), which expires their token by the fingerprint path
-(identity invariant 14).
+request. To take their *permissions* away, give them another role
+(`PUT /api/auth/tenants/:id/users/:userId/role`). That moves their token
+at once (F-101-b).
 
 ## Who reaches it, and on which pool
 

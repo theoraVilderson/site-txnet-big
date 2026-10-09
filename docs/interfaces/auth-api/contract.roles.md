@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 25
-updated: 2026-09-19
+version: 42
+updated: 2026-10-09
 ---
 
 # Contract — auth-api / roles
@@ -32,6 +32,24 @@ only on the caller's own tenant. A `role` object is
 
 `:id` is a UUID (`ParseUUIDPipe`) — a malformed id is 400 before any row is read.
 
+## On a tenant's own path (v42, F-1201-a, ADR-0134)
+
+`/auth/tenants/:tenantId/...`, the tenant is the path's. Bearer, **no**
+`role.manage`: `ResellerAccess` is the door (owner, seated member with
+`tenant.manage`, platform staff under the reseller's consent; the platform's
+tenant to its staff). Its refusals answer as on
+[contract.reseller-users.md](contract.reseller-users.md), with `{reason}`.
+Role-level refusals are the ones above, unchanged. Code:
+`.../roles/tenant-roles.controller.ts`.
+
+| Route | Body | Answers | Rate limit |
+|---|---|---|---|
+| GET `/auth/tenants/:tenantId/roles` | — | 200 `{roles:[role + members], grantable:[key]}` | `RESELLER_USER_READ` per caller |
+| POST `/auth/tenants/:tenantId/roles` | as `POST /auth/roles` | as `POST /auth/roles`; a key past `grantable` is 403 `role.permissionNotHeld` | `ROLE_WRITE` per **path** tenant |
+| PATCH `/auth/tenants/:tenantId/roles/:id` | as `PATCH /auth/roles/:id` | as `PATCH /auth/roles/:id` | same |
+| DELETE `/auth/tenants/:tenantId/roles/:id` | — | as `DELETE /auth/roles/:id` | same |
+| PUT `/auth/tenants/:tenantId/users/:userId/role` | `{roleId}` (UUID) | 200 `{userId, role:{id, name}}`. 404 `role_not_found` / `user_not_found`, 403 `role_not_held` / `no_authority` | `RESELLER_USER_WRITE` per caller |
+
 ## Why the write budget is per tenant
 
 A role is the tenant's, not the caller's, so two admins of one reseller share
@@ -42,7 +60,6 @@ permission listener, which is platform-wide work
 
 ## Not here
 
-No route changes what role a **user** holds — `user.roleId` is written by
-register and by staff membership (F-018-j), not by this file. Nor is there a
-route that lists the permission vocabulary; a caller composes from the keys its
-own `/auth/me` already returns.
+There is no route that lists the whole permission vocabulary. On
+`/auth/roles` a caller composes from the keys its own `/auth/me` returns; on a
+tenant's path, from `grantable`.

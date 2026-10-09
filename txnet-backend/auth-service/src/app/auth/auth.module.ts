@@ -47,6 +47,8 @@ import { MeController } from './me/me.controller';
 import { HandoffController } from './handoff/handoff.controller';
 import { HandoffService } from './handoff/handoff.service';
 import { RolesController } from './roles/roles.controller';
+import { TenantRolesController } from './roles/tenant-roles.controller';
+import { TenantRolesService } from './roles/tenant-roles.service';
 import { RolesService } from './roles/roles.service';
 import { UserSearchController } from './users/user-search.controller';
 import { ResellerUsersController } from './users/reseller-users.controller';
@@ -97,6 +99,7 @@ import { ConfigService } from '@nestjs/config';
     MeController,
     HandoffController,
     RolesController,
+    TenantRolesController,
     UserSearchController,
     ResellerUsersController,
     UserStatusController,
@@ -110,6 +113,7 @@ import { ConfigService } from '@nestjs/config';
     MeService,
     HandoffService,
     RolesService,
+    TenantRolesService,
     UserSearchService,
     ResellerUsersService,
     UserStatusService,

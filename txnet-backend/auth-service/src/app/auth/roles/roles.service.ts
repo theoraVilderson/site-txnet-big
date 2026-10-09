@@ -5,13 +5,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BackendI18nKeys, holdsPermission, ok } from '@txnet-backend/shared-core';
+import { Prisma } from '@prisma/client';
+import { BackendI18nKeys, holdsPermission, ok, tenantTransaction } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
-import type { AuthClaims } from '../token.service';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 
 /** The permission every route here needs (F-018-n). A tenant administers its own roles with it. */
 export const ROLE_MANAGE = 'role.manage';
+
+/**
+ * Whose roles, and what the writer may put on one. From `/auth/roles` it is
+ * the caller's claims as they are; on a tenant's path (F-1201-a) `permissions`
+ * is what `TenantRolesService` computed may be granted there — the tenant
+ * ceiling on a reseller (ADR-0134).
+ */
+export type RoleScope = { tenantId: string; permissions: readonly string[] };
 
 /** One role as the caller sees it. A template is readable by everyone and writable by no one. */
 export type RoleView = {
@@ -48,6 +56,11 @@ type RoleRow = {
  * The scope is applied here instead, and in one shape — a read is
  * `{OR: [own, template]}`, a write is `{tenantId: <the caller's own>}`.
  *
+ * **Every query is in a `tenantTransaction`.** `role` is policied shared-read
+ * (`data-model.md`): with no `app.tenant_id` bound, a read sees the templates
+ * alone and an insert is refused by `WITH CHECK`. The ambient tenant is the
+ * scope's — the gate's on `/auth/roles`, the admitted one on a tenant's path.
+ *
  * **Redis is not written here.** A grant change is `role_permission` rows; the
  * Postgres trigger notifies and `PermissionNotificationsListener` rewrites
  * `role:<id>:permissions` (invariant #14). One transaction per change, so a
@@ -58,20 +71,27 @@ export class RolesService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** The caller's own roles and the system templates, in that order. */
-  async list(claims: AuthClaims) {
-    const rows = (await this.prisma.role.findMany({
-      where: { OR: [{ tenantId: claims.tenantId }, { tenantId: null }] },
-      select: ROLE_VIEW,
-      orderBy: [{ tenantId: 'asc' }, { name: 'asc' }],
-    })) as RoleRow[];
-    return ok({ roles: rows.map(toView) }, BackendI18nKeys.errors.role.list);
+  async list(scope: RoleScope) {
+    return ok({ roles: await this.views(scope) }, BackendI18nKeys.errors.role.list);
   }
 
-  async create(claims: AuthClaims, input: CreateRoleInput) {
-    const permissionIds = await this.grantable(claims, input.permissions);
-    const role = await this.prisma.$transaction(async (tx) => {
+  /** {@link list}'s rows without the envelope — `TenantRolesService` adds what a tenant's page needs. */
+  async views(scope: RoleScope): Promise<RoleView[]> {
+    const rows = (await tenantTransaction(this.prisma, (tx) =>
+      tx.role.findMany({
+        where: { OR: [{ tenantId: scope.tenantId }, { tenantId: null }] },
+        select: ROLE_VIEW,
+        orderBy: [{ tenantId: 'asc' }, { name: 'asc' }],
+      }),
+    )) as RoleRow[];
+    return rows.map(toView);
+  }
+
+  async create(scope: RoleScope, input: CreateRoleInput) {
+    const permissionIds = await this.grantable(scope, input.permissions);
+    const role = await tenantTransaction(this.prisma, async (tx) => {
       const created = await tx.role.create({
-        data: { tenantId: claims.tenantId, name: input.name, isSystemRole: false },
+        data: { tenantId: scope.tenantId, name: input.name, isSystemRole: false },
         select: ROLE_VIEW,
       });
       await this.setGrants(tx, created.id, permissionIds);
@@ -80,11 +100,11 @@ export class RolesService {
     return ok({ role: toView({ ...role, rolePermissions: keysOf(input.permissions) }) }, BackendI18nKeys.errors.role.created);
   }
 
-  async update(claims: AuthClaims, id: string, input: UpdateRoleInput) {
-    const existing = await this.ownRole(claims, id);
-    const permissionIds = input.permissions ? await this.grantable(claims, input.permissions) : null;
+  async update(scope: RoleScope, id: string, input: UpdateRoleInput) {
+    const permissionIds = input.permissions ? await this.grantable(scope, input.permissions) : null;
 
-    const role = await this.prisma.$transaction(async (tx) => {
+    const role = await tenantTransaction(this.prisma, async (tx) => {
+      const existing = await this.ownRole(tx, scope, id);
       const updated =
         input.name === undefined
           ? existing
@@ -102,12 +122,11 @@ export class RolesService {
    * `user.roleId` is a NOT NULL FK (invariant #5), so there is nothing to move
    * them to that this endpoint could choose for the caller.
    */
-  async remove(claims: AuthClaims, id: string) {
-    await this.ownRole(claims, id);
-    const held = await this.prisma.user.count({ where: { roleId: id } });
-    if (held > 0) throw new ConflictException(BackendI18nKeys.errors.role.inUse);
-
-    await this.prisma.$transaction(async (tx) => {
+  async remove(scope: RoleScope, id: string) {
+    await tenantTransaction(this.prisma, async (tx) => {
+      await this.ownRole(tx, scope, id);
+      const held = await tx.user.count({ where: { roleId: id } });
+      if (held > 0) throw new ConflictException(BackendI18nKeys.errors.role.inUse);
       await tx.rolePermission.deleteMany({ where: { roleId: id } });
       await tx.role.delete({ where: { id } });
     });
@@ -121,9 +140,9 @@ export class RolesService {
    * keeps invariant #9 (`isSystemRole` is never deleted): a template is never
    * found here, and a tenant's own role is never a system role.
    */
-  private async ownRole(claims: AuthClaims, id: string): Promise<RoleRow> {
-    const role = (await this.prisma.role.findFirst({
-      where: { id, tenantId: claims.tenantId },
+  private async ownRole(tx: Prisma.TransactionClient, scope: RoleScope, id: string): Promise<RoleRow> {
+    const role = (await tx.role.findFirst({
+      where: { id, tenantId: scope.tenantId },
       select: ROLE_VIEW,
     })) as RoleRow | null;
     if (!role) throw new NotFoundException(BackendI18nKeys.errors.role.notFound);
@@ -139,7 +158,7 @@ export class RolesService {
    * A key with no `permission` row is refused for everyone — a typo must not
    * become a grant that silently means nothing.
    */
-  private async grantable(claims: AuthClaims, keys: string[]): Promise<string[]> {
+  private async grantable(scope: RoleScope, keys: string[]): Promise<string[]> {
     const wanted = [...new Set(keys)];
     const rows = await this.prisma.permission.findMany({
       where: { key: { in: wanted } },
@@ -149,7 +168,7 @@ export class RolesService {
       throw new BadRequestException(BackendI18nKeys.errors.role.permissionUnknown);
     }
     for (const key of wanted) {
-      if (!holdsPermission(claims.permissions, key)) {
+      if (!holdsPermission(scope.permissions, key)) {
         throw new ForbiddenException(BackendI18nKeys.errors.role.permissionNotHeld);
       }
     }

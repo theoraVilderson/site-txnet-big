@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 41
-updated: 2026-10-05
+version: 42
+updated: 2026-10-09
 ---
 
 # Contract — auth-api
