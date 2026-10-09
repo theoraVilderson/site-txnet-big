@@ -26,11 +26,11 @@ describe('ResellerUsersService', () => {
     status: UserStatus.active,
     statusReason: null,
     createdAt: new Date('2026-09-01T00:00:00Z'),
-    role: { rolePermissions: [] as { permission: { key: string } }[] },
+    role: { id: 'tpl-user', name: 'user', rolePermissions: [] as { permission: { key: string } }[] },
     ...over,
   });
 
-  const keys = (...k: string[]) => ({ role: { rolePermissions: k.map((key) => ({ permission: { key } })) } });
+  const keys = (...k: string[]) => ({ role: { id: 'role-x', name: 'X', rolePermissions: k.map((key) => ({ permission: { key } })) } });
 
   const build = (
     options: {
@@ -126,6 +126,8 @@ describe('ResellerUsersService', () => {
             createdAt: '2026-09-01T00:00:00.000Z',
             canAct: true,
             staff: false,
+            // F-1201-c: the Team page says which role each person holds.
+            role: { id: 'tpl-user', name: 'user' },
           },
         ],
         total: 1,
@@ -133,6 +135,14 @@ describe('ResellerUsersService', () => {
         pageSize: 20,
       });
       expect(JSON.stringify(page)).not.toContain('+989121234567');
+    });
+
+    it('narrows to the team when asked: people whose role holds any permission (F-1201-c)', async () => {
+      const { service, asked } = build();
+
+      await service.list(actor, reseller, { page: 1, pageSize: 20, staff: true });
+
+      expect(asked.findMany?.where).toEqual({ deletedAt: null, role: { rolePermissions: { some: {} } } });
     });
 
     it('never names the tenant itself — the scope the door opened is the whole filter', async () => {

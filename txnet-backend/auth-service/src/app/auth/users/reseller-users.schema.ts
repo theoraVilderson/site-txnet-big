@@ -17,6 +17,8 @@ export const resellerUserListSchema = z.object({
   q: z.string().trim().min(3).max(64).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  /** `true`: only the team — people whose role holds any permission (F-1201-c). A query string, so `'true'` is the only yes. */
+  staff: z.preprocess((v) => v === true || v === 'true', z.boolean()).optional(),
 });
 
 export type ResellerUserListQuery = z.infer<typeof resellerUserListSchema>;

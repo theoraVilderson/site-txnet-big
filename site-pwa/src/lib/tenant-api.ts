@@ -627,3 +627,40 @@ export const resellerPurchaseApi = {
     return call<Purchased>("/tenants/purchase", { method: "POST", body: JSON.stringify(body) });
   },
 };
+
+/** A seat's state at the moment it was read (`staffState`, tenant contract.staff.md). */
+export type StaffState = "invited" | "active" | "expired" | "revoked";
+
+/** One seat on a reseller's team (F-018-j); `role` is their identity role, set at auth (F-1201-a). */
+export interface StaffSeat {
+  id: string;
+  userId: string;
+  state: StaffState;
+  invitedByUserId: string | null;
+  invitedAt: string;
+  joinedAt: string | null;
+  accessExpiresAt: string | null;
+  revokedAt: string | null;
+  user: { id: string; fullName: string; username: string | null; phoneNumber: string | null } | null;
+  role: { id: string; name: string } | null;
+}
+
+const staffPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/staff`;
+
+/**
+ * A reseller's seats (F-018-j, F-1201-b): the owner, a seated admin with
+ * `tenant.manage`, or platform staff. Resellers only — the platform's team is
+ * people holding a staff role, with no seat (`contract.team.md`).
+ */
+export const resellerStaffApi = {
+  list: (tenantId: string) => call<StaffSeat[]>(staffPath(tenantId), { method: "GET" }),
+  /** An existing user of that reseller; the role is set after, at auth. 409 `already_staff`, `reseller_limit_reached`. */
+  invite: (tenantId: string, body: { userId: string; accessExpiresAt?: string }) =>
+    call<StaffSeat>(staffPath(tenantId), { method: "POST", body: JSON.stringify(body) }),
+  /** A new end, or `null` for none, without re-inviting (F-1201-b). */
+  setExpiry: (tenantId: string, memberId: string, accessExpiresAt: string | null) =>
+    call<StaffSeat>(`${staffPath(tenantId)}/${encodeURIComponent(memberId)}`, { method: "PATCH", body: JSON.stringify({ accessExpiresAt }) }),
+  /** The row stays (`revoked`); their role does not change. */
+  remove: (tenantId: string, memberId: string) =>
+    call<StaffSeat>(`${staffPath(tenantId)}/${encodeURIComponent(memberId)}`, { method: "DELETE" }),
+};

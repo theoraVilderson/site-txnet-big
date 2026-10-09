@@ -86,7 +86,7 @@ describe("the menu's sections (N1)", () => {
     ["account", ["dashboard", "buy", "my-services", "wallet", "wheel", "lotteries", "support", "buy-reseller"]],
     ["sales", ["catalog", "coupons", "ai", "wheel-settings", "lottery-settings"]],
     ["finance", ["gateways", "manual-payments", "tenant-billing"]],
-    ["people", ["users", "user-groups", "resellers"]],
+    ["people", ["users", "team", "roles", "user-groups", "resellers"]],
     ["infra", ["systems"]],
     ["support", ["support-inbox", "support-settings", "guides"]],
   ])("puts in %s exactly what N1 names, in order", (section, ids) => {

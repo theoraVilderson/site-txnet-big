@@ -39,7 +39,8 @@
       "resellerList": "Reseller list",
       "resellerPackages": "Reseller packages",
       "resellerLimits": "Reseller limits",
-      "roles": "Roles"
+      "roles": "Roles",
+      "team": "Team"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -1941,7 +1942,8 @@
       "settings": "Reseller settings",
       "branding": "Reseller brand",
       "setup": "Reseller setup",
-      "roles": "Reseller roles"
+      "roles": "Reseller roles",
+      "team": "Reseller team"
     },
     "scope": "Reseller",
     "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
@@ -1956,7 +1958,8 @@
       "users": "Users",
       "domains": "Domains",
       "bot": "Bot",
-      "roles": "Roles"
+      "roles": "Roles",
+      "team": "Team"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -5828,5 +5831,63 @@
     "cancel": "cancel",
     "platformOnly": "platform only",
     "other": "other"
+  },
+  "tenantTeam": {
+    "title": "team",
+    "titleOf": "{{slug}}'s team",
+    "subtitle": "who is on the team, the role each holds, and until when.",
+    "subtitlePlatform": "the platform's staff and the role each holds.",
+    "refresh": "refresh",
+    "reload": "try again",
+    "add": "add someone",
+    "empty": "no one is on the team yet.",
+    "unnamed": "no name",
+    "columns": {
+      "role": "role",
+      "state": "status",
+      "expires": "until"
+    },
+    "noExpiry": "no end date",
+    "noRole": "no role",
+    "state": {
+      "invited": "invited — not accepted yet",
+      "active": "active",
+      "expired": "expired",
+      "revoked": "removed"
+    },
+    "changeRole": "change role",
+    "changeExpiry": "change end",
+    "remove": "remove",
+    "removeConfirm": "take {{name}} off the team?",
+    "removeHint": "their role stays until you give them another one.",
+    "removePlatformHint": "they keep their account as an ordinary user.",
+    "dialogAdd": "add to the team",
+    "search": "search by name, username or phone",
+    "searchHint": "type at least 3 characters",
+    "noMatch": "no user matches.",
+    "pick": "choose",
+    "picked": "chosen: {{name}}",
+    "role": "role",
+    "roleKeep": "keep their current role",
+    "roleRequired": "choose a role",
+    "expiry": "access ends on",
+    "expiryHint": "leave it empty for no end date.",
+    "inviteNote": "they join when they accept the invitation in their own panel.",
+    "dialogRole": "role of {{name}}",
+    "dialogExpiry": "end of access for {{name}}",
+    "clear": "no end date",
+    "save": "save",
+    "cancel": "cancel",
+    "roleNotSet": "invited, but the role was not set: {{reason}}",
+    "refusals": {
+      "role_not_held": "you cannot give this role: it holds a permission you may not grant.",
+      "no_authority": "you cannot change this person's role: they hold as much as you, or own the reseller.",
+      "role_not_found": "that role no longer exists — refresh.",
+      "already_staff": "they are already on the team.",
+      "user_inactive": "their account is not active.",
+      "expiry_past": "choose a date in the future.",
+      "staff_not_found": "that seat is gone — refresh.",
+      "reseller_limit_reached": "the team is full for this reseller's package."
+    }
   }
 }

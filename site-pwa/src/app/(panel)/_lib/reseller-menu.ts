@@ -1,4 +1,4 @@
-import { Bot, Globe, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
+import { Bot, Contact, Globe, KeyRound, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
@@ -11,6 +11,7 @@ import {
   myResellerDomainsPath,
   myResellerGatewaysPath,
   myResellerRolesPath,
+  myResellerTeamPath,
   myResellerSettingsPath,
   myResellerSetupPath,
   myResellerUsersPath,
@@ -42,6 +43,7 @@ export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath },
   { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath },
   { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath },
+  { id: "reseller-team", label: R.menu.team, short: R.short.team, icon: Contact, href: myResellerTeamPath },
   { id: "reseller-roles", label: R.menu.roles, short: R.short.roles, icon: KeyRound, href: myResellerRolesPath },
   { id: "reseller-domains", label: R.menu.domains, short: R.short.domains, icon: Globe, href: myResellerDomainsPath },
   { id: "reseller-bot", label: R.menu.bot, short: R.short.bot, icon: Bot, href: myResellerBotPath },

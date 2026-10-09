@@ -576,7 +576,12 @@ export type UserGroupMember = {
 
 /** One user as a reseller's own list answers it (F-311-a, `contract.reseller-users.md`). */
 /** `statusReason`: what the person is shown for their status (ADR-0133). */
-export type ResellerUser = UserSearchHit & { createdAt: string; statusReason?: string | null };
+export type ResellerUser = UserSearchHit & {
+  createdAt: string;
+  statusReason?: string | null;
+  /** The role they hold (F-1201-c). */
+  role?: { id: string; name: string } | null;
+};
 
 /** A reseller's own users, by the **path's** tenant (F-311-a) — never the session's, which is the platform's for its owner (ADR-0059). */
 export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encodeURIComponent(tenantId)}/users`;
@@ -592,9 +597,11 @@ export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encod
 export const resellerUserBlockPath = (tenantId: string, userId: string) => `${resellerUsersApiPath(tenantId)}/${encodeURIComponent(userId)}/block`;
 
 export const resellerUsersApi = {
-  async list(tenantId: string, query: { q?: string; page: number; pageSize: number }) {
+  /** `staff`: only the team — people whose role holds any permission (F-1201-c). */
+  async list(tenantId: string, query: { q?: string; page: number; pageSize: number; staff?: boolean }) {
     const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) });
     if (query.q) params.set("q", query.q);
+    if (query.staff) params.set("staff", "true");
     return request<{ items: ResellerUser[]; total: number; page: number; pageSize: number }>(`${resellerUsersApiPath(tenantId)}?${params}`, { method: "GET" });
   },
   /** Answers the user at `suspended`, every session revoked; already blocked is the same 200. `staffWrite`. */

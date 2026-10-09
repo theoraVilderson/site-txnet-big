@@ -57,6 +57,8 @@ export type ResellerUserView = {
   createdAt: string;
   canAct: boolean;
   staff: boolean;
+  /** The role they hold (F-1201-c, the Team page); changed at `PUT …/users/:userId/role`. */
+  role: { id: string; name: string } | null;
 };
 
 export type ResellerUserPage = {
@@ -66,7 +68,7 @@ export type ResellerUserPage = {
   pageSize: number;
 };
 
-export type ResellerUserListInput = { q?: string; page: number; pageSize: number };
+export type ResellerUserListInput = { q?: string; page: number; pageSize: number; staff?: boolean };
 
 const SELECT = {
   id: true,
@@ -76,7 +78,7 @@ const SELECT = {
   status: true,
   statusReason: true,
   createdAt: true,
-  ...TARGET_PERMISSIONS_SELECT,
+  role: { select: { id: true, name: true, ...TARGET_PERMISSIONS_SELECT.role.select } },
 } as const;
 
 type UserRow = Prisma.UserGetPayload<{ select: typeof SELECT }>;
@@ -118,6 +120,9 @@ export class ResellerUsersService {
       const ctx = { actor, admitted, tenant: await this.tenantOf(admitted.id) };
       const where: Prisma.UserWhereInput = { deletedAt: null };
       if (input.q) where.OR = matchers(input.q);
+      // The team (F-1201-c): the same rule as `staff` on a row, less the owner,
+      // who is in another tenant and never on this list.
+      if (input.staff) where.role = { rolePermissions: { some: {} } };
 
       const [rows, total] = await Promise.all([
         this.prisma.user.findMany({
@@ -266,5 +271,6 @@ function view(row: UserRow, ctx: ViewContext): ResellerUserView {
     createdAt: row.createdAt.toISOString(),
     canAct: refusal === null,
     staff: permissions.length > 0 || row.id === ctx.tenant.ownerUserId,
+    role: row.role ? { id: row.role.id, name: row.role.name } : null,
   };
 }

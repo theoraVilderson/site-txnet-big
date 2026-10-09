@@ -20,7 +20,7 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
 
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| list a reseller's users | the reseller (named in the path), `q?` (3-64, the same matcher as "find a user"), `page`, `pageSize` (1-100) | `{items, total, page, pageSize}`, newest first; an item is `id, fullName, username, phoneMasked, status, createdAt, canAct, staff` — never the number, never an email | sync | the door's four; nothing else |
+| list a reseller's users | the reseller (named in the path), `q?` (3-64, the same matcher as "find a user"), `page`, `pageSize` (1-100), `staff?` (`true`: only people whose role holds any permission — the team, F-1201-c) | `{items, total, page, pageSize}`, newest first; an item is `id, fullName, username, phoneMasked, status, createdAt, canAct, staff, role {id, name}` — never the number, never an email | sync | the door's four; nothing else |
 | block one | the reseller, the user's id, `reason?`, the caller's IP | that user at `suspended` (restricted to support, ADR-0133) with `statusReason`, every live session of theirs revoked `admin_ban`, one `admin_audit_log` row `user_ban` under the reseller's `tenantId` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
 | unblock one | the same | that user at `active`, `statusReason` cleared, every session revoked, one `admin_audit_log` row `user_unban` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
 

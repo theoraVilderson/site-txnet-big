@@ -27,9 +27,10 @@ seats holding `tenant.manage`, or the platform owner's staff — judged against
 the **reseller the path names**, never the session's tenant. The path may
 also name the **platform's own tenant**, admitted to platform staff only
 (F-311-aa, ADR-0102); anyone else asking for it gets `not_allowed`. A `user` object is
-`{id, fullName, username, phoneMasked, status, createdAt, canAct, staff}` and carries no phone
+`{id, fullName, username, phoneMasked, status, createdAt, canAct, staff, role}` and carries no phone
 number and no email. `canAct` is whether the caller may block or unblock this
-person (ADR-0103); `staff` marks one who holds any permission, or the owner.
+person (ADR-0103); `staff` marks one who holds any permission, or the owner;
+`role` is `{id, name}` (F-1201-c). The list's `staff=true` narrows it to the team.
 
 | Route | Body / query | Answers | Rate limit | Auth |
 |---|---|---|---|---|

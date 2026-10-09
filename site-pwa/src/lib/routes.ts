@@ -197,6 +197,11 @@ export const myResellerUserPath = (id: string, userId: string, self = false) =>
  * platform's for its staff — never the session's.
  */
 export const myResellerRolesPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/roles`;
+/**
+ * A tenant's team (F-1201-c): a reseller's seats — role, state, end — or the
+ * platform's staff, by the path's tenant.
+ */
+export const myResellerTeamPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/team`;
 /** Where that catalog's machine-drafted names are reviewed (F-1533-e on the reseller's surface). */
 export const myResellerCatalogTranslationsPath = (id: string, self = false) => `${myResellerCatalogPath(id, self)}/translations`;
 /**
