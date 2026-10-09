@@ -51,6 +51,11 @@ describe('notice classes (F-601-s)', () => {
       'subscriptionSuspended',
     ]);
     expect(by('important')).toEqual([
+      // AC-1-s: the person's own access moved.
+      'accessKeysChanged',
+      'accessRoleSet',
+      'accessSeatRemoved',
+      'accessSeatRestored',
       // F-707-q: an opt-in lottery opened — join before it closes.
       'lotteryOpened',
       // F-707-m: a lottery prize given.

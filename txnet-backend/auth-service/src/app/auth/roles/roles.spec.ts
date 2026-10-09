@@ -179,7 +179,7 @@ describe('RolesService', () => {
       ]);
     });
 
-    it('tells every holder of an edited grant set, in the same transaction (AC-1-q)', async () => {
+    it('tells every holder of an edited grant set, in the same transaction, with the keys given and taken (AC-1-q, AC-1-s)', async () => {
       const { tx, service } = harness();
       await service.update(RESELLER, 'role-staff', { permissions: ['wallet.view'] });
       expect(tx.user.findMany.mock.calls[0][0]).toMatchObject({ where: { roleId: 'role-staff', deletedAt: null } });
@@ -188,7 +188,7 @@ describe('RolesService', () => {
           aggregate: 'identity.access',
           aggregateId: userId,
           type: 'identity.access.changed',
-          payload: { userId, tenantId: 'tenant-reseller', cause: 'role_edited' },
+          payload: { userId, tenantId: 'tenant-reseller', cause: 'role_edited', given: ['wallet.view'], taken: ['user.view'] },
         })),
       );
     });

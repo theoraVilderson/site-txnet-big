@@ -104,6 +104,11 @@ export const NOTIFY_TEMPLATES = [
   'supportReplied',
   'supportResolved',
   'supportUserWrote',
+  // AC-1-s: the person's own access moved — their role now, keys their role gained or lost, their seat on a team.
+  'accessRoleSet',
+  'accessKeysChanged',
+  'accessSeatRemoved',
+  'accessSeatRestored',
 ] as const;
 export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 
@@ -155,6 +160,7 @@ type NotificationsNamespace = {
   suggestion?: Texts;
   engagement?: Texts;
   support?: Texts;
+  access?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 type Notice = Text & { inbox: Text };
@@ -171,6 +177,13 @@ const SUGGESTION_MANY: Notice = {
   read: (ns) => ns?.suggestion?.many,
   fallback: '💡 You have {{count}} suggestions about your services. See them in My services.',
   inbox: { read: (ns) => ns?.suggestion?.manyTitle, fallback: '{{count}} suggestions' },
+};
+
+/** Access moved more than once in one window (AC-1-s): what changed is the panel's to show, not a list. */
+const ACCESS_MANY: Notice = {
+  read: (ns) => ns?.access?.many,
+  fallback: '🔑 Your access changed {{count}} times. The panel shows what you can do now.',
+  inbox: { read: (ns) => ns?.access?.manyTitle, fallback: 'Your access changed' },
 };
 
 const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
@@ -1096,6 +1109,31 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.support?.userWroteManyTitle, fallback: 'New user messages ({{count}})' },
     },
   },
+  // AC-1-s: every access notice combines into the same one line — the panel already shows what is held now.
+  accessRoleSet: {
+    read: (ns) => ns?.access?.roleSet,
+    fallback: '🔑 Your role is now {{role}}. The panel shows what it lets you do.',
+    inbox: { read: (ns) => ns?.access?.roleSetTitle, fallback: 'Your role changed' },
+    many: ACCESS_MANY,
+  },
+  accessKeysChanged: {
+    read: (ns) => ns?.access?.keysChanged,
+    fallback: '🔑 What your role lets you do has changed.',
+    inbox: { read: (ns) => ns?.access?.keysChangedTitle, fallback: 'Your access changed' },
+    many: ACCESS_MANY,
+  },
+  accessSeatRemoved: {
+    read: (ns) => ns?.access?.seatRemoved,
+    fallback: '🚪 You were removed from the team. Its pages in the panel are closed to you now.',
+    inbox: { read: (ns) => ns?.access?.seatRemovedTitle, fallback: 'Removed from the team' },
+    many: ACCESS_MANY,
+  },
+  accessSeatRestored: {
+    read: (ns) => ns?.access?.seatRestored,
+    fallback: '✅ Your place on the team was restored. Its pages in the panel are open to you again.',
+    inbox: { read: (ns) => ns?.access?.seatRestoredTitle, fallback: 'Back on the team' },
+    many: ACCESS_MANY,
+  },
 };
 
 /**
@@ -1109,6 +1147,9 @@ const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
   { param: 'reactivated', read: (ns) => ns?.retention?.reactivatedLine, fallback: '✅ Your service is active again and reconnects within a few minutes — its link stays the same.' },
   { param: 'servicesUrl', read: (ns) => ns?.purchase?.servicesLine, fallback: '👉 Open it: {{servicesUrl}}' },
   { param: 'supportUrl', read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' },
+  // AC-1-s: the keys a role edit gave and took, by their labels (`withKeyLabels`).
+  { param: 'given', read: (ns) => ns?.access?.givenLine, fallback: '➕ Now allowed: {{given}}' },
+  { param: 'taken', read: (ns) => ns?.access?.takenLine, fallback: '➖ No longer allowed: {{taken}}' },
 ];
 
 /** A combined notice lists at most this many services; the rest are one "and N more" line. */
@@ -1178,7 +1219,11 @@ export class UserNotifier {
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
-    const told = this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, user.languagePreference, ns), user.languagePreference, ns);
+    const told = this.withKeyLabels(
+      this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, user.languagePreference, ns), user.languagePreference, ns),
+      user.languagePreference,
+      ns,
+    );
     const params = combined ? { ...told, count: String(request.count) } : told;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
@@ -1295,6 +1340,25 @@ export class UserNotifier {
     const planName = this.catalogName(params.planNameKey ?? null, lang) ?? params.planSku ?? '';
     const plan = params.planSize ? say(SERVICE_LIST.named, { label: planName, name: params.planSize }) : planName;
     return { ...params, service, plan };
+  }
+
+  /**
+   * The keys an access notice names, by the labels the role editor shows
+   * (AC-1-f's `permissions` namespace) in the user's language, else the
+   * default one, else the key itself — never an empty name (AC-1-s).
+   */
+  private withKeyLabels(params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
+    if (!params.given && !params.taken) return params;
+    const label = (key: string) => {
+      const path = `keys.${key}.label`;
+      const text = this.locale.getKey(lang, 'permissions', path) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'permissions', path);
+      return typeof text === 'string' && text !== '' ? text : key;
+    };
+    const separator = ns?.access?.keySeparator ?? ', ';
+    const named = (keys: string | undefined) => (keys ? keys.split(',').filter(Boolean).map(label).join(separator) : undefined);
+    const given = named(params.given);
+    const taken = named(params.taken);
+    return { ...params, ...(given ? { given } : {}), ...(taken ? { taken } : {}) };
   }
 
   /** A `catalog.*` key in the user's language, or the default one; undefined when neither has it. */

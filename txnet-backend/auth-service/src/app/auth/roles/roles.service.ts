@@ -111,7 +111,12 @@ export class RolesService {
           : ((await tx.role.update({ where: { id }, data: { name: input.name }, select: ROLE_VIEW })) as RoleRow);
       if (permissionIds) {
         await this.setGrants(tx, id, permissionIds);
-        await this.tellHolders(tx, scope, id);
+        const before = new Set(existing.rolePermissions.map((rp) => rp.permission.key));
+        const after = new Set(input.permissions);
+        await this.tellHolders(tx, scope, id, {
+          given: [...after].filter((key) => !before.has(key)),
+          taken: [...before].filter((key) => !after.has(key)),
+        });
       }
       return updated;
     });
@@ -182,11 +187,12 @@ export class RolesService {
    * AC-1-q: everyone holding a role whose keys were replaced hears it, one
    * outbox row each, in the edit's transaction. A rename moves no access and
    * tells no one. In the tenant's scope, so the holders are this tenant's.
+   * `keys` is what the edit gave and took, for the notice (AC-1-s).
    */
-  private async tellHolders(tx: Prisma.TransactionClient, scope: RoleScope, roleId: string): Promise<void> {
+  private async tellHolders(tx: Prisma.TransactionClient, scope: RoleScope, roleId: string, keys: { given: string[]; taken: string[] }): Promise<void> {
     const holders = await tx.user.findMany({ where: { roleId, deletedAt: null }, select: { id: true } });
     if (holders.length === 0) return;
-    await tx.outboxEvent.createMany({ data: holders.map((h) => accessChanged(h.id, scope.tenantId, 'role_edited')) });
+    await tx.outboxEvent.createMany({ data: holders.map((h) => accessChanged(h.id, scope.tenantId, 'role_edited', keys)) });
   }
 
   /** The whole grant set, replaced: the fingerprint is over a set, not a diff. */

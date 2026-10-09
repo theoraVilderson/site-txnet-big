@@ -151,7 +151,7 @@ describe('TenantRolesService', () => {
         aggregate: 'identity.access',
         aggregateId: 'u-ali',
         type: 'identity.access.changed',
-        payload: { userId: 'u-ali', tenantId: reseller, cause: 'role_set' },
+        payload: { userId: 'u-ali', tenantId: reseller, cause: 'role_set', role: 'Desk' },
       });
     });
 

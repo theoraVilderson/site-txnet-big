@@ -689,6 +689,31 @@ describe('UserNotifier', () => {
     expect(titles.every((t) => t.length > 0)).toBe(true);
   });
 
+  // AC-1-s: a role edit names the keys it gave and took by the editor's labels, in the user's language.
+  it('names the keys an access notice gives and takes by their labels, else the default language, else the key', async () => {
+    const client = botClient();
+    const labels: Record<string, Record<string, string>> = {
+      fa: { 'keys.coupon.manage.label': 'مدیریت کد تخفیف' },
+      en: { 'keys.user.ban.label': 'Ban users' },
+    };
+    const locale = {
+      getNamespace: vi.fn(() => ({ access: { keySeparator: '، ' } })),
+      getKey: vi.fn((lang: string, _ns: string, key: string) => labels[lang]?.[key]),
+      getDefaultLanguage: () => 'en',
+    } as unknown as LocaleService;
+    const db = notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] });
+    const notifier = new UserNotifier(db as unknown as PrismaService, registry(client), locale);
+
+    await inTenant(() =>
+      notifier.notify({ userId: 'user-1', channel: 'bot', template: 'accessKeysChanged', params: { given: 'coupon.manage,wallet.read', taken: 'user.ban' } }),
+    );
+
+    const text = (client.sendMessage.mock.calls[0] as unknown as [string, string])[1];
+    expect(locale.getKey).toHaveBeenCalledWith('fa', 'permissions', 'keys.coupon.manage.label');
+    expect(text).toContain('مدیریت کد تخفیف، wallet.read');
+    expect(text).toContain('Ban users');
+  });
+
   // F-601-c: a notice given the tenant's support link ends with it; one without reads whole.
   it('ends a notice with the support line only when it was given a supportUrl', async () => {
     const inbox = { put: vi.fn(async () => undefined) };

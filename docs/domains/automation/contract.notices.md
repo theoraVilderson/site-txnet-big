@@ -109,3 +109,17 @@ its own queue `AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE` on `outbox.engagement.lott
 | `muted` (kind `lottery`) skips; one member failing is counted, the rest told, then the event throws and is delivered again | one bad member never silences a group |
 | Its own queue | a group of thousands never holds up a person notice |
 
+## A person told their access moved (AC-1-s)
+
+`AccessNoticeConsumer` (`worker-service/src/app/outbox/access-notice.consumer.ts`),
+consumer `access-notice`, its own queue `AUTOMATION_ACCESS_NOTICE_QUEUE` on
+`identity.access.changed` (AC-1-q) beside the live-push one. User 2026-10-08.
+
+| Rule | Why |
+|---|---|
+| `person` only, never `live` | the page already re-read on `LivePushConsumer`'s `{type}` (panel-web AC-1-r); a second frame is a second read |
+| One template per cause: `role_set` -> `accessRoleSet` (`role`, the name as written), `role_edited` -> `accessKeysChanged` (`given` / `taken`, keys comma-joined, each only when non-empty), `seat_removed` -> `accessSeatRemoved`, `seat_restored` -> `accessSeatRestored`; all `important` (inbox and bot) | the words are auth-service's: `UserNotifier` names each key by its `permissions` label (AC-1-f) in the person's language, else the default one, else the key |
+| A `role_edited` that gave and took nothing tells no one | a rename, or the same set saved again, moved no access |
+| A burst of any of them is one "your access changed N times" (`access.many`) | what is held now is the panel's to show, not a list of edits |
+| A cause with no template, a `role_set` with no `role`, or a payload without tenant or user throws and dead-letters | a producer that adds a cause (AC-1-l, AC-1-m, a temporal window, seat expiry) adds its template in the same item, or nobody is told |
+

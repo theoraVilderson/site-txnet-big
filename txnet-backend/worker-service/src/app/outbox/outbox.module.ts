@@ -9,6 +9,7 @@ import { NotificationCreatedConsumer } from './notification-created.consumer';
 import { PanelTestedConsumer } from './panel-tested.consumer';
 import { PaymentConfirmedConsumer } from './payment-confirmed.consumer';
 import { PaymentReversedConsumer } from './payment-reversed.consumer';
+import { AccessNoticeConsumer } from './access-notice.consumer';
 import { RetentionNoticeConsumer } from './retention-notice.consumer';
 import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from './tenant-renewal.consumers';
 
@@ -25,5 +26,5 @@ import { TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer } from 
  * `NoticeFlushConsumer` after the window (F-067-p). `BrokerService`, `RedisService` and `RealtimePublisher` are
  * global modules.
  */
-@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, RetentionNoticeConsumer, NoticeFlushConsumer, LotteryAnnouncementConsumer] })
+@Module({ providers: [PaymentConfirmedConsumer, PaymentReversedConsumer, NotificationCreatedConsumer, PanelTestedConsumer, TenantBillingCreditedConsumer, TenantSubscriptionNoticeConsumer, GrantCreatedConsumer, GrantDeliveryConsumer, LivePushConsumer, RetentionNoticeConsumer, NoticeFlushConsumer, LotteryAnnouncementConsumer, AccessNoticeConsumer] })
 export class OutboxModule {}

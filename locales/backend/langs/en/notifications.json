@@ -390,5 +390,20 @@
     "dropped": "⛔ The verification record of {{host}} has been missing for 72 hours, so your panel no longer opens on it. Put the TXT record back and ask for a check on the domains page.",
     "droppedManyTitle": "Domains stopped working ({{count}})",
     "droppedMany": "⛔ {{count}} of your domains lost their verification record and no longer open your panel."
+  },
+  "access": {
+    "roleSet": "🔑 Your role is now {{role}}. The panel shows what it lets you do.",
+    "roleSetTitle": "Your role changed",
+    "keysChanged": "🔑 What your role lets you do has changed.",
+    "keysChangedTitle": "Your access changed",
+    "givenLine": "➕ Now allowed: {{given}}",
+    "takenLine": "➖ No longer allowed: {{taken}}",
+    "keySeparator": ", ",
+    "seatRemoved": "🚪 You were removed from the team. Its pages in the panel are closed to you now.",
+    "seatRemovedTitle": "Removed from the team",
+    "seatRestored": "✅ Your place on the team was restored. Its pages in the panel are open to you again.",
+    "seatRestoredTitle": "Back on the team",
+    "many": "🔑 Your access changed {{count}} times. The panel shows what you can do now.",
+    "manyTitle": "Your access changed"
   }
 }

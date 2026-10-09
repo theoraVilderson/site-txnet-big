@@ -112,6 +112,11 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   purchaseDelivered: 'important',
   // F-027-eo: a panel-side edit replaced the buyer's lines — their app needs an update before it connects again.
   serviceLinesChanged: 'important',
+  // AC-1-s: the person's access moved — what they may do changed, not something to act on at once.
+  accessRoleSet: 'important',
+  accessKeysChanged: 'important',
+  accessSeatRemoved: 'important',
+  accessSeatRestored: 'important',
   purchaseDelayed: 'important',
   subscriptionPaymentDue: 'important',
   panelRefused: 'important',

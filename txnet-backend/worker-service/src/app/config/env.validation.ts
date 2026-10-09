@@ -135,6 +135,8 @@ export const envSchema = z.object({
   AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.tenant-subscription-notice'),
   /** F-707-q: a published lottery told to its group, page by page. */
   AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE: z.string().min(1).default('txnet.automation.outbox.lottery-announcement'),
+  /** AC-1-s: a person's access moved, told to them; the same type's live push has its own queue. */
+  AUTOMATION_ACCESS_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.access-notice'),
   /** F-111-d: a paid Grant delivered or refunded, told to its buyer — both types on one queue. */
   AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE: z.string().min(1).default('txnet.automation.outbox.grant-delivery-notice'),
   /** F-114-i: a purchase's `entitlement.grant.created`, delivered at once rather than on the next minute sweep. */

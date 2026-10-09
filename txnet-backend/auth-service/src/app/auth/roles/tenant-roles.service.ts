@@ -173,7 +173,7 @@ export class TenantRolesService {
           },
         });
         // AC-1-q: their panel moves now, not on the next refused call (F-101-c).
-        await tx.outboxEvent.create({ data: accessChanged(userId, admitted.id, 'role_set'), select: { id: true } });
+        await tx.outboxEvent.create({ data: accessChanged(userId, admitted.id, 'role_set', { role: role.name }), select: { id: true } });
         return answer;
       });
     });
