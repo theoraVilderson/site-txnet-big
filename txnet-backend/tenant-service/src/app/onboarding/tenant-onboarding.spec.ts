@@ -119,7 +119,7 @@ describe('TenantOnboardingService', () => {
       productVariant: { findFirst: first(rows.price) },
       tenant: { findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'IRR' })) },
     };
-    const access = { admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
+    const access = { for() { return this; }, admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
     return { service: new TenantOnboardingService(access as never, all as never), all, access };
   };
 

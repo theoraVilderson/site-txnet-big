@@ -20,7 +20,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
  *
  * **Who.** As the operating currency: a reseller's through
  * {@link ResellerAccess} (`staffWrite` to set); the platform's only by its own
- * staff holding `tenant.manage`.
+ * staff holding `settings.manage` (AC-1-e).
  */
 
 export type TenantTimeZoneView = { timezone: string };
@@ -69,13 +69,13 @@ export class TenantTimeZoneService {
       select: { tenantType: true, deletedAt: true, timezone: true },
     });
     if (tenant?.tenantType === TenantType.platform_owner && !tenant.deletedAt) {
-      if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'tenant.manage')) {
+      if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'settings.manage')) {
         throw new TenantTimeZoneRefused('not_allowed', tenantId);
       }
       return { id: tenantId, timezone: tenant.timezone };
     }
     try {
-      const reseller = await this.resellerAccess.admit(actor, tenantId, capability);
+      const reseller = await this.resellerAccess.for('settings.manage').admit(actor, tenantId, capability);
       return { id: reseller.id, timezone: tenant?.timezone ?? PLATFORM_DEFAULT_TIMEZONE };
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new TenantTimeZoneRefused(e.reason, tenantId);

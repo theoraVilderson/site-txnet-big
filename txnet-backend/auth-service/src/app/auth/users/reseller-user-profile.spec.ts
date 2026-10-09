@@ -56,6 +56,9 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
       $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)),
     };
     const access = {
+      for() {
+        return this;
+      },
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: unknown, capability: string, work: (r: unknown) => Promise<unknown>) => {
         order.push(`admit:${capability}`);
         return runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'vpnshop', as: options.as ?? 'staff' }));

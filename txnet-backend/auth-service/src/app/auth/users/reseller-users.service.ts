@@ -355,7 +355,9 @@ export class ResellerUsersService {
     work: (reseller: AdmittedReseller) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.runIncludingPlatform(actor, tenantId, capability, (reseller) => work(reseller));
+      // A member reads on `user.read` and writes on `user.write` (AC-1-e).
+      const door = this.access.for(capability === 'read' ? 'user.read' : 'user.write');
+      return await door.runIncludingPlatform(actor, tenantId, capability, (reseller) => work(reseller));
     } catch (err) {
       if (err instanceof ResellerAccessRefused || err instanceof SupportConsentRefused) {
         throw new ResellerUsersRefused(err.reason, tenantId);

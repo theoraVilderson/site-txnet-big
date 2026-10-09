@@ -266,7 +266,7 @@ export class ResellerBotService {
     now?: Date,
   ): Promise<T> {
     try {
-      return await this.access.run(
+      return await this.access.for('bot.manage').run(
         actor,
         tenantId,
         capability,

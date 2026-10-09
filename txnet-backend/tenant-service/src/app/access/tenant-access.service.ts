@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  RESELLER_KEYS,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -68,7 +69,11 @@ export class TenantAccessService {
     return { tenantId, canRead: true, canWrite: write === null, reason: null };
   }
 
-  /** `null` when the door admits; otherwise its reason. A refusal is an answer here, never an error. */
+  /**
+   * `null` when the door admits; otherwise its reason. A refusal is an answer here, never an error.
+   * A member is asked for any reseller key (AC-1-e): this answers whether the reseller opens at all,
+   * and each page's own route still asks for its own key.
+   */
   private async admits(
     actor: TenantAccessActor,
     tenantId: string,
@@ -76,7 +81,7 @@ export class TenantAccessService {
     now: Date,
   ): Promise<TenantAccessRejection | null> {
     try {
-      await this.access.admit(actor, tenantId, capability, now);
+      await this.access.for(...RESELLER_KEYS).admit(actor, tenantId, capability, now);
       return null;
     } catch (e) {
       // Only the door's own refusal is a verdict. A reader that threw is a

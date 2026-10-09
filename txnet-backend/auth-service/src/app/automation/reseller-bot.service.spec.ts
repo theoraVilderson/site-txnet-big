@@ -82,6 +82,9 @@ describe('ResellerBotService', () => {
     };
 
     const access = {
+      for() {
+        return this;
+      },
       run: vi.fn(async (_a: unknown, _t: unknown, capability: string, work: (r: unknown) => Promise<unknown>) => {
         order.push(`admit:${capability}`);
         if (options.admit) return (options.admit as () => Promise<unknown>)();

@@ -43,7 +43,7 @@ const STATUS: Record<ResellerAccessRejection, 403 | 404 | 409> = {
  * platform's.
  *
  * Read only, and nothing new is read: {@link ResellerAccess} (invariant 21)
- * admits the owner, a seat holding `tenant.manage`, or the platform owner's
+ * admits the owner, a seat holding `user_group.manage` (AC-1-e), or the platform owner's
  * staff, and the ambient service's own `list` runs in the reseller's scope —
  * so RLS, not a filter here, keeps it to that reseller's groups.
  */
@@ -77,7 +77,7 @@ export class ResellerUserGroupsController {
       trace: accessTraceOf(req),
     };
     try {
-      return await this.access.run(actor, tenantId, 'read', () =>
+      return await this.access.for('user_group.manage').run(actor, tenantId, 'read', () =>
         this.groups.list({
           adminId: user.sub,
           tenantId,

@@ -9,7 +9,7 @@ import { TenantTimeZoneRefused, TenantTimeZoneService } from './tenant-time-zone
  * - A tenant's zone is an IANA name, stored canonical; a fixed offset is refused.
  * - A set to the zone it already has writes nothing.
  * - A reseller's is reached through `ResellerAccess` (`staffWrite` to set); the
- *   platform's only by its own staff holding `tenant.manage`.
+ *   platform's only by its own staff holding `settings.manage` (AC-1-e).
  */
 describe('TenantTimeZoneService', () => {
   const PLATFORM = '11111111-1111-1111-1111-111111111111';
@@ -19,9 +19,9 @@ describe('TenantTimeZoneService', () => {
   const STAFF = '55555555-5555-5555-5555-555555555555';
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage', 'settings.manage'] };
   const stranger = { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] };
-  const resellerAdmin = { userId: OWNER, tenantId: OTHER, permissions: ['tenant.manage'] };
+  const resellerAdmin = { userId: OWNER, tenantId: OTHER, permissions: ['settings.manage'] };
 
   const build = (opts: { status?: string } = {}) => {
     const tenants: Record<string, Record<string, unknown>> = {

@@ -1,5 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
-import { runWithTenant } from '@txnet-backend/shared-core';
+import { PERMISSION_REGISTRY, runWithTenant } from '@txnet-backend/shared-core';
 import { RolesService } from './roles.service';
 import { TenantRolesRefused, TenantRolesService } from './tenant-roles.service';
 
@@ -82,6 +82,9 @@ describe('TenantRolesService', () => {
       $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)),
     };
     const access = {
+      for() {
+        return this;
+      },
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: unknown, capability: string, work: (r: unknown) => Promise<unknown>) => {
         order.push(`admit:${capability}`);
         return runWithTenant({ id: reseller }, () =>
@@ -94,10 +97,15 @@ describe('TenantRolesService', () => {
   };
 
   describe('what may be granted', () => {
-    it('gives a reseller owner the tenant ceiling: every template key but `*`', async () => {
+    it("gives a reseller owner the tenant ceiling: the registry's keys less the platform-only ones (AC-1-e)", async () => {
       const { service } = build({ as: 'owner' });
       const { grantable } = await service.list(owner, reseller);
-      expect(grantable).toEqual(['restriction.assign', 'support.agent']);
+      const ceiling = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
+      expect(grantable).toEqual([...ceiling].sort());
+      // No template is granted the reseller keys, and they are grantable anyway.
+      expect(grantable).toEqual(expect.arrayContaining(['domain.manage', 'theme.manage', 'staff.manage', 'role.manage']));
+      expect(grantable).not.toContain('tenant.manage');
+      expect(grantable).not.toContain('*');
     });
 
     it('gives a member only the part of the ceiling they hold', async () => {

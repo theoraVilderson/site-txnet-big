@@ -17,7 +17,7 @@ billing's: [billing/contract.currency-change.md](../billing/contract.currency-ch
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/operating-currency` | a reseller: its owner, a staff member, or platform staff with `tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `tenant.manage` | `{code, choices: [{code, name, symbol, decimalPlaces}]}` |
+| `GET /api/tenants/:id/operating-currency` | a reseller: its owner, a staff member with `settings.manage` (AC-1-e), or platform staff with `tenant.manage` (`ResellerAccess`, invariant 21). The platform's own tenant: only its staff with `settings.manage` | `{code, choices: [{code, name, symbol, decimalPlaces}]}` |
 | `PUT /api/tenants/:id/operating-currency` | same, `staffWrite` | `{code}` (`^[A-Z]{3}$`, strict) → `{code, choices, conversion}`; `conversion` is `{changeId, fromCode, rate, summary}` (what was converted, by kind), `null` when the code was already the tenant's |
 
 Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
@@ -35,7 +35,7 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 | 3. **A change converts the tenant's money** (F-116-f): the pair old -> new is read once (`readFxPair`), and billing's `convertOperatingCurrency` converts every live amount at it in one transaction on the cross-tenant pool, audited (`tenant_currency_change`). History keeps its currency. A reseller's own billing wallet is not its money — it is in the platform's currency, converted only by the **platform's** change, which also converts every reseller's billing wallet and the packages it sells | ADR-0098 part 5; the user chose conversion over a lock (D-50) |
 | 4. A set to the code it already has is not a change: 200, `conversion: null`, nothing read or written | a retried request is harmless |
 | 5. **No rate, no change** (`rate_unavailable`): nothing is converted at a guessed rate. A change that finds the tenant no longer in the currency its rate was read from is refused (`currency_changed`), not converted | part 5: one snapshot, and the right one |
-| 6. The platform's own tenant is not a reseller, so `ResellerAccess` does not admit it: the caller must be signed in to it and hold `tenant.manage`. A reseller's `tenant.manage` is its own tenant's, never the platform's | the platform's currency prices every reseller's billing (part 4) |
+| 6. The platform's own tenant is not a reseller, so `ResellerAccess` does not admit it: the caller must be signed in to it and hold `settings.manage` (AC-1-e; was `tenant.manage`). A reseller's `settings.manage` is its own tenant's, never the platform's | the platform's currency prices every reseller's billing (part 4) |
 | 7. **The pair is read in the tenant's own books** (F-116-j): `readFxPair(…, { tenantId: target.id })`, so its own live pin converts before the platform's | ADR-0098 part 9: a tenant's rate prices its own currency change, and only that tenant's |
 
 ## Consumers

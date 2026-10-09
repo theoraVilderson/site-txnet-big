@@ -23,7 +23,7 @@ Field schemas live in code:
 
 Every route needs a **Bearer** token and **no permission**: the door is
 `ResellerAccess` (tenant invariant 21) — the reseller's owner, one of its staff
-seats holding `tenant.manage`, or the platform owner's staff — judged against
+seats holding `bot.manage` (AC-1-e), or the platform owner's staff — judged against
 the **reseller the path names**, never the session's tenant. A `bot` object is
 `{id, platform, botUsername, role, status}` and carries no credential, no
 `webhookPath` and no `credentialRef` (F-323, ADR-0009).

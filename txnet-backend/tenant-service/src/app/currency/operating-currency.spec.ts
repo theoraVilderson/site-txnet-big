@@ -22,7 +22,7 @@ vi.mock('@txnet-backend/shared-core', async (original) => ({
  *   one transaction (F-116-f; what is converted is `currency-change.int.spec.ts`'s).
  *   No rate refuses it, and so does losing a race to another change.
  * - A reseller's is reached through `ResellerAccess`; the platform's only by
- *   its own staff holding `tenant.manage`.
+ *   its own staff holding `settings.manage` (AC-1-e).
  */
 describe('TenantOperatingCurrencyService', () => {
   const PLATFORM = '11111111-1111-1111-1111-111111111111';
@@ -32,9 +32,9 @@ describe('TenantOperatingCurrencyService', () => {
   const STAFF = '55555555-5555-5555-5555-555555555555';
 
   const owner = { userId: OWNER, tenantId: PLATFORM, permissions: [] as string[] };
-  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage'] };
+  const staff = { userId: STAFF, tenantId: PLATFORM, permissions: ['tenant.manage', 'settings.manage'] };
   const stranger = { userId: STAFF, tenantId: PLATFORM, permissions: [] as string[] };
-  const resellerAdmin = { userId: OWNER, tenantId: OTHER, permissions: ['tenant.manage'] };
+  const resellerAdmin = { userId: OWNER, tenantId: OTHER, permissions: ['settings.manage'] };
 
   const CURRENCIES = [
     { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isActive: true, isBaseCurrency: true, exchangeRates: [] },
@@ -134,7 +134,7 @@ describe('TenantOperatingCurrencyService', () => {
     expect((await service.set(staff, PLATFORM, 'IRR', '10.0.0.1')).code).toBe('IRR');
     expect(await refusal(service.read(stranger, PLATFORM))).toBe('not_allowed');
     expect(await refusal(service.read(owner, PLATFORM))).toBe('not_allowed');
-    // tenant.manage in a reseller is not the platform's.
+    // settings.manage in a reseller is not the platform's.
     expect(await refusal(service.set(resellerAdmin, PLATFORM, 'IRR', '10.0.0.1'))).toBe('not_allowed');
   });
 

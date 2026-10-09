@@ -35,8 +35,8 @@ only on the caller's own tenant. A `role` object is
 ## On a tenant's own path (v42, F-1201-a, ADR-0134)
 
 `/auth/tenants/:tenantId/...`, the tenant is the path's. Bearer, **no**
-`role.manage`: `ResellerAccess` is the door (owner, seated member with
-`tenant.manage`, platform staff under the reseller's consent; the platform's
+`role.manage` guard: `ResellerAccess.for('role.manage')` is the door (owner, seated member with
+`role.manage` (AC-1-e), platform staff under the reseller's consent; the platform's
 tenant to its staff). Its refusals answer as on
 [contract.reseller-users.md](contract.reseller-users.md), with `{reason}`.
 Role-level refusals are the ones above, unchanged. Code:

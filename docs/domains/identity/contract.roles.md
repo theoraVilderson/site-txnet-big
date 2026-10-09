@@ -58,7 +58,7 @@ writes to `RolesService`, so the rules above live once.
 
 | | |
 |---|---|
-| **What may be granted** | the platform's tenant: the caller's keys, `*` included. A reseller: the **tenant ceiling** (every concrete key the templates name, `*` excepted), whole for its owner, and the part they hold for anyone else |
+| **What may be granted** | the platform's tenant: the caller's keys, `*` included. A reseller: the **tenant ceiling** — every registry key not `platformOnly` (AC-1-e; it was the keys the templates hold, which made a key grantable only by granting it to every template holder) — whole for its owner, and the part they hold for anyone else |
 | **list** | adds `members` (how many of *this* tenant's people hold each role, templates included) and `grantable` (the keys above) |
 | **assign** | the role is this tenant's or a template, else `role_not_found`. The writer holds every key of it, else `role_not_held`. `authorityOver` allows the act on this person (ADR-0103), else `no_authority`. Writes `user.roleId` with a `role_change` audit row in the tenant's trail; the same role again writes nothing. The trigger moves the token (F-101-b) |
 
@@ -76,6 +76,25 @@ without English or Persian text. A missing text at runtime shows the key.
 The registry is what can be *shown*. `identity.permission` rows are still what
 can be *granted* (a key with no row is refused). A key in one and not the other
 is shown raw, or not offered.
+
+## The reseller keys (AC-1-e, catalog §3.2)
+
+`tenant.manage` was the one key of a reseller's member door, and no tenant-made
+role may hold it, so a reseller's role was everything (the owner) or nothing.
+It is split: each reseller surface names its own key with
+`ResellerAccess.for(key)`, and `RESELLER_KEYS` (`shared-core/.../tenant/reseller-keys.ts`)
+lists them — `domain.manage`, `theme.manage`, `bot.manage`, `grant.assign`,
+`staff.manage`, `role.manage`, `settings.manage` (currency, time zone,
+onboarding), `report.read` (revenue), and the existing `user.read`,
+`user.write`, `user.impersonate`, `user_group.manage`, `catalog.manage`,
+`gateway.manage`, `campaign.manage`, `restriction.assign`. `wallet.manual_adjust`,
+`credential.manage`, `audit.read` and `export.request` are registered and
+grantable with no reseller route yet. A subscription, limits and support
+consent name no key: they are the owner's contract with the platform.
+
+The keys sit under `Admin` in `permissions.yaml`, which is what puts them in
+the ceiling; **no template is granted one** in the database (migration
+`20261009000200`), so nobody holds more than before.
 
 ## Every query is tenant-bound
 
@@ -117,4 +136,4 @@ team, from when and until when. It names **no** role — a member's role is thei
 `user.roleId`, one of these, set by **assign** above — and holds nothing about
 permissions itself. That
 is D-42 (2): the seat says they are on the team, a role of that tenant says what
-they may do, and `tenant.manage` in it is what administers the reseller.
+they may do, and the reseller keys in it say which of its surfaces they administer.

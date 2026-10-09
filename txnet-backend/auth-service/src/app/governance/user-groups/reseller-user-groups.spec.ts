@@ -18,6 +18,9 @@ const req = { user: { sub: 'user-ali', tenantId: 'tenant-platform', permissions:
 function build(admit: boolean) {
   const seenScope: unknown[] = [];
   const access = {
+    for() {
+      return this;
+    },
     run: vi.fn(async (_actor: unknown, tenantId: string, _cap: string, work: (r: { id: string }) => Promise<unknown>) => {
       if (!admit) throw new ResellerAccessRefused('not_allowed', tenantId);
       return runWithTenant({ id: tenantId } as never, () => work({ id: tenantId }));

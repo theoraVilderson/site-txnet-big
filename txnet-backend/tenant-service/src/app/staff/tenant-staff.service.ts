@@ -35,7 +35,7 @@ import type { InviteStaffInput } from './tenant-staff.schema';
  *
  * **Who reaches it** is {@link ResellerAccess} (invariant 21): the path's
  * reseller, by its owner, by the platform owner's staff, or by a member of that
- * reseller holding `tenant.manage` — the seat this service grants is what makes
+ * reseller holding `staff.manage` (AC-1-e) — the seat this service grants is what makes
  * the third door open. Reading the team is `read` and changing it is
  * `staffWrite`, so a suspended reseller sees its team and cannot change it.
  *
@@ -229,7 +229,7 @@ export class TenantStaffService {
 
   private async admit(actor: StaffActor, tenantId: string, capability: 'read' | 'staffWrite', now: Date) {
     try {
-      return await this.resellerAccess.admit(actor, tenantId, capability, now);
+      return await this.resellerAccess.for('staff.manage').admit(actor, tenantId, capability, now);
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new StaffRefused(e.reason, tenantId);
       throw e;

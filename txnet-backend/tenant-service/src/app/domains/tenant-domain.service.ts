@@ -634,7 +634,7 @@ export class TenantDomainService {
   /** The one access check (F-061-h); nothing on the cross-tenant pool is read before it. */
   private async access(actor: DomainActor, tenantId: string, capability: TenantCapabilityName): Promise<AdmittedReseller> {
     try {
-      return await this.resellerAccess.admit(actor, tenantId, capability);
+      return await this.resellerAccess.for('domain.manage').admit(actor, tenantId, capability);
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new DomainRefused(e.reason, tenantId);
       throw e;

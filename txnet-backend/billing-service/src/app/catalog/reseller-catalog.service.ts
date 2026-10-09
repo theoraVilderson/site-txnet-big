@@ -74,7 +74,7 @@ export type ResellerProductFilter = Omit<ListProductsFilter, 'tenantId'>;
  *
  * **It adds a door and a scope, and no rules.** {@link ResellerAccess} (tenant
  * invariant 21) says whether this caller may configure that reseller — its
- * owner, one of its staff seats holding `tenant.manage`, or the platform
+ * owner, one of its staff seats holding `catalog.manage`, or the platform
  * owner's staff — and `run` opens the reseller's tenant scope around the work.
  * Inside it, {@link CatalogAdminService} is called with the **reseller** as the
  * actor's tenant, so every rule of the ambient surface applies here by
@@ -282,7 +282,7 @@ export class ResellerCatalogService {
     work: (as: CatalogActor) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, (reseller) =>
+      return await this.access.for('catalog.manage').run(actor, tenantId, capability, (reseller) =>
         work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip }),
       );
     } catch (e) {

@@ -10,8 +10,8 @@ import { TenantAccessService } from './tenant-access.service';
  * fake door would prove nothing. Three things are pinned:
  *
  * - **the same three doors, and no fourth**: the reseller's `ownerUserId` from
- *   whichever tenant their session is in, a live staff seat of it holding
- *   `tenant.manage`, the platform owner's staff with `tenant.manage`;
+ *   whichever tenant their session is in, a live staff seat of it holding any
+ *   reseller key (AC-1-e), the platform owner's staff with `tenant.manage`;
  * - **two verdicts, because the status matrix answers them differently**: a
  *   suspended reseller still reads and no longer writes, so one boolean would
  *   have to lie to one of the two;
@@ -75,13 +75,13 @@ describe('TenantAccessService', () => {
     });
   });
 
-  it('answers a live seat holding `tenant.manage` yes, and a seat without it no (F-018-j)', async () => {
-    await expect(build('active', [seat()]).verdict(insider(['tenant.manage']), RESELLER, T0)).resolves.toMatchObject({
+  it('answers a live seat holding any reseller key yes, and a seat without one no (F-018-j, AC-1-e)', async () => {
+    await expect(build('active', [seat()]).verdict(insider(['domain.manage']), RESELLER, T0)).resolves.toMatchObject({
       canRead: true,
       canWrite: true,
     });
-    // A seat is the membership; the permission is what administers. Neither alone.
-    await expect(build('active', [seat()]).verdict(insider(), RESELLER, T0)).resolves.toEqual({
+    // A seat is the membership; a key is what administers. Neither alone — `tenant.manage` is no reseller key.
+    await expect(build('active', [seat()]).verdict(insider(['tenant.manage']), RESELLER, T0)).resolves.toEqual({
       tenantId: RESELLER,
       canRead: false,
       canWrite: false,

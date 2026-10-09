@@ -107,31 +107,31 @@ describe('ResellerAccess', () => {
     await expect(access.admit(insider, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
 
-  it('admits a live staff seat with `tenant.manage`, and nothing less (F-018-j)', async () => {
-    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] };
-    await expect(build('active', [seat()]).admit(member, RESELLER, 'staffWrite', T0)).resolves.toEqual({
+  it("admits a live staff seat holding the door's key, and nothing less (F-018-j, AC-1-e)", async () => {
+    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['domain.manage'] };
+    await expect(build('active', [seat()]).for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).resolves.toEqual({
       id: RESELLER,
       slug: 'ali',
       as: 'member',
     });
 
-    // The seat is the membership; the permission is what administers. Neither alone.
+    // The seat is the membership; the key is what administers. Neither alone.
     const noPermission = { ...member, permissions: ['user.read'] };
-    await expect(build('active', [seat()]).admit(noPermission, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(build('active', [seat()]).for('domain.manage').admit(noPermission, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
 
     // Invited and not yet accepted, expired, and removed: three seats that admit nobody.
     for (const dead of [seat({ joinedAt: null }), seat({ accessExpiresAt: LONG_AGO }), seat({ revokedAt: LONG_AGO })]) {
-      await expect(build('active', [dead]).admit(member, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+      await expect(build('active', [dead]).for('domain.manage').admit(member, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     }
 
     // A seat on one reseller is not a seat on another.
-    await expect(build('active', [seat()]).admit({ ...member, tenantId: OTHER }, OTHER, 'read', T0)).rejects.toMatchObject({
+    await expect(build('active', [seat()]).for('domain.manage').admit({ ...member, tenantId: OTHER }, OTHER, 'read', T0)).rejects.toMatchObject({
       reason: 'not_allowed',
     });
 
     // And a member is held to their reseller's matrix, as the owner is.
-    await expect(build('suspended', [seat()]).admit(member, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'member' });
-    await expect(build('suspended', [seat()]).admit(member, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    await expect(build('suspended', [seat()]).for('domain.manage').admit(member, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'member' });
+    await expect(build('suspended', [seat()]).for('domain.manage').admit(member, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'reseller_suspended' });
   });
 
   it('admits platform staff, and tells only them that a reseller does not exist', async () => {
@@ -254,8 +254,8 @@ describe('ResellerAccess', () => {
     // Unchanged: the reseller's owner and members need none, nor does the
     // platform's own tenant, nor any configuration route (`admit`).
     await expect(build().admitIncludingPlatform(owner, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'owner' });
-    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['tenant.manage'] };
-    await expect(build('active', [seat()]).admitIncludingPlatform(member, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'member' });
+    const member = { userId: CUSTOMER, tenantId: RESELLER, permissions: ['user.write'] };
+    await expect(build('active', [seat()]).for('user.write').admitIncludingPlatform(member, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'member' });
     await expect(build().admitIncludingPlatform(staff, PLATFORM, 'staffWrite', T0)).resolves.toMatchObject({ platform: true });
     await expect(build().admit(staff, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'staff' });
   });

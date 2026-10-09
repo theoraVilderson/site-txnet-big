@@ -64,6 +64,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 |---|---|
 | `ResellerAccess.admit(actor, tenantId, capability)` | `{id, slug, as: 'owner' \| 'member' \| 'staff'}`, or throws `ResellerAccessRefused` with `reason` |
 | `ResellerAccess.run(actor, tenantId, capability, work)` | `admit`, then `work(reseller)` inside `runWithTenant({id})`: the app pool's RLS sees the **reseller's** rows, never the caller's. A refusal throws before `work` starts |
+| `ResellerAccess.for(...keys)` (AC-1-e) | the same door, opened also to a seated member holding **any one** of `keys` — `RESELLER_KEYS` in `shared-core/.../tenant/reseller-keys.ts`. The bare door names none and admits **no member**, `*` included; the owner and platform staff are admitted as before, whatever the keys |
 
 - `actor` is `{userId, tenantId, permissions}` as `forward-auth` sent them;
   `capability` a `TenantCapabilityName`, judged against the **reseller's**

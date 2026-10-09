@@ -23,9 +23,9 @@ import { RedisService } from '../redis/redis.service';
  * money between a tenant and the platform is in it (part 4).
  *
  * **Who.** A reseller's through {@link ResellerAccess}, as its branding is. The
- * platform's only by its own staff holding `tenant.manage` — `ResellerAccess`
- * admits resellers alone, and a reseller's admin holds `tenant.manage` in its
- * own tenant, never in the platform's.
+ * platform's only by its own staff holding `settings.manage` — `ResellerAccess`
+ * admits resellers alone, and a reseller's member holds `settings.manage` in
+ * its own tenant, never in the platform's (AC-1-e).
  *
  * **Which.** Only a currency with a rate (part 8): active, at most two
  * decimals (money is `DECIMAL(18,2)`, part 6), and either the USD pivot or
@@ -152,13 +152,13 @@ export class TenantOperatingCurrencyService {
       select: { tenantType: true, deletedAt: true, operatingCurrencyCode: true },
     });
     if (tenant?.tenantType === TenantType.platform_owner && !tenant.deletedAt) {
-      if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'tenant.manage')) {
+      if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'settings.manage')) {
         throw new OperatingCurrencyRefused('not_allowed', tenantId);
       }
       return { id: tenantId, code: tenant.operatingCurrencyCode };
     }
     try {
-      const reseller = await this.resellerAccess.admit(actor, tenantId, capability);
+      const reseller = await this.resellerAccess.for('settings.manage').admit(actor, tenantId, capability);
       return { id: reseller.id, code: tenant?.operatingCurrencyCode ?? 'USD' };
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new OperatingCurrencyRefused(e.reason, tenantId);

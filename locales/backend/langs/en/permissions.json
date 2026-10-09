@@ -3,6 +3,9 @@
     "ai": {
       "label": "AI"
     },
+    "audit": {
+      "label": "Audit"
+    },
     "bot": {
       "label": "Bots"
     },
@@ -15,14 +18,26 @@
     "coupon": {
       "label": "Coupons"
     },
+    "credential": {
+      "label": "Credentials"
+    },
     "currency": {
       "label": "Currency"
+    },
+    "domain": {
+      "label": "Domains"
     },
     "engagement": {
       "label": "Engagement"
     },
+    "export": {
+      "label": "Exports"
+    },
     "gateway": {
       "label": "Payment gateways"
+    },
+    "grant": {
+      "label": "Grants"
     },
     "guide": {
       "label": "Guides"
@@ -36,6 +51,9 @@
     "realtime": {
       "label": "Live updates"
     },
+    "report": {
+      "label": "Reports"
+    },
     "restriction": {
       "label": "Restrictions"
     },
@@ -45,8 +63,14 @@
     "self": {
       "label": "Own account"
     },
+    "settings": {
+      "label": "Settings"
+    },
     "settlement": {
       "label": "Settlements"
+    },
+    "staff": {
+      "label": "Team"
     },
     "support": {
       "label": "Support"
@@ -57,11 +81,17 @@
     "tenant_billing": {
       "label": "Reseller billing"
     },
+    "theme": {
+      "label": "Appearance"
+    },
     "user": {
       "label": "Users"
     },
     "user_group": {
       "label": "User groups"
+    },
+    "wallet": {
+      "label": "Wallets"
     },
     "worker": {
       "label": "Background jobs"
@@ -74,7 +104,17 @@
         "description": "Set up the AI assistant and its provider."
       }
     },
+    "audit": {
+      "read": {
+        "label": "See the activity log",
+        "description": "Read who did what in this tenant."
+      }
+    },
     "bot": {
+      "manage": {
+        "label": "Manage bots",
+        "description": "Set up the tenant's bots and their settings."
+      },
       "webhook_rotate": {
         "label": "Renew bot connection",
         "description": "Renew a bot's webhook secret."
@@ -98,10 +138,22 @@
         "description": "Create and withdraw discount codes."
       }
     },
+    "credential": {
+      "manage": {
+        "label": "Manage credentials",
+        "description": "Set and replace provider keys and secrets."
+      }
+    },
     "currency": {
       "pin": {
         "label": "Pin exchange rates",
         "description": "Fix an exchange rate by hand."
+      }
+    },
+    "domain": {
+      "manage": {
+        "label": "Manage domains",
+        "description": "Add, verify and remove the tenant's domains."
       }
     },
     "engagement": {
@@ -110,10 +162,22 @@
         "description": "Set up rewards, lotteries and reminders for users."
       }
     },
+    "export": {
+      "request": {
+        "label": "Request exports",
+        "description": "Ask for a download of the tenant's data."
+      }
+    },
     "gateway": {
       "manage": {
         "label": "Manage payment gateways",
         "description": "Connect, switch on and switch off payment gateways."
+      }
+    },
+    "grant": {
+      "assign": {
+        "label": "Give services",
+        "description": "Give users a service or credit as a gift."
       }
     },
     "guide": {
@@ -142,6 +206,12 @@
         }
       }
     },
+    "report": {
+      "read": {
+        "label": "See reports",
+        "description": "See revenue and sales figures."
+      }
+    },
     "restriction": {
       "assign": {
         "label": "Restrict users",
@@ -151,7 +221,7 @@
     "role": {
       "manage": {
         "label": "Manage roles",
-        "description": "Create and edit the platform's roles. Platform only."
+        "description": "Create and edit roles and give them to people."
       }
     },
     "self": {
@@ -164,10 +234,22 @@
         "description": "Change their own account details."
       }
     },
+    "settings": {
+      "manage": {
+        "label": "Manage settings",
+        "description": "Change currency, time zone and setup steps."
+      }
+    },
     "settlement": {
       "manage": {
         "label": "Manage settlements",
         "description": "Settle balances with resellers and partners."
+      }
+    },
+    "staff": {
+      "manage": {
+        "label": "Manage the team",
+        "description": "Invite and remove team members."
       }
     },
     "support": {
@@ -200,6 +282,12 @@
         "description": "Add credit to a reseller's balance."
       }
     },
+    "theme": {
+      "manage": {
+        "label": "Manage appearance",
+        "description": "Change the logo, colours and branding."
+      }
+    },
     "user": {
       "ban": {
         "label": "Ban users",
@@ -222,6 +310,12 @@
       "manage": {
         "label": "Manage user groups",
         "description": "Create groups and move users between them."
+      }
+    },
+    "wallet": {
+      "manual_adjust": {
+        "label": "Adjust wallets",
+        "description": "Add to or take from a user's wallet by hand."
       }
     },
     "worker": {

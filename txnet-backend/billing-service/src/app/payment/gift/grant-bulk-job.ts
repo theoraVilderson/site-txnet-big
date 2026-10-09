@@ -225,7 +225,7 @@ export class ResellerGrantBulkJobService {
 
   private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: (admitted: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
-      return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
+      return await this.access.for('grant.assign').runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
       if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;

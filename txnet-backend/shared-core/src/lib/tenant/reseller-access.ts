@@ -6,6 +6,7 @@ import { runWithTenant } from '../tenant-context/tenant-context';
 import { tenantTransaction } from '../tenant-context/with-tenant';
 import { AccessTrace, PlatformAccessTier, recordPlatformAccess } from './platform-access-trail';
 import { TenantCapabilityName, tenantAllows } from './status-policy';
+import type { ResellerKey } from './reseller-keys';
 import { liveEmergencyEntry, liveSupportConsent } from './support-consent';
 
 /**
@@ -90,11 +91,12 @@ export class ResellerAccessRefused extends Error {
  * **The reseller's own staff are the third door** (F-018-j). A member holds an
  * accepted, unexpired, unrevoked `tenant_staff_member` seat of *this* reseller,
  * signs in to it — so unlike the owner their ambient tenant is the reseller —
- * and holds `tenant.manage` in it, through a role of that tenant (F-018-n).
- * That permission is the same door the platform owner's staff pass, so a
- * reseller decides which of its roles administer it and which do not; a seat
- * alone grants nothing. They are held to their reseller's matrix as the owner
- * is, which `TenantStatusGuard` would do for them anyway.
+ * and holds, through a role of that tenant (F-018-n), **the key the route
+ * names** (AC-1-e): `for('domain.manage')` admits a member holding it and no
+ * other. The bare door names no key and admits no member, so a route is the
+ * owner's alone until it says otherwise. A seat alone grants nothing. They are
+ * held to their reseller's matrix as the owner is, which `TenantStatusGuard`
+ * would do for them anyway.
  *
  * Every fact is read on the app pool — `tenant.tenant` has no RLS, and a
  * member's seat is their own tenant's row — before a caller touches the
@@ -106,7 +108,21 @@ export class ResellerAccessRefused extends Error {
  */
 @Injectable()
 export class ResellerAccess {
+  /** The keys that admit a member; none on the bare door, which is owner-only. Not a constructor parameter: Nest injects this class. */
+  private keys: readonly ResellerKey[] = [];
+
   constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
+
+  /**
+   * This door, opened also to a reseller's own staff member holding **any one**
+   * of `keys` (AC-1-e). The owner and the platform's staff are admitted as on
+   * the bare door; the keys are the member's door only.
+   */
+  for(...keys: ResellerKey[]): ResellerAccess {
+    const door = new ResellerAccess(this.prisma);
+    door.keys = keys;
+    return door;
+  }
 
   admit(actor: ResellerActor, tenantId: string, capability: TenantCapabilityName, now = new Date()): Promise<AdmittedReseller> {
     return this.admitTarget(actor, tenantId, capability, now, 'reseller');
@@ -252,13 +268,13 @@ export class ResellerAccess {
   }
 
   /**
-   * A live seat on this reseller, held by a caller signed in to it with
-   * `tenant.manage`. Both halves are required: the seat says they are on the
-   * team, the permission says this team member administers the reseller.
+   * A live seat on this reseller, held by a caller signed in to it with one of
+   * this door's keys. Both halves are required: the seat says they are on the
+   * team, the key says this team member may do what this route does.
    */
   private async isMember(actor: ResellerActor, resellerId: string, now: Date): Promise<boolean> {
     if (actor.tenantId !== resellerId) return false;
-    if (!holdsPermission(actor.permissions, 'tenant.manage')) return false;
+    if (!this.keys.some((key) => holdsPermission(actor.permissions, key))) return false;
     const seat = await this.prisma.tenantStaffMember.findFirst({
       where: { tenantId: resellerId, userId: actor.userId, revokedAt: null, joinedAt: { not: null } },
       select: { accessExpiresAt: true },

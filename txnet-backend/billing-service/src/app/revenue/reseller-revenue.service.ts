@@ -442,7 +442,7 @@ export class ResellerRevenueService {
   private async run<T>(actor: ResellerActor, tenantId: string, work: (reseller: AdmittedReseller) => Promise<T>): Promise<T> {
     try {
       // The platform's own tenant too, to its staff (UX-1-r2): its dashboard's revenue.
-      return await this.access.runFiguresIncludingPlatform(actor, tenantId, 'read', (reseller) => work(reseller));
+      return await this.access.for('report.read').runFiguresIncludingPlatform(actor, tenantId, 'read', (reseller) => work(reseller));
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerRevenueRefused(e.reason, tenantId);
       throw e;

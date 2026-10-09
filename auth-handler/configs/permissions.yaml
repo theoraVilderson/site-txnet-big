@@ -50,10 +50,6 @@ roles:
       # named role, and a line under `Admin` would let every tenant grant it
       # to its own roles. Given by hand, one person at a time.
       - tenant.emergency_access
-      # A tenant's own roles at `/api/auth/roles` (F-018-n). `*` already allows
-      # it; listed so the permission registry (AC-1-f) names and labels it. A
-      # reseller administers its roles on its own path (ADR-0134), not by this key.
-      - role.manage
   Admin:
     permissions:
       - user.read
@@ -122,6 +118,28 @@ roles:
       # Guides (F-414-c): the tenant's own help content, or the platform's
       # for the platform owner's Admin — drafts, publish, override, hide.
       - guide.manage
+      # A reseller's own staff (AC-1-e, catalog §3.2): `tenant.manage` split
+      # into one key per surface, so a reseller makes "domains only" or
+      # "finance only". Listed here to put them inside the tenant ceiling a
+      # tenant-made role may claim (F-018-n2); the `Admin` template is granted
+      # none of them in the database, so nobody holds more than before.
+      # `shared-core/.../tenant/reseller-keys.ts` names which door each opens.
+      - domain.manage
+      - theme.manage
+      - bot.manage
+      - grant.assign
+      - staff.manage
+      - settings.manage
+      - report.read
+      # A tenant's roles (F-018-n): `/api/auth/roles` and, on a reseller's own
+      # path, its roles and who holds them (ADR-0134).
+      - role.manage
+      # Registered and grantable before their reseller route exists, so a role
+      # made today already carries them when it lands.
+      - wallet.manual_adjust
+      - credential.manage
+      - audit.read
+      - export.request
   Support:
     permissions:
       - user.read

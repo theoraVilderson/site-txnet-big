@@ -69,7 +69,7 @@ export class TenantOnboardingService {
   ) {}
 
   async checklist(actor: OnboardingActor, tenantId: string): Promise<OnboardingView> {
-    const reseller = await this.access.admit(actor, tenantId, 'read');
+    const reseller = await this.access.for('settings.manage').admit(actor, tenantId, 'read');
     const [domain, gateway, bot, pricing] = await Promise.all([
       this.hasDoor(reseller.id),
       this.all.tenantGatewayConfig.findFirst({

@@ -39,6 +39,9 @@ describe("impersonating a reseller's user", () => {
     };
     const tokens = { signImpersonatedToken: vi.fn(() => 'impersonated-token') };
     const access = {
+      for() {
+        return this;
+      },
       runIncludingPlatform: vi.fn(async (_a: unknown, _t: string, capability: string, work: (r: unknown) => Promise<unknown>) => {
         if (support instanceof Error) throw support;
         expect(capability).toBe('staffWrite');

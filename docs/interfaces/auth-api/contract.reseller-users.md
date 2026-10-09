@@ -23,7 +23,7 @@ Field schemas live in code:
 
 Every route needs a **Bearer** token and **no permission**: the door is
 `ResellerAccess` (tenant invariant 21) — the reseller's owner, one of its staff
-seats holding `tenant.manage`, or the platform owner's staff — judged against
+seats holding `user.read` to read or `user.write` to change (AC-1-e), or the platform owner's staff — judged against
 the **reseller the path names**, never the session's tenant. The path may
 also name the **platform's own tenant**, admitted to platform staff only
 (F-311-aa, ADR-0102); anyone else asking for it gets `not_allowed`. A `user` object is
@@ -48,7 +48,7 @@ Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 
 | reason | status | when |
 |---|---|---|
-| `not_allowed` | 403 | not the owner, not a seat with `tenant.manage`, not platform staff — and, to everyone but platform staff, an unknown reseller |
+| `not_allowed` | 403 | not the owner, not a seat with the route's key, not platform staff — and, to everyone but platform staff, an unknown reseller |
 | `reseller_not_found` | 404 | platform staff only: there is no such reseller |
 | `reseller_suspended` | 403 | the reseller's status closes the capability the route named |
 | `reseller_terminated` | 409 | closed to everyone, staff included |

@@ -6,7 +6,7 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
-  ALL_PERMISSIONS,
+  PERMISSION_REGISTRY,
   SupportConsentRefused,
   SupportConsentRejection,
   TenantCapabilityName,
@@ -47,6 +47,9 @@ export type TenantRolesList = { roles: TenantRoleView[]; grantable: string[] };
 
 export type RoleAssignment = { userId: string; role: { id: string; name: string } };
 
+/** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). */
+const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
+
 const KEYS = { rolePermissions: { select: { permission: { select: { key: true } } } } } as const;
 
 /**
@@ -61,9 +64,10 @@ const KEYS = { rolePermissions: { select: { permission: { select: { key: true } 
  * admitted to its staff by the same door, so one surface serves both teams.
  *
  * **What may be granted** ({@link grantScope}) is identity invariant 18 with
- * one bound added on a reseller: the tenant ceiling — every concrete key the
- * templates name, the database's half of the rule
- * `forward-auth` applies to a tenant-made role. The owner holds no operator
+ * one bound added on a reseller: the tenant ceiling — every key the
+ * permission registry does not mark platform-only, which is the rule
+ * `forward-auth` applies to a tenant-made role, read from the same file
+ * (AC-1-e). The owner holds no operator
  * key of their own (they are the platform's customer), so they grant the
  * whole ceiling; a member or the platform's staff grant the part they hold.
  *
@@ -187,22 +191,21 @@ export class TenantRolesService {
    */
   private async grantScope(actor: ResellerActor, admitted: AdmittedReseller): Promise<RoleScope> {
     if (admitted.platform) return { tenantId: admitted.id, permissions: actor.permissions };
-    const ceiling = await this.tenantCeiling();
+    const ceiling = this.tenantCeiling();
     const permissions =
       admitted.as === 'owner' ? ceiling : ceiling.filter((key) => holdsPermission(actor.permissions, key));
     return { tenantId: admitted.id, permissions };
   }
 
   /**
-   * Every concrete key a template names — what a tenant-made role may ever
-   * claim. `*` is not a key but "all of them", so it is left out: SuperAdmin
-   * holds nothing else, which is how it stays out of every tenant's reach.
+   * Every key a tenant-made role may ever claim: the registry's keys that are
+   * not platform-only (AC-1-e). It was the keys the templates hold in the
+   * database, which made a key grantable only by granting it to every holder
+   * of a template; the registry is `permissions.yaml`, the gate's own ceiling
+   * (F-018-n2), so the two can no longer disagree.
    */
-  private async tenantCeiling(): Promise<string[]> {
-    const templates = await this.prisma.role.findMany({ where: { tenantId: null }, select: KEYS });
-    const keys = new Set(templates.flatMap((template) => permissionsOf({ role: template })));
-    keys.delete(ALL_PERMISSIONS);
-    return [...keys];
+  private tenantCeiling(): string[] {
+    return TENANT_CEILING;
   }
 
   /** Admit, run in the tenant's scope, and translate the door's refusal into this surface's one type. */
@@ -213,7 +216,7 @@ export class TenantRolesService {
     work: (admitted: AdmittedReseller) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.runIncludingPlatform(actor, tenantId, capability, work);
+      return await this.access.for('role.manage').runIncludingPlatform(actor, tenantId, capability, work);
     } catch (err) {
       if (err instanceof ResellerAccessRefused || err instanceof SupportConsentRefused) {
         throw new TenantRolesRefused(err.reason, tenantId);

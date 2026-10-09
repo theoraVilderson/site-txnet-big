@@ -81,7 +81,7 @@ const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
  * reseller's owner holds no `gateway.manage` — they are a customer of the
  * platform, not one of its operators — and `ResellerAccess` is the door
  * instead. It admits the reseller's owner, one of its staff seats holding
- * `tenant.manage`, and the platform owner's staff. What may then be done to a
+ * `gateway.manage` (AC-1-e), and the platform owner's staff. What may then be done to a
  * gateway is `GatewayAdminService`'s, unchanged: the work runs as the reseller,
  * so a platform gateway is `gateway_not_found` here and `blockedReason` is
  * `block_is_platform_owners` for **everyone**, platform staff included —

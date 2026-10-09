@@ -30,11 +30,11 @@ platform's global permission keys, and seats people here.
 
 | Route | Who | Answer |
 |---|---|---|
-| `GET /api/tenants/:id/staff` | the reseller's owner, a member with `tenant.manage`, or platform staff with `tenant.manage` | the team, newest invitation first |
+| `GET /api/tenants/:id/staff` | the reseller's owner, a member with `staff.manage`, or platform staff with `tenant.manage` | the team, newest invitation first |
 | `POST /api/tenants/:id/staff` `{userId, accessExpiresAt?}` | same | `201` the seat, `invited` |
 | `POST /api/tenants/:id/staff/accept` | the invited user, themselves | `200` the seat, `active` |
-| `PATCH /api/tenants/:id/staff/:memberId` `{accessExpiresAt: date \| null}` | the owner, a member with `tenant.manage`, or platform staff | `200` the seat, its end moved or cleared (F-1201-b) |
-| `DELETE /api/tenants/:id/staff/:memberId` | the owner, a member with `tenant.manage`, or platform staff | `200` the seat, `revoked` |
+| `PATCH /api/tenants/:id/staff/:memberId` `{accessExpiresAt: date \| null}` | the owner, a member with `staff.manage`, or platform staff | `200` the seat, its end moved or cleared (F-1201-b) |
+| `DELETE /api/tenants/:id/staff/:memberId` | the owner, a member with `staff.manage`, or platform staff | `200` the seat, `revoked` |
 
 The role is set after an invite at `PUT /api/auth/tenants/:id/users/:userId/role`
 (F-1201-a): this service never writes `identity.user` (rule 1), and calls no other
@@ -67,7 +67,7 @@ door can never disagree — one function, `staffState`.
 | 4 | Removing sets `revokedAt`; nothing is deleted | as rules.md #4 for a tenant: the trail outlives the membership |
 | 5 | Acceptance is the invitee's own call, on their own session, once | a seat nobody accepted is not access, and `accept` is therefore the one route `ResellerAccess` cannot guard — an unaccepted member is exactly who it refuses |
 | 6 | An `accessExpiresAt` in the past is refused (`expiry_past`) | a seat that is expired the moment it is written is a mistake, not a policy |
-| 7 | A member reaches reseller self-service only with `tenant.manage`, in a role of that tenant | the seat says they are on the team; the permission says this member administers the reseller. A `Support` role gets a seat and no administration (invariant 21) |
+| 7 | A member reaches a reseller surface only with **that surface's key**, in a role of that tenant (AC-1-e): `staff.manage` here, `domain.manage` on domains — `shared-core/.../tenant/reseller-keys.ts` | the seat says they are on the team; the key says what this member administers, so a reseller can make "domains only" or "finance only". A `Support` role gets a seat and no administration (invariant 21) |
 | 8 | An invite past the reseller's `staff_members_max` is **409** `reseller_limit_reached`, `facts {key, limit, used}`, to its owner and team; the platform's staff pass. Counted: seats neither removed nor expired, under a per-reseller lock (F-019-t1, [contract.limits.md](contract.limits.md)) | a team is bounded like the other things a reseller adds; lowering it removes nobody |
 | 9 | A seat's end is moved or cleared in place (`PATCH`), never by re-inviting: acceptance and history stay. A removed seat is `staff_not_found`; a past date `expiry_past`. An **expired** seat given a later end (or none) counts again, so it passes rule 8 as an invite does, and a joined member is told (`identity.access.changed`, `seat_restored`) | re-inviting would make them accept again for a date change |
 

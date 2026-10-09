@@ -61,7 +61,7 @@ export class ImpersonationService {
     // The admin is a user of the platform's tenant: read before the reseller's scope opens.
     const admin = await this.prisma.user.findUnique({ where: { id: actor.userId }, include: { role: true } });
     try {
-      return await this.access.runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
+      return await this.access.for('user.impersonate').runIncludingPlatform(actor, tenantId, 'staffWrite', async (admitted) => {
         if (admitted.as !== 'staff') throw new ForbiddenException('Only the platform impersonates here');
         const target = await this.prisma.user.findUnique({
           where: { id: targetUserId },

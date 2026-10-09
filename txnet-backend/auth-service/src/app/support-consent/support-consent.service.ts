@@ -149,9 +149,10 @@ function view(row: Row, now: Date): ConsentView {
  * (4), catalog §3.7): `/api/auth/tenants/:tenantId/support-consent`.
  *
  * **The platform may ask; only the reseller grants.** `ResellerAccess` admits
- * the reseller's owner, a `tenant.manage` seat of it, and the platform's staff;
+ * the reseller's owner and the platform's staff — no member: consent is the
+ * owner's (AC-1-e);
  * a grant or a default refuses the last (`platform_cannot_grant`), a request
- * refuses the first two (`only_platform_requests`). Revoke is anyone's the door
+ * refuses the first (`only_platform_requests`). Revoke is anyone's the door
  * admits: the reseller ends access, the platform withdraws its ask or leaves.
  *
  * Every boundary is one `admin_audit_log` row in the reseller's trail, in the
@@ -200,7 +201,7 @@ export class SupportConsentService {
   /**
    * What the platform's staff did among the reseller's people, newest first
    * (F-117-c, ADR-0104 (6)): one row per admitted request, reads included. The
-   * reseller's to read — its owner or a `tenant.manage` seat — not the
+   * reseller's to read — its owner — not the
    * platform's (`reseller_only`): the rows name its users.
    */
   activity(actor: SupportConsentActor, tenantId: string, page: number) {

@@ -273,7 +273,7 @@ export class TenantBrandingService {
 
   private async access(actor: BrandingActor, tenantId: string, capability: TenantCapabilityName) {
     try {
-      return await this.resellerAccess.admit(actor, tenantId, capability);
+      return await this.resellerAccess.for('theme.manage').admit(actor, tenantId, capability);
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new BrandingRefused(e.reason, tenantId);
       throw e;

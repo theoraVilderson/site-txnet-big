@@ -136,7 +136,7 @@ export class ResellerCampaignService {
     work: (as: { adminId: string; tenantId: string }) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, (reseller) =>
+      return await this.access.for('campaign.manage').run(actor, tenantId, capability, (reseller) =>
         work({ adminId: actor.userId, tenantId: reseller.id }),
       );
     } catch (e) {

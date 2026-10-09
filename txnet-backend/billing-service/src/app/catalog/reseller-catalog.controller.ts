@@ -143,7 +143,7 @@ const STATUS: Record<ResellerCatalogRejection, 400 | 403 | 404 | 409 | 503> = {
  * a reseller's owner holds no `catalog.manage` — they are a customer of the
  * platform, not one of its operators — and `ResellerAccess` is the door
  * instead. It admits the reseller's owner, one of its staff seats holding
- * `tenant.manage`, and the platform owner's staff. What may then be done is
+ * `catalog.manage` (AC-1-e), and the platform owner's staff. What may then be done is
  * `CatalogAdminService`'s, unchanged: the work runs as the reseller, so a
  * platform category is `category_not_found` here and a platform item cannot be
  * written at all — that is done on the ambient route, as the platform owner.
