@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -40,22 +42,24 @@ beforeEach(() => {
 });
 
 describe("menuTrail", () => {
-  it("is the section, the group and then the page, neither heading a link", () => {
+  // Every crumb is a way back (user, 2026-10-09): a section opens its own
+  // page, `/section/:id`, and a group that page at the group's heading.
+  it("is the section, the group and then the page, each a link", () => {
     expect(menuTrail(PANEL_MENU, PANEL_DEPOSIT)).toEqual([
-      { label: SEC.account, href: null, section: true },
-      { label: M.wallet, href: null },
+      { label: SEC.account, href: "/section/account", section: true },
+      { label: M.wallet, href: "/section/account#wallet" },
       { label: M.deposit, href: PANEL_DEPOSIT },
     ]);
     expect(menuTrail(PANEL_MENU, PANEL_COUPONS)).toEqual([
-      { label: SEC.sales, href: null, section: true },
+      { label: SEC.sales, href: "/section/sales", section: true },
       { label: M.coupons, href: PANEL_COUPONS },
     ]);
   });
 
   it("finds the page a deeper path belongs to", () => {
     expect(menuTrail(PANEL_MENU, `${PANEL_RESELLERS}/r-1`)).toEqual([
-      { label: SEC.people, href: null, section: true },
-      { label: M.resellers, href: null },
+      { label: SEC.people, href: "/section/people", section: true },
+      { label: M.resellers, href: "/section/people#resellers" },
       { label: M.resellerList, href: PANEL_RESELLERS },
     ]);
   });
@@ -72,14 +76,15 @@ describe("menuTrail", () => {
 });
 
 describe("PageHeader", () => {
-  it("draws the trail above the title, the page itself current", () => {
+  it("draws the trail above the title, every crumb but the page itself a link", () => {
     pathname = PANEL_DEPOSIT;
     render(<PageHeader title="Top up" subtitle="Add to the wallet" actions={<button>New</button>} />);
     const nav = screen.getByRole("navigation", { name: "kit.pageHeader.breadcrumb" });
     const items = within(nav).getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toEqual([SEC.account, M.wallet, M.deposit]);
     expect(within(nav).getByText(M.deposit)).toHaveAttribute("aria-current", "page");
-    expect(within(nav).queryByRole("link")).not.toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: SEC.account })).toHaveAttribute("href", "/section/account");
+    expect(within(nav).getByRole("link", { name: M.wallet })).toHaveAttribute("href", "/section/account#wallet");
     expect(screen.getByRole("heading", { level: 1, name: "Top up" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
@@ -100,6 +105,12 @@ describe("PageHeader", () => {
     pathname = PANEL_COUPONS;
     render(<PageHeader title="Coupons" />);
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
+  });
+});
+
+describe("a section's page (/section/:id)", () => {
+  it("exists, so every section crumb leads somewhere", () => {
+    expect(existsSync(join(__dirname, "section/[id]/page.tsx"))).toBe(true);
   });
 });
 

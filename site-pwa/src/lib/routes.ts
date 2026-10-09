@@ -224,6 +224,14 @@ export function selfWorkspacePath(pathname: string, id: string): string | null {
   if (pathname !== root && !pathname.startsWith(`${root}/`)) return null;
   return `${PANEL_RESELLER_SELF}${pathname.slice(root.length)}`;
 }
+/**
+ * A menu section's own page (user, 2026-10-09): its visible entries, a group's
+ * under its heading. Every breadcrumb is a way back, so a section crumb opens
+ * this, and a group crumb this at `#<group id>`.
+ */
+export const PANEL_SECTION = "/section";
+export const panelSectionPath = (section: string, group?: string) =>
+  `${PANEL_SECTION}/${encodeURIComponent(section)}${group ? `#${encodeURIComponent(group)}` : ""}`;
 /** Payments the gateway has not confirmed, for a person to settle (F-093-n). */
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */

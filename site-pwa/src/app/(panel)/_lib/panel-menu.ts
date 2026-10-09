@@ -32,7 +32,7 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, PANEL_ROLES, PANEL_TEAM, PANEL_USERS } from "@/lib/routes";
+import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_USER_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, PANEL_ROLES, PANEL_TEAM, PANEL_USERS, panelSectionPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -459,7 +459,7 @@ export function activeHref(
 export interface MenuCrumb {
   /** A `common` namespace key. */
   label: string;
-  /** `null` for a section or a group, which are headings and not pages. */
+  /** A section's page, a group's heading on it; `null` only outside every section. */
   href: string | null;
   /** A section's heading (UX-1-j) — drawn only beside a trail that is drawn anyway. */
   section?: true;
@@ -492,11 +492,11 @@ export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string):
   for (const entry of entries) {
     const placed = entry.section ?? "account";
     const section = MENU_SECTIONS.find((s) => s.id === placed);
-    const top: MenuCrumb[] = section ? [{ label: section.label, href: null, section: true }] : [];
+    const top: MenuCrumb[] = section ? [{ label: section.label, href: panelSectionPath(section.id), section: true }] : [];
     if (isMenuGroup(entry)) {
       for (const child of entry.children) {
         const href = hrefOf(child);
-        if (href) trails.push({ href, trail: [...top, { label: entry.label, href: null }, { label: child.label, href }] });
+        if (href) trails.push({ href, trail: [...top, { label: entry.label, href: section ? panelSectionPath(section.id, entry.id) : null }, { label: child.label, href }] });
       }
     } else {
       const href = hrefOf(entry);
