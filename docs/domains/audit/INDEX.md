@@ -9,6 +9,7 @@ source:
   - txnet-backend/auth-service/src/app/account-switch/**
   - txnet-backend/billing-service/src/app/settlement/**
   - txnet-backend/prisma/domains/migrations/20260912000300_settlement_admin_actions/**
+  - txnet-backend/prisma/domains/migrations/20261009000100_staff_edit_a_users_profile/**
   - txnet-backend/prisma/domains/migrations/20260918000200_bot_scope_key_tenant/**
   - txnet-backend/prisma/domains/migrations/20260930000900_staff_set_a_users_metered_cap/**
   - txnet-backend/billing-service/src/app/grant-audit/**

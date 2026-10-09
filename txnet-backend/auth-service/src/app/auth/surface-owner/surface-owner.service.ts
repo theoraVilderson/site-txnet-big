@@ -92,6 +92,22 @@ export class SurfaceOwnerService {
     };
   }
 
+  /**
+   * Whether the owner of `tenantId` — whose account lives in another tenant —
+   * holds `username` (identity invariant 16). Staff renaming one of the
+   * tenant's people to it (AC-1-a) would make that person shadow the owner at
+   * every sign-in on the door, exactly as registering with it would. Reads the
+   * one account `ownerUserId` names, nobody else's.
+   */
+  async ownerHoldsUsername(ownerUserId: string | null, tenantId: string, username: string): Promise<boolean> {
+    if (!ownerUserId) return false;
+    const owner = await this.all.user.findFirst({
+      where: { id: ownerUserId, username, tenantId: { not: tenantId }, deletedAt: null },
+      select: { id: true },
+    });
+    return owner !== null;
+  }
+
   // --- who may hold a session on this door (F-061-g) ------------------------
 
   /**

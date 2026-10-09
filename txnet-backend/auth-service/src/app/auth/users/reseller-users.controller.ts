@@ -10,6 +10,7 @@ import {
   HttpStatus,
   NotFoundException,
   Param,
+  Patch,
   ParseUUIDPipe,
   Post,
   Query,
@@ -26,8 +27,10 @@ import type { AuthClaims } from '../token.service';
 import {
   resellerUserBlockSchema,
   resellerUserListSchema,
+  resellerUserProfileSchema,
   type ResellerUserBlockBody,
   type ResellerUserListQuery,
+  type ResellerUserProfileBody,
 } from './reseller-users.schema';
 import {
   ResellerUsersActor,
@@ -51,11 +54,13 @@ const STATUS: Record<ResellerUsersRejection, 400 | 403 | 404 | 409> = {
   user_banned: 409,
   cannot_block_self: 400,
   no_authority: 403,
+  username_taken: 409,
 };
 
 /**
  * A named reseller's own users (F-311-a, ADR-0064):
- * `/api/auth/tenants/:tenantId/users` — list, block, unblock. The data the
+ * `/api/auth/tenants/:tenantId/users` — list, block, unblock; one person's
+ * profile, read and edited (AC-1-a). The data the
  * bot's reseller panel (F-311-c) is built on, and a future panel page with it.
  *
  * **No `PermissionsGuard`**, as on every other reseller-named surface: a
@@ -92,6 +97,37 @@ export class ResellerUsersController {
     return this.refusing(() =>
       this.users.list(this.actor(req), tenantId, query as Required<ResellerUserListQuery>),
     );
+  }
+
+  /** One person, for the admin's user page (AC-1-a): the row plus `emailMasked`. */
+  @Get(':userId')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_READ, req?.user?.sub ?? req?.ip),
+    configKey: 'RESELLER_USER_READ_RATE_LIMIT',
+    windowSec: 900,
+  })
+  profile(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: Request,
+  ) {
+    return this.refusing(() => this.users.profile(this.actor(req), tenantId, userId));
+  }
+
+  /** Staff edit a person's name, username, or remove their email (AC-1-a, ADR-0103). Never the phone. */
+  @Patch(':userId')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_WRITE, req?.user?.sub ?? req?.ip),
+    configKey: 'RESELLER_USER_WRITE_RATE_LIMIT',
+    windowSec: 900,
+  })
+  editProfile(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(resellerUserProfileSchema)) body: ResellerUserProfileBody,
+  ) {
+    return this.refusing(() => this.users.editProfile(this.actor(req), tenantId, userId, this.ip(req), body));
   }
 
   @Post(':userId/block')

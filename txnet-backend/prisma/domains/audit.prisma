@@ -177,6 +177,9 @@ enum AdminAction {
   // F-117-d (ADR-0104 (5)). Tier C: an emergency entry opened, and ended early.
   emergency_entry_open
   emergency_entry_end
+  // AC-1-a — staff edited a person's name, username or email (removal only).
+  // `oldValue`/`newValue` hold just the fields that changed; an address masked.
+  user_profile_update
 
   @@schema("audit")
 }

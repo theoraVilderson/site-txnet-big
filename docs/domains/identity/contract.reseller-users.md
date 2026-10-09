@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 25
-updated: 2026-09-29
+version: 31
+updated: 2026-10-09
 ---
 
 # Contract — identity / a reseller's own users
@@ -11,7 +11,7 @@ updated: 2026-09-29
 A topic file of [contract.md](contract.md) (§10), opened because that file is at
 its 250-line cap. What a reseller may know and decide about the people who
 registered on its domain (F-311-a, spec F-311): read a page of them, block one,
-lift the block. Wire shapes — paths, codes, limits — are
+lift the block, read one and edit their profile (AC-1-a). Wire shapes — paths, codes, limits — are
 [auth-api/contract.reseller-users.md](../../interfaces/auth-api/contract.reseller-users.md).
 
 Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
@@ -23,6 +23,8 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
 | list a reseller's users | the reseller (named in the path), `q?` (3-64, the same matcher as "find a user"), `page`, `pageSize` (1-100), `staff?` (`true`: only people whose role holds any permission — the team, F-1201-c) | `{items, total, page, pageSize}`, newest first; an item is `id, fullName, username, phoneMasked, status, createdAt, canAct, staff, role {id, name}` — never the number, never an email | sync | the door's four; nothing else |
 | block one | the reseller, the user's id, `reason?`, the caller's IP | that user at `suspended` (restricted to support, ADR-0133) with `statusReason`, every live session of theirs revoked `admin_ban`, one `admin_audit_log` row `user_ban` under the reseller's `tenantId` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
 | unblock one | the same | that user at `active`, `statusReason` cleared, every session revoked, one `admin_audit_log` row `user_unban` | sync (tx) | `user_not_found`, `user_banned`, `cannot_block_self`, `no_authority` |
+| read one (AC-1-a) | the reseller, the user's id | the list's item plus `emailMasked` (`a***@example.com`, or null) | sync | `user_not_found` |
+| edit one's profile (AC-1-a) | the reseller, the user's id, any of `fullName`, `username`, `email: null`, the caller's IP | the profile as it now stands; one `admin_audit_log` row `user_profile_update` holding only the changed fields, before and after (an address masked) | sync (tx) | `user_not_found`, `user_banned`, `no_authority`, `username_taken` |
 
 ## The rules this surface exists to hold
 
@@ -77,6 +79,26 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
   policy in the RLS migration permits the write, and strict reads keep it the
   reseller's).
 
+## A person's profile, edited by staff (AC-1-a)
+
+- **Editing someone is acting on them.** Admitted under `staffWrite`, then
+  `authorityOver` about the one person named, exactly as a block: never
+  yourself (you edit yourself at `/auth/me`), never the owner, a peer only
+  from strictly above. A `banned` account is the platform's and is refused.
+- **An email is removed, never written** (user, 2026-10-09). A stored
+  address is one its owner proved (invariant 15); one typed by staff is not,
+  and campaign mail (F-035-h) would reach it. Removal clears `email` and
+  `emailVerifiedAt` together; the person adds a new one themselves. A
+  staff-proposed address confirmed by its owner would be its own row.
+- **The phone is not editable here.** It is the person's sign-in.
+- **A username takes register's rules** — and register's refusals: one held
+  in the tenant (the unique index, so two concurrent renames cannot both
+  win) or by the tenant's owner across tenants (invariant 16, through
+  `SurfaceOwnerService.ownerHoldsUsername`) is `username_taken`.
+- **Only what changed is written and audited**; a body that changes nothing
+  writes nothing. No session is revoked — nothing here changes what the
+  person may do.
+
 ## What it does not do
 
 - **No creation.** A reseller's user is created by registering on that
@@ -87,9 +109,9 @@ Code: `txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts`.
   `billing`'s and `catalog`'s, not identity's.
 - **No raw phone number.** The list masks, as "find a user" does. A reseller
   that needs to reach a customer has the notification surfaces for it.
-- **No role or permission change.** A reseller administers its roles at
-  `/auth/roles` ([contract.roles.md](contract.roles.md)); this surface only
-  moves a user's `status`.
+- **No role or permission change.** A person's role is set at
+  `PUT …/users/:userId/role` ([contract.roles.md](contract.roles.md)); this
+  surface moves a user's `status` and edits their profile.
 
 ## Impersonating a reseller's user (F-117-e)
 

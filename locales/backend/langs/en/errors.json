@@ -180,7 +180,8 @@
     "invalidFormat": "Enter a valid mobile number"
   },
   "validation": {
-    "failed": "Some of the submitted information is invalid."
+    "failed": "Some of the submitted information is invalid.",
+    "nothingToChange": "Change at least one field."
   },
   "billing": {
     "gatewayNotFound": "That payment gateway is not available.",

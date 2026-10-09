@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 37
-updated: 2026-09-29
+version: 44
+updated: 2026-10-09
 ---
 
 # Contract — auth-api / a named reseller's users
@@ -37,12 +37,14 @@ person (ADR-0103); `staff` marks one who holds any permission, or the owner;
 | GET `/auth/tenants/:tenantId/users` | `q?` 3-64, `page` >=1 (1), `pageSize` 1-100 (20) | 200 `{items:[user], total, page, pageSize}`, newest first. Admitted under `read`, so a suspended reseller still sees its customers | 60 / 900s per caller (`RESELLER_USER_READ_RATE_LIMIT`) | Bearer + `ResellerAccess` |
 | POST `/auth/tenants/:tenantId/users/:userId/block` | `{reason?}` (≤500, ADR-0133) | 200 `user` at `suspended` — restricted to support — every session of that account revoked. Blocking an already-blocked user is the same 200 and writes nothing | 20 / 900s per caller (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
 | DELETE `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `active`. **Unblock is the deletion of the block**, not a second verb on the user | 20 / 900s per caller (shared with `POST`) | Bearer + `ResellerAccess` (`staffWrite`) |
+| GET `/auth/tenants/:tenantId/users/:userId` (AC-1-a) | — | 200 `user` plus `emailMasked` (`a***@example.com` or null) | the list's (`RESELLER_USER_READ_RATE_LIMIT`) | Bearer + `ResellerAccess` (`read`) |
+| PATCH `/auth/tenants/:tenantId/users/:userId` (AC-1-a) | at least one of `fullName` 2-120, `username` 3-32 `[A-Za-z0-9_]` (register's), `email: null` — strict: any other key, an address, or `{}` is 400 | 200 the same shape as GET. Unchanged fields are not written; no change, no audit row | shared with block (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
 
 Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 
 ## Refusals
 
-`ResellerAccess`'s four, and this surface's four, each as `{reason}`:
+`ResellerAccess`'s four, and this surface's five, each as `{reason}`:
 
 | reason | status | when |
 |---|---|---|
@@ -53,7 +55,8 @@ Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 | `user_not_found` | 404 | no such user **in that reseller's scope** — another tenant's id gets this answer, not a 403 |
 | `user_banned` | 409 | the platform banned this account; a reseller neither deepens nor lifts that |
 | `cannot_block_self` | 400 | the caller is the user named |
-| `no_authority` | 403 | admitted to the tenant, but not over this person: they are its owner, or hold every key the caller holds (ADR-0103) |
+| `no_authority` | 403 | admitted to the tenant, but not over this person: they are its owner, or hold every key the caller holds (ADR-0103) — on PATCH, also the caller themselves |
+| `username_taken` | 409 | PATCH: the username is held in the tenant, or by its owner (identity invariant 16) |
 
 ## Consumers
 

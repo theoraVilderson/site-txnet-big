@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { registerSchema } from '../register/register.schema';
 
 /**
  * `GET /auth/tenants/:tenantId/users` (F-311-a): one page of a reseller's own
@@ -29,3 +30,23 @@ export const resellerUserBlockSchema = z
   .default({});
 
 export type ResellerUserBlockBody = z.infer<typeof resellerUserBlockSchema>;
+
+/**
+ * `PATCH …/users/:userId` (AC-1-a): what staff may change about a person.
+ * Name and username take register's own rules, so an edited account is one
+ * register could have made. `email` is `null` only — staff remove an address,
+ * never write one: a stored address is a proven one (identity invariant 15),
+ * and the person proves a new one themselves. The phone is not here at all; it
+ * is their sign-in. `.strict()`, so a field this surface does not edit is a
+ * 400 rather than silently dropped.
+ */
+export const resellerUserProfileSchema = z
+  .object({
+    fullName: registerSchema.shape.fullName.optional(),
+    username: registerSchema.shape.username.optional(),
+    email: z.null().optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'validation.nothingToChange' });
+
+export type ResellerUserProfileBody = z.infer<typeof resellerUserProfileSchema>;

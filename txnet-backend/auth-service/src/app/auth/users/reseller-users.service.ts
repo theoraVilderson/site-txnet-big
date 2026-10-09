@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { maskPhone } from '../../common/validation/phone.schema';
 import { SessionService } from '../session/session.service';
+import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, permissionsOf } from './authority';
 import { matchers } from './user-search.service';
 
@@ -28,7 +29,8 @@ export type ResellerUsersRejection =
   | 'user_not_found'
   | 'user_banned'
   | 'cannot_block_self'
-  | 'no_authority';
+  | 'no_authority'
+  | 'username_taken';
 
 export class ResellerUsersRefused extends Error {
   constructor(
@@ -61,6 +63,16 @@ export type ResellerUserView = {
   role: { id: string; name: string } | null;
 };
 
+/**
+ * One person, for the admin's user page (AC-1-a): the row, plus whether they
+ * have an email — masked, because staff may remove an address but never need
+ * to read one, and the list's "never an email" holds here too.
+ */
+export type ResellerUserProfile = ResellerUserView & { emailMasked: string | null };
+
+/** What `PATCH …/users/:userId` may change; `email` only ever to `null` (identity invariant 15). */
+export type ResellerUserProfileEdit = { fullName?: string; username?: string; email?: null };
+
 export type ResellerUserPage = {
   items: ResellerUserView[];
   total: number;
@@ -82,6 +94,10 @@ const SELECT = {
 } as const;
 
 type UserRow = Prisma.UserGetPayload<{ select: typeof SELECT }>;
+
+const PROFILE_SELECT = { ...SELECT, email: true } as const;
+
+type ProfileRow = Prisma.UserGetPayload<{ select: typeof PROFILE_SELECT }>;
 
 /** What `view` needs to answer `canAct`: who asks, how they were admitted, and the tenant's owner. */
 type ViewContext = { actor: ResellerUsersActor; admitted: AdmittedReseller; tenant: AuthorityTenant };
@@ -112,6 +128,7 @@ export class ResellerUsersService {
     private readonly prisma: PrismaService,
     private readonly access: ResellerAccess,
     private readonly sessions: SessionService,
+    private readonly owners: SurfaceOwnerService,
   ) {}
 
   /** One page of this reseller's users, newest first. `q` is F-018-ad's matcher, asked inside this scope. */
@@ -218,6 +235,100 @@ export class ResellerUsersService {
     });
   }
 
+  /** One of this reseller's users, as the admin's user page shows them (AC-1-a). */
+  profile(actor: ResellerUsersActor, tenantId: string, userId: string): Promise<ResellerUserProfile> {
+    return this.run(actor, tenantId, 'read', async (admitted) => {
+      const ctx = { actor, admitted, tenant: await this.tenantOf(admitted.id) };
+      const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null }, select: PROFILE_SELECT });
+      if (!user) throw new ResellerUsersRefused('user_not_found', userId);
+      return profileView(user, ctx);
+    });
+  }
+
+  /**
+   * Staff edit a person's name, username or email (AC-1-a). Admitted like a
+   * block, and asked of the same authority rule about the one person named
+   * (ADR-0103) — editing someone is acting on them. Only the fields that
+   * actually change are written, and one audit row records each as it was
+   * and as it became; a body that changes nothing writes nothing.
+   *
+   * The email is only ever removed, together with its proof
+   * (`emailVerifiedAt`): a stored address is one its owner proved (identity
+   * invariant 15), and an address typed by staff is not. No session is
+   * revoked — nothing here changes what the person may do.
+   */
+  editProfile(
+    actor: ResellerUsersActor,
+    tenantId: string,
+    userId: string,
+    ip: string,
+    edit: ResellerUserProfileEdit,
+  ): Promise<ResellerUserProfile> {
+    return this.run(actor, tenantId, 'staffWrite', async (reseller) => {
+      const ctx = { actor, admitted: reseller, tenant: await this.tenantOf(reseller.id) };
+
+      const row = await tenantTransaction(this.prisma, async (tx) => {
+        const user = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: PROFILE_SELECT });
+        if (!user) throw new ResellerUsersRefused('user_not_found', userId);
+        if (!view(user, ctx).canAct) throw new ResellerUsersRefused('no_authority', userId);
+        if (user.status === UserStatus.banned) throw new ResellerUsersRefused('user_banned', userId);
+
+        const data: Prisma.UserUpdateInput = {};
+        const before: Record<string, string | null> = {};
+        const after: Record<string, string | null> = {};
+        if (edit.fullName !== undefined && edit.fullName !== user.fullName) {
+          data.fullName = edit.fullName;
+          before.fullName = user.fullName;
+          after.fullName = edit.fullName;
+        }
+        if (edit.username !== undefined && edit.username !== user.username) {
+          // Invariant 16: on a reseller's door the owner's username signs in as
+          // the owner, so a customer holding it would shadow them for good.
+          // The same answer as a username taken inside the tenant.
+          if (await this.owners.ownerHoldsUsername(ctx.tenant.ownerUserId, reseller.id, edit.username)) {
+            throw new ResellerUsersRefused('username_taken', userId);
+          }
+          data.username = edit.username;
+          before.username = user.username;
+          after.username = edit.username;
+        }
+        if (edit.email === null && user.email !== null) {
+          data.email = null;
+          data.emailVerifiedAt = null;
+          before.email = maskEmail(user.email);
+          after.email = null;
+        }
+        if (Object.keys(after).length === 0) return user;
+
+        const updated = await tx.user
+          .update({ where: { id: userId }, data, select: PROFILE_SELECT })
+          .catch((err: unknown) => {
+            // `@@unique([tenantId, username])`: the write is the check, so two
+            // staff renaming two people to one name cannot both win.
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+              throw new ResellerUsersRefused('username_taken', userId);
+            }
+            throw err;
+          });
+        await tx.adminAuditLog.create({
+          data: {
+            tenantId: reseller.id,
+            adminId: actor.userId,
+            action: 'user_profile_update',
+            targetEntityType: 'user',
+            targetEntityId: userId,
+            oldValue: before,
+            newValue: after,
+            adminIpAddress: ip,
+          },
+        });
+        return updated;
+      });
+
+      return profileView(row, ctx);
+    });
+  }
+
   /** The tenant's owner and kind, on the app pool — `tenant.tenant` has no RLS. */
   private async tenantOf(id: string): Promise<AuthorityTenant> {
     const tenant = await this.prisma.tenant.findUnique({
@@ -273,4 +384,15 @@ function view(row: UserRow, ctx: ViewContext): ResellerUserView {
     staff: permissions.length > 0 || row.id === ctx.tenant.ownerUserId,
     role: row.role ? { id: row.role.id, name: row.role.name } : null,
   };
+}
+
+function profileView(row: ProfileRow, ctx: ViewContext): ResellerUserProfile {
+  return { ...view(row, ctx), emailMasked: row.email ? maskEmail(row.email) : null };
+}
+
+/** `ali.rezaei@example.com` -> `a***@example.com`: enough to recognise, not to write to. */
+export function maskEmail(address: string): string {
+  const at = address.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${address[0]}***${address.slice(at)}`;
 }

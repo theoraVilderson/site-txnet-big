@@ -99,7 +99,7 @@ describe('ResellerUsersService', () => {
       }),
     };
 
-    const service = new ResellerUsersService(prisma as never, access as never, sessions as never);
+    const service = new ResellerUsersService(prisma as never, access as never, sessions as never, {} as never);
     return { service, order, prisma, user, adminAuditLog, sessions, access, asked, bound };
   };
 
