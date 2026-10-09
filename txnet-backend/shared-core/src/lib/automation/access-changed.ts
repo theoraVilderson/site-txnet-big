@@ -10,10 +10,11 @@ export const ACCESS_AGGREGATE = 'identity.access';
  * (AC-1-s), which has one template per cause; the page only re-reads.
  * `keys_set` is a key given, taken or lifted on the person (AC-1-l);
  * `group_access` a group's access changed, or they joined or left one that
- * gives some (AC-1-m). A producer added later (a temporal window) adds its
- * cause here, and its template with it.
+ * gives some (AC-1-m); `group_membership_ended` a membership of theirs
+ * reached its end and the sweep removed it (GR-1-c). A producer added later
+ * (a temporal window) adds its cause here, and its template with it.
  */
-export const ACCESS_CHANGE_CAUSES = ['role_set', 'role_edited', 'keys_set', 'group_access', 'seat_removed', 'seat_restored'] as const;
+export const ACCESS_CHANGE_CAUSES = ['role_set', 'role_edited', 'keys_set', 'group_access', 'group_membership_ended', 'seat_removed', 'seat_restored'] as const;
 export type AccessChangeCause = (typeof ACCESS_CHANGE_CAUSES)[number];
 
 /**
@@ -26,10 +27,11 @@ export type AccessHistoryCause = (typeof ACCESS_HISTORY_CAUSES)[number];
 
 /**
  * What the notice names (AC-1-s): `role_set` the role now held, by its name;
- * `role_edited`, `keys_set` and `group_access` the keys the person's answer
- * gained and lost — which the history row keeps too.
+ * `role_edited`, `keys_set`, `group_access` and `group_membership_ended` the
+ * keys the person's answer gained and lost — which the history row keeps too;
+ * `group_membership_ended` also the group's name, as written (`group`).
  */
-export type AccessChangeDetail = { role?: string; given?: string[]; taken?: string[] };
+export type AccessChangeDetail = { role?: string; group?: string; given?: string[]; taken?: string[] };
 
 /**
  * One person's access moved by one act. `actorUserId` did it; `auditLogId` is

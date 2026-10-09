@@ -45,9 +45,13 @@ export class AccessReader {
     return (await this.ofLoadedMany([user], client)).get(user.id) as UserAccess;
   }
 
-  /** {@link ofLoaded} for a page of people, in one read — what a list's `canAct` weighs. */
-  async ofLoadedMany(users: readonly LoadedUser[], client: Reader = this.prisma): Promise<Map<string, UserAccess>> {
-    const personal = await this.personalOf(users, client);
+  /**
+   * {@link ofLoaded} for a page of people, in one read — what a list's `canAct` weighs.
+   * `at`: the moment memberships are judged live at — now, or just before one
+   * ended, for the answer the person held then (GR-1-c's sweep).
+   */
+  async ofLoadedMany(users: readonly LoadedUser[], client: Reader = this.prisma, at: Date = new Date()): Promise<Map<string, UserAccess>> {
+    const personal = await this.personalOf(users, client, at);
     return new Map(users.map((u) => [u.id, accessOf({ roleKeys: roleKeysOf(u), ...personal.get(u.id) })]));
   }
 
@@ -110,7 +114,7 @@ export class AccessReader {
    * gives access (AC-1-m), while the membership lasts (ADR-0139 (3)). A platform group may hold another tenant's user;
    * the platform's keys are not theirs, so that membership counts for nothing.
    */
-  private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader): Promise<Map<string, Personal>> {
+  private async personalOf(users: readonly Pick<LoadedUser, 'id'>[], client: Reader, at: Date = new Date()): Promise<Map<string, Personal>> {
     type Entry = { given: string[]; taken: string[]; groups: GroupSource[] };
     const out = new Map<string, Entry>();
     if (users.length === 0) return out;
@@ -121,7 +125,7 @@ export class AccessReader {
         select: { userId: true, effect: true, permission: { select: { key: true } } },
       }),
       client.userGroupMember.findMany({
-        where: { ...liveMembership(), userId: { in: ids }, memberType: 'user', group: GIVES_ACCESS },
+        where: { ...liveMembership(at), userId: { in: ids }, memberType: 'user', group: GIVES_ACCESS },
         select: {
           userId: true,
           tenantId: true,

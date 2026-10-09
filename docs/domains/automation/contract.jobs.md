@@ -18,6 +18,7 @@ each job's row and the rules every job that crosses a service follows.
 |---|---|---|
 | `worker_heartbeat` | nothing, and records that it did — the proof the tick path is alive | — |
 | `vault_credential_retention` | destroys superseded credential versions past their rotation grace window (ADR-0026 rule 4) | `TENANT_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
+| `group_membership_end` (seeded `always_on`) | removes group memberships past their end and tells each person what they lost (GR-1-c, governance `contract.md`) — `POST /api/internal/user-groups/end-memberships` | `AUTH_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_pending_expiry` / `invoice_pending_expiry` | expires `pending` top-ups / unpaid invoices past their `expiresAt` and gives their coupon holds back (F-092-k `contract.deposit.md`; F-111-a `contract.purchase.md`, billing) | `BILLING_API_BASE_URL` + `SERVICE_AUTH_TOKEN` |
 | `deposit_reconciliation` | asks the gateway about pending and expired top-ups nobody came back for, and about a verifying one only when its retry is 10 min overdue (the next job is not running): credits what it confirms, flags a differing amount (F-092-l; `domains/billing/contract.verify.md`) | the same two |
 | `deposit_verify_retry` | asks again about verifying top-ups whose retry is due, every tick: credits, re-schedules silence, flags one still verifying after a day (F-092-y, F-092-ac) | the same two |

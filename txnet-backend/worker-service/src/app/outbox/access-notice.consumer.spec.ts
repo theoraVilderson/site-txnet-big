@@ -76,6 +76,18 @@ describe('AccessNoticeConsumer.handle', () => {
     ]);
   });
 
+  it('an ended membership tells the person the group, by name, and what they lost (GR-1-c)', async () => {
+    const { consumer, calls } = build();
+    await consumer.handle(event({ cause: 'group_membership_ended', group: 'Support', given: [], taken: ['user.read'] }));
+
+    expect(calls.joined).toEqual([{ burst: burst('accessMembershipEnded'), params: { group: 'Support', taken: 'user.read' } }]);
+  });
+
+  it('an ended membership without its group dead-letters', async () => {
+    const { consumer } = build();
+    await expect(consumer.handle(event({ cause: 'group_membership_ended', taken: ['user.read'] }))).rejects.toThrow('without naming the group');
+  });
+
   it('only what moved is named: a key only given has no `taken`', async () => {
     const { consumer, calls } = build();
     await consumer.handle(event({ cause: 'role_edited', given: ['coupon.manage'], taken: [] }));

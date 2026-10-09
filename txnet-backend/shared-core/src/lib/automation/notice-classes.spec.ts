@@ -53,6 +53,7 @@ describe('notice classes (F-601-s)', () => {
     expect(by('important')).toEqual([
       // AC-1-s: the person's own access moved.
       'accessKeysChanged',
+      'accessMembershipEnded',
       'accessRoleSet',
       'accessSeatRemoved',
       'accessSeatRestored',

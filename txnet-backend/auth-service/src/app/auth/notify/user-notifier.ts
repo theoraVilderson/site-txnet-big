@@ -107,6 +107,8 @@ export const NOTIFY_TEMPLATES = [
   // AC-1-s: the person's own access moved — their role now, keys their role gained or lost, their seat on a team.
   'accessRoleSet',
   'accessKeysChanged',
+  // GR-1-c: a group membership of theirs reached its end.
+  'accessMembershipEnded',
   'accessSeatRemoved',
   'accessSeatRestored',
 ] as const;
@@ -1120,6 +1122,12 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     read: (ns) => ns?.access?.keysChanged,
     fallback: '🔑 What your role lets you do has changed.',
     inbox: { read: (ns) => ns?.access?.keysChangedTitle, fallback: 'Your access changed' },
+    many: ACCESS_MANY,
+  },
+  accessMembershipEnded: {
+    read: (ns) => ns?.access?.membershipEnded,
+    fallback: '⏳ Your membership of "{{group}}" has ended.',
+    inbox: { read: (ns) => ns?.access?.membershipEndedTitle, fallback: 'A group membership ended' },
     many: ACCESS_MANY,
   },
   accessSeatRemoved: {

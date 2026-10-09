@@ -399,6 +399,8 @@
     "givenLine": "➕ Now allowed: {{given}}",
     "takenLine": "➖ No longer allowed: {{taken}}",
     "keySeparator": ", ",
+    "membershipEnded": "⏳ Your membership of \"{{group}}\" has ended.",
+    "membershipEndedTitle": "A group membership ended",
     "seatRemoved": "🚪 You were removed from the team. Its pages in the panel are closed to you now.",
     "seatRemovedTitle": "Removed from the team",
     "seatRestored": "✅ Your place on the team was restored. Its pages in the panel are open to you again.",

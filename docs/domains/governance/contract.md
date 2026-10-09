@@ -69,6 +69,7 @@ their answer (identity `contract.access.md`). Set by
 | A role a group gives is `role.inUse` to a delete | FK RESTRICT; `RolesService.remove` |
 | Every member whose answer moved is told: `access.changed`, cause `group_access`, with the keys gained and lost — on access set, member add or remove, and group delete. `user_group_access_set` is audited with the set before and after | `UserGroupAdminService.tell` |
 | A reseller's staff are bounded (GR-1-b, ADR-0139): a member add to, or access set on, a group giving a reseller key (`reseller-keys.ts`) that raises the count of people holding one through its groups past `staff_members_max` is 409 `reseller_limit_reached`, `facts {key, limit, used}`, rolled back; under the per-reseller lock; the platform's staff and the platform's own tenant pass | `UserGroupAdminService.withinStaffLimit`, `RESELLER_LIMIT_USAGE.staff_members_max` (`staff-limit.spec.ts`) |
+| A membership's end is kept (GR-1-c, ADR-0139 (3)): past it, a sweep removes the row — the trigger moves the token — and tells each person whose answer moved (`access.changed`, cause `group_membership_ended`, `group` + `given`/`taken` against the answer just before the end), history actor = who added them, no audit row; at most 500 per run, safe twice | `MembershipEndSweep` (`membership-end.spec.ts`) on worker `group_membership_end` |
 | Tokens move after commit by trigger: `{kind:"group"}` on the role or keys, `{kind:"person"}` on a user member added or removed | migration `20261009000600` |
 
 ## Display preferences (UX-1-k)
@@ -85,7 +86,8 @@ what each key means: [panel-web/contract.ux.md](../../interfaces/panel-web/contr
 
 ## Emits (events)
 
-`identity.access.changed` (AC-1-q's outbox row, cause `group_access`), in the
+`identity.access.changed` (AC-1-q's outbox row, cause `group_access`, or
+`group_membership_ended` from the end sweep, GR-1-c), in the
 group write's own transaction with each moved member's `access_history` row, both by
 shared-core `recordAccessChange` against the act's audit row (AC-1-p); consumed as
 identity's are. Postgres `NOTIFY identity_permissions_changed` from the triggers above.

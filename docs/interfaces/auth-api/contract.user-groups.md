@@ -41,6 +41,8 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | GET `/auth/tenants/:tenantId/user-groups` | — | 200 `[group]` — the **path's** reseller's, behind `ResellerAccess` (invariant 21, `read`), not `user_group.manage`; read in its scope (F-102-g-d, ADR-0064 (1)). 403 `not_allowed` / `reseller_suspended`, 404 `reseller_not_found`, 409 `reseller_terminated` | read |
 | POST, PATCH `/:id`, DELETE `/:id`, GET `/:id/members`, PUT `/:id/access`, POST `/:id/members`, PATCH and DELETE `/:id/members/users/:userId` — each under `/auth/tenants/:tenantId/user-groups` (v49, GR-1-d, ADR-0139 (5)) | as the ambient route | as the ambient route, on the path's reseller: behind `ResellerAccess.for('user_group.manage')` (`staffWrite` on a write), in its scope. What the caller may give is the tenant ceiling — whole for the owner, the part they hold for the platform's staff, their own keys for the reseller's member. The door's refusals as on GET, then the service's below | as the ambient route |
 
+`POST /internal/user-groups/end-memberships` (GR-1-c): **service callers only** (404 otherwise), no tenant; 200 `{ended, told}` — worker `group_membership_end`'s seam, governance `contract.md`.
+
 Every id in a path is `ParseUUIDPipe`d. A user and a reseller have their own
 removal path, so neither id can be read as the other.
 

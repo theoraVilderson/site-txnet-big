@@ -16,6 +16,7 @@ const TEMPLATE_OF: Readonly<Record<string, string>> = {
   role_edited: 'accessKeysChanged',
   keys_set: 'accessKeysChanged',
   group_access: 'accessKeysChanged',
+  group_membership_ended: 'accessMembershipEnded',
   seat_removed: 'accessSeatRemoved',
   seat_restored: 'accessSeatRestored',
 };
@@ -27,9 +28,10 @@ const TEMPLATE_OF: Readonly<Record<string, string>> = {
  *
  * The params are the payload's, untranslated: the role's name as written, and
  * the keys given and taken as keys — auth-service names each in the person's
- * language (AC-1-f's labels). A role edit, a key write (`keys_set`, AC-1-l) or a
- * group change (`group_access`, AC-1-m) that moved none of their keys is told
- * to no one. A cause with no template throws, so the producer that added
+ * language (AC-1-f's labels). A role edit, a key write (`keys_set`, AC-1-l), a
+ * group change (`group_access`, AC-1-m) or an ended membership
+ * (`group_membership_ended`, GR-1-c — with the group's name) that moved none
+ * of their keys is told to no one. A cause with no template throws, so the producer that added
  * it sees a dead letter rather than a person who was never told.
  */
 @Injectable()
@@ -68,7 +70,12 @@ export class AccessNoticeConsumer implements OnApplicationBootstrap {
       if (!role) throw new Error(`outbox event ${event.id} sets a role without naming it`);
       params.role = role;
     }
-    if (cause === 'role_edited' || cause === 'keys_set' || cause === 'group_access') {
+    if (cause === 'group_membership_ended') {
+      const group = str('group');
+      if (!group) throw new Error(`outbox event ${event.id} ends a membership without naming the group`);
+      params.group = group;
+    }
+    if (cause === 'role_edited' || cause === 'keys_set' || cause === 'group_access' || cause === 'group_membership_ended') {
       const given = keys('given');
       const taken = keys('taken');
       if (given.length === 0 && taken.length === 0) return;

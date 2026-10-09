@@ -115,6 +115,7 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   // AC-1-s: the person's access moved — what they may do changed, not something to act on at once.
   accessRoleSet: 'important',
   accessKeysChanged: 'important',
+  accessMembershipEnded: 'important',
   accessSeatRemoved: 'important',
   accessSeatRestored: 'important',
   purchaseDelayed: 'important',
