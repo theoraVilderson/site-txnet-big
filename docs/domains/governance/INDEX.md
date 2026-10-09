@@ -9,6 +9,7 @@ source:
   - txnet-backend/auth-service/src/app/governance/**
   - txnet-backend/prisma/domains/migrations/20260925001600_user_groups/**
   - txnet-backend/prisma/domains/migrations/20261009000600_a_group_holds_access/**
+  - txnet-backend/prisma/domains/migrations/20261009001000_seats_and_staff_roles_become_groups/**
 owns_tables: [user_setting, temporal_access_grant, user_restriction, user_group, user_group_member, user_group_permission]
 depends_on: [identity, tenant]
 updated: 2026-10-09
