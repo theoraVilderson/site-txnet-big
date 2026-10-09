@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 1
-updated: 2026-09-19
+version: 54
+updated: 2026-10-09
 ---
 
 # Contract — tenant / staff seats
@@ -33,9 +33,12 @@ platform's global permission keys, and seats people here.
 | `GET /api/tenants/:id/staff` | the reseller's owner, a member with `tenant.manage`, or platform staff with `tenant.manage` | the team, newest invitation first |
 | `POST /api/tenants/:id/staff` `{userId, accessExpiresAt?}` | same | `201` the seat, `invited` |
 | `POST /api/tenants/:id/staff/accept` | the invited user, themselves | `200` the seat, `active` |
+| `PATCH /api/tenants/:id/staff/:memberId` `{accessExpiresAt: date \| null}` | the owner, a member with `tenant.manage`, or platform staff | `200` the seat, its end moved or cleared (F-1201-b) |
 | `DELETE /api/tenants/:id/staff/:memberId` | the owner, a member with `tenant.manage`, or platform staff | `200` the seat, `revoked` |
 
-The seat: `{id, userId, state, invitedByUserId, invitedAt, joinedAt,
+The role is set after an invite at `PUT /api/auth/tenants/:id/users/:userId/role`
+(F-1201-a): this service never writes `identity.user` (rule 1), and calls no other
+service. The seat: `{id, userId, state, invitedByUserId, invitedAt, joinedAt,
 accessExpiresAt, revokedAt, user: {id, fullName, username, phoneNumber},
 role: {id, name}}`. `role` is the member's `identity` role — shown here because
 it is the answer to "what can this person do". It is set at
@@ -66,6 +69,7 @@ door can never disagree — one function, `staffState`.
 | 6 | An `accessExpiresAt` in the past is refused (`expiry_past`) | a seat that is expired the moment it is written is a mistake, not a policy |
 | 7 | A member reaches reseller self-service only with `tenant.manage`, in a role of that tenant | the seat says they are on the team; the permission says this member administers the reseller. A `Support` role gets a seat and no administration (invariant 21) |
 | 8 | An invite past the reseller's `staff_members_max` is **409** `reseller_limit_reached`, `facts {key, limit, used}`, to its owner and team; the platform's staff pass. Counted: seats neither removed nor expired, under a per-reseller lock (F-019-t1, [contract.limits.md](contract.limits.md)) | a team is bounded like the other things a reseller adds; lowering it removes nobody |
+| 9 | A seat's end is moved or cleared in place (`PATCH`), never by re-inviting: acceptance and history stay. A removed seat is `staff_not_found`; a past date `expiry_past`. An **expired** seat given a later end (or none) counts again, so it passes rule 8 as an invite does, and a joined member is told (`identity.access.changed`, `seat_restored`) | re-inviting would make them accept again for a date change |
 
 Refusals: `not_allowed` 403 and `reseller_not_found` 404 as
 [contract.domains.md](contract.domains.md) (only platform staff learn a

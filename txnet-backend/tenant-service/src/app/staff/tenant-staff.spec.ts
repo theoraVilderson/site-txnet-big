@@ -1,5 +1,5 @@
 import { ResellerAccess, ResellerLimitReached } from '@txnet-backend/shared-core';
-import { inviteStaffSchema } from './tenant-staff.schema';
+import { inviteStaffSchema, seatExpirySchema } from './tenant-staff.schema';
 import { StaffRefused, TenantStaffService } from './tenant-staff.service';
 
 /**
@@ -242,6 +242,48 @@ describe('TenantStaffService', () => {
         payload: { userId: MEMBER, tenantId: RESELLER, cause: 'seat_removed' },
       },
       select: { id: true },
+    });
+  });
+
+  describe('a seat\'s expiry, changed or cleared without re-inviting (F-1201-b)', () => {
+    it('moves or clears the date on the same row, keeping when they joined', async () => {
+      const { service, rows } = build({ rows: [{ joinedAt: T0, accessExpiresAt: LATER }] });
+      const later = new Date('2026-11-19T10:00:00Z');
+      expect(await service.setExpiry(owner, RESELLER, 'row-1', later, T0)).toMatchObject({ state: 'active', accessExpiresAt: later, joinedAt: T0 });
+      expect(await service.setExpiry(owner, RESELLER, 'row-1', null, T0)).toMatchObject({ state: 'active', accessExpiresAt: null });
+      expect(rows).toHaveLength(1);
+    });
+
+    it('refuses a date already past, a removed seat, and anyone the door refuses', async () => {
+      const { service } = build({ rows: [{ joinedAt: T0 }, { userId: SECOND, revokedAt: T0 }] });
+      await expect(service.setExpiry(owner, RESELLER, 'row-1', new Date('2026-09-19T09:00:00Z'), T0)).rejects.toMatchObject({ reason: 'expiry_past' });
+      await expect(service.setExpiry(owner, RESELLER, 'row-2', LATER, T0)).rejects.toMatchObject({ reason: 'staff_not_found' });
+      const stranger = { userId: OUTSIDER, tenantId: PLATFORM, permissions: [] as string[] };
+      await expect(service.setExpiry(stranger, RESELLER, 'row-1', LATER, T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    });
+
+    it('restores an expired seat only under staff_members_max, and tells the member (AC-1-q)', async () => {
+      const expired = { userId: MEMBER, joinedAt: T0, accessExpiresAt: T0 };
+      const full = build({ staffLimit: 1, rows: [expired, { userId: SECOND, joinedAt: T0 }] });
+      await expect(full.service.setExpiry(owner, RESELLER, 'row-1', null, LATER)).rejects.toBeInstanceOf(ResellerLimitReached);
+
+      const { service, all } = build({ staffLimit: 2, rows: [expired, { userId: SECOND, joinedAt: T0 }] });
+      await expect(service.setExpiry(owner, RESELLER, 'row-1', null, LATER)).resolves.toMatchObject({ state: 'active' });
+      const create = (all.outboxEvent as { create: ReturnType<typeof vi.fn> }).create;
+      expect(create.mock.calls[0][0].data.payload).toEqual({ userId: MEMBER, tenantId: RESELLER, cause: 'seat_restored' });
+    });
+
+    it('tells no one when an active seat only moves its date', async () => {
+      const { service, all } = build({ rows: [{ joinedAt: T0, accessExpiresAt: LATER }] });
+      await service.setExpiry(owner, RESELLER, 'row-1', null, T0);
+      expect((all.outboxEvent as { create: ReturnType<typeof vi.fn> }).create).not.toHaveBeenCalled();
+    });
+
+    it('takes a date or null, and nothing else', () => {
+      expect(seatExpirySchema.safeParse({ accessExpiresAt: null }).success).toBe(true);
+      expect(seatExpirySchema.safeParse({ accessExpiresAt: '2026-10-19T10:00:00.000Z' }).data?.accessExpiresAt).toEqual(LATER);
+      expect(seatExpirySchema.safeParse({}).success).toBe(false);
+      expect(seatExpirySchema.safeParse({ accessExpiresAt: null, revokedAt: null }).success).toBe(false);
     });
   });
 

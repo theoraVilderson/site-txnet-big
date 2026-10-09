@@ -10,6 +10,7 @@ import {
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
 } from '@nestjs/common';
@@ -18,7 +19,7 @@ import { ResellerLimitReached } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
-import { InviteStaffInput, inviteStaffSchema } from './tenant-staff.schema';
+import { InviteStaffInput, SeatExpiryInput, inviteStaffSchema, seatExpirySchema } from './tenant-staff.schema';
 import { StaffActor, StaffRefused, StaffRejection, StaffView, TenantStaffService } from './tenant-staff.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
@@ -37,7 +38,8 @@ const STATUS: Record<StaffRejection, 403 | 404 | 409> = {
 
 /**
  * A reseller's staff seats (F-018-j): `GET` / `POST /api/tenants/:id/staff`,
- * `POST .../staff/accept` and `DELETE .../staff/:memberId`.
+ * `POST .../staff/accept`, `PATCH .../staff/:memberId` (its end, F-1201-b) and
+ * `DELETE .../staff/:memberId`.
  *
  * No `TenantPermissionGuard`: the reseller's owner holds no `tenant.manage`,
  * and is let in by `ResellerAccess` (F-061-h) — as a member of the reseller who
@@ -67,6 +69,17 @@ export class TenantStaffController {
   @HttpCode(HttpStatus.OK)
   accept(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<StaffView> {
     return this.refusing(() => this.staff.accept(actorOf(req), id));
+  }
+
+  @Patch(':memberId')
+  @HttpCode(HttpStatus.OK)
+  setExpiry(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('memberId', new ParseUUIDPipe()) memberId: string,
+    @Body(new ZodValidationPipe(seatExpirySchema)) body: SeatExpiryInput,
+  ): Promise<StaffView> {
+    return this.refusing(() => this.staff.setExpiry(actorOf(req), id, memberId, body.accessExpiresAt ?? null));
   }
 
   @Delete(':memberId')

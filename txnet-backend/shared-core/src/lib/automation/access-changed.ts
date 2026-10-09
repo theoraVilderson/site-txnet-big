@@ -8,7 +8,7 @@ export const ACCESS_AGGREGATE = 'identity.access';
  * page only re-reads. A producer added later (a key given or taken, group
  * access, a temporal window) adds its cause here.
  */
-export type AccessChangeCause = 'role_set' | 'role_edited' | 'seat_removed';
+export type AccessChangeCause = 'role_set' | 'role_edited' | 'seat_removed' | 'seat_restored';
 
 /**
  * The `outbox_event` row for one person's access change, written in the

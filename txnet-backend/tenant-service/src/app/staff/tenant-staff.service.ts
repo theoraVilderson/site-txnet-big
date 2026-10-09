@@ -133,15 +133,7 @@ export class TenantStaffService {
     // A removed member is re-invited **in place**: `(tenantId, userId)` is
     // unique, so the alternative is not a second row but a lost history.
     const seat = await this.all.$transaction(async (tx) => {
-      // One more seat is bounded by the reseller's limit (F-019-t1, ADR-0106):
-      // its own people are refused past it; the platform's staff are not.
-      if (reseller.as !== 'staff') {
-        const inEffect = await resellerLimitOf(tx, reseller.id, 'staff_members_max');
-        if (inEffect.limit !== null) {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:staff_members_max:${reseller.id}`}))`;
-          assertUnderLimit('staff_members_max', inEffect, await RESELLER_LIMIT_USAGE.staff_members_max(tx, reseller.id, now));
-        }
-      }
+      await this.assertRoomForOneMore(tx, reseller, now);
       return existing
         ? tx.tenantStaffMember.update({
             where: { id: existing.id },
@@ -180,6 +172,32 @@ export class TenantStaffService {
     return (await this.withUsers([joined], now))[0];
   }
 
+  /**
+   * A seat's end moved or cleared, without re-inviting (F-1201-b): the row,
+   * its acceptance and its history stay. An expired seat given a later end (or
+   * none) is a seat again, so it counts against `staff_members_max` as an
+   * invite would, and the member is told their access is back (AC-1-q). Moving
+   * the end of a seat that still admits them changes nothing they can see now.
+   */
+  async setExpiry(actor: StaffActor, tenantId: string, memberId: string, accessExpiresAt: Date | null, now = new Date()): Promise<StaffView> {
+    const reseller = await this.admit(actor, tenantId, 'staffWrite', now);
+    if (accessExpiresAt && accessExpiresAt <= now) throw new StaffRefused('expiry_past', accessExpiresAt.toISOString());
+    const seat = await this.all.tenantStaffMember.findFirst({ where: { id: memberId, tenantId: reseller.id, revokedAt: null } });
+    if (!seat) throw new StaffRefused('staff_not_found', memberId);
+
+    const restored = staffState(seat, now) === 'expired';
+    const updated = await this.all.$transaction(async (tx) => {
+      if (restored) await this.assertRoomForOneMore(tx, reseller, now);
+      const row = await tx.tenantStaffMember.update({ where: { id: seat.id }, data: { accessExpiresAt } });
+      if (restored && row.joinedAt) {
+        await tx.outboxEvent.create({ data: accessChanged(seat.userId, reseller.id, 'seat_restored'), select: { id: true } });
+      }
+      return row;
+    });
+    this.logger.log(`staff seat ${seat.id} on ${reseller.slug} now ends ${accessExpiresAt?.toISOString() ?? 'never'}, by ${actor.userId}`);
+    return (await this.withUsers([updated], now))[0];
+  }
+
   /** Removal keeps the row: who was on this team last month is a question an audit asks. */
   async remove(actor: StaffActor, tenantId: string, memberId: string, now = new Date()): Promise<StaffView> {
     const reseller = await this.admit(actor, tenantId, 'staffWrite', now);
@@ -194,6 +212,19 @@ export class TenantStaffService {
     });
     this.logger.log(`staff seat ${seat.id} on ${reseller.slug} removed by ${actor.userId}`);
     return (await this.withUsers([revoked], now))[0];
+  }
+
+  /**
+   * One more seat is bounded by the reseller's limit (F-019-t1, ADR-0106): its
+   * own people are refused past it; the platform's staff are not. Under a
+   * per-reseller lock, so two invites cannot both take the last seat.
+   */
+  private async assertRoomForOneMore(tx: Prisma.TransactionClient, reseller: { id: string; as: string }, now: Date): Promise<void> {
+    if (reseller.as === 'staff') return;
+    const inEffect = await resellerLimitOf(tx, reseller.id, 'staff_members_max');
+    if (inEffect.limit === null) return;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:staff_members_max:${reseller.id}`}))`;
+    assertUnderLimit('staff_members_max', inEffect, await RESELLER_LIMIT_USAGE.staff_members_max(tx, reseller.id, now));
   }
 
   private async admit(actor: StaffActor, tenantId: string, capability: 'read' | 'staffWrite', now: Date) {
