@@ -4,6 +4,10 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MY_RESELLERS,
   PANEL_RESELLER_SELF,
+  PANEL_ROLES,
+  PANEL_TEAM,
+  PANEL_USERS,
+  resellerWorkspaceRoot,
   myResellerBotPath,
   myResellerBrandingPath,
   myResellerCatalogPath,
@@ -135,17 +139,23 @@ export function resellerMenu(
 
 /**
  * The account's menu with the reseller's button after its own entries. A
- * page the account's menu already holds — `/reseller/users` for a reseller's
- * staff seat (F-311-ab) — is not drawn twice.
+ * page the account's menu already holds is not drawn twice: on a reseller's
+ * staff seat (F-311-ab) the workspace is the session's own tenant
+ * (`ownTenantId`), so its `/reseller/users` is the account's `/users` — and
+ * the same for the team and the roles.
  */
 export function withResellerMenu(
   menu: readonly VisibleMenuEntry[],
   ws: Workspace | null,
   slug: string | null = null,
   setup: SetupProgress | null = null,
+  ownTenantId: string | null = null,
 ): VisibleMenuEntry[] {
   if (!ws) return [...menu];
   const held = new Set(menuHrefs(menu));
+  if (ws.id === ownTenantId)
+    for (const own of [PANEL_USERS, PANEL_TEAM, PANEL_ROLES])
+      if (held.has(own)) held.add(`${resellerWorkspaceRoot(ws.id, ws.self)}${own}`);
   const group = resellerMenu(ws, slug, setup);
   return [...menu, { ...group, children: group.children.filter((l) => !held.has(l.href)) }];
 }

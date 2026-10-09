@@ -9,7 +9,7 @@ import {
   type ResellerUserProfile,
   type TenantRole,
 } from "@/lib/auth-api";
-import { myResellerTeamPath } from "@/lib/routes";
+import { PANEL_TEAM, myResellerTeamPath } from "@/lib/routes";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import {
   Alert,
@@ -54,10 +54,13 @@ export function UserProfile({
   id,
   userId,
   platform,
+  own = false,
   onShown,
 }: {
   id: string;
   userId: string;
+  /** On the session's own `/users`: the team link is `/team`. */
+  own?: boolean;
   /** Each answer shown, so the page's title follows a renamed person. */
   onShown?: (p: ResellerUserProfile) => void;
   platform: boolean;
@@ -277,7 +280,7 @@ export function UserProfile({
             <p>{person.role?.name ?? t("common", P.noRole)}</p>
             {editable && !platform && (
               <Link
-                href={myResellerTeamPath(id, self)}
+                href={own ? PANEL_TEAM : myResellerTeamPath(id, self)}
                 className="mt-2 inline-block text-xs font-bold text-primary hover:underline"
               >
                 {t("common", P.roleOnTeam)}

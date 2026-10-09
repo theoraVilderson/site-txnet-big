@@ -14,7 +14,7 @@ import { ConfirmProvider } from "../_components/kit";
 
 const K = FrontendI18nKeys.common.tenantRoles;
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/my-resellers/r-1/roles", useSearchParams: () => null }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/my-resellers/r-1/roles", useSearchParams: () => null, useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({ lang: "en", isRtl: false, t: (_ns: string, key: string, vars?: object) => (vars ? `${key} ${JSON.stringify(vars)}` : key) }),
 }));

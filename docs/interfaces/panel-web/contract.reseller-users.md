@@ -15,13 +15,15 @@ Reached from the console's "More settings" (`OnboardingConsoleView`), and
 from the sidebar's **Users** entry on the tenant the session is in (F-311-ab,
 [contract.shell.md](contract.shell.md) rule 2): the platform's own users for
 platform staff (F-311-aa, D-55), the reseller's for its staff on its domain.
-The session's own users live at `/users` (`OwnUsers`, the same screens with
-`own`), never `/my-resellers/<own id>/users` — that address read "my reseller"
-(user, 2026-10-09); an old one is replaced by its `/users` twin (`ownUsersRedirect`).
+The session's own users live at `/users` (`OwnTenantView`, the same screens
+with `own`; `/team` and `/roles` likewise), never `/my-resellers/<own id>/…` —
+that address read "my reseller" (user, 2026-10-09); an old one is replaced by
+its own twin (`ownTenantRedirect`). On a staff seat `withResellerMenu` drops the
+workspace's `/reseller/users|team|roles`, the same pages as the account's.
 
 | page | route | files |
 |---|---|---|
-| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`); the session's own: `/users` (`PANEL_USERS`, `users/_components/OwnUsers.tsx`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
+| its users | `/my-resellers/[id]/users` (`myResellerUsersPath`); the session's own: `/users` (`PANEL_USERS`, `my-resellers/_components/OwnTenantView.tsx`) | `my-resellers/[id]/users/_components/ResellerUsersView.tsx`, `FindByLink.tsx`, `BulkByFilter.tsx` |
 | one user's page | `/my-resellers/[id]/users/[userId]` (`myResellerUserPath`); the session's own: `/users/[userId]` (`panelUserPath`) | `…/users/[userId]/_components/UserServicesView.tsx`, `AdminConfigs.tsx`, `GrantActions.tsx`, `GrantHistory.tsx`, `useUserMessage.ts` |
 
 Platform staff (no consent needed by the reseller's own people) meet the consent banner at the top of both, and a `consent_required` page reads "ask the reseller": [contract.support-access.md](contract.support-access.md) rules 11-16 (F-117-g).

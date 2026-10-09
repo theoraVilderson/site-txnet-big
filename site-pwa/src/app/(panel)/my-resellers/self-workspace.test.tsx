@@ -172,12 +172,14 @@ describe("the menu's users entry", () => {
       .flatMap((e) => (isMenuGroup(e) ? e.children : [e]))
       .find((l) => l.id === "users")?.href;
 
-  it("opens the id-less users page on a reseller's domain, and the id-addressed one on the platform", () => {
-    expect(usersHref("reseller", "r-1")).toBe("/reseller/users");
-    expect(usersHref("platform_owner", "t-platform")).toBe("/my-resellers/t-platform/users");
+  // The session's own users are `/users` on either host (2026-10-09); the
+  // workspace's `/reseller/users` is the reseller menu's, not this entry's.
+  it("opens /users for the session's own users on either host", () => {
+    expect(usersHref("reseller", "r-1")).toBe("/users");
+    expect(usersHref("platform_owner", "t-platform")).toBe("/users");
   });
 
-  it("still places /reseller/users in the breadcrumb", () => {
-    expect(menuTrail(PANEL_MENU, "/reseller/users").at(-1)).toMatchObject({ href: "/reseller/users" });
+  it("places /users/:id in the breadcrumb under it", () => {
+    expect(menuTrail(PANEL_MENU, "/users/u-1").at(-1)).toMatchObject({ href: "/users" });
   });
 });

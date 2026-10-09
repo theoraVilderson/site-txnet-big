@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { TableSkeleton } from "../_components/kit/TableSkeleton";
-import { OwnUsers } from "./_components/OwnUsers";
+import { OwnTenantView } from "../my-resellers/_components/OwnTenantView";
 
 /** `/users` — the session's own users (F-311-ab); the menu's "Users". */
 export default function UsersPage() {
@@ -12,7 +12,7 @@ export default function UsersPage() {
         </div>
       }
     >
-      <OwnUsers />
+      <OwnTenantView screen="users" />
     </Suspense>
   );
 }

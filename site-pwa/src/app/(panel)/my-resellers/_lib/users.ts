@@ -2,7 +2,7 @@ import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
-import { PANEL_USERS, myResellerUserPath, myResellerUsersPath, panelUserPath } from "@/lib/routes";
+import { myResellerUserPath, panelUserPath, resellerWorkspaceRoot } from "@/lib/routes";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 
 /** The screens' strings as generated constants (C-06). */
@@ -159,15 +159,15 @@ export function userPagePath(id: string, userId: string, own: boolean, self: boo
 }
 
 /**
- * The `/users` address of a `/my-resellers/<session tenant>/users[/…]` one —
- * the session's own users before they had their own (2026-10-09) — or `null`
- * for any other path, a real reseller's included.
+ * The `/users`, `/team` or `/roles` address of a `/my-resellers/<session
+ * tenant>/…` one — the session's own people pages before they had their own
+ * (2026-10-09) — or `null` for any other path, a real reseller's included.
  */
-export function ownUsersRedirect(pathname: string, sessionTenantId: string | null | undefined): string | null {
+export function ownTenantRedirect(pathname: string, sessionTenantId: string | null | undefined): string | null {
   if (!sessionTenantId) return null;
-  const root = myResellerUsersPath(sessionTenantId);
-  if (pathname !== root && !pathname.startsWith(`${root}/`)) return null;
-  return `${PANEL_USERS}${pathname.slice(root.length)}`;
+  const root = resellerWorkspaceRoot(sessionTenantId);
+  const rest = pathname.startsWith(`${root}/`) ? pathname.slice(root.length) : "";
+  return /^\/(users|team|roles)(\/|$)/.test(rest) ? rest : null;
 }
 
 export function isPlatformTenant(

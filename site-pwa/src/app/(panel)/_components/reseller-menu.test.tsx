@@ -204,7 +204,7 @@ describe("one reseller button that opens", () => {
     owned = [];
     renderSidebar();
     // The account's own users page arrives a moment later and redraws the menu: click after it.
-    await waitFor(() => expect(screen.getByRole("link", { name: S.menu.users })).toHaveAttribute("href", "/reseller/users"));
+    await waitFor(() => expect(screen.getByRole("link", { name: S.menu.users })).toHaveAttribute("href", "/users"));
     fireEvent.click(await resellerButton());
     expect(await screen.findByRole("link", { name: N.short.catalog })).toHaveAttribute("href", "/reseller/catalog");
     expect(screen.queryByRole("link", { name: N.short.users })).toBeNull();

@@ -29,7 +29,7 @@ import { useUserMessage } from "./useUserMessage";
 import { Alert, Button, PageHeader, Tabs } from "../../../../../_components/kit";
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { isPlatformTenant } from "../../../../_lib/users";
-import { useOwnUsersRedirect } from "../../_components/ResellerUsersView";
+import { useOwnTenantRedirect } from "../../../../_lib/useOwnTenantRedirect";
 
 const S = K.services;
 /** The page's two tabs, kept in `?tab=` (AC-1-b); none, or a value naming no tab, is the services. */
@@ -62,7 +62,7 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
-  useOwnUsersRedirect(own, me?.tenant.id);
+  useOwnTenantRedirect(own, me?.tenant.id);
   // The title is the person's name as auth has it now (AC-1-a), never one a
   // link carried in the address; a failed read leaves the plain title.
   const [name, setName] = useState<string | null>(null);
@@ -156,7 +156,7 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
       />
 
       {tab === "profile" ? (
-        <UserProfile id={id} userId={userId} platform={platform} onShown={(p) => setName(p.fullName || null)} />
+        <UserProfile id={id} userId={userId} platform={platform} own={own} onShown={(p) => setName(p.fullName || null)} />
       ) : (
         <>
           {/* Read again with the list: an issue or a refresh changes how many are open. */}

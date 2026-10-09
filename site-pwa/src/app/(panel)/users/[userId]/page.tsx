@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { OwnUsers } from "../_components/OwnUsers";
+import { OwnTenantView } from "../../my-resellers/_components/OwnTenantView";
 
 /** `/users/[userId]` — one of the session's own users: services and profile. */
 export default async function UserPage({ params }: { params: Promise<{ userId: string }> }) {
@@ -13,7 +13,7 @@ export default async function UserPage({ params }: { params: Promise<{ userId: s
         </div>
       }
     >
-      <OwnUsers userId={userId} />
+      <OwnTenantView screen="users" userId={userId} />
     </Suspense>
   );
 }

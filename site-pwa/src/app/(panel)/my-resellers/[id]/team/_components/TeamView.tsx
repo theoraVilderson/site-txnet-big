@@ -10,6 +10,7 @@ import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { DatePicker } from "../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../_lib/datetime";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
+import { useOwnTenantRedirect } from "../../../_lib/useOwnTenantRedirect";
 import { USERS_QUERY_MIN, isPlatformTenant, usersQuery } from "../../../_lib/users";
 import { assignableRoles, customerRole, endOfDay, teamRefusalKey } from "../../../_lib/team";
 import { useUserMessage } from "../../users/[userId]/_components/useUserMessage";
@@ -62,12 +63,13 @@ type Asking =
  *    (`grantable`, identity invariant 18); auth decides authority over the
  *    person, and its refusal is said as a sentence.
  */
-export function TeamView({ id }: { id: string }) {
+export function TeamView({ id, own = false }: { id: string; own?: boolean }) {
   const { t, lang } = useLocale();
   const confirm = useConfirm();
   const userMessage = useUserMessage();
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
+  useOwnTenantRedirect(own, me?.tenant.id);
   const message = (e: unknown) => {
     const key = teamRefusalKey(e);
     return key ? t("common", key) : userMessage(e);
@@ -243,7 +245,7 @@ export function TeamView({ id }: { id: string }) {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader
-        title={platform ? t("common", FrontendI18nKeys.common.shell.menu.team) : slug ? t("common", K.titleOf, { slug }) : t("common", K.title)}
+        title={own || platform ? t("common", FrontendI18nKeys.common.shell.menu.team) : slug ? t("common", K.titleOf, { slug }) : t("common", K.title)}
         subtitle={t("common", platform ? K.subtitlePlatform : K.subtitle)}
         actions={
           <>

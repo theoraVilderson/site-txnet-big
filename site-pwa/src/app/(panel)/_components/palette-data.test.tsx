@@ -4,7 +4,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { ApiError } from "@/lib/api-error";
 import { authApi, resellerUsersApi } from "@/lib/auth-api";
 import { billingApi } from "@/lib/billing-api";
-import { myResellerUserPath, panelSupportThreadPath } from "@/lib/routes";
+import { panelSupportThreadPath, panelUserPath } from "@/lib/routes";
 import { supportApi } from "@/lib/support-api";
 import { tenantAccessApi } from "@/lib/tenant-api";
 import { useUiPreferences } from "@/stores/ui-preferences-store";
@@ -147,7 +147,7 @@ describe("palette data groups (N7)", () => {
     await screen.findByRole("group", { name: P.groups.users });
     expect(authApi.searchUsers).toHaveBeenCalledWith("sara");
     fireEvent.click(screen.getByRole("option", { name: /Sara Ahmadi/ }));
-    expect(push).toHaveBeenCalledWith(myResellerUserPath("t-1", "user-7"));
+    expect(push).toHaveBeenCalledWith(panelUserPath("user-7"));
   });
 
   it("asks a reseller's own users route for its staff", async () => {

@@ -5,6 +5,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_COUPONS, PANEL_DEPOSIT, PANEL_HOME, PANEL_RESELLERS } from "@/lib/routes";
 import { copyText } from "./_lib/clipboard";
 import { PANEL_MENU, menuTrail } from "./_lib/panel-menu";
+import { RESELLER_MENU_GROUP } from "./_lib/reseller-menu";
 import { PageHeader } from "./_components/kit/PageHeader";
 import PanelError from "./error";
 import PanelNotFound from "./not-found";
@@ -27,6 +28,7 @@ vi.mock("./_lib/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 
 const M = FrontendI18nKeys.common.shell.menu;
 const SEC = FrontendI18nKeys.common.shell.sections;
+const R = FrontendI18nKeys.common.resellerNav;
 
 beforeEach(() => {
   pathname = "/";
@@ -59,11 +61,9 @@ describe("menuTrail", () => {
   });
 
   it("matches a tenant's own page on the tenant the path names", () => {
-    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/team/s-1")).toEqual([
-      { label: SEC.people, href: null, section: true },
-      { label: M.team, href: "/my-resellers/t-9/team" },
-    ]);
-    expect(menuTrail(PANEL_MENU, "/my-resellers/t-9/teamx")).toEqual([]);
+    const workspace = [RESELLER_MENU_GROUP, ...PANEL_MENU];
+    expect(menuTrail(workspace, "/my-resellers/t-9/team/s-1").at(-1)).toEqual({ label: R.menu.team, href: "/my-resellers/t-9/team" });
+    expect(menuTrail(workspace, "/my-resellers/t-9/teamx").some((c) => c.href?.endsWith("/team"))).toBe(false);
   });
 
   it("is empty on a path no menu entry owns", () => {

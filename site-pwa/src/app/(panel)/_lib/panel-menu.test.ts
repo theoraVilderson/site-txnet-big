@@ -250,6 +250,10 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     visibleMenu(PANEL_MENU, held, type, false, null, tenantId).flatMap((e) =>
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => h.endsWith("/users"));
+  const people = (type: "reseller" | "platform_owner", tenantId: string | null = "T1") =>
+    visibleMenu(PANEL_MENU, ["tenant.manage"], type, false, null, tenantId).flatMap((e) =>
+      "children" in e ? e.children.map((c) => c.href) : [e.href],
+    ).filter((h) => /\/(users|team|roles)$/.test(h));
 
   // The session's own users are not a reseller's workspace: `/users`, never
   // `/my-resellers/<own id>/users`, which read as "my reseller" (2026-10-09).
@@ -257,6 +261,12 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(users("platform_owner", ["tenant.manage"])).toEqual(["/users"]);
     expect(users("platform_owner", ["*"])).toEqual(["/users"]);
     expect(users("reseller", ["tenant.manage"], "R 1")).toEqual(["/users"]);
+  });
+
+  it("puts the team and the roles at /team and /roles too, still hidden while the tenant is unknown", () => {
+    expect(people("platform_owner")).toEqual(["/users", "/team", "/roles"]);
+    expect(people("reseller", "R 1")).toEqual(["/users", "/team", "/roles"]);
+    expect(people("platform_owner", null)).toEqual([]);
   });
 
   it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {

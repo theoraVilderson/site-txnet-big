@@ -7,6 +7,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi, tenantRolesApi, type PermissionArea, type TenantRole } from "@/lib/auth-api";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
+import { useOwnTenantRedirect } from "../../../_lib/useOwnTenantRedirect";
 import { isPlatformTenant } from "../../../_lib/users";
 import { editorAreas, permissionIndex, unknownKeys } from "../../../_lib/roles";
 import { useUserMessage } from "../../users/[userId]/_components/useUserMessage";
@@ -35,12 +36,13 @@ type Editing = { role: TenantRole | null; name: string; keys: string[] };
  * No permission is judged here: `ResellerAccess` admits, and its refusal is the
  * page's sentence.
  */
-export function RolesView({ id }: { id: string }) {
+export function RolesView({ id, own: ownTenant = false }: { id: string; own?: boolean }) {
   const { t } = useLocale();
   const confirm = useConfirm();
   const message = useUserMessage();
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
+  useOwnTenantRedirect(ownTenant, me?.tenant.id);
 
   const [answer, setAnswer] = useState<{ roles: TenantRole[]; grantable: string[] } | null>(null);
   const [registry, setRegistry] = useState<PermissionArea[]>([]);
@@ -148,7 +150,7 @@ export function RolesView({ id }: { id: string }) {
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader
-        title={platform ? t("common", FrontendI18nKeys.common.shell.menu.roles) : slug ? t("common", K.titleOf, { slug }) : t("common", K.title)}
+        title={ownTenant || platform ? t("common", FrontendI18nKeys.common.shell.menu.roles) : slug ? t("common", K.titleOf, { slug }) : t("common", K.title)}
         subtitle={t("common", K.subtitle)}
         actions={
           <>

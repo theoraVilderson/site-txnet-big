@@ -19,7 +19,7 @@ import {
   issuableProducts,
   usersQuery,
   userPagePath,
-  ownUsersRedirect,
+  ownTenantRedirect,
 } from "./_lib/users";
 
 /**
@@ -174,12 +174,15 @@ describe("the platform's own users and the catalog the forms name (F-311-ab, -ab
     expect(userPagePath("R", "u", false, true)).toBe("/reseller/users/u");
   });
 
-  it("moves an old /my-resellers/<session tenant>/users address to /users, and no other", () => {
-    expect(ownUsersRedirect("/my-resellers/P/users", "P")).toBe("/users");
-    expect(ownUsersRedirect("/my-resellers/P/users/u-9", "P")).toBe("/users/u-9");
-    expect(ownUsersRedirect("/my-resellers/R/users", "P")).toBeNull();
-    expect(ownUsersRedirect("/my-resellers/P/usersx", "P")).toBeNull();
-    expect(ownUsersRedirect("/my-resellers/P/users", null)).toBeNull();
+  it("moves an old /my-resellers/<session tenant>/{users,team,roles} address to its own, and no other", () => {
+    expect(ownTenantRedirect("/my-resellers/P/users", "P")).toBe("/users");
+    expect(ownTenantRedirect("/my-resellers/P/users/u-9", "P")).toBe("/users/u-9");
+    expect(ownTenantRedirect("/my-resellers/P/team", "P")).toBe("/team");
+    expect(ownTenantRedirect("/my-resellers/P/roles", "P")).toBe("/roles");
+    expect(ownTenantRedirect("/my-resellers/P/settings", "P")).toBeNull();
+    expect(ownTenantRedirect("/my-resellers/R/team", "P")).toBeNull();
+    expect(ownTenantRedirect("/my-resellers/P/usersx", "P")).toBeNull();
+    expect(ownTenantRedirect("/my-resellers/P/users", null)).toBeNull();
   });
 
   // The title is the person's name, read from auth — never a `?name=` a link carried.

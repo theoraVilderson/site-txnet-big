@@ -85,6 +85,7 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
         wsId === null ? null : { id: wsId, self: wsSelf },
         slug,
         setup,
+        tenantId,
       ),
     [held, tenantType, isOwner, ownsReseller, tenantId, wsId, wsSelf, slug, setup],
   );

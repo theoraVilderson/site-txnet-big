@@ -75,8 +75,8 @@ describe("the page header says whose page it is", () => {
     expect(within(screen.getByRole("navigation", { name: BC })).getByRole("link", { name: N.menu.users })).toBeInTheDocument();
   });
 
-  it("leaves the platform's own users page the platform's, though it shares the address", async () => {
-    pathname = "/my-resellers/t-platform/users/u-9";
+  it("leaves the platform's own users page, at /users, the platform's", async () => {
+    pathname = "/users/u-9";
     header("Ali");
     const trail = await screen.findByRole("navigation", { name: BC });
     expect(within(trail).getByRole("link", { name: S.menu.users })).toBeInTheDocument();

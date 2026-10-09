@@ -15,7 +15,7 @@ import { ConfirmProvider } from "../_components/kit";
 const K = FrontendI18nKeys.common.tenantTeam;
 
 const { session } = vi.hoisted(() => ({ session: { tenant: { id: "p-1", type: "platform_owner" as const }, permissions: ["*"] } }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/my-resellers/r-1/team", useSearchParams: () => null }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/my-resellers/r-1/team", useSearchParams: () => null, useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("@/context/LocaleContext", () => ({
   useLocale: () => ({ lang: "en", isRtl: false, t: (_ns: string, key: string, vars?: object) => (vars ? `${key} ${JSON.stringify(vars)}` : key) }),
 }));

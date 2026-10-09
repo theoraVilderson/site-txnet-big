@@ -19,8 +19,8 @@ Server rules: [identity/contract.roles.md](../../domains/identity/contract.roles
 
 | Page | Route (C-10) | In the menu |
 |---|---|---|
-| Team (F-1201-c) | `myResellerTeamPath(id, self)` — `/my-resellers/:id/team`, `/reseller/team` | `RESELLER_MENU` `reseller-team`, after users; `people` › team, as roles |
-| Roles (F-1201-d) | `myResellerRolesPath(id, self)` — `/my-resellers/:id/roles`, `/reseller/roles` on its own domain | `RESELLER_MENU` `reseller-roles`, after users; for platform staff and a seated admin, `people` › roles on the session's tenant (`tenant.manage`, as users) |
+| Team (F-1201-c) | `myResellerTeamPath(id, self)` — `/my-resellers/:id/team`, `/reseller/team`; the session's own: `/team` (`PANEL_TEAM`, `OwnTenantView`) | `RESELLER_MENU` `reseller-team`, after users; `people` › team, as roles |
+| Roles (F-1201-d) | `myResellerRolesPath(id, self)` — `/my-resellers/:id/roles`, `/reseller/roles` on its own domain; the session's own: `/roles` (`PANEL_ROLES`) | `RESELLER_MENU` `reseller-roles`, after users; for platform staff and a seated admin, `people` › roles on the session's tenant (`tenant.manage`, as users) |
 
 No permission is judged on either page: `ResellerAccess` admits, and its
 refusal (or the consent platform staff need, F-117-g) is the page's sentence.
