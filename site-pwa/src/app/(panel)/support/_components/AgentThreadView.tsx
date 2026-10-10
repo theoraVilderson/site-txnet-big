@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { Check, CheckCheck, CheckCircle2, Hand, Lock, RotateCw, Send, StickyNote, XCircle } from "lucide-react";
+import Link from "next/link";
+import { Check, CheckCheck, CheckCircle2, ExternalLink, Hand, Lock, RotateCw, Send, StickyNote, XCircle } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import {
@@ -12,7 +13,6 @@ import {
   type CannedPick,
   type SupportChannel,
   type SupportPriority,
-  type SupportUserFacts,
 } from "@/lib/support-api";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
@@ -21,7 +21,8 @@ import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { applySupportEvent, isSendKey, mergeMessages, readSupportEvent, senderKey, typingGate, type ThreadState } from "../_lib/support";
-import { AGENT_KEYS as K, PRIORITIES, PRIORITY_KEYS, agentActions } from "../_lib/support-agent";
+import { AGENT_KEYS as K, PRIORITIES, PRIORITY_KEYS, agentActions, senderNameOf, userLinksOf } from "../_lib/support-agent";
+import { AssigneeLabel } from "./SupportInboxView";
 import { Frame } from "./SupportThreadView";
 import { AttachmentList, JumpToLatest, SendButton, ThreadMessages, TypingDots, useAutoGrow, useFollowLatest } from "./ThreadParts";
 import { StatusPill } from "./SupportView";
@@ -29,7 +30,7 @@ import { PriorityPill, SlaBadge } from "./SupportInboxView";
 import { usePresence } from "./usePresence";
 import { UserStatusControl } from "./UserStatusControl";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { Alert, Button, Field, NativeSelect, SegmentedControl, Textarea, useConfirm } from "../../_components/kit";
+import { Alert, Button, Field, NativeSelect, SegmentedControl, Textarea, buttonClass, useConfirm } from "../../_components/kit";
 
 const TYPING_EVERY_MS = 4_000;
 
@@ -221,6 +222,10 @@ export function AgentThreadView({ id }: { id: string }) {
             }
           />
           <div className="flex flex-wrap items-center gap-2">
+            {/* F-033-r: who has it, by name. */}
+            <span className="text-xs text-text-secondary">
+              <AssigneeLabel conversation={conversation} me={myId} />
+            </span>
             {actions.canTake && (
               <Button variant="quiet" size="sm" disabled={busy} onClick={() => act(() => supportAgentApi.assign(id, myId))} icon={<Hand size={12} aria-hidden />}>
                 {t("common", K.thread.take)}
@@ -331,7 +336,7 @@ function AgentBubble({ message: m, first, me, seen, time }: { message: AgentMess
     : m.senderUserId === me
       ? t("common", K.thread.you)
       : m.senderKind === "agent"
-        ? t("common", K.thread.colleague)
+        ? (senderNameOf(m) ?? t("common", K.thread.colleague))
         : t("common", senderKey(m.senderKind, false));
   const tone = m.internal ? "border border-dashed border-card-border bg-bg-inner" : fromUser ? "bg-bg-inner" : "bg-primary/10";
   return (
@@ -474,7 +479,7 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
 /** The user, as billing sees them (F-033-m). `billing: null` is billing not answering — a line, never an error. */
 function Sidebar({ id }: { id: string }) {
   const { lang, t } = useLocale();
-  const [context, setContext] = useState<{ userId: string; billing: SupportUserFacts | null } | null>(null);
+  const [context, setContext] = useState<Awaited<ReturnType<typeof supportAgentApi.context>> | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -491,14 +496,32 @@ function Sidebar({ id }: { id: string }) {
   const S = K.sidebar;
   const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const billing = context?.billing ?? null;
+  const links = context ? userLinksOf(context.userId) : null;
 
   return (
     <aside className="h-fit space-y-4 rounded-2xl border border-card-border bg-card-bg p-4 text-xs">
       <h2 className="text-sm font-bold text-text-primary">{t("common", S.title)}</h2>
       {context && (
-        <p className="break-all text-text-secondary">
-          {t("common", S.userId)}: <span className="font-mono text-text-primary">{context.userId}</span>
-        </p>
+        <div className="space-y-1">
+          {/* F-033-r: the person by name, and one click to their page — services and details. */}
+          {context.user && (
+            <p dir="auto" className="text-sm font-bold text-text-primary">
+              {context.user.fullName || context.user.username}
+              {context.user.username && context.user.fullName && (
+                <span dir="ltr" className="ms-1 font-normal text-text-secondary">
+                  @{context.user.username}
+                </span>
+              )}
+            </p>
+          )}
+          <p className="break-all text-text-secondary">
+            {t("common", S.userId)}: <span className="font-mono text-text-primary">{context.userId}</span>
+          </p>
+          <Link href={links?.page ?? ""} className={buttonClass({ variant: "quiet", size: "sm" })}>
+            <ExternalLink size={12} aria-hidden />
+            {t("common", S.openUser)}
+          </Link>
+        </div>
       )}
       {/* BAN-1-f: restrict, ban and lift, by the caller's own keys (ADR-0133). */}
       {context && <UserStatusControl userId={context.userId} />}
@@ -531,7 +554,13 @@ function Sidebar({ id }: { id: string }) {
                 {billing.grants.items.map((g) => (
                   <li key={g.id} className="space-y-0.5 rounded-lg bg-bg-inner p-2">
                     <p dir="auto" className="font-bold text-text-primary">
-                      {g.label ?? g.nameKey ?? g.id.slice(0, 8)}
+                      <Link
+                        href={links?.grant(g.id) ?? ""}
+                        title={t("common", S.openService)}
+                        className="text-primary hover:underline"
+                      >
+                        {g.label ?? g.nameKey ?? g.id.slice(0, 8)}
+                      </Link>
                       {g.frozen && <span className="ms-1 font-normal text-error">({t("common", S.frozen)})</span>}
                     </p>
                     <p className="text-text-secondary">

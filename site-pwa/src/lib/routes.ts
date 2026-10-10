@@ -191,6 +191,8 @@ export const myResellerBrandingPath = (id: string, self = false) => `${resellerW
 export const PANEL_USERS = "/users";
 /** One of the session's own users: their services and profile. */
 export const panelUserPath = (userId: string) => `${PANEL_USERS}/${encodeURIComponent(userId)}`;
+/** One service on that page, opened (F-033-r): the users page reads `?grant=`. */
+export const panelUserGrantPath = (userId: string, grantId: string) => `${panelUserPath(userId)}?grant=${encodeURIComponent(grantId)}`;
 /**
  * A reseller's users (F-311-v, over F-311-a): find one, and open their
  * services. By the path's reseller, never the session's tenant.

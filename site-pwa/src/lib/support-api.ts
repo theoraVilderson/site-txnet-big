@@ -61,12 +61,14 @@ export interface SupportAttachment {
   expired: boolean;
 }
 
-/** `MessageView`. An agent is a kind, never an account. */
+/** `MessageView`. An agent's message names them (F-033-q); no account id on this side. */
 export interface SupportMessage {
   id: string;
   seq: number;
   senderKind: string;
   mine: boolean;
+  /** The answering agent's name; `null` for anyone else, or one this tenant cannot read. Absent from an older answer. */
+  senderName?: string | null;
   body: string;
   createdAt: string;
   attachments: SupportAttachment[];
@@ -191,6 +193,8 @@ export interface AgentConversation extends Omit<SupportConversation, "priority">
   priority: SupportPriority;
   userId: string;
   assignedToUserId: string | null;
+  /** Who has it, by name (F-033-q). */
+  assignedToName: string | null;
   firstResponseAt: string | null;
   resolvedAt: string | null;
   closedAt: string | null;
@@ -250,7 +254,7 @@ export const supportAgentApi = {
     return call<AgentMessagePage>(`${agentThread(id)}/messages${query({ ...at, limit: 50 })}`, { method: "GET" });
   },
   /** The sidebar; `billing` is `null` when billing did not answer — never an error. */
-  context(id: string): Promise<{ userId: string; billing: SupportUserFacts | null }> {
+  context(id: string): Promise<{ userId: string; user: { fullName: string; username: string | null } | null; billing: SupportUserFacts | null }> {
     return call(`${agentThread(id)}/context`, { method: "GET" });
   },
   /** A reply claims an unassigned thread for the replier; a note (`internal`) changes nothing the user sees. */

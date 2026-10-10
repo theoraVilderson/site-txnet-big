@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { AgentConversation, ConversationStatus, InboxView, SlaTarget, SupportPriority, SupportSla } from "@/lib/support-api";
+import { panelUserGrantPath, panelUserPath } from "@/lib/routes";
+import type { AgentConversation, ConversationStatus, InboxView, SlaTarget, SupportMessage, SupportPriority, SupportSla } from "@/lib/support-api";
 
 /** The agent's and admin's strings as generated constants (C-06). */
 export const AGENT_KEYS = FrontendI18nKeys.common.supportAgent;
@@ -32,6 +33,26 @@ export function slaState(sla: SupportSla, now: number): SlaState {
   if (left <= 0) return "breached";
   return left <= DUE_SOON_MS ? "soon" : "running";
 }
+
+/** An agent's message by name (F-033-r); `null` for any other sender, or no name. */
+export const senderNameOf = (m: Pick<SupportMessage, "senderKind" | "senderName">): string | null =>
+  m.senderKind === "agent" ? (m.senderName ?? null) : null;
+
+/** Who has the conversation, as the inbox and the thread say it: nobody, me, or a colleague by name when known. */
+export function assigneeOf(
+  c: Pick<AgentConversation, "assignedToUserId" | "assignedToName">,
+  me: string | undefined,
+): { key: "unassigned" | "assignedToMe" } | { key: "assignedOther"; name?: string } {
+  if (c.assignedToUserId === null) return { key: "unassigned" };
+  if (c.assignedToUserId === me) return { key: "assignedToMe" };
+  return c.assignedToName ? { key: "assignedOther", name: c.assignedToName } : { key: "assignedOther" };
+}
+
+/** The ticket's person on the users page, and one service opened there (F-033-r). The inbox is the session's own tenant. */
+export const userLinksOf = (userId: string) => ({
+  page: panelUserPath(userId),
+  grant: (grantId: string) => panelUserGrantPath(userId, grantId),
+});
 
 /** What the agent is offered — exactly what support accepts (F-033-d). A closed thread is read-only. */
 export function agentActions(c: Pick<AgentConversation, "status" | "assignedToUserId">, me: string) {

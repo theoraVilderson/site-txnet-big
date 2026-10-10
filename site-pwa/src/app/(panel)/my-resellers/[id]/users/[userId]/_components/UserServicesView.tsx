@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Check, ChevronDown, Copy, Loader2, QrCode, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
@@ -61,6 +61,8 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
   const message = useUserMessage();
   const query = useSearchParams();
   const tab: Tab = query.get("tab") === "profile" ? "profile" : "services";
+  // F-033-r: a support ticket's link opens the service it is about.
+  const focusGrant = query.get("grant");
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
@@ -187,7 +189,7 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
                 ) : (
                   <ul className="space-y-3">
                     {answer.rows.map((row) => (
-                      <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
+                      <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} focused={row.id === focusGrant} />
                     ))}
                   </ul>
                 )}
@@ -213,15 +215,32 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
 }
 
 /** One Grant: its name, status and meter; opened, its sheet. */
-function AdminGrantCard({ api, row, texts, onChanged }: { api: ResellerUserGrantsApi; row: GrantRow; texts: Record<string, string>; onChanged: () => void }) {
+function AdminGrantCard({
+  api,
+  row,
+  texts,
+  onChanged,
+  focused = false,
+}: {
+  api: ResellerUserGrantsApi;
+  row: GrantRow;
+  texts: Record<string, string>;
+  onChanged: () => void;
+  /** Named by `?grant=` (F-033-r): opened, and brought into view once. */
+  focused?: boolean;
+}) {
   const { t, lang } = useLocale();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(focused);
+  const cardRef = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    if (focused) cardRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [focused]);
   const tone = GRANT_TONES[row.status];
   const Icon = tone.icon;
   const name = serviceName(texts, row) ?? t("common", S.noPlan);
 
   return (
-    <li className="rounded-2xl border border-card-border bg-card-bg p-4">
+    <li ref={cardRef} className={`rounded-2xl border bg-card-bg p-4 ${focused ? "border-primary" : "border-card-border"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="min-w-0 flex-1 truncate text-base font-bold text-text-primary" dir="auto">
           {name}

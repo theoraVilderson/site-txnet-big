@@ -34,6 +34,7 @@ import { Alert as KitAlert } from "../../_components/kit/Alert";
 import { PendingFiles, useFileDrop } from "./SupportFiles";
 import { AttachmentList, JumpToLatest, SendButton, StarRating, ThreadMessages, TypingDots, useAutoGrow, useFollowLatest } from "./ThreadParts";
 import { Alert, Button, Input, Textarea, buttonClass } from "../../_components/kit";
+import { senderNameOf } from "../_lib/support-agent";
 
 /** Below the server's ~6s hold, so a steady typist never flickers off. */
 const TYPING_EVERY_MS = 4_000;
@@ -280,7 +281,12 @@ function MessageBubble({ message: m, first, seen, time }: { message: SupportMess
   return (
     <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] space-y-1 rounded-2xl px-3 py-2 ${m.mine ? "bg-primary/10" : "bg-bg-inner"}`}>
-        {first && <p className="text-[11px] font-bold text-text-secondary">{t("common", senderKey(m.senderKind, m.mine))}</p>}
+        {first && (
+          <p className="text-[11px] font-bold text-text-secondary">
+            {/* F-033-r: who answered, by name, beside what they are. */}
+            {senderNameOf(m) ? `${senderNameOf(m)} · ${t("common", senderKey(m.senderKind, m.mine))}` : t("common", senderKey(m.senderKind, m.mine))}
+          </p>
+        )}
         {m.body && (
           <p dir="auto" className="whitespace-pre-wrap break-words text-sm text-text-primary">
             {m.body}

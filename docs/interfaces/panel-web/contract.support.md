@@ -16,7 +16,7 @@ The agent's side and the settings are under "Staff" below.
 | Route | Component | What it does |
 |---|---|---|
 | `/support` | `support/_components/SupportView.tsx`, `NewTicketSheet.tsx` | the caller's conversations (newest activity first, `nextBefore` pages) under status tabs with counts and a search, both server-side in `?status=&q=` (`contract.ux.md` T2); the wait notice (`GET …/availability`); a new ticket in a sheet of steps — category (only when the tenant has any), optional subject (≤120), body (≤4000), files, the guides (T3); `?new=1` (`PANEL_SUPPORT_NEW`, the palette's "new ticket", UX-1-n) opens it, and closing it drops the query |
-| `/support/[id]` | `support/_components/SupportThreadView.tsx` | one thread: messages oldest first, "earlier" (`beforeSeq`), sender by kind, files, "seen" on the caller's last message, the agent typing; send, attach (also by paste and drop), rate, reopen — drawn per `contract.ux.md` T4 (`ThreadParts.tsx`) |
+| `/support/[id]` | `support/_components/SupportThreadView.tsx` | one thread: messages oldest first, "earlier" (`beforeSeq`), sender by kind and an agent by name (`senderNameOf`, F-033-r), files, "seen" on the caller's last message, the agent typing; send, attach (also by paste and drop), rate, reopen — drawn per `contract.ux.md` T4 (`ThreadParts.tsx`) |
 
 Menu: the existing `support` entry (`_lib/panel-menu.ts`) now links
 `PANEL_SUPPORT`, for every signed-in user — support answers each with their
@@ -84,8 +84,8 @@ reason on its own line (`FormError` `detail`, `banDetail`).
 
 | Route | Component | Who | What it does |
 |---|---|---|---|
-| `/support/inbox` | `SupportInboxView.tsx` | `support.agent` | the four views (`pending`, `live`, `mine`, `unassigned`) in support's queue order; priority, SLA badge, owner, unread; presence on/off; re-read every minute |
-| `/support/inbox/[id]` | `AgentThreadView.tsx` | `support.agent` | messages and notes, take/release, priority, resolve, close; reply or note, canned insert; the user's sidebar (F-033-m); drawn per `contract.ux.md` T4 |
+| `/support/inbox` | `SupportInboxView.tsx` | `support.agent` | the four views (`pending`, `live`, `mine`, `unassigned`) in support's queue order; priority, SLA badge, owner by name (`assigneeOf`, F-033-r), unread; presence on/off; re-read every minute |
+| `/support/inbox/[id]` | `AgentThreadView.tsx` | `support.agent` | messages and notes, take/release, priority, resolve, close; reply or note, canned insert; the user's sidebar (F-033-m) with their name, a link to their page and each service opened there (`userLinksOf`, `/users/:id?grant=`, F-033-r); drawn per `contract.ux.md` T4 |
 | (sidebar) | `UserStatusControl.tsx` | `restriction.assign` / `user.ban` | the person's status and reason; restrict and ban with a reason, lift after a confirm — each offered by the caller's own key (BAN-1-f, ADR-0133) |
 | `/support/settings` | `SupportSettingsView.tsx` | `support.manage` | tabs: working hours (`HH:MM`, `24:00` allowed, the tenant's zone), SLA targets per priority, categories (F-033-e) |
 

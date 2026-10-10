@@ -10,7 +10,7 @@ import { supportAgentApi, type AgentConversation, type InboxView } from "@/lib/s
 import { formatInstant } from "../../_lib/datetime";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { AGENT_KEYS as K, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, slaState } from "../_lib/support-agent";
+import { AGENT_KEYS as K, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, assigneeOf, slaState } from "../_lib/support-agent";
 import { StatusPill } from "./SupportView";
 import { usePresence } from "./usePresence";
 import { PageHeader } from "../../_components/kit/PageHeader";
@@ -127,7 +127,7 @@ export function SupportInboxView() {
                     <p className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
                       <span>{formatInstant(c.lastMessageAt, lang) ?? ""}</span>
                       <span>·</span>
-                      <span>{t("common", c.assignedToUserId === null ? K.unassigned : c.assignedToUserId === me?.userId ? K.assignedToMe : K.assignedOther)}</span>
+                      <AssigneeLabel conversation={c} me={me?.userId} />
                       {c.mode === "live" && <span className="font-bold text-primary">{t("common", K.liveMode)}</span>}
                     </p>
                   </div>
@@ -166,4 +166,11 @@ export function SlaBadge({ conversation: c, now }: { conversation: AgentConversa
   const tone = state === "breached" ? "bg-error/10 text-error" : state === "soon" ? "bg-primary/10 text-primary" : "bg-bg-inner text-text-secondary";
   const text = state === "running" ? t("common", K.sla.running, { time: formatInstant(c.sla.dueAt, lang) ?? "" }) : t("common", K.sla[state]);
   return <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tone}`}>{text}</span>;
+}
+
+/** Who has the conversation (F-033-r): nobody, me, or the colleague by name when support knows it. */
+export function AssigneeLabel({ conversation, me }: { conversation: AgentConversation; me: string | undefined }) {
+  const { t } = useLocale();
+  const who = assigneeOf(conversation, me);
+  return <span>{"name" in who && who.name ? t("common", K.assignedNamed, { name: who.name }) : t("common", K[who.key])}</span>;
 }

@@ -5385,6 +5385,7 @@
     },
     "assignedToMe": "با من",
     "assignedOther": "با همکار",
+    "assignedNamed": "با {{name}}",
     "unassigned": "بی‌صاحب",
     "liveMode": "زنده",
     "thread": {
@@ -5418,6 +5419,8 @@
     "sidebar": {
       "title": "کاربر",
       "userId": "شناسه کاربر",
+      "openUser": "صفحه‌ی کاربر: سرویس‌ها و مشخصات",
+      "openService": "باز کردن این سرویس",
       "unavailable": "اطلاعات مالی کاربر الان در دسترس نیست.",
       "wallet": "کیف پول",
       "held": "رزرو‌شده: {{amount}}",

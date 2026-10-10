@@ -11,7 +11,10 @@ import {
   PRIORITY_KEYS,
   VIEW_KEYS,
   agentActions,
+  assigneeOf,
   categoryTexts,
+  senderNameOf,
+  userLinksOf,
   fromHhmm,
   slaFormErrors,
   slaState,
@@ -193,5 +196,37 @@ describe("the menu shows the staff pages to staff only", () => {
 
   it("puts an agent's thread under the inbox", () => {
     expect(panelSupportInboxThreadPath("a b")).toBe(`${PANEL_SUPPORT_INBOX}/a%20b`);
+  });
+});
+
+/**
+ * F-033-r: who answered is said by name, and the agent reaches the person and
+ * the service the ticket is about in one click. What breaks with nothing red:
+ * a name shown on the user's own message, an "assigned to someone else" with
+ * the name right there, or a sidebar link to an address the users page does
+ * not read.
+ */
+describe("names and links on a ticket (F-033-r)", () => {
+  const msg = (over: Partial<SupportMessage>): SupportMessage => ({ id: "m", seq: 1, senderKind: "agent", mine: false, senderName: null, body: "", createdAt: "", attachments: [], ...over });
+
+  it("names an agent's message, and no one else's", () => {
+    expect(senderNameOf(msg({ senderName: "Sara Ahmadi" }))).toBe("Sara Ahmadi");
+    expect(senderNameOf(msg({ senderName: null }))).toBeNull();
+    expect(senderNameOf(msg({ senderKind: "user", senderName: "x" }))).toBeNull();
+    // An older answer without the field reads as no name.
+    expect(senderNameOf({ ...msg({}), senderName: undefined } as unknown as SupportMessage)).toBeNull();
+  });
+
+  it("says who has the conversation: nobody, me, or the colleague by name", () => {
+    expect(assigneeOf({ assignedToUserId: null, assignedToName: null }, "me")).toEqual({ key: "unassigned" });
+    expect(assigneeOf({ assignedToUserId: "me", assignedToName: "Me Myself" }, "me")).toEqual({ key: "assignedToMe" });
+    expect(assigneeOf({ assignedToUserId: "u-2", assignedToName: "Sara Ahmadi" }, "me")).toEqual({ key: "assignedOther", name: "Sara Ahmadi" });
+    expect(assigneeOf({ assignedToUserId: "u-2", assignedToName: null }, "me")).toEqual({ key: "assignedOther" });
+  });
+
+  it("links the person's page and one service on it, as the users page reads them", () => {
+    const links = userLinksOf("u 1");
+    expect(links.page).toBe("/users/u%201");
+    expect(links.grant("g-9")).toBe("/users/u%201?grant=g-9");
   });
 });

@@ -5385,6 +5385,7 @@
     },
     "assignedToMe": "Mine",
     "assignedOther": "A colleague's",
+    "assignedNamed": "With {{name}}",
     "unassigned": "Unassigned",
     "liveMode": "Live",
     "thread": {
@@ -5418,6 +5419,8 @@
     "sidebar": {
       "title": "User",
       "userId": "User id",
+      "openUser": "User's page: services and details",
+      "openService": "Open this service",
       "unavailable": "The user's billing is unavailable right now.",
       "wallet": "Wallet",
       "held": "Held: {{amount}}",
