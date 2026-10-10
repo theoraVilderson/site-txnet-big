@@ -170,13 +170,27 @@ export const memberKey = (m: { memberType: "user" | "tenant"; userId: string | n
 
 /** Someone picked to join: a person, or a reseller on the platform's own group. */
 export type MemberPick = { kind: "user" | "tenant"; id: string; label: string };
-export type DraftAdd = MemberPick & { endDay: string | null };
+/** When a membership ends, as the visitor's wall time `YYYY-MM-DDTHH:mm` (GR-1-k), or null for never. */
+export type WallTime = string;
+export type DraftAdd = MemberPick & { endAt: WallTime | null };
+
+/** A saved end (an ISO instant) as the visitor's wall time, minute precise — what the draft compares against. */
+export function wallTimeOf(iso: string | null): WallTime | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/** A wall time in the visitor's zone as the instant the server stores. */
+export const instantOf = (wall: WallTime) => new Date(`${wall}:00`).toISOString();
 
 /**
  * Every change the members sheet holds until Save (GR-1-j, user 2026-10-10):
- * people to add (each with an end day or none), members to remove (by
- * {@link memberKey}), and members whose end moves (`userId` → day, or `null`
- * to clear). Nothing is sent until {@link changesBody}.
+ * people to add (each with an end or none), members to remove (by
+ * {@link memberKey}), and members whose end moves (`userId` → wall time, or
+ * `null` to clear). An end is a minute, not a day (GR-1-k). Nothing is sent
+ * until {@link changesBody}.
  */
 export type MembersDraft = { add: DraftAdd[]; remove: string[]; ends: Record<string, string | null> };
 export const emptyMembersDraft: MembersDraft = { add: [], remove: [], ends: {} };
@@ -192,7 +206,7 @@ export function draftAdd(d: MembersDraft, pick: MemberPick, present: ReadonlySet
   const key = keyOf(pick);
   if (d.remove.includes(key)) return { ...d, remove: d.remove.filter((k) => k !== key) };
   if (present.has(key) || d.add.some((a) => keyOf(a) === key)) return d;
-  return { ...d, add: [...d.add, { ...pick, endDay: null }] };
+  return { ...d, add: [...d.add, { ...pick, endAt: null }] };
 }
 
 /** A pending add is dropped; a member is marked for removal, or unmarked; a removed member's end move goes with it. */
@@ -204,26 +218,26 @@ export function draftToggleRemove(d: MembersDraft, key: string): MembersDraft {
   return { ...d, remove: [...d.remove, key], ends };
 }
 
-/** An end day on a pending add, or on a member — kept only when it differs from the one they have (`was`). */
-export function draftEnd(d: MembersDraft, userId: string, day: string | null, was: string | null): MembersDraft {
+/** An end on a pending add, or on a member — kept only when it differs from the one they have (`was`, {@link wallTimeOf}). */
+export function draftEnd(d: MembersDraft, userId: string, at: WallTime | null, was: WallTime | null): MembersDraft {
   if (d.add.some((a) => a.kind === "user" && a.id === userId)) {
-    return { ...d, add: d.add.map((a) => (a.kind === "user" && a.id === userId ? { ...a, endDay: day } : a)) };
+    return { ...d, add: d.add.map((a) => (a.kind === "user" && a.id === userId ? { ...a, endAt: at } : a)) };
   }
   const ends = { ...d.ends };
-  if (day === was) delete ends[userId];
-  else ends[userId] = day;
+  if (at === was) delete ends[userId];
+  else ends[userId] = at;
   return { ...d, ends };
 }
 
 /** How many changes Save would make. */
 export const draftSize = (d: MembersDraft) => d.add.length + d.remove.length + Object.keys(d.ends).length;
 
-/** The one `POST …/members/changes` body (GR-1-i), each day its last moment in the visitor's zone; `null` when there is nothing to save. */
+/** The one `POST …/members/changes` body (GR-1-i), each end its instant in the visitor's zone; `null` when there is nothing to save. */
 export function changesBody(d: MembersDraft): MemberChangesBody | null {
   if (draftSize(d) === 0) return null;
-  const at = (day: string | null) => (day ? endOfDay(day) : null);
+  const at = (wall: WallTime | null) => (wall ? instantOf(wall) : null);
   return {
-    add: d.add.map((a) => (a.kind === "user" ? { userId: a.id, expiresAt: at(a.endDay) } : { tenantId: a.id, expiresAt: at(a.endDay) })),
+    add: d.add.map((a) => (a.kind === "user" ? { userId: a.id, expiresAt: at(a.endAt) } : { tenantId: a.id, expiresAt: at(a.endAt) })),
     remove: d.remove.map((k) => (k.startsWith("user:") ? { userId: k.slice(5) } : { tenantId: k.slice(7) })),
     ends: Object.entries(d.ends).map(([userId, day]) => ({ userId, expiresAt: at(day) })),
   };

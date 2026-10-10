@@ -60,7 +60,9 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
    a *new* row, a removal marks its row (and undoes), an end day is set per
    person on its row; someone already in or pending is never added twice
    (`draftAdd`), adding back a marked member unmarks them, an end equal to
-   the saved one is no change (`draftEnd`). The footer counts the changes.
+   the saved one is no change (`draftEnd`). An end is a date and a time to
+   the minute, in the visitor's zone (`DatePicker withTime`, `wallTimeOf`,
+   `instantOf`, GR-1-k). The footer counts the changes.
 7. **Save is one request** (`changesBody`, `POST …/members/changes`, GR-1-i):
    every change or none; a refusal shows its sentence, marks the row
    `facts.detail` names, and keeps the draft to fix. Discard empties it;

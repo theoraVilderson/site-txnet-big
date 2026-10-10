@@ -19,6 +19,8 @@ import {
   draftSize,
   draftToggleRemove,
   emptyMembersDraft,
+  instantOf,
+  wallTimeOf,
   memberKey,
   memberSearchOf,
   parseIds,
@@ -37,7 +39,7 @@ type Line = {
   kind: "user" | "tenant";
   id: string;
   label: string;
-  /** `YYYY-MM-DD` as saved, or null. */
+  /** The saved end as the visitor's wall time (GR-1-k), or null. */
   savedEnd: string | null;
   pending: boolean;
 };
@@ -167,12 +169,12 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
       kind: m.memberType,
       id: (m.userId ?? m.tenantId) as string,
       label: m.label ?? t("common", K.members.noLabel),
-      savedEnd: m.expiresAt?.slice(0, 10) ?? null,
+      savedEnd: wallTimeOf(m.expiresAt),
       pending: false,
     })),
   ];
   const endOf = (line: Line): string | null => {
-    if (line.pending) return draft.add.find((a) => `${a.kind}:${a.id}` === line.key)?.endDay ?? null;
+    if (line.pending) return draft.add.find((a) => `${a.kind}:${a.id}` === line.key)?.endAt ?? null;
     return line.id in draft.ends ? draft.ends[line.id] : line.savedEnd;
   };
   const pages = rows ? Math.max(1, Math.ceil(rows.total / PAGE_SIZE)) : 1;
@@ -257,7 +259,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                         </span>
                         {line.kind === "user" && (
                           <span className="text-[11px] text-text-secondary">
-                            {end ? t("common", K.members.endsOn, { date: formatInstant(`${end}T12:00:00Z`, lang, { withTime: false }) ?? end }) : t("common", K.members.noEnd)}
+                            {end ? t("common", K.members.endsOn, { date: formatInstant(instantOf(end), lang, { withTime: true }) ?? end }) : t("common", K.members.noEnd)}
                           </span>
                         )}
                       </span>
@@ -293,7 +295,12 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                   </div>
                   {editing === line.key && line.kind === "user" && (
                     <div className="flex flex-wrap items-end gap-2">
-                      <DatePicker label={t("common", K.members.end)} value={end} onChange={(day) => setDraft((d) => draftEnd(d, line.id, day, line.savedEnd))} />
+                      <DatePicker
+                        withTime
+                        label={t("common", K.members.end)}
+                        value={end}
+                        onChange={(at) => setDraft((d) => draftEnd(d, line.id, at, line.savedEnd))}
+                      />
                       {end && (
                         <Button variant="quiet" size="sm" onClick={() => setDraft((d) => draftEnd(d, line.id, null, line.savedEnd))}>
                           {t("common", K.members.noEnd)}

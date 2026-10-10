@@ -33,6 +33,7 @@ import {
   draftSize,
   draftToggleRemove,
   emptyMembersDraft,
+  wallTimeOf,
   updateGroupBody,
   validateGroupForm,
 } from "./_lib/user-groups";
@@ -342,7 +343,7 @@ describe("the members draft", () => {
     let d = draftAdd(emptyMembersDraft, ali, present);
     d = draftAdd(d, ali, present);
     d = draftAdd(d, { kind: "user", id: "u-sara", label: "Sara" }, present);
-    expect(d.add).toEqual([{ ...ali, endDay: null }]);
+    expect(d.add).toEqual([{ ...ali, endAt: null }]);
     expect(draftSize(d)).toBe(1);
   });
 
@@ -361,10 +362,11 @@ describe("the members draft", () => {
   });
 
   it("an end goes on the pending add, or on a member only when it differs from theirs; a removal drops it", () => {
-    let d = draftEnd(draftAdd(emptyMembersDraft, ali, present), "u-ali", "2026-12-01", null);
-    expect(d.add[0].endDay).toBe("2026-12-01");
-    d = draftEnd(d, "u-sara", "2026-11-01", null);
-    expect(d.ends).toEqual({ "u-sara": "2026-11-01" });
+    let d = draftEnd(draftAdd(emptyMembersDraft, ali, present), "u-ali", "2026-12-01T18:30", null);
+    expect(d.add[0].endAt).toBe("2026-12-01T18:30");
+    d = draftEnd(d, "u-sara", "2026-11-01T09:00", null);
+    expect(d.ends).toEqual({ "u-sara": "2026-11-01T09:00" });
+    expect(draftEnd(d, "u-sara", "2026-11-01T09:00", "2026-11-01T09:00").ends).toEqual({});
     expect(draftEnd(d, "u-sara", null, null).ends).toEqual({});
     expect(draftToggleRemove(d, "user:u-sara").ends).toEqual({});
   });
@@ -372,17 +374,35 @@ describe("the members draft", () => {
   it("builds the one body: each add with its own end, removals, ends; nothing when empty", () => {
     expect(changesBody(emptyMembersDraft)).toBeNull();
     let d = draftAdd(emptyMembersDraft, ali, present);
-    d = draftEnd(d, "u-ali", "2026-12-01", null);
+    d = draftEnd(d, "u-ali", "2026-12-01T18:30", null);
     d = draftAdd(d, acme, present);
     d = draftToggleRemove(d, "user:u-reza");
-    d = draftEnd(d, "u-sara", null, "2026-11-01");
+    d = draftEnd(d, "u-sara", null, "2026-11-01T09:00");
     expect(changesBody(d)).toEqual({
       add: [
-        { userId: "u-ali", expiresAt: endOfDay("2026-12-01") },
+        { userId: "u-ali", expiresAt: new Date("2026-12-01T18:30:00").toISOString() },
         { tenantId: "t-acme", expiresAt: null },
       ],
       remove: [{ userId: "u-reza" }],
       ends: [{ userId: "u-sara", expiresAt: null }],
     });
+  });
+});
+
+/**
+ * GR-1-k — a membership ends at a minute, not a day (user 2026-10-10). The
+ * wall time is the visitor's zone, as `endOfDay` was; what breaks silently is a
+ * saved end read back in another zone and shown as a "change".
+ */
+describe("a membership end as a wall time", () => {
+  it("reads a saved instant back as the visitor's wall time, minute precise", () => {
+    const iso = new Date("2026-11-01T09:05:00").toISOString();
+    expect(wallTimeOf(iso)).toBe("2026-11-01T09:05");
+    expect(wallTimeOf(null)).toBeNull();
+  });
+
+  it("a saved end restated is no change", () => {
+    const was = wallTimeOf(new Date("2026-11-01T09:05:00").toISOString());
+    expect(draftEnd(emptyMembersDraft, "u-sara", "2026-11-01T09:05", was).ends).toEqual({});
   });
 });

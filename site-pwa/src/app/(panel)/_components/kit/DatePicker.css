@@ -100,3 +100,22 @@
     height: 40px !important;
   }
 }
+
+/* `withTime` (GR-1-k): hour and minute under the grid, left to right in both languages, as a clock reads. */
+.panel-date-picker .rmdp-time-picker {
+  direction: ltr;
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+  border-top: 1px solid var(--card-border);
+}
+
+.panel-date-picker .rmdp-time-picker div input {
+  background: var(--bg-inner) !important;
+  color: var(--text-primary) !important;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.panel-date-picker .rmdp-time-picker div .rmdp-am {
+  color: var(--text-secondary) !important;
+}

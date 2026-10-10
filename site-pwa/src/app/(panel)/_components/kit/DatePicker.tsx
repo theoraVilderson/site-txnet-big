@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import ReactDatePicker, { DateObject } from "react-multi-date-picker";
+import TimePicker from "react-multi-date-picker/plugins/time_picker";
 import gregorian from "react-date-object/calendars/gregorian";
 import persian from "react-date-object/calendars/persian";
 import gregorian_en from "react-date-object/locales/gregorian_en";
@@ -22,6 +23,10 @@ const CALENDARS: Record<string, { calendar: typeof gregorian; locale: typeof gre
 const GREGORIAN = { calendar: gregorian, locale: gregorian_en };
 
 const ISO = "YYYY-MM-DD";
+/** `withTime`: a wall time, minute precise, in the visitor's zone. */
+const ISO_TIME = "YYYY-MM-DDTHH:mm";
+/** Above `Dialog`'s `z-50`: the calendar is drawn on `document.body` (see `portal` below). */
+const CALENDAR_Z = 60;
 
 export interface DatePickerProps {
   label?: string;
@@ -34,26 +39,40 @@ export interface DatePickerProps {
   value: string | null;
   onChange: (value: string | null) => void;
   placeholder?: string;
+  /**
+   * Pick an hour and a minute too (GR-1-k): `value` is then a wall time
+   * `YYYY-MM-DDTHH:mm` in the visitor's zone, and a day picked from empty
+   * starts at 23:59 — the end of that day, as a day-only end was.
+   */
+  withTime?: boolean;
 }
 
 /**
  * A single-date field (F-093-b): a Jalali grid in Persian, a Gregorian one
  * otherwise, following the panel language. Day boundaries — whether a "to"
  * date includes its whole day, in whose timezone — belong to the caller.
+ *
+ * The calendar is drawn on `document.body` (`portal`), above any dialog, and
+ * may open upward: inside a scrolling sheet it was clipped to the sheet and
+ * fell below the visible part (user, 2026-10-10).
  */
-export function DatePicker({ label, value, onChange, placeholder }: DatePickerProps) {
+export function DatePicker({ label, value, onChange, placeholder, withTime = false }: DatePickerProps) {
   const { lang, isRtl, t } = useLocale();
   const pickerRef = useRef<{ isOpen?: boolean } | null>(null);
   const { calendar, locale } = CALENDARS[lang] ?? GREGORIAN;
 
+  const format = withTime ? ISO_TIME : ISO;
   const selected = value
-    ? new DateObject({ date: value, format: ISO, calendar: gregorian, locale: gregorian_en }).convert(calendar, locale)
+    ? new DateObject({ date: value, format, calendar: gregorian, locale: gregorian_en }).convert(calendar, locale)
     : null;
 
   const handleChange = (date: DateObject | null) => {
     if (!date?.isValid) return onChange(null);
+    const picked = new DateObject(date);
+    // From empty, a day means its end — the time is then the user's to move.
+    if (withTime && !value) picked.setHour(23).setMinute(59);
     // Back to Gregorian, and ASCII digits whatever the locale printed.
-    onChange(toEnglishDigits(new DateObject(date).convert(gregorian, gregorian_en).format(ISO)));
+    onChange(toEnglishDigits(picked.convert(gregorian, gregorian_en).format(format)));
   };
 
   return (
@@ -66,10 +85,12 @@ export function DatePicker({ label, value, onChange, placeholder }: DatePickerPr
         calendar={calendar}
         locale={locale}
         digits={LATIN_DIGITS}
-        format="YYYY/MM/DD"
+        format={withTime ? "YYYY/MM/DD HH:mm" : "YYYY/MM/DD"}
         calendarPosition={isRtl ? "bottom-right" : "bottom-left"}
         editable={false}
-        fixMainPosition
+        portal
+        zIndex={CALENDAR_Z}
+        plugins={withTime ? [<TimePicker key="time" position="bottom" hideSeconds />] : []}
         containerClassName="w-full"
         className="panel-date-picker"
         render={(text: string, openCalendar: () => void) => {
