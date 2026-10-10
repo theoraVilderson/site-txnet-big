@@ -86,7 +86,7 @@ export function GroupWizard({ onClose, onDone }: { onClose: (changed: boolean) =
   function pick(id: string) {
     setStart(id);
     const next = loaded?.presets.find((p) => p.id === id) ?? null;
-    const draft = loaded ? presetDraft(next, loaded.areas, loaded.grantable) : { keys: [], dropped: [] };
+    const draft = loaded ? presetDraft(next, loaded.areas, loaded.grantable, isPlatformGroup(me, tenantId)) : { keys: [], dropped: [] };
     setKeys(draft.keys);
     setDropped(draft.dropped);
     if (!nameTouched) setForm((f) => ({ ...f, name: next ? next.label : "" }));
@@ -186,7 +186,7 @@ export function GroupWizard({ onClose, onDone }: { onClose: (changed: boolean) =
                 <>
                   {p.description}
                   <span className="mt-1 block text-[11px] font-bold">
-                    {p.every ? t("common", W.presetEvery) : t("common", W.presetKeys, { count: presetDraft(p, loaded.areas, loaded.grantable).keys.length })}
+                    {p.every ? t("common", W.presetEvery) : t("common", W.presetKeys, { count: presetDraft(p, loaded.areas, loaded.grantable, isPlatformGroup(me, tenantId)).keys.length })}
                   </span>
                 </>
               ),

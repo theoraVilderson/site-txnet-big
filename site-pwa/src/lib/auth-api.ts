@@ -772,6 +772,8 @@ export interface GroupPreset {
   description: string;
   every: boolean;
   keys: string[];
+  /** Platform-only keys it adds on the platform's own groups alone (GR-1-s); absent before auth v-next. */
+  platformKeys?: string[];
 }
 
 /** A key given or taken on one person: which, why, by whom, since when (AC-1-l). */

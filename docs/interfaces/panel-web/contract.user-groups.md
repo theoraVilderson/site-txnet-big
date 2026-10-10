@@ -82,7 +82,9 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
     scratch*. A preset only fills the form: its name, if not typed yet, and its
     keys narrowed by `presetDraft` to what this caller may give on this group.
     The keys it leaves out are named in a warning. `every` (admin) is every
-    offered key the caller may give, never `platform.` or `self.`. Submit is
+    offered key the caller may give, never `platform.` or `self.`. On the
+    platform's own group a preset's `platformKeys` join its keys (GR-1-s:
+    Support ticks `platform.support`, ADR-0141); a reseller's never sees them. Submit is
     `create`, then `setAccess` when keys are ticked. A refused second write
     keeps the group, and the next submit sends only the access. The finished
     screen offers to add members (opens `MembersSheet`).

@@ -51,8 +51,8 @@ describe('PermissionRegistryService', () => {
   it('answers every group preset with its keys and its text, and the id when a text is missing (GR-1-h)', () => {
     const fa = service.list('fa').presets;
     expect(fa.map((p) => p.id)).toEqual(GROUP_PRESETS.map((p) => p.id));
-    expect(fa[0]).toEqual({ id: 'support', label: 'پشتیبانی', description: 'پاسخ به تیکت‌ها.', every: false, keys: [...GROUP_PRESETS[0].keys] });
-    expect(fa.find((p) => p.id === 'admin')).toMatchObject({ every: true, keys: [] });
+    expect(fa[0]).toEqual({ id: 'support', label: 'پشتیبانی', description: 'پاسخ به تیکت‌ها.', every: false, keys: [...GROUP_PRESETS[0].keys], platformKeys: ['platform.support'] });
+    expect(fa.find((p) => p.id === 'admin')).toMatchObject({ every: true, keys: [], platformKeys: [] });
     expect(service.list('en').presets[0]).toMatchObject({ label: 'support', description: '' });
   });
 

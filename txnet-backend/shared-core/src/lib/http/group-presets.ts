@@ -10,15 +10,23 @@ type RegistryKey = (typeof PERMISSION_REGISTRY)[number]['permission'];
  * that exists. `every` is the admin preset: every key the creator may give,
  * resolved where `grantable` is known, never written down here.
  *
- * Only registry keys, none of them `platformOnly` (the spec holds both), so a
- * preset is offered the same way on the platform and on every reseller; what
+ * `keys` are registry keys, none of them `platformOnly` (the spec holds both),
+ * so they are offered the same way on the platform and on every reseller; what
  * the creator does not hold is dropped in the wizard, with a word why.
+ * `platformKeys` are platform-only keys the wizard adds on the platform's own
+ * groups alone (GR-1-s): Support's `platform.support`, its work in resellers
+ * under their consent (ADR-0141). A reseller's wizard never sees them.
  * Texts: `presets.<id>.{label,description}` in the `permissions` namespace.
  */
-export type GroupPreset = { id: string; every: boolean; keys: readonly RegistryKey[] };
+export type GroupPreset = { id: string; every: boolean; keys: readonly RegistryKey[]; platformKeys?: readonly RegistryKey[] };
 
 export const GROUP_PRESETS: readonly GroupPreset[] = [
-  { id: 'support', every: false, keys: ['user.read', 'support.agent', 'restriction.assign', 'realtime.tenant.read', 'grant.read', 'grant.repair'] },
+  {
+    id: 'support',
+    every: false,
+    keys: ['user.read', 'support.agent', 'restriction.assign', 'realtime.tenant.read', 'grant.read', 'grant.repair'],
+    platformKeys: ['platform.support'],
+  },
   {
     id: 'finance',
     every: false,

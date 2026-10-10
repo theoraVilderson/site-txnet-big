@@ -305,12 +305,21 @@ const NEVER_PRESET = (key: string) => key.startsWith("self.") || key.startsWith(
  * ones it had to leave out, so the wizard can say so instead of sending a
  * key the server refuses `key_not_held`. The admin preset is every such key,
  * never a `platform.` or `self.` one. `null` (from scratch) fills nothing.
+ * On the platform's own group (`platformGroup`) a preset's `platformKeys` join
+ * its keys (GR-1-s: Support's `platform.support`, ADR-0141); on a reseller's
+ * they are neither offered nor named.
  */
-export function presetDraft(preset: GroupPreset | null, areas: readonly PermissionArea[], grantable: readonly string[]): { keys: string[]; dropped: string[] } {
+export function presetDraft(
+  preset: GroupPreset | null,
+  areas: readonly PermissionArea[],
+  grantable: readonly string[],
+  platformGroup = false,
+): { keys: string[]; dropped: string[] } {
   if (!preset) return { keys: [], dropped: [] };
-  const offered = new Set(areas.flatMap((a) => a.permissions.filter((p) => !p.platformOnly).map((p) => p.key)));
+  const extra = platformGroup ? (preset.platformKeys ?? []) : [];
+  const offered = new Set(areas.flatMap((a) => a.permissions.filter((p) => !p.platformOnly || extra.includes(p.key)).map((p) => p.key)));
   const can = (key: string) => offered.has(key) && holdsPermission(grantable, key);
   if (preset.every) return { keys: [...offered].filter((k) => !NEVER_PRESET(k) && can(k)).sort(), dropped: [] };
-  const keys = [...new Set(preset.keys)].sort();
+  const keys = [...new Set([...preset.keys, ...extra])].sort();
   return { keys: keys.filter(can), dropped: keys.filter((k) => !can(k)) };
 }

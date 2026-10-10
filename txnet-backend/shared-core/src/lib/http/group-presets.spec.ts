@@ -26,6 +26,13 @@ describe('GROUP_PRESETS', () => {
     }
   });
 
+  it('adds platform keys only as `platformKeys`, every one platform-only — Support\'s `platform.support` (GR-1-s)', () => {
+    for (const preset of GROUP_PRESETS) {
+      for (const key of preset.platformKeys ?? []) expect(known.get(key), `${preset.id}: ${key}`).toBe(true);
+    }
+    expect(GROUP_PRESETS.find((p) => p.id === 'support')?.platformKeys).toEqual(['platform.support']);
+  });
+
   it('gives a listed preset at least one key, and the admin preset none of its own', () => {
     for (const preset of GROUP_PRESETS) {
       if (preset.every) expect(preset.keys).toEqual([]);

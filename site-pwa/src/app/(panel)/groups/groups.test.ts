@@ -325,6 +325,19 @@ describe("presetDraft", () => {
     expect(presetDraft(admin, areas, ["*"])).toEqual({ keys: ["support.agent", "user.read", "user.write"], dropped: [] });
     expect(presetDraft(admin, areas, ["user.read", "user.write"])).toEqual({ keys: ["user.read", "user.write"], dropped: [] });
   });
+
+  // GR-1-s, ADR-0141: Support on the platform works in resellers under their consent, so its preset ticks
+  // `platform.support` there — and never on a reseller's group, where no platform key is offered at all.
+  it("adds a preset's platform keys on the platform's own group only", () => {
+    const platformAreas = [...areas, { area: "platform", label: "platform", permissions: [entry("platform.support", true)] }];
+    const resellerAreas = groupKeyAreas(platformAreas, false);
+    const supportOnPlatform = { ...support, platformKeys: ["platform.support"] };
+    expect(presetDraft(supportOnPlatform, platformAreas, ["*"], true)).toEqual({ keys: ["platform.support", "support.agent", "user.read"], dropped: ["restriction.assign"] });
+    // Not held by the creator: named, as any other key.
+    expect(presetDraft(supportOnPlatform, platformAreas, ["user.read", "support.agent"], true).dropped).toContain("platform.support");
+    // A reseller's group: not offered, not named.
+    expect(presetDraft(supportOnPlatform, resellerAreas, ["*"], false)).toEqual({ keys: ["support.agent", "user.read"], dropped: ["restriction.assign"] });
+  });
 });
 
 /**

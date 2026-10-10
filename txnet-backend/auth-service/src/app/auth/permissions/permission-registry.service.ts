@@ -56,6 +56,8 @@ export class PermissionRegistryService {
       description: text(tree, ['presets', p.id, 'description']) ?? '',
       every: p.every,
       keys: [...p.keys],
+      // Platform-only keys the wizard adds on the platform's own groups alone (GR-1-s).
+      platformKeys: [...(p.platformKeys ?? [])],
     }));
     return { areas: [...areas.values()], presets };
   }
