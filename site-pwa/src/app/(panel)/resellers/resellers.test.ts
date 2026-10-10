@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Me } from "@/lib/auth-api";
 import type { TenantPackage } from "@/lib/tenant-api";
-import { PANEL_RESELLERS } from "@/lib/routes";
+import { PANEL_RESELLERS, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, myResellerUsersPath, panelResellerPath } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
   BILLING_MODELS,
@@ -14,6 +14,8 @@ import {
   canAdjustWallet,
   canAdministerResellers,
   canSearchUsers,
+  canSeeResellers,
+  resellerRowHref,
   createBody,
   ownerSelectable,
   userQuery,
@@ -93,6 +95,23 @@ describe("who sees the page", () => {
     expect(hrefs(OWNER)).toContain(PANEL_RESELLERS);
     expect(hrefs(OWNER_STAFF)).toContain(PANEL_RESELLERS);
     expect(hrefs(RESELLER)).not.toContain(PANEL_RESELLERS);
+  });
+
+  // GR-1-r, ADR-0141: Support finds the reseller it helps, and administers nothing.
+  it("opens the list to platform.support, read-only, a row going to the reseller's users", () => {
+    const SUPPORT = { ...OWNER_STAFF, permissions: ["platform.support", "user.read", "grant.read"] } as Me;
+    expect(canSeeResellers(SUPPORT)).toBe(true);
+    expect(canAdministerResellers(SUPPORT)).toBe(false);
+    expect(canSeeResellers({ ...RESELLER, permissions: ["platform.support"] } as Me)).toBe(false);
+    expect(canSeeResellers(OWNER_STAFF)).toBe(true);
+    expect(resellerRowHref(SUPPORT, "r-1")).toBe(myResellerUsersPath("r-1"));
+    expect(resellerRowHref(OWNER_STAFF, "r-1")).toBe(panelResellerPath("r-1"));
+
+    const hrefs = menuHrefs(visibleMenu(PANEL_MENU, SUPPORT.permissions, "platform_owner", false));
+    expect(hrefs).toContain(PANEL_RESELLERS);
+    expect(hrefs).not.toContain(PANEL_RESELLER_PACKAGES);
+    expect(hrefs).not.toContain(PANEL_RESELLER_LIMITS);
+    expect(menuHrefs(visibleMenu(PANEL_MENU, OWNER_STAFF.permissions, "platform_owner", false))).toContain(PANEL_RESELLER_PACKAGES);
   });
 
   it("offers the wallet adjustment only with tenant_billing.adjust, on the platform owner's tenant", () => {

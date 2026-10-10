@@ -9,6 +9,7 @@ import type {
   TenantStatus,
 } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { myResellerUsersPath, panelResellerPath } from "@/lib/routes";
 
 /** The page's strings as generated constants (C-06). */
 export const RESELLER_KEYS = FrontendI18nKeys.common.resellers;
@@ -16,6 +17,8 @@ const K = RESELLER_KEYS;
 
 /** The key tenant-service's reseller, subscription and status routes gate on. */
 export const RESELLERS_MANAGE = "platform.tenant.manage";
+/** Platform support (ADR-0141): reads the list to find a reseller, works among its people only under its consent. */
+export const RESELLERS_SUPPORT = "platform.support";
 /** The key auth-service's user search gates on (F-018-ad); the spec reads it from the service. */
 export const USER_SEARCH = "user.search";
 /** The key billing's manual adjustment gates on (F-019-a). */
@@ -82,6 +85,10 @@ const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
  * service would refuse it anyway (`not_platform_owner`).
  */
 export const canAdministerResellers = (me: Me | null) => onPlatform(me) && holds(me, RESELLERS_MANAGE);
+/** Who may read the list (GR-1-r): its administrators, and Support, which only finds a reseller in it. */
+export const canSeeResellers = (me: Me | null) => canAdministerResellers(me) || (onPlatform(me) && holds(me, RESELLERS_SUPPORT));
+/** A row opens the reseller's page for an administrator; for Support, its users, where the consent banner asks (F-117-g). */
+export const resellerRowHref = (me: Me | null, id: string) => (canAdministerResellers(me) ? panelResellerPath(id) : myResellerUsersPath(id));
 export const canAdjustWallet = (me: Me | null) => onPlatform(me) && holds(me, WALLET_ADJUST);
 /** Whether the create sheet can search for the owner; without it the sheet takes a user id. */
 export const canSearchUsers = (me: Me | null) => onPlatform(me) && holds(me, USER_SEARCH);

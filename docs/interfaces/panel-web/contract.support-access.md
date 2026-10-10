@@ -54,5 +54,6 @@ Spec: `my-resellers/support-access.test.tsx`.
 | 14 | **Emergency entry is offered only to a holder of `tenant.emergency_access`** (`holdsPermission`), needs 20 characters, and is **asked first**. The caller's own running entry shows its time left and **end**; no second entry is offered while it runs | the owner is told at once and the hour is never extended (audit "Emergency entry") |
 | 15 | After any act the banner and the page under it are read again (`onChange`) | a consent opens the list without a reload |
 | 16 | **A users page refused for want of consent says what to do, not "failed"**: `consent_required` / `consent_read_only` on the list or a user's services render `ConsentNeeded` (a status, no retry); on an action they are the users pages' own sentences (`USER_REFUSAL_KEYS`, `useUserMessage`) | the row: "the refusal as 'ask the reseller', not an error" |
+| 17 | **Support asks here like any staff** (GR-1-r): `platform.support` reaches a reseller's users pages from the reseller list, and the banner is the same; the door also wants the act's own key (`grant.read`, `grant.repair`, …) | ADR-0141: no broad key for support work |
 
 Spec: `my-resellers/platform-access.test.tsx`.

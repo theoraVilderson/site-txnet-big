@@ -6,14 +6,14 @@ import Link from "next/link";
 import { Gauge, Package, Plus, RotateCw, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { tenantApi, type Reseller } from "@/lib/tenant-api";
-import { PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, panelResellerPath } from "@/lib/routes";
+import { PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { DataTable } from "../../_components/kit/DataTable";
 import { Alert, StatusBadge, useMessage } from "./resellers-ui";
-import { RESELLER_KEYS as K, canAdministerResellers } from "../_lib/resellers";
+import { RESELLER_KEYS as K, canAdministerResellers, canSeeResellers, resellerRowHref } from "../_lib/resellers";
 import { CreateResellerSheet } from "./CreateResellerSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Button, buttonClass } from "../../_components/kit";
@@ -44,7 +44,9 @@ export function ResellersView() {
   const router = useRouter();
   const pathname = usePathname();
   const page = pageOf(useSearchParams().get("page"));
-  const allowed = canAdministerResellers(me);
+  // Support reads the list to find a reseller and administers nothing in it (ADR-0141).
+  const allowed = canSeeResellers(me);
+  const manages = canAdministerResellers(me);
 
   const [rows, setRows] = useState<Reseller[] | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -97,7 +99,7 @@ export function ResellersView() {
         title={t("common", K.title)}
         subtitle={t("common", K.subtitle)}
         actions={
-          <>
+          manages && (
             <div className="flex flex-wrap items-center gap-2">
               <Link href={PANEL_RESELLER_PACKAGES} className={buttonClass({ variant: "quiet", size: "sm" })}>
                 <Package size={14} aria-hidden />
@@ -111,7 +113,7 @@ export function ResellersView() {
                 {t("common", K.new)}
               </Button>
             </div>
-          </>
+          )
         }
       />
 
@@ -139,7 +141,7 @@ export function ResellersView() {
               id: "slug",
               header: t("common", K.columns.slug),
               cell: (r) => (
-                <Link href={panelResellerPath(r.id)} className="font-bold text-primary hover:underline" dir="ltr">
+                <Link href={resellerRowHref(me, r.id)} className="font-bold text-primary hover:underline" dir="ltr">
                   {r.slug}
                 </Link>
               ),

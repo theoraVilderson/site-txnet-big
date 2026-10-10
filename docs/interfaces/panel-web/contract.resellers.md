@@ -36,12 +36,12 @@ behind them are [tenant/contract.admin.md](../../domains/tenant/contract.admin.m
 
 ## Rules
 
-1. **The platform owner's alone, by two conditions.** The menu entry (top level,
-   after the financial group) `requires: ["platform.tenant.manage"]` (AC-1-d) **and**
-   `tenantTypes: ["platform_owner"]`: a reseller administers its own roles and
-   can grant itself the key. The page applies the same pair
-   (`canAdministerResellers`) before its first read; tenant-service's
-   `not_platform_owner` is still the boundary.
+1. **The platform owner's, by two conditions.** The menu entry `requiresAnyOf`
+   `platform.tenant.manage` or `platform.support` (AC-1-d, ADR-0141; packages and
+   limits the first alone) **and** `tenantTypes: ["platform_owner"]`. The page
+   applies the pair (`canSeeResellers`); Support sees no action, and a row opens
+   that reseller's users (`resellerRowHref`), where it asks for consent.
+   tenant-service's `not_platform_owner` is still the boundary.
 2. **Each billing act needs its own key.** The adjust section is shown only
    with `tenant_billing.adjust` on the platform owner's tenant
    (`canAdjustWallet`), and never on a terminated reseller; the ledger only

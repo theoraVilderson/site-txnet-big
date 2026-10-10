@@ -71,6 +71,8 @@ export type MenuPlacement = MenuSectionId | "footer";
  */
 export type PermissionGated = {
   requires?: readonly string[];
+  /** At least one of these, beside `requires` — a page two kinds of staff open for different work (the reseller list, ADR-0141). */
+  requiresAnyOf?: readonly string[];
   /**
    * What a caller signed in to a **reseller** needs instead of `requires`
    * (AC-1-e2): the page's own reseller key (`RESELLER_KEYS`), where `requires`
@@ -258,12 +260,13 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     id: "resellers",
     label: M.resellers,
     icon: Store,
-    requires: ["platform.tenant.manage"],
+    // Support reads the list to find a reseller (ADR-0141); packages and limits stay its administrators'.
+    requiresAnyOf: ["platform.tenant.manage", "platform.support"],
     tenantTypes: ["platform_owner"],
     children: [
       { id: "reseller-list", label: M.resellerList, icon: List, href: PANEL_RESELLERS },
-      { id: "reseller-packages", label: M.resellerPackages, icon: Boxes, href: PANEL_RESELLER_PACKAGES },
-      { id: "reseller-limits", label: M.resellerLimits, icon: Gauge, href: PANEL_RESELLER_LIMITS },
+      { id: "reseller-packages", label: M.resellerPackages, icon: Boxes, href: PANEL_RESELLER_PACKAGES, requires: ["platform.tenant.manage"] },
+      { id: "reseller-limits", label: M.resellerLimits, icon: Gauge, href: PANEL_RESELLER_LIMITS, requires: ["platform.tenant.manage"] },
     ],
   },
 
@@ -365,7 +368,8 @@ export function admits(
     !hidden &&
     (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
     ((isOwner && e.ownerSuffices === true) ||
-      holdsEveryPermission(held, (tenantType === "reseller" ? e.resellerRequires : undefined) ?? e.requires ?? []))
+      (holdsEveryPermission(held, (tenantType === "reseller" ? e.resellerRequires : undefined) ?? e.requires ?? []) &&
+        (!e.requiresAnyOf || e.requiresAnyOf.some((key) => holdsEveryPermission(held, [key])))))
   );
 }
 
