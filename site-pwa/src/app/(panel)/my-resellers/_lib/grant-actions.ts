@@ -1,5 +1,6 @@
 import type { GrantRow } from "@/lib/billing-api";
-import { USER_KEYS } from "./users";
+import { holdsPermission } from "@/lib/permissions";
+import { USER_KEYS, type OfferedAction } from "./users";
 
 /** The strings of a Grant's actions (C-06). */
 export const GRANT_KEYS = USER_KEYS.grant;
@@ -177,4 +178,35 @@ export const GRANT_REFUSAL_KEYS: Record<GrantRefusal, string> = GRANT_KEYS.refus
 export function grantRefusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;
   return typeof reason === "string" && reason in GRANT_REFUSAL_KEYS ? GRANT_REFUSAL_KEYS[reason as GrantRefusal] : null;
+}
+
+// ------------------------------------------------------------------ the keys
+
+/** The member-door keys of a user's services, one per kind of act (KS-1-a, ADR-0140). */
+export type GrantKey = "grant.read" | "grant.repair" | "grant.assign";
+
+/** The key billing asks for each Grant act: a new link is a repair, every other act moves value. */
+export const GRANT_ACTION_KEY: Record<GrantAction, GrantKey> = Object.fromEntries(
+  GRANT_ACTIONS.map((a) => [a, a === "rotate" ? "grant.repair" : "grant.assign"]),
+) as Record<GrantAction, GrantKey>;
+
+/** The key billing asks for each config action: a retired config is not given back, so retiring moves value. */
+export const CONFIG_ACTION_KEY: Record<OfferedAction, GrantKey> = {
+  regenerate: "grant.repair",
+  disable: "grant.repair",
+  enable: "grant.repair",
+  retire: "grant.assign",
+  move: "grant.repair",
+};
+
+/**
+ * Whether to offer an act asking `key` on the users of `tenantId`. A member of
+ * that tenant needs the key (`*` covering it). The reseller's owner and the
+ * platform's staff come in from another tenant and are admitted by structure
+ * or consent, which the panel cannot see: for them nothing is hidden, and the
+ * door's refusal is the sentence.
+ */
+export function grantKeyHeld(me: { tenant: { id: string }; permissions: readonly string[] } | null, tenantId: string, key: GrantKey): boolean {
+  if (!me) return false;
+  return me.tenant.id !== tenantId || holdsPermission(me.permissions, key);
 }

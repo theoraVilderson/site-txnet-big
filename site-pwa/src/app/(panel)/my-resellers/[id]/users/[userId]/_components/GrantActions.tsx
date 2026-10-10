@@ -9,6 +9,7 @@ import { formatInstant } from "../../../../../_lib/datetime";
 import { formatMoney } from "../../../../../_lib/money";
 import { formatBytes } from "../../../../../services/_lib/service-configs";
 import {
+  GRANT_ACTION_KEY,
   GRANT_ACTION_ROUTES,
   GRANT_KEYS as G,
   REASON_REQUIRED,
@@ -21,6 +22,7 @@ import {
 } from "../../../../_lib/grant-actions";
 import { USER_KEYS, issuableProducts } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
+import { useMayGrant } from "./grant-keys-context";
 import { Alert, Button, Field, Input, NativeSelect } from "../../../../../_components/kit";
 
 const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
@@ -47,7 +49,9 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
   const [done, setDone] = useState<{ action: GrantAction; result: GrantActionResult } | null>(null);
   const [error, setError] = useState<unknown>(null);
 
-  const offered = grantActionsOf(row);
+  const may = useMayGrant();
+  // Only the acts this viewer's keys open (KS-1-a): an agent with `grant.repair` gets the link alone.
+  const offered = grantActionsOf(row).filter((a) => may(GRANT_ACTION_KEY[a]));
   const body = open ? grantActionBody(open, draft) : null;
 
   function start(action: GrantAction) {
@@ -76,6 +80,7 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
   }
 
   const set = (patch: Partial<GrantActionDraft>) => setDraft((d) => ({ ...d, ...patch }));
+  if (offered.length === 0) return null;
 
   return (
     <section aria-label={t("common", G.title)} className="space-y-2">

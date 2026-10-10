@@ -37,6 +37,8 @@ export const RESELLER_KEYS = [
   "export.request",
   "gateway.manage",
   "grant.assign",
+  "grant.read",
+  "grant.repair",
   "report.read",
   "restriction.assign",
   "role.manage",

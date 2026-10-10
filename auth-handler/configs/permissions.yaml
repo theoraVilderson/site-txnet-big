@@ -128,6 +128,10 @@ roles:
       - domain.manage
       - theme.manage
       - bot.manage
+      # A user's services, one key per kind of act (KS-1-a, ADR-0140): see,
+      # repair without moving value, and `grant.assign` for the rest.
+      - grant.read
+      - grant.repair
       - grant.assign
       - staff.manage
       - settings.manage

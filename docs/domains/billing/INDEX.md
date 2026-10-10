@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 85
+version: 86
 keywords: [quota engine, consume a quota, release a quota, overage charge, reseller spend cap, سهمیه نماینده, wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
@@ -67,7 +67,7 @@ source:
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-09-29
+updated: 2026-10-10
 ---
 
 # Billing
@@ -89,6 +89,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 | [contract.verify.md](contract.verify.md) | a payment the gateway met with silence: the retry clock, the flag, manual confirmation |
 | [contract.gift.md](contract.gift.md) | the panel's gift-code box, and a user's own Grants, configs, usage and `/sub` link |
 | [contract.reseller-grants.md](contract.reseller-grants.md) | a reseller's admin on one of its users' services: reads, config actions, freeze, days, traffic, reset, gift, delete, issue, search by pasted line (F-311); many users' Grants at once, by id or by a filter as a job, and the catalog those forms name (F-311-ab1): [contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md) (F-311-u, F-311-u2) |
+| [contract.grant-keys.md](contract.grant-keys.md) | which key (`grant.read` / `grant.repair` / `grant.assign`) each act on a user's services asks (KS-1-a, ADR-0140) |
 | [contract.coupon.md](contract.coupon.md) | whose a coupon is, whose users it serves, managing coupons and gift codes |
 | [contract.revenue.md](contract.revenue.md) | what one reseller sold and what its users paid in, over a period — and the same split by product and by day, small cells suppressed for the platform (F-117-h) — **or the analytics rollup, its tabs, export, cost and margin:** [contract.analytics.md](contract.analytics.md) (F-1001…F-1007) |
 | [contract.metering.md](contract.metering.md) | a collection pass becoming usage: what `metering-service` writes, and what it refuses to |
@@ -104,7 +105,6 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Changelog
 | Date | Change |
 |---|---|
-| 2026-10-01 | contract v85 (additive, F-019-v10): `ResellerQuota.meterStatementOf` and `productQuotaStatementsOf` — a reseller's product quotas, window by window ([contract.reseller-quota.md](contract.reseller-quota.md)). Consumer: tenant |
-| 2026-10-01 | contract v84 (**break** inside shared-core, F-019-v6, ADR-0107 points 3, 10): `QuotaMeterTerms` carries `windows[]`; `ResellerQuota.admit`; a product's sales quota consumed at issue, asked at invoice, released when never delivered. Consumers: notification (via `consume`, unchanged), tenant (`quotaTermsOf`) |
+| 2026-10-10 | contract v86 (**break**, KS-1-a, ADR-0140): a user's services are seen with `grant.read` and repaired with `grant.repair`; `grant.assign` keeps the value-moving acts. Every holder got all three by migration ([contract.grant-keys.md](contract.grant-keys.md)). Consumer: panel-web (updated in the same change) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

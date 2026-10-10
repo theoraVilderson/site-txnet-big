@@ -7,8 +7,11 @@ import { resellerUserGrantsPath } from "@/lib/billing-api";
 import {
   GRANT_ACTIONS,
   GRANT_ACTION_ROUTES,
+  CONFIG_ACTION_KEY,
+  GRANT_ACTION_KEY,
   GRANT_REFUSAL_KEYS,
   REASON_REQUIRED,
+  grantKeyHeld,
   emptyDraft,
   grantActionBody,
   grantActionsOf,
@@ -174,5 +177,41 @@ describe("a refusal", () => {
     expect(grantRefusalKey({ reason: "grant_not_active" })).toBe(GRANT_REFUSAL_KEYS.grant_not_active);
     expect(grantRefusalKey({ reason: "user_not_found" })).toBeNull();
     expect(grantRefusalKey(null)).toBeNull();
+  });
+});
+
+/**
+ * KS-1-a (ADR-0140) — the key each act asks billing's door for, mirrored so a
+ * reseller's own member is offered only what their keys open. What breaks with
+ * nothing red: a support agent shown "delete" and refused, or the owner (a
+ * platform user, from outside the tenant) shown nothing at all.
+ */
+describe("the key each act asks", () => {
+  const BILLING = join(__dirname, "../../../../../txnet-backend/billing-service/src/app/payment/gift/reseller-user-grants.service.ts");
+
+  it("mirrors billing: the link and config fixes are repair, retiring and every Grant act move value", () => {
+    expect(readFileSync(BILLING, "utf8")).toContain("command.action === 'retire' ? 'grant.assign' : 'grant.repair'");
+    expect(Object.entries(CONFIG_ACTION_KEY)).toEqual([
+      ["regenerate", "grant.repair"],
+      ["disable", "grant.repair"],
+      ["enable", "grant.repair"],
+      ["retire", "grant.assign"],
+      ["move", "grant.repair"],
+    ]);
+    for (const action of GRANT_ACTIONS) expect(GRANT_ACTION_KEY[action], action).toBe(action === "rotate" ? "grant.repair" : "grant.assign");
+  });
+
+  const T = "t-reseller";
+  const member = (permissions: string[]) => ({ tenant: { id: T }, permissions });
+
+  it("a member of the path's tenant needs the key", () => {
+    expect(grantKeyHeld(member(["grant.read", "grant.repair"]), T, "grant.repair")).toBe(true);
+    expect(grantKeyHeld(member(["grant.read", "grant.repair"]), T, "grant.assign")).toBe(false);
+    expect(grantKeyHeld(member(["*"]), T, "grant.assign")).toBe(true);
+  });
+
+  it("the owner and platform staff come from outside the tenant: the door decides, nothing is hidden", () => {
+    expect(grantKeyHeld({ tenant: { id: "t-platform" }, permissions: [] }, T, "grant.assign")).toBe(true);
+    expect(grantKeyHeld(null, T, "grant.read")).toBe(false);
   });
 });

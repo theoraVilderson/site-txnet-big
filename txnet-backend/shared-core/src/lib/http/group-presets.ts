@@ -18,7 +18,7 @@ type RegistryKey = (typeof PERMISSION_REGISTRY)[number]['permission'];
 export type GroupPreset = { id: string; every: boolean; keys: readonly RegistryKey[] };
 
 export const GROUP_PRESETS: readonly GroupPreset[] = [
-  { id: 'support', every: false, keys: ['user.read', 'support.agent', 'restriction.assign', 'realtime.tenant.read'] },
+  { id: 'support', every: false, keys: ['user.read', 'support.agent', 'restriction.assign', 'realtime.tenant.read', 'grant.read', 'grant.repair'] },
   {
     id: 'finance',
     every: false,

@@ -178,6 +178,14 @@
       "assign": {
         "label": "Give services",
         "description": "Give users a service or credit as a gift."
+      },
+      "read": {
+        "label": "See users' services",
+        "description": "See a user's services, configs, usage, subscription link and history."
+      },
+      "repair": {
+        "label": "Repair users' services",
+        "description": "Regenerate, switch off or on, or move a config, and renew the subscription link, without moving money or traffic."
       }
     },
     "guide": {
@@ -352,7 +360,7 @@
   "presets": {
     "support": {
       "label": "Support",
-      "description": "Answer support conversations, see users and restrict accounts."
+      "description": "Answer support conversations, see users and their services, repair configs and restrict accounts."
     },
     "finance": {
       "label": "Finance",

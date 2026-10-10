@@ -23,6 +23,8 @@ import { ConsentNeeded, PlatformAccessBanner } from "../../../../_components/Pla
 import { consentRefusal } from "../../../../_lib/support-access";
 import { AdminConfigs } from "./AdminConfigs";
 import { GrantActions, IssueGrant } from "./GrantActions";
+import { MayGrantProvider } from "./grant-keys-context";
+import { grantKeyHeld, type GrantKey } from "../../../../_lib/grant-actions";
 import { GrantHistory } from "./GrantHistory";
 import { UserProfile } from "./UserProfile";
 import { useUserMessage } from "./useUserMessage";
@@ -62,6 +64,8 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
   const platform = isPlatformTenant(id, me);
+  // KS-1-a: a member of this tenant is offered only the acts their `grant.*` keys open.
+  const mayGrant = (key: GrantKey) => grantKeyHeld(me ?? null, id, key);
   useOwnTenantRedirect(own, me?.tenant.id);
   // The title is the person's name as auth has it now (AC-1-a), never one a
   // link carried in the address; a failed read leaves the plain title.
@@ -128,81 +132,83 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
   };
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
-      <PageHeader
-        title={name ?? t("common", S.titlePlain)}
-        subtitle={tab === "services" ? t("common", S.subtitle) : undefined}
-        tail={name ?? t("common", S.titlePlain)}
-        actions={
-          tab === "services" && (
-            <>
-              <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
-                {t("common", K.refresh)}
-              </Button>
-              <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />
-            </>
-          )
-        }
-      />
-
-      {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
-      <PlatformAccessBanner tenantId={id} onChange={retry} />
-
-      <Tabs<Tab>
-        ariaLabel={t("common", K.tabs.label)}
-        urlParam="tab"
-        variant="pills"
-        tabs={TABS.map((value) => ({ value, label: t("common", K.tabs[value]) }))}
-      />
-
-      {tab === "profile" ? (
-        <UserProfile id={id} userId={userId} platform={platform} own={own} onShown={(p) => setName(p.fullName || null)} />
-      ) : (
-        <>
-          {/* Read again with the list: an issue or a refresh changes how many are open. */}
-          <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
-
-          {consentRefusal(loadError) ? (
-            <ConsentNeeded error={loadError} />
-          ) : loadError !== null ? (
-            <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
-              <Alert tone="error">{message(loadError)}</Alert>
-              <Button variant="primary" size="sm" onClick={retry}>
-                {t("common", K.reload)}
-              </Button>
-            </div>
-          ) : answer === null ? (
-            <TableSkeleton rows={3} columns={2} />
-          ) : (
-            <>
-              {answer.rows.length === 0 ? (
-                <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
-                  {t("common", scope === "current" && answer.hidden > 0 ? S.noCurrent : S.empty)}
-                </p>
-              ) : (
-                <ul className="space-y-3">
-                  {answer.rows.map((row) => (
-                    <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
-                  ))}
-                </ul>
-              )}
-              {(answer.hidden > 0 || scope === "all") && (
-                <Button variant="quiet" size="sm" onClick={toggleScope}>
-                  {scope === "current" ? t("common", S.showEnded, { count: answer.hidden }) : t("common", S.hideEnded)}
+    <MayGrantProvider value={mayGrant}>
+      <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
+        <PageHeader
+          title={name ?? t("common", S.titlePlain)}
+          subtitle={tab === "services" ? t("common", S.subtitle) : undefined}
+          tail={name ?? t("common", S.titlePlain)}
+          actions={
+            tab === "services" && (
+              <>
+                <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
+                  {t("common", K.refresh)}
                 </Button>
-              )}
-              <Pagination
-                page={page}
-                totalPages={Math.max(1, Math.ceil(answer.total / PAGE_SIZE))}
-                totalItems={answer.total}
-                pageSize={PAGE_SIZE}
-                onPageChange={setPage}
-              />
-            </>
-          )}
-        </>
-      )}
-    </div>
+                {mayGrant("grant.assign") && <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />}
+              </>
+            )
+          }
+        />
+
+        {/* F-117-g: platform staff's consent, request and emergency entry; nothing to anyone else. */}
+        <PlatformAccessBanner tenantId={id} onChange={retry} />
+
+        <Tabs<Tab>
+          ariaLabel={t("common", K.tabs.label)}
+          urlParam="tab"
+          variant="pills"
+          tabs={TABS.map((value) => ({ value, label: t("common", K.tabs[value]) }))}
+        />
+
+        {tab === "profile" ? (
+          <UserProfile id={id} userId={userId} platform={platform} own={own} onShown={(p) => setName(p.fullName || null)} />
+        ) : (
+          <>
+            {/* Read again with the list: an issue or a refresh changes how many are open. */}
+            <UserGrantLimitCard key={asked} tenantId={id} userId={userId} />
+
+            {consentRefusal(loadError) ? (
+              <ConsentNeeded error={loadError} />
+            ) : loadError !== null ? (
+              <div className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-6">
+                <Alert tone="error">{message(loadError)}</Alert>
+                <Button variant="primary" size="sm" onClick={retry}>
+                  {t("common", K.reload)}
+                </Button>
+              </div>
+            ) : answer === null ? (
+              <TableSkeleton rows={3} columns={2} />
+            ) : (
+              <>
+                {answer.rows.length === 0 ? (
+                  <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
+                    {t("common", scope === "current" && answer.hidden > 0 ? S.noCurrent : S.empty)}
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {answer.rows.map((row) => (
+                      <AdminGrantCard key={row.id} api={api} row={row} texts={texts} onChanged={retry} />
+                    ))}
+                  </ul>
+                )}
+                {(answer.hidden > 0 || scope === "all") && (
+                  <Button variant="quiet" size="sm" onClick={toggleScope}>
+                    {scope === "current" ? t("common", S.showEnded, { count: answer.hidden }) : t("common", S.hideEnded)}
+                  </Button>
+                )}
+                <Pagination
+                  page={page}
+                  totalPages={Math.max(1, Math.ceil(answer.total / PAGE_SIZE))}
+                  totalItems={answer.total}
+                  pageSize={PAGE_SIZE}
+                  onPageChange={setPage}
+                />
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </MayGrantProvider>
   );
 }
 

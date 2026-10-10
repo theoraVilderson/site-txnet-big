@@ -94,7 +94,8 @@ the registry and not `platformOnly` (`group-presets.spec.ts`). Texts are
 role may hold it, so a reseller's role was everything (the owner) or nothing.
 It is split: each reseller surface names its own key with
 `ResellerAccess.for(key)`, and `RESELLER_KEYS` (`shared-core/.../tenant/reseller-keys.ts`)
-lists them — `domain.manage`, `theme.manage`, `bot.manage`, `grant.assign`,
+lists them — `domain.manage`, `theme.manage`, `bot.manage`, `grant.read`,
+`grant.repair`, `grant.assign` (one per kind of act, KS-1-a, ADR-0140),
 `staff.manage`, `role.manage`, `settings.manage` (currency, time zone,
 onboarding), `report.read` (revenue), and the existing `user.read`,
 `user.write`, `user.impersonate`, `user_group.manage`, `catalog.manage`,

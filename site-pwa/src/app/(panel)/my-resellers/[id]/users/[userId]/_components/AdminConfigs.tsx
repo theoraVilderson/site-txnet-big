@@ -12,6 +12,8 @@ import {
 } from "../../../../../services/_lib/service-configs";
 import { ADMIN_REFUSAL_KEYS, USER_KEYS as K, adminActionBody, type OfferedAction } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
+import { useMayGrant } from "./grant-keys-context";
+import { CONFIG_ACTION_KEY } from "../../../../_lib/grant-actions";
 import { Alert, Button, Field, Input, NativeSelect, useConfirm } from "../../../../../_components/kit";
 
 const A = K.actions;
@@ -284,38 +286,47 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
 /**
  * The five buttons. On one config, enable shows only on a disabled one and
  * disable only on one that is not; on the ticked ones both show, and billing
- * answers each config for itself.
+ * answers each config for itself. Each shows only to a viewer its key opens
+ * (KS-1-a): retire is `grant.assign`, the rest `grant.repair`.
  */
 function ActionButtons({ busy, status, onAct }: { busy: boolean; status?: UserConfigRow["status"]; onAct: (action: OfferedAction) => void }) {
   const { t } = useLocale();
+  const may = useMayGrant();
+  const can = (action: OfferedAction) => may(CONFIG_ACTION_KEY[action]);
   const disabled = status === "disabled_by_admin" || status === "disabled_by_system";
   return (
     <>
-      <Button size="sm" disabled={busy} onClick={() => onAct("regenerate")} icon={<KeyRound size={12} aria-hidden />}>
-        {t("common", A.regenerate)}
-      </Button>
-      {(status === undefined || !disabled) && (
+      {can("regenerate") && (
+        <Button size="sm" disabled={busy} onClick={() => onAct("regenerate")} icon={<KeyRound size={12} aria-hidden />}>
+          {t("common", A.regenerate)}
+        </Button>
+      )}
+      {can("disable") && (status === undefined || !disabled) && (
         <Button size="sm" disabled={busy} onClick={() => onAct("disable")} icon={<Ban size={12} aria-hidden />}>
           {t("common", A.disable)}
         </Button>
       )}
-      {(status === undefined || disabled) && (
+      {can("enable") && (status === undefined || disabled) && (
         <Button size="sm" disabled={busy} onClick={() => onAct("enable")} icon={<Play size={12} aria-hidden />}>
           {t("common", A.enable)}
         </Button>
       )}
-      <Button size="sm" disabled={busy} onClick={() => onAct("move")} icon={<ArrowLeftRight size={12} aria-hidden />}>
-        {t("common", A.move)}
-      </Button>
-      <Button
-        size="sm"
-        disabled={busy}
-        onClick={() => onAct("retire")}
-        icon={<Trash2 size={12} aria-hidden />}
-        className="ms-auto text-error hover:text-error hover:bg-error-bg"
-      >
-        {t("common", A.retire)}
-      </Button>
+      {can("move") && (
+        <Button size="sm" disabled={busy} onClick={() => onAct("move")} icon={<ArrowLeftRight size={12} aria-hidden />}>
+          {t("common", A.move)}
+        </Button>
+      )}
+      {can("retire") && (
+        <Button
+          size="sm"
+          disabled={busy}
+          onClick={() => onAct("retire")}
+          icon={<Trash2 size={12} aria-hidden />}
+          className="ms-auto text-error hover:text-error hover:bg-error-bg"
+        >
+          {t("common", A.retire)}
+        </Button>
+      )}
     </>
   );
 }

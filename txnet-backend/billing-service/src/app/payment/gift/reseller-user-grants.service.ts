@@ -34,6 +34,9 @@ import { SubscriptionLinkService } from './subscription-link.service';
 import { UsersCatalogProduct, usersCatalogOf } from './reseller-users-catalog';
 
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
+/** The member-door keys of a user's services, one per kind of act (KS-1-a, ADR-0140). */
+type GrantKey = 'grant.read' | 'grant.repair' | 'grant.assign';
+
 export type ResellerUserGrantsRejection = ResellerAccessRejection | SupportConsentRejection | 'user_not_found';
 
 /** The door's actor and the address the request came from: every write here is audited (F-311-r). */
@@ -90,19 +93,19 @@ export class ResellerUserGrantsService {
   ) {}
 
   grants(actor: ResellerActor, tenantId: string, userId: string, query: GrantListQuery) {
-    return this.run(actor, tenantId, userId, () => this.grantService.listForUser(userId, query));
+    return this.run(actor, tenantId, userId, () => this.grantService.listForUser(userId, query), 'read', 'grant.read');
   }
 
   configs(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<UserConfigView[]> {
-    return this.run(actor, tenantId, userId, () => this.configService.listForGrant(userId, grantId));
+    return this.run(actor, tenantId, userId, () => this.configService.listForGrant(userId, grantId), 'read', 'grant.read');
   }
 
   usage(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<GrantUsageView> {
-    return this.run(actor, tenantId, userId, () => this.usageService.dailyForGrant(userId, grantId));
+    return this.run(actor, tenantId, userId, () => this.usageService.dailyForGrant(userId, grantId), 'read', 'grant.read');
   }
 
   subscriptionLink(actor: ResellerActor, tenantId: string, userId: string, grantId: string): Promise<string> {
-    return this.run(actor, tenantId, userId, () => this.links.linkFor(grantId, userId));
+    return this.run(actor, tenantId, userId, () => this.links.linkFor(grantId, userId), 'read', 'grant.read');
   }
 
   /**
@@ -123,7 +126,7 @@ export class ResellerUserGrantsService {
         }),
       );
       return panels.map((p) => ({ id: p.id, name: p.name, region: p.region, own: p.tenantId !== null }));
-    });
+    }, 'read', 'grant.repair');
   }
 
   /**
@@ -144,7 +147,7 @@ export class ResellerUserGrantsService {
    * there is no path user to check — the paste is what names them.
    */
   findByLines(actor: ResellerActor, tenantId: string, body: GrantsByLinesBody): Promise<GrantPage<TenantGrantView>> {
-    return this.admitted(actor, tenantId, 'read', () => this.grantService.listByLinesInScope(body));
+    return this.admitted(actor, tenantId, 'read', () => this.grantService.listByLinesInScope(body), 'grant.read');
   }
 
   /**
@@ -161,6 +164,7 @@ export class ResellerUserGrantsService {
       userId,
       () => this.links.reset(grantId, userId, (tx, rotate) => auditedGrantAct(tx, actor, tenantId, grantId, spec, rotate)),
       'staffWrite',
+      'grant.repair',
     );
   }
 
@@ -173,7 +177,9 @@ export class ResellerUserGrantsService {
   act(actor: AdminActor, tenantId: string, userId: string, command: AdminConfigCommand): Promise<UserConfigOutcome[]> {
     const audit = <T extends string | void>(tx: Prisma.TransactionClient, configId: string, step: () => Promise<T>) =>
       auditedConfigAct(tx, actor, tenantId, configId, `config_${command.action}`, command.reason ?? null, step);
-    return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command, audit), 'staffWrite');
+    // A retired config is not given back, so retiring moves value (ADR-0140 (2)).
+    const key = command.action === 'retire' ? 'grant.assign' : 'grant.repair';
+    return this.run(actor, tenantId, userId, () => this.configService.actAsAdmin(actor.userId, userId, command, audit), 'staffWrite', key);
   }
 
   /**
@@ -331,7 +337,7 @@ export class ResellerUserGrantsService {
    * reseller still sees who did what.
    */
   history(actor: ResellerActor, tenantId: string, userId: string, grantId: string, page: { page: number; pageSize: number }) {
-    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => grantHistory(tx, grantId, page)));
+    return this.run(actor, tenantId, userId, () => this.onGrant(userId, grantId, (tx) => grantHistory(tx, grantId, page)), 'read', 'grant.read');
   }
 
   /** `work` on this user's Grant as a `staffWrite`, written down in its transaction (F-311-r). */
@@ -355,25 +361,37 @@ export class ResellerUserGrantsService {
     });
   }
 
-  /** Admit, run in the reseller's scope, check the user is its own, then `work`; the door's refusal becomes this surface's one type. */
+  /**
+   * Admit, run in the reseller's scope, check the user is its own, then
+   * `work`; the door's refusal becomes this surface's one type. `key` is the
+   * kind of act (ADR-0140): `grant.read` to see, `grant.repair` to fix without
+   * moving value, `grant.assign` — the default, the strongest — for the rest.
+   */
   private async run<T>(
     actor: ResellerActor,
     tenantId: string,
     userId: string,
     work: (admitted: AdmittedReseller) => Promise<T>,
     capability: 'read' | 'staffWrite' = 'read',
+    key: GrantKey = 'grant.assign',
   ): Promise<T> {
     return this.admitted(actor, tenantId, capability, async (admitted) => {
       const user = await tenantTransaction(this.prisma, (tx) => tx.user.findFirst({ where: { id: userId }, select: { id: true } }));
       if (!user) throw new ResellerUserGrantsRefused('user_not_found', userId);
       return await work(admitted);
-    });
+    }, key);
   }
 
   /** The door, then `work` in the reseller's scope; the door's refusal becomes this surface's one type. */
-  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: (admitted: AdmittedReseller) => Promise<T>): Promise<T> {
+  private async admitted<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: 'read' | 'staffWrite',
+    work: (admitted: AdmittedReseller) => Promise<T>,
+    key: GrantKey = 'grant.assign',
+  ): Promise<T> {
     try {
-      return await this.access.for('grant.assign').runIncludingPlatform(actor, tenantId, capability, work);
+      return await this.access.for(key).runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
       if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;
