@@ -240,12 +240,12 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // F-311-ab. One users page for every tenant (D-55), opened on the tenant the
   // session is in: platform staff reach the platform's own users (F-311-aa), a
   // reseller's staff on its domain the reseller's — at `/users`, which ignores
-  // the id but keeps the function so the tenant-id gate applies. The key hides it: `platform.tenant.manage`
-  // on the platform (AC-1-d), the page's own on a reseller (AC-1-e2);
+  // the id but keeps the function so the tenant-id gate applies. The key hides it: the page's own,
+  // `user.read`, on every tenant (AC-1-e2; the platform's since GR-1-o, ADR-0139 (7));
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["platform.tenant.manage"], resellerRequires: ["user.read"] },
+  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["user.read"] },
   // F-114-m, GR-1-f. Every tenant has its own groups: the permission hides it,
   // and auth-service answers each tenant its own (F-114-j). The one place the
   // panel gives access (ADR-0139 (1)): Team and Roles left the menu for it.
@@ -371,8 +371,8 @@ export function admits(
 
 /**
  * The tenant id `visibleMenu` builds the caller's own pages on (F-311-ab), or
- * `null` to hide them. On the platform, `platform.tenant.manage` (or `*`) is the whole of
- * the users-admin door's rule for its staff, and `requires` already holds it. On
+ * `null` to hide them. On the platform, the page's key (`user.read`, or `*`) is the whole of
+ * the users-admin door's rule for its own people, and `requires` already holds it. On
  * a reseller it is not: the door also needs a live seat (invariant 21), which a
  * role outlives — so `canRead` is the door's own verdict (`GET /tenants/:id/access`),
  * and until it answers the pages stay hidden.

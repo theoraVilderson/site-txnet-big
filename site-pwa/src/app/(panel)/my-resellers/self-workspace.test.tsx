@@ -167,8 +167,8 @@ describe("PlatformOnlyWorkspace (/my-resellers/:id on a reseller's domain)", () 
 });
 
 describe("the menu's users entry", () => {
-  const usersHref = (type: "platform_owner" | "reseller", id: string) =>
-    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage"] : ["user.read"], type, false, false, id)
+  const usersHref = (type: "platform_owner" | "reseller", id: string, held: string[] = ["user.read"]) =>
+    visibleMenu(PANEL_MENU, held, type, false, false, id)
       .flatMap((e) => (isMenuGroup(e) ? e.children : [e]))
       .find((l) => l.id === "users")?.href;
 
@@ -176,6 +176,14 @@ describe("the menu's users entry", () => {
   // workspace's `/reseller/users` is the reseller menu's, not this entry's.
   it("opens /users for the session's own users on the platform", () => {
     expect(usersHref("platform_owner", "t-platform")).toBe("/users");
+  });
+
+  // GR-1-o: one key on every tenant. The platform's Support group holds `user.read`
+  // and `grant.read`, not `platform.tenant.manage`, and still reaches its own users.
+  it("opens /users on the platform by `user.read`, as on a reseller (GR-1-p)", () => {
+    expect(usersHref("platform_owner", "t-platform", ["user.read", "grant.read", "grant.repair"])).toBe("/users");
+    expect(usersHref("platform_owner", "t-platform", ["*"])).toBe("/users");
+    expect(usersHref("platform_owner", "t-platform", ["support.agent"])).toBeUndefined();
   });
 
   it("opens /users for a reseller seat's own users, by `user.read` (AC-1-e2)", () => {
