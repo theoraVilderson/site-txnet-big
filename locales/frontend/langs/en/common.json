@@ -4016,7 +4016,6 @@
       "cancel": "Cancel",
       "endSaved": "End date saved.",
       "searchAll": "Find a user by name, username, phone or email",
-      "searchAllResellers": "Find a user or a reseller by name, username, phone or email",
       "newBadge": "New",
       "removedBadge": "Will be removed",
       "endChangedBadge": "End changed",
@@ -4031,9 +4030,7 @@
       "byIds": "Add by id",
       "addIds": "Add to the list",
       "refusedRow": "This row was refused",
-      "addedShort": "Added",
-      "resellerOwnedBy": "Reseller (the business), owned by {{name}}",
-      "userAccount": "User account"
+      "addedShort": "Added"
     },
     "errors": {
       "nameRequired": "Enter a name.",

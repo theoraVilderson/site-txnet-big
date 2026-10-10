@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Loader2, Plus, Search, Store } from "lucide-react";
+import { Check, Loader2, Plus, Search } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi, userGroupsApi, type UserSearchHit } from "@/lib/auth-api";
-import type { Reseller } from "@/lib/tenant-api";
 import { userQuery } from "../../resellers/_lib/resellers";
 import { USER_GROUP_KEYS as K } from "../_lib/user-groups";
 import { useMessage } from "./user-groups-ui";
@@ -12,34 +11,19 @@ import { Button, Input } from "../../_components/kit";
 
 /** Wait for the typing to settle: both searches are rate-limited per caller. */
 const DEBOUNCE_MS = 300;
-/** Resellers shown for one query: the slug or the owner matches; a longer list means a sharper query. */
-const RESELLER_HITS = 5;
-
-/** The resellers a query names, by slug or by owner, from a list already read. */
-export function resellerHits(resellers: readonly Reseller[], q: string): Reseller[] {
-  const needle = q.toLowerCase();
-  return resellers
-    .filter((r) => [r.slug, r.owner?.fullName, r.owner?.username].some((v) => v?.toLowerCase().includes(needle)))
-    .slice(0, RESELLER_HITS);
-}
-
 /**
  * Find a user to add (F-114-m) through the caller's own tenant's door — the
  * platform owner's `GET /auth/users`, or a reseller's list of its own users.
  * The group routes do not search; a caller with neither door types ids instead.
  *
- * On the platform's own group, `resellers` puts the resellers the same query
- * names in the same list, marked as such (GR-1-j): one box for everyone who
- * can join. `taken` marks who is in already or pending, so nobody is added
- * twice.
+ * `taken` marks who is in already or pending, so nobody is added twice. One
+ * row per account: a reseller is its owner's account (user, 2026-10-10).
  */
 export function UserSearch({
   via,
   tenantId,
   onAdd,
   busy,
-  resellers,
-  onAddReseller,
   taken,
   placeholder,
 }: {
@@ -47,8 +31,6 @@ export function UserSearch({
   tenantId: string;
   onAdd: (hit: UserSearchHit) => void;
   busy: boolean;
-  resellers?: readonly Reseller[] | null;
-  onAddReseller?: (r: Reseller) => void;
   /** `user:<id>` / `tenant:<id>` keys already in the group or pending. */
   taken?: ReadonlySet<string>;
   placeholder?: string;
@@ -61,7 +43,6 @@ export function UserSearch({
   const q = userQuery(text);
   const current = q && answer?.q === q ? answer : null;
   const hits = current?.hits ?? null;
-  const shops = q && resellers && onAddReseller ? resellerHits(resellers, q) : [];
   const has = (key: string) => taken?.has(key) ?? false;
 
   useEffect(() => {
@@ -97,32 +78,15 @@ export function UserSearch({
         </p>
       )}
       {current?.failure && <p className="text-xs text-error">{current.failure}</p>}
-      {hits && hits.length === 0 && shops.length === 0 && <p className="text-xs text-text-secondary">{t("common", K.members.noMatch)}</p>}
-      {((hits && hits.length > 0) || shops.length > 0) && (
+      {hits && hits.length === 0 && <p className="text-xs text-text-secondary">{t("common", K.members.noMatch)}</p>}
+      {hits && hits.length > 0 && (
         <ul className="flex flex-col divide-y divide-card-border overflow-hidden rounded-xl border border-card-border">
-          {shops.map((r) => (
-            <li key={`tenant:${r.id}`} className="flex items-center justify-between gap-3 px-3 py-2">
-              <span className="flex min-w-0 items-center gap-2">
-                <Store size={14} className="shrink-0 text-text-secondary" aria-hidden />
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-bold text-text-primary" dir="ltr">
-                    {r.slug}
-                  </span>
-                  {/* The business, not a second account of its owner (user, 2026-10-10): said in so many words. */}
-                  <span className="truncate text-xs text-text-secondary">
-                    {r.owner?.fullName ? t("common", K.members.resellerOwnedBy, { name: r.owner.fullName }) : t("common", K.members.reseller)}
-                  </span>
-                </span>
-              </span>
-              <AddButton done={has(`tenant:${r.id}`)} busy={busy} onClick={() => onAddReseller?.(r)} />
-            </li>
-          ))}
-          {(hits ?? []).map((hit) => (
+          {hits.map((hit) => (
             <li key={hit.id} className="flex items-center justify-between gap-3 px-3 py-2">
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-bold text-text-primary">{hit.fullName}</span>
                 <span className="truncate text-xs text-text-secondary" dir="ltr">
-                  {[resellers && onAddReseller ? t("common", K.members.userAccount) : null, hit.username && `@${hit.username}`, hit.phoneMasked].filter(Boolean).join(" · ")}
+                  {[hit.username && `@${hit.username}`, hit.phoneMasked].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <AddButton done={has(`user:${hit.id}`)} busy={busy} onClick={() => onAdd(hit)} />

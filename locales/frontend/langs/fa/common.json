@@ -4016,7 +4016,6 @@
       "cancel": "انصراف",
       "endSaved": "تاریخ پایان ذخیره شد.",
       "searchAll": "جستجوی کاربر با نام، نام کاربری، شماره یا ایمیل",
-      "searchAllResellers": "جستجوی کاربر یا نماینده با نام، نام کاربری، شماره یا ایمیل",
       "newBadge": "جدید",
       "removedBadge": "برداشته می‌شود",
       "endChangedBadge": "پایان تغییر کرد",
@@ -4031,9 +4030,7 @@
       "byIds": "افزودن با شناسه",
       "addIds": "به فهرست اضافه کن",
       "refusedRow": "این ردیف رد شد",
-      "addedShort": "اضافه شده",
-      "resellerOwnedBy": "نماینده (کسب‌وکار)، صاحبش: {{name}}",
-      "userAccount": "حساب کاربری"
+      "addedShort": "اضافه شده"
     },
     "errors": {
       "nameRequired": "یک نام بنویسید.",

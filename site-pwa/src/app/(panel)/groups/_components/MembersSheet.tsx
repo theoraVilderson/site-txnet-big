@@ -5,14 +5,11 @@ import { CalendarClock, Loader2, RotateCcw, RotateCw, Store, Trash2, User, X } f
 import { useLocale } from "@/context/LocaleContext";
 import type { UserGroup, UserGroupMember } from "@/lib/auth-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
-import { tenantApi, type Reseller } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
-import { canAdministerResellers } from "../../resellers/_lib/resellers";
 import {
   MEMBER_IDS_MAX,
   USER_GROUP_KEYS as K,
-  canNameResellers,
   changesBody,
   draftAdd,
   draftEnd,
@@ -48,9 +45,9 @@ type Line = {
  * One group's members (F-114-m), edited as a draft and saved at once
  * (GR-1-j, user 2026-10-10):
  *
- *  - **one box finds everyone who can join** — the caller's own users, and on
- *    the platform's own group the resellers too, marked as such; a pick lands
- *    in the list as *new*, nothing is sent;
+ *  - **one box, one row per account** — the caller's own users; a reseller is
+ *    its owner's account, never a second row (user, 2026-10-10: "it is one
+ *    account"). A pick lands in the list as *new*, nothing is sent;
  *  - **one list**: members and pending adds together; remove marks a row (and
  *    undoes), the date chip sets a person's own end;
  *  - **Save** sends every change as one `POST …/members/changes` (GR-1-i) —
@@ -68,7 +65,6 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
   const { tenantId, api } = useGroupsScope();
   const search = memberSearchOf(me, tenantId);
   const searchTenant = tenantId ?? me?.tenant.id ?? "";
-  const resellersToo = canNameResellers(me, tenantId) && !group.allTenants;
 
   const [page, setPage] = useState(1);
   const [asked, setAsked] = useState(0);
@@ -82,7 +78,6 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
   // The person whose end is open for editing.
   const [editing, setEditing] = useState<string | null>(null);
   const [idText, setIdText] = useState("");
-  const [resellers, setResellers] = useState<Reseller[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<{ text: string; row: string | null } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -107,13 +102,6 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
       alive = false;
     };
   }, [api, group.id, page, key]);
-
-  // Resellers the search box can also name, for a caller who may read the list.
-  const pickable = resellersToo && canAdministerResellers(me);
-  useEffect(() => {
-    if (!pickable) return;
-    tenantApi.resellers(100, 0).then(setResellers, () => setResellers(null));
-  }, [pickable]);
 
   const present = useMemo(() => new Set((rows?.items ?? []).map(memberKey)), [rows]);
   const taken = useMemo(() => new Set([...present, ...draft.add.map((a) => `${a.kind}:${a.id}`)]), [present, draft.add]);
@@ -204,10 +192,8 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
             tenantId={searchTenant}
             busy={busy}
             taken={taken}
-            placeholder={t("common", resellersToo ? K.members.searchAllResellers : K.members.searchAll)}
+            placeholder={t("common", K.members.searchAll)}
             onAdd={(hit) => pick({ kind: "user", id: hit.id, label: hit.fullName || hit.username || hit.id })}
-            resellers={pickable ? resellers : null}
-            onAddReseller={(r) => pick({ kind: "tenant", id: r.id, label: r.slug })}
           />
         ) : (
           <Field label={t("common", K.members.byIds)} hint={t("common", K.members.userIdsHint)}>

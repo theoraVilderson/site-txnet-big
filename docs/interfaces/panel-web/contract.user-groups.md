@@ -45,17 +45,15 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
    `UserGroupRefusal`; the spec reads `UserGroupRejection` from the service.
 4. **The form mirrors the schema:** a name of 1..80 once trimmed; an edit
    sends only what changed, and nothing at all when nothing did.
-5. **One box finds everyone who can join** (`UserSearch`, GR-1-j), through
-   the caller's own door (`memberSearchOf`): the platform owner with
+5. **One box, one row per account** (`UserSearch`, GR-1-m): through the
+   caller's own door (`memberSearchOf`): the platform owner with
    `user.search` searches `GET /auth/users`; a reseller's owner, or someone
    holding `user.read`, its own `GET /auth/tenants/:own/users`; on a tenant's
-   path, that tenant's. On the platform's own group the same query also names
-   resellers (`resellerHits`, slug or owner, from `tenantApi.resellers`, first
-   100), marked *reseller (the business), owned by …* — and, beside them, people *user account* — in the same list — one list, two kinds of member,
-   because a reseller member is the business, not its owner (user,
-   2026-10-10). Anyone with no search door types user ids instead — split on
-   spaces, commas or lines, each once; a non-uuid is named; more than 500 is
-   refused first.
+   path, that tenant's. A reseller is never offered as a second row: it is
+   its owner's account (user, 2026-10-10 — "it is one account"; nothing reads
+   a reseller member, GR-1-n). Anyone with no search door types user ids —
+   split on spaces, commas or lines, each once; a non-uuid is named; more
+   than 500 is refused first.
 6. **Members change as a draft** (`MembersDraft`, user 2026-10-10): a pick is
    a *new* row, a removal marks its row (and undoes), an end day is set per
    person on its row; someone already in or pending is never added twice
