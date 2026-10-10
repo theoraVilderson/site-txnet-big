@@ -4014,7 +4014,24 @@
       "changeEnd": "End date",
       "saveEnd": "Save end date",
       "cancel": "Cancel",
-      "endSaved": "End date saved."
+      "endSaved": "End date saved.",
+      "searchAll": "Find a user by name, username, phone or email",
+      "searchAllResellers": "Find a user or a reseller by name, username, phone or email",
+      "newBadge": "New",
+      "removedBadge": "Will be removed",
+      "endChangedBadge": "End changed",
+      "undo": "Undo",
+      "pending": "{{count}} unsaved changes",
+      "save": "Save changes",
+      "discard": "Discard changes",
+      "saved": "Changes saved.",
+      "confirmClose": "Your changes are not saved. Close and lose them?",
+      "close": "Close and discard",
+      "draftHint": "Adds, removals and end dates are prepared here and applied together only when you press “Save changes”. If one is refused, none is applied.",
+      "byIds": "Add by id",
+      "addIds": "Add to the list",
+      "refusedRow": "This row was refused",
+      "addedShort": "Added"
     },
     "errors": {
       "nameRequired": "Enter a name.",
@@ -4039,7 +4056,8 @@
       "key_not_grantable": "A permission you chose cannot be given by a group.",
       "key_not_held": "You may only give what you may give yourself — on access, and on adding or removing a member of a group that holds it.",
       "no_authority": "You cannot add or remove this person: they hold as much as you, or it is you.",
-      "expiry_past": "An end date must be after today."
+      "expiry_past": "An end date must be after today.",
+      "member_conflict": "One person appears twice in these changes, for example added and removed. Remove one of them."
     },
     "access": {
       "title": "Access of {{name}}",

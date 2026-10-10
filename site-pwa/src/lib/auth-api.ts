@@ -975,6 +975,13 @@ export const resellerUserGroupsApi = {
   async list(tenantId: string) { return request<UserGroup[]>(`/auth/tenants/${encodeURIComponent(tenantId)}/user-groups`, { method: "GET" }); },
 };
 
+/** The `POST …/members/changes` body (GR-1-i): one save of a group's members. */
+export type MemberChangesBody = {
+  add: ({ userId: string; expiresAt: string | null } | { tenantId: string; expiresAt: string | null })[];
+  remove: ({ userId: string } | { tenantId: string })[];
+  ends: { userId: string; expiresAt: string | null }[];
+};
+
 /** Every group route, on the session's tenant or on a tenant by its path ({@link groupsApiPath}). */
 export function groupsApi(tenantId: string | null) {
   const base = groupsApiPath(tenantId);
@@ -992,6 +999,10 @@ export function groupsApi(tenantId: string | null) {
     /** Move or clear one user's end in place (GR-1-d). */
     async setMemberEnd(id: string, userId: string, body: { expiresAt: string | null }) {
       return request<{ userId: string; expiresAt: string | null }>(`${userGroupPath(id)}/members/users/${encodeURIComponent(userId)}`, { method: "PATCH", body: JSON.stringify(body) });
+    },
+    /** Every member change of one save, all or none (GR-1-i): adds with their own end, removals, end moves. */
+    async changeMembers(id: string, body: MemberChangesBody) {
+      return request<{ added: number; removed: number; endsMoved: number }>(`${userGroupPath(id)}/members/changes`, { method: "POST", body: JSON.stringify(body) });
     },
     async removeUser(id: string, userId: string) { return request<{ removed: true }>(`${userGroupPath(id)}/members/users/${encodeURIComponent(userId)}`, { method: "DELETE" }); },
     /** The **whole** access — a role or none, and every extra key (AC-1-m). */

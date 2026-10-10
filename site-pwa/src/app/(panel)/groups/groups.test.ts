@@ -27,6 +27,12 @@ import {
   membersBody,
   parseIds,
   presetDraft,
+  changesBody,
+  draftAdd,
+  draftEnd,
+  draftSize,
+  draftToggleRemove,
+  emptyMembersDraft,
   updateGroupBody,
   validateGroupForm,
 } from "./_lib/user-groups";
@@ -317,5 +323,66 @@ describe("presetDraft", () => {
   it("gives the admin preset every offered key the creator can give, never platform. or self.", () => {
     expect(presetDraft(admin, areas, ["*"])).toEqual({ keys: ["support.agent", "user.read", "user.write"], dropped: [] });
     expect(presetDraft(admin, areas, ["user.read", "user.write"])).toEqual({ keys: ["user.read", "user.write"], dropped: [] });
+  });
+});
+
+/**
+ * GR-1-j — the members sheet holds every change as a draft and saves it as one
+ * `POST …/members/changes` (GR-1-i). What breaks with nothing red: a change
+ * that cancels another sent anyway (add then remove → the server's
+ * `member_conflict`), someone already in added twice, or an end the person
+ * already has sent as a "change".
+ */
+describe("the members draft", () => {
+  const ali = { kind: "user" as const, id: "u-ali", label: "Ali" };
+  const acme = { kind: "tenant" as const, id: "t-acme", label: "acme" };
+  const present = new Set(["user:u-sara", "user:u-reza"]);
+
+  it("adds once, and adding someone already in changes nothing", () => {
+    let d = draftAdd(emptyMembersDraft, ali, present);
+    d = draftAdd(d, ali, present);
+    d = draftAdd(d, { kind: "user", id: "u-sara", label: "Sara" }, present);
+    expect(d.add).toEqual([{ ...ali, endDay: null }]);
+    expect(draftSize(d)).toBe(1);
+  });
+
+  it("removing a pending add drops it; removing a member twice undoes the removal", () => {
+    let d = draftAdd(emptyMembersDraft, acme, present);
+    d = draftToggleRemove(d, "tenant:t-acme");
+    expect(d).toEqual(emptyMembersDraft);
+    d = draftToggleRemove(d, "user:u-sara");
+    expect(d.remove).toEqual(["user:u-sara"]);
+    expect(draftToggleRemove(d, "user:u-sara")).toEqual(emptyMembersDraft);
+  });
+
+  it("adding back someone marked for removal cancels the removal instead", () => {
+    const d = draftAdd(draftToggleRemove(emptyMembersDraft, "user:u-sara"), { kind: "user", id: "u-sara", label: "Sara" }, present);
+    expect(d).toEqual(emptyMembersDraft);
+  });
+
+  it("an end goes on the pending add, or on a member only when it differs from theirs; a removal drops it", () => {
+    let d = draftEnd(draftAdd(emptyMembersDraft, ali, present), "u-ali", "2026-12-01", null);
+    expect(d.add[0].endDay).toBe("2026-12-01");
+    d = draftEnd(d, "u-sara", "2026-11-01", null);
+    expect(d.ends).toEqual({ "u-sara": "2026-11-01" });
+    expect(draftEnd(d, "u-sara", null, null).ends).toEqual({});
+    expect(draftToggleRemove(d, "user:u-sara").ends).toEqual({});
+  });
+
+  it("builds the one body: each add with its own end, removals, ends; nothing when empty", () => {
+    expect(changesBody(emptyMembersDraft)).toBeNull();
+    let d = draftAdd(emptyMembersDraft, ali, present);
+    d = draftEnd(d, "u-ali", "2026-12-01", null);
+    d = draftAdd(d, acme, present);
+    d = draftToggleRemove(d, "user:u-reza");
+    d = draftEnd(d, "u-sara", null, "2026-11-01");
+    expect(changesBody(d)).toEqual({
+      add: [
+        { userId: "u-ali", expiresAt: endOfDay("2026-12-01") },
+        { tenantId: "t-acme", expiresAt: null },
+      ],
+      remove: [{ userId: "u-reza" }],
+      ends: [{ userId: "u-sara", expiresAt: null }],
+    });
   });
 });

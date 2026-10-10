@@ -12,7 +12,7 @@ A topic file of [contract.md](contract.md) (§10). The panel's one place to
 give access (ADR-0139 (1)): a tenant's groups, each with members — each
 membership with an end — and the keys ticked on the group. Under
 `(panel)/groups/`: `GroupsView.tsx` the list, `GroupWizard.tsx` create (GR-1-h),
-`GroupSheet.tsx` rename, `MembersSheet.tsx` one group's members and their end, `AccessSheet.tsx`
+`GroupSheet.tsx` rename, `MembersSheet.tsx` one group's members and their end, edited as a draft (GR-1-j), `AccessSheet.tsx`
 what it gives, `UserSearch.tsx` finding a user, and `_lib/user-groups.ts` the
 rules. The routes are auth-api's
 [contract.user-groups.md](../auth-api/contract.user-groups.md) (F-114-j,
@@ -45,20 +45,28 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
    `UserGroupRefusal`; the spec reads `UserGroupRejection` from the service.
 4. **The form mirrors the schema:** a name of 1..80 once trimmed; an edit
    sends only what changed, and nothing at all when nothing did.
-5. **Finding a user goes through the caller's own door** (`memberSearchOf`):
-   the platform owner with `user.search` searches `GET /auth/users`; a
-   reseller's owner, or someone holding `user.read`, its own
-   `GET /auth/tenants/:own/users`; on a tenant's path, that tenant's. Anyone
-   else types ids — split on spaces, commas or lines, each once; a non-uuid is
-   named and nothing is sent; more than 500 of either kind is refused first.
-6. **A reseller is picked from the list** (`tenantApi.resellers`, first 100)
-   on the platform, else typed as an id.
-7. **A membership may end** (GR-1-c): an add carries one optional end day for
-   everyone it brings in (`membersBody`, that day's last moment in the
-   visitor's zone); someone already in keeps theirs. Each user's end is shown,
-   and moved or cleared in place (`endBody`, `PATCH …/members/users/:userId`).
-8. **Nothing is patched from an answer.** Every add, remove, end move, rename
-   and delete re-reads the members page and the list.
+5. **One box finds everyone who can join** (`UserSearch`, GR-1-j), through
+   the caller's own door (`memberSearchOf`): the platform owner with
+   `user.search` searches `GET /auth/users`; a reseller's owner, or someone
+   holding `user.read`, its own `GET /auth/tenants/:own/users`; on a tenant's
+   path, that tenant's. On the platform's own group the same query also names
+   resellers (`resellerHits`, slug or owner, from `tenantApi.resellers`, first
+   100), marked *reseller* in the same list — one list, two kinds of member,
+   because a reseller member is the business, not its owner (user,
+   2026-10-10). Anyone with no search door types user ids instead — split on
+   spaces, commas or lines, each once; a non-uuid is named; more than 500 is
+   refused first.
+6. **Members change as a draft** (`MembersDraft`, user 2026-10-10): a pick is
+   a *new* row, a removal marks its row (and undoes), an end day is set per
+   person on its row; someone already in or pending is never added twice
+   (`draftAdd`), adding back a marked member unmarks them, an end equal to
+   the saved one is no change (`draftEnd`). The footer counts the changes.
+7. **Save is one request** (`changesBody`, `POST …/members/changes`, GR-1-i):
+   every change or none; a refusal shows its sentence, marks the row
+   `facts.detail` names, and keeps the draft to fix. Discard empties it;
+   closing with changes unsaved asks first.
+8. **Nothing is patched from an answer.** A save re-reads the members page
+   and the list.
 9. **Delete is confirmed**, and says the members go with it; `group_in_use`
    is shown as its sentence.
 10. **A group's access is keys ticked on it** (`AccessSheet`), never a role
@@ -85,6 +93,7 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
 permission key and schema bounds, the menus (groups present; no team, roles or
 old address), `canNameResellers` and `isPlatformGroup` by tenant type and
 scope, `memberSearchOf`, the form bodies, `parseIds`, `membersBody` with an
-end, `endBody`, `accessBody` (the whole set, the fold, the 200-key cap),
+end, `endBody`, the members draft (`draftAdd`, `draftToggleRemove`,
+`draftEnd`, `changesBody`), `accessBody` (the whole set, the fold, the 200-key cap),
 `groupKeyAreas`, `receivers`, `presetDraft` (held, offered, admin), `groupsApiPath`, every old address redirecting,
 no *team* or *role* in the page's `en` and `fa` strings, and every key in both.

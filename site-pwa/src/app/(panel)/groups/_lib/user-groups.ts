@@ -1,4 +1,4 @@
-import type { GroupPreset, Me, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
+import type { GroupPreset, Me, MemberChangesBody, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
 import { groupsApiPath } from "@/lib/auth-api";
 import { endOfDay } from "../../my-resellers/_lib/team";
 import { holdsPermission } from "@/lib/permissions";
@@ -42,7 +42,8 @@ export type UserGroupRefusal =
   | "key_not_grantable"
   | "key_not_held"
   | "no_authority"
-  | "expiry_past";
+  | "expiry_past"
+  | "member_conflict";
 
 export const REFUSAL_KEYS: Record<UserGroupRefusal, string> = K.refusals;
 
@@ -160,6 +161,73 @@ export function membersBody(
 
 /** A member's end moved to a day's last moment, or cleared (`PATCH …/members/users/:userId`). */
 export const endBody = (day: string | null): { expiresAt: string | null } => ({ expiresAt: day ? endOfDay(day) : null });
+
+// ------------------------------------------------------------ the draft (GR-1-j)
+
+/** A member's key in the draft: `user:<id>` or `tenant:<id>`. */
+export const memberKey = (m: { memberType: "user" | "tenant"; userId: string | null; tenantId: string | null }) =>
+  m.memberType === "user" ? `user:${m.userId}` : `tenant:${m.tenantId}`;
+
+/** Someone picked to join: a person, or a reseller on the platform's own group. */
+export type MemberPick = { kind: "user" | "tenant"; id: string; label: string };
+export type DraftAdd = MemberPick & { endDay: string | null };
+
+/**
+ * Every change the members sheet holds until Save (GR-1-j, user 2026-10-10):
+ * people to add (each with an end day or none), members to remove (by
+ * {@link memberKey}), and members whose end moves (`userId` → day, or `null`
+ * to clear). Nothing is sent until {@link changesBody}.
+ */
+export type MembersDraft = { add: DraftAdd[]; remove: string[]; ends: Record<string, string | null> };
+export const emptyMembersDraft: MembersDraft = { add: [], remove: [], ends: {} };
+
+const keyOf = (p: MemberPick) => `${p.kind}:${p.id}`;
+
+/**
+ * Add `pick`, unless it is pending already or is a member (`present` holds
+ * the keys on the page). Someone marked for removal is not added: the removal
+ * is cancelled, which is what adding them back means.
+ */
+export function draftAdd(d: MembersDraft, pick: MemberPick, present: ReadonlySet<string>): MembersDraft {
+  const key = keyOf(pick);
+  if (d.remove.includes(key)) return { ...d, remove: d.remove.filter((k) => k !== key) };
+  if (present.has(key) || d.add.some((a) => keyOf(a) === key)) return d;
+  return { ...d, add: [...d.add, { ...pick, endDay: null }] };
+}
+
+/** A pending add is dropped; a member is marked for removal, or unmarked; a removed member's end move goes with it. */
+export function draftToggleRemove(d: MembersDraft, key: string): MembersDraft {
+  if (d.add.some((a) => keyOf(a) === key)) return { ...d, add: d.add.filter((a) => keyOf(a) !== key) };
+  if (d.remove.includes(key)) return { ...d, remove: d.remove.filter((k) => k !== key) };
+  const ends = { ...d.ends };
+  if (key.startsWith("user:")) delete ends[key.slice(5)];
+  return { ...d, remove: [...d.remove, key], ends };
+}
+
+/** An end day on a pending add, or on a member — kept only when it differs from the one they have (`was`). */
+export function draftEnd(d: MembersDraft, userId: string, day: string | null, was: string | null): MembersDraft {
+  if (d.add.some((a) => a.kind === "user" && a.id === userId)) {
+    return { ...d, add: d.add.map((a) => (a.kind === "user" && a.id === userId ? { ...a, endDay: day } : a)) };
+  }
+  const ends = { ...d.ends };
+  if (day === was) delete ends[userId];
+  else ends[userId] = day;
+  return { ...d, ends };
+}
+
+/** How many changes Save would make. */
+export const draftSize = (d: MembersDraft) => d.add.length + d.remove.length + Object.keys(d.ends).length;
+
+/** The one `POST …/members/changes` body (GR-1-i), each day its last moment in the visitor's zone; `null` when there is nothing to save. */
+export function changesBody(d: MembersDraft): MemberChangesBody | null {
+  if (draftSize(d) === 0) return null;
+  const at = (day: string | null) => (day ? endOfDay(day) : null);
+  return {
+    add: d.add.map((a) => (a.kind === "user" ? { userId: a.id, expiresAt: at(a.endDay) } : { tenantId: a.id, expiresAt: at(a.endDay) })),
+    remove: d.remove.map((k) => (k.startsWith("user:") ? { userId: k.slice(5) } : { tenantId: k.slice(7) })),
+    ends: Object.entries(d.ends).map(([userId, day]) => ({ userId, expiresAt: at(day) })),
+  };
+}
 
 // ------------------------------------------------------------------ the access
 
