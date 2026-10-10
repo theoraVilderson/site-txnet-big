@@ -33,6 +33,13 @@ describe('GROUP_PRESETS', () => {
     expect(GROUP_PRESETS.find((p) => p.id === 'support')?.platformKeys).toEqual(['platform.support']);
   });
 
+  it('lets Support see and change the person and fix their services (GR-1-t, user 2026-10-10)', () => {
+    const support = GROUP_PRESETS.find((p) => p.id === 'support')?.keys ?? [];
+    for (const key of ['user.read', 'user.write', 'grant.read', 'grant.repair', 'support.agent']) expect(support, key).toContain(key);
+    // Money and gifts stay with finance and sales.
+    for (const key of ['grant.assign', 'wallet.manual_adjust']) expect(support, key).not.toContain(key);
+  });
+
   it('gives a listed preset at least one key, and the admin preset none of its own', () => {
     for (const preset of GROUP_PRESETS) {
       if (preset.every) expect(preset.keys).toEqual([]);

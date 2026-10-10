@@ -364,7 +364,7 @@
   "presets": {
     "support": {
       "label": "Support",
-      "description": "Answer support conversations, see users and their services, repair configs and restrict accounts."
+      "description": "Answer support conversations, see users and their services, repair configs, edit a user's details and restrict or block accounts. On the platform: help resellers' users under their consent."
     },
     "finance": {
       "label": "Finance",
