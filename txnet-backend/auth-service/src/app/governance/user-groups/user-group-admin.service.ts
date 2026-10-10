@@ -61,6 +61,18 @@ export type UserGroupInput = { name: string; allTenants?: boolean };
 export type UserGroupPatch = Partial<UserGroupInput>;
 /** `expiresAt`: when each membership this call adds ends (ADR-0139 (3)); absent or null, never. */
 export type UserGroupMembersInput = { userIds?: string[]; tenantIds?: string[]; expiresAt?: Date | null };
+/** One member, named by kind: a person, or a reseller (the platform's own groups only). */
+export type MemberRef = { userId: string } | { tenantId: string };
+/**
+ * Every change a save makes (GR-1-i): adds, each person with their own end;
+ * removals; and end moves on members who stay. Checked whole, then written in
+ * one transaction — all of it or none.
+ */
+export type UserGroupMemberChanges = {
+  add: (MemberRef & { expiresAt?: Date | null })[];
+  remove: MemberRef[];
+  ends: { userId: string; expiresAt: Date | null }[];
+};
 
 export type UserGroupView = {
   id: string;
@@ -277,20 +289,7 @@ export class UserGroupAdminService {
       const platform = await this.isPlatform(tx, tenant.id);
       const group = { tenantId: tenant.id, platform, allTenants: row.allTenants };
 
-      const candidates: Array<[string, MemberCandidate]> = [];
-      if (userIds.length > 0) {
-        const found = await this.userReader(tx, platform).findMany({ where: { id: { in: userIds }, deletedAt: null }, select: { id: true, tenantId: true } });
-        for (const userId of userIds) candidates.push([userId, { type: 'user', userTenantId: found.find((u) => u.id === userId)?.tenantId ?? null }]);
-      }
-      if (tenantIds.length > 0) {
-        // A reseller cannot name one at all; asking the cross-tenant pool first would be the leak.
-        const found = platform ? await this.all.tenant.findMany({ where: { id: { in: tenantIds } }, select: { id: true } }) : [];
-        for (const tenantId of tenantIds) candidates.push([tenantId, { type: 'tenant', tenantId, exists: found.some((t) => t.id === tenantId) }]);
-      }
-      for (const [memberId, c] of candidates) {
-        const refused = memberRefusal(group, c);
-        if (refused) throw new UserGroupRefused(refused, memberId);
-      }
+      await this.mayJoin(tx, group, userIds, tenantIds);
 
       // AC-1-m: joining a group that gives access is a grant — see `mayMove`.
       const people = await this.mayMove(tx, actor, row, tenant.id, userIds);
@@ -310,6 +309,117 @@ export class UserGroupAdminService {
       const act = count > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, { userIds, tenantIds, expiresAt: expiresAt?.toISOString() ?? null }) : null;
       await this.tell(tx, tenant.id, people, before, actor, act);
       return { added: count };
+    });
+  }
+
+  /**
+   * Many member changes in one save (GR-1-i, user 2026-10-10): adds with an
+   * end each, removals, end moves. Everything is checked before anything is
+   * written — the same checks as the one-at-a-time routes, plus that a
+   * removal or a moved end names a member and that no one is named twice
+   * (`member_conflict`) — then written in this one transaction, removals
+   * first. `staff_members_max` weighs the save as a whole, so swapping one
+   * person for another at the cap is allowed. Each kind present is one audit
+   * row of its usual action, so the access history reads it as before.
+   */
+  changeMembers(actor: UserGroupActor, id: string, changes: UserGroupMemberChanges): Promise<{ added: number; removed: number; endsMoved: number }> {
+    const tenant = TenantContext.current('user group member changes');
+    const userOf = (m: MemberRef) => ('userId' in m ? m.userId : null);
+    const tenantOf = (m: MemberRef) => ('tenantId' in m ? m.tenantId : null);
+    const addUsers = changes.add.flatMap((m): string[] => {
+      const v = userOf(m);
+      return v ? [v] : [];
+    });
+    const addTenants = changes.add.flatMap((m): string[] => {
+      const v = tenantOf(m);
+      return v ? [v] : [];
+    });
+    const removeUsers = changes.remove.flatMap((m): string[] => {
+      const v = userOf(m);
+      return v ? [v] : [];
+    });
+    const removeTenants = changes.remove.flatMap((m): string[] => {
+      const v = tenantOf(m);
+      return v ? [v] : [];
+    });
+    const endUsers = changes.ends.map((e) => e.userId);
+    return tenantTransaction(this.prisma, async (tx) => {
+      const named = [...addUsers, ...addTenants, ...removeUsers, ...removeTenants, ...endUsers];
+      const twice = named.find((m, i) => named.indexOf(m) !== i);
+      if (twice) throw new UserGroupRefused('member_conflict', twice);
+      const now = new Date();
+      for (const at of [...changes.add.map((m) => m.expiresAt ?? null), ...changes.ends.map((e) => e.expiresAt)]) {
+        if (at && at <= now) throw new UserGroupRefused('expiry_past', at.toISOString());
+      }
+      const row = await this.mustFind(tx, id);
+      const platform = await this.isPlatform(tx, tenant.id);
+      await this.mayJoin(tx, { tenantId: tenant.id, platform, allTenants: row.allTenants }, addUsers, addTenants);
+
+      // A removal or a moved end names someone in the group, or it is refused before anything is written.
+      const staying = [...removeUsers, ...endUsers];
+      const present = staying.length > 0 ? await tx.userGroupMember.findMany({ where: { groupId: id, userId: { in: staying } }, select: { id: true, userId: true, expiresAt: true } }) : [];
+      const presentTenants =
+        removeTenants.length > 0 ? await tx.userGroupMember.findMany({ where: { groupId: id, memberTenantId: { in: removeTenants } }, select: { memberTenantId: true } }) : [];
+      const missing =
+        staying.find((u) => !present.some((r) => r.userId === u)) ?? removeTenants.find((t) => !presentTenants.some((r) => r.memberTenantId === t));
+      if (missing) throw new UserGroupRefused('member_not_found', missing);
+
+      const people = await this.mayMove(tx, actor, row, tenant.id, [...addUsers, ...removeUsers, ...endUsers]);
+      const before = await this.answers.ofLoadedMany(people, tx);
+      const staff = givesAccess(row) && (addUsers.length > 0 || endUsers.length > 0) && makesStaff(keysGiven(row));
+      const counts = await this.withinStaffLimit(tx, actor, tenant.id, staff, async () => {
+        let removed = 0;
+        if (removeUsers.length > 0) removed += (await tx.userGroupMember.deleteMany({ where: { groupId: id, userId: { in: removeUsers } } })).count;
+        if (removeTenants.length > 0) removed += (await tx.userGroupMember.deleteMany({ where: { groupId: id, memberTenantId: { in: removeTenants } } })).count;
+        const base = { groupId: id, tenantId: tenant.id, addedByAdminId: actor.adminId };
+        const { count: added } =
+          changes.add.length > 0
+            ? await tx.userGroupMember.createMany({
+                data: changes.add.map((m) =>
+                  'userId' in m
+                    ? { ...base, expiresAt: m.expiresAt ?? null, memberType: UserGroupMemberType.user, userId: m.userId }
+                    : { ...base, expiresAt: m.expiresAt ?? null, memberType: UserGroupMemberType.tenant, memberTenantId: m.tenantId },
+                ),
+                skipDuplicates: true,
+              })
+            : { count: 0 };
+        for (const e of changes.ends) {
+          const member = present.find((r) => r.userId === e.userId);
+          if (member) await tx.userGroupMember.update({ where: { id: member.id }, data: { expiresAt: e.expiresAt } });
+        }
+        return { added, removed, endsMoved: changes.ends.length };
+      });
+
+      const iso = (d: Date | null | undefined) => d?.toISOString() ?? null;
+      const acts = {
+        add:
+          counts.added > 0
+            ? await this.audit(tx, actor, tenant.id, 'user_group_member_add', id, null, {
+                userIds: addUsers,
+                tenantIds: addTenants,
+                ends: changes.add.map((m) => ({ ...m, expiresAt: iso(m.expiresAt) })),
+              })
+            : null,
+        remove: counts.removed > 0 ? await this.audit(tx, actor, tenant.id, 'user_group_member_remove', id, { userIds: removeUsers, tenantIds: removeTenants }, null) : null,
+        end:
+          changes.ends.length > 0
+            ? await this.audit(
+                tx,
+                actor,
+                tenant.id,
+                'user_group_member_end_set',
+                id,
+                { ends: present.filter((r) => endUsers.includes(r.userId as string)).map((r) => ({ userId: r.userId, expiresAt: iso(r.expiresAt) })) },
+                { ends: changes.ends.map((e) => ({ userId: e.userId, expiresAt: iso(e.expiresAt) })) },
+              )
+            : null,
+      };
+      // Each person is told against the act that moved them.
+      const among = (ids: string[]) => people.filter((p) => ids.includes(p.id));
+      await this.tell(tx, tenant.id, among(addUsers), before, actor, acts.add);
+      await this.tell(tx, tenant.id, among(removeUsers), before, actor, acts.remove);
+      await this.tell(tx, tenant.id, among(endUsers), before, actor, acts.end);
+      return counts;
     });
   }
 
@@ -407,6 +517,28 @@ export class UserGroupAdminService {
       await this.tell(tx, tenant.id, people, before, actor, act);
       return this.view(tx, await this.mustFind(tx, id));
     });
+  }
+
+  /**
+   * Whether these may join this group (`memberRefusal`): a user who exists and
+   * may be in it, a reseller only on the platform's own groups. The platform
+   * names past its tenant on the cross-tenant pool; anyone else, its own users.
+   */
+  private async mayJoin(tx: Tx, group: { tenantId: string; platform: boolean; allTenants: boolean }, userIds: readonly string[], tenantIds: readonly string[]) {
+    const candidates: Array<[string, MemberCandidate]> = [];
+    if (userIds.length > 0) {
+      const found = await this.userReader(tx, group.platform).findMany({ where: { id: { in: [...userIds] }, deletedAt: null }, select: { id: true, tenantId: true } });
+      for (const userId of userIds) candidates.push([userId, { type: 'user', userTenantId: found.find((u) => u.id === userId)?.tenantId ?? null }]);
+    }
+    if (tenantIds.length > 0) {
+      // A reseller cannot name one at all; asking the cross-tenant pool first would be the leak.
+      const found = group.platform ? await this.all.tenant.findMany({ where: { id: { in: [...tenantIds] } }, select: { id: true } }) : [];
+      for (const tenantId of tenantIds) candidates.push([tenantId, { type: 'tenant', tenantId, exists: found.some((t) => t.id === tenantId) }]);
+    }
+    for (const [memberId, c] of candidates) {
+      const refused = memberRefusal(group, c);
+      if (refused) throw new UserGroupRefused(refused, memberId);
+    }
   }
 
   /**

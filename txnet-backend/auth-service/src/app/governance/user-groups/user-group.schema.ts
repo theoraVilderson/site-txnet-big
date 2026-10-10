@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { UserGroupMemberChanges } from './user-group-admin.service';
+
 /**
  * The wire shapes of user-group management (F-114-j).
  *
@@ -33,6 +35,29 @@ export const addUserGroupMembersSchema = z
   .strict()
   .refine((b) => (b.userIds?.length ?? 0) + (b.tenantIds?.length ?? 0) > 0, { message: 'userIds or tenantIds must name someone' });
 
+const end = z.coerce.date().nullable();
+
+/**
+ * Every member change a save makes (GR-1-i): adds — a person or a reseller,
+ * each with its own end — removals, and end moves on members who stay. At
+ * most 500 of each; nothing at all is refused. Who may be named, and whether
+ * the list contradicts itself, are the service's (`member_conflict`).
+ */
+export const changeUserGroupMembersSchema = z
+  .object({
+    add: z
+      .array(z.union([z.object({ userId: uuid('userId'), expiresAt: end.optional() }).strict(), z.object({ tenantId: uuid('tenantId'), expiresAt: end.optional() }).strict()]))
+      .max(500)
+      .default([]),
+    remove: z
+      .array(z.union([z.object({ userId: uuid('userId') }).strict(), z.object({ tenantId: uuid('tenantId') }).strict()]))
+      .max(500)
+      .default([]),
+    ends: z.array(z.object({ userId: uuid('userId'), expiresAt: end }).strict()).max(500).default([]),
+  })
+  .strict()
+  .refine((b) => b.add.length + b.remove.length + b.ends.length > 0, { message: 'add, remove or ends must name someone' });
+
 /** A membership's end moved, or cleared with `null` (GR-1-d, ADR-0139 (3)). */
 export const setUserGroupMemberEndSchema = z.object({ expiresAt: z.coerce.date().nullable() }).strict();
 
@@ -57,6 +82,8 @@ export type CreateUserGroupBody = z.infer<typeof createUserGroupSchema>;
 export type UpdateUserGroupBody = z.infer<typeof updateUserGroupSchema>;
 export type AddUserGroupMembersBody = z.infer<typeof addUserGroupMembersSchema>;
 export type SetUserGroupMemberEndBody = { expiresAt: Date | null };
+/** The service's own shape: this project's non-strict inference reads the union's fields optional. */
+export type ChangeUserGroupMembersBody = UserGroupMemberChanges;
 export type UserGroupMemberPageQuery = z.infer<typeof userGroupMemberPageSchema>;
 /** `Required`: both fields are mandatory in the schema; this project's non-strict inference reads them optional. */
 export type SetUserGroupAccessBody = Required<z.infer<typeof setUserGroupAccessSchema>>;

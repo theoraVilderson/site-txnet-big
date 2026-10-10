@@ -35,12 +35,14 @@ import {
 } from './user-group-admin.service';
 import {
   AddUserGroupMembersBody,
+  ChangeUserGroupMembersBody,
   CreateUserGroupBody,
   SetUserGroupAccessBody,
   SetUserGroupMemberEndBody,
   UpdateUserGroupBody,
   UserGroupMemberPageQuery,
   addUserGroupMembersSchema,
+  changeUserGroupMembersSchema,
   createUserGroupSchema,
   setUserGroupAccessSchema,
   setUserGroupMemberEndSchema,
@@ -69,6 +71,7 @@ export const USER_GROUP_REFUSAL_STATUS: Record<UserGroupRejection, 400 | 403 | 4
   key_not_held: 403,
   no_authority: 403,
   expiry_past: 400,
+  member_conflict: 400,
 };
 
 export const USER_GROUP_READ = {
@@ -145,6 +148,14 @@ export class UserGroupController {
     return this.refusing(() => this.groups.addMembers(this.actor(req), id, body));
   }
 
+  /** Every member change of one save, all or none (GR-1-i). */
+  @Post(':id/members/changes')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(USER_GROUP_WRITE)
+  changeMembers(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(changeUserGroupMembersSchema)) body: ChangeUserGroupMembersBody, @Req() req: Request) {
+    return this.refusing(() => this.groups.changeMembers(this.actor(req), id, body));
+  }
+
   /** A membership's end moved or cleared in place (GR-1-d). */
   @Patch(':id/members/users/:userId')
   @RateLimit(USER_GROUP_WRITE)
@@ -193,7 +204,8 @@ export async function answeringRefusals<T>(work: () => Promise<T>): Promise<T> {
     // Past the reseller's staff_members_max (GR-1-b): the figures say what to raise.
     if (err instanceof ResellerLimitReached) throw new ConflictException({ reason: err.reason, message: err.message, facts: err.facts });
     if (!(err instanceof UserGroupRefused)) throw err;
-    const body = { reason: err.reason, message: err.message };
+    // `facts.detail` names the member or key refused, so a save of many can point at its row (GR-1-i).
+    const body = { reason: err.reason, message: err.message, ...(err.detail ? { facts: { detail: err.detail } } : {}) };
     switch (USER_GROUP_REFUSAL_STATUS[err.reason]) {
       case 403:
         throw new ForbiddenException(body);

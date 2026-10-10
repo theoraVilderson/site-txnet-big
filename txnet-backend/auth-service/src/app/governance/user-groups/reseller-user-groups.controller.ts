@@ -37,12 +37,14 @@ import { USER_GROUP_READ, USER_GROUP_WRITE, answeringRefusals } from './user-gro
 import { UserGroupActor, UserGroupAdminService, UserGroupInput, UserGroupView } from './user-group-admin.service';
 import {
   AddUserGroupMembersBody,
+  ChangeUserGroupMembersBody,
   CreateUserGroupBody,
   SetUserGroupAccessBody,
   SetUserGroupMemberEndBody,
   UpdateUserGroupBody,
   UserGroupMemberPageQuery,
   addUserGroupMembersSchema,
+  changeUserGroupMembersSchema,
   createUserGroupSchema,
   setUserGroupAccessSchema,
   setUserGroupMemberEndSchema,
@@ -145,6 +147,19 @@ export class ResellerUserGroupsController {
     @Req() req: Request,
   ) {
     return this.run(req, tenantId, 'staffWrite', (actor) => this.groups.addMembers(actor, id, body));
+  }
+
+  /** Every member change of one save, all or none (GR-1-i). */
+  @Post(':id/members/changes')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(USER_GROUP_WRITE)
+  changeMembers(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(changeUserGroupMembersSchema)) body: ChangeUserGroupMembersBody,
+    @Req() req: Request,
+  ) {
+    return this.run(req, tenantId, 'staffWrite', (actor) => this.groups.changeMembers(actor, id, body));
   }
 
   @Patch(':id/members/users/:userId')

@@ -33,7 +33,9 @@ export type UserGroupRejection =
   | 'key_not_grantable'
   | 'key_not_held'
   | 'no_authority'
-  | 'expiry_past';
+  | 'expiry_past'
+  /** One save names the same member twice — added and removed, or an end moved on someone it removes (GR-1-i). */
+  | 'member_conflict';
 
 export type MemberRow = { memberType: UserGroupMemberType; userId: string | null; memberTenantId: string | null };
 
