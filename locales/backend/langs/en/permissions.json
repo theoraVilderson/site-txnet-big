@@ -37,7 +37,7 @@
       "label": "Payment gateways"
     },
     "grant": {
-      "label": "Grants"
+      "label": "Users' services"
     },
     "guide": {
       "label": "Guides"
@@ -176,8 +176,8 @@
     },
     "grant": {
       "assign": {
-        "label": "Give services",
-        "description": "Give users a service or credit as a gift."
+        "label": "Manage users' services fully",
+        "description": "Create, renew, cancel or delete a service; freeze it, add or remove days or traffic, reset or gift traffic, set speed and devices; bulk work and issuing caps. Moves money and traffic."
       },
       "read": {
         "label": "See users' services",
