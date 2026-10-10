@@ -362,29 +362,34 @@ describe("the members draft", () => {
   });
 
   it("an end goes on the pending add, or on a member only when it differs from theirs; a removal drops it", () => {
-    let d = draftEnd(draftAdd(emptyMembersDraft, ali, present), "u-ali", "2026-12-01T18:30", null);
+    let d = draftEnd(draftAdd(emptyMembersDraft, ali, present), "user:u-ali", "2026-12-01T18:30", null);
     expect(d.add[0].endAt).toBe("2026-12-01T18:30");
-    d = draftEnd(d, "u-sara", "2026-11-01T09:00", null);
-    expect(d.ends).toEqual({ "u-sara": "2026-11-01T09:00" });
-    expect(draftEnd(d, "u-sara", "2026-11-01T09:00", "2026-11-01T09:00").ends).toEqual({});
-    expect(draftEnd(d, "u-sara", null, null).ends).toEqual({});
+    d = draftEnd(d, "user:u-sara", "2026-11-01T09:00", null);
+    expect(d.ends).toEqual({ "user:u-sara": "2026-11-01T09:00" });
+    expect(draftEnd(d, "user:u-sara", "2026-11-01T09:00", "2026-11-01T09:00").ends).toEqual({});
+    expect(draftEnd(d, "user:u-sara", null, null).ends).toEqual({});
     expect(draftToggleRemove(d, "user:u-sara").ends).toEqual({});
   });
 
   it("builds the one body: each add with its own end, removals, ends; nothing when empty", () => {
     expect(changesBody(emptyMembersDraft)).toBeNull();
     let d = draftAdd(emptyMembersDraft, ali, present);
-    d = draftEnd(d, "u-ali", "2026-12-01T18:30", null);
+    d = draftEnd(d, "user:u-ali", "2026-12-01T18:30", null);
     d = draftAdd(d, acme, present);
+    d = draftEnd(d, "tenant:t-acme", "2026-12-02T10:00", null);
     d = draftToggleRemove(d, "user:u-reza");
-    d = draftEnd(d, "u-sara", null, "2026-11-01T09:00");
+    d = draftEnd(d, "user:u-sara", null, "2026-11-01T09:00");
+    d = draftEnd(d, "tenant:t-shop", "2026-12-03T08:00", null);
     expect(changesBody(d)).toEqual({
       add: [
         { userId: "u-ali", expiresAt: new Date("2026-12-01T18:30:00").toISOString() },
-        { tenantId: "t-acme", expiresAt: null },
+        { tenantId: "t-acme", expiresAt: new Date("2026-12-02T10:00:00").toISOString() },
       ],
       remove: [{ userId: "u-reza" }],
-      ends: [{ userId: "u-sara", expiresAt: null }],
+      ends: [
+        { userId: "u-sara", expiresAt: null },
+        { tenantId: "t-shop", expiresAt: new Date("2026-12-03T08:00:00").toISOString() },
+      ],
     });
   });
 });
@@ -403,6 +408,6 @@ describe("a membership end as a wall time", () => {
 
   it("a saved end restated is no change", () => {
     const was = wallTimeOf(new Date("2026-11-01T09:05:00").toISOString());
-    expect(draftEnd(emptyMembersDraft, "u-sara", "2026-11-01T09:05", was).ends).toEqual({});
+    expect(draftEnd(emptyMembersDraft, "user:u-sara", "2026-11-01T09:05", was).ends).toEqual({});
   });
 });

@@ -4031,7 +4031,9 @@
       "byIds": "Add by id",
       "addIds": "Add to the list",
       "refusedRow": "This row was refused",
-      "addedShort": "Added"
+      "addedShort": "Added",
+      "resellerOwnedBy": "Reseller (the business), owned by {{name}}",
+      "userAccount": "User account"
     },
     "errors": {
       "nameRequired": "Enter a name.",

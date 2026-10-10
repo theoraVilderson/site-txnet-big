@@ -20,7 +20,7 @@ page still owns on top of them.
 | `Skeleton` | `_components/kit/Skeleton.tsx` | `shape` + size classes |
 | `TableSkeleton` | `_components/kit/TableSkeleton.tsx` | `rows`, `columns`, `withPagination` |
 | `Pagination` | `_components/kit/Pagination.tsx` | `page`, `totalPages`, `totalItems`, `pageSize`, `onPageChange` |
-| `DatePicker` | `_components/kit/DatePicker.tsx` | `value` / `onChange` as ISO `YYYY-MM-DD`; with `withTime`, a wall time `YYYY-MM-DDTHH:mm` in the visitor's zone (a day picked from empty starts 23:59, GR-1-k). The calendar is drawn on `document.body` above dialogs and may open upward, so a sheet never clips it |
+| `DatePicker` | `_components/kit/DatePicker.tsx` | `value` / `onChange` as ISO `YYYY-MM-DD`; with `withTime`, a wall time `YYYY-MM-DDTHH:mm` in the visitor's zone (a day picked from empty starts 23:59, GR-1-k); `date-value.ts` converts, since the library cannot parse the `T` (GR-1-l). The calendar is drawn on `document.body` above dialogs and may open upward, so a sheet never clips it |
 | `Select` | `_components/kit/Select.tsx` | `value`, `onChange`, `options` `{value,label}[]`, `placeholder?`, `ariaLabel?`, `invalid?` — use it instead of a native `<select>`, whose option list the browser draws unstyled; the list is portaled, so it is not clipped inside a modal, and its own Esc closes only the list |
 | `NativeSelect` | `_components/kit/Field.tsx` | a native `<select>` in the kit's box, wired by a `Field` — only for a long list where type-to-find matters: zones (`ZoneSelect`), currencies, coupon templates (UX-1-ac) |
 | `formatMoney`, `amountInWords` | `_lib/money.ts` | amount, currency code, `useLocale()` |

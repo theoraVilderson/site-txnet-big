@@ -108,9 +108,9 @@ export function UserSearch({
                   <span className="truncate text-sm font-bold text-text-primary" dir="ltr">
                     {r.slug}
                   </span>
+                  {/* The business, not a second account of its owner (user, 2026-10-10): said in so many words. */}
                   <span className="truncate text-xs text-text-secondary">
-                    {t("common", K.members.reseller)}
-                    {r.owner?.fullName ? ` · ${r.owner.fullName}` : ""}
+                    {r.owner?.fullName ? t("common", K.members.resellerOwnedBy, { name: r.owner.fullName }) : t("common", K.members.reseller)}
                   </span>
                 </span>
               </span>
@@ -122,7 +122,7 @@ export function UserSearch({
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-bold text-text-primary">{hit.fullName}</span>
                 <span className="truncate text-xs text-text-secondary" dir="ltr">
-                  {[hit.username && `@${hit.username}`, hit.phoneMasked].filter(Boolean).join(" · ")}
+                  {[resellers && onAddReseller ? t("common", K.members.userAccount) : null, hit.username && `@${hit.username}`, hit.phoneMasked].filter(Boolean).join(" · ")}
                 </span>
               </span>
               <AddButton done={has(`user:${hit.id}`)} busy={busy} onClick={() => onAdd(hit)} />

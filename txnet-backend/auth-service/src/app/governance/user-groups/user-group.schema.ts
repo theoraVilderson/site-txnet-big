@@ -53,7 +53,11 @@ export const changeUserGroupMembersSchema = z
       .array(z.union([z.object({ userId: uuid('userId') }).strict(), z.object({ tenantId: uuid('tenantId') }).strict()]))
       .max(500)
       .default([]),
-    ends: z.array(z.object({ userId: uuid('userId'), expiresAt: end }).strict()).max(500).default([]),
+    // A reseller member's end too (GR-1-l): either kind of membership may end.
+    ends: z
+      .array(z.union([z.object({ userId: uuid('userId'), expiresAt: end }).strict(), z.object({ tenantId: uuid('tenantId'), expiresAt: end }).strict()]))
+      .max(500)
+      .default([]),
   })
   .strict()
   .refine((b) => b.add.length + b.remove.length + b.ends.length > 0, { message: 'add, remove or ends must name someone' });

@@ -8,6 +8,7 @@ import { RadioCards, SegmentedControl } from "./choice";
 import { Select } from "./Select";
 import { StatusPill } from "./StatusPill";
 import { Checkbox, Toggle } from "./Toggle";
+import { pickedValue, pickerDate } from "./date-value";
 
 /**
  * The kit's form and display primitives (UX-1-c, `contract.ux.md` K3–K6).
@@ -170,5 +171,29 @@ describe("display", () => {
   it("AnimatedNumber reads as the final value from the first frame", () => {
     render(<AnimatedNumber value={1250} format={(n) => `$${Math.round(n)}`} />);
     expect(screen.getByText("$1250", { selector: ".sr-only" })).toBeInTheDocument();
+  });
+});
+
+/**
+ * GR-1-l — the date-and-time value round-trips through the calendar library.
+ * It cannot parse a `T` between date and time: the value read back was
+ * invalid, the picker reported "empty", and the field cleared itself right
+ * after a pick (user, 2026-10-10).
+ */
+describe("DatePicker's value", () => {
+  it("reads a wall time back as a valid date with its minute", () => {
+    const d = pickerDate("2026-11-01T23:59", true);
+    expect(d.isValid).toBe(true);
+    expect(pickedValue(d, true, true)).toBe("2026-11-01T23:59");
+  });
+
+  it("reads a day as a day", () => {
+    const d = pickerDate("2026-11-01", false);
+    expect(d.isValid).toBe(true);
+    expect(pickedValue(d, false, true)).toBe("2026-11-01");
+  });
+
+  it("a day picked from empty with a time starts at 23:59", () => {
+    expect(pickedValue(pickerDate("2026-11-01T08:15", true), true, false)).toBe("2026-11-01T23:59");
   });
 });

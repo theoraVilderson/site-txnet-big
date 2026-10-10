@@ -979,7 +979,7 @@ export const resellerUserGroupsApi = {
 export type MemberChangesBody = {
   add: ({ userId: string; expiresAt: string | null } | { tenantId: string; expiresAt: string | null })[];
   remove: ({ userId: string } | { tenantId: string })[];
-  ends: { userId: string; expiresAt: string | null }[];
+  ends: ({ userId: string; expiresAt: string | null } | { tenantId: string; expiresAt: string | null })[];
 };
 
 /** Every group route, on the session's tenant or on a tenant by its path ({@link groupsApiPath}). */

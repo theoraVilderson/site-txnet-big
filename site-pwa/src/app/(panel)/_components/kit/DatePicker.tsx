@@ -10,8 +10,8 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import { CalendarDays, ChevronDown, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { toEnglishDigits } from "@/util/helper";
 import { LATIN_DIGITS } from "../../_lib/digits";
+import { pickedValue, pickerDate } from "./date-value";
 import "./DatePicker.css";
 
 const D = FrontendI18nKeys.common.kit.datePicker;
@@ -22,9 +22,6 @@ const CALENDARS: Record<string, { calendar: typeof gregorian; locale: typeof gre
 };
 const GREGORIAN = { calendar: gregorian, locale: gregorian_en };
 
-const ISO = "YYYY-MM-DD";
-/** `withTime`: a wall time, minute precise, in the visitor's zone. */
-const ISO_TIME = "YYYY-MM-DDTHH:mm";
 /** Above `Dialog`'s `z-50`: the calendar is drawn on `document.body` (see `portal` below). */
 const CALENDAR_Z = 60;
 
@@ -61,18 +58,11 @@ export function DatePicker({ label, value, onChange, placeholder, withTime = fal
   const pickerRef = useRef<{ isOpen?: boolean } | null>(null);
   const { calendar, locale } = CALENDARS[lang] ?? GREGORIAN;
 
-  const format = withTime ? ISO_TIME : ISO;
-  const selected = value
-    ? new DateObject({ date: value, format, calendar: gregorian, locale: gregorian_en }).convert(calendar, locale)
-    : null;
+  const selected = value ? pickerDate(value, withTime).convert(calendar, locale) : null;
 
   const handleChange = (date: DateObject | null) => {
     if (!date?.isValid) return onChange(null);
-    const picked = new DateObject(date);
-    // From empty, a day means its end — the time is then the user's to move.
-    if (withTime && !value) picked.setHour(23).setMinute(59);
-    // Back to Gregorian, and ASCII digits whatever the locale printed.
-    onChange(toEnglishDigits(picked.convert(gregorian, gregorian_en).format(format)));
+    onChange(pickedValue(date, withTime, value !== null));
   };
 
   return (

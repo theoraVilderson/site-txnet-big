@@ -51,7 +51,7 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
    holding `user.read`, its own `GET /auth/tenants/:own/users`; on a tenant's
    path, that tenant's. On the platform's own group the same query also names
    resellers (`resellerHits`, slug or owner, from `tenantApi.resellers`, first
-   100), marked *reseller* in the same list — one list, two kinds of member,
+   100), marked *reseller (the business), owned by …* — and, beside them, people *user account* — in the same list — one list, two kinds of member,
    because a reseller member is the business, not its owner (user,
    2026-10-10). Anyone with no search door types user ids instead — split on
    spaces, commas or lines, each once; a non-uuid is named; more than 500 is
@@ -60,7 +60,7 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
    a *new* row, a removal marks its row (and undoes), an end day is set per
    person on its row; someone already in or pending is never added twice
    (`draftAdd`), adding back a marked member unmarks them, an end equal to
-   the saved one is no change (`draftEnd`). An end is a date and a time to
+   the saved one is no change (`draftEnd`). An end — a person's or a reseller's (GR-1-l) — is a date and a time to
    the minute, in the visitor's zone (`DatePicker withTime`, `wallTimeOf`,
    `instantOf`, GR-1-k). The footer counts the changes.
 7. **Save is one request** (`changesBody`, `POST …/members/changes`, GR-1-i):

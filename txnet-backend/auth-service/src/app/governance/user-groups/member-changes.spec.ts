@@ -30,8 +30,10 @@ const keys = (...k: string[]) => k.map((key) => ({ permission: { key } }));
 
 type Row = { userId: string; expiresAt: Date | null; createdAt: Date };
 
-function harness(start: Row[] = [], groupKeys: string[] = ['coupon.manage']) {
+function harness(start: Row[] = [], groupKeys: string[] = ['coupon.manage'], shops: { tenantId: string; expiresAt: Date | null }[] = []) {
   const members: Row[] = [...start];
+  // Reseller members, for the platform's own group (GR-1-l).
+  const tenants = shops.map((t) => ({ ...t }));
   const audits: { action: string; oldValue: unknown; newValue: unknown }[] = [];
   const outbox: Record<string, unknown>[] = [];
   const live = (r: Row) => r.expiresAt === null || r.expiresAt > new Date();
@@ -46,8 +48,9 @@ function harness(start: Row[] = [], groupKeys: string[] = ['coupon.manage']) {
     resellerLimitSetting: { findMany: vi.fn(async () => []) },
     userGroup: { findUnique: vi.fn(async () => group) },
     userGroupMember: {
-      findMany: vi.fn(async ({ where, distinct }: { where: { groupId?: string; userId?: { in: string[] } }; distinct?: string[] }) => {
+      findMany: vi.fn(async ({ where, distinct }: { where: { groupId?: string; userId?: { in: string[] }; memberTenantId?: { in: string[] } }; distinct?: string[] }) => {
         if (distinct) return [];
+        if (where.memberTenantId) return tenants.filter((t) => where.memberTenantId?.in.includes(t.tenantId)).map((t) => ({ id: `t-${t.tenantId}`, memberTenantId: t.tenantId, expiresAt: t.expiresAt }));
         return members
           .filter((m) => (where.userId ? where.userId.in.includes(m.userId) && live(m) : true))
           .map((m) => ({
@@ -86,6 +89,8 @@ function harness(start: Row[] = [], groupKeys: string[] = ['coupon.manage']) {
         return { count: before - members.length };
       }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: { expiresAt: Date | null } }) => {
+        const shop = tenants.find((t) => `t-${t.tenantId}` === where.id);
+        if (shop) return Object.assign(shop, { expiresAt: data.expiresAt });
         const m = members.find((r) => `m-${r.userId}` === where.id) as Row;
         m.expiresAt = data.expiresAt;
         return m;
@@ -105,7 +110,7 @@ function harness(start: Row[] = [], groupKeys: string[] = ['coupon.manage']) {
   };
   const prisma = { ...tx, $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)) };
   const service = new UserGroupAdminService(prisma as never, prisma as never, new AccessReader(prisma as never));
-  return { service, members, audits, outbox, prisma };
+  return { service, members, tenants, audits, outbox, prisma };
 }
 
 const lead = (permissions: string[] = ['user_group.manage', 'coupon.manage', 'user.read', 'report.read']) => ({ adminId: LEAD, tenantId: TENANT, ip: '1.1.1.1', permissions });
@@ -159,5 +164,16 @@ describe("a group's members changed in one save (GR-1-i)", () => {
     expect(twice).toBe('member_conflict');
     expect(endOfRemoved).toBe('member_conflict');
     expect(h.members.map((m) => m.userId)).toEqual([ALI]);
+  });
+
+  it("moves a reseller member's end too (GR-1-l)", async () => {
+    const ACME = '99999999-9999-4999-8999-999999999999';
+    const h = harness([], ['coupon.manage'], [{ tenantId: ACME, expiresAt: null }]);
+    const end = later(7);
+    const out = await inTenant(() => h.service.changeMembers(lead(), GROUP, { add: [], remove: [], ends: [{ tenantId: ACME, expiresAt: end }] }));
+
+    expect(out.endsMoved).toBe(1);
+    expect(h.tenants).toEqual([{ tenantId: ACME, expiresAt: end }]);
+    expect(h.audits.map((a) => a.action)).toEqual(['user_group_member_end_set']);
   });
 });

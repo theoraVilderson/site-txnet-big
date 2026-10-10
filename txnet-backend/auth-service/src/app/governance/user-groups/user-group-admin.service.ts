@@ -71,7 +71,8 @@ export type MemberRef = { userId: string } | { tenantId: string };
 export type UserGroupMemberChanges = {
   add: (MemberRef & { expiresAt?: Date | null })[];
   remove: MemberRef[];
-  ends: { userId: string; expiresAt: Date | null }[];
+  /** A person's or a reseller's end (GR-1-l): either kind of membership may end. */
+  ends: (MemberRef & { expiresAt: Date | null })[];
 };
 
 export type UserGroupView = {
@@ -342,9 +343,16 @@ export class UserGroupAdminService {
       const v = tenantOf(m);
       return v ? [v] : [];
     });
-    const endUsers = changes.ends.map((e) => e.userId);
+    const endUsers = changes.ends.flatMap((m): string[] => {
+      const v = userOf(m);
+      return v ? [v] : [];
+    });
+    const endTenants = changes.ends.flatMap((m): string[] => {
+      const v = tenantOf(m);
+      return v ? [v] : [];
+    });
     return tenantTransaction(this.prisma, async (tx) => {
-      const named = [...addUsers, ...addTenants, ...removeUsers, ...removeTenants, ...endUsers];
+      const named = [...addUsers, ...addTenants, ...removeUsers, ...removeTenants, ...endUsers, ...endTenants];
       const twice = named.find((m, i) => named.indexOf(m) !== i);
       if (twice) throw new UserGroupRefused('member_conflict', twice);
       const now = new Date();
@@ -358,10 +366,10 @@ export class UserGroupAdminService {
       // A removal or a moved end names someone in the group, or it is refused before anything is written.
       const staying = [...removeUsers, ...endUsers];
       const present = staying.length > 0 ? await tx.userGroupMember.findMany({ where: { groupId: id, userId: { in: staying } }, select: { id: true, userId: true, expiresAt: true } }) : [];
+      const shops = [...removeTenants, ...endTenants];
       const presentTenants =
-        removeTenants.length > 0 ? await tx.userGroupMember.findMany({ where: { groupId: id, memberTenantId: { in: removeTenants } }, select: { memberTenantId: true } }) : [];
-      const missing =
-        staying.find((u) => !present.some((r) => r.userId === u)) ?? removeTenants.find((t) => !presentTenants.some((r) => r.memberTenantId === t));
+        shops.length > 0 ? await tx.userGroupMember.findMany({ where: { groupId: id, memberTenantId: { in: shops } }, select: { id: true, memberTenantId: true, expiresAt: true } }) : [];
+      const missing = staying.find((u) => !present.some((r) => r.userId === u)) ?? shops.find((t) => !presentTenants.some((r) => r.memberTenantId === t));
       if (missing) throw new UserGroupRefused('member_not_found', missing);
 
       const people = await this.mayMove(tx, actor, row, tenant.id, [...addUsers, ...removeUsers, ...endUsers]);
@@ -384,7 +392,7 @@ export class UserGroupAdminService {
               })
             : { count: 0 };
         for (const e of changes.ends) {
-          const member = present.find((r) => r.userId === e.userId);
+          const member = 'userId' in e ? present.find((r) => r.userId === e.userId) : presentTenants.find((r) => r.memberTenantId === e.tenantId);
           if (member) await tx.userGroupMember.update({ where: { id: member.id }, data: { expiresAt: e.expiresAt } });
         }
         return { added, removed, endsMoved: changes.ends.length };
@@ -409,8 +417,13 @@ export class UserGroupAdminService {
                 tenant.id,
                 'user_group_member_end_set',
                 id,
-                { ends: present.filter((r) => endUsers.includes(r.userId as string)).map((r) => ({ userId: r.userId, expiresAt: iso(r.expiresAt) })) },
-                { ends: changes.ends.map((e) => ({ userId: e.userId, expiresAt: iso(e.expiresAt) })) },
+                {
+                  ends: [
+                    ...present.filter((r) => endUsers.includes(r.userId as string)).map((r) => ({ userId: r.userId, expiresAt: iso(r.expiresAt) })),
+                    ...presentTenants.filter((r) => endTenants.includes(r.memberTenantId as string)).map((r) => ({ tenantId: r.memberTenantId, expiresAt: iso(r.expiresAt) })),
+                  ],
+                },
+                { ends: changes.ends.map((e) => ({ ...e, expiresAt: iso(e.expiresAt) })) },
               )
             : null,
       };

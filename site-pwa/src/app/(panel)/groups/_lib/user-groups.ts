@@ -188,9 +188,9 @@ export const instantOf = (wall: WallTime) => new Date(`${wall}:00`).toISOString(
 /**
  * Every change the members sheet holds until Save (GR-1-j, user 2026-10-10):
  * people to add (each with an end or none), members to remove (by
- * {@link memberKey}), and members whose end moves (`userId` → wall time, or
- * `null` to clear). An end is a minute, not a day (GR-1-k). Nothing is sent
- * until {@link changesBody}.
+ * {@link memberKey}), and members whose end moves ({@link memberKey} → wall
+ * time, or `null` to clear) — a person's or a reseller's (GR-1-l). An end is a
+ * minute, not a day (GR-1-k). Nothing is sent until {@link changesBody}.
  */
 export type MembersDraft = { add: DraftAdd[]; remove: string[]; ends: Record<string, string | null> };
 export const emptyMembersDraft: MembersDraft = { add: [], remove: [], ends: {} };
@@ -214,18 +214,16 @@ export function draftToggleRemove(d: MembersDraft, key: string): MembersDraft {
   if (d.add.some((a) => keyOf(a) === key)) return { ...d, add: d.add.filter((a) => keyOf(a) !== key) };
   if (d.remove.includes(key)) return { ...d, remove: d.remove.filter((k) => k !== key) };
   const ends = { ...d.ends };
-  if (key.startsWith("user:")) delete ends[key.slice(5)];
+  delete ends[key];
   return { ...d, remove: [...d.remove, key], ends };
 }
 
 /** An end on a pending add, or on a member — kept only when it differs from the one they have (`was`, {@link wallTimeOf}). */
-export function draftEnd(d: MembersDraft, userId: string, at: WallTime | null, was: WallTime | null): MembersDraft {
-  if (d.add.some((a) => a.kind === "user" && a.id === userId)) {
-    return { ...d, add: d.add.map((a) => (a.kind === "user" && a.id === userId ? { ...a, endAt: at } : a)) };
-  }
+export function draftEnd(d: MembersDraft, key: string, at: WallTime | null, was: WallTime | null): MembersDraft {
+  if (d.add.some((a) => keyOf(a) === key)) return { ...d, add: d.add.map((a) => (keyOf(a) === key ? { ...a, endAt: at } : a)) };
   const ends = { ...d.ends };
-  if (at === was) delete ends[userId];
-  else ends[userId] = at;
+  if (at === was) delete ends[key];
+  else ends[key] = at;
   return { ...d, ends };
 }
 
@@ -239,7 +237,7 @@ export function changesBody(d: MembersDraft): MemberChangesBody | null {
   return {
     add: d.add.map((a) => (a.kind === "user" ? { userId: a.id, expiresAt: at(a.endAt) } : { tenantId: a.id, expiresAt: at(a.endAt) })),
     remove: d.remove.map((k) => (k.startsWith("user:") ? { userId: k.slice(5) } : { tenantId: k.slice(7) })),
-    ends: Object.entries(d.ends).map(([userId, day]) => ({ userId, expiresAt: at(day) })),
+    ends: Object.entries(d.ends).map(([key, wall]) => (key.startsWith("user:") ? { userId: key.slice(5), expiresAt: at(wall) } : { tenantId: key.slice(7), expiresAt: at(wall) })),
   };
 }
 

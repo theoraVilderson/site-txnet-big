@@ -175,7 +175,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
   ];
   const endOf = (line: Line): string | null => {
     if (line.pending) return draft.add.find((a) => `${a.kind}:${a.id}` === line.key)?.endAt ?? null;
-    return line.id in draft.ends ? draft.ends[line.id] : line.savedEnd;
+    return line.key in draft.ends ? draft.ends[line.key] : line.savedEnd;
   };
   const pages = rows ? Math.max(1, Math.ceil(rows.total / PAGE_SIZE)) : 1;
 
@@ -246,7 +246,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
               const Icon = line.kind === "user" ? User : Store;
               const removed = draft.remove.includes(line.key);
               const end = endOf(line);
-              const endMoved = !line.pending && line.id in draft.ends;
+              const endMoved = !line.pending && line.key in draft.ends;
               const refused = failure?.row === line.key;
               return (
                 <li key={line.key} className={`flex flex-col gap-2 px-3 py-2 ${refused ? "bg-error-bg" : line.pending ? "bg-bg-inner" : ""}`}>
@@ -257,7 +257,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                         <span className={`truncate text-sm font-bold text-text-primary ${removed ? "line-through opacity-60" : ""}`} dir="auto">
                           {line.label}
                         </span>
-                        {line.kind === "user" && (
+                        {!removed && (
                           <span className="text-[11px] text-text-secondary">
                             {end ? t("common", K.members.endsOn, { date: formatInstant(instantOf(end), lang, { withTime: true }) ?? end }) : t("common", K.members.noEnd)}
                           </span>
@@ -270,7 +270,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                       {removed && <Badge tone="error">{t("common", K.members.removedBadge)}</Badge>}
                       {endMoved && <Badge tone="info">{t("common", K.members.endChangedBadge)}</Badge>}
                       {refused && <Badge tone="error">{t("common", K.members.refusedRow)}</Badge>}
-                      {line.kind === "user" && !removed && (
+                      {!removed && (
                         <Button
                           variant="quiet"
                           size="sm"
@@ -293,16 +293,16 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                       </Button>
                     </span>
                   </div>
-                  {editing === line.key && line.kind === "user" && (
+                  {editing === line.key && !removed && (
                     <div className="flex flex-wrap items-end gap-2">
                       <DatePicker
                         withTime
                         label={t("common", K.members.end)}
                         value={end}
-                        onChange={(at) => setDraft((d) => draftEnd(d, line.id, at, line.savedEnd))}
+                        onChange={(at) => setDraft((d) => draftEnd(d, line.key, at, line.savedEnd))}
                       />
                       {end && (
-                        <Button variant="quiet" size="sm" onClick={() => setDraft((d) => draftEnd(d, line.id, null, line.savedEnd))}>
+                        <Button variant="quiet" size="sm" onClick={() => setDraft((d) => draftEnd(d, line.key, null, line.savedEnd))}>
                           {t("common", K.members.noEnd)}
                         </Button>
                       )}

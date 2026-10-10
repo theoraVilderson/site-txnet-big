@@ -4031,7 +4031,9 @@
       "byIds": "افزودن با شناسه",
       "addIds": "به فهرست اضافه کن",
       "refusedRow": "این ردیف رد شد",
-      "addedShort": "اضافه شده"
+      "addedShort": "اضافه شده",
+      "resellerOwnedBy": "نماینده (کسب‌وکار)، صاحبش: {{name}}",
+      "userAccount": "حساب کاربری"
     },
     "errors": {
       "nameRequired": "یک نام بنویسید.",
