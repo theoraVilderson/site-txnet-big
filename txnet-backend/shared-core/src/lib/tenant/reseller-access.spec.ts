@@ -201,6 +201,27 @@ describe('ResellerAccess', () => {
     expect(seen).toBe(PLATFORM);
   });
 
+  it("admits a platform user holding the route's key to the platform's own people, and to no reseller's (GR-1-o, ADR-0139 (7))", async () => {
+    const access = build().for('grant.read');
+    const agent = { userId: CUSTOMER, tenantId: PLATFORM, permissions: ['user.read', 'grant.read'] };
+    // The platform's Support group: the route's own key, from a group, opens the platform's users.
+    await expect(access.admitIncludingPlatform(agent, PLATFORM, 'read', T0)).resolves.toEqual({
+      id: PLATFORM,
+      slug: 'platform_owner',
+      as: 'staff',
+      platform: true,
+    });
+
+    // Not another key, not `*` alone as a member, not a reseller's user, not the bare door.
+    await expect(access.admitIncludingPlatform({ ...agent, permissions: ['user.read'] }, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(access.admitIncludingPlatform({ ...agent, tenantId: RESELLER }, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(build().admitIncludingPlatform(agent, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+
+    // A reseller's people stay behind `platform.tenant.manage` and its consent; a figures route stays staff-only.
+    await expect(build('active', [], [consent({ scope: 'act' })]).for('grant.read').admitIncludingPlatform(agent, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(access.admitFiguresIncludingPlatform(agent, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+  });
+
   it("admits the platform's own tenant to its staff on a figures route, and a reseller exactly as `admit` does — no consent (UX-1-r2)", async () => {
     const access = build();
     // A figures route asks the report key (AC-1-d): `platform.tenant.manage` alone is refused there.

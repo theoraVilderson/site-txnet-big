@@ -151,8 +151,10 @@ export class ResellerAccess {
    * {@link admit}, on a route that may also name the platform's own tenant
    * (F-311-aa, D-55): the users-admin routes, one page for every tenant's
    * users, the platform's direct users included. The platform's tenant is
-   * admitted to **its staff only** (`platform.tenant.manage` or `*`) and to nobody
-   * else, who learns nothing — its `ownerUserId` and a seat on it are no door.
+   * admitted to its staff (`platform.tenant.manage` or `*`) and to a user of
+   * the platform holding the route's key by name (GR-1-o, ADR-0139 (7)), both
+   * answered `staff`; anyone else learns nothing — its `ownerUserId` and a seat
+   * on it are no door.
    * A reseller is answered as {@link admit} answers it, with one more rule
    * for the platform's staff (F-117-b, ADR-0104 (4)): these routes name a
    * reseller's **people**, so staff reach them only under that reseller's live
@@ -200,7 +202,11 @@ export class ResellerAccess {
     const staffKey: PlatformKey = this.staffKey ?? (route === 'figures' ? 'platform.report.read' : 'platform.tenant.manage');
     const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, staffKey);
     if (platform && tenant?.tenantType === TenantType.platform_owner) {
-      if (!staff) throw new ResellerAccessRefused('not_allowed', tenantId);
+      // Its own people are a tenant's like any other's (GR-1-o, ADR-0139 (7)): a
+      // user of the platform holding the route's key by name — its Support group's
+      // `grant.read` — is admitted as its staff are. Figures stay staff-only.
+      const member = route === 'people' && actor.tenantId === tenant.id && this.holdsRouteKey(actor);
+      if (!staff && !member) throw new ResellerAccessRefused('not_allowed', tenantId);
       return { id: tenant.id, slug: tenant.slug, as: 'staff', platform: true };
     }
     const reseller = tenant?.tenantType === TenantType.reseller ? tenant : null;
@@ -294,11 +300,15 @@ export class ResellerAccess {
    * of theirs that is not live (invited and not accepted, expired, removed)
    * refuses: a removed seat kept its role and so its keys. GR-1-g drops this.
    */
+  /** One of the route's keys, by name, never `*`: a tenant user holding `*` is a mistake, not a grant (groups cannot give it, ADR-0138 (7)). */
+  private holdsRouteKey(actor: ResellerActor): boolean {
+    const named = actor.permissions.filter((key) => key !== ALL_PERMISSIONS);
+    return this.keys.some((key) => holdsPermission(named, key));
+  }
+
   private async isMember(actor: ResellerActor, resellerId: string, now: Date): Promise<boolean> {
     if (actor.tenantId !== resellerId) return false;
-    // A named key, never `*`: a reseller's user holding `*` is a mistake, not a grant (groups cannot give it, ADR-0138 (7)).
-    const named = actor.permissions.filter((key) => key !== ALL_PERMISSIONS);
-    if (!this.keys.some((key) => holdsPermission(named, key))) return false;
+    if (!this.holdsRouteKey(actor)) return false;
     const seat = await this.prisma.tenantStaffMember.findFirst({
       where: { tenantId: resellerId, userId: actor.userId },
       select: { joinedAt: true, accessExpiresAt: true, revokedAt: true },

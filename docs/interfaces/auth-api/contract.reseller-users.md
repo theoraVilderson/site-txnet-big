@@ -25,8 +25,10 @@ Every route needs a **Bearer** token and **no permission**: the door is
 `ResellerAccess` (tenant invariant 21) — the reseller's owner, one of its staff
 seats holding `user.read` to read or `user.write` to change (AC-1-e), or the platform owner's staff — judged against
 the **reseller the path names**, never the session's tenant. The path may
-also name the **platform's own tenant**, admitted to platform staff only
-(F-311-aa, ADR-0102); anyone else asking for it gets `not_allowed`. A `user` object is
+also name the **platform's own tenant**, admitted to platform staff and to a
+user of the platform holding the route's key — `user.read` / `user.write`
+here, from a platform group (F-311-aa, ADR-0102, GR-1-o); anyone else asking
+for it gets `not_allowed`. A `user` object is
 `{id, fullName, username, phoneMasked, status, createdAt, canAct, staff, role}` and carries no phone
 number and no email. `canAct` is whether the caller may block or unblock this
 person (ADR-0103); `staff` marks one who holds any permission, or the owner;

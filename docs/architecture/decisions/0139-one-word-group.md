@@ -47,6 +47,14 @@ where one person could be on both, confused them.
 6. **Existing seats and tenant roles become groups**, once, by migration: one
    group per role held by seated people, with the role's keys; its members are
    the seated holders, with the seat's end. The seat table stays for history.
+7. **The platform's own people are reached by the route's key, as a
+   reseller's are** (GR-1-o, user 2026-10-10). A user of the platform holding
+   `user.read`, `grant.read` or `grant.repair` from a platform group reaches
+   the platform's own users and their services, as the platform's staff do.
+   `platform.tenant.manage` stays the only way to a *reseller's* people, and
+   figures stay behind `platform.report.read`. Found when the platform's
+   Support group, given `grant.read` and `grant.repair`, had no page to use
+   them on.
 
 ## Consequences
 
