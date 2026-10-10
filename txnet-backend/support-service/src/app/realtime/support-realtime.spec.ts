@@ -81,6 +81,7 @@ describe('events on support:<conversationId>', () => {
     id: 'm1',
     seq: 4,
     senderKind: 'user' as const,
+    senderName: null,
     mine: true,
     body: 'hello',
     createdAt: new Date('2026-10-03T10:00:00Z'),

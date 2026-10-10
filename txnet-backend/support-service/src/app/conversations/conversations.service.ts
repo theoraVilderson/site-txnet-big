@@ -62,8 +62,14 @@ export interface MessageView {
   id: string;
   seq: number;
   senderKind: MessageSenderKind;
-  /** The caller wrote it. An agent is shown by kind, never by account. */
+  /** The caller wrote it. */
   mine: boolean;
+  /**
+   * An agent's message: who answered, by name (F-033-q, user 2026-10-10) —
+   * their full name, else their username; `null` for anyone else, and for an
+   * agent whose account this tenant cannot read (the platform's, in a reseller).
+   */
+  senderName: string | null;
   body: string;
   createdAt: Date;
   attachments: AttachmentView[];
@@ -296,10 +302,11 @@ export class SupportConversationService {
       const now = new Date();
       const attachmentsOf = (messageId: string) =>
         files.filter((f) => f.messageId === messageId).map((f) => this.attachmentView(f, now));
+      const names = await agentNamesOf(tx, page);
 
       return {
         conversation: summaryOf(conversation, unread.get(conversationId) ?? 0),
-        messages: page.map((m) => viewOf(m, caller, attachmentsOf(m.id))),
+        messages: page.map((m) => viewOf(m, caller, attachmentsOf(m.id), names)),
         hasEarlier,
         lastReadSeq: mine,
         seenUpToSeq: seen,
@@ -554,12 +561,34 @@ export function summaryOf(c: ConversationRow, unread: number): ConversationSumma
   };
 }
 
-export function viewOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[]): MessageView {
+/**
+ * The names of these accounts, as the bound tenant can read them (F-033-q):
+ * the full name, else the username. Read in the caller's tenant transaction,
+ * so RLS keeps it to that tenant's own people.
+ */
+export async function namesOf(tx: Prisma.TransactionClient, ids: readonly (string | null)[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))];
+  if (wanted.length === 0) return new Map();
+  const rows = await tx.user.findMany({ where: { id: { in: wanted } }, select: { id: true, fullName: true, username: true } });
+  const names = new Map<string, string>();
+  for (const r of rows) {
+    const name = r.fullName.trim() || r.username?.trim();
+    if (name) names.set(r.id, name);
+  }
+  return names;
+}
+
+/** The agents among these messages, by name ({@link namesOf}). */
+export const agentNamesOf = (tx: Prisma.TransactionClient, messages: readonly MessageRow[]) =>
+  namesOf(tx, messages.filter((m) => m.senderKind === MessageSenderKind.agent).map((m) => m.senderUserId));
+
+export function viewOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[], names?: ReadonlyMap<string, string>): MessageView {
   return {
     id: m.id,
     seq: m.seq,
     senderKind: m.senderKind,
     mine: m.senderUserId === caller.userId,
+    senderName: m.senderKind === MessageSenderKind.agent && m.senderUserId ? (names?.get(m.senderUserId) ?? null) : null,
     body: m.body,
     createdAt: m.createdAt,
     attachments,

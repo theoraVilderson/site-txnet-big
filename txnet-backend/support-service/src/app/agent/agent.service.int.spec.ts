@@ -331,6 +331,33 @@ describe('live or async on the stored thread (F-033-g, catalog §11.2)', () => {
  * `support.agent` from any source (ADR-0138), a group included.
  */
 describe('names and agents by group (F-033-q, F-033-s)', () => {
+  it("names the answering agent to the user and to colleagues, and the assignee in the inbox", async () => {
+    await owner.$executeRawUnsafe(`UPDATE identity.user SET "fullName" = 'Sara Ahmadi' WHERE id = '${SARA.userId}'`);
+    await owner.$executeRawUnsafe(`UPDATE identity.user SET "fullName" = '', username = 'kaveh_s' WHERE id = '${KAVEH.userId}'`);
+    const opened = await as(ALICE, () => users.open(ALICE, { body: 'who is answering?' }));
+    await as(SARA, () => agents.reply(SARA, opened.id, { body: 'Sara here' }));
+    await as(KAVEH, () => agents.reply(KAVEH, opened.id, { body: 'and Kaveh' }));
+
+    const mine = await as(ALICE, () => users.messages(ALICE, opened.id, {}));
+    expect(mine.messages.map((m) => [m.senderKind, m.senderName])).toEqual([
+      ['user', null],
+      ['agent', 'Sara Ahmadi'],
+      // No full name: the username stands in.
+      ['agent', 'kaveh_s'],
+    ]);
+    // Live, as the page receives it.
+    const pushed = published.filter((p) => p.kind === 'message' && p.conversationId === opened.id).map((p) => (p.detail as { senderName: string | null }).senderName);
+    expect(pushed).toContain('Sara Ahmadi');
+
+    const page = await as(KAVEH, () => agents.messages(KAVEH, opened.id, {}));
+    expect(page.messages.find((m) => m.body === 'Sara here')?.senderName).toBe('Sara Ahmadi');
+    // The first reply claimed it for Sara (user, 2026-10-03).
+    expect(page.conversation.assignedToName).toBe('Sara Ahmadi');
+    const listed = (await as(SARA, () => agents.inbox(SARA, { view: 'mine' }))).items.find((c) => c.id === opened.id);
+    expect(listed?.assignedToName).toBe('Sara Ahmadi');
+    expect((await as(SARA, () => agents.assign(SARA, opened.id, { assigneeUserId: null }))).assignedToName).toBeNull();
+  });
+
   it('assigns a colleague who holds `support.agent` through a group, and no one whose group gives nothing', async () => {
     const GROUP = '66666666-6666-4666-8666-6666666666a1';
     await owner.$executeRawUnsafe(`

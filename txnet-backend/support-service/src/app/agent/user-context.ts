@@ -19,7 +19,8 @@ export interface BillingFactsSeam {
 
 export const BILLING_FACTS_SEAM = Symbol('BILLING_FACTS_SEAM');
 
-export type UserContext = { userId: string; billing: BillingUserFacts | null };
+/** `user`: the person's name as their tenant has it (F-033-q), so the agent knows who they are talking to. */
+export type UserContext = { userId: string; user: { fullName: string; username: string | null } | null; billing: BillingUserFacts | null };
 
 /**
  * The agent's sidebar (F-033-m, catalog §11.3): the conversation's user, as
@@ -39,15 +40,18 @@ export class SupportUserContext {
   ) {}
 
   async forConversation(caller: SupportCaller, conversationId: string): Promise<UserContext> {
-    const thread = await tenantTransaction(this.prisma, (tx) =>
-      tx.supportConversation.findFirst({ where: { id: conversationId, tenantId: caller.tenantId }, select: { userId: true } }),
-    );
-    if (!thread) throw new ConversationRefused('not_found');
+    const found = await tenantTransaction(this.prisma, async (tx) => {
+      const thread = await tx.supportConversation.findFirst({ where: { id: conversationId, tenantId: caller.tenantId }, select: { userId: true } });
+      if (!thread) return null;
+      const user = await tx.user.findFirst({ where: { id: thread.userId }, select: { fullName: true, username: true } });
+      return { userId: thread.userId, user };
+    });
+    if (!found) throw new ConversationRefused('not_found');
     try {
-      return { userId: thread.userId, billing: await this.billing.of(caller.tenantId, thread.userId) };
+      return { ...found, billing: await this.billing.of(caller.tenantId, found.userId) };
     } catch (e) {
       this.logger.warn(`sidebar for conversation ${conversationId} without billing: ${(e as Error).message}`);
-      return { userId: thread.userId, billing: null };
+      return { ...found, billing: null };
     }
   }
 }

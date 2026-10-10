@@ -43,7 +43,7 @@ the door (F-117-c, audit `contract.md` "The platform's trail").
 `GET /api/support/tenants/:tenantId/agent/conversations/:id/context` (`read`
 consent — it names a person). `agent/user-context.ts`.
 
-Answer: `{userId, billing}` — `billing` is billing's `support-context` as it
+Answer: `{userId, user, billing}` — `user` is `{fullName, username}` as the tenant has it (F-033-q), `billing` is billing's `support-context` as it
 shaped it (wallet, current Grants, recent invoices, last connection; billing
 `contract.md` "Support's sidebar"), or **`null`** when billing fails or
 `BILLING_API_BASE_URL` is unset.

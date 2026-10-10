@@ -15,8 +15,10 @@ import {
   PAGE_MAX,
   SupportCaller,
   UNFINISHED,
+  agentNamesOf,
   attachmentViewOf,
   moveCursor,
+  namesOf,
   noticeTarget,
   summaryOf,
   unreadCounts,
@@ -49,6 +51,8 @@ import { SUPPORT_AGENT_PERMISSION } from './support-agent.guard';
 export interface AgentConversationView extends ConversationSummary {
   userId: string;
   assignedToUserId: string | null;
+  /** Who has it, by name (F-033-q); `null` when unassigned or unreadable. */
+  assignedToName: string | null;
   firstResponseAt: Date | null;
   resolvedAt: Date | null;
   closedAt: Date | null;
@@ -120,8 +124,9 @@ export class SupportAgentService {
       });
       const page = rows.slice(0, limit);
       const unread = await unreadCounts(tx, caller, page.map((c) => c.id), true);
+      const names = await namesOf(tx, page.map((c) => c.assignedToUserId));
       return {
-        items: page.map((c) => agentViewOf(c, unread.get(c.id) ?? 0)),
+        items: page.map((c) => agentViewOf(c, unread.get(c.id) ?? 0, names)),
         nextAfter: rows.length > limit ? page[page.length - 1].id : null,
       };
     });
@@ -162,9 +167,10 @@ export class SupportAgentService {
       const attachmentsOf = (messageId: string): AttachmentView[] =>
         files.filter((f) => f.messageId === messageId).map((f) => attachmentViewOf(f, now, secret));
 
+      const names = await namesOf(tx, [conversation.assignedToUserId, ...page.filter((m) => m.senderKind === MessageSenderKind.agent).map((m) => m.senderUserId)]);
       return {
-        conversation: agentViewOf(conversation, unread.get(conversationId) ?? 0),
-        messages: page.map((m) => agentMessageOf(m, caller, attachmentsOf(m.id))),
+        conversation: agentViewOf(conversation, unread.get(conversationId) ?? 0, names),
+        messages: page.map((m) => agentMessageOf(m, caller, attachmentsOf(m.id), names)),
         hasEarlier,
         lastReadSeq: reads.find((r) => r.userId === caller.userId)?.lastReadSeq ?? 0,
         seenUpToSeq: reads.find((r) => r.userId === conversation.userId)?.lastReadSeq ?? 0,
@@ -184,7 +190,7 @@ export class SupportAgentService {
     const internal = input.internal === true;
     // An agent answering re-decides the mode as a user's message does (F-033-g).
     const mode = await this.availability.mode(caller.tenantId);
-    const { message, status, user } = await writingMessage(this.prisma, this.logger, async (tx, now) => {
+    const { message, status, user, names } = await writingMessage(this.prisma, this.logger, async (tx, now) => {
       const [row] = await tx.$queryRaw<{ lastSeq: number; status: ConversationStatus; userId: string; subject: string }[]>`
         UPDATE support.conversation
            SET "lastSeq" = "lastSeq" + 1,
@@ -219,13 +225,13 @@ export class SupportAgentService {
       if (!internal) await applySla(tx, conversationId, now, 'agent_replied');
       // A note tells no one (invariant 5); a reply tells the user (F-033-i).
       const user = internal ? null : await noticeTarget(tx, conversationId, row.userId, row.subject);
-      return { message, status: row.status, user };
+      return { message, status: row.status, user, names: await agentNamesOf(tx, [message]) };
     });
-    // Invariant 5: the user reads this channel, so a note is never on it —
-    // and it carries the user-side view, which names no agent.
-    if (!internal) await this.realtime.message(conversationId, viewOf(message, caller, []), status);
+    // Invariant 5: the user reads this channel, so a note is never on it.
+    // It carries the user-side view, the agent named as on the page (F-033-q).
+    if (!internal) await this.realtime.message(conversationId, viewOf(message, caller, [], names), status);
     if (user) void this.notifier.tell(caller.tenantId, 'supportReplied', user);
-    return agentMessageOf(message, caller, []);
+    return agentMessageOf(message, caller, [], names);
   }
 
   /** Hands the thread to an agent of this tenant, or with `null` back to the queue. */
@@ -239,7 +245,7 @@ export class SupportAgentService {
         where: { id: conversationId },
         data: { assignedToUserId: input.assigneeUserId },
       });
-      return agentViewOf(updated, 0);
+      return agentViewOf(updated, 0, await namesOf(tx, [updated.assignedToUserId]));
     });
   }
 
@@ -278,7 +284,8 @@ export class SupportAgentService {
       await tenantConversation(tx, conversationId);
       await tx.supportConversation.update({ where: { id: conversationId }, data: { priority: input.priority } });
       await applySla(tx, conversationId, new Date(), 'reprioritized');
-      return agentViewOf(await tenantConversation(tx, conversationId), 0);
+      const row = await tenantConversation(tx, conversationId);
+      return agentViewOf(row, 0, await namesOf(tx, [row.assignedToUserId]));
     });
   }
 
@@ -311,7 +318,8 @@ export class SupportAgentService {
       const now = new Date();
       const notice = await write(tx, now);
       await applySla(tx, conversationId, now, 'settled');
-      return { view: agentViewOf(await tenantConversation(tx, conversationId), 0), notice };
+      const row = await tenantConversation(tx, conversationId);
+      return { view: agentViewOf(row, 0, await namesOf(tx, [row.assignedToUserId])), notice };
     });
     await this.realtime.status(conversationId, status);
     if (notice) void this.notifier.tell(caller.tenantId, notice.template, notice.target);
@@ -376,11 +384,12 @@ async function isAgent(tx: Prisma.TransactionClient, tenantId: string, userId: s
   return rows.length > 0;
 }
 
-function agentViewOf(c: ConversationRow, unread: number, now = new Date()): AgentConversationView {
+function agentViewOf(c: ConversationRow, unread: number, names?: ReadonlyMap<string, string>, now = new Date()): AgentConversationView {
   return {
     ...summaryOf(c, unread),
     userId: c.userId,
     assignedToUserId: c.assignedToUserId,
+    assignedToName: c.assignedToUserId ? (names?.get(c.assignedToUserId) ?? null) : null,
     firstResponseAt: c.firstResponseAt,
     resolvedAt: c.resolvedAt,
     closedAt: c.closedAt,
@@ -389,6 +398,6 @@ function agentViewOf(c: ConversationRow, unread: number, now = new Date()): Agen
   };
 }
 
-function agentMessageOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[]): AgentMessageView {
-  return { ...viewOf(m, caller, attachments), internal: m.internal, senderUserId: m.senderUserId };
+function agentMessageOf(m: MessageRow, caller: SupportCaller, attachments: AttachmentView[], names?: ReadonlyMap<string, string>): AgentMessageView {
+  return { ...viewOf(m, caller, attachments, names), internal: m.internal, senderUserId: m.senderUserId };
 }

@@ -23,6 +23,8 @@ describe('SupportUserContext', () => {
         bound.push(tenantId);
       }),
       supportConversation: { findFirst },
+      // The person's name, in the same tenant transaction (F-033-r's sidebar).
+      user: { findFirst: vi.fn(async () => ({ fullName: 'Ali Rezaei', username: 'ali_r' })) },
     };
     const prisma = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
     const raw = new SupportUserContext(prisma as never, seam as never);
@@ -33,7 +35,11 @@ describe('SupportUserContext', () => {
 
   it("finds the thread in the caller's tenant, then asks billing for that tenant and the thread's user", async () => {
     const { context, findFirst, seam, bound } = build();
-    await expect(context.forConversation(caller, 'conv-1')).resolves.toEqual({ userId: 'user-9', billing: facts });
+    await expect(context.forConversation(caller, 'conv-1')).resolves.toEqual({
+      userId: 'user-9',
+      user: { fullName: 'Ali Rezaei', username: 'ali_r' },
+      billing: facts,
+    });
     expect(bound).toEqual(['tenant-1']);
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'conv-1', tenantId: 'tenant-1' } }));
     expect(seam.of).toHaveBeenCalledWith('tenant-1', 'user-9');
@@ -51,6 +57,6 @@ describe('SupportUserContext', () => {
         throw new Error('billing answered 502');
       },
     });
-    await expect(context.forConversation(caller, 'conv-1')).resolves.toEqual({ userId: 'user-9', billing: null });
+    await expect(context.forConversation(caller, 'conv-1')).resolves.toEqual({ userId: 'user-9', user: { fullName: 'Ali Rezaei', username: 'ali_r' }, billing: null });
   });
 });
