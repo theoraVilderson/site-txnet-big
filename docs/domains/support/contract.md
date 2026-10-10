@@ -88,8 +88,8 @@ and **claims an unassigned thread for the replier** (user, 2026-10-03); an
 assigned one keeps its assignee. A **note** (`internal: true`) takes the next
 `seq` and changes nothing else — no status, no `lastMessageAt`, no event.
 `resolve` stamps `resolvedAt`; `close` stamps `closedAt` and is final. An
-assignee is an active account of the caller's tenant whose role holds
-`support.agent` (or `*`); anyone else is `assignee_unknown`.
+assignee is an active account of the caller's tenant holding `support.agent` (or `*`) from any
+source — role, live group, given key, not taken (F-033-s); else `assignee_unknown`.
 
 ## Live or async (F-033-g, catalog §11.2)
 

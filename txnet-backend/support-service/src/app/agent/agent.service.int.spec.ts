@@ -323,3 +323,34 @@ describe('live or async on the stored thread (F-033-g, catalog §11.2)', () => {
     await as(SARA, () => availability.beat(SARA, 'away'));
   });
 });
+
+/**
+ * F-033-q: who answered is said by name — the agent's on their messages, on
+ * both sides, and the assignee's on the agent's view — read in the
+ * conversation's tenant, never another's. F-033-s: an agent is anyone holding
+ * `support.agent` from any source (ADR-0138), a group included.
+ */
+describe('names and agents by group (F-033-q, F-033-s)', () => {
+  it('assigns a colleague who holds `support.agent` through a group, and no one whose group gives nothing', async () => {
+    const GROUP = '66666666-6666-4666-8666-6666666666a1';
+    await owner.$executeRawUnsafe(`
+      INSERT INTO governance.user_group (id, "tenantId", name, "createdByAdminId", "updatedAt")
+      VALUES ('${GROUP}', '${RESELLER_A}', 'Support', '${SARA.userId}', now())`);
+    await owner.$executeRawUnsafe(`
+      INSERT INTO governance.user_group_member (id, "groupId", "tenantId", "memberType", "userId", "addedByAdminId")
+      VALUES (gen_random_uuid(), '${GROUP}', '${RESELLER_A}', 'user', '${NOT_AGENT}', '${SARA.userId}')`);
+    const opened = await as(ALICE, () => users.open(ALICE, { body: 'group agent' }));
+    // In the group, but the group gives nothing yet.
+    expect(await refusal(as(SARA, () => agents.assign(SARA, opened.id, { assigneeUserId: NOT_AGENT })))).not.toBe('accepted');
+    await owner.$executeRawUnsafe(`
+      INSERT INTO governance.user_group_permission ("groupId", "tenantId", "permissionId")
+      SELECT '${GROUP}', '${RESELLER_A}', id FROM identity.permission WHERE key = 'support.agent'`);
+    expect((await as(SARA, () => agents.assign(SARA, opened.id, { assigneeUserId: NOT_AGENT }))).assignedToUserId).toBe(NOT_AGENT);
+    // An ended membership gives nothing (GR-1-a).
+    await owner.$executeRawUnsafe(`UPDATE governance.user_group_member SET "expiresAt" = now() - interval '1 minute' WHERE "groupId" = '${GROUP}'`);
+    expect(await refusal(as(SARA, () => agents.assign(SARA, opened.id, { assigneeUserId: NOT_AGENT })))).not.toBe('accepted');
+    await owner.$executeRawUnsafe(`DELETE FROM governance.user_group_permission WHERE "groupId" = '${GROUP}'`);
+    await owner.$executeRawUnsafe(`DELETE FROM governance.user_group_member WHERE "groupId" = '${GROUP}'`);
+    await owner.$executeRawUnsafe(`DELETE FROM governance.user_group WHERE id = '${GROUP}'`);
+  });
+});
