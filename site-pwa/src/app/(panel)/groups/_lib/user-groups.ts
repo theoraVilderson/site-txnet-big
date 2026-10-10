@@ -1,4 +1,4 @@
-import type { Me, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
+import type { GroupPreset, Me, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
 import { groupsApiPath } from "@/lib/auth-api";
 import { endOfDay } from "../../my-resellers/_lib/team";
 import { holdsPermission } from "@/lib/permissions";
@@ -211,4 +211,26 @@ export const givesAccess = (a: UserGroupAccess) => a.roleId !== null || a.keys.l
  */
 export function receivers(members: readonly UserGroupMember[]): UserGroupMember[] {
   return members.filter((m) => m.memberType === "user" && m.receivesAccess);
+}
+
+// ----------------------------------------------------------------- the presets
+
+/** Keys no preset fills: every user holds `self.` already, and `platform.` is ticked by hand. */
+const NEVER_PRESET = (key: string) => key.startsWith("self.") || key.startsWith("platform.");
+
+/**
+ * What a preset fills the create wizard's keys with (GR-1-h): its keys that
+ * this creator can give on this group — offered in `areas` (already
+ * {@link groupKeyAreas}) and held per `grantable` (`*` = every key) — and the
+ * ones it had to leave out, so the wizard can say so instead of sending a
+ * key the server refuses `key_not_held`. The admin preset is every such key,
+ * never a `platform.` or `self.` one. `null` (from scratch) fills nothing.
+ */
+export function presetDraft(preset: GroupPreset | null, areas: readonly PermissionArea[], grantable: readonly string[]): { keys: string[]; dropped: string[] } {
+  if (!preset) return { keys: [], dropped: [] };
+  const offered = new Set(areas.flatMap((a) => a.permissions.filter((p) => !p.platformOnly).map((p) => p.key)));
+  const can = (key: string) => offered.has(key) && holdsPermission(grantable, key);
+  if (preset.every) return { keys: [...offered].filter((k) => !NEVER_PRESET(k) && can(k)).sort(), dropped: [] };
+  const keys = [...new Set(preset.keys)].sort();
+  return { keys: keys.filter(can), dropped: keys.filter((k) => !can(k)) };
 }

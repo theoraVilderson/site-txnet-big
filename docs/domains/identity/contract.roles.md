@@ -79,6 +79,15 @@ The registry is what can be *shown*. `identity.permission` rows are still what
 can be *granted* (a key with no row is refused). A key in one and not the other
 is shown raw, or not offered.
 
+**Group presets (GR-1-h).** `shared-core/.../group-presets.ts` holds the create
+wizard's starting points: support, finance, sales, look, admin. Each is a list
+of registry keys, or `every` (admin: what the creator may give). They are
+templates only. No group is ever created from one but the group a person
+finishes, so editing a preset changes no existing group. Every key must be in
+the registry and not `platformOnly` (`group-presets.spec.ts`). Texts are
+`presets.<id>.{label,description}` in the same namespace, fa and en
+(`permission-registry.spec.ts`).
+
 ## The reseller keys (AC-1-e, catalog §3.2)
 
 `tenant.manage` was the one key of a reseller's member door, and no tenant-made

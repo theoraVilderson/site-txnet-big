@@ -69,7 +69,7 @@ permission listener, which is platform-wide work
 
 | Route | Answers | Auth |
 |---|---|---|
-| GET `/auth/permissions` | 200 `{areas:[{area, label, permissions:[{key, label, description, platformOnly}]}]}`, texts in the request's language (`Accept-Language`) | Bearer, any caller — the vocabulary is not a secret |
+| GET `/auth/permissions` | 200 `{areas:[{area, label, permissions:[{key, label, description, platformOnly}]}], presets:[{id, label, description, every, keys}]}` (`presets` GR-1-h, templates for a new group), texts in the request's language (`Accept-Language`) | Bearer, any caller — the vocabulary is not a secret |
 
 What a caller may tick is `grantable` on a tenant's path; on `/auth/roles`, the
 keys its own `/auth/me` returns. Code: `.../permissions/permission-registry.controller.ts`.

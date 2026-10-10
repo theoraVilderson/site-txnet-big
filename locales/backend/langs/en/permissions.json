@@ -348,5 +348,27 @@
         "description": "See, schedule, pause and run background jobs."
       }
     }
+  },
+  "presets": {
+    "support": {
+      "label": "Support",
+      "description": "Answer support conversations, see users and restrict accounts."
+    },
+    "finance": {
+      "label": "Finance",
+      "description": "Sales reports, manual payments, wallets, settlements and payment gateways."
+    },
+    "sales": {
+      "label": "Sales and products",
+      "description": "Products, discount codes, campaigns, rewards and gifts to users."
+    },
+    "look": {
+      "label": "Look and content",
+      "description": "Theme and logo, guides, domains and the bot."
+    },
+    "admin": {
+      "label": "Admin",
+      "description": "Every key you can give yourself."
+    }
   }
 }

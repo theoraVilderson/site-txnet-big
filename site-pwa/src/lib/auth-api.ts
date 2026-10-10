@@ -761,6 +761,19 @@ export interface PermissionArea {
   permissions: PermissionEntry[];
 }
 
+/**
+ * A starting point for a new group (GR-1-h): a template the create wizard
+ * fills its form from, never a group. `every` is every key the creator may
+ * give; otherwise `keys`, which the wizard narrows to what the creator holds.
+ */
+export interface GroupPreset {
+  id: string;
+  label: string;
+  description: string;
+  every: boolean;
+  keys: string[];
+}
+
 /** A key given or taken on one person: which, why, by whom, since when (AC-1-l). */
 export type KeyOverride = { key: string; reason: string; by: string; at: string };
 
@@ -822,9 +835,9 @@ export const tenantRolesApi = {
   async liftKey(tenantId: string, userId: string, key: string) {
     return request<PersonKeys>(personKeysPath(tenantId, userId, key), { method: "DELETE" });
   },
-  /** The registry (AC-1-f): every key the platform knows, by area, labelled in the request's language. */
+  /** The registry (AC-1-f): every key the platform knows, by area, labelled in the request's language, and the group presets (GR-1-h). */
   async permissions() {
-    return request<{ areas: PermissionArea[] }>("/auth/permissions", { method: "GET" });
+    return request<{ areas: PermissionArea[]; presets: GroupPreset[] }>("/auth/permissions", { method: "GET" });
   },
 };
 

@@ -26,6 +26,7 @@ import {
   memberSearchOf,
   membersBody,
   parseIds,
+  presetDraft,
   updateGroupBody,
   validateGroupForm,
 } from "./_lib/user-groups";
@@ -280,5 +281,41 @@ describe("one word", () => {
 
   it("in Persian", () => {
     expect(words("fa").filter((w) => /تیم|نقش/.test(w))).toEqual([]);
+  });
+});
+
+/**
+ * GR-1-h — the create wizard's starting point. A preset only fills the form;
+ * what it may fill is what this creator can give on this group. What breaks
+ * with nothing red: a preset key the creator lacks reaching the PUT (refused
+ * `key_not_held` after the group exists), or the admin preset carrying a
+ * `platform.` key or the base `self.` keys every user already has.
+ */
+describe("presetDraft", () => {
+  const entry = (key: string, platformOnly = false) => ({ key, label: key, description: "", platformOnly });
+  const areas = [
+    { area: "user", label: "user", permissions: [entry("user.read"), entry("user.write")] },
+    { area: "support", label: "support", permissions: [entry("support.agent")] },
+    { area: "self", label: "self", permissions: [entry("self.read")] },
+    { area: "platform", label: "platform", permissions: [entry("platform.tenant.create", true)] },
+  ];
+  const support = { id: "support", label: "Support", description: "", every: false, keys: ["user.read", "support.agent", "restriction.assign"] };
+  const admin = { id: "admin", label: "Admin", description: "", every: true, keys: [] };
+
+  it("starts from nothing when no preset is picked", () => {
+    expect(presetDraft(null, areas, ["*"])).toEqual({ keys: [], dropped: [] });
+  });
+
+  it("keeps the preset keys this creator can give, and names the rest", () => {
+    expect(presetDraft(support, areas, ["user.read"])).toEqual({ keys: ["user.read"], dropped: ["restriction.assign", "support.agent"] });
+  });
+
+  it("drops a key the offered areas do not show, even under *", () => {
+    expect(presetDraft(support, areas, ["*"])).toEqual({ keys: ["support.agent", "user.read"], dropped: ["restriction.assign"] });
+  });
+
+  it("gives the admin preset every offered key the creator can give, never platform. or self.", () => {
+    expect(presetDraft(admin, areas, ["*"])).toEqual({ keys: ["support.agent", "user.read", "user.write"], dropped: [] });
+    expect(presetDraft(admin, areas, ["user.read", "user.write"])).toEqual({ keys: ["user.read", "user.write"], dropped: [] });
   });
 });

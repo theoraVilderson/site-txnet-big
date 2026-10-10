@@ -1,4 +1,6 @@
-import { PERMISSION_REGISTRY } from '@txnet-backend/shared-core';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { GROUP_PRESETS, PERMISSION_REGISTRY } from '@txnet-backend/shared-core';
 import { PermissionRegistryService } from './permission-registry.service';
 
 /**
@@ -10,6 +12,7 @@ import { PermissionRegistryService } from './permission-registry.service';
 describe('PermissionRegistryService', () => {
   const tree = {
     areas: { support: { label: 'پشتیبانی' }, platform: { label: 'پلتفرم' } },
+    presets: { support: { label: 'پشتیبانی', description: 'پاسخ به تیکت‌ها.' } },
     keys: {
       support: { agent: { label: 'پاسخ به پشتیبانی', description: 'خواندن و پاسخ دادن.' } },
       platform: { tenant: { manage: { label: 'اداره‌ی نماینده‌ها', description: 'فقط برای پلتفرم.' } } },
@@ -43,5 +46,24 @@ describe('PermissionRegistryService', () => {
     const agent = areas.find((a) => a.area === 'support')?.permissions.find((p) => p.key === 'support.agent');
     expect(agent).toMatchObject({ label: 'support.agent', description: '' });
     expect(areas.find((a) => a.area === 'support')?.label).toBe('support');
+  });
+
+  it('answers every group preset with its keys and its text, and the id when a text is missing (GR-1-h)', () => {
+    const fa = service.list('fa').presets;
+    expect(fa.map((p) => p.id)).toEqual(GROUP_PRESETS.map((p) => p.id));
+    expect(fa[0]).toEqual({ id: 'support', label: 'پشتیبانی', description: 'پاسخ به تیکت‌ها.', every: false, keys: [...GROUP_PRESETS[0].keys] });
+    expect(fa.find((p) => p.id === 'admin')).toMatchObject({ every: true, keys: [] });
+    expect(service.list('en').presets[0]).toMatchObject({ label: 'support', description: '' });
+  });
+
+  it('has a Persian and an English text for every preset in the locale files', () => {
+    for (const lang of ['fa', 'en']) {
+      const file = resolve(__dirname, '../../../../../../locales/backend/langs', lang, 'permissions.json');
+      const presets = (JSON.parse(readFileSync(file, 'utf8')) as { presets?: Record<string, { label?: string; description?: string }> }).presets ?? {};
+      for (const { id } of GROUP_PRESETS) {
+        expect(presets[id]?.label, `${lang}: presets.${id}.label`).toBeTruthy();
+        expect(presets[id]?.description, `${lang}: presets.${id}.description`).toBeTruthy();
+      }
+    }
   });
 });

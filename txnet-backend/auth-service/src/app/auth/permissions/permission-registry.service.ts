@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PERMISSION_REGISTRY } from '@txnet-backend/shared-core';
+import { GROUP_PRESETS, PERMISSION_REGISTRY } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 
@@ -8,6 +8,9 @@ export type PermissionView = { key: string; label: string; description: string; 
 
 /** One area of the editor: the key's first segment, its label, and its keys. */
 export type PermissionAreaView = { area: string; label: string; permissions: PermissionView[] };
+
+/** A starting point for a new group (GR-1-h): `every` is every key the creator may give. */
+export type GroupPresetView = { id: string; label: string; description: string; every: boolean; keys: string[] };
 
 /** The locale namespace the texts live in: `areas.<area>.label`, `keys.<key>.{label,description}`. */
 const NAMESPACE = 'permissions';
@@ -29,7 +32,7 @@ type TextNode = { [segment: string]: TextNode | string | undefined };
 export class PermissionRegistryService {
   constructor(private readonly locale: LocaleService) {}
 
-  list(lang: string): { areas: PermissionAreaView[] } {
+  list(lang: string): { areas: PermissionAreaView[]; presets: GroupPresetView[] } {
     const tree = (this.locale.getNamespace(lang, NAMESPACE) ?? {}) as TextNode;
     const areas = new Map<string, PermissionAreaView>();
     for (const row of PERMISSION_REGISTRY) {
@@ -46,7 +49,15 @@ export class PermissionRegistryService {
         platformOnly: row.platformOnly,
       });
     }
-    return { areas: [...areas.values()] };
+    // The create-group wizard's starting points (GR-1-h): templates, never groups.
+    const presets = GROUP_PRESETS.map((p) => ({
+      id: p.id,
+      label: text(tree, ['presets', p.id, 'label']) ?? p.id,
+      description: text(tree, ['presets', p.id, 'description']) ?? '',
+      every: p.every,
+      keys: [...p.keys],
+    }));
+    return { areas: [...areas.values()], presets };
   }
 }
 

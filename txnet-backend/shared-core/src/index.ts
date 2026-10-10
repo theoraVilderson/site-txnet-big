@@ -21,6 +21,7 @@ export * from './lib/http/permissions';
 export * from './lib/http/key-holders';
 export * from './lib/http/impersonation';
 export * from './lib/http/permission-registry.generated';
+export * from './lib/http/group-presets';
 export * from './lib/redis/keyspace';
 export * from './lib/redis/keys';
 export * from './lib/redis/ttl';

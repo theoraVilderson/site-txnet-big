@@ -4053,6 +4053,38 @@
       "save": "Save",
       "saved": "Access saved.",
       "unchanged": "Nothing changed."
+    },
+    "wizard": {
+      "title": "New group",
+      "confirmClose": "The group is not made yet. Close and discard what you entered?",
+      "steps": {
+        "start": "Start from",
+        "name": "Name",
+        "access": "Access",
+        "review": "Review"
+      },
+      "intro": {
+        "start": "Start from a ready preset, or from scratch. A preset only fills the form; you can change everything in the next steps.",
+        "name": "The name you and your colleagues will know this group by.",
+        "access": "The keys this group gives its members. The preset has ticked them already; add or remove any.",
+        "review": "Take one more look. Once the group is made, you add its members."
+      },
+      "scratch": "From scratch",
+      "scratchHint": "A group that gives no access yet. You tick the keys yourself.",
+      "presetKeys": "{{count}} keys",
+      "presetEvery": "Every key you hold yourself",
+      "dropped": "You do not hold these preset keys, so you cannot give them; they were left out: {{keys}}",
+      "noKeys": "This group gives no access. Its members are only in a group, for example for one gateway or one discount.",
+      "reviewName": "Name",
+      "reviewKeys": "Access",
+      "reviewMembers": "Members",
+      "create": "Create group",
+      "accessFailed": "The group was made, but its access was not saved: {{reason}} Press “Create group” again to save only the access.",
+      "doneTitle": "Group “{{name}}” is made",
+      "doneBody": "This group gives {{count}} keys. Now add its members; whoever is added gets this access at once.",
+      "doneNoKeys": "This group gives no access. Add its members.",
+      "addMembers": "Add members",
+      "later": "Later"
     }
   },
   "resellerUsers": {

@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 43
-updated: 2026-10-09
+updated: 2026-10-10
 ---
 
 # Contract — panel-web: groups (F-114-m, GR-1-f)
@@ -11,8 +11,8 @@ updated: 2026-10-09
 A topic file of [contract.md](contract.md) (§10). The panel's one place to
 give access (ADR-0139 (1)): a tenant's groups, each with members — each
 membership with an end — and the keys ticked on the group. Under
-`(panel)/groups/`: `GroupsView.tsx` the list, `GroupSheet.tsx` create and
-rename, `MembersSheet.tsx` one group's members and their end, `AccessSheet.tsx`
+`(panel)/groups/`: `GroupsView.tsx` the list, `GroupWizard.tsx` create (GR-1-h),
+`GroupSheet.tsx` rename, `MembersSheet.tsx` one group's members and their end, `AccessSheet.tsx`
 what it gives, `UserSearch.tsx` finding a user, and `_lib/user-groups.ts` the
 rules. The routes are auth-api's
 [contract.user-groups.md](../auth-api/contract.user-groups.md) (F-114-j,
@@ -69,6 +69,15 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
     (`accessBody` sends `roleId: null` and the **whole** set; nothing when
     untouched). Who receives them: the members the server marks
     `receivesAccess`. A group of every reseller gets a sentence, no form.
+11. **A new group is made in a wizard** (GR-1-h): start, name, access, review.
+    The start is a **preset** from `GET /auth/permissions` (`presets`) or *from
+    scratch*. A preset only fills the form: its name, if not typed yet, and its
+    keys narrowed by `presetDraft` to what this caller may give on this group.
+    The keys it leaves out are named in a warning. `every` (admin) is every
+    offered key the caller may give, never `platform.` or `self.`. Submit is
+    `create`, then `setAccess` when keys are ticked. A refused second write
+    keeps the group, and the next submit sends only the access. The finished
+    screen offers to add members (opens `MembersSheet`).
 
 ## Proof
 
@@ -77,5 +86,5 @@ permission key and schema bounds, the menus (groups present; no team, roles or
 old address), `canNameResellers` and `isPlatformGroup` by tenant type and
 scope, `memberSearchOf`, the form bodies, `parseIds`, `membersBody` with an
 end, `endBody`, `accessBody` (the whole set, the fold, the 200-key cap),
-`groupKeyAreas`, `receivers`, `groupsApiPath`, every old address redirecting,
+`groupKeyAreas`, `receivers`, `presetDraft` (held, offered, admin), `groupsApiPath`, every old address redirecting,
 no *team* or *role* in the page's `en` and `fa` strings, and every key in both.

@@ -11,6 +11,7 @@ import { DataTable } from "../../_components/kit/DataTable";
 import { USER_GROUP_KEYS as K, canManageGroups, canNameResellers } from "../_lib/user-groups";
 import { Alert, GroupsScopeProvider, useMessage } from "./user-groups-ui";
 import { GroupSheet } from "./GroupSheet";
+import { GroupWizard } from "./GroupWizard";
 import { MembersSheet } from "./MembersSheet";
 import { AccessSheet } from "./AccessSheet";
 import { PageHeader } from "../../_components/kit/PageHeader";
@@ -22,7 +23,8 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
  * access (ADR-0139 (1)). `tenantId` null: the session's own, over
  * `/auth/user-groups` (F-114-j); else the tenant its path names, over
  * `/auth/tenants/:id/user-groups` (GR-1-d). The resellers column and "every
- * reseller" are the platform owner's own groups' only. A group's members and
+ * reseller" are the platform owner's own groups' only. A new group is made in
+ * the wizard, from a preset or from scratch (GR-1-h); a group's members and
  * their end are its Members sheet's, the keys it gives its Access sheet's.
  *
  * The check here only spares a caller who typed the path a refused read.
@@ -148,9 +150,24 @@ export function GroupsView({ tenantId = null }: { tenantId?: string | null }) {
           />
         )}
 
-        {editing && (
+        {editing === "new" && (
+          <GroupWizard
+            onClose={(changed) => {
+              setEditing(null);
+              if (changed) reload();
+            }}
+            onDone={(g, addMembers) => {
+              setEditing(null);
+              setFailure(null);
+              setNotice(t("common", K.form.saved));
+              if (addMembers) setMembers(g);
+              reload();
+            }}
+          />
+        )}
+        {editing && editing !== "new" && (
           <GroupSheet
-            group={editing === "new" ? null : editing}
+            group={editing}
             onClose={() => setEditing(null)}
             onSaved={(g) => {
               setEditing(null);
