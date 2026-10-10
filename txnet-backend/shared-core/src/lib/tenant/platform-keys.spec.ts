@@ -40,6 +40,8 @@ describe('platform keys (AC-1-c)', () => {
         'platform.report.read',
         'platform.tenant.create',
         'platform.tenant.manage',
+        // ADR-0141: a reseller's people under its consent, with the act's own key.
+        'platform.support',
       ].sort(),
     );
     const registry = new Map<string, { platformOnly: boolean }>(PERMISSION_REGISTRY.map((row) => [row.permission, row]));

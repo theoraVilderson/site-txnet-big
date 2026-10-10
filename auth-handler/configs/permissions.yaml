@@ -51,6 +51,8 @@ roles:
       - platform.node.manage
       - platform.report.read
       - platform.impersonate
+      # ADR-0141: a reseller's people under its consent, by the act's own key.
+      - platform.support
   Admin:
     permissions:
       - user.read

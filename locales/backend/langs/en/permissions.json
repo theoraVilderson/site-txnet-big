@@ -232,6 +232,10 @@
       "impersonate": {
         "label": "Sign in as a reseller's user",
         "description": "Sign in as a reseller's user under its consent. Platform staff only."
+      },
+      "support": {
+        "label": "Support resellers",
+        "description": "See the reseller list, ask a reseller for access, and work on its users only under its consent and with that act's own key. Platform staff only."
       }
     },
     "realtime": {

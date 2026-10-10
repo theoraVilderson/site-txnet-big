@@ -20,7 +20,7 @@ F-018-y, ADR-0058).
 
 ## Routes
 
-Creating needs `platform.tenant.create`, listing and reading `platform.tenant.manage` (`PlatformPermissionGuard`, AC-1-d, ADR-0135, on the identity
+Creating needs `platform.tenant.create`, listing and reading `platform.tenant.manage` or `platform.support` (Support finds the reseller it helps, ADR-0141 (4)) (`PlatformPermissionGuard`, AC-1-d, ADR-0135, on the identity
 `forward-auth` forwarded), and the service admits only a caller whose own
 tenant is the `platform_owner`. `SuperAdmin` holds the key through `*`; no
 other role is granted it (migration `20260917001100_tenant_create`), because

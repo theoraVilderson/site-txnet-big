@@ -83,6 +83,8 @@ describe('SupportConsentService', () => {
         runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'shop', as: opts.as ?? 'owner' })),
       ),
     };
+    // The platform's side is two keys (ADR-0141 (3)); this fake decides admission itself.
+    Object.assign(access, { asStaff: vi.fn(() => access) });
     const leash = { endUnder: vi.fn(async () => 0) };
     const service = new SupportConsentService(prisma as never, access as never, leash as never);
     return { service, rows, audits, order, bound, leash };

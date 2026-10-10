@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PlatformKey, isPlatformStaff } from '@txnet-backend/shared-core';
+import { PlatformKey, holdsPermission, isPlatformStaff } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -8,8 +8,13 @@ import { identityOf } from './identity.middleware';
 
 export const PLATFORM_KEY_METADATA = 'txnet:platform-key';
 
-/** The platform key a route asks (AC-1-d, ADR-0135): on the class for a whole group, on a handler to differ. */
-export const PlatformRoute = (key: PlatformKey) => SetMetadata(PLATFORM_KEY_METADATA, key);
+/**
+ * The platform keys a route asks, any one of which admits (AC-1-d, ADR-0135):
+ * on the class for a whole group, on a handler to differ. More than one only
+ * where another kind of staff work needs the same read — the reseller list for
+ * `platform.support` (ADR-0141 (4)).
+ */
+export const PlatformRoute = (...keys: [PlatformKey, ...PlatformKey[]]) => SetMetadata(PLATFORM_KEY_METADATA, keys);
 
 /**
  * The first door on the platform's tenant administration (F-018-c, AC-1-d):
@@ -30,12 +35,13 @@ export class PlatformPermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const key = this.reflector.getAllAndOverride<PlatformKey | undefined>(PLATFORM_KEY_METADATA, [context.getHandler(), context.getClass()]);
+    const keys = this.reflector.getAllAndOverride<readonly PlatformKey[] | undefined>(PLATFORM_KEY_METADATA, [context.getHandler(), context.getClass()]);
     // A guarded route that names no key is a wiring mistake: refuse rather than guess.
-    if (!key) throw new ForbiddenException('a platform key is required');
+    if (!keys?.length) throw new ForbiddenException('a platform key is required');
     const identity = identityOf(context.switchToHttp().getRequest<Request>());
-    if (!(await isPlatformStaff(this.prisma, identity, key))) {
-      throw new ForbiddenException(`${key} is required`);
+    const held = keys.find((key) => holdsPermission(identity.permissions, key));
+    if (!held || !(await isPlatformStaff(this.prisma, identity, held))) {
+      throw new ForbiddenException(`${keys.join(' or ')} is required`);
     }
     return true;
   }

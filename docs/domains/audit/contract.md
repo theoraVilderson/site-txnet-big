@@ -94,13 +94,14 @@ Routes (auth-service `access-history/`, auth-api `contract.roles.md`):
 
 `auth-service/src/app/support-consent/`, ADR-0104 (4), catalog §3.7. The
 platform's staff reach a reseller's people only under a live consent the
-reseller grants; the reader is `liveSupportConsent` (shared-core), and every
+reseller grants — with `platform.tenant.manage`, or `platform.support` plus
+the route's own key (ADR-0141); the reader is `liveSupportConsent` (shared-core), and every
 door uses it, never its own query.
 
 | Route `/api/auth/tenants/:tenantId/support-consent` | Who | What |
 |---|---|---|
 | `GET` | anyone `ResellerAccess` admits | `{defaultHours, items[], emergency[]}` — newest 50 of each, each with `state` `requested`/`live`/`expired`/`revoked`/`declined`, derived on read |
-| `POST requests` `{scope, reason≥10}` | platform staff only (`only_platform_requests`) | one open request per reseller (`request_pending`, 409) |
+| `POST requests` `{scope, reason≥10}` | platform staff only — `platform.tenant.manage` or `platform.support`, ADR-0141 (`only_platform_requests`) | one open request per reseller (`request_pending`, 409) |
 | `POST` `{scope, hours?, reason?, requestId?}` | the reseller only (`platform_cannot_grant`) | live from now for `hours` (its default, else 4; 1–24, `hours_out_of_range`); a `requestId` turns that request live with the scope chosen here; any earlier live one is revoked |
 | `POST :consentId/revoke` | anyone admitted | ends a request (declined/withdrawn) or a live grant; anything else `consent_not_found` |
 | `PUT policy` `{defaultHours}` | the reseller only | its default length, 1–24 |

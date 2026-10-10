@@ -114,8 +114,8 @@ export class ResellerAccess {
   /** The keys that admit a member; none on the bare door, which is owner-only. Not a constructor parameter: Nest injects this class. */
   private keys: readonly ResellerKey[] = [];
 
-  /** The platform key that admits the platform's staff, when the route asks another than its default ({@link asStaff}). */
-  private staffKey: PlatformKey | null = null;
+  /** The platform keys, any one of which admits the platform's staff, when the route asks other than its default ({@link asStaff}). */
+  private staffKeys: readonly PlatformKey[] | null = null;
 
   constructor(@Inject(RESELLER_ACCESS_READER) private readonly prisma: ResellerAccessReader) {}
 
@@ -127,19 +127,21 @@ export class ResellerAccess {
   for(...keys: ResellerKey[]): ResellerAccess {
     const door = new ResellerAccess(this.prisma);
     door.keys = keys;
-    door.staffKey = this.staffKey;
+    door.staffKeys = this.staffKeys;
     return door;
   }
 
   /**
-   * This door, with the platform's staff admitted by `key` instead of the
-   * default — `platform.tenant.manage`, or `platform.report.read` on a figures
-   * route (AC-1-d, ADR-0135). Impersonation asks `platform.impersonate`.
+   * This door, with the platform's staff admitted by any one of `keys` instead
+   * of the default — `platform.tenant.manage`, or `platform.report.read` on a
+   * figures route (AC-1-d, ADR-0135). Impersonation asks `platform.impersonate`;
+   * the support-consent routes `platform.tenant.manage` or `platform.support`
+   * (ADR-0141 (3)).
    */
-  asStaff(key: PlatformKey): ResellerAccess {
+  asStaff(...keys: PlatformKey[]): ResellerAccess {
     const door = new ResellerAccess(this.prisma);
     door.keys = this.keys;
-    door.staffKey = key;
+    door.staffKeys = keys;
     return door;
   }
 
@@ -199,8 +201,9 @@ export class ResellerAccess {
       }),
     ]);
     // The platform's staff door asks a platform key (AC-1-d, ADR-0135): figures are a cross-tenant report.
-    const staffKey: PlatformKey = this.staffKey ?? (route === 'figures' ? 'platform.report.read' : 'platform.tenant.manage');
-    const staff = caller?.tenantType === TenantType.platform_owner && holdsPermission(actor.permissions, staffKey);
+    const staffKeys = this.staffKeys ?? [route === 'figures' ? 'platform.report.read' : 'platform.tenant.manage'];
+    const fromPlatform = caller?.tenantType === TenantType.platform_owner;
+    const staff = fromPlatform && staffKeys.some((key) => holdsPermission(actor.permissions, key));
     if (platform && tenant?.tenantType === TenantType.platform_owner) {
       // Its own people are a tenant's like any other's (GR-1-o, ADR-0139 (7)): a
       // user of the platform holding the route's key by name — its Support group's
@@ -210,21 +213,24 @@ export class ResellerAccess {
       return { id: tenant.id, slug: tenant.slug, as: 'staff', platform: true };
     }
     const reseller = tenant?.tenantType === TenantType.reseller ? tenant : null;
-    // Only staff learns whether a reseller exists.
-    if (!reseller) throw new ResellerAccessRefused(staff ? 'reseller_not_found' : 'not_allowed', tenantId);
+    // Platform support (ADR-0141 (2)): on a people route only, by the route's own key; admitted as staff, so under consent below.
+    const supportAgent = !staff && route === 'people' && fromPlatform && holdsPermission(actor.permissions, 'platform.support') && this.holdsRouteKey(actor);
+    const viaPlatform = staff || supportAgent;
+    // Only the platform's side learns whether a reseller exists.
+    if (!reseller) throw new ResellerAccessRefused(viaPlatform ? 'reseller_not_found' : 'not_allowed', tenantId);
     const owner = reseller.ownerUserId === actor.userId;
-    const member = !staff && !owner && (await this.isMember(actor, reseller.id, now));
-    if (!staff && !owner && !member) throw new ResellerAccessRefused('not_allowed', tenantId);
+    const member = !viaPlatform && !owner && (await this.isMember(actor, reseller.id, now));
+    if (!viaPlatform && !owner && !member) throw new ResellerAccessRefused('not_allowed', tenantId);
     if (reseller.status === TenantStatus.terminated) throw new ResellerAccessRefused('reseller_terminated', tenantId);
 
-    if (!staff) {
+    if (!viaPlatform) {
       const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
     } else if (route === 'people' && !owner) {
       const support = await this.mustHoldConsent(actor, reseller.id, capability, now);
       return { id: reseller.id, slug: reseller.slug, as: 'staff', support };
     }
-    return { id: reseller.id, slug: reseller.slug, as: staff ? 'staff' : owner ? 'owner' : 'member' };
+    return { id: reseller.id, slug: reseller.slug, as: viaPlatform ? 'staff' : owner ? 'owner' : 'member' };
   }
 
   /**
@@ -294,18 +300,18 @@ export class ResellerAccess {
     );
   }
 
-  /**
-   * A caller signed in to this reseller holding one of this door's keys — the
-   * key is what says they may do what this route does (ADR-0139 (2)). A seat
-   * of theirs that is not live (invited and not accepted, expired, removed)
-   * refuses: a removed seat kept its role and so its keys. GR-1-g drops this.
-   */
   /** One of the route's keys, by name, never `*`: a tenant user holding `*` is a mistake, not a grant (groups cannot give it, ADR-0138 (7)). */
   private holdsRouteKey(actor: ResellerActor): boolean {
     const named = actor.permissions.filter((key) => key !== ALL_PERMISSIONS);
     return this.keys.some((key) => holdsPermission(named, key));
   }
 
+  /**
+   * A caller signed in to this reseller holding one of this door's keys — the
+   * key is what says they may do what this route does (ADR-0139 (2)). A seat
+   * of theirs that is not live (invited and not accepted, expired, removed)
+   * refuses: a removed seat kept its role and so its keys. GR-1-g drops this.
+   */
   private async isMember(actor: ResellerActor, resellerId: string, now: Date): Promise<boolean> {
     if (actor.tenantId !== resellerId) return false;
     if (!this.holdsRouteKey(actor)) return false;

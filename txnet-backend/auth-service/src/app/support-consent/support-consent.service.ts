@@ -450,7 +450,8 @@ export class SupportConsentService {
     work: (reseller: AdmittedReseller) => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.access.run(actor, tenantId, capability, work);
+      // The platform's side is its administrators or its support (ADR-0141 (3)); emergency entry asks its own key on top.
+      return await this.access.asStaff('platform.tenant.manage', 'platform.support').run(actor, tenantId, capability, work);
     } catch (err) {
       if (err instanceof ResellerAccessRefused) throw new SupportConsentRefused(err.reason);
       throw err;

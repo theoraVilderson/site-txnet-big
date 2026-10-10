@@ -35,7 +35,7 @@ describe('PlatformPermissionGuard (AC-1-d)', () => {
   const guard = new PlatformPermissionGuard(reflector, prisma as never);
 
   const keyOf = (controller: abstract new (...args: never[]) => unknown, method: string) =>
-    reflector.getAllAndOverride<string>(PLATFORM_KEY_METADATA, [
+    reflector.getAllAndOverride<string[]>(PLATFORM_KEY_METADATA, [
       (controller.prototype as Record<string, () => unknown>)[method],
       controller,
     ]);
@@ -49,15 +49,24 @@ describe('PlatformPermissionGuard (AC-1-d)', () => {
       }),
     }) as unknown as ExecutionContext;
 
-  it('names one platform key per route group', () => {
-    expect(keyOf(ResellerController, 'create')).toBe('platform.tenant.create');
-    expect(keyOf(ResellerController, 'list')).toBe('platform.tenant.manage');
-    expect(keyOf(ResellerController, 'read')).toBe('platform.tenant.manage');
-    expect(keyOf(TenantStatusController, 'change')).toBe('platform.tenant.manage');
-    expect(keyOf(TenantPackageController, 'create')).toBe('platform.plan.assign');
-    expect(keyOf(TenantSubscriptionController, 'put')).toBe('platform.plan.assign');
-    expect(keyOf(ResellerLimitsController, 'table')).toBe('platform.plan.assign');
-    expect(keyOf(PackageProductsController, 'list')).toBe('platform.plan.assign');
+  it('names the platform keys per route group', () => {
+    expect(keyOf(ResellerController, 'create')).toEqual(['platform.tenant.create']);
+    // Support finds the reseller it helps (ADR-0141 (4)); nothing else of a reseller opens to it.
+    expect(keyOf(ResellerController, 'list')).toEqual(['platform.tenant.manage', 'platform.support']);
+    expect(keyOf(ResellerController, 'read')).toEqual(['platform.tenant.manage', 'platform.support']);
+    expect(keyOf(TenantStatusController, 'change')).toEqual(['platform.tenant.manage']);
+    expect(keyOf(TenantPackageController, 'create')).toEqual(['platform.plan.assign']);
+    expect(keyOf(TenantSubscriptionController, 'put')).toEqual(['platform.plan.assign']);
+    expect(keyOf(ResellerLimitsController, 'table')).toEqual(['platform.plan.assign']);
+    expect(keyOf(PackageProductsController, 'list')).toEqual(['platform.plan.assign']);
+  });
+
+  it('admits any one of a route\'s keys: `platform.support` reads the reseller list, and changes nothing (GR-1-q)', async () => {
+    await expect(guard.canActivate(context(ResellerController, 'list', PLATFORM, ['platform.support']))).resolves.toBe(true);
+    await expect(guard.canActivate(context(ResellerController, 'read', PLATFORM, ['platform.support']))).resolves.toBe(true);
+    await expect(guard.canActivate(context(ResellerController, 'create', PLATFORM, ['platform.support']))).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(guard.canActivate(context(TenantStatusController, 'change', PLATFORM, ['platform.support']))).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(guard.canActivate(context(ResellerController, 'list', RESELLER, ['platform.support']))).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("admits the platform's staff on the route's key, or `*`", async () => {

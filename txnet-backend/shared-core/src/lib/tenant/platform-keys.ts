@@ -19,6 +19,7 @@ export const PLATFORM_KEY_PREFIX = 'platform.';
  *     platform.node.manage     the platform's panels and nodes
  *     platform.report.read     figures across tenants
  *     platform.impersonate     sign in as a reseller's user, under consent (F-117-e)
+ *     platform.support         a reseller's people under its consent, with the act's own key (ADR-0141)
  *
  * `platform.tenant.manage` is the sixth, beside the catalog's five: the
  * general door into one reseller that `tenant.manage` was (user, 2026-10-09).
@@ -30,6 +31,7 @@ export const PLATFORM_KEYS = [
   'platform.node.manage',
   'platform.report.read',
   'platform.impersonate',
+  'platform.support',
 ] as const satisfies readonly RegisteredPermission[];
 
 /** A key of the platform's set. */

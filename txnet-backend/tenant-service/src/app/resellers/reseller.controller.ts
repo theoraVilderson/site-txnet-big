@@ -57,7 +57,9 @@ export class ResellerController {
     return this.refusing(() => this.resellers.create(actorOf(req, ip), body));
   }
 
+  // The list and one reseller's summary are how Support finds the reseller it helps (ADR-0141 (4)).
   @Get()
+  @PlatformRoute('platform.tenant.manage', 'platform.support')
   async list(
     @Req() req: Request,
     @Query(new ZodValidationPipe(listResellersSchema)) page: ListResellersInput,
@@ -67,6 +69,7 @@ export class ResellerController {
   }
 
   @Get(':id')
+  @PlatformRoute('platform.tenant.manage', 'platform.support')
   async read(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<ResellerView> {
     return this.refusing(() => this.resellers.read(actorOf(req, ip), id));
   }

@@ -64,7 +64,7 @@ the host; the ambient routes stay for a tenant configuring itself.
 |---|---|
 | `ResellerAccess.admit(actor, tenantId, capability)` | `{id, slug, as: 'owner' \| 'member' \| 'staff'}`, or throws `ResellerAccessRefused` with `reason` |
 | `ResellerAccess.run(actor, tenantId, capability, work)` | `admit`, then `work(reseller)` inside `runWithTenant({id})`: the app pool's RLS sees the **reseller's** rows, never the caller's. A refusal throws before `work` starts |
-| `ResellerAccess.asStaff(key)` (AC-1-d) | the same door, the platform's staff admitted by `key` instead of the default `platform.tenant.manage` (`platform.report.read` on a figures route). Impersonation asks `platform.impersonate` |
+| `ResellerAccess.asStaff(...keys)` (AC-1-d) | the same door, the platform's staff admitted by any one of `keys` instead of the default `platform.tenant.manage` (`platform.report.read` on a figures route). Impersonation asks `platform.impersonate`; the support-consent routes `platform.tenant.manage` or `platform.support` (ADR-0141) |
 | `ResellerAccess.for(...keys)` (AC-1-e) | the same door, opened also to the reseller's own signed-in user holding **any one** of `keys`, from any source, no seat asked (ADR-0139 (2); a seat that is not live still refuses until GR-1-g) — `RESELLER_KEYS` in `shared-core/.../tenant/reseller-keys.ts`. The bare door names none and admits **no member**, `*` included; the owner and platform staff are admitted as before, whatever the keys |
 
 - `actor` is `{userId, tenantId, permissions}` as `forward-auth` sent them;

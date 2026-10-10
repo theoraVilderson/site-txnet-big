@@ -217,7 +217,7 @@ describe('ResellerAccess', () => {
     await expect(access.admitIncludingPlatform({ ...agent, tenantId: RESELLER }, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     await expect(build().admitIncludingPlatform(agent, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
 
-    // A reseller's people stay behind `platform.tenant.manage` and its consent; a figures route stays staff-only.
+    // A reseller's people stay behind a platform key and its consent; a figures route stays staff-only.
     await expect(build('active', [], [consent({ scope: 'act' })]).for('grant.read').admitIncludingPlatform(agent, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
     await expect(access.admitFiguresIncludingPlatform(agent, PLATFORM, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
@@ -291,6 +291,42 @@ describe('ResellerAccess', () => {
     await expect(build('active', [seat()]).for('user.write').admitIncludingPlatform(member, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'member' });
     await expect(build().admitIncludingPlatform(staff, PLATFORM, 'staffWrite', T0)).resolves.toMatchObject({ platform: true });
     await expect(build().admit(staff, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'staff' });
+  });
+
+  it("admits `platform.support` with the route's key to a reseller's people as staff are — only under its consent (GR-1-q, ADR-0141)", async () => {
+    const support = { userId: CUSTOMER, tenantId: PLATFORM, permissions: ['platform.support', 'user.read', 'grant.read', 'grant.repair'] };
+    const reading = build('active', [], [consent()]);
+    // Under a live consent, by the route's own key: admitted as staff, the consent recorded.
+    await expect(reading.for('grant.read').admitIncludingPlatform(support, RESELLER, 'read', T0)).resolves.toEqual({
+      id: RESELLER,
+      slug: 'ali',
+      as: 'staff',
+      support: { tier: 'consent', consentId: 'consent-1', endsAt: new Date('2026-09-18T13:00:00Z') },
+    });
+    // `read` refuses a repair; `act` allows it.
+    await expect(reading.for('grant.repair').admitIncludingPlatform(support, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'consent_read_only' });
+    await expect(build('active', [], [consent({ scope: 'act' })]).for('grant.repair').admitIncludingPlatform(support, RESELLER, 'staffWrite', T0)).resolves.toMatchObject({ as: 'staff' });
+
+    // No consent: refused, and told so (it may ask).
+    await expect(build().for('grant.read').admitIncludingPlatform(support, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'consent_required' });
+    // Not the route's key, the bare door, or `platform.support` without the route key: refused before any consent is read.
+    await expect(reading.for('grant.assign').admitIncludingPlatform(support, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(reading.admitIncludingPlatform(support, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(reading.for('grant.read').admitIncludingPlatform({ ...support, permissions: ['grant.read'] }, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    // A reseller's user claiming the key is no platform user.
+    await expect(reading.for('grant.read').admitIncludingPlatform({ ...support, tenantId: OTHER }, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    // Not a configuration route, not figures, not impersonation.
+    await expect(reading.for('grant.read').admit(support, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(reading.for('report.read').admitFiguresIncludingPlatform({ ...support, permissions: ['platform.support', 'report.read'] }, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(build('active', [], [consent({ scope: 'act' })]).asStaff('platform.impersonate').admitIncludingPlatform(support, RESELLER, 'staffWrite', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
+  });
+
+  it("opens a door to more than one platform key: the consent routes take `platform.tenant.manage` or `platform.support` (GR-1-q)", async () => {
+    const door = build().asStaff('platform.tenant.manage', 'platform.support');
+    const support = { userId: CUSTOMER, tenantId: PLATFORM, permissions: ['platform.support'] };
+    await expect(door.admit(support, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'staff' });
+    await expect(door.admit(staff, RESELLER, 'read', T0)).resolves.toMatchObject({ as: 'staff' });
+    await expect(build().admit(support, RESELLER, 'read', T0)).rejects.toMatchObject({ reason: 'not_allowed' });
   });
 
   it("runs admitted work in the reseller's scope, and refused work not at all (ADR-0064 (3))", async () => {
