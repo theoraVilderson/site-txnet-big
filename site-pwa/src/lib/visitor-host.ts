@@ -4,8 +4,18 @@
 // brand (`branding.ts`, F-066-v).
 import { ProxyHeaders } from "@/generated/wire";
 
-export function visitorHost(headers: Headers, fallback?: string): string | null {
-  const forwarded = headers.get(ProxyHeaders.forwardedHost);
-  const host = forwarded?.split(",")[0]?.trim() || headers.get("host") || fallback;
-  return host || null;
+export function visitorHost(
+  headers: Headers,
+  fallback?: string,
+): string | null {
+  const forwardedHostHeader = headers.get(ProxyHeaders.forwardedHost);
+  const forwardedHost = forwardedHostHeader?.split(",")[0].trim();
+  const hostHeader = headers.get("host");
+  const host = forwardedHost || hostHeader || fallback;
+
+  if (!host) return null;
+
+  const hostWithOutPort = host.replace(/:\d+$/, "");
+
+  return hostWithOutPort;
 }
