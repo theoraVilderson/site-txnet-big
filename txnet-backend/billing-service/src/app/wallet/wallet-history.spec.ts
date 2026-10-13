@@ -22,7 +22,7 @@
 import { Prisma, WalletReasonType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
-import { foldedSearch, matchesFolded } from './persian-search';
+import { foldedSearch } from './persian-search';
 import { WalletHistoryService } from './wallet-history.service';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -151,6 +151,8 @@ function build({
 const page = { page: 1, pageSize: 10 };
 
 describe('persian-search', () => {
+  const matchesFolded = (term: string, text: string) => foldedSearch(term)?.test(text) ?? false;
+
   it('folds the letter variants a Persian keyboard disagrees about', () => {
     expect(matchesFolded('كيف', 'شارژ کیف پول از درگاه پرداخت')).toBe(true);
     expect(matchesFolded('کیف', 'شارژ کیف پول از درگاه پرداخت')).toBe(true);

@@ -36,7 +36,7 @@ The *why* is **ADR-0080**.
    `GET /systems/panels`. The event is a nudge, never rendered: the row shown
    is still billing's. Without the key the page reads on load, as before.
    **A burst is two reads, not twelve** (F-067-p, ADR-0084 decision 3): the
-   re-read goes through `trailingThrottle(…, LIVE_REREAD_MS)` (`lib/realtime.ts`,
+   re-read goes through `useLiveReread`'s throttle (`LIVE_REREAD_MS`,
    2 s) — the first event reads at once, the rest of the window owes one read
    at its end, so the last event always causes one. Unmounting cancels it.
 3. **Refused here, not at billing time.** A refused panel's matrix names the
@@ -217,7 +217,7 @@ The *why* is **ADR-0080**.
    counted against it), with the reason said once over the list (`HELD_KEYS`
    in an `Alert`); `not_checked` is `notChecked`; a down, degraded or refusing
    panel names its cause and fix (`CAUSE_KEYS`), since when and the last
-   check. The page re-reads on `network.panel.state_changed` too (`isPanelEvent`).
+   check. The page re-reads on `network.panel.state_changed` too (`PANEL_EVENTS`).
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.

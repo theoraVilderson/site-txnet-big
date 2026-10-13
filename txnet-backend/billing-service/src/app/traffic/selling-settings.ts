@@ -30,8 +30,6 @@ export type SellingLayerValues = { [K in SellingSetting]?: SellingValues[K] | nu
 
 export type EffectiveSellingSettings = { [K in SellingSetting]: { value: SellingValues[K]; layer: SellingLayer } };
 
-export const SELLING_SETTINGS = ['inboundPlacement', 'maxClients', 'priority', 'weight', 'inboundsPerBuyer'] as const satisfies readonly SellingSetting[];
-
 /**
  * What a panel sells by when neither it nor the membership says otherwise.
  * `network.panel`'s columns had these as defaults before F-027-cg; the
@@ -61,17 +59,6 @@ export function effectiveSellingSettings(member: SellingLayerValues | null, pane
     priority: pick('priority'),
     weight: pick('weight'),
     inboundsPerBuyer: pick('inboundsPerBuyer'),
-  };
-}
-
-/** The values alone, as fulfilment places by them. */
-export function sellingValues(effective: EffectiveSellingSettings): SellingValues {
-  return {
-    inboundPlacement: effective.inboundPlacement.value,
-    maxClients: effective.maxClients.value,
-    priority: effective.priority.value,
-    weight: effective.weight.value,
-    inboundsPerBuyer: effective.inboundsPerBuyer.value,
   };
 }
 

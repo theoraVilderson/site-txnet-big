@@ -94,8 +94,7 @@ pages (F-1201-c/d) are gone, and their menu entries with them. The page says
 `groups/groups.test.ts` — the refusal union against the service source, the
 permission key and schema bounds, the menus (groups present; no team, roles or
 old address), `canNameResellers` and `isPlatformGroup` by tenant type and
-scope, `memberSearchOf`, the form bodies, `parseIds`, `membersBody` with an
-end, `endBody`, the members draft (`draftAdd`, `draftToggleRemove`,
+scope, `memberSearchOf`, the form bodies, `parseIds`, the members draft (`draftAdd`, `draftToggleRemove`,
 `draftEnd`, `changesBody`), `accessBody` (the whole set, the fold, the 200-key cap),
 `groupKeyAreas`, `receivers`, `presetDraft` (held, offered, admin), `groupsApiPath`, every old address redirecting,
 no *team* or *role* in the page's `en` and `fa` strings, and every key in both.

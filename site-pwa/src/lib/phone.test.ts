@@ -5,7 +5,6 @@ import {
   flagOf,
   formatAsTyped,
   fromE164,
-  looksComplete,
   readTyped,
   toE164,
 } from "./phone";
@@ -66,7 +65,6 @@ describe("phone", () => {
   describe("what the form submits is E.164, whatever was typed", () => {
     it.each(COUNTRIES)("$iso: $national -> $e164", ({ iso, national, e164 }) => {
       expect(toE164(national, iso)).toBe(e164);
-      expect(looksComplete(national, iso)).toBe(true);
     });
 
     it.each(COUNTRIES)("$iso: round-trips back into the field", ({ iso, e164 }) => {
@@ -78,11 +76,6 @@ describe("phone", () => {
     it("keeps the user's leading zero out of the submitted number", () => {
       // A local types the trunk prefix out of habit; E.164 has no room for it.
       expect(toE164("09121234567", "IR")).toBe("+989121234567");
-    });
-
-    it("does not claim a half-typed number is complete", () => {
-      expect(looksComplete("912", "IR")).toBe(false);
-      expect(looksComplete("", "US")).toBe(false);
     });
 
     it("groups digits as the selected country writes them", () => {

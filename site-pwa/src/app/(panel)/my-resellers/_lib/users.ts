@@ -136,9 +136,6 @@ export function adminActionBody(action: OfferedAction, configIds: string[], reas
   return { action, configIds, reason: why };
 }
 
-/** The two refusals only a move meets; the owner's list says "failed" for both, since a user never moves. */
-export const MOVE_REFUSALS = ["same_panel", "panel_not_found"] as const satisfies readonly ConfigActionRefusal[];
-
 /** One config's refusal on the admin sheet: the owner's sentences, with a move's own two. */
 export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
   ...REFUSAL_KEYS,

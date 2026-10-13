@@ -1,15 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { parseTenantStatusState, tenantAllows } from '@txnet-backend/shared-core';
-import { RedisService, type FanoutSubscriberClient } from '../redis/redis.service';
+import { RedisService } from '../redis/redis.service';
 import { RedisKeys } from '../redis/redis.keys';
 import { ConnectionRegistry, type Connection } from './connection.registry';
-
-/** What this class needs of `RedisService`, and nothing more. */
-export interface TenantStatusRedis {
-  readonly keyPrefix: string;
-  readonly subscriber: FanoutSubscriberClient;
-  get(key: string): Promise<string | null>;
-}
 
 /**
  * A socket exists only while its tenant's status allows `read` (F-018-r,

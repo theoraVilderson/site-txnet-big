@@ -95,8 +95,6 @@ export const AUTH_KEY_MAP = {
   botLinkChangeMethod: A.botLink.changeMethod,
 } as const;
 
-export type Lang = string;
-
 /** `{ loginTitle: string; usernameTab: string; ... }` — the shape components see. */
 export type AuthTranslations = Record<keyof typeof AUTH_KEY_MAP, string>;
 

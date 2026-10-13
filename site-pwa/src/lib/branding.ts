@@ -140,6 +140,7 @@ export function brandStyle(brand: Branding | null): CSSProperties {
 const cache = new Map<string, { at: number; brand: Branding | null }>();
 
 /** Unit test helper to reset in-memory state. */
+// codeshape: spec-only — the host cache is module state; each spec starts clean
 export function clearBrandingCache(): void {
   cache.clear();
 }

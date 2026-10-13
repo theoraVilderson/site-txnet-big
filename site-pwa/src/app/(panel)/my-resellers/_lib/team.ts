@@ -21,16 +21,3 @@ export function teamRefusalKey(e: unknown): string | null {
 export function assignableRoles(roles: readonly TenantRole[], grantable: readonly string[]): TenantRole[] {
   return roles.filter((role) => role.permissions.length === 0 || holdsEveryPermission(grantable, role.permissions));
 }
-
-/**
- * Where a platform staffer goes when taken off the team: the template with no
- * permission (the ordinary user's). The platform has no seats (`contract.team.md`).
- */
-export function customerRole(roles: readonly TenantRole[]): TenantRole | null {
-  return roles.find((role) => role.isTemplate && role.permissions.length === 0) ?? null;
-}
-
-/** A picked day (`YYYY-MM-DD`) as the end of that day in the visitor's zone, for `accessExpiresAt`. */
-export function endOfDay(day: string): string {
-  return new Date(`${day}T23:59:59`).toISOString();
-}

@@ -187,12 +187,6 @@ export async function resellerOverageOf(tx: ResellerOverageReader, tenantId: str
   return one;
 }
 
-/** Every quota key at once, for a page that shows them all. */
-export async function resellerOveragesOf(tx: ResellerOverageReader, tenantId: string): Promise<Map<ResellerQuotaKey, QuotaOverageInEffect>> {
-  const rows = await overagesOf(tx, tenantId, RESELLER_QUOTA_KEYS);
-  return new Map(RESELLER_QUOTA_KEYS.map((key, i) => [key, rows[i]]));
-}
-
 async function overagesOf(tx: ResellerOverageReader, tenantId: string, keys: readonly ResellerLimitKey[]): Promise<QuotaOverageInEffect[]> {
   const quotas = keys.filter(isResellerQuotaKey);
   if (quotas.length === 0) return keys.map(() => ({ ...STOP, source: 'default' as const }));

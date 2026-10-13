@@ -30,6 +30,7 @@ export interface OtpNamespace {
  * name the same key, and that each has a sentence in every language.
  */
 const T = BackendI18nKeys.notifications.otp.title;
+// codeshape: spec-only — the compile-time half of a runtime key; dynamic-keys.spec checks every title ships
 export const OTP_TITLE_KEY: Record<OtpPurpose, string> = {
   [OtpPurpose.login]: T.login,
   [OtpPurpose.register_phone_verify]: T.register_phone_verify,

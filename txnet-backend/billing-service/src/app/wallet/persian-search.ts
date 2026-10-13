@@ -46,9 +46,3 @@ export function foldedSearch(term: string): RegExp | null {
     .join('');
   return new RegExp(folded, 'i');
 }
-
-/** Whether `text` contains `term`, with every variant above folded. A blank term matches nothing. */
-export function matchesFolded(term: string, text: string): boolean {
-  const pattern = foldedSearch(term);
-  return pattern !== null && pattern.test(text);
-}

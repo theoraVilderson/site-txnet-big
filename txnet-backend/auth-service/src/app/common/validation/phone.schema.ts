@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   CountryCode,
   getCountries,
-  getCountryCallingCode,
   parsePhoneNumberFromString,
 } from 'libphonenumber-js/max';
 
@@ -69,11 +68,6 @@ export function supportedPhoneCountries(): CountryCode[] {
 
 function isSupportedCountry(iso: string): boolean {
   return supportedPhoneCountries().includes(iso as CountryCode);
-}
-
-/** The dial prefix for a country, without the `+` — `IR` -> `98`. */
-export function phoneCountryCallingCode(iso: CountryCode): string {
-  return getCountryCallingCode(iso);
 }
 
 /**

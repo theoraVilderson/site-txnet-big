@@ -36,6 +36,7 @@ import { z } from 'zod';
 export const NETWORK_USAGE_ROUTING_PREFIX = 'network.usage.';
 
 /** The key one collection pass is published under (C-08). */
+// codeshape: spec-only — network-service (Go) publishes it; usage-delta.contract.spec holds it to delta.json
 export const USAGE_DELTA_ROUTING_KEY = `${NETWORK_USAGE_ROUTING_PREFIX}delta`;
 
 /** `contracts/network/delta.json`'s `version`. A consumer refuses a version it was not written against. */

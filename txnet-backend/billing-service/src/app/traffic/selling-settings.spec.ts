@@ -18,7 +18,7 @@
 import { InboundPlacement } from '@prisma/client';
 
 import { addPanelGroupMemberSchema, updatePanelGroupMemberSchema, updatePanelInboundsSchema } from '../systems/panel-registration.schema';
-import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingValues } from './selling-settings';
+import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS } from './selling-settings';
 
 const UNSET = { inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsPerBuyer: null };
 
@@ -32,7 +32,7 @@ describe('effectiveSellingSettings — member -> panel -> platform', () => {
       weight: { value: 1, layer: 'platform' },
       inboundsPerBuyer: { value: 2, layer: 'platform' },
     });
-    expect(sellingValues(effective)).toEqual(PLATFORM_SELLING_DEFAULTS);
+    expect(Object.fromEntries(Object.entries(effective).map(([k, v]) => [k, v.value]))).toEqual(PLATFORM_SELLING_DEFAULTS);
   });
 
   it('takes the panel over the platform, and the member over both, setting by setting', () => {

@@ -27,6 +27,7 @@ const CACHE_MAX = 500;
 const cache = new Map<string, { at: number; serves: boolean }>();
 
 /** For the spec. */
+// codeshape: spec-only — the host cache is module state; each spec starts clean
 export function clearDoorCache() {
   cache.clear();
 }

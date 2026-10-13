@@ -102,7 +102,6 @@ export const otpDeliveryStatusSchema = z.object({
   deliveryId: z.string().regex(/^[0-9a-f]{32}$/),
 });
 
-export type OtpRequestInput = z.infer<typeof otpRequestSchema>;
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;

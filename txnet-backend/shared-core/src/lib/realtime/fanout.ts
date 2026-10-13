@@ -144,16 +144,6 @@ export const RealtimeChannelFamily = {
 export type RealtimeChannelFamily =
   (typeof RealtimeChannelFamily)[keyof typeof RealtimeChannelFamily];
 
-/** The channel one person's events ride. */
-export function userRealtimeChannel(userId: string): string {
-  return `${RealtimeChannelFamily.user}:${userId}`;
-}
-
-/** The channel one tenant's events ride. */
-export function tenantRealtimeChannel(tenantId: string): string {
-  return `${RealtimeChannelFamily.tenant}:${tenantId}`;
-}
-
 /**
  * What arrives on that channel: the end state of one OTP send, and never the
  * code.

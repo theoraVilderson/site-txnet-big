@@ -62,4 +62,3 @@ export const usageReleaseMessageSchema = z.object({
 });
 
 export type UsageReleasePayload = z.infer<typeof usageReleasePayloadSchema>;
-export type UsageReleaseMessage = z.infer<typeof usageReleaseMessageSchema>;

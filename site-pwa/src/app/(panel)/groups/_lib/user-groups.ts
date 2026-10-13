@@ -1,6 +1,5 @@
 import type { GroupPreset, Me, MemberChangesBody, PermissionArea, UserGroupAccess, UserGroupMember } from "@/lib/auth-api";
 import { groupsApiPath } from "@/lib/auth-api";
-import { endOfDay } from "../../my-resellers/_lib/team";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -134,33 +133,6 @@ export function parseIds(text: string): { ids: string[]; bad: string[] } {
   }
   return { ids, bad };
 }
-
-/**
- * The add body, or `null` when it names no one. A reseller's reseller ids are
- * dropped — the field is never shown to it. More than {@link MEMBER_IDS_MAX}
- * of either is a caller bug: the form says so before this is reached.
- * `endDay` (`YYYY-MM-DD`) ends every membership the call adds at that day's
- * last moment (GR-1-c); none, and they last until removed.
- */
-export function membersBody(
-  userIds: readonly string[],
-  tenantIds: readonly string[],
-  me: Me | null,
-  endDay: string | null = null,
-  tenantId: string | null = null,
-): { userIds?: string[]; tenantIds?: string[]; expiresAt?: string } | null {
-  const tenants = canNameResellers(me, tenantId) ? tenantIds : [];
-  if (userIds.length > MEMBER_IDS_MAX || tenants.length > MEMBER_IDS_MAX) throw new Error(`at most ${MEMBER_IDS_MAX} ids of each`);
-  const body: { userIds?: string[]; tenantIds?: string[]; expiresAt?: string } = {};
-  if (userIds.length > 0) body.userIds = [...userIds];
-  if (tenants.length > 0) body.tenantIds = [...tenants];
-  if (Object.keys(body).length === 0) return null;
-  if (endDay) body.expiresAt = endOfDay(endDay);
-  return body;
-}
-
-/** A member's end moved to a day's last moment, or cleared (`PATCH …/members/users/:userId`). */
-export const endBody = (day: string | null): { expiresAt: string | null } => ({ expiresAt: day ? endOfDay(day) : null });
 
 // ------------------------------------------------------------ the draft (GR-1-j)
 

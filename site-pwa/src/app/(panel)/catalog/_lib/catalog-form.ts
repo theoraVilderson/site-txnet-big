@@ -317,7 +317,7 @@ export const suggestCapabilityKey = (name: string, taken: Iterable<string>) => {
 
 export function validateCapabilityForm(f: CapabilityForm): Errors<CapabilityForm> {
   const errors: Errors<CapabilityForm> = {};
-  if (!FEATURE_KEY.test(f.key.trim())) errors.key = E.featureKey;
+  if (!isFeatureKey(f.key.trim())) errors.key = E.featureKey;
   if (blank(f.sourceLang)) errors.sourceLang = E.required;
   if (blank(f.name)) errors.name = E.required;
   return errors;
@@ -458,7 +458,7 @@ export function validateProductForm(f: ProductForm, me: Me | null): Errors<Produ
   if (!KEY.test(f.key.trim())) errors.key = E.key;
   if (blank(f.sourceLang)) errors.sourceLang = E.required;
   if (blank(f.name)) errors.name = E.required;
-  if (unique(f.featureKeys).some((k) => !FEATURE_KEY.test(k))) errors.featureKeys = E.featureKey;
+  if (unique(f.featureKeys).some((k) => !isFeatureKey(k))) errors.featureKeys = E.featureKey;
   return errors;
 }
 

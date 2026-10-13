@@ -746,7 +746,8 @@ every doc line naming it. `tools/codeshape.py` fails on a file nothing but
 specs imports (`dead`), an exported name nothing outside specs uses
 (`exports`), and a `dependencies` entry nothing imports (`deps`); a
 file that exists for specs says so in its first lines
-(`// codeshape: spec-only — <why>`), and a dependency used without an import is
+(`// codeshape: spec-only — <why>`), as does one export a spec needs — a cache
+reset, the TS side of a wire contract — in the lines above it, and a dependency used without an import is
 in its `ALLOW_DEPS` with the reason. App code logs through the app's logger
 (`console.info`/`warn`/`error` in Next server code), never `console.log`. A
 `TODO` names the row that will do it.

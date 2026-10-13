@@ -43,8 +43,5 @@ export const removeAccountSchema = z.object({
   userId: z.string().uuid(),
 });
 
-export type AddByOtpRequestInput = z.infer<typeof addByOtpRequestSchema>;
 export type AddByOtpVerifyInput = z.infer<typeof addByOtpVerifySchema>;
 export type AddByPasswordInput = z.infer<typeof addByPasswordSchema>;
-export type SwitchAccountInput = z.infer<typeof switchAccountSchema>;
-export type RemoveAccountInput = z.infer<typeof removeAccountSchema>;

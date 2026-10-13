@@ -7,8 +7,6 @@ import { isPlatformTenant } from "@/lib/tenant-type";
 /** The values billing's enums accept. Shown as they are: a provider name is a logo, not a sentence. */
 export const PROVIDERS = Object.keys(PROVIDER_FIELDS) as Provider[];
 export const CATEGORIES = ["domestic_rial", "international_card", "crypto", "in_chat"] as const;
-export const FEE_MODES = ["manual", "automatic"] as const;
-export const FEE_TYPES = ["percentage", "fixed"] as const;
 
 /**
  * What the form holds: every field a string (or a boolean), exactly as typed.

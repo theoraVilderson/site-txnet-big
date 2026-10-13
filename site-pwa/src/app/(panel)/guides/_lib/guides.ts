@@ -1,5 +1,4 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { Me } from "@/lib/auth-api";
 import type {
   CalloutTone,
   GuideBlock,
@@ -11,14 +10,10 @@ import type {
   GuideTargetKind,
   GuideText,
 } from "@/lib/guide-api";
-import { holdsPermission } from "@/lib/permissions";
 
 /** The guide pages' strings as generated constants (C-06). */
 export const GUIDE_KEYS = FrontendI18nKeys.common.guides;
 const K = GUIDE_KEYS;
-
-export const GUIDE_MANAGE = "guide.manage";
-export const canManageGuides = (me: Me | null) => holdsPermission(me?.permissions, GUIDE_MANAGE);
 
 export const GUIDE_KINDS: readonly GuideKind[] = ["os", "app", "product", "section"];
 export const CALLOUT_TONES: readonly CalloutTone[] = ["info", "tip", "warning", "danger"];
@@ -183,9 +178,4 @@ export function placementError(p: GuidePlacement): string | null {
 export function emptyPlacement(kind: GuideTargetKind): GuidePlacement {
   const slot = GUIDE_SLOTS[kind];
   return { targetKind: kind, surface: slot.surfaces[0], targetRef: slot.refs?.[0] ?? "" };
-}
-
-/** The image keys a text names, for previews: a block's file, a step's image. */
-export function imageKeys(blocks: readonly GuideBlock[]): string[] {
-  return blocks.flatMap((b) => (b.type === "image" ? [b.file] : b.type === "steps" ? b.items.flatMap((i) => (i.image ? [i.image] : [])) : [])).filter(Boolean);
 }

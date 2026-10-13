@@ -1,3 +1,4 @@
+// codeshape: spec-only — the one BotIntegration fixture three projects' specs build from
 import { BotIntegration } from './bot-integration';
 
 /**

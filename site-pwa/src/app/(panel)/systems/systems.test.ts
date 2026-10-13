@@ -15,7 +15,7 @@ import {
   HOLD_REASON_KEYS,
   HOLD_STATE_KEYS,
   CAUSE_KEYS,
-  isPanelEvent,
+  PANEL_EVENTS,
   liveChannelOf,
   PANEL_MANAGE,
   PANEL_ROLES,
@@ -421,10 +421,7 @@ describe("a connection test's answer arrives without a reload (F-027-bs)", () =>
   });
 
   it("re-reads on a panel's test result or health change, and on nothing else the channel carries", () => {
-    expect(isPanelEvent({ type: "network.panel.tested", panelId: "p", reviewState: "accepted", fault: null })).toBe(true);
-    // F-027-em: a confirmed health change (ADR-0122).
-    expect(isPanelEvent({ type: "network.panel.state_changed", panelId: "p", panelState: "down", cause: "connection_refused" })).toBe(true);
-    expect(isPanelEvent({ type: "notification.created" })).toBe(false);
-    expect(isPanelEvent(null)).toBe(false);
+    // F-027-em: a confirmed health change (ADR-0122) as well as a test result.
+    expect([...PANEL_EVENTS].sort()).toEqual(["network.panel.state_changed", "network.panel.tested"]);
   });
 });

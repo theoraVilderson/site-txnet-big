@@ -8,7 +8,6 @@ import { resellerUserGrantsPath, resellerUsersCatalogPath } from "@/lib/billing-
 import {
   ADMIN_ACTIONS,
   ADMIN_REFUSAL_KEYS,
-  MOVE_REFUSALS,
   USERS_QUERY_MIN,
   USER_REFUSAL_KEYS,
   adminActionBody,
@@ -97,7 +96,7 @@ describe("an admin's config action", () => {
   });
 
   it("has a sentence of its own for a move's two refusals", () => {
-    for (const reason of MOVE_REFUSALS) expect(ADMIN_REFUSAL_KEYS[reason]).not.toBe(ADMIN_REFUSAL_KEYS.failed);
+    for (const reason of ["same_panel", "panel_not_found"] as const) expect(ADMIN_REFUSAL_KEYS[reason]).not.toBe(ADMIN_REFUSAL_KEYS.failed);
   });
 
   it("sends no disable the schema would refuse", () => {

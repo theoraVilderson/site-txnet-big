@@ -55,7 +55,6 @@ export const CLOSE_SESSION_GONE = 4401;
 export const CLOSE_TENANT_CLOSED = 4403;
 export const CLOSE_HEARTBEAT = 4408;
 export const CLOSE_TOO_MANY = 4429;
-export const CLOSE_SHUTTING_DOWN = 4503;
 
 /** Refusal codes a subscriber can be told about. Machine keys, never text. */
 export type RealtimeErrorCode =
@@ -484,32 +483,3 @@ export function createRealtimeClient(options: RealtimeClientOptions = {}): Realt
 
 /** How often a page re-reads on a burst of live events, at most (F-067-p, ADR-0084 decision 3). */
 export const LIVE_REREAD_MS = 2_000;
-
-/**
- * A page's re-read on a live event, throttled on the reader's side (F-067-p,
- * ADR-0084 decision 3): the push is never combined, so a burst of twelve
- * events must not be twelve reads. The first event reads at once; the rest of
- * the window owes one more read at its end, so the last event always causes a
- * read and nothing shown is older than it.
- */
-export function trailingThrottle(read: () => void, ms: number): { call(): void; cancel(): void } {
-  let last = -Infinity;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const run = () => {
-    timer = null;
-    last = Date.now();
-    read();
-  };
-  return {
-    call() {
-      if (timer) return;
-      const wait = last + ms - Date.now();
-      if (wait <= 0) run();
-      else timer = setTimeout(run, wait);
-    },
-    cancel() {
-      if (timer) clearTimeout(timer);
-      timer = null;
-    },
-  };
-}

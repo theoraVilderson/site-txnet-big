@@ -1,4 +1,3 @@
-export * from './lib/shared-core.module';
 export * from './lib/automation/schedule';
 export * from './lib/automation/confirm-publish';
 export * from './lib/automation/bot-update';

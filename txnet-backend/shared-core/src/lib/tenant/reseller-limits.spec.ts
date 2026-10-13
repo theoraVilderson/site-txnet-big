@@ -23,7 +23,6 @@ import {
   resellerLimitOf,
   resellerLimitsOf,
   resellerOverageOf,
-  resellerOveragesOf,
 } from './reseller-limits';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -113,12 +112,6 @@ describe('resellerOverageOf', () => {
       source: 'default',
     });
     await expect(resellerOverageOf(overageTx({ tenantType: 'platform_owner', own: { [KEY]: priced('1') } }) as never, PLATFORM, KEY)).resolves.toMatchObject({ mode: 'stop', source: 'exempt' });
-  });
-
-  it('every quota key at once', async () => {
-    const all = await resellerOveragesOf(overageTx({ platform: { [KEY]: priced('2') } }) as never, RESELLER);
-    expect([...all.keys()]).toEqual(RESELLER_QUOTA_KEYS);
-    expect(all.get(KEY)).toMatchObject({ mode: 'overage', source: 'platform' });
   });
 });
 

@@ -35,6 +35,7 @@ interface Source {
 const refused = new Set<string>();
 
 /** A spec's clean slate. */
+// codeshape: spec-only — the refused-source set is module state; each spec starts clean
 export function resetPaletteDataForTests(): void {
   refused.clear();
 }

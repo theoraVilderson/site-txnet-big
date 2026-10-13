@@ -6,8 +6,6 @@ export const botLinkStatusSchema = z.object({
   linkToken: z.string().min(16).max(128),
 });
 
-export type BotLinkStatusInput = z.infer<typeof botLinkStatusSchema>;
-
 /**
  * `bot-service` handing over the two updates that belong to the link flow. It
  * has already resolved the webhook secret and normalized the update; what it
@@ -41,8 +39,6 @@ export const botSessionSchema = z.object({
     .optional(),
 });
 
-export type BotSessionInput = z.infer<typeof botSessionSchema>;
-
 /**
  * Signing in from inside the Mini App (`F-310`, ADR-0018).
  *
@@ -58,8 +54,6 @@ export const botWebAppSessionSchema = z.object({
   initData: z.string().min(1).max(4096),
 });
 
-export type BotWebAppSessionInput = z.infer<typeof botWebAppSessionSchema>;
-
 export const botLinkContactSchema = z.object({
   platform: z.nativeEnum(SocialPlatform),
   chatId: z.string().min(1).max(64),
@@ -71,6 +65,3 @@ export const botLinkContactSchema = z.object({
     user_id: z.union([z.string().min(1).max(64), z.number()]).optional(),
   }),
 });
-
-export type BotLinkResolveInput = z.infer<typeof botLinkResolveSchema>;
-export type BotLinkContactInput = z.infer<typeof botLinkContactSchema>;

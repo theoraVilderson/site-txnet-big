@@ -65,7 +65,6 @@ export const GUIDE_BOT_SCREENS = [
   'time_zone',
   'miniapp',
 ] as const;
-export type GuideBotScreen = (typeof GUIDE_BOT_SCREENS)[number];
 
 /** Operating systems an install guide is written for. */
 export const GUIDE_OSES = ['android', 'ios', 'windows', 'macos', 'linux'] as const;

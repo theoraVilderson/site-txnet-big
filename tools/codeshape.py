@@ -68,6 +68,7 @@ ALLOW_DEPS = {
 
 # A file only specs import may say so in its first lines, with the reason:
 #     // codeshape: spec-only — <why it is not dead>
+# and so may one export, in the three lines above its declaration.
 SPEC_ONLY = re.compile(r"codeshape:\s*spec-only\s*—\s*\S")
 
 IMPORT_RE = re.compile(
@@ -287,8 +288,11 @@ def find_exports():
     for r, t in text.items():
         if NEXT_ENTRY.search("/" + r) or BACKEND_ENTRY.search("/" + r) or SPEC_ONLY.search(t[:2000]):
             continue
-        for name in set(EXPORT_RE.findall(t)):
-            if name in NEXT_EXPORTS:
+        for m in EXPORT_RE.finditer(t):
+            name = m.group(1)
+            # One export a spec needs (a cache reset, the TS side of a wire
+            # contract) says so in the three lines above it, with the reason.
+            if name in NEXT_EXPORTS or SPEC_ONLY.search("\n".join(t[:m.start()].splitlines()[-3:])):
                 continue
             # Used nowhere else, and only declared here: nothing reaches it.
             # (Exported for a spec but used in its own file is not dead.)

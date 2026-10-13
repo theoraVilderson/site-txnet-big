@@ -367,31 +367,3 @@ describe('the version-keyed caches', () => {
     expect(store.getVersion()).toBe('unknown');
   });
 });
-
-describe('reloadStore', () => {
-  it('re-syncs, refreshes the metadata and drops the derived caches', async () => {
-    const client = fakeClient({ namespaces: { fa: { auth: { a: 'x' } } } });
-    const store = await load(client);
-    await store.initStore();
-    const before = store.getCompiledNamespace('fa', 'auth');
-
-    await store.reloadStore();
-    const after = store.getCompiledNamespace('fa', 'auth');
-
-    expect(client.resync).toHaveBeenCalledOnce();
-    expect(store.getAvailableLocales()).toEqual(['fa', 'en']);
-    expect(after).not.toBe(before);
-  });
-
-  it('keeps the cached data when the re-sync fails', async () => {
-    const client = fakeClient({ namespaces: { fa: { auth: { a: 'x' } } } });
-    const store = await load(client);
-    await store.initStore();
-    client.resync.mockRejectedValueOnce(new Error('stream dropped'));
-
-    await expect(store.reloadStore()).resolves.toBeUndefined();
-
-    expect(store.getAvailableLocales()).toEqual(['fa', 'en']);
-    expect(store.getCompiledNamespace('fa', 'auth')).toEqual({ a: 'x' });
-  });
-});

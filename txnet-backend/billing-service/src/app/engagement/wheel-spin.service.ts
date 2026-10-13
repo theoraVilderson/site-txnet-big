@@ -5,7 +5,7 @@ import { FraudSubjectType, GrantStatus, InvoiceStatus, Prisma, RewardSource, Spi
 import { liveMembership, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
-import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
+import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, fingerprintVerdict, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
 import { PrismaService } from '../prisma/prisma.service';
 import { issueReward, RewardIssued, RewardRefused } from './reward-issuer';
 import { isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
@@ -137,7 +137,7 @@ export function checkEligibility(cfg: SpinConfig, f: EligibilityFacts, at: Date)
     ['paidOrders', 'too_few_orders', SpinAttemptStatus.rejected_ineligible, { ok: cfg.requiresMinCompletedOrdersCount === null || f.paidOrders >= cfg.requiresMinCompletedOrdersCount, required: cfg.requiresMinCompletedOrdersCount, value: f.paidOrders }],
     ['group', 'not_in_group', SpinAttemptStatus.rejected_ineligible, { ok: cfg.userGroupId === null || f.inGroup === true, required: cfg.userGroupId, value: f.inGroup }],
     ['notFlagged', 'flagged', SpinAttemptStatus.voided_fraud, { ok: f.openFraudFlags === 0, required: 0, value: f.openFraudFlags }],
-    ['device', 'shared_device', SpinAttemptStatus.voided_fraud, { ok: f.accountsOnFingerprint < FINGERPRINT_FREE_GRANTS_REFUSED_AT, required: `< ${FINGERPRINT_FREE_GRANTS_REFUSED_AT}`, value: f.accountsOnFingerprint }],
+    ['device', 'shared_device', SpinAttemptStatus.voided_fraud, { ok: fingerprintVerdict(f.accountsOnFingerprint) !== 'refuse_free_grants', required: `< ${FINGERPRINT_FREE_GRANTS_REFUSED_AT}`, value: f.accountsOnFingerprint }],
     ['dailyLimit', 'daily_limit', SpinAttemptStatus.rejected_ineligible, { ok: f.awardedToday < cfg.maxSpinsPerAccountPerDay, required: cfg.maxSpinsPerAccountPerDay, value: f.awardedToday }],
     ['cooldown', 'cooldown', SpinAttemptStatus.rejected_ineligible, { ok: nextAt === null || nextAt.getTime() <= at.getTime(), required: cfg.perUserCooldownHours, value: nextAt?.toISOString() ?? null }],
   ];

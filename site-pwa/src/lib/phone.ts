@@ -115,11 +115,6 @@ export function toE164(national: string, iso: CountryCode): string {
   );
 }
 
-/** A coarse "can this be submitted" hint. The server is the real validator. */
-export function looksComplete(national: string, iso: CountryCode): boolean {
-  return parsePhoneNumberFromString(national, iso)?.isValid() ?? false;
-}
-
 /**
  * Splits a stored E.164 number back into a country and a national number, so
  * a form can be prefilled without the user seeing `+98…` in a field that

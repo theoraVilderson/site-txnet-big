@@ -5,7 +5,6 @@ import {
   isPhoneNumber,
   normalizePhone,
   parsePhone,
-  phoneCountryCallingCode,
   phoneSchema,
   supportedPhoneCountries,
 } from './phone.schema';
@@ -91,7 +90,6 @@ describe('phone.schema', () => {
           expect(parsePhone(e164)).toBe(e164);
           expect(normalizePhone(e164)).toBe(e164);
           expect(isPhoneNumber(e164)).toBe(true);
-          expect(phoneCountryCallingCode(iso)).toMatch(/^\d+$/);
         });
       },
     );

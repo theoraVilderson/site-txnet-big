@@ -181,21 +181,6 @@ export function initStore(): Promise<void> {
   return globalForLocale.localeBoot;
 }
 
-export async function reloadStore(): Promise<void> {
-  try {
-    await client().resync();
-    const metaMap = await loadMetaMap();
-    globalForLocale.localeMetaMap = metaMap;
-    globalForLocale.availableLocales = Object.keys(metaMap);
-    // نسخه‌ها عوض شده‌اند؛ کش‌های مشتق را خالی کن تا از نو ساخته شوند
-    globalForLocale.compiledCache?.clear();
-    globalForLocale.nsCache?.clear();
-    console.info("[locale] re-synced, version:", getVersion());
-  } catch (e) {
-    console.error("[locale] re-sync failed, keeping cached data", e);
-  }
-}
-
 export function getNamespace(lang: string, ns: string): Namespace | undefined {
   const c = globalForLocale.localeClient;
   if (!c) return undefined;

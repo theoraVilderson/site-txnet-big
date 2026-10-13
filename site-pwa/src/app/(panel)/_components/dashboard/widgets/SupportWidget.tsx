@@ -5,8 +5,9 @@ import { Headphones } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_SUPPORT, PANEL_SUPPORT_NEW, panelSupportThreadPath } from "@/lib/routes";
-import { supportApi, type ConversationStatus } from "@/lib/support-api";
+import { supportApi } from "@/lib/support-api";
 import { STATUS_KEYS } from "../../../support/_lib/support";
+import { isUnfinished } from "../../../support/_lib/support-agent";
 import { Badge, EmptyState } from "../../kit";
 import { FooterLink, WidgetList } from "../parts";
 import { useWidgetSource } from "../useWidgetSource";
@@ -14,14 +15,13 @@ import { WidgetBody } from "../WidgetFrame";
 
 const D = FrontendI18nKeys.common.dashboard;
 
-const OPEN: readonly ConversationStatus[] = ["open", "pending_agent", "pending_user"];
 const SHOWN = 5;
 
 /** Support (UX-1-q, D4): the caller's open threads, unread first, then the list's order. */
 export default function SupportWidget() {
   const { t } = useLocale();
   const source = useWidgetSource("support", async () => {
-    const open = (await supportApi.list()).items.filter((c) => OPEN.includes(c.status));
+    const open = (await supportApi.list()).items.filter((c) => isUnfinished(c.status));
     return [...open.filter((c) => c.unread > 0), ...open.filter((c) => !(c.unread > 0))].slice(0, SHOWN);
   });
   return (

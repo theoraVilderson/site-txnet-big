@@ -3,15 +3,13 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Me, UserGroupMember } from "@/lib/auth-api";
-import { PANEL_GROUPS, PANEL_ROLES, PANEL_TEAM, PANEL_USER_GROUPS, myResellerGroupsPath } from "@/lib/routes";
+import { PANEL_GROUPS, PANEL_ROLES, myResellerGroupsPath } from "@/lib/routes";
 import { RESELLER_MENU } from "../_lib/reseller-menu";
-import { endOfDay } from "../my-resellers/_lib/team";
 import { PANEL_MENU, isMenuGroup, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import {
   ACCESS_KEYS_MAX,
   GROUP_NAME_MAX,
   accessBody,
-  endBody,
   groupKeyAreas,
   groupsApiPath,
   isPlatformGroup,
@@ -24,7 +22,6 @@ import {
   canNameResellers,
   createGroupBody,
   memberSearchOf,
-  membersBody,
   parseIds,
   presetDraft,
   changesBody,
@@ -101,9 +98,9 @@ describe("who sees the page", () => {
 
   it("is the only people page that gives access: Team and Roles have left both menus (GR-1-f, ADR-0139 (1))", () => {
     const links = PANEL_MENU.flatMap((e) => (isMenuGroup(e) ? e.children : [e])).map((l) => (typeof l.href === "function" ? l.href("t-owner", false) : l.href));
-    expect(links).not.toContain(PANEL_TEAM);
+    expect(links).not.toContain("/team");
     expect(links).not.toContain(PANEL_ROLES);
-    expect(links).not.toContain(PANEL_USER_GROUPS);
+    expect(links).not.toContain("/user-groups");
     const workspace = RESELLER_MENU.map((l) => l.href("r-1", false));
     expect(workspace).toContain(myResellerGroupsPath("r-1"));
     expect(workspace.filter((h) => /\/(team|roles)$/.test(h))).toEqual([]);
@@ -152,22 +149,6 @@ describe("naming members", () => {
     expect(parseIds(` ${A},${B}\n${A} `)).toEqual({ ids: [A, B], bad: [] });
     expect(parseIds("nope, " + A)).toEqual({ ids: [A], bad: ["nope"] });
     expect(parseIds("")).toEqual({ ids: [], bad: [] });
-  });
-
-  it("ends every membership an add makes on the day picked, at its last moment, or never", () => {
-    expect(membersBody([A], [], OWNER, "2026-12-31")).toEqual({ userIds: [A], expiresAt: endOfDay("2026-12-31") });
-    expect(membersBody([A], [], OWNER, null)).toEqual({ userIds: [A] });
-    expect(endBody("2026-12-31")).toEqual({ expiresAt: endOfDay("2026-12-31") });
-    expect(endBody(null)).toEqual({ expiresAt: null });
-  });
-
-  it("builds a body with at least one id, at most 500 of each, and no reseller for a reseller", () => {
-    expect(membersBody([A], [], OWNER)).toEqual({ userIds: [A] });
-    expect(membersBody([], [B], OWNER)).toEqual({ tenantIds: [B] });
-    expect(membersBody([A], [B], RESELLER)).toEqual({ userIds: [A] });
-    expect(membersBody([], [], OWNER)).toBeNull();
-    expect(membersBody([], [B], RESELLER)).toBeNull();
-    expect(() => membersBody(Array(MEMBER_IDS_MAX + 1).fill(A), [], OWNER)).toThrow();
   });
 });
 
@@ -409,7 +390,7 @@ describe("the members draft", () => {
 
 /**
  * GR-1-k — a membership ends at a minute, not a day (user 2026-10-10). The
- * wall time is the visitor's zone, as `endOfDay` was; what breaks silently is a
+ * wall time is the visitor's zone; what breaks silently is a
  * saved end read back in another zone and shown as a "change".
  */
 describe("a membership end as a wall time", () => {

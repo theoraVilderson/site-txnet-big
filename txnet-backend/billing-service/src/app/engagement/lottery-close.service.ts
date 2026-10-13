@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { FraudSubjectType, LotteryEntryMode, LotteryStatus, Prisma, UserGroupMemberType, UserStatus } from '@prisma/client';
 import { LOTTERY_ALGORITHM, lotteryListHash, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
-import { FINGERPRINT_FREE_GRANTS_REFUSED_AT, FINGERPRINT_WINDOW_DAYS } from '../fraud/device-fingerprint';
+import { FINGERPRINT_WINDOW_DAYS, fingerprintVerdict } from '../fraud/device-fingerprint';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LotterySeedSeal } from './lottery-seed-seal';
@@ -65,7 +65,7 @@ export function judgeCandidate(
   if (at.getTime() - facts.createdAt.getTime() < rules.requiresMinAccountAgeHours * 3_600_000) return 'account_too_new';
   if (rules.requiresPhoneVerified && facts.phoneVerifiedAt === null) return 'phone_unverified';
   if (facts.openFlags > 0) return 'flagged';
-  if (facts.accountsOnFingerprint >= FINGERPRINT_FREE_GRANTS_REFUSED_AT) return 'shared_device';
+  if (fingerprintVerdict(facts.accountsOnFingerprint) === 'refuse_free_grants') return 'shared_device';
   return null;
 }
 

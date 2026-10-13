@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import type { PanelGroup, PanelGroupMember, PanelInbound, PanelInbounds, SystemsPanel } from "@/lib/billing-api";
 import {
-  CONFIG_PROTOCOLS,
   DRAIN_TTL_MULTIPLE,
   MEMBER_ROLE_KEYS,
   addablePanels,
@@ -99,8 +98,7 @@ const group = (over: Partial<PanelGroup> = {}): PanelGroup => ({
 });
 
 describe("the closed sets, from their declared home", () => {
-  it("ConfigProtocol and PanelGroupMemberRole", () => {
-    expect([...CONFIG_PROTOCOLS].sort()).toEqual(prismaEnum("ConfigProtocol").sort());
+  it("PanelGroupMemberRole", () => {
     expect(Object.keys(MEMBER_ROLE_KEYS).sort()).toEqual(prismaEnum("PanelGroupMemberRole").sort());
   });
 

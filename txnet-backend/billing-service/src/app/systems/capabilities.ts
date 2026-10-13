@@ -32,8 +32,6 @@ export const CAPABILITY_ROWS = [
   { key: 'internal_credit_disablable', scope: 'any', severity: 'degrades' },
 ] as const;
 
-export type CapabilityKey = (typeof CAPABILITY_ROWS)[number]['key'];
-
 /**
  * One row as the page shows it. `not_asked`: outside the panel's transport, so
  * no answer is expected (`Scope.Includes`). `unanswered`: in scope, but no

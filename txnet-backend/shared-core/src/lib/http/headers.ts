@@ -46,6 +46,7 @@ export const IdentityHeaders = {
  * pair is conditional, so a consumer checking "did the gate identify someone"
  * checks these and not the whole set.
  */
+// codeshape: spec-only — the TS side of wire.json; wire.contract.spec holds it to the Go gate
 export const ALWAYS_SET_IDENTITY_HEADERS = [
   IdentityHeaders.userId,
   IdentityHeaders.tenantId,
@@ -55,6 +56,7 @@ export const ALWAYS_SET_IDENTITY_HEADERS = [
 ] as const;
 
 /** Written only while an admin is impersonating (`audit` unit). */
+// codeshape: spec-only — the TS side of wire.json; wire.contract.spec holds it to the Go gate
 export const IMPERSONATION_HEADERS = [
   IdentityHeaders.impersonated,
   IdentityHeaders.impersonatedBy,

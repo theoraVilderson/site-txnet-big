@@ -1,4 +1,4 @@
-import type { ConfigProtocol, EvictOrphans, EvictPreview, PanelGroup, PanelGroupBody, PanelGroupMember, PanelGroupMemberRole, SystemsPanel } from "@/lib/billing-api";
+import type { EvictOrphans, EvictPreview, PanelGroup, PanelGroupBody, PanelGroupMember, PanelGroupMemberRole, SystemsPanel } from "@/lib/billing-api";
 import { SYSTEMS_KEYS } from "./systems";
 
 /**
@@ -9,23 +9,6 @@ import { SYSTEMS_KEYS } from "./systems";
  * says what fulfilment and the drain sweep will do with the answer.
  */
 const K = SYSTEMS_KEYS.groups;
-
-/**
- * `network.ConfigProtocol`, in the schema's order (C-09). Protocol names, not
- * prose: not translated. A group names none — its panels' picked inbounds do
- * (F-114-b) — so this is what a picked inbound can be.
- */
-export const CONFIG_PROTOCOLS = [
-  "vmess",
-  "vless",
-  "trojan",
-  "shadowsocks",
-  "hysteria2",
-  "tuic",
-  "wireguard",
-  "openvpn",
-  "pppoe",
-] as const satisfies readonly ConfigProtocol[];
 
 export const MEMBER_ROLE_KEYS: Record<PanelGroupMemberRole, string> = {
   primary: K.role.primary,

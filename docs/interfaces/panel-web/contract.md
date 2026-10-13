@@ -36,10 +36,9 @@ signed in?" without any client-side probe (see the auth-screen guard below).
 
 No module here spells a user-facing sentence: `useLocale().t(ns, key)` is the
 only source, and a miss renders the raw key — visible, never one fixed
-language. Helpers included — `util/helper.ts`'s `zodErrorToString` takes `t`
-and resolves every issue message in the `validations` namespace, so a schema
-reads `z.string().min(3, "fields.username.tooShort")`. A message that is not a
-key survives unchanged, so an un-keyed schema still renders.
+language. A form's own check returns a key, never a sentence; no zod issue
+message reaches the screen (the `zodErrorToString` helper was removed in CS-1-h,
+having no caller).
 
 ## Which language a visitor gets (F-068)
 

@@ -201,19 +201,10 @@ export const myResellerUsersPath = (id: string, self = false) => `${resellerWork
 /** One user's page — services and profile — as that reseller's admin reads and acts on them (F-311-v, over F-311-f/g). */
 export const myResellerUserPath = (id: string, userId: string, self = false) =>
   `${myResellerUsersPath(id, self)}/${encodeURIComponent(userId)}`;
-/** A tenant's roles page's old address (F-1201-d); redirects to {@link myResellerGroupsPath} (GR-1-f). */
-export const myResellerRolesPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/roles`;
 /** A tenant's access log (AC-1-p): every act that moved someone's access, behind `audit.read`. */
 export const myResellerAccessLogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/access-log`;
-/**
- * The old addresses of the session's own team and roles (F-1201-c/-d). Each
- * now redirects to {@link PANEL_GROUPS}: a group is the only way to give
- * access in the panel (GR-1-f, ADR-0139 (1)).
- */
-export const PANEL_TEAM = "/team";
+/** The roles page's old address (F-1201-d); redirects to {@link PANEL_GROUPS} (GR-1-f, ADR-0139 (1)). */
 export const PANEL_ROLES = "/roles";
-/** A tenant's team's old address, by the path's tenant; redirects to {@link myResellerGroupsPath}. */
-export const myResellerTeamPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/team`;
 /**
  * A tenant's groups by its path (GR-1-f, ADR-0139 (5)): members with an end,
  * and the keys each group gives. A reseller's for its owner and its people
@@ -249,8 +240,6 @@ export const PANEL_SYSTEMS = "/systems";
  * each tenant its own groups (F-114-j).
  */
 export const PANEL_GROUPS = "/groups";
-/** The groups page's old address; redirects to {@link PANEL_GROUPS}. */
-export const PANEL_USER_GROUPS = "/user-groups";
 /** The user's lucky wheel: public odds, a spin the server decides, their own history (F-707-g). */
 export const PANEL_WHEEL = "/wheel";
 /** A tenant admin's wheel: prizes, odds, the cap, eligibility, versions and the day report (F-707-f). */
@@ -280,7 +269,9 @@ export const panelGuidePath = (id: string) => `${PANEL_GUIDES}/${encodeURICompon
  * `deposit-callback.controller.ts` redirects to them by path, so they are the
  * one pair of routes here that cannot be renamed from this side alone.
  */
+// codeshape: spec-only — billing's RESULT_PATH redirects here; payment-result.test holds the three paths to it
 export const PAYMENT_SUCCESS = "/payment/success";
 export const PAYMENT_FAILED = "/payment/failed";
 /** A verifying payment (F-093-l): billing's callback writes this path out too. */
+// codeshape: spec-only — billing's RESULT_PATH writes it; payment-result.test holds it
 export const PAYMENT_PENDING = "/payment/pending";

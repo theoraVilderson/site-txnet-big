@@ -24,7 +24,7 @@ Cross-cutting anti-fraud, intentionally its own schema. `device_fingerprint` (D-
 | **built** `fingerprintSourceOf(req)` | the request | a web or bot source, or `null` — the caller then refuses what needs one | sync | — |
 | **built** `recordFingerprint(tx, …)` | tenantId, userId, source, at | `{id, fingerprintHash}`: one row per (tenant, account, hash), `lastSeenAt` moved | sync, caller's tx | — |
 | **built** `accountsOnFingerprint(tx, …)` | tenantId, fingerprintHash, at | distinct accounts with `lastSeenAt` in the 30 days to `at` | sync, caller's tx | — |
-| **built** `fingerprintVerdict(n)` | that count | `clear` < 3 ≤ `flag` < 5 ≤ `refuse_free_grants` (D-11) | sync | — |
+| **built** `fingerprintVerdict(n)` | that count | `clear` < 3 ≤ `flag` < 5 ≤ `refuse_free_grants` (D-11); the wheel's and the lottery's device check ask it | sync | — |
 | raise flag | subjectType, subjectId, flagType, severity | `fraud_flag` (+ optional auto action) | async (scanner) | — |
 | resolve flag | flagId, adminId, notes | updated flag | sync | — |
 | list open flags | filters | flags | sync | — |

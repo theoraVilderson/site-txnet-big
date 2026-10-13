@@ -46,12 +46,6 @@ export function liveChannelOf(me: { tenant: { id: string }; permissions: readonl
  */
 export const PANEL_EVENTS: readonly string[] = [RealtimeEvents.panelTested, RealtimeEvents.panelStateChanged];
 
-export function isPanelEvent(payload: unknown): boolean {
-  if (!payload || typeof payload !== "object") return false;
-  const type = (payload as Record<string, unknown>).type;
-  return typeof type === "string" && PANEL_EVENTS.includes(type);
-}
-
 // The closed sets the register form offers, as `network.prisma` declares them
 // (C-09). `systems.test.ts` reads each enum out of the schema.
 export const DRIVER_TYPES = [
