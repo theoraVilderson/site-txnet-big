@@ -369,16 +369,20 @@ task, name it and ask — the same rule as a `CONVENTIONS.md` id.
 
 **Standing instruction from the user (2026-10-13), for every session, every
 agent and every person on the team:** code is written so the next person can
-pick it up without asking. It is held by `docs/CONVENTIONS.md` C-17 … C-22,
-and mostly by checks, not by memory:
+pick it up without asking — readable, not repeated, nothing dead, nothing
+hardcoded, no hidden bug and no bottleneck. **Before the first line of code in
+any session, read "The short version" at the top of `docs/CONVENTIONS.md`**
+(~60 lines; C-01 … C-38 behind it, looked up by id). Most of it is held by
+`conventions.py` and `codeshape.py`, not by memory:
 
 - **No hardcoding.** A language comes from the locale meta, never `"fa"`/`"en"`
   (C-17); a domain question is one imported function, never a literal compared
   again (C-18); text a person reads is a locale key (C-19); a number that means
   something is a named constant (C-22). Write code that follows the data — the
   next language, tenant type or gateway must need no edit at the call site.
-- **Small parts.** 400 lines a file, 10 `useState` a React file (C-20,
-  `tools/codeshape.py`). Split by job — `_components` / `_hooks` / `_lib`,
+- **Small parts.** 400 lines a file, 10 `useState` a React file (C-20), a
+  function about 50 lines (C-35), one home per need and no pasted blocks
+  (C-27, `tools/codeshape.py`). Split by job — `_components` / `_hooks` / `_lib`,
   controller / service / pure function — before the cap, not after.
 - **Comments say why**, in English, with the id they come from; every export
   of a lib module has one doc line (C-01, C-22).

@@ -12,6 +12,66 @@ codebase, and they apply everywhere.
 
 Read at tier 4 — before writing code inside any unit.
 
+## The short version — read this before any code
+
+Every session reads this block whole; the sections below are looked up by id
+(`grep -n "## C-27" docs/CONVENTIONS.md`), not read through. Each line names
+the rule that holds it. **check** = `conventions.py` or `codeshape.py` fails on
+it; the rest is review.
+
+**Before writing**
+- Look for the home first: the need probably has one already (C-27 table).
+  The second copy of anything is an extraction, never a paste.
+- A new dependency, a new pattern or a new shared module is a question to the
+  user, not a decision made mid-item (C-34, AGENTS.md "Decide once").
+- The spec comes first and fails for the reason you named (CODE-LAYOUT.md).
+
+**Names and shape**
+- Names say what a thing is in the product's words; units in the name
+  (`timeoutMs`, `amountMinor`); booleans read as questions (`isOwner`) — C-23.
+- A function does one thing, ≤ ~50 lines, ≤ 3 positional parameters, nesting ≤ 3,
+  no boolean flag parameters, no nested ternaries — C-35.
+- A file ≤ 400 lines, a React file ≤ 10 `useState`; split by job — C-20 **check**.
+- A comment says why and cites its id; every export of a lib module has one doc
+  line; no commented-out code; English only — C-22, C-01 **check**.
+
+**Nothing hardcoded, nothing repeated**
+- No language literal (C-17), no domain literal compared at a call site (C-18),
+  no user text in code (C-19), no magic number (C-22), no closed set restated
+  (C-09), no route / header / Redis key / routing key spelled by hand
+  (C-10, C-04, C-03, C-08) — all **check**.
+- Pasted blocks, dead files, dead exports and unused packages fail `codeshape.py`
+  — C-27, C-21 **check**. What a change replaces, it deletes.
+
+**Correctness — the bugs nobody sees**
+- Types are honest: no `any`, no `as unknown as`, no `!`, no `@ts-ignore`;
+  input from outside is parsed with zod at the edge; a `switch` over a union is
+  exhaustive — C-24 **check**.
+- An error is handled once, on purpose: no empty `catch`, no swallowed promise,
+  a user-facing failure is a locale key — C-25 **check**.
+- Money is `Decimal`/string in its currency (C-02); time is UTC on the wire and
+  in the database, zoned only at the edge (C-37).
+- A write that can run twice runs safely twice; a multi-row change is one
+  transaction; tenant data goes through `tenantTransaction` — C-29.
+- Config is read from the app's validated env module only — C-26 **check**.
+
+**Fast by default**
+- No query inside a loop; every list is paged with a maximum; select what you
+  render; a new filter on a growing table ships its index — C-28.
+- Slow or retried work goes to the queue; every outside call has a timeout —
+  C-28. A page hears queued work over the socket, never polls — C-14 **check**.
+- React: derive, do not mirror state; effects only sync with the outside; keys
+  are ids — C-30 **check**. Styling is tokens and logical sides — C-31 **check**.
+
+**Safe by default**
+- Authorise on the server for every route; the UI hiding a button is not
+  security. No raw unsafe SQL, no `dangerouslySetInnerHTML`, no secret in code,
+  no token or phone number in a log — C-32 **check**, C-38.
+
+**Done**
+- The seven checks in AGENTS.md pass; a debt entry you touched got smaller and
+  `codeshape.py --tighten` locked it in (C-20).
+
 ## The format
 
 Every convention gets a permanent id (`C-nn`), cited in review and in commit
@@ -32,8 +92,24 @@ needs to move up that table.
 
 | id | rule | enforced by |
 |---|---|---|
+| C-38 | A log line says what happened, to which ids, at the right level, through the app's logger (Nest `Logger` with the class name; `console.info`/`warn`/`error` in Next server code). Never a token, password, OTP, card or full phone number. | review |
+| C-37 | An API change is backwards compatible until every consumer moved: add a field, never rename or retype one in place; the unit's `contract.md` changes in the same commit. Time is ISO-8601 UTC on the wire and in the database, zoned only for display (`_lib/datetime.ts`, `shared-core/lib/time`). | review |
+| C-36 | Go: `gofmt`/`go vet` clean; `context.Context` is the first parameter of anything that does I/O; errors are wrapped with `%w` and returned, not logged and dropped; `panic` only for a broken invariant, with its reason; an ignored error is a response write and says so. | review |
+| C-35 | A function does one thing: about 50 lines at most, at most 3 positional parameters (more is an options object), nesting at most 3 (return early), no boolean flag parameter, no nested ternary. | review |
+| C-34 | One library per job. A new dependency is asked for first, with what it replaces and its size; an unused one is removed (`codeshape.py` `deps`). | check |
+| C-33 | A bug fix starts with a spec that fails on the bug. Specs test behaviour through the public surface, use fake timers not sleeps, and never ship `.only` / `.skip`. | check |
+| C-32 | Every route authorises on the server; input is validated at the edge; no `$queryRawUnsafe`/`$executeRawUnsafe`, no `dangerouslySetInnerHTML` (the theme scripts excepted), no `eval`, no key material in code, no `Math.random` in the backend. | check |
+| C-31 | Panel styling is theme tokens and logical sides: no hex colour in a component, no `ml-`/`mr-`/`left-`/`text-left`, so RTL and LTR both work; contrast per `contract.ux.md`. | check |
+| C-30 | React renders from minimal state: derive instead of mirroring, an effect only syncs with something outside React and cleans up, list keys are ids, an `eslint-disable` says why after ` -- `. Server components by default; heavy client code is a dynamic import. | check |
+| C-29 | A write that may run twice is safe twice (a dedupe key or a unique constraint); a change across rows is one transaction; read-modify-write is a conditional update; tenant data goes through `tenantTransaction`/`withTenant`; an event leaves through the outbox. | review |
+| C-28 | Data access is bounded: no query per loop iteration, every list paged with a maximum, select what is used, an index ships with a new filter or sort on a growing table, slow work goes to a queue, every outside call has a timeout and a capped retry, every cache key a TTL. | review |
+| C-27 | One home per need (the table in C-27). The second copy is extracted, not pasted: `codeshape.py` `dupes` fails on a pasted block, `smells` on a bypassed home (`raw-fetch`, `raw-storage`). | check |
+| C-26 | Config is read only in the app's validated env module (`env.validation.ts`, `site-pwa/src/env.ts`); everything else imports the typed value. | check |
+| C-25 | An error is handled once and on purpose: no empty `catch`, a caught error is converted, rethrown or logged with context — never dropped; a promise is awaited or marked `void` with a reason; what the user reads is a locale key. | check |
+| C-24 | Types are honest: no `any`, no `as unknown as`, no non-null `!`, no `@ts-ignore`/`@ts-nocheck`. Outside input is `unknown` until zod parses it; a `switch` over a union ends in `assertNever`. | check |
+| C-23 | A name says what the thing is, in the product's words (`grant`, `tenant`, `panel`, not `data`, `info`, `item2`); it carries its unit (`timeoutMs`, `sizeBytes`, `amountMinor`); a boolean reads as a question (`isOwner`, `hasGrant`, `canBuy`). TypeScript: `camelCase` values, `PascalCase` types and components, `UPPER_SNAKE` module constants, files `kebab-case.ts`, components `PascalCase.tsx`, hooks `useThing.ts`. No `var`. | check |
 | C-22 | A comment says *why* — the rule, the case or the id it comes from — never what the next line plainly does. Every export of a `lib/`, `_lib/` or service module has a one-line doc. No commented-out code. A file does one job: a page is thin, its view is in `_components`, its state in `_hooks`, its pure logic in `_lib`; a controller is thin over a service. | review |
-| C-21 | Code that is replaced is deleted in the same change, with its tests and its doc mentions. No file only tests import, no `dependencies` entry nothing imports (`codeshape.py` `dead`/`deps`), no `console.log`/`console.debug` in app code, no `TODO`/`FIXME` without a backlog id: `TODO(FE-1-e)`. | check |
+| C-21 | Code that is replaced is deleted in the same change, with its tests and its doc mentions. No file or export only tests reach, no `dependencies` entry nothing imports (`codeshape.py` `dead`/`exports`/`deps`), no `console.log`/`console.debug` in app code, no `TODO`/`FIXME` without a backlog id: `TODO(FE-1-e)`. | check |
 | C-20 | A source file is at most 400 lines and a React file declares at most 10 `useState` (`tools/codeshape.py`). Files over it today are a baseline that may only shrink. | check |
 | C-19 | Text a person reads is never in code: it is a locale key (C-06, C-07). Arabic-script literals live only in a module whose job is the script itself — normalising digits and letters, transliterating, matching. | check |
 | C-18 | A domain question is one named function: *is this the platform's tenant*, *may this user buy* — asked of the module that owns the type, never re-derived from a literal at the call site. `"platform_owner"` outside its owners is a violation. | check |
@@ -644,7 +720,8 @@ and `--tighten` locks in a split.
 
 **Rule.** The change that makes code unnecessary deletes it, with its spec and
 every doc line naming it. `tools/codeshape.py` fails on a file nothing but
-specs imports (`dead`) and a `dependencies` entry nothing imports (`deps`); a
+specs imports (`dead`), an exported name nothing outside specs uses
+(`exports`), and a `dependencies` entry nothing imports (`deps`); a
 file that exists for specs says so in its first lines
 (`// codeshape: spec-only — <why>`), and a dependency used without an import is
 in its `ALLOW_DEPS` with the reason. App code logs through the app's logger
@@ -685,3 +762,336 @@ message: delete the debug line, log through the logger, and give a TODO its back
 the last one stopped without asking them. None is checkable by a regex, so
 they rest on review; when one keeps being broken, it gets a check (see "The
 format").
+
+## C-23 — a name says what the thing is
+
+**Rule.**
+- Product words, the ones the docs use: `grant`, `tenant`, `reseller`,
+  `panel`, `inbound`, `wallet`. Never `data`, `info`, `obj`, `temp`, `item2`,
+  `handleStuff`, `doIt`, `manager`.
+- The unit is in the name when there is one: `timeoutMs`, `ttlSec`,
+  `sizeBytes`, `amountMinor`, `priceRial`. A bare `timeout` is a bug waiting
+  for the next reader to guess seconds.
+- A boolean is a question: `isOwner`, `hasGrant`, `canBuy`, `shouldRetry`.
+- A function is a verb for what it does (`loadGrants`, `formatMoney`); a
+  predicate is the question (`isPlatformTenant`); a React hook starts `use`.
+- Casing (TypeScript): `camelCase` values and functions, `PascalCase` types,
+  classes and components, `UPPER_SNAKE` module-level constants. Files:
+  `kebab-case.ts`, `PascalCase.tsx` for a component, `useThing.ts` for a hook,
+  `thing.spec.ts` / `thing.test.tsx` beside it. Go: Effective Go.
+- One spelling per idea across the repo: the backend's `grant` is the panel's
+  `grant`, not `subscription` in one file and `plan` in the next.
+
+**Why.** A reader spends more time on names than on anything else. A name with
+no unit or no domain word is read once by its author and guessed at by
+everyone after.
+
+```check C-23
+forbid: ^\s*var\s+\w
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
+except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts, txnet-backend/*-e2e/**
+message: use const (or let when it is reassigned) — var is function-scoped and hoisted (C-23); the two inline <head> scripts are ES5 on purpose
+```
+
+## C-24 — types are honest
+
+**Rule.**
+- No `any`. A value of unknown shape is `unknown` and is narrowed.
+- No `as unknown as T`: it tells the compiler to stop checking. Parse it
+  (zod), convert it (`Number(x)`, `new Decimal(x)`), or fix the type upstream.
+- No non-null `x!.y`: handle the missing case, or make the type say it cannot
+  be missing.
+- No `@ts-ignore` / `@ts-nocheck`. A known compiler gap is
+  `@ts-expect-error -- <why>`, which fails once the gap closes.
+- Data from outside the process — a request body, a queue message, a webhook,
+  `JSON.parse`, `localStorage`, a third-party API — is parsed with a zod
+  schema at the edge. Inside, the types are trusted and not re-checked.
+- A `switch` over a union or enum is exhaustive: the `default` calls
+  `assertNever(x)`, so a new member is a compile error, not a silent fall-through.
+
+**Why.** Every one of these turns a compile error into a runtime one — the
+kind that shows up on a real screen with every suite green. On 2026-10-13
+`PaymentSummary` formatted a rial string through `as unknown as number`.
+`@ts-ignore` is a `check`; `any`, the double cast and `!` are counted per file
+by `codeshape.py` `smells` (98 double casts in 49 files today) and may only go
+down.
+
+```check C-24
+forbid: @ts-(ignore|nocheck)\b
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
+except: txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**
+message: fix the type; a real compiler gap is `// @ts-expect-error -- <why>` (C-24)
+```
+
+## C-25 — an error is handled once, on purpose
+
+**Rule.**
+- No empty `catch`. A caught error is converted (to a domain exception with a
+  locale key), rethrown with context, or logged with the ids it concerns — and
+  only one of those, in one place: the layer that can do something about it.
+- `catch (e)` types `e` as `unknown`; read it with `e instanceof Error`.
+- A promise is awaited. One deliberately left running is `void doThing()` with
+  a comment saying why nothing waits for it.
+- Backend: what a user will read is a domain exception carrying a backend
+  locale key (C-07); an `Error` is for a broken invariant only.
+  Panel: a failed call shows the API's localised message (`useApiError`), never
+  `e.message` raw.
+- Go: return `fmt.Errorf("doing x: %w", err)`; do not log and also return.
+
+**Why.** A swallowed error is the bug that is reported three weeks later as
+"sometimes it doesn't save". The two empty catches that remain are inside the
+ES5 `<head>` scripts, where a throw would blank the page.
+
+```check C-25
+forbid: catch\s*(\([^)]*\))?\s*\{\s*\}
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
+except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts, txnet-backend/*-e2e/**
+message: handle the error — convert, rethrow with context, or log with the ids — never drop it (C-25)
+```
+
+## C-26 — config comes from the validated env module
+
+**Rule.** `process.env` is read in one module per app: each service's
+`config/env.validation.ts` (zod, fails at boot), `site-pwa/src/env.ts`,
+`coinsite/src/env.ts`, and build config files. Everything else imports the
+typed, defaulted value from there.
+
+**Why.** A variable read raw is a string or `undefined` at whatever moment it
+is read; a typo in its name is `undefined` for ever and nothing fails. Read
+once through the schema, a missing or malformed value stops the boot with its
+name. `codeshape.py` counts raw reads per file (`raw-env`).
+
+## C-27 — one home per need
+
+**Rule.** Before writing a helper, use the home. The second time the same logic
+is needed it is moved to its home and both callers import it — not pasted.
+
+| need | panel (`site-pwa`) | backend (`txnet-backend`) |
+|---|---|---|
+| call the API | `lib/api-request.ts` and the `lib/*-api.ts` clients | — |
+| a route | `lib/routes.ts` (C-10) | — |
+| a header / cookie / permission name | `@/generated/wire` (C-04) | `shared-core/src/lib/http` (C-04) |
+| a translated string | `@/generated/i18n-keys` (C-06) | `BackendI18nKeys` / `BotKeys` (C-07) |
+| money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02) |
+| a date or time | `_lib/datetime.ts`, `lib/time-zone.ts` | `shared-core/src/lib/time` |
+| digits and numbers | `_lib/digits.ts` (`numberLocale`) | — |
+| a control, a dialog, a table | `(panel)/_components/kit` (C-13) | — |
+| live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
+| browser storage | `lib/storage.ts` (FE-1-l) | — |
+| copy to clipboard | `_lib/clipboard.ts` | — |
+| a Redis key, a rate-limit bucket | — | `RedisKeys` (C-03), the bucket registry (C-05) |
+| tenant scope | — | `tenantTransaction` / `withTenant` / `runWithTenant` |
+| who holds a key | — | `findKeyHolders` (C-15) |
+| a feature or a limit | — | `TenantEntitlements`, `resellerLimitOf` (C-16) |
+
+A need that has no home gets one in the change that needs it twice, and a row
+in this table.
+
+**Why.** On 2026-10-13: five copies of the digit normaliser, six of
+"is this the platform", two identical guards, two network drivers sharing 300
+pasted blocks. A fix made to one copy is a bug left in the others.
+`codeshape.py` fails on a new block of 8 meaningful lines pasted across files
+(`dupes`) and on a home bypassed (`raw-fetch`, `raw-storage`); the copies there
+today are its baseline.
+
+## C-28 — data access is bounded
+
+**Rule.**
+- No query inside a loop. Load the set once (`where: { id: { in: ids } }`),
+  then join in memory; a `Promise.all` over a list a user controls is chunked.
+- Every list endpoint is paged, with a maximum page size the server enforces;
+  the panel never asks for "all".
+- `select` the columns the caller uses; a wide JSON column is not read to show
+  a name.
+- A new `where` or `orderBy` on a table that grows with users or time ships its
+  index in the same migration.
+- Work that is slow, retried or fans out (sending, provisioning, metering,
+  recomputing) goes to `worker-service` through the queue; a request does not
+  wait for it.
+- Every call out of the process (a panel API, a payment gateway, an SMS line)
+  has a timeout and a capped, backed-off retry; an unreachable provider fails
+  one request, not the worker.
+- Every Redis key has a TTL unless the keyspace contract says it is permanent.
+
+**Why.** None of these is slow on a developer's ten rows. They are what makes
+the platform fall over at a hundred resellers with thousands of users each, and
+they are expensive to retrofit because callers come to rely on the shape.
+
+## C-29 — a write is safe to repeat and to race
+
+**Rule.**
+- A consumer, a webhook handler, a payment callback and a retried job are
+  idempotent: a dedupe key or a unique constraint makes the second delivery a
+  no-op.
+- A change that spans rows is one transaction; an event about it leaves through
+  the outbox in that transaction, never after it.
+- Read-modify-write is a conditional update (`updateMany({ where: { id,
+  version } })`, an atomic increment, a Lua script in Redis), never read, then
+  compute, then write.
+- Tenant data is read and written inside `tenantTransaction` / `withTenant`; a
+  bare client on an RLS table sees nothing and is refused (see memory of
+  2026-09).
+- Money moves only by appending a ledger row (C-02).
+
+**Why.** Queues redeliver, users double-click, gateways call back twice. Each
+of these bugs passes every spec that sends one request.
+
+## C-30 — React renders from minimal state
+
+**Rule.**
+- State holds what cannot be computed; everything else is derived during render.
+  `useMemo` only where a measurement showed the cost.
+- An effect synchronises with something outside React (a socket, a timer, the
+  DOM) and returns its cleanup. Fetching a page's data is `useLiveReread` or the
+  area's data hook; copying props into state is a bug.
+- A list key is the row's id. An index key is allowed only for a list that never
+  reorders, inserts or deletes (a skeleton).
+- `eslint-disable` is a last resort and says why: `// eslint-disable-next-line
+  react-hooks/exhaustive-deps -- runs once per tenant switch`.
+- Server components by default; `"use client"` at the smallest component that
+  needs it. A heavy client-only library (charts, an editor, a date picker) is
+  `next/dynamic`.
+- Lists longer than a page are paged (`kit/Pagination`).
+
+**Why.** Mirrored state and index keys are where a panel shows one row's data
+in another row. On 2026-10-13: 41 index keys, 31 unexplained exhaustive-deps
+switches. `codeshape.py` counts both per file (`index-key`, `lint-off`).
+
+## C-31 — styling is tokens and logical sides
+
+**Rule.** Colours, radii and type sizes come from the theme tokens
+(`globals.css`, `contract.ux.md`); no hex or `rgb()` in a component. Sides are
+logical — `ms-`/`me-`/`ps-`/`pe-`/`start-`/`end-`/`text-start` — never
+`ml-`/`mr-`/`left-`/`text-left`, so the same markup is right in Persian and
+English. Gold is never on a control (`contract.ux.md`).
+
+**Why.** Every hard-coded colour is a dark-theme bug and every physical side a
+mirror bug in the other direction. `codeshape.py` counts `hex-color` and
+`physical-side` per file.
+
+## C-32 — safe at every boundary
+
+**Rule.**
+- Every route authorises on the server: a guard or a permission key. A button
+  the UI hides is not a permission.
+- Every input from outside is validated at the edge (C-24) and size-limited.
+- SQL goes through Prisma or the tagged `$queryRaw`; never the `Unsafe`
+  variants, never a string built from input.
+- No `dangerouslySetInnerHTML` (the two theme `<head>` scripts are constants),
+  no `eval` / `new Function`.
+- No key material, token or password in code or in a fixture that is not
+  obviously fake; secrets come from the vault or env (C-26).
+- Anything that must be unguessable — a token, a code, an id in a URL — comes
+  from `crypto` (`randomUUID`, `randomBytes`, `randomInt`), never
+  `Math.random`.
+- Logs never carry a secret or personal data (C-38).
+
+**Why.** A reseller platform holds other people's money and customers. These
+are the mistakes that cannot be fixed after the fact.
+
+```check C-32
+forbid: \$(query|execute)RawUnsafe|dangerouslySetInnerHTML|(?<![.\w])eval\((?![^)]*:\s*\w)|new Function\(|-----BEGIN [A-Z ]*PRIVATE KEY-----|\bsk_live_[0-9a-zA-Z]{8,}|\bAKIA[0-9A-Z]{16}\b
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
+except: site-pwa/src/app/layout.tsx, site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**
+message: no raw unsafe SQL, injected HTML, eval or key material in code (C-32)
+```
+
+```check C-32
+forbid: Math\.random\(
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**, txnet-backend/shared-core/src/lib/automation/confirm-publish.ts
+message: use crypto.randomUUID / randomBytes / randomInt for anything that must not be guessed (C-32); a correlation suffix that may be guessed is excepted by name
+```
+
+## C-33 — a spec guards behaviour
+
+**Rule.**
+- A bug fix starts with a spec that fails on the bug, for the reason in the
+  report (CODE-LAYOUT.md "Order of work").
+- A spec drives the public surface — the route, the hook, the exported
+  function — and asserts what a user or caller sees, not private calls.
+- Its name is a sentence of behaviour: `"refuses a second start of the same
+  payment"`.
+- Time is a fake clock (`vi.useFakeTimers`, an injected `now`), never a sleep.
+- `.only`, `.skip`, `fit`, `xit` never reach a commit; a spec that cannot run
+  yet is a backlog row.
+
+**Why.** A skipped spec is a deleted spec nobody decided to delete; a sleep is a
+spec that fails on a busy server — this one also hosts the live site.
+
+```check C-33
+forbid: \b(it|describe|test)\.(only|skip)\(|(?<![\w.])(fit|fdescribe|xit|xdescribe)\(
+in: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**/*.ts
+except: txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**
+message: run the whole spec — make it pass, or delete it and open a row (C-33)
+```
+
+## C-34 — one library per job
+
+**Rule.** The panel has one of each: HTTP `fetch` through `api-request.ts`,
+validation `zod`, state `zustand`, animation `framer-motion`, toasts
+`react-hot-toast` (via `kit/notify`), icons `lucide-react`, dates `Intl` plus
+`react-multi-date-picker`. The backend: Nest, Prisma, `zod`, `ioredis`,
+RabbitMQ through `shared-core`. A new dependency is a question to the user
+naming what it replaces, its size and its maintenance. One that nothing imports
+fails `codeshape.py` `deps`; one needed without an import is in `ALLOW_DEPS`
+with its reason.
+
+**Why.** Two libraries for one job means two behaviours, two upgrade paths and
+two places a security advisory lands. On 2026-10-13 the panel carried 16
+packages it never imported.
+
+## C-35 — a function does one thing
+
+**Rule.**
+- About 50 lines at most; past that, it is doing two things — name them and
+  split.
+- At most 3 positional parameters; more is one options object with named
+  fields.
+- No boolean flag parameter (`render(true)`): two functions, or an option
+  with a name.
+- Nesting at most 3 levels: return early on the cases that end.
+- No nested ternary: an `if`, a lookup `Record`, or a small function.
+- Pure where it can be: compute in a function, do I/O at the edge, so the
+  logic is testable without mocks.
+
+**Why.** Short, flat functions are the ones a reviewer actually checks. The
+alternative was measured on 2026-10-13: 111 lines of nested ternaries.
+
+## C-36 — Go
+
+**Rule.** `gofmt` and `go vet` clean. `context.Context` is the first parameter
+of anything that does I/O, and is honoured. Errors are wrapped
+(`fmt.Errorf("register inbound: %w", err)`) and returned to the layer that
+decides; a handler logs once. `panic` only for a broken invariant, with a
+message naming it. `_ = f()` only on a response write after the status is sent,
+with a comment. Shared names come from their declaration (C-04, C-03).
+
+**Why.** The Go services sit on the hot path (ForwardAuth, metering); an error
+dropped there is an outage nobody can trace.
+
+## C-37 — an API change does not break its consumers
+
+**Rule.**
+- Add, never rename or retype in place. A field is removed only after every
+  consumer stopped reading it — the panel, the bot, the other services.
+- The unit's `contract.md` changes in the same commit as the code (§8).
+- Time on the wire and in the database is ISO-8601 UTC; it is zoned only for
+  display, through `_lib/datetime.ts` / `shared-core/src/lib/time`.
+- Money on the wire is a decimal string with its currency code (C-02).
+- An error response carries a locale key, never prose.
+
+**Why.** The panel, the bot and the services deploy separately; a breaking
+change lands as a blank page in whichever deploys second.
+
+## C-38 — a log line can be acted on
+
+**Rule.** Through the app's logger — Nest `Logger` named after the class,
+`console.info`/`warn`/`error` in Next server code. The line says what happened
+and the ids it happened to (`tenant`, `payment`, `grant`), not "error". Levels:
+`error` someone must act, `warn` degraded but handled, `info` a state change
+worth knowing, `debug` off in production. Never a token, password, OTP, card
+number or full phone number; mask what identifies a person.
+
+**Why.** On a multi-tenant platform a log is read during an incident, by
+someone who did not write the code, about a tenant they do not know.

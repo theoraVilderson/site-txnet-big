@@ -324,6 +324,8 @@ def main():
         enforced, review = conventions_in_play(fm)
         rules = convention_rules()
         print(hr("CONVENTIONS (tier 4 — before the first line of code)"))
+        print('  read "The short version" at the top of docs/CONVENTIONS.md first;')
+        print("  look the ids below up by `grep -n '## C-nn' docs/CONVENTIONS.md`.\n")
         if enforced:
             print("  a check fails on a violation inside this unit:")
             for cid, n, msg in enforced:

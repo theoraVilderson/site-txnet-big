@@ -8,6 +8,9 @@ or the whole import graph, so they live here (C-20, C-21 in CONVENTIONS.md):
     state  a React component file declares at most MAX_STATE `useState`s
     dead   every source file is imported by something that is not a test
     deps   every runtime dependency in a package.json is imported somewhere
+    exports every exported name is used by another non-test file
+    dupes  no block of DUPE_WINDOW meaningful lines is pasted into another file
+    smells counted patterns that hide bugs or bypass the one way (C-24 … C-31)
 
 Code written before these rules is listed in tools/codeshape.baseline.json.
 The baseline is a ratchet: a listed file may shrink but not grow, an entry
@@ -17,7 +20,7 @@ number or add any entry.
 
 usage:
     python3 tools/codeshape.py              check (exit 1 on a violation)
-    python3 tools/codeshape.py --tighten    lock in what got better (first run: create the baseline)
+    python3 tools/codeshape.py --tighten    lock in what got better (a new rule: adopt today's findings)
     python3 tools/codeshape.py --list dead  print one rule's current findings
 """
 import json
@@ -31,6 +34,7 @@ BASELINE = Path(__file__).with_name("codeshape.baseline.json")
 
 MAX_LINES = 400
 MAX_STATE = 10
+DUPE_WINDOW = 8
 
 # App roots: the source tree, the tsconfig whose `paths` resolve its aliases,
 # and the package.json whose `dependencies` it owns.
@@ -78,7 +82,7 @@ def walk(base, exts):
     for dirpath, dirs, files in os.walk(ROOT / base):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
         for f in files:
-            if f.endswith(exts) and not f.endswith(".d.ts"):
+            if f.endswith(exts) and not f.endswith((".d.ts", ".pb.go")):
                 yield Path(dirpath) / f
 
 
@@ -198,11 +202,128 @@ def find_deps():
     return out
 
 
+COMMENT_LINE = re.compile(r"^\s*(//|\*|/\*|\{/\*)")
+
+# name: (regex, path filter, convention, what to do instead). Counted per file
+# on non-comment lines; a file's count may only shrink.
+SMELLS = {
+    "any": (r"\bas any\b|:\s*any\b\s*[,;)=\]>|]|<any>|\bany\[\]", lambda r: r.endswith(SOURCE_EXT),
+            "C-24", "type it, or take `unknown` and narrow it"),
+    "double-cast": (r"\bas unknown as\b", lambda r: r.endswith(SOURCE_EXT),
+                    "C-24", "a double cast lies to the compiler; parse or narrow the value"),
+    "non-null": (r"[\w\])]!\.[A-Za-z_]", lambda r: r.endswith(SOURCE_EXT),
+                 "C-24", "handle the null case instead of asserting it away"),
+    "lint-off": (r"eslint-disable(?!.*\s--\s)", lambda r: r.endswith(SOURCE_EXT),
+                 "C-30", "fix the code; a disable that must stay says why after ` -- `"),
+    "index-key": (r"key=\{(i|idx|index|j|n)\}", lambda r: r.endswith(".tsx"),
+                  "C-30", "key a row by its id; an index key moves state between rows"),
+    "raw-env": (r"process\.env\b", lambda r: r.endswith(SOURCE_EXT) and not re.search(
+        r"(/env(\.validation)?\.ts$|/config/|\.config\.m?ts$)", r),
+                "C-26", "read config from the app's validated env module"),
+    "raw-storage": (r"\b(localStorage|sessionStorage)\.", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
+                    "C-27", "go through the panel's storage helper, which survives a blocked storage"),
+    "raw-fetch": (r"(?<![.\w])fetch\(", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT)
+                  and not r.endswith("lib/api-request.ts"),
+                  "C-27", "call the API through lib/api-request.ts"),
+    "physical-side": (r"\b(ml|mr|pl|pr|left|right)-(\d|\[|auto|px)|\btext-(left|right)\b|\brounded-(l|r)-",
+                      lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
+                      "C-31", "use logical sides (ms/me/ps/pe/start/end) so RTL and LTR both work"),
+    "hex-color": (r"['\"`]#[0-9a-fA-F]{3,8}['\"`]", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
+                  "C-31", "use a theme token"),
+}
+
+NEXT_EXPORTS = {"default", "metadata", "generateMetadata", "generateStaticParams", "generateViewport",
+                "viewport", "dynamic", "dynamicParams", "revalidate", "runtime", "preferredRegion",
+                "fetchCache", "maxDuration", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS",
+                "config", "middleware", "proxy", "register", "onRequestError"}
+EXPORT_RE = re.compile(
+    r"^export\s+(?:declare\s+)?(?:default\s+)?(?:async\s+)?(?:abstract\s+)?"
+    r"(?:function\*?|const|let|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)", re.M)
+TOKEN_RE = re.compile(r"[A-Za-z_$][\w$]*")
+
+
+def app_sources():
+    """(path, rel) of every non-test, non-generated source file, all apps."""
+    for a in APPS:
+        for p in walk(a["src"], SOURCE_EXT):
+            r = rel(p)
+            if not TEST_RE.search(r):
+                yield p, r
+
+
+def find_smells():
+    out = {}
+    files = list(app_sources()) + [(p, rel(p)) for g in GO_ROOTS for p in walk(g, (".go",))
+                                   if not TEST_RE.search(rel(p))]
+    compiled = {k: (re.compile(v[0]), v[1]) for k, v in SMELLS.items()}
+    for p, r in files:
+        every = read(p).splitlines()
+        code = [ln for ln in every if not COMMENT_LINE.match(ln)]
+        for name, (rx, scope) in compiled.items():
+            if scope(r):
+                # A lint switch lives in a comment, so that one smell reads them.
+                n = sum(len(rx.findall(ln)) for ln in (every if name == "lint-off" else code))
+                if n:
+                    out[f"{r} [{name}]"] = n
+    return out
+
+
+def find_exports():
+    out = {}
+    files = list(app_sources())
+    text = {r: read(p) for p, r in files}
+    seen = {}
+    for r, t in text.items():
+        for tok in set(TOKEN_RE.findall(t)):
+            seen[tok] = seen.get(tok, 0) + 1
+    for r, t in text.items():
+        if NEXT_ENTRY.search("/" + r) or BACKEND_ENTRY.search("/" + r) or SPEC_ONLY.search(t[:2000]):
+            continue
+        for name in set(EXPORT_RE.findall(t)):
+            if name in NEXT_EXPORTS:
+                continue
+            # Used nowhere else, and only declared here: nothing reaches it.
+            # (Exported for a spec but used in its own file is not dead.)
+            if seen.get(name, 0) <= 1 and len(re.findall(r"(?<![\w$])" + re.escape(name) + r"(?![\w$])", t)) <= 1:
+                out[f"{r}:{name}"] = 1
+    return out
+
+
+def _norm(ln):
+    s = ln.strip()
+    if not s or COMMENT_LINE.match(s) or s.startswith(("import ", "export {", "} from", "package ")):
+        return None
+    s = re.sub(r"\s+", " ", s)
+    if len(re.sub(r"[\s{}()\[\];,]", "", s)) < 4:
+        return None
+    return s
+
+
+def find_dupes():
+    """A window of DUPE_WINDOW meaningful lines found in two files is a paste."""
+    where = {}
+    for p, r in list(app_sources()) + [(p, rel(p)) for g in GO_ROOTS for p in walk(g, (".go",))
+                                        if not TEST_RE.search(rel(p))]:
+        lines = [n for n in (_norm(ln) for ln in read(p).splitlines()) if n]
+        for i in range(len(lines) - DUPE_WINDOW + 1):
+            key = hash("\n".join(lines[i:i + DUPE_WINDOW]))
+            where.setdefault(key, set()).add(r)
+    out = {}
+    for files in where.values():
+        if len(files) > 1:
+            for r in files:
+                out[r] = out.get(r, 0) + 1
+    return out
+
+
 RULES = {
     "size": (find_size, f"over {MAX_LINES} lines — split it (C-20)"),
     "state": (find_state, f"over {MAX_STATE} useState — move state into a hook or useReducer, or split the view (C-20)"),
     "dead": (find_dead, "imported by nothing but tests — delete it, or import it where it is meant to run (C-21)"),
     "deps": (find_deps, "a dependency nothing imports — remove it from package.json (C-21)"),
+    "exports": (find_exports, "exported and used by nothing outside specs — delete it (C-21)"),
+    "dupes": (find_dupes, f"{DUPE_WINDOW}-line blocks pasted from another file — extract the shared part (C-27)"),
+    "smells": (find_smells, "see the [name] in SMELLS for the rule and the remedy (C-24 … C-31)"),
 }
 
 
@@ -232,17 +353,23 @@ def main(argv):
                 better.append((name, k))
 
     if argv[:1] == ["--tighten"]:
-        if bad and BASELINE.exists():
+        # A rule with no baseline yet is being adopted: its findings today are
+        # its starting debt. Every rule already adopted may only shrink.
+        bad = [b for b in bad if b.split()[0] in base]
+        if bad:
             print("refused: the tree is worse than the baseline somewhere; fix that first")
             print("\n".join(bad))
             return 1
         BASELINE.write_text(json.dumps(now, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        for name in RULES:
+            if name not in base:
+                print(f"adopted {name}: {len(now[name])} entr(y/ies) of starting debt")
         print(f"baseline tightened: {len(better)} entr(y/ies) improved")
         return 0
 
     for name in RULES:
-        print(f"  {name:5}  {len(now[name]):4} listed as debt" if not any(b.startswith(f"  {name:5}") for b in bad)
-              else f"  {name:5}  FAIL")
+        print(f"  {name:7}  {len(now[name]):4} listed as debt" if not any(b.startswith(f"  {name:5}") for b in bad)
+              else f"  {name:7}  FAIL")
     if better:
         print(f"\n{len(better)} baseline entr(y/ies) got better — run `python3 tools/codeshape.py --tighten` to lock it in")
     if bad:
