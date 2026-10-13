@@ -33,7 +33,7 @@ many users with no username.
 | role | dynamic RBAC role | **yes, or not at all** (`tenantId` nullable — null = a system template every tenant reads, F-018-n) | permanent; `isSystemRole` protected |
 | permission | permission key (`wallet.manual_adjust`, ...) | no | permanent |
 | role_permission | role<->permission join | no | — |
-| user_permission | one key given (`give`) or taken (`take`) on one person on top of their role, with `reason` and `grantedByUserId`; one row per person and key (AC-1-l, ADR-0138). A trigger notifies `{kind:"person"}` | yes (`tenantId`, the person's; strict RLS) | until lifted by hand; cascades with the user |
+| user_permission | one key given (`give`) or taken (`take`) on one person on top of their role, with `reason` and `grantedByUserId`; one row per person and key (AC-1-l, ADR-0138). A give may carry `startsAt`/`endsAt` (F-030-a, check `endsAt > startsAt`) and `openedAt`, the sweep's mark that a future start passed. A trigger notifies `{kind:"person"}` | yes (`tenantId`, the person's; strict RLS) | until lifted by hand or its `endsAt` passes; cascades with the user |
 | otp_code | OTP audit/history + fallback | no (has `phoneNumber`) | expire; Redis is truth (ADR-0007) |
 | linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`) | yes (`tenantId`, F-066-l) | until unlinked |
 

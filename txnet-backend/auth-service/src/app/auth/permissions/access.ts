@@ -51,3 +51,10 @@ export function accessOf(sources: AccessSources): UserAccess {
   for (const key of taken) keys.delete(key);
   return { keys: [...keys], personal: true };
 }
+
+/** What an answer gained and lost between two reads — what the person is told (AC-1-s); a missing answer holds nothing. */
+export function answerMoved(before: UserAccess | undefined, after: UserAccess | undefined): { given: string[]; taken: string[] } {
+  const was = new Set(before?.keys ?? []);
+  const now = new Set(after?.keys ?? []);
+  return { given: [...now].filter((k) => !was.has(k)).sort(), taken: [...was].filter((k) => !now.has(k)).sort() };
+}

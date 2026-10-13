@@ -116,6 +116,7 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   accessRoleSet: 'important',
   accessKeysChanged: 'important',
   accessMembershipEnded: 'important',
+  accessKeyWindow: 'important',
   accessSeatRemoved: 'important',
   accessSeatRestored: 'important',
   purchaseDelayed: 'important',

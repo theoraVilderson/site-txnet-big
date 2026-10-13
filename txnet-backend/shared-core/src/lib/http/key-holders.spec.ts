@@ -1,5 +1,5 @@
 import type { Prisma } from '@prisma/client';
-import { findKeyHolders, liveMembership } from './key-holders';
+import { findKeyHolders, liveKeyWindow, liveMembership } from './key-holders';
 
 /**
  * Who in a tenant holds one key (ADR-0138), for a query that picks people by
@@ -34,7 +34,8 @@ describe('findKeyHolders', () => {
           {
             OR: [
               { role: { rolePermissions: { some: { permission: { key: 'engagement.manage' } } } } },
-              { permissionOverrides: { some: { effect: 'give', permission: { key: 'engagement.manage' } } } },
+              // A gift counts only inside its window (F-030-a).
+              { permissionOverrides: { some: { ...liveKeyWindow(expect.any(Date)), effect: 'give', permission: { key: 'engagement.manage' } } } },
               { id: { in: ['u-grp'] } },
             ],
           },

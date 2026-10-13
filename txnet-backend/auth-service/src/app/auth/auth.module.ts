@@ -64,6 +64,8 @@ import { MeMessengerService } from './me/me-messenger.service';
 import { MeTimeZoneService } from './me/me-time-zone.service';
 import { MeAccountService } from './me/me-account.service';
 import { AccessReader } from './permissions/access.reader';
+import { KeyWindowInternalController } from './permissions/key-window-internal.controller';
+import { KeyWindowSweep } from './permissions/key-window.sweep';
 import { PermissionStateStore } from './permissions/permission-state.store';
 import {
   PERMISSIONS_LISTEN_CLIENT,
@@ -108,6 +110,7 @@ import { ConfigService } from '@nestjs/config';
     ResellerUsersController,
     UserStatusController,
     ActiveSessionsController,
+    KeyWindowInternalController,
   ],
   providers: [
     UserNotifier,
@@ -134,6 +137,7 @@ import { ConfigService } from '@nestjs/config';
     AuthGuard,
     PermissionStateStore,
     AccessReader,
+    KeyWindowSweep,
     PermissionNotificationsListener,
     // One `pg` client per connection attempt, as the running service's own
     // least-privileged login (`DATABASE_APP_URL`) — LISTEN needs no grant, and

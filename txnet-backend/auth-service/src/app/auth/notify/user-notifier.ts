@@ -109,6 +109,8 @@ export const NOTIFY_TEMPLATES = [
   'accessKeysChanged',
   // GR-1-c: a group membership of theirs reached its end.
   'accessMembershipEnded',
+  // F-030-a: a key given to them for a window opened or closed.
+  'accessKeyWindow',
   'accessSeatRemoved',
   'accessSeatRestored',
 ] as const;
@@ -187,6 +189,14 @@ const ACCESS_MANY: Notice = {
   fallback: '🔑 Your access changed {{count}} times. The panel shows what you can do now.',
   inbox: { read: (ns) => ns?.access?.manyTitle, fallback: 'Your access changed' },
 };
+
+/** An access notice (AC-1-s) at `access.<key>` and `access.<key>Title`, combined into {@link ACCESS_MANY}. */
+const accessNotice = (key: string, fallback: string, title: string): Notice & { many: Notice } => ({
+  read: (ns) => ns?.access?.[key],
+  fallback,
+  inbox: { read: (ns) => ns?.access?.[`${key}Title`], fallback: title },
+  many: ACCESS_MANY,
+});
 
 const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   paymentCredited: {
@@ -1112,36 +1122,13 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     },
   },
   // AC-1-s: every access notice combines into the same one line — the panel already shows what is held now.
-  accessRoleSet: {
-    read: (ns) => ns?.access?.roleSet,
-    fallback: '🔑 Your role is now {{role}}. The panel shows what it lets you do.',
-    inbox: { read: (ns) => ns?.access?.roleSetTitle, fallback: 'Your role changed' },
-    many: ACCESS_MANY,
-  },
-  accessKeysChanged: {
-    read: (ns) => ns?.access?.keysChanged,
-    fallback: '🔑 What your role lets you do has changed.',
-    inbox: { read: (ns) => ns?.access?.keysChangedTitle, fallback: 'Your access changed' },
-    many: ACCESS_MANY,
-  },
-  accessMembershipEnded: {
-    read: (ns) => ns?.access?.membershipEnded,
-    fallback: '⏳ Your membership of "{{group}}" has ended.',
-    inbox: { read: (ns) => ns?.access?.membershipEndedTitle, fallback: 'A group membership ended' },
-    many: ACCESS_MANY,
-  },
-  accessSeatRemoved: {
-    read: (ns) => ns?.access?.seatRemoved,
-    fallback: '🚪 You were removed from the team. Its pages in the panel are closed to you now.',
-    inbox: { read: (ns) => ns?.access?.seatRemovedTitle, fallback: 'Removed from the team' },
-    many: ACCESS_MANY,
-  },
-  accessSeatRestored: {
-    read: (ns) => ns?.access?.seatRestored,
-    fallback: '✅ Your place on the team was restored. Its pages in the panel are open to you again.',
-    inbox: { read: (ns) => ns?.access?.seatRestoredTitle, fallback: 'Back on the team' },
-    many: ACCESS_MANY,
-  },
+  accessRoleSet: accessNotice('roleSet', '🔑 Your role is now {{role}}. The panel shows what it lets you do.', 'Your role changed'),
+  accessKeysChanged: accessNotice('keysChanged', '🔑 What your role lets you do has changed.', 'Your access changed'),
+  accessMembershipEnded: accessNotice('membershipEnded', '⏳ Your membership of "{{group}}" has ended.', 'A group membership ended'),
+  // F-030-a: a key given to them for a window opened or closed.
+  accessKeyWindow: accessNotice('keyWindow', '⏳ Access given to you for a set time has changed.', 'Your temporary access changed'),
+  accessSeatRemoved: accessNotice('seatRemoved', '🚪 You were removed from the team. Its pages in the panel are closed to you now.', 'Removed from the team'),
+  accessSeatRestored: accessNotice('seatRestored', '✅ Your place on the team was restored. Its pages in the panel are open to you again.', 'Back on the team'),
 };
 
 /**

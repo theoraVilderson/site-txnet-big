@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { isPlatformKey, liveMembership, isPlatformTenant } from '@txnet-backend/shared-core';
+import { isPlatformKey, liveKeyWindow, liveMembership, isPlatformTenant } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { accessOf, type AccessSources, type UserAccess } from './access';
 
@@ -47,8 +47,9 @@ export class AccessReader {
 
   /**
    * {@link ofLoaded} for a page of people, in one read — what a list's `canAct` weighs.
-   * `at`: the moment memberships are judged live at — now, or just before one
-   * ended, for the answer the person held then (GR-1-c's sweep).
+   * `at`: the moment memberships and key windows are judged live at — now, or
+   * just before one moved, for the answer the person held then (GR-1-c's and
+   * F-030-a's sweeps).
    */
   async ofLoadedMany(users: readonly LoadedUser[], client: Reader = this.prisma, at: Date = new Date()): Promise<Map<string, UserAccess>> {
     const personal = await this.personalOf(users, client, at);
@@ -116,7 +117,7 @@ export class AccessReader {
 
   /**
    * What applies to each person beyond their role: the keys given to and
-   * taken from them (AC-1-l), and every group of **their own tenant** that
+   * taken from them (AC-1-l) while their window lasts (F-030-a), and every group of **their own tenant** that
    * gives access (AC-1-m), while the membership lasts (ADR-0139 (3)). A platform group may hold another tenant's user;
    * the platform's keys are not theirs, so that membership counts for nothing. A group's `platform.` key counts only
    * for someone of the platform owner's tenant (ADR-0139 (4)): the writer refuses it elsewhere, and this drops it
@@ -129,7 +130,7 @@ export class AccessReader {
     const ids = users.map((u) => u.id);
     const [rows, memberships, tenants] = await Promise.all([
       client.userPermission.findMany({
-        where: { userId: { in: ids } },
+        where: { ...liveKeyWindow(at), userId: { in: ids } },
         select: { userId: true, effect: true, permission: { select: { key: true } } },
       }),
       client.userGroupMember.findMany({

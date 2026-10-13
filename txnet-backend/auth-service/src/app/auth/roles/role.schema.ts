@@ -44,11 +44,14 @@ export const keyParamSchema = permissionKey;
 
 /**
  * `PUT .../keys/:key` (AC-1-l): give or take, and why. The reason is
- * required — it is what staff read later, and what the audit row keeps.
+ * required — it is what staff read later, and what the audit row keeps. A
+ * give may hold for a window (F-030-a); what a window may be is the service's.
  */
 export const setKeySchema = z.object({
   effect: z.nativeEnum(UserPermissionEffect),
   reason: z.string().trim().min(3).max(500),
+  startsAt: z.coerce.date().nullable().optional(),
+  endsAt: z.coerce.date().nullable().optional(),
 });
 /** `Required`: both fields are mandatory in the schema; this project's non-strict inference reads them optional. */
-export type SetKeyInput = Required<z.infer<typeof setKeySchema>>;
+export type SetKeyInput = Required<Pick<z.infer<typeof setKeySchema>, 'effect' | 'reason'>> & Pick<z.infer<typeof setKeySchema>, 'startsAt' | 'endsAt'>;

@@ -3,21 +3,21 @@ id: governance
 layer: domain
 status: active
 version: 4
-keywords: [group access, a group holds a role, give a group permissions, دسترسی گروه, settings, display preferences, ui preferences, motion level, pinned pages, access grant, restriction, cap, user group, user groups, group of users, segment, /api/auth/user-groups]
+keywords: [group access, a group holds a role, give a group permissions, دسترسی گروه, settings, display preferences, ui preferences, motion level, pinned pages, restriction, cap, user group, user groups, group of users, segment, /api/auth/user-groups]
 source:
   - txnet-backend/prisma/domains/governance.prisma
   - txnet-backend/auth-service/src/app/governance/**
   - txnet-backend/prisma/domains/migrations/20260925001600_user_groups/**
   - txnet-backend/prisma/domains/migrations/20261009000600_a_group_holds_access/**
   - txnet-backend/prisma/domains/migrations/20261009001000_seats_and_staff_roles_become_groups/**
-owns_tables: [user_setting, temporal_access_grant, user_restriction, user_group, user_group_member, user_group_permission]
+owns_tables: [user_setting, user_restriction, user_group, user_group_member, user_group_permission]
 depends_on: [identity, tenant]
-updated: 2026-10-09
+updated: 2026-10-13
 ---
 
 # Governance
 
-**Responsibility (one sentence):** user groups (a tenant's named sets of users — and, for the platform owner, of resellers — that other units target), per-user key/value settings, time-boxed extra access grants (beyond the base role), and admin-imposed usage/spend caps on a user.
+**Responsibility (one sentence):** user groups (a tenant's named sets of users — and, for the platform owner, of resellers — that other units target), per-user key/value settings, and admin-imposed usage/spend caps on a user.
 **Explicitly NOT responsible for:** tenant-level caps (`tenant`), the base RBAC role model (`identity`).
 
 ## Files

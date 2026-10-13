@@ -9,14 +9,14 @@ updated: 2026-10-05
 # Contract — governance
 
 **User groups are built** (F-114-j, below), and so are display preferences
-(UX-1-k, below) — the first keys of `user_setting`. Other settings, temporal
-grants and restrictions are still **schema only** — no service implements them; their
+(UX-1-k, below) — the first keys of `user_setting`. Other settings and
+restrictions are still **schema only** — no service implements them; their
 rows are intent derived from `txnet-backend/prisma/domains/governance.prisma`.
 
 ## TL;DR
 
 User groups — a named set of a tenant's users, the one target discount rules,
-campaigns and restrictions share (built). Low-traffic key/value config for users, plus two opposite tools: `temporal_access_grant` (extra access, one-time or recurring-daily window, in a timezone) and `user_restriction` (a cap: max daily traffic, max active configs, max daily spend, ...).
+campaigns and restrictions share (built). Low-traffic key/value config for users, and `user_restriction` (a cap on one user). Extra access for a window is not here: it is a key given to the person with a window, identity's `user_permission` (F-030-a, ADR-0138 (7)).
 
 ## Provides
 
@@ -28,9 +28,7 @@ campaigns and restrictions share (built). Low-traffic key/value config for users
 | is this person / this reseller in group G — **built** | a member list, a user id or a tenant id | `admitsUser` / `admitsTenant` (`user-group.ts`) | sync | — |
 | read / write the caller's display preferences — **built** (UX-1-k) | the token's user; any subset of `ui.motion`, `ui.dashboard`, `ui.pins`, `ui.sidebar` | every key, defaults filled in | sync | `unknown_preference`, `invalid_preference`, `preference_too_large` |
 | get/set any other user setting (intended) | userId, key, JSON value | row | sync | — |
-| grant temporal access | grantee, permissionKey, mode, window | `temporal_access_grant` | sync | overlapping active grant |
 | assign restriction | userId, restrictionKey, limit JSON, scope | `user_restriction` | sync | — |
-| evaluate effective access | userId, permissionKey, now | allow/deny (role ∪ active grants, minus hard blocks) | sync | — |
 
 ## User groups (F-114-j)
 

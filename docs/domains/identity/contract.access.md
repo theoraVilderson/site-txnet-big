@@ -2,8 +2,8 @@
 id: identity
 layer: domain
 status: active
-version: 33
-updated: 2026-10-09
+version: 34
+updated: 2026-10-13
 ---
 
 # Contract — what a person may do
@@ -59,7 +59,7 @@ as **assign** in [contract.roles.md](contract.roles.md)). Code: `TenantRolesServ
 | Operation | Input | Output | Refuses |
 |---|---|---|---|
 | read a person's keys | userId | `{userId, keys, role:{id,name,keys}, groups:[{id,name,keys}], given:[{key,reason,by,at}], taken:[…]}` — `groups` by `AccessReader.groupsOf`, the rule the answer counts by | `user_not_found` |
-| give or take | userId, key, `{effect: give\|take, reason}` | the same view, after | `key_not_grantable` (`*`, `platform.`), `key_unknown` (no `permission` row), `key_not_held` (outside the writer's grant scope), `key_on_wildcard` (the person holds `*`), `no_authority`, `user_not_found` |
+| give or take | userId, key, `{effect: give\|take, reason, startsAt?, endsAt?}` | the same view, after | `window_on_take`, `window_past`, `window_inverted` (F-030-a, below), `key_not_grantable` (`*`, `platform.`), `key_unknown` (no `permission` row), `key_not_held` (outside the writer's grant scope), `key_on_wildcard` (the person holds `*`), `no_authority`, `user_not_found` |
 | lift | userId, key | the same view, after | `key_not_found` (nothing given or taken), and the checks above |
 
 One row per person and key (`identity.user_permission`): a give replaces a
@@ -72,3 +72,12 @@ nothing and tells no one. The trigger moves the token; nothing here touches Redi
 
 A key given to someone makes them staff on the users list (`staff`), as a role
 holding keys does.
+
+### A key given for a window (F-030-a)
+
+| Rule | Held by |
+|---|---|
+| A give may name `startsAt` and/or `endsAt`; it counts from its start (none: at once) until its end (none: until lifted) — wherever the answer is read (`AccessReader`, `findKeyHolders`), through shared-core `liveKeyWindow` | `key-window.spec.ts` |
+| A take has no window (`window_on_take`); an end not after now is `window_past`, an end not after the start `window_inverted`; a start not in the future is stored as none. The window is part of the act: the same key, effect, reason and window again writes nothing | `user-keys.view.ts` |
+| At its start `KeyWindowSweep` marks the row `openedAt`, at its end removes it — each a write, so the trigger moves the token — and tells each person whose answer moved: `access.changed`, cause `key_window`, `given`/`taken` against their answer just before; history actor the giver, no audit row. Clock: worker `key_window` (`always_on`) over `POST /api/internal/user-keys/windows`; safe twice | `key-window.sweep.ts` |
+| Daily windows (hours in a time zone) are not built until asked | — |

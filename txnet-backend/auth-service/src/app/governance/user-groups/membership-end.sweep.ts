@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 import { recordAccessChange, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { AccessReader } from '../../auth/permissions/access.reader';
-import type { UserAccess } from '../../auth/permissions/access';
+import { answerMoved, type UserAccess } from '../../auth/permissions/access';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -80,10 +80,7 @@ export class MembershipEndSweep {
     const after = await this.answers.ofLoadedMany(people, tx, now);
 
     const changes = people.flatMap((person) => {
-      const was = new Set(before.get(person.id)?.keys ?? []);
-      const is = new Set(after.get(person.id)?.keys ?? []);
-      const given = [...is].filter((k) => !was.has(k)).sort();
-      const taken = [...was].filter((k) => !is.has(k)).sort();
+      const { given, taken } = answerMoved(before.get(person.id), after.get(person.id));
       if (given.length === 0 && taken.length === 0) return [];
       const ending = mine(person.id);
       return [

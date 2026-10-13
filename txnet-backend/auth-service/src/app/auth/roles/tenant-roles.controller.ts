@@ -54,6 +54,9 @@ const STATUS: Record<TenantRolesRejection, 400 | 403 | 404 | 409> = {
   key_not_held: 403,
   key_on_wildcard: 409,
   key_not_found: 404,
+  window_on_take: 400,
+  window_past: 400,
+  window_inverted: 400,
 };
 
 /** An act on a person, so it spends the users-admin's per-caller budget, as block does. */

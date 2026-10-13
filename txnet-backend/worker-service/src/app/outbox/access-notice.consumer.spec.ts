@@ -83,6 +83,13 @@ describe('AccessNoticeConsumer.handle', () => {
     expect(calls.joined).toEqual([{ burst: burst('accessMembershipEnded'), params: { group: 'Support', taken: 'user.read' } }]);
   });
 
+  it('a key window opening or closing tells what moved (F-030-a)', async () => {
+    const { consumer, calls } = build();
+    await consumer.handle(event({ cause: 'key_window', given: ['report.read'], taken: [] }));
+
+    expect(calls.joined).toEqual([{ burst: burst('accessKeyWindow'), params: { given: 'report.read' } }]);
+  });
+
   it('an ended membership without its group dead-letters', async () => {
     const { consumer } = build();
     await expect(consumer.handle(event({ cause: 'group_membership_ended', taken: ['user.read'] }))).rejects.toThrow('without naming the group');

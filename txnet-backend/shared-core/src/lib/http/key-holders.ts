@@ -15,6 +15,17 @@ export function liveMembership(now: Date = new Date()): Prisma.UserGroupMemberWh
 }
 
 /**
+ * A key given or taken that counts at `now` (F-030-a): no window, or one that
+ * has started and not ended. Every read of `user_permission` that decides an
+ * answer adds it, so a window counts on time before the sweep tells anyone.
+ */
+export function liveKeyWindow(now: Date = new Date()): Prisma.UserPermissionWhereInput {
+  return {
+    AND: [{ OR: [{ startsAt: null }, { startsAt: { lte: now } }] }, { OR: [{ endsAt: null }, { endsAt: { gt: now } }] }],
+  };
+}
+
+/**
  * The people of `tenantId` who hold `key` (ADR-0138), ordered by id — for a
  * query that picks people by a key rather than checking one caller's token
  * (that is `holdsPermission`). Every such query asks this; `conventions.py`
@@ -61,7 +72,7 @@ export async function findKeyHolders(
             {
               OR: [
                 roleGrants(key),
-                { permissionOverrides: { some: { effect: 'give', permission: { key } } } },
+                { permissionOverrides: { some: { ...liveKeyWindow(now), effect: 'give', permission: { key } } } },
                 { id: { in: viaGroup } },
               ],
             },

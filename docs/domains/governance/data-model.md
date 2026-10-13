@@ -14,7 +14,6 @@ Source of truth: `txnet-backend/prisma/domains/governance.prisma` (Postgres sche
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | user_setting | `(userId, key)` unique KV, JSON value, category-tagged | via user | latest |
-| temporal_access_grant | extra permission/resource access for a window; `one_time` or `recurring_daily` | via grantee user | expires |
 | user_restriction | per-user cap keyed by `restrictionKey`, JSON limit, soft-warning or hard-block | via user | until inactive/expired |
 | user_group | a named set (F-114-j): `name` unique per tenant, `kind` (`manual`), `allTenants` (platform owner's only, trigger); `(id, tenantId)` unique — the key members and discount rules point at | `tenantId`, strict RLS | until deleted |
 | user_group_permission | one extra key a group gives its user members (AC-1-m); PK `(groupId, permissionId)`; FK on the group's `(id, tenantId)` cascade | `tenantId`, strict RLS | with its group (cascade) |
@@ -23,7 +22,7 @@ Source of truth: `txnet-backend/prisma/domains/governance.prisma` (Postgres sche
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |
 |---|---|---|---|
-| temporal_access_grant.granteeUserId, user_setting.userId, user_restriction.userId | -> | identity.user.id | all three are per identity |
+| user_setting.userId, user_restriction.userId | -> | identity.user.id | both are per identity |
 | user_group_member.userId / memberTenantId | -> | identity.user.id / tenant.tenant.id | no foreign key (as `discount_rule_user`); checked on add, by the service and the trigger |
 | user_group.roleId, user_group_permission.permissionId | -> | identity.role.id, identity.permission.id | what a group gives (AC-1-m); role RESTRICT (`role.inUse`), permission cascade |
 | billing.discount_rule.(groupId, tenantId) | -> | user_group.(id, tenantId) | billing's rule targets a group; `Restrict`. Billing reads `user_group_member` read-only at pricing |

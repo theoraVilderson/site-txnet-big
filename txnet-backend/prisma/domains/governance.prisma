@@ -12,21 +12,6 @@ enum SettingCategory {
   @@schema("governance")
 }
 
-enum GrantResourceType {
-  config
-  feature
-  service_plan
-
-  @@schema("governance")
-}
-
-enum GrantMode {
-  one_time
-  recurring_daily
-
-  @@schema("governance")
-}
-
 enum RestrictionScope {
   soft_warning
   hard_block
@@ -48,30 +33,7 @@ model UserSetting {
   @@schema("governance")
 }
 
-/// 9.2 — دسترسی زمان‌بندی‌شده (اعطای دسترسی اضافه فراتر از نقش پایه).
-model TemporalAccessGrant {
-  id               String             @id @default(uuid()) @db.Uuid
-  granteeUserId    String             @db.Uuid
-  grantedByAdminId String?            @db.Uuid
-  permissionKey    String
-  resourceType     GrantResourceType?
-  resourceId       String?            @db.Uuid
-  grantMode        GrantMode
-  startAt          DateTime? // فقط one_time
-  endAt            DateTime? // فقط one_time
-  dailyStartTime   DateTime?          @db.Time // فقط recurring_daily
-  dailyEndTime     DateTime?          @db.Time // فقط recurring_daily
-  timezone         String             @default("Asia/Tehran")
-  validFrom        DateTime?          @db.Date
-  validUntil       DateTime?          @db.Date
-  isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-
-  @@map("temporal_access_grant")
-  @@schema("governance")
-}
-
-/// 9.3 — سقف/محدودیت عملکرد و مصرف کاربر (برعکس TemporalAccessGrant).
+/// 9.3 — سقف/محدودیت عملکرد و مصرف کاربر.
 model UserRestriction {
   id              String           @id @default(uuid()) @db.Uuid
   userId          String           @db.Uuid

@@ -19,10 +19,13 @@ import {
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessReader } from '../permissions/access.reader';
-import type { UserAccess } from '../permissions/access';
+import { answerMoved } from '../permissions/access';
 import { authorityOver, permissionsOf } from '../users/authority';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 import { RoleScope, RoleView, RolesService } from './roles.service';
+import { type KeyPerson, type KeyWindowRejection, type KeyWrite, type PersonKeys, PERSON, keyWindowRefusal, personKeysOf, storedWindow } from './user-keys.view';
+
+export type { KeyEffect, KeyOverride, PersonKeys } from './user-keys.view';
 
 /** The door's refusals and this surface's own, in one union (F-066-w5's shape). */
 export type TenantRolesRejection =
@@ -36,7 +39,8 @@ export type TenantRolesRejection =
   | 'key_not_grantable'
   | 'key_not_held'
   | 'key_on_wildcard'
-  | 'key_not_found';
+  | 'key_not_found'
+  | KeyWindowRejection;
 
 export class TenantRolesRefused extends Error {
   constructor(
@@ -56,26 +60,7 @@ export type TenantRolesList = { roles: TenantRoleView[]; grantable: string[] };
 
 export type RoleAssignment = { userId: string; role: { id: string; name: string } };
 
-/** A key given or taken: which, why, by whom, since when (AC-1-l). */
-export type KeyOverride = { key: string; reason: string; by: string; at: string };
-
-/** A person's keys by where each comes from (AC-1-l), and the answer they add up to (ADR-0138). */
-export type PersonKeys = {
-  userId: string;
-  keys: string[];
-  role: { id: string; name: string; keys: string[] };
-  /** Each group that gives them access, and every key it gives (AC-1-n). */
-  groups: { id: string; name: string; keys: string[] }[];
-  given: KeyOverride[];
-  taken: KeyOverride[];
-};
-
-export type KeyEffect = 'give' | 'take';
-
 type Tx = Prisma.TransactionClient;
-
-/** A person as a key write reads them: their role and its keys, inside the tenant's scope. */
-const PERSON = { id: true, tenantId: true, roleId: true, role: { select: { name: true, rolePermissions: { select: { permission: { select: { key: true } } } } } } } as const;
 
 /** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). A reseller's group gives from the same ceiling (GR-1-d). */
 export const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
@@ -221,30 +206,30 @@ export class TenantRolesService {
   /** One person's keys by source (AC-1-l): what the Permissions section shows (AC-1-n). */
   keysOf(actor: ResellerActor, tenantId: string, userId: string): Promise<PersonKeys> {
     return this.run(actor, tenantId, 'read', () =>
-      tenantTransaction(this.prisma, async (tx) => this.personKeys(tx, await this.person(tx, userId))),
+      tenantTransaction(this.prisma, async (tx) => personKeysOf(this.answers, tx, await this.person(tx, userId))),
     );
   }
 
   /**
-   * Give or take one key on one person, permanently, with a reason (AC-1-l,
-   * ADR-0138 (7)). The key must exist, be neither `*` nor a `platform.` key,
+   * Give or take one key on one person, with a reason (AC-1-l, ADR-0138 (7)),
+   * a give for a window if it names one (F-030-a, {@link keyWindowRefusal}):
+   * `KeyWindowSweep` tells the person when it opens and closes. The key must exist, be neither `*` nor a `platform.` key,
    * and be one this writer may grant — a take too, or a member could strip a
    * key they could never give back. The person must not hold `*`, and the
    * writer must have authority over their whole answer (ADR-0103). The same
-   * key, effect and reason again writes nothing.
+   * key, effect, reason and window again writes nothing.
    */
-  setKey(
-    actor: ResellerActor,
-    tenantId: string,
-    userId: string,
-    key: string,
-    input: { effect: KeyEffect; reason: string },
-    ip: string,
-  ): Promise<PersonKeys> {
+  setKey(actor: ResellerActor, tenantId: string, userId: string, key: string, input: KeyWrite, ip: string): Promise<PersonKeys> {
+    const now = new Date();
+    const refused = keyWindowRefusal(input, now);
+    if (refused) return Promise.reject(new TenantRolesRefused(refused, key));
+    const window = storedWindow(input, now);
     return this.writingKey(actor, tenantId, userId, key, ip, async (tx, person, permissionId) => {
       const current = await tx.userPermission.findUnique({ where: { userId_permissionId: { userId, permissionId } } });
-      if (current && current.effect === input.effect && current.reason === input.reason) return null;
-      const data = { effect: input.effect, reason: input.reason, grantedByUserId: actor.userId };
+      const same = (a: Date | null, b: Date | null) => a?.getTime() === b?.getTime();
+      if (current && current.effect === input.effect && current.reason === input.reason && same(current.startsAt, window.startsAt) && same(current.endsAt, window.endsAt)) return null;
+      // A start moved or cleared is told afresh: the sweep marks `openedAt` when it passes.
+      const data = { effect: input.effect, reason: input.reason, grantedByUserId: actor.userId, ...window, openedAt: null as Date | null };
       await tx.userPermission.upsert({
         where: { userId_permissionId: { userId, permissionId } },
         create: { userId, permissionId, tenantId: person.tenantId, ...data },
@@ -252,8 +237,8 @@ export class TenantRolesService {
       });
       return {
         action: AdminAction.user_permission_set,
-        before: current ? { key, effect: current.effect, reason: current.reason } : null,
-        after: { key, ...input },
+        before: current ? { key, ...overrideAudit(current) } : null,
+        after: { key, ...overrideAudit({ effect: input.effect, reason: input.reason, ...window }) },
       };
     });
   }
@@ -264,7 +249,7 @@ export class TenantRolesService {
       const current = await tx.userPermission.findUnique({ where: { userId_permissionId: { userId, permissionId } } });
       if (!current) throw new TenantRolesRefused('key_not_found', `${userId}: ${key}`);
       await tx.userPermission.deleteMany({ where: { userId, permissionId } });
-      return { action: AdminAction.user_permission_lift, before: { key, effect: current.effect, reason: current.reason }, after: null };
+      return { action: AdminAction.user_permission_lift, before: { key, ...overrideAudit(current) }, after: null };
     });
   }
 
@@ -281,7 +266,7 @@ export class TenantRolesService {
     ip: string,
     write: (
       tx: Tx,
-      person: Prisma.UserGetPayload<{ select: typeof PERSON }>,
+      person: KeyPerson,
       permissionId: string,
     ) => Promise<{ action: AdminAction; before: Record<string, string> | null; after: Record<string, string> | null } | null>,
   ): Promise<PersonKeys> {
@@ -324,10 +309,10 @@ export class TenantRolesService {
           const after = await this.answers.ofLoaded(person, tx);
           // AC-1-q: their panel moves now; the trigger moves their token (ADR-0138 (5)). AC-1-p: their history keeps it.
           await recordAccessChange(tx, [
-            { userId, tenantId: admitted.id, cause: 'keys_set', actorUserId: actor.userId, auditLogId: act.id, detail: moved(before, after) },
+            { userId, tenantId: admitted.id, cause: 'keys_set', actorUserId: actor.userId, auditLogId: act.id, detail: answerMoved(before, after) },
           ]);
         }
-        return this.personKeys(tx, person);
+        return personKeysOf(this.answers, tx, person);
       });
     });
   }
@@ -337,30 +322,6 @@ export class TenantRolesService {
     const person = await tx.user.findFirst({ where: { id: userId, deletedAt: null }, select: PERSON });
     if (!person) throw new TenantRolesRefused('user_not_found', userId);
     return person;
-  }
-
-  private async personKeys(tx: Tx, person: Prisma.UserGetPayload<{ select: typeof PERSON }>): Promise<PersonKeys> {
-    const [answer, groups, rows] = await Promise.all([
-      this.answers.ofLoaded(person, tx),
-      this.answers.groupsOf(person.id, tx),
-      tx.userPermission.findMany({
-        where: { userId: person.id },
-        select: { effect: true, reason: true, grantedByUserId: true, updatedAt: true, permission: { select: { key: true } } },
-      }),
-    ]);
-    const of = (effect: KeyEffect): KeyOverride[] =>
-      rows
-        .filter((r) => r.effect === effect)
-        .map((r) => ({ key: r.permission.key, reason: r.reason, by: r.grantedByUserId, at: r.updatedAt.toISOString() }))
-        .sort((a, b) => a.key.localeCompare(b.key));
-    return {
-      userId: person.id,
-      keys: answer.keys,
-      role: { id: person.roleId, name: person.role?.name ?? '', keys: permissionsOf(person) },
-      groups,
-      given: of('give'),
-      taken: of('take'),
-    };
   }
 
   /**
@@ -406,9 +367,8 @@ export class TenantRolesService {
   }
 }
 
-/** What an answer gained and lost between two reads — what the person is told (AC-1-s). */
-function moved(before: UserAccess, after: UserAccess): { given: string[]; taken: string[] } {
-  const was = new Set(before.keys);
-  const now = new Set(after.keys);
-  return { given: after.keys.filter((k) => !was.has(k)).sort(), taken: before.keys.filter((k) => !now.has(k)).sort() };
+/** An override as its audit row keeps it (AC-1-l); a window's ends only when it has them (F-030-a). */
+function overrideAudit(row: { effect: string; reason: string; startsAt: Date | null; endsAt: Date | null }): Record<string, string> {
+  const ends = Object.entries({ startsAt: row.startsAt, endsAt: row.endsAt }).flatMap(([k, v]) => (v ? [[k, v.toISOString()]] : []));
+  return { effect: row.effect, reason: row.reason, ...Object.fromEntries(ends) };
 }

@@ -281,6 +281,12 @@ model UserPermission {
   /// Why, as the giver wrote it; shown to staff and kept in the audit row.
   reason          String               @db.VarChar(500)
   grantedByUserId String               @db.Uuid
+  /// A give for a window (F-030-a): counted from `startsAt` (null: at once)
+  /// until `endsAt` (null: until lifted). A take has neither.
+  startsAt        DateTime?
+  endsAt          DateTime?
+  /// When the window-open sweep told the person; set only on a future start.
+  openedAt        DateTime?
   createdAt       DateTime             @default(now())
   updatedAt       DateTime             @default(now()) @updatedAt
 
@@ -290,6 +296,8 @@ model UserPermission {
   @@id([userId, permissionId])
   @@index([tenantId])
   @@index([permissionId])
+  @@index([startsAt])
+  @@index([endsAt])
   @@map("user_permission")
   @@schema("identity")
 }

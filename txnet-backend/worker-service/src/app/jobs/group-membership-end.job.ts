@@ -1,9 +1,8 @@
-import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
 import { DefaultSchedule, Job, JobResult } from '../automation/job';
-import { envelopeData } from '../automation/internal-answer';
+import { authInternalCall, postForCounts, type InternalCall } from '../automation/internal-answer';
 
 /** The one route this job exists to call. Service callers only; 404 otherwise. */
 const END_MEMBERSHIPS_PATH = '/api/internal/user-groups/end-memberships';
@@ -30,47 +29,15 @@ export class GroupMembershipEndJob implements Job {
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'always_on' };
 
   private readonly logger = new Logger(GroupMembershipEndJob.name);
-  private readonly baseUrl: string;
-  private readonly serviceToken: string;
-  private readonly timeoutMs: number;
+  private readonly call: () => InternalCall;
 
   constructor(config: ConfigService) {
-    this.baseUrl = config.get<string>('AUTH_API_BASE_URL', '').replace(/\/+$/, '');
-    this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
-    this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
+    this.call = authInternalCall(config, END_MEMBERSHIPS_PATH);
   }
 
   async run(): Promise<JobResult> {
-    // Read at run time, not boot, for the reason `deposit-expiry.job.ts` gives.
-    if (!this.baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
-    if (!this.serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
-
-    const result = await this.endMemberships();
+    const result = await postForCounts(this.call(), ['ended', 'told'] as const);
     if (result.ended > 0) this.logger.log(`ended ${result.ended} group membership(s), told ${result.told}`);
     return { itemsProcessed: result.ended, errorsCount: 0, metrics: { ...result } };
-  }
-
-  private async endMemberships(): Promise<{ ended: number; told: number }> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-    try {
-      const response = await fetch(`${this.baseUrl}${END_MEMBERSHIPS_PATH}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
-        body: '{}',
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error(`auth-api answered ${response.status} to ${END_MEMBERSHIPS_PATH}`);
-
-      const body = envelopeData(await response.json());
-      const counts = ['ended', 'told'].map((k) => body?.[k]);
-      if (!counts.every((v) => typeof v === 'number')) {
-        throw new Error(`auth-api answered ${END_MEMBERSHIPS_PATH} without its two counts`);
-      }
-      const [ended, told] = counts as number[];
-      return { ended, told };
-    } finally {
-      clearTimeout(timer);
-    }
   }
 }
