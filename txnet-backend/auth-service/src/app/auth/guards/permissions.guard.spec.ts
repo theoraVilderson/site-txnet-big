@@ -1,26 +1,12 @@
-import { CanActivate, ForbiddenException } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { PermissionsGuard } from './permissions.guard';
-import { PermissionsGuard as ImpersonationPermissionsGuard } from '../../impersonation/guards/permissions.guard';
 import { fakeExecutionContext } from '../../../test-support/execution-context';
 
-/**
- * There are two PermissionsGuard classes in this service — this one and
- * `impersonation/guards/permissions.guard.ts`. They are, today, identical
- * copies. Every case below runs against both, so the day one of them grows an
- * impersonation-specific rule (say, refusing a permission the impersonator
- * only holds through the impersonated user) the shared expectations fail and
- * the difference has to be stated rather than drifting in silently.
- */
-const implementations: Array<[string, new (perms: string[]) => CanActivate]> = [
-  ['auth', PermissionsGuard],
-  ['impersonation', ImpersonationPermissionsGuard],
-];
-
-describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
+describe('PermissionsGuard', () => {
   const contextFor = (user: unknown) => fakeExecutionContext({ user }).context;
 
   it('lets a user holding the single required permission through', () => {
-    const guard = new Guard(['user.read']);
+    const guard = new PermissionsGuard(['user.read']);
 
     expect(guard.canActivate(contextFor({ permissions: ['user.read'] }))).toBe(
       true,
@@ -28,7 +14,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   });
 
   it('requires every listed permission, not just one of them', () => {
-    const guard = new Guard(['user.read', 'user.write']);
+    const guard = new PermissionsGuard(['user.read', 'user.write']);
 
     expect(() =>
       guard.canActivate(contextFor({ permissions: ['user.read'] })),
@@ -36,7 +22,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   });
 
   it('passes when the user holds all of them plus more', () => {
-    const guard = new Guard(['user.read', 'user.write']);
+    const guard = new PermissionsGuard(['user.read', 'user.write']);
 
     expect(
       guard.canActivate(
@@ -46,7 +32,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   });
 
   it('lets an empty requirement list through', () => {
-    const guard = new Guard([]);
+    const guard = new PermissionsGuard([]);
 
     expect(guard.canActivate(contextFor({ permissions: [] }))).toBe(true);
   });
@@ -54,7 +40,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   // A missing user means AuthGuard never ran on this route — a wiring mistake,
   // not a permission decision. It must still not fall open.
   it('rejects a request with no user attached', () => {
-    const guard = new Guard(['user.read']);
+    const guard = new PermissionsGuard(['user.read']);
 
     expect(() => guard.canActivate(contextFor(undefined))).toThrow(
       ForbiddenException,
@@ -66,7 +52,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
     ['a user whose permissions are empty', { permissions: [] }],
     ['a user holding only unrelated permissions', { permissions: ['tenant.read'] }],
   ])('rejects %s', (_label, user) => {
-    const guard = new Guard(['user.read']);
+    const guard = new PermissionsGuard(['user.read']);
 
     expect(() => guard.canActivate(contextFor(user))).toThrow(
       ForbiddenException,
@@ -76,7 +62,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   // F-101-d: the bare `*` SuperAdmin holds satisfies every requirement, one
   // named nowhere yet included. It is the only wildcard.
   it('lets a holder of "*" through every requirement', () => {
-    const guard = new Guard(['user.read', 'settlement.manage']);
+    const guard = new PermissionsGuard(['user.read', 'settlement.manage']);
 
     expect(guard.canActivate(contextFor({ permissions: ['*'] }))).toBe(true);
   });
@@ -88,7 +74,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
     ['a differently-cased name', 'User.Read'],
     ['a longer name that starts the same', 'user.readAll'],
   ])('does not accept %s as the required permission', (_label, held) => {
-    const guard = new Guard(['user.read']);
+    const guard = new PermissionsGuard(['user.read']);
 
     expect(() => guard.canActivate(contextFor({ permissions: [held] }))).toThrow(
       ForbiddenException,
@@ -96,7 +82,7 @@ describe.each(implementations)('PermissionsGuard (%s)', (_name, Guard) => {
   });
 
   it('answers 403 in both the no-user and the wrong-permission case', () => {
-    const guard = new Guard(['user.read']);
+    const guard = new PermissionsGuard(['user.read']);
 
     expect(() => guard.canActivate(contextFor(undefined))).toThrow(
       expect.objectContaining({ status: 403 }),

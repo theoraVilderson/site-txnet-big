@@ -12,7 +12,7 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../impersonation/guards/permissions.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
   SetScheduleInput,

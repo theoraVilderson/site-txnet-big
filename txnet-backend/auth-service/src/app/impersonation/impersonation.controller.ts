@@ -12,7 +12,7 @@ import {
 import { accessTraceOf, TenantCapability } from '@txnet-backend/shared-core';
 import { ImpersonationService } from './impersonation.service';
 import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from './guards/permissions.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 
 /**
  * Impersonation start and end, under `/auth` — a role word never belongs in a URL — authority is the caller's

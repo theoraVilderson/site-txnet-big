@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { isBotPlatform } from '@txnet-backend/messenger';
 import { AuthGuard } from '../auth/auth.guard';
-import { PermissionsGuard } from '../impersonation/guards/permissions.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { TenantContext } from '../tenant-context/tenant-context';
 import { PrismaBotIntegrationDirectory } from './bot-integration.directory';
 import { WebhookRotationService } from './webhook-rotation.service';
