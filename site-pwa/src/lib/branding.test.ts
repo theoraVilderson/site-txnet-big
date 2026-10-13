@@ -62,6 +62,14 @@ describe('parseBranding', () => {
     expect(parseBranding('<html>')).toBeNull();
     expect(parseBranding(null)).toBeNull();
   });
+
+  // Rule 1 (panel-web contract.branding.md): a name past 64 is not this tenant's
+  // checked brand, so the whole brand is dropped, never shown cut; a colour is
+  // `#rrggbb` as tenant-service's CHECK keeps it, never a shorthand.
+  it('drops the whole brand for a name past 64, and a colour that is not #rrggbb', () => {
+    expect(parseBranding({ ok: true, data: { ...VIEW, brandName: 'x'.repeat(65) } })).toBeNull();
+    expect(parseBranding({ ok: true, data: { ...VIEW, primaryColorHex: '#abc' } })?.primaryColorHex).toBeNull();
+  });
 });
 
 describe('brandStyle', () => {
@@ -117,6 +125,27 @@ describe('fetchBranding — the host names the brand, never the session', () => 
     await fetchBranding('panel.acme.test', origin);
     await fetchBranding('panel.other.test', origin);
     expect(seen.map((s) => s.host)).toEqual(['panel.acme.test', 'panel.other.test']);
+  });
+
+  // Every host reaches this app, so a scan of made-up hosts must not become one
+  // upstream call per page: a host that is no tenant's is remembered too, but
+  // briefly (10s, not 60s), so a tenant-service blip clears on its own.
+  it('remembers a host that has no brand, but only for a short while', async () => {
+    const realNow = Date.now;
+    let now = realNow();
+    Date.now = () => now;
+    try {
+      reply = (res) => { res.statusCode = 404; res.end(JSON.stringify({ ok: false, msg: 'x' })); };
+      await fetchBranding('scan-1.test', origin);
+      await fetchBranding('scan-1.test', origin);
+      expect(seen).toHaveLength(1);
+      now += 10_001;
+      reply = (res) => res.end(JSON.stringify({ ok: true, data: VIEW }));
+      expect((await fetchBranding('scan-1.test', origin))?.brandName).toBe('Acme VPN');
+      expect(seen).toHaveLength(2);
+    } finally {
+      Date.now = realNow;
+    }
   });
 
   it('is null — the neutral look — on a 404, a bad body or no service', async () => {

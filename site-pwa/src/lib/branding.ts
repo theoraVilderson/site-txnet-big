@@ -10,12 +10,14 @@
 // title, favicon, colours and logo — a white-label page that flashes the
 // platform's name before its own is the leak this row exists to close.
 //
-// Server-only: it opens a socket with `node:http` (`host-get.ts`). Client
+// Server-only: it opens a connection with `undici` (`host-get.ts`). Client
 // components import its `Branding` type alone.
+
 import type { CSSProperties } from "react";
 import { TENANT_PUBLIC, getJsonAsHost } from "./host-get";
+import { isValidJsonObject } from "@util/helper";
 
-/** The fields of tenant's branding view the panel renders. */
+/** Fields of the tenant branding view rendered by the panel. */
 export interface Branding {
   brandName: string;
   logoLightUrl: string | null;
@@ -26,117 +28,155 @@ export interface Branding {
   secondaryColorHex: string | null;
 }
 
-const HEX = /^#[0-9a-f]{6}$/i;
+const HEX_PATTERN = /^#[0-9a-f]{6}$/i;
 const BRAND_NAME_MAX = 64;
 const TIMEOUT_MS = 2000;
-/** A replaced image may already be five minutes stale (file route `max-age=300`). */
+/** Stale cache window: an updated asset may already be cached upstream for up to 5 minutes. */
 const CACHE_MS = 60_000;
+/** A host with no brand (no tenant's, or the service did not answer): short, so a blip clears itself. */
+const NEGATIVE_CACHE_MS = 10_000;
+/** Bounded cache capacity to mitigate memory starvation under domain scan attacks. */
+const CACHE_MAX = 500;
 
-function hex(v: unknown): string | null {
-  return typeof v === "string" && HEX.test(v) ? v : null;
+/** A `#rrggbb` colour (tenant `contract.branding.md` rule 3, a CHECK there too), or null. */
+function sanitizeHex(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return HEX_PATTERN.test(trimmed) ? trimmed : null;
 }
 
-function httpsUrl(v: unknown): string | null {
-  if (typeof v !== "string") return null;
+/** Enforces valid HTTPS URL protocol. Drops plain HTTP or non-URL inputs. */
+function sanitizeHttpsUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
   try {
-    return new URL(v).protocol === "https:" ? v : null;
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.href : null;
   } catch {
     return null;
   }
 }
 
-/**
- * The branding in a `{ok, data}` envelope, or null. Every field is checked
- * again here (tenant rule 3: the schema is the second wall, the renderer the
- * first): a colour is `#rrggbb` or nothing, a URL `https` or nothing.
- */
 export function parseBranding(body: unknown): Branding | null {
-  if (!body || typeof body !== "object") return null;
-  const { ok, data } = body as { ok?: unknown; data?: unknown };
-  if (ok !== true || !data || typeof data !== "object") return null;
-  const d = data as Record<string, unknown>;
-  const name = typeof d.brandName === "string" ? d.brandName.trim() : "";
-  if (!name || name.length > BRAND_NAME_MAX) return null;
-  return {
-    brandName: name,
-    logoLightUrl: httpsUrl(d.logoLightUrl),
-    logoDarkUrl: httpsUrl(d.logoDarkUrl),
-    faviconUrl: httpsUrl(d.faviconUrl),
-    ogImageUrl: httpsUrl(d.ogImageUrl),
-    primaryColorHex: hex(d.primaryColorHex),
-    secondaryColorHex: hex(d.secondaryColorHex),
+  // The `{ ok: true, data: { ... } }` envelope, or nothing.
+  if (
+    !isValidJsonObject(body) ||
+    body.ok !== true ||
+    !isValidJsonObject(body.data)
+  ) {
+    return null;
+  }
+
+  const { data } = body;
+  const brandName =
+    typeof data.brandName === "string" ? data.brandName.trim() : "";
+
+  // 1-64 or the whole brand is null (panel-web contract.branding.md rule 1):
+  // a name the schema would refuse is not this tenant's checked brand.
+  if (!brandName || brandName.length > BRAND_NAME_MAX) {
+    return null;
+  }
+
+  const sanitizedBranding: Branding = {
+    brandName,
+    logoLightUrl: sanitizeHttpsUrl(data.logoLightUrl),
+    logoDarkUrl: sanitizeHttpsUrl(data.logoDarkUrl),
+    faviconUrl: sanitizeHttpsUrl(data.faviconUrl),
+    ogImageUrl: sanitizeHttpsUrl(data.ogImageUrl),
+    primaryColorHex: sanitizeHex(data.primaryColorHex),
+    secondaryColorHex: sanitizeHex(data.secondaryColorHex),
   };
+
+  return sanitizedBranding;
 }
 
-/** WCAG relative luminance of a checked `#rrggbb`. */
-function luminance(hex: string): number {
+/** Computes WCAG relative luminance for a verified hex color. */
+function luminance(hexColor: string): number {
   const [r, g, b] = [1, 3, 5].map((i) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    const channel = parseInt(hexColor.slice(i, i + 2), 16) / 255;
+    return channel <= 0.03928
+      ? channel / 12.92
+      : ((channel + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 /**
- * The label colour on a brand's filled surfaces (contract.ux.md K1). The brand
- * replaces the accent in all three themes, so the theme's own label cannot be
- * trusted on it: white while white still reads at 3:1, the bar the platform's
- * own green was approved at, and a near-black otherwise.
+ * Selects an accessible foreground text color (white or dark) based on the background.
+ * Ensures a minimum 3:1 contrast ratio against the primary accent surface.
  */
-function labelOn(hex: string): string {
-  return 1.05 / (luminance(hex) + 0.05) >= 3 ? "#ffffff" : "#111111";
+function labelOn(hexColor: string): string {
+  const contrastWithWhite = 1.05 / (luminance(hexColor) + 0.05);
+  return contrastWithWhite >= 3 ? "#ffffff" : "#111111";
 }
 
 /**
- * The theme tokens the brand overrides, as a style for `<html>` — so they win
- * over every theme block in `globals.css`. React sets them as properties, and
- * only checked `#rrggbb` values reach it.
+ * Generates custom CSS variables for `<html>` to override platform default tokens.
  */
 export function brandStyle(brand: Branding | null): CSSProperties {
   const primary = brand?.primaryColorHex;
   if (!primary) return {};
+
   const style: Record<string, string> = {
     "--accent-primary": primary,
     "--text-on-accent": labelOn(primary),
     "--accent-glow": `color-mix(in srgb, ${primary} 25%, transparent)`,
     "--leaf-bg": `color-mix(in srgb, ${primary} 10%, transparent)`,
   };
+
   const secondary = brand?.secondaryColorHex;
   if (secondary) {
-    style["--card-gradient"] = `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`;
+    style["--card-gradient"] =
+      `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`;
   }
+
   return style as CSSProperties;
 }
 
 /**
  * Keyed by a host the visitor chose — every host reaches this app — so it is
- * bounded: past the cap it starts over rather than growing with a scan.
+ * bounded (FIFO past {@link CACHE_MAX}) and remembers a host with no brand
+ * too, briefly: otherwise a scan of made-up hosts is one upstream call a page.
  */
-const CACHE_MAX = 500;
 const cache = new Map<string, { at: number; brand: Branding | null }>();
 
-/** For the spec. */
-export function clearBrandingCache() {
+/** Unit test helper to reset in-memory state. */
+export function clearBrandingCache(): void {
   cache.clear();
 }
 
 /**
- * The branding of `host`, or null — the neutral look — when the host is not a
- * tenant's door, the service does not answer or the answer does not parse.
- * Never another tenant's brand, and never a failed page for want of one.
- *
- * `origin` is `TENANT_SERVICE_ORIGIN` (the internal hop, as the session guard's
- * `AUTH_SERVICE_ORIGIN`), else the visitor's own `https://<host>`, where
- * Traefik routes `/api/public/tenant` on every host.
+ * Resolves the branding configuration for a target host:
+ * 1. Queries the local memory cache.
+ * 2. Fetches from the upstream tenant service if cache missed or expired.
+ * 3. Never throws; a failure is the neutral look, remembered only briefly.
  */
 export async function fetchBranding(
   host: string,
   origin: string = process.env.TENANT_SERVICE_ORIGIN || `https://${host}`,
 ): Promise<Branding | null> {
+  // 1. Memory cache hit check
   const hit = cache.get(host);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.brand;
-  const brand = parseBranding(await getJsonAsHost(origin, `${TENANT_PUBLIC}/branding`, host, TIMEOUT_MS));
-  if (cache.size >= CACHE_MAX) cache.clear();
+  if (hit && Date.now() - hit.at < (hit.brand ? CACHE_MS : NEGATIVE_CACHE_MS)) {
+    return hit.brand;
+  }
+
+  // 2. Fetch remote payload (never throws; returns null on error/timeout)
+  const rawData = await getJsonAsHost(
+    origin,
+    `${TENANT_PUBLIC}/branding`,
+    host,
+    TIMEOUT_MS,
+  );
+  const brand = parseBranding(rawData);
+
+  // 3. Remember it — a miss only for NEGATIVE_CACHE_MS. FIFO: past the cap
+  // the oldest host goes, not the whole cache. A re-set moves the host last.
+  cache.delete(host);
+  if (cache.size >= CACHE_MAX) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) cache.delete(oldestKey);
+  }
   cache.set(host, { at: Date.now(), brand });
+
   return brand;
 }

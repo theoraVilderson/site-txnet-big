@@ -7,7 +7,10 @@ import { ZodError } from "zod";
 import { ProxyHeaders } from "@/generated/wire";
 
 export function getIpFromHeader(headers: NextRequest["headers"]) {
-  return headers.get(ProxyHeaders.forwardedFor)?.split?.(",")?.shift?.() || "127.0.0.1";
+  return (
+    headers.get(ProxyHeaders.forwardedFor)?.split?.(",")?.shift?.() ||
+    "127.0.0.1"
+  );
 }
 export function getHostFromHeader(headers: NextRequest["headers"]) {
   return headers.get(ProxyHeaders.forwardedHost) ?? headers.get("host") ?? "";
@@ -142,11 +145,7 @@ export const zodErrorToString = (
   error: ZodError,
   options: ZodFormatOptions = {},
 ): string => {
-  const {
-    withPath = true,
-    separator = "\n",
-    t = (_ns, key) => key,
-  } = options;
+  const { withPath = true, separator = "\n", t = (_ns, key) => key } = options;
 
   if (!error || !error.issues) {
     return t(VALIDATIONS_NS, UNKNOWN_VALIDATION_KEY);
@@ -164,3 +163,9 @@ export const zodErrorToString = (
     })
     .join(separator);
 };
+
+export function isValidJsonObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return Object.prototype.toString.call(value) === "[object Object]";
+}

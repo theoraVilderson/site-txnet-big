@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 20
-updated: 2026-10-05
+updated: 2026-10-13
 ---
 
 # panel-web — the domain's brand (F-066-v, ADR-0059)
@@ -28,8 +28,8 @@ domain. So the read carries the visitor's host and no cookie.
 | who | the root layout (`app/layout.tsx`), on the server, before first byte |
 | code | `lib/branding.ts` (`fetchBranding`, `parseBranding`, `brandStyle`); the host is `lib/visitor-host.ts`, shared with the session guard |
 | hop | `TENANT_SERVICE_ORIGIN` (internal, `http://tenant-service:3000`) with `Host: <visitor host>`; unset -> `https://<visitor host>`, where Traefik routes `/api/public/tenant` on every host (ADR-0065) |
-| transport | `node:http` (`lib/host-get.ts`, shared with `lib/door.ts`), not `fetch`: `fetch` drops a `Host` header, and tenant-service resolves a public route from `Host` alone (tenant rule 6) |
-| cache | per host, 60s, in process; capped at 500 hosts, then cleared — every host reaches this app, so the key is the visitor's choice |
+| transport | `undici`'s `request` (`lib/host-get.ts`, shared with `lib/door.ts`; a direct dependency of site-pwa), not `fetch`: `fetch` drops a `Host` header, and tenant-service resolves a public route from `Host` alone (tenant rule 6) |
+| cache | per host, in process: a brand 60s, a host with none (no tenant's, or no answer) 10s — so a scan of made-up hosts is not one upstream call a page, and a blip clears itself; capped at 500 hosts, the oldest dropped first — every host reaches this app, so the key is the visitor's choice |
 | timeout | 2s |
 
 Server-side on purpose: the first HTML already carries the title, favicon,
