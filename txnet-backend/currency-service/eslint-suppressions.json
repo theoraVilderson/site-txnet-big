@@ -1,0 +1,17 @@
+{
+  "src/app/pins/pins.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/rates/rates.service.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  }
+}

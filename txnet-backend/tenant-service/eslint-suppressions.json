@@ -1,0 +1,112 @@
+{
+  "src/app/branding/tenant-branding.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/currency/operating-currency.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/domains/tenant-domain.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/domains/tenant-domain.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/domains/tenant-domain.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "src/app/guide/guide-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/guide/guide-file-upkeep.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/app/guide/guide-reader.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/app/guide/guide-stats.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 15
+    }
+  },
+  "src/app/limits/reseller-limits.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 2
+    }
+  },
+  "src/app/onboarding/tenant-onboarding.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/onboarding/tenant-onboarding.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/app/packages/tenant-package.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/purchase/reseller-purchase.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/resellers/reseller.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/staff/tenant-staff.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/staff/tenant-staff.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 13
+    }
+  },
+  "src/app/status/tenant-status.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/subscription/tenant-subscription.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 2
+    }
+  },
+  "src/app/subscription/tenant-subscription.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/time-zone/tenant-time-zone.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  }
+}

@@ -202,16 +202,21 @@ def find_deps():
     return out
 
 
+# Trees whose C-24 smells ESLint holds (txnet-backend/eslint.config.mjs).
+LINTED = "txnet-backend/"
+
 COMMENT_LINE = re.compile(r"^\s*(//|\*|/\*|\{/\*)")
 
 # name: (regex, path filter, convention, what to do instead). Counted per file
 # on non-comment lines; a file's count may only shrink.
 SMELLS = {
-    "any": (r"\bas any\b|:\s*any\b\s*[,;)=\]>|]|<any>|\bany\[\]", lambda r: r.endswith(SOURCE_EXT),
-            "C-24", "type it, or take `unknown` and narrow it"),
+    # `any` and `!` in txnet-backend are held by ESLint (eslint-suppressions.json,
+    # CS-1-j); counting them here too would be two baselines for one rule.
+    "any": (r"\bas any\b|:\s*any\b\s*[,;)=\]>|]|<any>|\bany\[\]", lambda r: r.endswith(SOURCE_EXT)
+            and not r.startswith(LINTED), "C-24", "type it, or take `unknown` and narrow it"),
     "double-cast": (r"\bas unknown as\b", lambda r: r.endswith(SOURCE_EXT),
                     "C-24", "a double cast lies to the compiler; parse or narrow the value"),
-    "non-null": (r"[\w\])]!\.[A-Za-z_]", lambda r: r.endswith(SOURCE_EXT),
+    "non-null": (r"[\w\])]!\.[A-Za-z_]", lambda r: r.endswith(SOURCE_EXT) and not r.startswith(LINTED),
                  "C-24", "handle the null case instead of asserting it away"),
     "lint-off": (r"eslint-disable(?!.*\s--\s)", lambda r: r.endswith(SOURCE_EXT),
                  "C-30", "fix the code; a disable that must stay says why after ` -- `"),

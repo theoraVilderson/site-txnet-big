@@ -1,0 +1,42 @@
+{
+  "src/app/agent/agent.service.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/availability/availability.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/categories/categories.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/app/conversations/attachments.service.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/realtime/support-realtime.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/retention/retention.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/sla/sla.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  }
+}

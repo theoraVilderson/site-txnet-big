@@ -376,6 +376,7 @@ def main():
     print("  60s measured for a one-service change, vs ~180s for the workspace):")
     print("      cd txnet-backend && { npm run test:affected > /tmp/test.log 2>&1 & ")
     print("                            npm run typecheck:affected > /tmp/tc.log 2>&1 & wait; }")
+    print("  Then, after them (never beside: CS-1-j), `npm run lint:affected`.")
     print("  Note the braces: `cd X && (A) & (B) &` binds the cd to the FIRST")
     print("  subshell only, and the second one runs in the wrong directory.")
     print("\n  Do NOT add a third suite to that pair. site-pwa's vitest alongside the")

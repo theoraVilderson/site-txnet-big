@@ -1,0 +1,105 @@
+{
+  "src/app/currency/fx-currencies.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/currency/fx-rate.snapshot.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/jobs/campaign-delivery.job.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/jobs/campaign-fan-out.job.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/jobs/fx-rate.job.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 6
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 8
+    }
+  },
+  "src/app/jobs/grant-bulk-job.job.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/jobs/retention-held-notice.job.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/access-notice.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/event-notice.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 31
+    }
+  },
+  "src/app/outbox/event-notice.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/app/outbox/grant-delivery.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/app/outbox/panel-tested.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/payment-confirmed.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/payment-reversed.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/retention-grouping.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 16
+    }
+  },
+  "src/app/outbox/retention-notice.consumer.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/outbox/retention-notice.consumer.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/outbox/tenant-renewal.consumers.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/redis/redis.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  }
+}

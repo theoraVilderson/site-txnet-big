@@ -1,0 +1,255 @@
+{
+  "src/app/catalog/catalog-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/catalog/reseller-catalog.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/engagement/lottery-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/engagement/prize-shape.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/engagement/wheel-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/engagement/wheel.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/entitlement/delivery.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 10
+    }
+  },
+  "src/app/entitlement/grant-names.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/entitlement/link-reset.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/entitlement/purchase-limits.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/app/invoice/invoice-payment.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/coupon-admin/coupon-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/payment/coupon-admin/coupon-admin.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 4
+    }
+  },
+  "src/app/payment/coupon-admin/coupon-batch.service.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/coupon/coupon-reservation.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/deposit/deposit-reconciliation.service.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/deposit/deposit-start.service.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/app/payment/deposit/manual-confirm.service.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/gateway-admin/gateway-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/payment/gateway-admin/gateway-admin.service.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/payment/gateway-admin/reseller-gateway.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/payment/gateway/gateway-merchant.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/payment/gateway/stripe.provider.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/payment/gift/gift-redemption.int.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/payment/gift/grant-bulk-job.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/app/payment/gift/reseller-user-grants.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/payment/pricing/gateway-pricing.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 6
+    }
+  },
+  "src/app/request/rate-limit-coverage.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    }
+  },
+  "src/app/revenue/reseller-revenue.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/revenue/reseller-revenue.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/revenue/reseller-revenue.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/app/systems/panel-groups.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/systems/panel-inbounds.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/systems/panel-retire.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/tenant-billing/tenant-billing-admin.controller.ts": {
+    "@typescript-eslint/switch-exhaustiveness-check": {
+      "count": 1
+    }
+  },
+  "src/app/traffic/config-actions.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/traffic/grant-period.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/traffic/group-drain.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/traffic/vpn-postpaid-wholesale.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/traffic/vpn-postpaid.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/traffic/vpn-reserve.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/app/traffic/vpn-wholesale.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/usage/spending-cap.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/app/usage/usage-door.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    }
+  },
+  "src/app/usage/usage-settlement.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/app/usage/usage-wholesale.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 5
+    }
+  },
+  "src/app/wallet/wallet-currency.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/app/wallet/wallet-hold.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 9
+    }
+  },
+  "src/app/wallet/wallet-ledger.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 3
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    }
+  }
+}

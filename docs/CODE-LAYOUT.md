@@ -167,6 +167,20 @@ capped**, median load 7; one service 25s -> 26s. A spec that times out only
 in this pair, and passes alone, is contention: re-check the caps before
 raising its timeout.
 
+### Lint
+
+`npm run lint:affected` (`txnet-backend/`) runs type-aware ESLint
+(`eslint.config.mjs`, typescript-eslint) as a cached Nx `lint` target per
+project, inferred by `@nx/eslint/plugin`. The rules are only conventions:
+`no-explicit-any`, `no-non-null-assertion`, `switch-exhaustiveness-check`,
+`ban-ts-comment` (C-24), `no-floating-promises`, `no-empty` (C-25). The hits
+that existed on 2026-10-13 — 616 across 14 projects — are each project's
+`eslint-suppressions.json`, a per-file per-rule count: a new hit fails, and a
+fixed one fails (exit 2) until `npx eslint . --prune-suppressions` in that
+project records it, so the file only shrinks. It runs after the test/typecheck
+pair, never beside it (the cap above): ~21s one service, 194s cold for all
+(`LINT_JOBS`, default 2).
+
 **`npm test` is `nx run-many -t test`** — all **thirteen** unit projects
 (ai-service, auth-service, billing-service, bot-service, currency-service, gateway-service,
 messenger, metering-service, notification-service, shared-core, support-service, tenant-service,

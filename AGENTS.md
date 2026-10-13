@@ -436,6 +436,13 @@ cd txnet-backend && { npm run test:affected > /tmp/test.log 2>&1 & \
                       npm run typecheck:affected > /tmp/tc.log 2>&1 & wait; }
 ```
 
+**Then, after the pair, `npm run lint:affected`** (CS-1-j) — type-aware ESLint
+over the same Nx set, holding C-24/C-25 in the backend. Not beside the pair:
+those two already take every core but the two kept free. ~21s for one service,
+194s cold for the workspace, ~0s cached. A new hit fails; so does a fixed one
+until `npx eslint . --prune-suppressions` (in that project) shrinks its
+`eslint-suppressions.json`. Never `--suppress-all` to make a new hit pass.
+
 Both are Nx-cached: a project unchanged since its last green run replays in
 ~0s, so a re-run after a small fix costs only what the fix reached (typecheck
 8s warm vs 265s uncached, 2026-09-23). Never pass `--skip-nx-cache` by habit,

@@ -1,0 +1,37 @@
+{
+  "src/lib/automation/notice-classes.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/lib/automation/notice-classes.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/billing/quota-alerts.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  },
+  "src/lib/currency/fx-rate.spec.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 11
+    }
+  },
+  "src/lib/envelope/response.interceptor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    }
+  },
+  "src/lib/rate-limit/rate-limit.decorator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/lib/sms/sms-provider.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 2
+    }
+  }
+}

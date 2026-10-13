@@ -46,9 +46,9 @@ it; the rest is review.
 **Correctness — the bugs nobody sees**
 - Types are honest: no `any`, no `as unknown as`, no `!`, no `@ts-ignore`;
   input from outside is parsed with zod at the edge; a `switch` over a union is
-  exhaustive — C-24 **check**.
+  exhaustive — C-24 **check** (backend: `npm run lint`).
 - An error is handled once, on purpose: no empty `catch`, no swallowed promise,
-  a user-facing failure is a locale key — C-25 **check**.
+  a user-facing failure is a locale key — C-25 **check** (backend: `npm run lint`).
 - Money is `Decimal`/string in its currency, never a float (C-02 **check**);
   time is UTC on the wire and in the database, zoned only at the edge (C-37).
 - A write that can run twice runs safely twice; a multi-row change is one
@@ -803,8 +803,8 @@ everyone after.
 
 ```check C-23
 forbid: ^\s*var\s+\w
-in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
-except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts, txnet-backend/*-e2e/**
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx
+except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts
 message: use const (or let when it is reassigned) — var is function-scoped and hoisted (C-23); the two inline <head> scripts are ES5 on purpose
 ```
 
@@ -830,11 +830,14 @@ kind that shows up on a real screen with every suite green. On 2026-10-13
 `@ts-ignore` is a `check`; `any`, the double cast and `!` are counted per file
 by `codeshape.py` `smells` (98 double casts in 49 files today) and may only go
 down.
+In `txnet-backend` the rule is held by type-aware ESLint instead (CS-1-j):
+`any`, `!`, a non-exhaustive `switch` and `@ts-ignore` fail `npm run lint`,
+whose per-file baseline (`<project>/eslint-suppressions.json`) only shrinks.
+The double cast stays with `codeshape.py`; no lint rule names it.
 
 ```check C-24
 forbid: @ts-(ignore|nocheck)\b
-in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx
 message: fix the type; a real compiler gap is `// @ts-expect-error -- <why>` (C-24)
 ```
 
@@ -855,12 +858,15 @@ message: fix the type; a real compiler gap is `// @ts-expect-error -- <why>` (C-
 
 **Why.** A swallowed error is the bug that is reported three weeks later as
 "sometimes it doesn't save". The two empty catches that remain are inside the
-ES5 `<head>` scripts, where a throw would blank the page.
+ES5 `<head>` scripts, where a throw would blank the page. In `txnet-backend`,
+an empty block and an un-awaited promise fail `npm run lint` (`no-empty`,
+`no-floating-promises`, CS-1-j) — a type-aware rule sees the promise a regex
+cannot.
 
 ```check C-25
 forbid: catch\s*(\([^)]*\))?\s*\{\s*\}
-in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
-except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts, txnet-backend/*-e2e/**
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx
+except: site-pwa/src/lib/motion.ts, site-pwa/src/lib/theme-script.ts
 message: handle the error — convert, rethrow with context, or log with the ids — never drop it (C-25)
 ```
 

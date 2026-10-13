@@ -1,0 +1,20 @@
+{
+  "src/app/realtime/realtime.gateway.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 7
+    }
+  },
+  "src/app/redis/redis.service.ts": {
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-non-null-assertion": {
+      "count": 1
+    }
+  }
+}
