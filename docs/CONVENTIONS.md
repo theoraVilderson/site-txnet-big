@@ -176,7 +176,7 @@ CS-1-e (backend, Go); a new one is refused.
 ```check C-01
 forbid: (//|/\*|^\s*\*|\{/\*).*[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts, auth-handler/**/*.go, i18n-platform/**/*.go, network-service/**/*.go, sub-service/**/*.go
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go, coinsite/src/app/(Auth)/login/page.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/AuthCardShell.tsx, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_components/ThemeDropdown.tsx, site-pwa/src/app/(auth)/auth/_hooks/useFirstPaint.ts, site-pwa/src/app/(auth)/auth/loading.tsx, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/layout.tsx, site-pwa/src/context/LocaleContext.tsx, site-pwa/src/context/LocaleShell.tsx, site-pwa/src/context/ThemeContext.tsx, site-pwa/src/env.ts, site-pwa/src/instrumentation.ts, site-pwa/src/lib/locale-store.ts, site-pwa/src/lib/theme-script.ts, site-pwa/src/services/locale.ts, site-pwa/src/services/theme.ts, site-pwa/src/services/user-locale-mock.ts, site-pwa/src/stores/locale-store.ts, site-pwa/src/stores/theme-store.ts, txnet-backend/auth-service/src/app/auth/auth.schema.ts, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts, txnet-backend/messenger/src/lib/capabilities.ts, txnet-backend/shared-core/src/lib/sms/sms-provider.service.ts, txnet-backend/tenant-service/src/app/guide/guide-search.spec.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go, coinsite/src/app/(Auth)/login/page.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/AuthCardShell.tsx, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_hooks/useFirstPaint.ts, site-pwa/src/app/(auth)/auth/loading.tsx, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/layout.tsx, site-pwa/src/context/LocaleContext.tsx, site-pwa/src/context/LocaleShell.tsx, site-pwa/src/context/ThemeContext.tsx, site-pwa/src/env.ts, site-pwa/src/instrumentation.ts, site-pwa/src/lib/locale-store.ts, site-pwa/src/lib/theme-script.ts, site-pwa/src/services/locale.ts, site-pwa/src/services/theme.ts, site-pwa/src/services/user-locale-mock.ts, site-pwa/src/stores/locale-store.ts, site-pwa/src/stores/theme-store.ts, txnet-backend/auth-service/src/app/auth/auth.schema.ts, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts, txnet-backend/messenger/src/lib/capabilities.ts, txnet-backend/shared-core/src/lib/sms/sms-provider.service.ts, txnet-backend/tenant-service/src/app/guide/guide-search.spec.ts
 message: write the comment in English (C-01)
 ```
 
@@ -684,7 +684,8 @@ asked again, and each copy drifts on its own.
 
 **Why.** On 2026-10-13 the panel asked "is this the platform" 21 times inline
 and six files each kept a local helper; two of them, both named
-`isPlatformOwner`, meant different things (one also required `isOwner`). The
+`isPlatformOwner`, meant different things (one also required `isOwner`; FE-1-a
+named that one `ownsPlatform`). The
 check holds the one literal that has already drifted; the rule holds the rest
 in review. Owners: `site-pwa/src/app/(panel)/_lib/panel-menu.ts` (the
 `TenantType` union) and `shared-core/src/lib/tenant/platform-tenant.ts`.
@@ -713,7 +714,7 @@ in every locale, and no key-based check can see it.
 ```check C-19
 forbid: ^(?!\s*(?://|\*|/\*|\{/\*)).*['"`][^'"`]*[\u0600-\u06FF]
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, site-pwa/src/util/helper.ts, site-pwa/src/app/(panel)/_lib/palette.ts, site-pwa/src/app/(panel)/services/_lib/service-configs.ts, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, txnet-backend/billing-service/src/app/wallet/persian-search.ts, txnet-backend/tenant-service/src/app/guide/guide-search.ts, txnet-backend/tenant-service/src/app/purchase/slug-suggestion.ts, txnet-backend/billing-service/src/app/traffic/config-text.ts, txnet-backend/shared-core/src/lib/ai/suggestion-copy.ts, txnet-backend/bot-service/src/app/locale/bot-copy.fallbacks.ts, coinsite/src/app/layout.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_components/ThemeDropdown.tsx, site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx, site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx, site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/resellers/packages/_components/PackagesView.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/context/LocaleContext.tsx, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, site-pwa/src/util/helper.ts, site-pwa/src/app/(panel)/_lib/palette.ts, site-pwa/src/app/(panel)/services/_lib/service-configs.ts, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, txnet-backend/billing-service/src/app/wallet/persian-search.ts, txnet-backend/tenant-service/src/app/guide/guide-search.ts, txnet-backend/tenant-service/src/app/purchase/slug-suggestion.ts, txnet-backend/billing-service/src/app/traffic/config-text.ts, txnet-backend/shared-core/src/lib/ai/suggestion-copy.ts, txnet-backend/bot-service/src/app/locale/bot-copy.fallbacks.ts, coinsite/src/app/layout.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx, site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx, site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/resellers/packages/_components/PackagesView.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/context/LocaleContext.tsx, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts
 message: move the text to locales/ and reference its generated key (C-19); script tables belong in the app's one script module
 ```
 
@@ -901,6 +902,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
 | browser storage | `lib/storage.ts` (FE-1-l) | — |
 | copy to clipboard | `_lib/clipboard.ts` | — |
+| keys and moves for an editable list | `_hooks/useRowKeys.ts`, `_lib/rows.ts` (C-30) | — |
 | a Redis key, a rate-limit bucket | — | `RedisKeys` (C-03), the bucket registry (C-05) |
 | tenant scope | — | `tenantTransaction` / `withTenant` / `runWithTenant` |
 | who holds a key | — | `findKeyHolders` (C-15) |
@@ -976,7 +978,8 @@ resellers, never on a developer's machine.
 - An effect synchronises with something outside React (a socket, a timer, the
   DOM) and returns its cleanup. Fetching a page's data is `useLiveReread` or the
   area's data hook; copying props into state is a bug.
-- A list key is the row's id. An index key is allowed only for a list that never
+- A list key is the row's id; an editable list whose rows have none keys them
+  with `useRowKeys` (FE-1-a). An index key is allowed only for a list that never
   reorders, inserts or deletes (a skeleton).
 - `eslint-disable` is a last resort and says why: `// eslint-disable-next-line
   react-hooks/exhaustive-deps -- runs once per tenant switch`.

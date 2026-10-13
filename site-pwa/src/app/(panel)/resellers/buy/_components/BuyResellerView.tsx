@@ -33,10 +33,10 @@ import {
   emptyPurchaseForm,
   featureChart,
   isInsufficientBalance,
-  isPlatformOwner,
   offerChoices,
   offerPrice,
   ownedHosts,
+  ownsPlatform,
   purchaseBody,
   purchaseRefusalKey,
   suggestibleName,
@@ -177,7 +177,7 @@ export function BuyResellerView() {
   if (!mayBuy) {
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
-        <Alert>{t("common", isPlatformOwner(me) ? K.ownerNotice : K.refusals.not_platform_user)}</Alert>
+        <Alert>{t("common", ownsPlatform(me) ? K.ownerNotice : K.refusals.not_platform_user)}</Alert>
       </Shell>
     );
   }

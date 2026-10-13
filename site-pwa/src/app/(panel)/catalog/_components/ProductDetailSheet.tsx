@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { type CatalogCapability, type CatalogCategory, type CatalogPrice, type CatalogProduct, type CatalogProductDetail, type CatalogVariant, type FulfilmentKind, type PanelGroupOption, type Quotas } from "@/lib/catalog-api";
 import { PricingCurrencyContext, useCatalogSurface, usePricedIn, usePricingCurrency } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
+import { useRowKeys } from "../../_hooks/useRowKeys";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Select } from "../../_components/kit/Select";
 import { DataTable } from "../../_components/kit/DataTable";
@@ -406,8 +407,8 @@ export function VariantFields({
   const currency = usePricedIn();
   const [advanced, setAdvanced] = useState(false);
   const metered = form.billingMode === "metered";
-  const setQuota = (i: number, patch: Partial<VariantForm["quotas"][number]>) =>
-    set("quotas", form.quotas.map((q, j) => (j === i ? { ...q, ...patch } : q)));
+  const setQuota = (i: number, patch: Partial<VariantForm["quotas"][number]>) => set("quotas", form.quotas.map((q, j) => (j === i ? { ...q, ...patch } : q)));
+  const quotaKeys = useRowKeys(form.quotas);
 
   return (
     <div className="flex flex-col gap-3">
@@ -455,7 +456,7 @@ export function VariantFields({
         <p className="text-xs font-bold text-text-secondary">{t("common", K.variant.quotas)}</p>
         <p className="text-[11px] text-text-secondary">{t("common", K.variantHint.quotas)}</p>
         {form.quotas.map((q, i) => (
-          <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div key={quotaKeys[i]} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <Select
               ariaLabel={t("common", K.variant.metric)}
               value={q.metric}
@@ -476,9 +477,7 @@ export function VariantFields({
               onChange={(v) => setQuota(i, { resetPolicy: v as typeof q.resetPolicy })}
               options={RESET_POLICIES.map((m) => ({ value: m, label: t("common", K.resetPolicy[m]) }))}
             />
-            <Button variant="quiet" size="sm" onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>
-              {t("common", K.variant.remove)}
-            </Button>
+            <Button variant="quiet" size="sm" onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>{t("common", K.variant.remove)}</Button>
           </div>
         ))}
         {errors.quotas && <p className="text-[11px] text-error">{t("common", errors.quotas)}</p>}

@@ -54,7 +54,7 @@ export const isInsufficientBalance = (e: unknown) => reasonOf(e) === "insufficie
 export const canBuyReseller = (me: Me | null) => me?.tenant?.type === "platform_owner" && !me.tenant.isOwner;
 
 /** The caller this page turns away because they own the platform, not because they are outside it. */
-export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner" && me.tenant.isOwner;
+export const ownsPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner" && me.tenant.isOwner;
 
 /**
  * What every reseller gets whatever the package (user, 2026-10-06): its own

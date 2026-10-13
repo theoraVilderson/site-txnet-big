@@ -6,6 +6,7 @@ import { UserRoundCog } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { authApi } from "@/lib/auth-api";
+import { numberLocale } from "../_lib/digits";
 import { Button, notify } from "./kit";
 import { TONE_PILL } from "./kit/StatusPill";
 import { cn } from "./kit/cn";
@@ -13,10 +14,10 @@ import { useImpersonation } from "../_hooks/useImpersonation";
 
 const K = FrontendI18nKeys.common.impersonation;
 
-/** `ms` as `mm:ss` in the page's digits, never below zero. */
+/** `ms` as `mm:ss` in Latin digits like every number (`digits.ts`), never below zero. */
 export function impersonationTimeLeft(ms: number, lang: string): string {
   const total = Math.max(0, Math.floor(ms / 1000));
-  const two = new Intl.NumberFormat(lang === "fa" ? "fa-IR" : "en-US", { minimumIntegerDigits: 2, useGrouping: false });
+  const two = new Intl.NumberFormat(numberLocale(lang), { minimumIntegerDigits: 2, useGrouping: false });
   return `${two.format(Math.floor(total / 60))}:${two.format(total % 60)}`;
 }
 

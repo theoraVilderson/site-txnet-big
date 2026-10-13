@@ -3,8 +3,12 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sun, Moon, Waves, Laptop, ChevronDown, Check } from "lucide-react";
+import { useLocale } from "@/context/LocaleContext";
 import { useTheme } from "@/context/ThemeContext";
 import { AVAILABLE_THEMES, type ThemeName } from "@/env";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+
+const A = FrontendI18nKeys.common.settings.appearance;
 
 type ThemeChoice = ThemeName | "system";
 
@@ -15,18 +19,12 @@ const ICONS: Record<ThemeChoice, typeof Sun> = {
   ocean: Waves,
 };
 
-const LABELS: Record<ThemeChoice, string> = {
-  system: "پیش‌فرض سیستم",
-  light: "روشن",
-  dark: "تاریک",
-  ocean: "اقیانوسی",
-};
-
-// "system" + همه‌ی تم‌های AVAILABLE_THEMES از env.ts — اضافه‌کردن تم بعدی
-// فقط یعنی یک آیتم به AVAILABLE_THEMES + یک بلوک CSS، این لیست خودکار آپدیت می‌شه
+// "system" first, then every theme env.ts offers: a new theme is one
+// AVAILABLE_THEMES entry and its CSS block, its name one locale key (FE-1-a).
 const OPTIONS: ThemeChoice[] = ["system", ...AVAILABLE_THEMES];
 
 export function ThemeDropdown() {
+  const { t } = useLocale();
   const { theme, choice, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -44,6 +42,7 @@ export function ThemeDropdown() {
   return (
     <div className="relative" ref={ref}>
       <button
+        aria-label={t("common", A.theme)}
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 p-2 px-3 rounded-xl text-text-secondary hover:bg-leaf-bg hover:text-primary transition-colors"
       >
@@ -79,7 +78,7 @@ export function ThemeDropdown() {
                   }`}
                 >
                   <Icon size={16} />
-                  <span className="flex-1 text-start">{LABELS[opt]}</span>
+                  <span className="flex-1 text-start">{t("common", A.themes[opt])}</span>
                   {active && <Check size={16} />}
                 </button>
               );

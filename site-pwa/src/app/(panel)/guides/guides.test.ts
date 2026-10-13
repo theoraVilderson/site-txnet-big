@@ -16,7 +16,6 @@ import {
   REFUSAL_KEYS,
   emptyBlock,
   emptyPlacement,
-  moveBlock,
   placementError,
   textsBody,
   textsForm,
@@ -132,10 +131,6 @@ describe("the texts form", () => {
     expect(errorOf({ type: "video", file: v, poster: "tenants/t-1/guides/g-1/a.jpg" })).toBeUndefined();
   });
 
-  it("moves a block and ignores a move past either end", () => {
-    expect(moveBlock(["a", "b", "c"], 2, -1)).toEqual(["a", "c", "b"]);
-    expect(moveBlock(["a", "b"], 0, -1)).toEqual(["a", "b"]);
-  });
 });
 
 describe("the page", () => {

@@ -7,7 +7,6 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositQuote } from "@/lib/billing-api";
 import { formatMoney, rialInTomanWords } from "../../../_lib/money";
-import { numberLocale } from "../../../_lib/digits";
 import { fromMinor, tomanFromRial } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.summary;
@@ -143,7 +142,7 @@ export function PaymentSummary({
           {formatMoney(toman, "IRT", { lang, t }, { decimals: tomanWhole ? 0 : 1 })}
         </span>
         <span className="text-[10px] text-text-secondary">
-          {t("common", D.chargeRial, { amount: new Intl.NumberFormat(numberLocale(lang)).format(rial as unknown as number) })}
+          {t("common", D.chargeRial, { amount: formatMoney(rial, "IRR", { lang, t }, { decimals: 0 }) })}
         </span>
       </p>
     </div>

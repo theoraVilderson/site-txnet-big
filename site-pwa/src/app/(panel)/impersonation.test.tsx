@@ -133,7 +133,8 @@ describe("the banner", () => {
     expect(impersonationTimeLeft(1_800_000, "en")).toBe("30:00");
     expect(impersonationTimeLeft(61_500, "en")).toBe("01:01");
     expect(impersonationTimeLeft(-5, "en")).toBe("00:00");
-    expect(impersonationTimeLeft(90_000, "fa")).toBe("۰۱:۳۰");
+    // Latin digits in every language, like every number in the panel (digits.ts, FE-1-a).
+    expect(impersonationTimeLeft(90_000, "fa")).toBe("01:30");
   });
 });
 

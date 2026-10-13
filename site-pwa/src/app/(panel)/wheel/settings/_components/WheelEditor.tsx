@@ -7,6 +7,8 @@ import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { wheelAdminApi, type WheelVersion } from "@/lib/engagement-api";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
+import { useRowKeys } from "../../../_hooks/useRowKeys";
+import { moveRow } from "../../../_lib/rows";
 import { formatMoney } from "../../../_lib/money";
 import { Select } from "../../../_components/kit/Select";
 import { VariantPicker } from "../../../coupons/_components/VariantPicker";
@@ -86,12 +88,8 @@ export function WheelEditor({
 
   const set = <F extends keyof WheelForm>(field: F, value: WheelForm[F]) => setForm((f) => ({ ...f, [field]: value }));
   const setPrize = (i: number, patch: Partial<PrizeForm>) => setForm((f) => ({ ...f, prizes: f.prizes.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
-  const move = (i: number, by: -1 | 1) =>
-    setForm((f) => {
-      const prizes = [...f.prizes];
-      [prizes[i], prizes[i + by]] = [prizes[i + by], prizes[i]];
-      return { ...f, prizes };
-    });
+  const prizeKeys = useRowKeys(form.prizes);
+  const move = (i: number, by: -1 | 1) => setForm((f) => ({ ...f, prizes: moveRow(f.prizes, i, by) }));
 
   async function save() {
     setTried(true);
@@ -178,7 +176,7 @@ export function WheelEditor({
         {form.prizes.map((p, i) => {
           const e = tried ? check.prizes[i] ?? {} : {};
           return (
-            <div key={i} className="space-y-3 rounded-xl border border-card-border p-3">
+            <div key={prizeKeys[i]} className="space-y-3 rounded-xl border border-card-border p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-bold text-text-primary">
                   {t("common", K.prizes.slot, { n: i + 1 })}

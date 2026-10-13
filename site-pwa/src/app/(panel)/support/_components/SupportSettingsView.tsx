@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { supportSettingsApi, type AdminCategory, type CategoryList, type SlaTarget } from "@/lib/support-api";
 import { DataTable } from "../../_components/kit/DataTable";
+import { useRowKeys } from "../../_hooks/useRowKeys";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { AGENT_KEYS, PRIORITIES, PRIORITY_KEYS, categoryTexts, fromHhmm, slaFormErrors, toHhmm } from "../_lib/support-agent";
 import { PageHeader } from "../../_components/kit/PageHeader";
@@ -127,7 +128,7 @@ function HoursTab() {
     supportSettingsApi.hours().then((h) => ({ zone: h.zone, periods: h.intervals.map((i): Period => ({ weekday: i.weekday, start: toHhmm(i.startMinute), end: toHhmm(i.endMinute) })) })),
   );
   const { busy, note, setNote, save } = useSave();
-
+  const periodKeys = useRowKeys(data?.periods ?? []);
   if (!data) return <Loading error={error} reload={reload} />;
   const periods = data.periods;
   const setPeriods = (next: Period[]) => setData({ ...data, periods: next });
@@ -150,7 +151,7 @@ function HoursTab() {
             <div className="flex-1 space-y-2">
               {periods.map((p, i) =>
                 p.weekday !== day ? null : (
-                  <div key={i} className="flex flex-wrap items-center gap-2 text-xs">
+                  <div key={periodKeys[i]} className="flex flex-wrap items-center gap-2 text-xs">
                     <Field label={t("common", K.hours.start)}>
                       <Input dir="ltr" className="w-24" value={p.start} placeholder="09:00" onChange={(e) => set(i, { start: e.target.value })} />
                     </Field>
@@ -162,9 +163,7 @@ function HoursTab() {
                   </div>
                 ),
               )}
-              <Button variant="quiet" size="sm" onClick={() => setPeriods([...periods, { weekday: day, start: "09:00", end: "17:00" }])} icon={<Plus size={12} aria-hidden />}>
-                {t("common", K.hours.add)}
-              </Button>
+              <Button variant="quiet" size="sm" onClick={() => setPeriods([...periods, { weekday: day, start: "09:00", end: "17:00" }])} icon={<Plus size={12} aria-hidden />}>{t("common", K.hours.add)}</Button>
             </div>
           </li>
         ))}

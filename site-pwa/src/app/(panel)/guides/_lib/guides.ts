@@ -96,15 +96,6 @@ export function emptyBlock(type: EditableBlockType): GuideBlock {
   }
 }
 
-/** `blocks` with the one at `i` moved by `by` (−1 up, +1 down); out of range is a no-op. */
-export function moveBlock<T>(blocks: readonly T[], i: number, by: -1 | 1): T[] {
-  const j = i + by;
-  if (i < 0 || i >= blocks.length || j < 0 || j >= blocks.length) return [...blocks];
-  const next = [...blocks];
-  [next[i], next[j]] = [next[j], next[i]];
-  return next;
-}
-
 /** The editor's texts: every language, an untouched one empty. */
 export function textsForm(texts: readonly GuideText[]): GuideText[] {
   return GUIDE_LANGS.map((lang) => texts.find((t) => t.lang === lang) ?? { lang, title: "", blocks: [] });

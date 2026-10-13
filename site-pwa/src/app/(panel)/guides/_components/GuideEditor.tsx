@@ -20,6 +20,8 @@ import {
 } from "@/lib/guide-api";
 import { PANEL_GUIDES } from "@/lib/routes";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
+import { useRowKeys } from "../../_hooks/useRowKeys";
+import { moveRow } from "../../_lib/rows";
 import { Select } from "../../_components/kit/Select";
 import { Field, useDirOf } from "../../catalog/_components/catalog-ui";
 import {
@@ -32,7 +34,6 @@ import {
   KIND_KEYS,
   emptyBlock,
   emptyPlacement,
-  moveBlock,
   placementError,
   textsBody,
   textsForm,
@@ -273,6 +274,7 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
   const set = (next: GuideText) => onChange(form.map((x) => (x.lang === lang ? next : x)));
   const setBlocks = (blocks: GuideBlock[]) => set({ ...text, blocks });
   const err = (f: string) => errors[`${lang}.${f}`];
+  const blockKeys = useRowKeys(text.blocks);
 
   return (
     <div className="space-y-4">
@@ -297,17 +299,13 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
       {err("blocks") && <Alert tone="error">{t("common", err("blocks"))}</Alert>}
       <ol className="space-y-3">
         {text.blocks.map((block, i) => (
-          <li key={i} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
+          <li key={blockKeys[i]} className="space-y-2 rounded-2xl border border-card-border bg-card-bg p-3">
             <div className="flex flex-wrap items-center gap-1">
               <Badge>{t("common", K.block[block.type])}</Badge>
               <div className="ms-auto flex gap-1">
-                <IconButton size="sm" aria-label={t("common", K.moveUp)} onClick={() => setBlocks(moveBlock(text.blocks, i, -1))} icon={<ArrowUp size={12} aria-hidden />} />
-                <IconButton size="sm" aria-label={t("common", K.moveDown)} onClick={() => setBlocks(moveBlock(text.blocks, i, 1))} icon={<ArrowDown size={12} aria-hidden />} />
-                <IconButton
-                  size="sm"
-                  className="text-error"
-                  aria-label={t("common", K.removeBlock)}
-                  onClick={() => setBlocks(text.blocks.filter((_, j) => j !== i))} icon={<Trash2 size={12} aria-hidden />} />
+                <IconButton size="sm" aria-label={t("common", K.moveUp)} onClick={() => setBlocks(moveRow(text.blocks, i, -1))} icon={<ArrowUp size={12} aria-hidden />} />
+                <IconButton size="sm" aria-label={t("common", K.moveDown)} onClick={() => setBlocks(moveRow(text.blocks, i, 1))} icon={<ArrowDown size={12} aria-hidden />} />
+                <IconButton size="sm" className="text-error" aria-label={t("common", K.removeBlock)} onClick={() => setBlocks(text.blocks.filter((_, j) => j !== i))} icon={<Trash2 size={12} aria-hidden />} />
               </div>
             </div>
             <BlockEditor
@@ -335,6 +333,7 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
 
 function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block: GuideBlock; dir: string; onChange: (b: GuideBlock) => void }) {
   const { t } = useLocale();
+  const itemKeys = useRowKeys(block.type === "steps" ? block.items : []);
   switch (block.type) {
     case "text":
       return (
@@ -372,7 +371,7 @@ function BlockEditor({ guideId, block, dir, onChange }: { guideId: string; block
       return (
         <div className="space-y-3">
           {block.items.map((item, j) => (
-            <div key={j} className="grid gap-2 rounded-xl bg-bg-inner p-2 sm:grid-cols-[1fr_12rem]">
+            <div key={itemKeys[j]} className="grid gap-2 rounded-xl bg-bg-inner p-2 sm:grid-cols-[1fr_12rem]">
               <Field label={t("common", K.stepText, { n: String(j + 1) })}>
                 <Textarea
                   className="min-h-16"
@@ -498,6 +497,7 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
   const { busy, note, act } = useAct();
   const errors = rows.map(placementError);
   const set = (i: number, p: GuidePlacement) => setRows(rows.map((r, j) => (j === i ? p : r)));
+  const rowKeys = useRowKeys(rows);
 
   return (
     <div className="space-y-3">
@@ -506,7 +506,7 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
       {rows.map((p, i) => {
         const slot = GUIDE_SLOTS[p.targetKind];
         return (
-          <div key={i} className="grid items-end gap-2 rounded-2xl border border-card-border bg-card-bg p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <div key={rowKeys[i]} className="grid items-end gap-2 rounded-2xl border border-card-border bg-card-bg p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <Field label={t("common", K.kindLabel)}>
               <Select
                 value={p.targetKind}
