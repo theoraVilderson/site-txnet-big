@@ -3,7 +3,7 @@ import { ResellerAccess } from '@txnet-backend/shared-core';
 import { ImpersonationController } from './impersonation.controller';
 import { ImpersonationService } from './impersonation.service';
 import { ImpersonationLeash } from './impersonation-leash';
-import { AuthModule } from '../auth/auth.module'; // برای استفاده از AuthGuard و TokenService
+import { AuthModule } from '../auth/auth.module'; // for AuthGuard and TokenService
 
 @Module({
   imports: [AuthModule],

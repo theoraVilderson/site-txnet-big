@@ -73,8 +73,8 @@ export const MESSENGER_CAPABILITIES: Record<BotPlatform, MessengerCapabilities> 
       inlineKeyboard: true,
       replyKeyboard: true,
       requestContact: true,
-      // "بازوها می‌توانند پیام‌های ورودی را در گفتگو‌های خصوصی حذف کنند" +
-      // "کمتر از ۴۸ ساعت قبل ارسال شده باشد" — the same rule, same window.
+      // The docs, translated: "bots may delete incoming messages in private
+      // chats" + "sent less than 48 hours ago" — the same rule, same window.
       deleteIncomingMessage: true,
       deleteWindowSeconds: 48 * 3600,
       webApp: true,

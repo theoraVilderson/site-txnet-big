@@ -41,8 +41,6 @@ export class SmsProviderService {
     sender: string,
     force = true,
   ): Promise<ResponseType<boolean>> {
-    // مشخص کردن دقیق خروجی متد
-
     if (!force) {
       return ok(true, 'send on sucessfully in development mode');
     }

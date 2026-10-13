@@ -18,7 +18,7 @@ import (
 // change there.
 
 // platformLineNameTemplate is the default name when a tenant has set no
-// template of its own: the panel's region, e.g. `آلمان`.
+// template of its own: the panel's region, e.g. `آلمان` (Germany).
 const platformLineNameTemplate = "{region}"
 
 // LineNaming is a tenant's part in naming its lines (F-307-j, ADR-0089 rule

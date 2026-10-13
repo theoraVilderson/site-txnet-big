@@ -13,7 +13,7 @@ export const passwordLoginSchema = z.object({
 
 export const otpRequestSchema = z.object({
   phoneNumber: phoneSchema,
-  // اگر کاربر ندهد، از preferredOtpChannel پروفایل یا sms پیش‌فرض استفاده می‌شود
+  // Optional: without it the profile's preferredOtpChannel is used, else the default sms.
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
