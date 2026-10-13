@@ -364,7 +364,7 @@ export class DepositStartService {
         providerToken: invoice.providerToken,
         credited: answer.credited,
         currencyCode: answer.currencyCode,
-        lang: request.lang ?? 'en',
+        lang: request.lang ?? this.config.get('DEFAULT_LANGUAGE', { infer: true }),
       });
       if (!link) {
         const failure = new GatewayFailure(provider.name, 'unavailable', null, 'bot-service made no invoice link');

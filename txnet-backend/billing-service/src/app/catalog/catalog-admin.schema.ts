@@ -46,7 +46,7 @@ const decimal = (what: string) => z.string({ message: `${what} must be a decimal
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
 const i18nKey = (what: string) => z.string().regex(I18N_KEY, { message: `${what} must be an i18n key` });
-/** A language code as locale-service names it: `fa`, `de`, `pt-BR`. Which exist is locale-service's answer, not a list here (§1.1). */
+/** A language code as locale-service names it: `de`, `pt-BR`. Which exist is locale-service's answer, not a list here (§1.1). */
 const LANG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
 const lang = z.string().regex(LANG, { message: 'lang must be a language code' });
 const text = (max: number) => z.string().trim().min(1, { message: 'text is required' }).max(max);

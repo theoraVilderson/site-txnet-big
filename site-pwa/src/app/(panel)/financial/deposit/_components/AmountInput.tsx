@@ -33,7 +33,7 @@ const TYPING = /^\d{0,16}(\.\d{0,2})?$/;
  * The amount box (F-093-e): a number, the same number in words, the gateway's
  * own presets, and a slider across its range.
  *
- * **Persian digits are accepted and stored as ASCII.** A `fa` user types `۱۰۰`
+ * **Persian digits are accepted and stored as ASCII.** A Persian-speaking user types `۱۰۰`
  * and the wire gets `100.00` — the regex the deposit route validates against
  * takes ASCII only, so converting at the boundary is the difference between a
  * working box and an unexplained 400.

@@ -82,13 +82,16 @@ const THOUSAND = BigInt(1000);
 
 const SCALES = [W.scales.thousand, W.scales.million, W.scales.billion, W.scales.trillion];
 
+/** The locale `Intl` is asked a currency's decimals in: the answer is the same in every language, and no person reads it (C-17). */
+const MACHINE_LOCALE = "en-US";
+
 /** The number of decimals a currency is shown with. */
 export function currencyDecimals(currency: string, options: MoneyOptions = {}): number {
   if (options.decimals !== undefined) return options.decimals;
   const nonIso = NON_ISO[currency];
   if (nonIso) return nonIso.decimals;
   try {
-    return new Intl.NumberFormat("en", { style: "currency", currency })
+    return new Intl.NumberFormat(MACHINE_LOCALE, { style: "currency", currency })
       .resolvedOptions().maximumFractionDigits ?? 2;
   } catch {
     return 2;

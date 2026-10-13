@@ -212,7 +212,7 @@ function build(setup: Setup = {}) {
   };
   const config = {
     get: (key: string) =>
-      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900, FRONTEND_ORIGIN: frontendOrigin })[key],
+      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900, FRONTEND_ORIGIN: frontendOrigin, DEFAULT_LANGUAGE: 'xx' })[key],
   };
 
   const service = new DepositStartService(
@@ -322,6 +322,14 @@ describe('DepositStartService.start', () => {
     // The bot is still answered the invoice it sends itself, and asks for no link.
     await asTenant(() => service.start({ ...request, channel: CouponChannel.bot, chat: { platform: 'bale', payerId: '42' } }));
     expect(calls.links).toHaveLength(1);
+  });
+
+  it("writes a Mini App's invoice in DEFAULT_LANGUAGE when the request carries none (CS-1-b, C-17)", async () => {
+    const { service, calls } = build({ inChat: 'bale', domains: [] });
+    const request = { userId: USER, gatewayId: GATEWAY, source: 'tenant' as const, amount: d('20.00'), couponCodes: [] };
+
+    await asTenant(() => service.start({ ...request, chat: { platform: 'bale', payerId: '42' } }));
+    expect(calls.links).toEqual([expect.objectContaining({ lang: 'xx' })]);
   });
 
   it('fails the payment and releases its holds when bot-service makes no link (F-104-q)', async () => {
