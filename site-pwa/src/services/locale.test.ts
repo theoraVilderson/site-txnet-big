@@ -22,7 +22,7 @@ vi.mock('next/headers', () => ({
 }));
 
 const getAvailableLocales = vi.fn<() => string[]>(() => ['fa', 'en', 'ar']);
-vi.mock('@/lib/locale-store', () => ({
+vi.mock('@/lib/locale-catalog', () => ({
   getAvailableLocales,
   ensureReady: async () => undefined,
 }));

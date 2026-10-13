@@ -1,7 +1,7 @@
 "use server";
 import { cookies } from "next/headers";
 import { DEFAULT_LOCALE, LOCALE_COOKIE } from "@/env";
-import { ensureReady } from "@/lib/locale-store";
+import { ensureReady } from "@/lib/locale-catalog";
 import { startWatching } from "@/lib/locale-watcher";
 import {
   getCurrentUserId,

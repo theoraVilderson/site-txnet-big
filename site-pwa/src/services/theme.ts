@@ -1,37 +1,30 @@
 "use server";
 
 import { cookies } from "next/headers";
-import {
-  AVAILABLE_THEMES,
-  DEFAULT_THEME,
-  THEME_COOKIE,
-  type ThemeName,
-} from "@/env";
+import { DEFAULT_THEME, THEME_COOKIE, type ThemeName } from "@/env";
+import { isThemeName, type ThemeChoice } from "@/lib/theme";
 import {
   getCurrentUserId,
   getUserSavedTheme,
   saveUserTheme,
 } from "./user-locale-mock";
 
-export type ThemeChoice = ThemeName | "system";
+/** The theme cookie lives a year; a choice is re-saved on every switch. */
+const THEME_COOKIE_MAX_AGE_S = 60 * 60 * 24 * 365;
 
 export interface ServerThemeResult {
-  /** تمی که باید بلافاصله روی HTML سرور رندر بشه */
+  /** The theme rendered on the server's HTML. */
   theme: ThemeName;
-  /** true یعنی این مقدار قطعیه (از اکانت یا کوکی)، false یعنی «سیستم» و کلاینت باید نهایی‌اش کنه */
+  /** True when settled (account or cookie); false means "system", left to the client. */
   isResolved: boolean;
-  /** انتخاب خام کاربر، برای پاس دادن به استور کلاینت */
+  /** The raw choice, seeded into the client store. */
   choice: ThemeChoice;
 }
 
-function isThemeName(v: string | null | undefined): v is ThemeName {
-  return !!v && (AVAILABLE_THEMES as readonly string[]).includes(v);
-}
-
 /**
- * اولویت: ۱) تم ذخیره‌شده روی اکانت کاربر  ۲) کوکی  ۳) پیش‌فرض سیستم.
- * حالت سوم روی سرور قابل تشخیص نیست (نیاز به matchMedia کلاینت داره)،
- * پس isResolved=false برمی‌گردونیم تا فقط اون حالت با اسکریپت inline حل بشه.
+ * Precedence: the account's saved theme, then the cookie, then the system.
+ * The server cannot see the OS preference, so that last case returns
+ * isResolved=false and the inline script settles it before paint.
  */
 export async function getServerTheme(): Promise<ServerThemeResult> {
   const userId = await getCurrentUserId();
@@ -53,11 +46,11 @@ export async function getServerTheme(): Promise<ServerThemeResult> {
 
 export async function setUserTheme(choice: ThemeChoice) {
   const cookieStore = await cookies();
-  cookieStore.set(THEME_COOKIE, choice, { maxAge: 60 * 60 * 24 * 365 });
+  cookieStore.set(THEME_COOKIE, choice, { maxAge: THEME_COOKIE_MAX_AGE_S });
 
   const userId = await getCurrentUserId();
   if (userId) {
-    // "system" هم عمداً ذخیره می‌شه تا دفعه بعد دوباره از سیستم پیروی کنه
+    // "system" is saved too, so the next visit follows the OS again.
     await saveUserTheme(userId, choice);
   }
 }

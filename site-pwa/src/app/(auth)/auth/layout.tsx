@@ -5,7 +5,7 @@ import {
   getCompiledNamespace,
   getAvailableLocales,
   ensureReady,
-} from "@/lib/locale-store";
+} from "@/lib/locale-catalog";
 import { startWatching } from "@/lib/locale-watcher";
 
 export default async function AuthLayout({

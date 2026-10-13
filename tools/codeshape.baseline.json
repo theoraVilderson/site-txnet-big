@@ -463,7 +463,7 @@
   "site-pwa/src/lib/branding.ts [raw-env]": 1,
   "site-pwa/src/lib/catalog-api.ts [raw-fetch]": 1,
   "site-pwa/src/lib/haptics.ts [double-cast]": 1,
-  "site-pwa/src/lib/locale-store.ts [double-cast]": 1,
+  "site-pwa/src/lib/locale-catalog.ts [double-cast]": 1,
   "site-pwa/src/lib/mini-app.ts [any]": 1,
   "site-pwa/src/lib/mini-app.ts [raw-storage]": 2,
   "site-pwa/src/lib/motion.ts [raw-storage]": 1,

@@ -1,50 +1,35 @@
 "use client";
 
 import { createStore } from "zustand/vanilla";
-import { AVAILABLE_THEMES, type ThemeName } from "@/env";
+import type { ThemeName } from "@/env";
+import { resolveTheme, systemPrefersDark, type ThemeChoice } from "@/lib/theme";
 import { setUserTheme } from "@/services/theme";
 
-export type ThemeChoice = ThemeName | "system";
-
 export interface ThemeState {
-  /** تمی که الان واقعاً اعمال شده — همیشه یکی از AVAILABLE_THEMES */
+  /** The theme painted now — always one of AVAILABLE_THEMES. */
   theme: ThemeName;
-  /** انتخاب خود کاربر — می‌تواند "system" باشد */
+  /** The user's own pick, which may be "system". */
   choice: ThemeChoice;
 }
 
 export interface ThemeActions {
   setTheme: (choice: ThemeChoice) => void;
-  /** internal: فقط برای همگام‌سازی با DOM (اسکریپت inline / matchMedia) */
+  /** Internal: follows the DOM (the inline script, the OS listener). */
   _syncResolvedTheme: (theme: ThemeName) => void;
 }
 
 export type ThemeStore = ThemeState & ThemeActions;
 export type ThemeStoreApi = ReturnType<typeof createThemeStore>;
 
-export function isThemeName(v: string | null | undefined): v is ThemeName {
-  return !!v && (AVAILABLE_THEMES as readonly string[]).includes(v);
-}
-
-function systemPrefersDark(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    !!window.matchMedia?.("(prefers-color-scheme: dark)").matches
-  );
-}
-
 export function createThemeStore(initial: ThemeState) {
   return createStore<ThemeStore>()((set) => ({
     ...initial,
 
     setTheme: (choice) => {
-      const resolved: ThemeName =
-        choice === "system" ? (systemPrefersDark() ? "dark" : "light") : choice;
-
-      set({ choice, theme: resolved });
+      set({ choice, theme: resolveTheme(choice, systemPrefersDark()) });
 
       setUserTheme(choice).catch(() => {
-        // ذخیره نشدن نباید تجربه کاربر رو خراب کنه؛ تم همچنان توی همین سشن عوض می‌شه
+        // A failed save must not undo the switch; it still holds for this session.
       });
     },
 

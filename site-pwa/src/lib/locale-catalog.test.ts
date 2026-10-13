@@ -1,6 +1,6 @@
 // @vitest-environment node
 //
-// `locale-store` is `import "server-only"` — it holds the process-wide gRPC
+// `locale-catalog` is `import "server-only"` — it holds the process-wide gRPC
 // client, so its spec runs in node and stubs the client rather than the wire.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,13 +67,13 @@ function fakeClient(options: {
   };
 }
 
-type Store = typeof import('./locale-store');
+type Store = typeof import('./locale-catalog');
 
 /** Fresh module + fresh process globals for every test. */
 async function load(client: ReturnType<typeof fakeClient>): Promise<Store> {
   createLocaleClient.mockReturnValue(client);
   vi.resetModules();
-  return import('./locale-store');
+  return import('./locale-catalog');
 }
 
 beforeEach(() => {

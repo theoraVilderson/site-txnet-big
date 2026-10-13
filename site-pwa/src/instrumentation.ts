@@ -13,7 +13,7 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
-  const { initStore } = await import("@/lib/locale-store");
+  const { initStore } = await import("@/lib/locale-catalog");
   const { startWatching } = await import("@/lib/locale-watcher");
 
   try {

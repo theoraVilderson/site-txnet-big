@@ -2,18 +2,15 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useStore } from "zustand";
-import {
-  createThemeStore,
-  isThemeName,
-  type ThemeStoreApi,
-  type ThemeChoice,
-} from "@/stores/theme-store";
+import { createThemeStore, type ThemeStoreApi } from "@/stores/theme-store";
+import { PREFERS_DARK_QUERY, isThemeName, resolveTheme, type ThemeChoice } from "@/lib/theme";
 import type { ThemeName } from "@/env";
 
 export type { ThemeChoice };
 
 const ThemeStoreContext = createContext<ThemeStoreApi | null>(null);
 
+/** Holds the theme store for the tree and keeps <html> in step with it. */
 export function ThemeProvider({
   children,
   initialTheme,
@@ -23,8 +20,8 @@ export function ThemeProvider({
   initialTheme: ThemeName;
   initialChoice: ThemeChoice;
 }) {
-  // useState با initializer: دقیقاً یک‌بار در طول عمر این mount ساخته می‌شود،
-  // بدون خواندن ref در زمان رندر (react-hooks/refs).
+  // A useState initializer builds the store exactly once per mount, without
+  // reading a ref during render (react-hooks/refs).
   const [store] = useState<ThemeStoreApi>(() =>
     createThemeStore({
       theme: initialTheme,
@@ -35,16 +32,15 @@ export function ThemeProvider({
   const theme = useStore(store, (s) => s.theme);
   const choice = useStore(store, (s) => s.choice);
 
-  // اگه انتخاب کاربر "system" باشه، اسکریپت inline توی <head> ممکنه قبل از
-  // هیدریت، data-theme واقعی رو (بر اساس matchMedia) روی <html> ست کرده باشه.
-  // اینجا همون مقدار رو از DOM می‌خونیم تا با initialTheme خام سرور یکی نشه
-  // و هیچ‌وقت میسمچ هیدریت نگیریم.
+  // On "system" the inline <head> script may already have set the real
+  // data-theme before hydration; adopt it so the server's raw initialTheme
+  // never fights it.
   useEffect(() => {
     const attr = document.documentElement.getAttribute("data-theme");
     if (isThemeName(attr) && attr !== store.getState().theme) {
       store.getState()._syncResolvedTheme(attr);
     }
-    // فقط یک‌بار، بلافاصله بعد از مانت
+    // Once, right after mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -54,12 +50,11 @@ export function ThemeProvider({
     html.classList.toggle("dark", theme === "dark");
   }, [theme]);
 
-  // وقتی انتخاب کاربر "system"ه، تغییر لحظه‌ای تم سیستم رو هم دنبال کن
+  // On "system", follow the OS when it switches mid-session.
   useEffect(() => {
     if (choice !== "system") return;
-    const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () =>
-      store.getState()._syncResolvedTheme(mq.matches ? "dark" : "light");
+    const mq = window.matchMedia(PREFERS_DARK_QUERY);
+    const apply = () => store.getState()._syncResolvedTheme(resolveTheme("system", mq.matches));
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, [choice, store]);

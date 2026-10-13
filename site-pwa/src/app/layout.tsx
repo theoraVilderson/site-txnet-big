@@ -9,12 +9,12 @@ import {
   getAvailableLocales,
   getLocaleMeta,
   ensureReady,
-  getCompiledNamespace, // 👈 این متد جدید را از استور ایمپورت کردیم
+  getCompiledNamespace,
   type LocaleMeta,
-} from "@/lib/locale-store";
+} from "@/lib/locale-catalog";
 import { startWatching } from "@/lib/locale-watcher";
 import { LocaleShell } from "@/context/LocaleShell";
-import { ThemeShell } from "@/context/ThemeShell";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { THEME_SCRIPT } from "@/lib/theme-script";
 import { MOTION_SCRIPT } from "@/lib/motion";
 import { BrandProvider } from "@/context/BrandContext";
@@ -96,7 +96,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: MOTION_SCRIPT }} />
       </head>
       <body className="transition-colors duration-300">
-        <ThemeShell initialTheme={theme} initialChoice={choice}>
+        <ThemeProvider initialTheme={theme} initialChoice={choice}>
           <BrandProvider value={brand}>
             <LocaleShell
               initialLang={locale}
@@ -107,7 +107,7 @@ export default async function RootLayout({
               {children}
             </LocaleShell>
           </BrandProvider>
-        </ThemeShell>
+        </ThemeProvider>
       </body>
     </html>
   );
