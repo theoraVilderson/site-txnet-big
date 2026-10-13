@@ -202,7 +202,7 @@ export const ServiceRow = memo(function ServiceRow({
             </div>
             {endingSoon && <StatusPill tone="gold">{t("common", RUNNING_OUT)}</StatusPill>}
             {noticeLevel === "essential" && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-bg-inner px-2 py-0.5 text-[11px] text-text-secondary">
+              <span className="inline-flex items-center gap-1 rounded-full bg-bg-inner px-2 py-0.5 text-2xs text-text-secondary">
                 <BellOff size={12} aria-hidden />
                 {t("common", S.notices.badge)}
               </span>
@@ -466,7 +466,7 @@ function LinkError({ error }: { error: { message: string; ref?: string } }) {
       <span className="min-w-0">
         {error.message}
         {error.ref && (
-          <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+          <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
             {error.ref}
           </span>
         )}

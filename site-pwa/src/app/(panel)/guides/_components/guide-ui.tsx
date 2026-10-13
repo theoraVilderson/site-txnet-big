@@ -53,7 +53,7 @@ const STATE_TONE: Record<GuideState, string> = {
 };
 
 export function Badge({ children, className = "bg-bg-inner text-text-secondary" }: { children: ReactNode; className?: string }) {
-  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-bold ${className}`}>{children}</span>;
+  return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-bold ${className}`}>{children}</span>;
 }
 
 export function StateBadge({ state }: { state: GuideState }) {

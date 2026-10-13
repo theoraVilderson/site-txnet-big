@@ -142,7 +142,7 @@ export function NotificationsButton() {
                   beside it says what it means, and says it with the count. */}
               <span
                 aria-hidden
-                className="absolute -top-1.5 -end-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 font-mono text-[10px] font-bold text-bg-inner"
+                className="absolute -top-1.5 -end-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-error px-1 font-mono text-3xs font-bold text-bg-inner"
               >
                 {badge}
               </span>
@@ -158,13 +158,13 @@ export function NotificationsButton() {
             {t("common", N.label)}
           </h3>
           {unreadCount > 0 && (
-            <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-bold text-on-accent">
+            <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-3xs font-bold text-on-accent">
               {t("common", N.new, { count: String(unreadCount) })}
             </span>
           )}
         </div>
         {unreadCount > 0 && (
-          <Button size="sm" variant="quiet" icon={<CheckCheck size={12} aria-hidden />} onClick={() => void markAllRead()} className="h-6 px-2 text-[10px]">
+          <Button size="sm" variant="quiet" icon={<CheckCheck size={12} aria-hidden />} onClick={() => void markAllRead()} className="h-6 px-2 text-3xs">
             {t("common", N.markAllRead)}
           </Button>
         )}
@@ -179,7 +179,7 @@ export function NotificationsButton() {
           <p role="alert" className="text-xs text-error">
             {t("common", N.unavailable)}
           </p>
-          <Button size="sm" variant="quiet" icon={<RotateCw size={12} aria-hidden />} onClick={refresh} className="h-6 px-2 text-[10px] text-error hover:text-error">
+          <Button size="sm" variant="quiet" icon={<RotateCw size={12} aria-hidden />} onClick={refresh} className="h-6 px-2 text-3xs text-error hover:text-error">
             {t("common", N.retry)}
           </Button>
         </div>
@@ -221,7 +221,7 @@ export function NotificationsButton() {
                       <p className="text-sm font-semibold text-text-primary">{item.title}</p>
                       <p className="mt-0.5 text-xs break-words text-text-secondary">{item.body}</p>
                       {when && (
-                        <p className="mt-1 font-mono text-[10px] text-text-secondary opacity-70">{when}</p>
+                        <p className="mt-1 font-mono text-3xs text-text-secondary opacity-70">{when}</p>
                       )}
                     </div>
                     {/* One row, marked on purpose. Opening the panel marks

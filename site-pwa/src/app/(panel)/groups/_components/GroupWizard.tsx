@@ -186,7 +186,7 @@ export function GroupWizard({ onClose, onDone }: { onClose: (changed: boolean) =
               description: (
                 <>
                   {p.description}
-                  <span className="mt-1 block text-[11px] font-bold">
+                  <span className="mt-1 block text-2xs font-bold">
                     {p.every ? t("common", W.presetEvery) : t("common", W.presetKeys, { count: presetDraft(p, loaded.areas, loaded.grantable, isPlatformGroup(me, tenantId)).keys.length })}
                   </span>
                 </>

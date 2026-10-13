@@ -159,7 +159,7 @@ export function ResellerDetailView({ id }: { id: string }) {
                   {r.owner ? (
                     <>
                       {r.owner.fullName || r.owner.username}
-                      <span dir="ltr" className="block text-[11px] text-text-secondary">
+                      <span dir="ltr" className="block text-2xs text-text-secondary">
                         {r.owner.phoneNumber ?? r.owner.username}
                       </span>
                     </>
@@ -182,7 +182,7 @@ export function ResellerDetailView({ id }: { id: string }) {
                             <span dir="ltr" className="text-text-primary">
                               {d.domainValue}
                             </span>
-                            <span className="text-[11px] text-text-secondary">
+                            <span className="text-2xs text-text-secondary">
                               {t("common", K.detail.cnameTarget)}
                             </span>
                           </span>
@@ -222,7 +222,7 @@ export function ResellerDetailView({ id }: { id: string }) {
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="rounded-xl bg-bg-inner p-3">
-      <dt className="text-[11px] text-text-secondary">{label}</dt>
+      <dt className="text-2xs text-text-secondary">{label}</dt>
       <dd className="mt-1 font-bold text-text-primary">{children}</dd>
     </div>
   );
@@ -264,10 +264,10 @@ function LimitsSection({ tenantId, reloadKey }: { tenantId: string; reloadKey: n
         <dl className="grid gap-2 text-xs sm:grid-cols-2">
           {rows.map((row) => (
             <div key={row.key} className="rounded-xl bg-bg-inner p-3">
-              <dt className="text-[11px] text-text-secondary">{t("common", (L.keys as Record<string, { name: string }>)[row.key].name)}</dt>
+              <dt className="text-2xs text-text-secondary">{t("common", (L.keys as Record<string, { name: string }>)[row.key].name)}</dt>
               <dd className="mt-1 font-bold text-text-primary">
                 {row.limit === null ? t("common", L.noLimit) : row.limit}
-                <span className="ms-2 text-[11px] font-normal text-text-secondary">{t("common", (L.sources as Record<string, string>)[row.source])}</span>
+                <span className="ms-2 text-2xs font-normal text-text-secondary">{t("common", (L.sources as Record<string, string>)[row.source])}</span>
               </dd>
             </div>
           ))}
@@ -355,7 +355,7 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
             </Field>
             <Field label={t("common", K.subscription.package)} error={missing ? K.errors.packageId : undefined}>
               {choices.length === 0 ? (
-                <span className="text-[11px] font-normal">{t("common", K.subscription.noPackage)}</span>
+                <span className="text-2xs font-normal">{t("common", K.subscription.noPackage)}</span>
               ) : (
                 <Select
                   value={packageId}
@@ -369,7 +369,7 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
               )}
             </Field>
           </div>
-          {subscription && <p className="text-[11px] text-text-secondary">{t("common", K.subscription.keepsPeriodEnd)}</p>}
+          {subscription && <p className="text-2xs text-text-secondary">{t("common", K.subscription.keepsPeriodEnd)}</p>}
           <div>
             <Button variant="primary" size="sm" disabled={choices.length === 0} onClick={submit} loading={busy}>
               {t("common", K.subscription.submit)}
@@ -429,7 +429,7 @@ function StatusSection({ reseller, onSaved }: { reseller: Reseller; onSaved: () 
         <div className="flex flex-col gap-1">
           <p className="text-xs font-bold text-error">{t("common", K.statusChange.terminateWarning)}</p>
           <Checkbox checked={form.confirmed} onChange={(on) => set({ confirmed: on })} label={t("common", K.statusChange.confirmTerminate)} />
-          {errors.confirm && <p className="text-[11px] text-error">{t("common", errors.confirm)}</p>}
+          {errors.confirm && <p className="text-2xs text-error">{t("common", errors.confirm)}</p>}
         </div>
       )}
       <div>

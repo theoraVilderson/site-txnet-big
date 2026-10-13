@@ -119,7 +119,7 @@ export function DataTable<T>({
     <>
       <div className={cn("hidden overflow-x-auto md:block", !bare && "rounded-2xl border border-card-border bg-card-bg")}>
         <table aria-label={label} className={cn("w-full", compact ? "text-xs" : "text-sm", minWidth)}>
-          <thead className={cn("text-[11px] text-text-secondary", !bare && "bg-bg-inner/50")}>
+          <thead className={cn("text-2xs text-text-secondary", !bare && "bg-bg-inner/50")}>
             <tr>
               {selection && (
                 <th scope="col" className={cn(cell, "w-10")}>

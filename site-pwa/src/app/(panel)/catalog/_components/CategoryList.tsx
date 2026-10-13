@@ -46,7 +46,7 @@ export function CategoryList(props: Props) {
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
-                  <p className="text-[11px] text-text-secondary">
+                  <p className="text-2xs text-text-secondary">
                     {t("common", K.categories.archivedProducts, { count: counts.get(c.id) ?? 0 })} · {t("common", K.removal.archivedBadge)}
                     {c.platform && ` · ${t("common", K.platform)}`}
                   </p>
@@ -115,7 +115,7 @@ export function CategoryList(props: Props) {
             <input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} aria-label={nameOf(c)} />
             <button type="button" className="min-w-0 flex-1 text-start" onClick={() => props.onShowProducts(c.id)}>
               <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
-              <p className="text-[11px] text-text-secondary">
+              <p className="text-2xs text-text-secondary">
                 {t("common", K.categories.products, { count: counts.get(c.id) ?? 0 })}
                 {c.platform && ` · ${t("common", K.platform)}`}
                 {!c.isActive && ` · ${t("common", K.inactive)}`}

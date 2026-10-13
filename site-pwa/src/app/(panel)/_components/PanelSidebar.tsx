@@ -164,8 +164,8 @@ export function PanelSidebar() {
     text === null ? null : (
       <span
         aria-hidden
-        className={`min-w-5 rounded-full bg-error px-1.5 text-center text-[11px] font-bold leading-5 text-on-error ${whenCollapsed(
-          "lg:absolute lg:-top-0.5 lg:end-1 lg:min-w-4 lg:px-1 lg:text-[10px] lg:leading-4",
+        className={`min-w-5 rounded-full bg-error px-1.5 text-center text-2xs font-bold leading-5 text-on-error ${whenCollapsed(
+          "lg:absolute lg:-top-0.5 lg:end-1 lg:min-w-4 lg:px-1 lg:text-3xs lg:leading-4",
         )}`}
       >
         {text}
@@ -263,7 +263,7 @@ export function PanelSidebar() {
             <span
               aria-hidden
               dir="ltr"
-              className={`max-w-20 shrink-0 truncate rounded-md border border-card-border px-1.5 text-[10px] font-bold leading-4 ${
+              className={`max-w-20 shrink-0 truncate rounded-md border border-card-border px-1.5 text-3xs font-bold leading-4 ${
                 filled ? "border-on-accent/40 text-on-accent" : "text-text-secondary"
               } ${whenCollapsed("lg:hidden")}`}
             >
@@ -275,7 +275,7 @@ export function PanelSidebar() {
             <span
               aria-hidden
               dir="ltr"
-              className={`shrink-0 rounded-full px-1.5 text-[10px] font-bold leading-5 ${
+              className={`shrink-0 rounded-full px-1.5 text-3xs font-bold leading-5 ${
                 filled ? "bg-on-accent/20 text-on-accent" : "bg-leaf-bg text-primary"
               } ${whenCollapsed("lg:hidden")}`}
             >
@@ -353,7 +353,7 @@ export function PanelSidebar() {
           <span
             aria-hidden
             dir="ltr"
-            className={`max-w-24 shrink-0 truncate rounded-md border border-card-border px-1.5 text-[10px] font-bold leading-4 text-text-secondary ${whenCollapsed("lg:hidden")}`}
+            className={`max-w-24 shrink-0 truncate rounded-md border border-card-border px-1.5 text-3xs font-bold leading-4 text-text-secondary ${whenCollapsed("lg:hidden")}`}
           >
             {group.tag}
           </span>
@@ -362,7 +362,7 @@ export function PanelSidebar() {
           <span
             aria-hidden
             dir="ltr"
-            className={`shrink-0 rounded-full bg-leaf-bg px-1.5 text-[10px] font-bold leading-5 text-primary ${whenCollapsed("lg:hidden")}`}
+            className={`shrink-0 rounded-full bg-leaf-bg px-1.5 text-3xs font-bold leading-5 text-primary ${whenCollapsed("lg:hidden")}`}
           >
             {group.progress.done}/{group.progress.total}
           </span>
@@ -438,7 +438,7 @@ export function PanelSidebar() {
             aria-expanded={!folded}
             aria-controls={listId}
             onClick={() => toggleSidebarSection(foldId)}
-            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary ${whenCollapsed(
+            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-2xs font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary ${whenCollapsed(
               "lg:justify-center lg:px-0",
             )}`}
           >
@@ -526,7 +526,7 @@ export function PanelSidebar() {
             <div className="mb-2 border-b border-card-border pb-2">
               <p
                 aria-hidden
-                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-text-secondary ${whenCollapsed("lg:sr-only")}`}
+                className={`px-3 py-1.5 text-2xs font-bold uppercase tracking-wide text-text-secondary ${whenCollapsed("lg:sr-only")}`}
               >
                 {t("common", S.sections.pinned)}
               </p>

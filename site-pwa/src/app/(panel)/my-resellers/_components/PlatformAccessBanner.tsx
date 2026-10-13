@@ -169,7 +169,7 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
                     <input type="radio" name={`staff-scope-${tenantId}`} aria-label={t("common", K.scope[s].title)} checked={scope === s} onChange={() => setScope(s)} className="mt-1" />
                     <span className="space-y-0.5">
                       <span className="block text-sm font-bold text-text-primary">{t("common", K.scope[s].title)}</span>
-                      <span className="block text-[11px] text-text-secondary">{t("common", K.scope[s].hint)}</span>
+                      <span className="block text-2xs text-text-secondary">{t("common", K.scope[s].hint)}</span>
                     </span>
                   </label>
                 ))}
@@ -200,7 +200,7 @@ export function PlatformAccessBanner({ tenantId, onChange }: { tenantId: string;
               <details className="rounded-xl border border-card-border p-3">
                 <summary className="cursor-pointer text-xs font-bold text-text-secondary">{t("common", K.staff.emergency.title)}</summary>
                 <div className="mt-3 space-y-2">
-                  <p className="text-[11px] text-text-secondary">{t("common", K.staff.emergency.hint)}</p>
+                  <p className="text-2xs text-text-secondary">{t("common", K.staff.emergency.hint)}</p>
                   <label htmlFor={`staff-emergency-${tenantId}`} className="block text-xs text-text-secondary">
                     {t("common", K.staff.emergency.reason)}
                   </label>

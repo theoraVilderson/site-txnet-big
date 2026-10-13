@@ -173,7 +173,7 @@ export function FindByLink({ id, own = false }: { id: string; own?: boolean }) {
                           : t("common", USER_KEYS.services.permanent)}
                       </p>
                     </div>
-                    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone.className}`}>{t("common", tone.labelKey)}</span>
+                    <span className={`rounded-full border px-2 py-0.5 text-3xs font-medium ${tone.className}`}>{t("common", tone.labelKey)}</span>
                     <Link href={userPagePath(id, row.userId, own, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
                       {t("common", F.openUser)}
                       <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />

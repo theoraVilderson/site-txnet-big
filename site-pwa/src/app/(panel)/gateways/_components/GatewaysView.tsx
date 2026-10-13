@@ -182,19 +182,19 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                       <div className="flex min-w-0 flex-col gap-1">
                         <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
                           {g.displayName}
-                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-3xs font-bold text-primary">
                             {g.source === "platform" ? t("common", G.platform) : t("common", G.tenant)}
                           </span>
-                          <span className={`text-[10px] font-bold ${g.isActive ? "text-success" : "text-text-secondary"}`}>
+                          <span className={`text-3xs font-bold ${g.isActive ? "text-success" : "text-text-secondary"}`}>
                             {g.isActive ? t("common", G.active) : t("common", G.inactive)}
                           </span>
                           {g.userGroupIds?.length > 0 && (
-                            <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-primary">
+                            <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-primary">
                               {t("common", G.audience.limited)}
                             </span>
                           )}
                           {g.blocked && (
-                            <span className="rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-[10px] font-bold text-[var(--error-color)]" title={g.blocked.reason}>
+                            <span className="rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-3xs font-bold text-[var(--error-color)]" title={g.blocked.reason}>
                               {t("common", G.blocked)}
                             </span>
                           )}

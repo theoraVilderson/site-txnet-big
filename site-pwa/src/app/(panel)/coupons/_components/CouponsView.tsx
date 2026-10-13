@@ -248,14 +248,14 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
                       <span dir="ltr" className="font-mono">
                         {c.code}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_TONES[c.status]}`}>{t("common", K.status[c.status])}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-3xs font-bold ${STATUS_TONES[c.status]}`}>{t("common", K.status[c.status])}</span>
                       {owner && (
-                        <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-text-secondary">
+                        <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-text-secondary">
                           {c.tenantId === null ? t("common", K.list.platform) : t("common", K.list.tenant, { id: c.tenantId.slice(0, 8) })}
                         </span>
                       )}
-                      {c.visibility === "targeted" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{t("common", K.list.targeted)}</span>}
-                      {hasLimits(c) && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">{t("common", K.list.limited)}</span>}
+                      {c.visibility === "targeted" && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-3xs font-bold text-primary">{t("common", K.list.targeted)}</span>}
+                      {hasLimits(c) && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-3xs font-bold text-primary">{t("common", K.list.limited)}</span>}
                     </span>
                     {c.label && <span className="text-xs text-text-primary">{c.label}</span>}
                     <span className="text-xs text-text-secondary">

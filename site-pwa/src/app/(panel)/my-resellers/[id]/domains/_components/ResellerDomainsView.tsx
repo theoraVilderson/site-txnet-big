@@ -306,7 +306,7 @@ function DomainCard({
 
       <CdnSettings domain={domain} />
 
-      <p className="text-[11px] text-text-secondary">
+      <p className="text-2xs text-text-secondary">
         {domain.verifiedAt && <span>{t("common", K.verifiedAt, { date: when(domain.verifiedAt) })} · </span>}
         {domain.lastCheckedAt ? t("common", K.lastCheckedAt, { date: when(domain.lastCheckedAt) }) : t("common", K.neverChecked)}
       </p>
@@ -395,7 +395,7 @@ function RecordName({ name }: { name: string }) {
   const { short, full } = dnsName(name);
   return (
     <Copyable text={short}>
-      <span className="mt-0.5 block text-[10px] leading-4 text-text-secondary">
+      <span className="mt-0.5 block text-3xs leading-4 text-text-secondary">
         {t("common", K.records.full)}{" "}
         <span dir="ltr" className="break-all font-mono">{full}</span>
       </span>

@@ -53,7 +53,7 @@ export function WalletPreview({ balance, credited, balanceCurrency, creditedCurr
 
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">
+          <p className="text-3xs font-bold uppercase tracking-widest text-white/60">
             {t("common", D.current)}
           </p>
           <p dir="ltr" className="mt-1 truncate text-2xl font-bold">
@@ -66,7 +66,7 @@ export function WalletPreview({ balance, credited, balanceCurrency, creditedCurr
       </div>
 
       <div className="relative mt-6 border-t border-white/10 pt-4">
-        <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-white/50">
+        <p className="flex items-center gap-1.5 text-3xs font-bold uppercase tracking-wide text-white/50">
           <ArrowDown size={12} aria-hidden />
           {t("common", D.incoming)}
         </p>

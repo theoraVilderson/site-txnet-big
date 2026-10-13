@@ -160,9 +160,9 @@ export function TranslationsView() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold text-text-primary">
                     {d.source.text ?? d.key}
-                    <span className="ms-2 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[11px] text-primary">{nameOf(d.lang)}</span>
+                    <span className="ms-2 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-2xs text-primary">{nameOf(d.lang)}</span>
                   </p>
-                  <p className="font-mono text-[10px] text-text-secondary" dir="ltr">
+                  <p className="font-mono text-3xs text-text-secondary" dir="ltr">
                     {d.key}
                   </p>
                 </div>

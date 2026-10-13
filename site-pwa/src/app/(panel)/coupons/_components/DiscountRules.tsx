@@ -152,7 +152,7 @@ export function DiscountRules({ me }: { me: Me | null }) {
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
                       {r.name}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${RULE_STATUS_TONES[r.status]}`}>{t("common", K.status[r.status])}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-3xs font-bold ${RULE_STATUS_TONES[r.status]}`}>{t("common", K.status[r.status])}</span>
                     </span>
                     <span className="text-xs text-text-secondary">
                       {what(r)} · {where(r)} · {who(r)}

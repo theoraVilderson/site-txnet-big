@@ -73,7 +73,7 @@ function DaySeparator({ day, at, today, yesterday, lang }: { day: string; at: st
   return (
     <li role="separator" aria-label={label ?? undefined} className="flex items-center gap-3 py-2">
       <span className="h-px flex-1 bg-card-border" aria-hidden />
-      <span className="rounded-full bg-bg-inner px-3 py-0.5 text-[11px] font-bold text-text-secondary">{label}</span>
+      <span className="rounded-full bg-bg-inner px-3 py-0.5 text-2xs font-bold text-text-secondary">{label}</span>
       <span className="h-px flex-1 bg-card-border" aria-hidden />
     </li>
   );

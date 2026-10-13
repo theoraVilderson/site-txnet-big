@@ -96,7 +96,7 @@ export function PackageSheet({
           <Input dir="ltr" inputMode="decimal" value={form.yearlyPrice} onChange={(e) => set({ yearlyPrice: e.target.value })} />
         </Field>
       </div>
-      <p className="-mt-2 text-[11px] text-text-secondary">{t("common", K.form.priceHint)}</p>
+      <p className="-mt-2 text-2xs text-text-secondary">{t("common", K.form.priceHint)}</p>
 
       <Field label={t("common", K.form.features)}>
         <div className="flex flex-wrap gap-2">

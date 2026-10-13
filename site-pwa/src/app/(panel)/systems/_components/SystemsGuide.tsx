@@ -53,17 +53,17 @@ export function SystemsGuide({
         {steps.map(({ step, state }, i) => (
           <li key={step} className={`flex flex-col gap-2 rounded-2xl border p-3 ${STEP_LOOK[state].card}`}>
             <div className="flex items-center gap-2">
-              <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${STEP_LOOK[state].badge}`}>
+              <span className={`grid size-6 shrink-0 place-items-center rounded-full text-2xs font-bold ${STEP_LOOK[state].badge}`}>
                 {state === "done" ? <Check size={13} aria-hidden /> : (i + 1).toLocaleString(lang)}
               </span>
               <p className="min-w-0 text-xs font-bold text-text-primary">{t("common", K.steps[step].title)}</p>
             </div>
-            <p className="text-[11px] leading-5 text-text-secondary">{t("common", K.steps[step].body)}</p>
+            <p className="text-2xs leading-5 text-text-secondary">{t("common", K.steps[step].body)}</p>
             <div className="mt-auto flex items-center justify-between gap-2">
-              <span className={`text-[10px] font-bold ${state === "todo" ? "text-text-secondary" : "text-primary"}`}>{t("common", K.state[state])}</span>
+              <span className={`text-3xs font-bold ${state === "todo" ? "text-text-secondary" : "text-primary"}`}>{t("common", K.state[state])}</span>
               {state === "current" &&
                 (step === "product" ? (
-                  <Link href={PANEL_CATALOG} className="rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-text-on-accent">
+                  <Link href={PANEL_CATALOG} className="rounded-lg bg-primary px-2.5 py-1 text-2xs font-bold text-text-on-accent">
                     {t("common", K.steps.product.action)}
                   </Link>
                 ) : (
@@ -85,7 +85,7 @@ export function SystemsGuide({
           {GLOSSARY.map((term) => (
             <div key={term}>
               <dt className="text-xs font-bold text-primary">{t("common", K.glossary[term].term)}</dt>
-              <dd className="mt-0.5 text-[11px] leading-5 text-text-secondary">{t("common", K.glossary[term].body)}</dd>
+              <dd className="mt-0.5 text-2xs leading-5 text-text-secondary">{t("common", K.glossary[term].body)}</dd>
             </div>
           ))}
         </dl>

@@ -140,11 +140,11 @@ export function GiftCodes({ me, owner }: { me: Me | null; owner: boolean }) {
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
                       {b.label}
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${b.deactivatedAt ? "bg-error/10 text-error" : "bg-primary/10 text-primary"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-3xs font-bold ${b.deactivatedAt ? "bg-error/10 text-error" : "bg-primary/10 text-primary"}`}>
                         {t("common", b.deactivatedAt ? G.list.deactivated : G.list.live)}
                       </span>
                       {owner && (
-                        <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-text-secondary">
+                        <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-text-secondary">
                           {b.tenantId === null ? t("common", G.list.platform) : t("common", G.list.tenant, { id: b.tenantId.slice(0, 8) })}
                         </span>
                       )}
@@ -242,11 +242,11 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
       </label>
       {control}
       {errors[k] ? (
-        <span role="alert" className="text-[11px] font-bold text-error">
+        <span role="alert" className="text-2xs font-bold text-error">
           {t("common", errors[k]!)}
         </span>
       ) : (
-        hint && <span className="text-[11px] text-text-secondary">{hint}</span>
+        hint && <span className="text-2xs text-text-secondary">{hint}</span>
       )}
     </div>
   );

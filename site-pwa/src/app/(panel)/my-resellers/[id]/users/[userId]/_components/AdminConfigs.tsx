@@ -255,7 +255,7 @@ export function AdminConfigs({ api, rows, onActed }: { api: ResellerUserGrantsAp
           );
         })}
       </ul>
-      <p className="text-[11px] text-text-secondary">{t("common", A.regenerateHint)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", A.regenerateHint)}</p>
 
       {busy && (
         <p className="flex items-center gap-2 text-xs text-text-secondary">

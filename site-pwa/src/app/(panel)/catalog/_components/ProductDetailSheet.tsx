@@ -112,7 +112,7 @@ export function ProductDetailSheet({
       title={
         <span className="flex flex-col">
           {name}
-          <span className="text-[11px] font-normal text-text-secondary">
+          <span className="text-2xs font-normal text-text-secondary">
             <span dir="ltr">{product.key}</span> · {t("common", K.fulfilmentKind[product.fulfilmentKind])}
           </span>
         </span>
@@ -203,10 +203,10 @@ function Capabilities({
         </div>
         <div className="flex flex-wrap gap-1.5">
           {product.featureKeys.length === 0 ? (
-            <span className="text-[11px] text-text-secondary">{t("common", K.wizard.none)}</span>
+            <span className="text-2xs text-text-secondary">{t("common", K.wizard.none)}</span>
           ) : (
             product.featureKeys.map((k) => (
-              <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-1 text-[11px] font-bold text-primary">
+              <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-1 text-2xs font-bold text-primary">
                 {nameOf(k)}
               </span>
             ))
@@ -315,14 +315,14 @@ function VariantCard({
           <p className="font-mono text-sm font-bold text-text-primary" dir="ltr">
             {v.sku}
           </p>
-          <p className="text-[11px] text-text-secondary">
+          <p className="text-2xs text-text-secondary">
             {t("common", K.visibility[v.visibility])} · {t("common", K.billingMode[v.billingMode])} ·{" "}
             {v.durationDays === null ? t("common", K.variant.permanent) : t("common", K.variant.days, { count: v.durationDays })}
             <QuotaSummary quotas={v.quotas} />
             {!v.isActive && ` · ${t("common", K.inactive)}`}
           </p>
-          {notForSale(v, kind) && <p className="mt-1 text-[11px] font-bold text-error">{t("common", K.variant.notForSale)}</p>}
-          {noRate(v, now) && <p className="mt-1 text-[11px] font-bold text-error">{t("common", K.rateCard.none)}</p>}
+          {notForSale(v, kind) && <p className="mt-1 text-2xs font-bold text-error">{t("common", K.variant.notForSale)}</p>}
+          {noRate(v, now) && <p className="mt-1 text-2xs font-bold text-error">{t("common", K.rateCard.none)}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
@@ -454,7 +454,7 @@ export function VariantFields({
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-bold text-text-secondary">{t("common", K.variant.quotas)}</p>
-        <p className="text-[11px] text-text-secondary">{t("common", K.variantHint.quotas)}</p>
+        <p className="text-2xs text-text-secondary">{t("common", K.variantHint.quotas)}</p>
         {form.quotas.map((q, i) => (
           <div key={quotaKeys[i]} className="grid gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
             <Select
@@ -480,7 +480,7 @@ export function VariantFields({
             <Button variant="quiet" size="sm" onClick={() => set("quotas", form.quotas.filter((_, j) => j !== i))}>{t("common", K.variant.remove)}</Button>
           </div>
         ))}
-        {errors.quotas && <p className="text-[11px] text-error">{t("common", errors.quotas)}</p>}
+        {errors.quotas && <p className="text-2xs text-error">{t("common", errors.quotas)}</p>}
         {form.quotas.length < QUOTA_METRICS.length && (
           <Button
             variant="quiet"

@@ -25,5 +25,5 @@ const TONE: Record<AdminLottery["status"], string> = {
 
 export function StatusPill({ lottery }: { lottery: Pick<AdminLottery, "status" | "closesAt"> }) {
   const { t } = useLocale();
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${TONE[lottery.status]}`}>{t("common", adminStatusKey(lottery, new Date()))}</span>;
+  return <span className={`rounded-full px-2 py-0.5 text-2xs font-bold ${TONE[lottery.status]}`}>{t("common", adminStatusKey(lottery, new Date()))}</span>;
 }

@@ -1012,8 +1012,9 @@ logical — `ms-`/`me-`/`ps-`/`pe-`/`start-`/`end-`/`text-start` — never
 English. Gold is never on a control (`contract.ux.md`).
 
 **Why.** Every hard-coded colour is a dark-theme bug and every physical side a
-mirror bug in the other direction. `codeshape.py` counts `hex-color` and
-`physical-side` per file.
+mirror bug in the other direction. A type size below `text-xs` is `text-2xs`
+(11px) or `text-3xs` (10px), never `text-[11px]` (FE-1-j). `codeshape.py`
+counts `hex-color`, `physical-side` and `arbitrary-text-size` per file.
 
 ## C-32 — safe at every boundary
 

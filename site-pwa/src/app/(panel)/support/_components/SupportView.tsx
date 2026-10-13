@@ -222,7 +222,7 @@ function TicketRow({ conversation: c, lang }: { conversation: SupportListedConve
             <span dir="auto" className={`truncate text-sm text-text-primary ${unread ? "font-bold" : "font-medium"}`}>
               {c.subject}
             </span>
-            <time dateTime={c.lastMessageAt} title={formatInstant(c.lastMessageAt, lang) ?? undefined} className="shrink-0 text-[11px] text-text-secondary">
+            <time dateTime={c.lastMessageAt} title={formatInstant(c.lastMessageAt, lang) ?? undefined} className="shrink-0 text-2xs text-text-secondary">
               {formatRelative(c.lastMessageAt, lang)}
             </time>
           </span>

@@ -343,7 +343,7 @@ function AgentBubble({ message: m, first, me, seen, time }: { message: AgentMess
     <div className={`flex ${fromUser ? "justify-start" : "justify-end"}`}>
       <div className={`max-w-[85%] space-y-1 rounded-2xl px-3 py-2 ${tone}`}>
         {first && (
-          <p className="flex items-center gap-1 text-[11px] font-bold text-text-secondary">
+          <p className="flex items-center gap-1 text-2xs font-bold text-text-secondary">
             {m.internal && <StickyNote size={11} aria-hidden />}
             {label}
             {m.internal && <span className="font-normal">· {t("common", K.thread.noteBadge)}</span>}
@@ -355,7 +355,7 @@ function AgentBubble({ message: m, first, me, seen, time }: { message: AgentMess
           </p>
         )}
         <AttachmentList attachments={m.attachments} />
-        <p className="flex items-center gap-1 text-[11px] text-text-secondary">
+        <p className="flex items-center gap-1 text-2xs text-text-secondary">
           {time}
           {seen !== null &&
             (seen ? <CheckCheck size={12} className="text-primary" aria-label={t("common", K.thread.seen)} /> : <Check size={12} aria-hidden />)}
@@ -462,13 +462,13 @@ function AgentComposer({ id, claims, onSent }: { id: string; claims: boolean; on
               ))}
             </select>
           ) : (
-            <span className="text-[11px] text-text-secondary">{t("common", K.thread.cannedNone)}</span>
+            <span className="text-2xs text-text-secondary">{t("common", K.thread.cannedNone)}</span>
           )
         ) : (
           <span />
         )}
         <div className="flex items-center gap-2">
-          {!internal && claims && <span className="text-[11px] text-text-secondary">{t("common", K.thread.replyClaims)}</span>}
+          {!internal && claims && <span className="text-2xs text-text-secondary">{t("common", K.thread.replyClaims)}</span>}
           <SendButton label={t("common", internal ? K.thread.sendNote : K.thread.send)} busy={busy} disabled={!body.trim()} />
         </div>
       </div>

@@ -54,7 +54,7 @@ export function FinancialTable({
 
   return (
     <div className="w-full overflow-hidden rounded-3xl border border-card-border bg-card-bg">
-      <div className="hidden grid-cols-12 gap-3 border-b border-card-border bg-leaf-bg px-6 py-3 text-[11px] font-bold text-text-secondary md:grid">
+      <div className="hidden grid-cols-12 gap-3 border-b border-card-border bg-leaf-bg px-6 py-3 text-2xs font-bold text-text-secondary md:grid">
         <div className="col-span-1 text-center">{columns[0]}</div>
         <div className="col-span-4">{columns[1]}</div>
         <div className="col-span-2">{columns[2]}</div>

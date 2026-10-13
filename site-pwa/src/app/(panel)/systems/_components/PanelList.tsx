@@ -145,7 +145,7 @@ function PanelItem({
             <Pill tone={STATUS_TONE[status]}>{t("common", PANEL_STATUS_KEYS[status].label)}</Pill>
             {isRemoving(panel) && <Pill tone={BAD}>{t("common", K.panels.removing)}</Pill>}
           </span>
-          <span dir="ltr" className="truncate text-start font-mono text-[11px] text-text-secondary">
+          <span dir="ltr" className="truncate text-start font-mono text-2xs text-text-secondary">
             {driverLabel(panel.driverType)}
             {panel.region && ` · ${panel.region}`}
             {address && ` · ${address}`}

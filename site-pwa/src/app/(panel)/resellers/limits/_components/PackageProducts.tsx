@@ -154,7 +154,7 @@ function ProductTerms({
     <div role="group" aria-label={name} className="space-y-2 border-t border-card-border pt-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold text-text-primary">{name}</span>
-        {!isActive && <span className="text-[11px] text-text-secondary">{t("common", P.inactive)}</span>}
+        {!isActive && <span className="text-2xs text-text-secondary">{t("common", P.inactive)}</span>}
       </div>
       <p className="text-xs text-text-secondary">
         {row

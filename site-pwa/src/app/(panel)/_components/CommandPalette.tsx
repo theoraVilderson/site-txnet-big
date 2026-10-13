@@ -96,7 +96,7 @@ export function PaletteButton({ className }: { className?: string }) {
     >
       <Search size={18} aria-hidden className="shrink-0" />
       <span className="hidden flex-1 text-start text-sm sm:inline">{t("common", P.open)}</span>
-      <kbd dir="ltr" className="hidden rounded-md border border-card-border px-1.5 text-[11px] font-medium sm:inline">
+      <kbd dir="ltr" className="hidden rounded-md border border-card-border px-1.5 text-2xs font-medium sm:inline">
         Ctrl K
       </kbd>
     </button>
@@ -283,7 +283,7 @@ function PaletteLayer({ onClose }: { onClose: () => void }) {
               if (inGroup.length === 0) return null;
               return (
                 <div key={group} role="group" aria-label={t("common", GROUP_LABEL[group])} className="mb-1">
-                  <p aria-hidden className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-text-secondary">
+                  <p aria-hidden className="px-3 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-text-secondary">
                     {t("common", GROUP_LABEL[group])}
                   </p>
                   {inGroup.map((item) => {
@@ -325,7 +325,7 @@ function PaletteLayer({ onClose }: { onClose: () => void }) {
         <p role="status" className={cn("px-4 pb-2 text-xs text-text-secondary", !data.searching && "sr-only")}>
           {data.searching ? t("common", P.searching) : ""}
         </p>
-        <div aria-hidden className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t border-card-border px-4 py-2 text-[11px] text-text-secondary sm:flex">
+        <div aria-hidden className="hidden flex-wrap items-center gap-x-4 gap-y-1 border-t border-card-border px-4 py-2 text-2xs text-text-secondary sm:flex">
           <span><kbd dir="ltr">↑ ↓</kbd> {t("common", P.keys.move)}</span>
           <span><kbd dir="ltr">Enter</kbd> {t("common", P.keys.open)}</span>
           <span><kbd dir="ltr">Shift Enter</kbd> {t("common", P.keys.pin)}</span>

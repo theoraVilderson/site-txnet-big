@@ -83,7 +83,7 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
             {t("common", DRIFT_EVENT_KEYS[event.eventType])}
             <span className="text-xs font-medium text-text-secondary">{event.panelName}</span>
             {haltsCollection(event) && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-[10px] font-bold text-error">
+              <span className="inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-3xs font-bold text-error">
                 <TriangleAlert size={10} aria-hidden />
                 {t("common", K.panels.halted)}
               </span>

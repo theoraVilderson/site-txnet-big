@@ -42,7 +42,7 @@ export function ProductList(props: Props) {
               <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
-                  <p className="text-[11px] text-text-secondary">
+                  <p className="text-2xs text-text-secondary">
                     {categoryNames(p.categoryIds)} · {t("common", K.removal.archivedBadge)}
                     {p.platform && ` · ${t("common", K.platform)}`}
                   </p>
@@ -103,7 +103,7 @@ export function ProductList(props: Props) {
             <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={nameOf(p)} />
             <button type="button" className="min-w-0 flex-1 text-start" onClick={() => props.onSheet({ kind: "open", productId: p.id })}>
               <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
-              <p className="text-[11px] text-text-secondary">
+              <p className="text-2xs text-text-secondary">
                 {categoryNames(p.categoryIds)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
                 {p.platform && ` · ${t("common", K.platform)}`}
                 {!p.isActive && ` · ${t("common", K.inactive)}`}
@@ -112,7 +112,7 @@ export function ProductList(props: Props) {
               {p.featureKeys.length > 0 && (
                 <p className="mt-1 flex flex-wrap gap-1">
                   {p.featureKeys.map((k) => (
-                    <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-primary">
+                    <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-primary">
                       {props.capabilityName(k)}
                     </span>
                   ))}

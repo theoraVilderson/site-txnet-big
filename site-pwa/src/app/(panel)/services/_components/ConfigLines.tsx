@@ -186,7 +186,7 @@ function Line({ line, config, onRenamed }: { line: string; config?: UserConfigRo
       </div>
 
       {showLine && (
-        <code className="mt-1 block select-all break-all font-mono text-[11px] text-text-secondary" dir="ltr">
+        <code className="mt-1 block select-all break-all font-mono text-2xs text-text-secondary" dir="ltr">
           {line}
         </code>
       )}

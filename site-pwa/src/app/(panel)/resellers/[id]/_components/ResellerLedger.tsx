@@ -86,7 +86,7 @@ export function ResellerLedger({ tenantId, reloadKey }: { tenantId: string; relo
         </div>
         {data && (
           <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-            <p className="text-[11px] text-text-secondary">{t("common", K.columns.balance)}</p>
+            <p className="text-2xs text-text-secondary">{t("common", K.columns.balance)}</p>
             <p dir="ltr" className="text-lg font-bold text-gold">
               {formatMoney(data.balance, data.currencyCode, { lang, t })}
             </p>

@@ -129,7 +129,7 @@ export function CouponInput({ codes, onAdd, onRemove, quote, disabled }: CouponI
                     {discount !== undefined && <Badge tone="success">{t("common", D.active)}</Badge>}
                     {refusal && <Badge tone="error">{t("common", D.rejected)}</Badge>}
                   </div>
-                  {refusal && <p className="mt-1 text-[11px] font-bold text-error">{refusal}</p>}
+                  {refusal && <p className="mt-1 text-2xs font-bold text-error">{refusal}</p>}
                 </div>
                 {discount !== undefined && (
                   <span dir="ltr" className="mt-1 text-sm font-bold text-primary">

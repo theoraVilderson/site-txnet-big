@@ -341,7 +341,7 @@ function StepHead({ step, index, total }: { step: Step; index: number; total: nu
         <Icon size={20} aria-hidden />
       </span>
       <div className="min-w-0 space-y-1">
-        <p className="text-[11px] font-bold text-text-secondary">
+        <p className="text-2xs font-bold text-text-secondary">
           {t("common", W.stepOf, { current: String(index + 1), total: String(total) })} · {t("common", step.gate ? W.required : W.optional)}
         </p>
         <h2 className="text-base font-bold text-text-primary">{t("common", STEP_KEYS[step.key].title)}</h2>
@@ -390,7 +390,7 @@ function BrandHead() {
         <Palette size={20} aria-hidden />
       </span>
       <div className="min-w-0 space-y-1">
-        <p className="text-[11px] font-bold text-text-secondary">{t("common", W.brand.optional)}</p>
+        <p className="text-2xs font-bold text-text-secondary">{t("common", W.brand.optional)}</p>
         <h2 className="text-base font-bold text-text-primary">{t("common", W.brand.title)}</h2>
         <p className="text-xs text-text-secondary">{t("common", W.brand.hint)}</p>
       </div>

@@ -191,10 +191,10 @@ export function ProductWizard({
         <div className="flex flex-col gap-3">
           {w.categoryMode === "existing" ? (
             <>
-              <p className="text-[11px] text-text-secondary">{t("common", K.product.categoriesHint)}</p>
+              <p className="text-2xs text-text-secondary">{t("common", K.product.categoriesHint)}</p>
               <CategoryMultiPicker categories={categories} label={categoryLabel} value={w.categoryIds} onChange={(ids) => setW((x) => ({ ...x, categoryIds: ids }))} />
               {errors.categoryIds && (
-                <p className="text-[11px] text-error">
+                <p className="text-2xs text-error">
                   {t("common", errors.categoryIds === K.wizard.categoryNotForOwner ? K.wizard.categoryNotForOwner : K.wizard.pickCategory)}
                 </p>
               )}
@@ -204,7 +204,7 @@ export function ProductWizard({
             </>
           ) : (
             <>
-              {categories.length === 0 && <p className="text-[11px] text-text-secondary">{t("common", K.wizard.noCategories)}</p>}
+              {categories.length === 0 && <p className="text-2xs text-text-secondary">{t("common", K.wizard.noCategories)}</p>}
               <CategoryFields
                 form={w.newCategory}
                 onChange={(c) => setW((x) => ({ ...x, newCategory: c }))}
@@ -283,7 +283,7 @@ export function ProductWizard({
               {CREATABLE_FULFILMENT_KINDS.map((kind) => (
                 <Choice key={kind} on={w.product.fulfilmentKind === kind} onClick={() => setProduct({ fulfilmentKind: kind })}>
                   <span className="text-sm font-bold">{t("common", K.fulfilmentKind[kind])}</span>
-                  <span className="text-[11px] font-normal leading-5 text-text-secondary">{t("common", K.fulfilmentHint[kind])}</span>
+                  <span className="text-2xs font-normal leading-5 text-text-secondary">{t("common", K.fulfilmentHint[kind])}</span>
                 </Choice>
               ))}
             </div>
@@ -331,7 +331,7 @@ export function ProductWizard({
           </Row>
           <Row label={t("common", K.product.name)} onEdit={() => go("names")}>
             <span dir={nameDir}>{w.product.name}</span>{" "}
-            <span dir="ltr" className="font-mono text-[11px] text-text-secondary">
+            <span dir="ltr" className="font-mono text-2xs text-text-secondary">
               ({w.product.key})
             </span>
           </Row>

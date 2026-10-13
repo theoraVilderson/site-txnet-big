@@ -133,7 +133,7 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
 
       {done && <Outcome action={done.action} result={done.result} />}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
-      <p className="text-[11px] text-text-secondary">{t("common", G.hint)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", G.hint)}</p>
     </section>
   );
 }
@@ -247,7 +247,7 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
         <p key={line}>{line}</p>
       ))}
       {result.subscriptionUrl && (
-        <p className="break-all font-mono text-[11px] font-normal text-text-secondary" dir="ltr">
+        <p className="break-all font-mono text-2xs font-normal text-text-secondary" dir="ltr">
           {result.subscriptionUrl}
         </p>
       )}

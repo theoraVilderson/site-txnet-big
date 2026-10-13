@@ -231,7 +231,7 @@ export function BuyResellerView() {
       aside={
         balance !== null && (
           <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-            <p className="text-[11px] text-text-secondary">{t("common", K.balance)}</p>
+            <p className="text-2xs text-text-secondary">{t("common", K.balance)}</p>
             <p dir="ltr" className="text-lg font-bold text-gold">
               {money(balance.amount, balance.currency)}
             </p>

@@ -83,7 +83,7 @@ function HoldItem({ hold, onDecided }: { hold: SystemsHold; onDecided: () => Pro
           <span className="flex flex-wrap items-center gap-2 text-sm font-bold text-text-primary">
             {t("common", HOLD_REASON_KEYS[hold.reason])}
             <span
-              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+              className={`rounded-full border px-2 py-0.5 text-3xs font-bold ${
                 decided ? "border-card-border bg-bg-inner text-text-secondary" : "border-primary/20 bg-leaf-bg text-primary"
               }`}
             >
@@ -104,7 +104,7 @@ function HoldItem({ hold, onDecided }: { hold: SystemsHold; onDecided: () => Pro
               </span>
             )}
           </span>
-          <span dir="ltr" className="font-mono text-[10px] text-text-secondary">
+          <span dir="ltr" className="font-mono text-3xs text-text-secondary">
             {hold.configId}
           </span>
           {hold.resolutionNote && <span className="text-text-secondary">{hold.resolutionNote}</span>}

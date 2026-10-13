@@ -197,6 +197,12 @@
   --color-info: var(--info);
   --color-info-bg: var(--info-bg);
   --color-info-border: var(--info-border);
+  /* FE-1-j (C-31): the two sizes below Tailwind's `text-xs` the panel uses for
+     badges, captions and meta lines — 279 `text-[11px]` / `text-[10px]` before
+     these existed. No line height of their own, exactly like the arbitrary
+     values they replace; `codeshape.py` (`arbitrary-text-size`) keeps them out. */
+  --text-2xs: 0.6875rem;
+  --text-3xs: 0.625rem;
 }
 
 /* The motion switch (UX-1-b, contract.ux.md M3). `data-motion="reduced"` on

@@ -358,7 +358,7 @@ function SubscriptionLink({ api, grantId }: { api: ResellerUserGrantsApi; grantI
         </Button>
       </div>
       {link && (
-        <p className="mt-2 break-all font-mono text-[11px] text-text-secondary" dir="ltr">
+        <p className="mt-2 break-all font-mono text-2xs text-text-secondary" dir="ltr">
           {link}
         </p>
       )}

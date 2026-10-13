@@ -69,7 +69,7 @@ export function PaymentSummary({
       {/* The gateway would not take what was left, so the payment was raised —
           and the extra is credited, not kept. `credited` already carries it. */}
       {quote.gap !== "0.00" && (
-        <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-[11px] font-bold leading-relaxed text-primary">
+        <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-2xs font-bold leading-relaxed text-primary">
           <Sparkles size={16} className="shrink-0" aria-hidden />
           {t("common", D.gap, { amount: money(quote.gap) })}
         </p>
@@ -118,7 +118,7 @@ export function PaymentSummary({
             {/* What the bank's own page will say, at the rate that priced this
                 quote (ADR-0019). Hidden when the figure cannot be read. */}
             {toman === null && charge !== null && quote.charge && (
-              <span dir="ltr" className="block text-[10px] text-text-secondary">
+              <span dir="ltr" className="block text-3xs text-text-secondary">
                 {t("common", D.charge, { amount: `${charge} ${quote.charge.currency}` })}
               </span>
             )}
@@ -130,7 +130,7 @@ export function PaymentSummary({
 
   const rialCharge = quote && !free && toman !== null && rial !== null && (
     <div className="rounded-2xl border border-primary/25 bg-leaf-bg p-3.5">
-      <p className="text-[11px] font-bold text-text-secondary">{t("common", D.chargeTitle)}</p>
+      <p className="text-2xs font-bold text-text-secondary">{t("common", D.chargeTitle)}</p>
       {chargeWords && (
         <p className="mt-1.5 text-sm font-bold leading-7 text-text-primary">
           <span className="sr-only">{t("common", D.chargeWords)}: </span>
@@ -141,7 +141,7 @@ export function PaymentSummary({
         <span className="text-xl font-bold text-primary">
           {formatMoney(toman, "IRT", { lang, t }, { decimals: tomanWhole ? 0 : 1 })}
         </span>
-        <span className="text-[10px] text-text-secondary">
+        <span className="text-3xs text-text-secondary">
           {t("common", D.chargeRial, { amount: formatMoney(rial, "IRR", { lang, t }, { decimals: 0 }) })}
         </span>
       </p>
@@ -165,7 +165,7 @@ export function PaymentSummary({
   );
 
   const failure = error && (
-    <p role="alert" className="text-[11px] font-bold text-error">
+    <p role="alert" className="text-2xs font-bold text-error">
       {error}
     </p>
   );
@@ -177,7 +177,7 @@ export function PaymentSummary({
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex items-center justify-between text-[11px] font-bold text-text-secondary"
+          className="flex items-center justify-between text-2xs font-bold text-text-secondary"
         >
           <span className="flex items-center gap-1.5">
             <Receipt size={12} aria-hidden />
@@ -209,7 +209,7 @@ export function PaymentSummary({
         {rialCharge}
 
         {free && (
-          <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-[11px] font-bold leading-relaxed text-primary">
+          <p className="flex items-start gap-2 rounded-2xl border border-primary/20 bg-leaf-bg p-3 text-2xs font-bold leading-relaxed text-primary">
             <ShieldCheck size={16} className="shrink-0" aria-hidden />
             {t("common", D.freeNotice)}
           </p>
@@ -218,7 +218,7 @@ export function PaymentSummary({
         {failure}
         {button}
 
-        <p className="flex items-start gap-2 text-[10px] font-bold leading-relaxed text-text-secondary">
+        <p className="flex items-start gap-2 text-3xs font-bold leading-relaxed text-text-secondary">
           <AlertCircle size={14} className="shrink-0 text-error" aria-hidden />
           {t("common", D.refund)}
         </p>

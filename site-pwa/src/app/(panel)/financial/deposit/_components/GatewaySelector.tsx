@@ -97,13 +97,13 @@ export function GatewaySelector({
                   <span className="flex min-w-0 items-center gap-1.5">
                     <span className="truncate text-sm font-bold text-text-primary">{gateway.displayName}</span>
                     {gateway.testing && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-dashed border-primary px-1.5 py-0.5 text-3xs font-bold text-primary">
                         <FlaskConical size={10} aria-hidden />
                         {t("common", D.testing)}
                       </span>
                     )}
                   </span>
-                  <span dir="ltr" className="block truncate text-[11px] text-text-secondary">
+                  <span dir="ltr" className="block truncate text-2xs text-text-secondary">
                     {gateway.minAmount && gateway.maxAmount
                       ? t("common", D.range, { min: money(gateway.minAmount, gateway.currencyCode), max: money(gateway.maxAmount, gateway.currencyCode) })
                       : gateway.minAmount
@@ -117,7 +117,7 @@ export function GatewaySelector({
             );
           })}
           {selected?.testing && (
-            <p className="flex items-start gap-2 rounded-xl border border-dashed border-primary bg-leaf-bg p-3 text-[11px] leading-5 text-text-primary sm:col-span-2">
+            <p className="flex items-start gap-2 rounded-xl border border-dashed border-primary bg-leaf-bg p-3 text-2xs leading-5 text-text-primary sm:col-span-2">
               <FlaskConical size={14} className="mt-0.5 shrink-0 text-primary" aria-hidden />
               {t("common", D.testingHint)}
             </p>

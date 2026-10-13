@@ -28,7 +28,7 @@ export function WheelVersions({ state, onStartFrom }: { state: WheelState; onSta
             return (
               <>
                 {v.version}
-                {tag && <span className="ms-2 rounded-md bg-[var(--leaf-bg)] px-1.5 py-0.5 text-[10px] text-primary">{t("common", tag)}</span>}
+                {tag && <span className="ms-2 rounded-md bg-[var(--leaf-bg)] px-1.5 py-0.5 text-3xs text-primary">{t("common", tag)}</span>}
               </>
             );
           },

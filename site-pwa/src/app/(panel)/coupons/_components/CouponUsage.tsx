@@ -153,7 +153,7 @@ export function CouponUsage({
               <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {tiles.map(([label, value]) => (
                   <div key={label} className="rounded-2xl bg-[var(--leaf-bg)] p-3">
-                    <dt className="text-[11px] text-text-secondary">{label}</dt>
+                    <dt className="text-2xs text-text-secondary">{label}</dt>
                     <dd className="text-sm font-bold text-text-primary">{value}</dd>
                   </div>
                 ))}
@@ -173,7 +173,7 @@ export function CouponUsage({
                     cell: (r) => (
                       <>
                         {r.userName ?? "—"}
-                        <span dir="ltr" className="block font-mono text-[10px] text-text-secondary">
+                        <span dir="ltr" className="block font-mono text-3xs text-text-secondary">
                           {r.username ?? r.userId.slice(0, 8)}
                         </span>
                       </>
@@ -184,7 +184,7 @@ export function CouponUsage({
                     header: t("common", U.columns.payment),
                     cell: (r) => (r.paymentTransactionId ? `${r.paymentTransactionId.slice(0, 8)} · ${r.paymentStatus ?? ""}` : "—"),
                     dir: "ltr",
-                    className: "font-mono text-[10px]",
+                    className: "font-mono text-3xs",
                     hideOnCard: true,
                   },
                   { id: "amount", header: t("common", U.columns.amount), cell: (r) => money(r.discountAmount, r.currencyCode) },

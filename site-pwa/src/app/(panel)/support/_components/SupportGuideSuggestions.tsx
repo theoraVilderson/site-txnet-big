@@ -64,7 +64,7 @@ export function SupportGuideSuggestions({ subject, body, empty = null }: { subje
           <OfferedGuide key={g.key} guide={g} placed={placed.guides?.find((p) => p.key === g.key)} />
         ))}
       </ul>
-      <p className="text-[11px] text-text-secondary">{t("common", H.beforeSupport.stillSend)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", H.beforeSupport.stillSend)}</p>
     </section>
   );
 }

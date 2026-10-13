@@ -45,7 +45,7 @@ export function PresetsEditor({ value, onChange, emptyText, currency, id }: Pres
     <div className="flex flex-col gap-2.5">
       <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-2xl border border-dashed border-card-border bg-[var(--bg-inner)] p-2">
         {value.length === 0 ? (
-          <span className="px-1 text-[11px] leading-5 text-text-secondary">{emptyText}</span>
+          <span className="px-1 text-2xs leading-5 text-text-secondary">{emptyText}</span>
         ) : (
           value.map((amount) => (
             <span
@@ -100,7 +100,7 @@ export function PresetsEditor({ value, onChange, emptyText, currency, id }: Pres
         </Button>
       </div>
 
-      <div className="flex items-center justify-between gap-2 text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-2xs">
         {error ? (
           <span role="alert" className="font-bold text-error">
             {t("common", P.errors[error], { max: String(MAX_PRESETS) })}

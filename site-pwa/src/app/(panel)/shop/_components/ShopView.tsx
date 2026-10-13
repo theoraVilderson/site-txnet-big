@@ -770,7 +770,7 @@ function ErrorBox({ message, errorRef, children }: { message: string; errorRef?:
       <div className="min-w-0">
         {message}
         {errorRef && (
-          <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+          <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
             {errorRef}
           </span>
         )}

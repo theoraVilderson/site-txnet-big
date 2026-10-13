@@ -215,7 +215,7 @@ function ManualPaymentItem({ row, onSettled }: { row: VerifyingPayment; onSettle
               </span>
             )}
           </span>
-          <span className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[10px] text-text-secondary" dir="ltr">
+          <span className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-3xs text-text-secondary" dir="ltr">
             {row.authority && <span>{t("common", K.authority)}: {row.authority}</span>}
             <span>{t("common", K.user)}: {row.userId}</span>
             {row.tenantId && <span>{t("common", K.tenant)}: {row.tenantId}</span>}
@@ -399,8 +399,8 @@ function Badge({ badge }: { badge: StateBadge }) {
     <span
       className={
         alert
-          ? "inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-[10px] font-bold text-error"
-          : "rounded-full border border-primary/20 bg-leaf-bg px-2 py-0.5 text-[10px] font-bold text-primary"
+          ? "inline-flex items-center gap-1 rounded-full border border-error-border bg-error-bg px-2 py-0.5 text-3xs font-bold text-error"
+          : "rounded-full border border-primary/20 bg-leaf-bg px-2 py-0.5 text-3xs font-bold text-primary"
       }
     >
       {alert && <TriangleAlert size={10} aria-hidden />}

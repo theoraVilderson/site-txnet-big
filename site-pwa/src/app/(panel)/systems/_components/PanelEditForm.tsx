@@ -129,7 +129,7 @@ function Group({ icon, title, hint, children }: { icon: ReactNode; title: string
           <span className="text-primary">{icon}</span>
           {title}
         </h3>
-        {hint && <p className="mt-1 text-[11px] leading-5 text-text-secondary">{hint}</p>}
+        {hint && <p className="mt-1 text-2xs leading-5 text-text-secondary">{hint}</p>}
       </div>
       {children}
     </section>

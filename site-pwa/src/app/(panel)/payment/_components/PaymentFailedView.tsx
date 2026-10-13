@@ -54,7 +54,7 @@ export function PaymentFailedView({ code, messageKey }: PaymentFailure) {
           {code !== null && (
             <span
               dir="ltr"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-error-border px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-error"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-error-border px-2.5 py-0.5 font-mono text-3xs tracking-wider text-error"
             >
               {t("common", P.failure.code)}: {code}
             </span>

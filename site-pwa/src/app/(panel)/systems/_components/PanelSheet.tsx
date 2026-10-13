@@ -184,7 +184,7 @@ function Matrix({ panelId }: { panelId: string }) {
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <span className="min-w-0 text-text-primary">{text ? t("common", text.question) : <span dir="ltr" className="font-mono">{row.key}</span>}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  {severity && <span className="text-[10px] text-text-secondary">{t("common", severity)}</span>}
+                  {severity && <span className="text-3xs text-text-secondary">{t("common", severity)}</span>}
                   <span className={`font-bold ${CELL_TONE[row.state] ?? "text-text-secondary"}`}>{state ? t("common", state) : row.state}</span>
                 </span>
               </div>

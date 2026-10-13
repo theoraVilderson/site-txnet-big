@@ -81,7 +81,7 @@ export function FinancialView() {
                 same route — never a total added up from the rows on screen. */}
             {page.balance !== null && (
               <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-                <p className="text-[11px] text-text-secondary">{t("common", F.balance)}</p>
+                <p className="text-2xs text-text-secondary">{t("common", F.balance)}</p>
                 <p dir="ltr" className="text-lg font-bold text-gold">
                   {formatMoney(page.balance.balance, page.balance.currencyCode, { lang, t })}
                 </p>

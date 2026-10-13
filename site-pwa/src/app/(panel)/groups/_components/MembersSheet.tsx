@@ -205,7 +205,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
             </div>
           </Field>
         )}
-        <p className="text-[11px] text-text-secondary">{t("common", K.members.draftHint)}</p>
+        <p className="text-2xs text-text-secondary">{t("common", K.members.draftHint)}</p>
       </section>
 
       {notice && <p className="text-xs font-bold text-primary">{notice}</p>}
@@ -244,7 +244,7 @@ export function MembersSheet({ group, onClose, onChanged }: { group: UserGroup; 
                           {line.label}
                         </span>
                         {!removed && (
-                          <span className="text-[11px] text-text-secondary">
+                          <span className="text-2xs text-text-secondary">
                             {end ? t("common", K.members.endsOn, { date: formatInstant(instantOf(end), lang, { withTime: true }) ?? end }) : t("common", K.members.noEnd)}
                           </span>
                         )}

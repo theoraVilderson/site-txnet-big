@@ -32,7 +32,7 @@ export const REVIEW_TONE = { pending: QUIET, accepted: GOOD, accepted_low_trust:
 export const STATE_TONE = { healthy: GOOD, degraded: QUIET, maintenance: QUIET, down: BAD, throttled_or_blocked: BAD } as const;
 
 export function Pill({ tone, children }: { tone: string; children: ReactNode }) {
-  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>{children}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-3xs font-bold ${tone}`}>{children}</span>;
 }
 
 export function Section({ title, hint, actions, children }: { title: string; hint?: string; actions?: ReactNode; children: ReactNode }) {

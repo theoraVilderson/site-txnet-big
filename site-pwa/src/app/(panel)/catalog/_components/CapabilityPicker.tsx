@@ -43,7 +43,7 @@ function CapabilityFields({
   const [keyTouched, setKeyTouched] = useState(false);
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[11px] text-text-secondary">{t("common", C.newHint)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", C.newHint)}</p>
       <div className="grid gap-3 sm:grid-cols-[10rem_1fr]">
         <Field label={t("common", K.product.sourceLang)} error={errors.sourceLang}>
           <LanguageSelect value={form.sourceLang} onChange={(v) => onChange({ ...form, sourceLang: v })} />
@@ -184,7 +184,7 @@ export function CapabilityPicker({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs font-bold text-text-secondary">{t("common", C.label)}</p>
-      <p className="text-[11px] text-text-secondary">{t("common", C.hint)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", C.hint)}</p>
       {options.length > 0 && (
         <Input
           value={query}
@@ -199,7 +199,7 @@ export function CapabilityPicker({
           }}
         />
       )}
-      {options.length === 0 && <p className="text-[11px] text-text-secondary">{t("common", C.empty)}</p>}
+      {options.length === 0 && <p className="text-2xs text-text-secondary">{t("common", C.empty)}</p>}
       <div className="flex flex-wrap gap-1.5">
         {shown.map((c) => {
           const on = value.includes(c.key);
@@ -211,7 +211,7 @@ export function CapabilityPicker({
               title={c.key}
               aria-pressed={on}
               onClick={() => toggle(c.key)}
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold ${
+              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-2xs font-bold ${
                 on ? "border-primary bg-primary text-on-accent" : "border-card-border bg-bg-inner text-text-primary hover:border-primary"
               }`}
             >
@@ -228,7 +228,7 @@ export function CapabilityPicker({
             dir="ltr"
             title={t("common", C.notOffered)}
             onClick={() => toggle(k)}
-            className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 font-mono text-[11px] font-bold text-error"
+            className="inline-flex items-center gap-1 rounded-full border border-error px-2.5 py-1 font-mono text-2xs font-bold text-error"
           >
             {k}
             <X size={12} aria-label={t("common", C.remove, { name: k })} />
@@ -238,14 +238,14 @@ export function CapabilityPicker({
           <button
             type="button"
             onClick={startAdding}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary px-2.5 py-1 text-[11px] font-bold text-primary"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary px-2.5 py-1 text-2xs font-bold text-primary"
           >
             <Plus size={12} aria-hidden />
             {query.trim() ? t("common", C.add, { name: query.trim() }) : t("common", C.new)}
           </button>
         )}
       </div>
-      {stray.length > 0 && <p className="text-[11px] text-error">{t("common", C.notOffered)}</p>}
+      {stray.length > 0 && <p className="text-2xs text-error">{t("common", C.notOffered)}</p>}
       {adding && (
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
           <CapabilityFields form={adding} onChange={setAdding} errors={creating.errors} takenKeys={takenKeys} />
@@ -261,7 +261,7 @@ export function CapabilityPicker({
           </div>
         </div>
       )}
-      {error && <p className="text-[11px] text-error">{t("common", error)}</p>}
+      {error && <p className="text-2xs text-error">{t("common", error)}</p>}
     </div>
   );
 }

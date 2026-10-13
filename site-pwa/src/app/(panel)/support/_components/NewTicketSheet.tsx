@@ -203,7 +203,7 @@ export function NewTicketSheet({ open, onClose, onOpened }: NewTicketSheetProps)
                     transition={{ duration: reduced ? 0 : DURATION.slow, ease: EASE.standard }}
                   />
                 </div>
-                <p className={`truncate text-[11px] font-bold ${i === index ? "text-text-primary" : "text-text-secondary"}`}>{stepTitle[s]}</p>
+                <p className={`truncate text-2xs font-bold ${i === index ? "text-text-primary" : "text-text-secondary"}`}>{stepTitle[s]}</p>
               </li>
             ))}
           </ol>

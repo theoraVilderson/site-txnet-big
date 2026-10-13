@@ -259,7 +259,7 @@ function GroupCard({
             <Layers size={14} className="text-primary" aria-hidden />
             {group.name}
           </span>
-          <span className="text-[11px] text-text-secondary">
+          <span className="text-2xs text-text-secondary">
             {t("common", SYSTEMS_KEYS.groupCard.meta, {
               members: String(group.members.length),
               variants: String(group.variantCount),
@@ -712,7 +712,7 @@ function MemberSheet({
                   aria-label={t("common", M.perBuyer)}
                   className="sm:max-w-40"
                 />
-                <span className="text-[11px] leading-5 text-text-secondary">{t("common", SYSTEMS_KEYS.inbounds.perBuyerHint)}</span>
+                <span className="text-2xs leading-5 text-text-secondary">{t("common", SYSTEMS_KEYS.inbounds.perBuyerHint)}</span>
                 {errors.perBuyer && <Alert tone="error">{t("common", errors.perBuyer)}</Alert>}
               </Choice>
             </fieldset>
@@ -735,7 +735,7 @@ function MemberSheet({
                 aria-label={t("common", M.cap)}
                 className="sm:max-w-40"
               />
-              <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.capHint)}</span>
+              <span className="text-2xs leading-5 text-text-secondary">{t("common", M.capHint)}</span>
               {errors.maxClients && <Alert tone="error">{t("common", errors.maxClients)}</Alert>}
             </Choice>
           </fieldset>
@@ -749,7 +749,7 @@ function MemberSheet({
               same={t("common", M.pool)}
               own={t("common", M.ownInbounds)}
             >
-              <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.ownInboundsHint)}</span>
+              <span className="text-2xs leading-5 text-text-secondary">{t("common", M.ownInboundsHint)}</span>
               <ul className="divide-y divide-card-border">
                 {inboundChoices(view, group.id).map(({ inbound: i, heldBy, takesNobody }) => (
                   <li key={i.remoteId} className="flex flex-wrap items-center gap-2 py-2 text-xs">
@@ -773,7 +773,7 @@ function MemberSheet({
               </ul>
               {errors.inbounds && <Alert tone="error">{t("common", errors.inbounds)}</Alert>}
             </Choice>
-            {form.inboundsMode === "pool" && <span className="text-[11px] leading-5 text-text-secondary">{t("common", M.poolHint)}</span>}
+            {form.inboundsMode === "pool" && <span className="text-2xs leading-5 text-text-secondary">{t("common", M.poolHint)}</span>}
           </fieldset>
 
           {preview && sellsNobody(view, preview) && (

@@ -150,7 +150,7 @@ function TabsView<V extends string>({ ariaLabel, tabs, variant = "line", childre
               {tab.icon && <span className="relative [&>svg]:size-4">{tab.icon}</span>}
               <span className="relative">{tab.label}</span>
               {tab.badge !== undefined && tab.badge !== null && (
-                <span className={cn("relative rounded-full px-1.5 text-[11px] tabular-nums", selected && pills ? "bg-black/10" : "bg-leaf-bg")}>{tab.badge}</span>
+                <span className={cn("relative rounded-full px-1.5 text-2xs tabular-nums", selected && pills ? "bg-black/10" : "bg-leaf-bg")}>{tab.badge}</span>
               )}
             </button>
           );

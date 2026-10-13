@@ -115,7 +115,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
             <input type="radio" name={`support-scope-${tenantId}`} aria-label={t("common", K.scope[s].title)} checked={scope === s} onChange={() => setScope(s)} className="mt-1" />
             <span className="space-y-0.5">
               <span className="block text-sm font-bold text-text-primary">{t("common", K.scope[s].title)}</span>
-              <span className="block text-[11px] text-text-secondary">{t("common", K.scope[s].hint)}</span>
+              <span className="block text-2xs text-text-secondary">{t("common", K.scope[s].hint)}</span>
             </span>
           </label>
         ))}
@@ -125,7 +125,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
           {t("common", K.grant.hours)}
         </label>
         <Input id={`support-hours-${tenantId}`} type="text" inputMode="numeric" className="max-w-[8rem]" value={hours} onChange={(e) => setHours(e.target.value)} />
-        {hours.trim() !== "" && typedHours === undefined && <p className="text-[11px] text-error">{t("common", K.hoursInvalid)}</p>}
+        {hours.trim() !== "" && typedHours === undefined && <p className="text-2xs text-error">{t("common", K.hoursInvalid)}</p>}
       </div>
     </div>
   );
@@ -145,7 +145,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
             <div className="space-y-3 rounded-xl border border-gold/20 bg-gold-bg p-4">
               <h3 className="text-sm font-bold text-text-primary">{t("common", K.pending.title)}</h3>
               {sides.pending.reason && <p className="text-sm text-text-primary">{sides.pending.reason}</p>}
-              <p className="text-[11px] text-text-secondary">
+              <p className="text-2xs text-text-secondary">
                 {t("common", K.pending.askedFor, { scope: scopeName(sides.pending.scope) })}
                 {sides.pending.requestedAt && ` · ${t("common", K.pending.asked, { date: when(sides.pending.requestedAt) })}`}
               </p>
@@ -199,13 +199,13 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
             >
               {t("common", K.policy.save)}
             </Button>
-            {saved && <span className="text-[11px] text-primary">{t("common", K.policy.saved)}</span>}
+            {saved && <span className="text-2xs text-primary">{t("common", K.policy.saved)}</span>}
           </div>
 
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-text-secondary">{t("common", K.history.title)}</h3>
             {sides.past.length === 0 ? (
-              <p className="text-[11px] text-text-secondary">{t("common", K.history.none)}</p>
+              <p className="text-2xs text-text-secondary">{t("common", K.history.none)}</p>
             ) : (
               <ul className="space-y-1">
                 {sides.past.map((c) => (
@@ -223,7 +223,7 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
               <ShieldAlert size={14} aria-hidden />
               {t("common", K.emergency.title)}
             </h3>
-            <p className="text-[11px] text-text-secondary">{t("common", K.emergency.hint)}</p>
+            <p className="text-2xs text-text-secondary">{t("common", K.emergency.hint)}</p>
             {view.emergency.length > 0 && (
               <ul className="space-y-1">
                 {view.emergency.map((e) => (
@@ -248,12 +248,12 @@ export function SupportAccessCard({ tenantId }: { tenantId: string }) {
             {t("common", K.activity.title)}
           </h3>
           {trail.length === 0 ? (
-            <p className="text-[11px] text-text-secondary">{t("common", K.activity.none)}</p>
+            <p className="text-2xs text-text-secondary">{t("common", K.activity.none)}</p>
           ) : (
             <ul className="space-y-1">
               {trail.map((a) => (
                 <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-bg-inner px-3 py-2 text-xs">
-                  <span dir="ltr" className="font-mono text-[11px] text-text-primary">{a.act}</span>
+                  <span dir="ltr" className="font-mono text-2xs text-text-primary">{a.act}</span>
                   <span className="flex items-center gap-2 text-text-secondary">
                     {(a.tier === "consent" || a.tier === "emergency") && <span>{t("common", K.tiers[a.tier])}</span>}
                     <span>{when(a.at)}</span>

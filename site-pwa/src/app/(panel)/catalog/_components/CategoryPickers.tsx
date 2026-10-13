@@ -76,14 +76,14 @@ export function CategoryMultiPicker({
               }`}
             >
               <span
-                className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+                className={`inline-flex size-5 shrink-0 items-center justify-center rounded-full text-3xs font-bold ${
                   at >= 0 ? "bg-primary text-on-accent" : "border border-card-border"
                 }`}
               >
                 {at >= 0 ? at + 1 : ""}
               </span>
               <span className="font-bold">{label(c)}</span>
-              {!c.isActive && <span className="text-[11px] text-text-secondary">· {t("common", K.inactive)}</span>}
+              {!c.isActive && <span className="text-2xs text-text-secondary">· {t("common", K.inactive)}</span>}
             </button>
           </li>
         );
@@ -205,9 +205,9 @@ export function ProductCategories({
       </div>
       {editing ? (
         <>
-          <p className="text-[11px] text-text-secondary">{t("common", K.product.categoriesHint)}</p>
+          <p className="text-2xs text-text-secondary">{t("common", K.product.categoriesHint)}</p>
           <CategoryMultiPicker categories={categories} label={label} value={editing} onChange={setEditing} />
-          {editing.length === 0 && <p className="text-[11px] text-error">{t("common", K.wizard.pickCategory)}</p>}
+          {editing.length === 0 && <p className="text-2xs text-error">{t("common", K.wizard.pickCategory)}</p>}
           {error && <Alert tone="error">{error}</Alert>}
           <div className="flex justify-end gap-2">
             <Button variant="quiet" size="sm" onClick={() => setEditing(null)}>
@@ -221,7 +221,7 @@ export function ProductCategories({
       ) : (
         <ul className="flex flex-wrap gap-1.5">
           {product.categoryIds.map((id) => (
-            <li key={id} className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-0.5 text-[11px] font-bold text-primary">
+            <li key={id} className="rounded-full bg-[var(--leaf-bg)] px-2.5 py-0.5 text-2xs font-bold text-primary">
               {path(id)}
             </li>
           ))}

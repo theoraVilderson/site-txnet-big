@@ -282,7 +282,7 @@ function MessageBubble({ message: m, first, seen, time }: { message: SupportMess
     <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] space-y-1 rounded-2xl px-3 py-2 ${m.mine ? "bg-primary/10" : "bg-bg-inner"}`}>
         {first && (
-          <p className="text-[11px] font-bold text-text-secondary">
+          <p className="text-2xs font-bold text-text-secondary">
             {/* F-033-r: who answered, by name, beside what they are. */}
             {senderNameOf(m) ? `${senderNameOf(m)} · ${t("common", senderKey(m.senderKind, m.mine))}` : t("common", senderKey(m.senderKind, m.mine))}
           </p>
@@ -293,7 +293,7 @@ function MessageBubble({ message: m, first, seen, time }: { message: SupportMess
           </p>
         )}
         <AttachmentList attachments={m.attachments} />
-        <p className="flex items-center gap-1 text-[11px] text-text-secondary">
+        <p className="flex items-center gap-1 text-2xs text-text-secondary">
           {time}
           {seen !== null && (
             <span title={seen ? t("common", K.thread.seen) : undefined} className="inline-flex">
@@ -405,7 +405,7 @@ function Composer({ id, onSent }: { id: string; onSent: (m: SupportMessage) => v
           <Button variant="quiet" size="sm" onClick={() => picker.current?.click()} disabled={busy} icon={<Paperclip size={12} aria-hidden />}>
             {t("common", K.thread.attach)}
           </Button>
-          <span className="text-[11px] text-text-secondary">{t("common", K.thread.attachHint)}</span>
+          <span className="text-2xs text-text-secondary">{t("common", K.thread.attachHint)}</span>
         </div>
         <SendButton label={t("common", K.thread.send)} busy={busy} disabled={!body.trim() && files.length === 0} />
       </div>

@@ -103,7 +103,7 @@ export function GuidesView() {
               ariaLabel={t("common", K.stats.period)}
               className="w-40"
             />
-            <p className="text-[11px] text-text-secondary">
+            <p className="text-2xs text-text-secondary">
               {statsFailed ? t("common", K.stats.failed) : t("common", data.owner === "platform" ? K.stats.platformHint : K.stats.tenantHint)}
             </p>
           </div>
@@ -122,7 +122,7 @@ export function GuidesView() {
                     <Badge>{t("common", KIND_KEYS[g.kind])}</Badge>
                     <StateBadge state={g.state} />
                     {g.hasDraft && g.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
-                    <span className="text-[11px] text-text-secondary">{formatList(g.publishedLangs.map(languageName), lang)}</span>
+                    <span className="text-2xs text-text-secondary">{formatList(g.publishedLangs.map(languageName), lang)}</span>
                     {stats && <GuideNumbers stat={stats.get(g.id)} />}
                     <Link href={panelGuidePath(g.id)} className={buttonClass({ variant: "quiet", size: "sm", className: "ms-auto" })}>
                       <Pencil size={12} aria-hidden />
@@ -145,7 +145,7 @@ export function GuidesView() {
                   {data.inherited.map((g) => (
                     <li key={g.id} className="flex flex-wrap items-center gap-2 p-3">
                       <span className="text-sm font-bold text-text-primary">{g.title}</span>
-                      <span className="font-mono text-[11px] text-text-secondary">{g.key}</span>
+                      <span className="font-mono text-2xs text-text-secondary">{g.key}</span>
                       {g.hidden && <Badge>{t("common", K.hiddenBadge)}</Badge>}
                       {g.overriddenBy && <Badge className="bg-leaf-bg text-primary">{t("common", K.overriddenBadge)}</Badge>}
                       {stats && <GuideNumbers stat={stats.get(g.id)} />}
@@ -184,10 +184,10 @@ export function GuidesView() {
 function GuideNumbers({ stat }: { stat: GuideStat | undefined }) {
   const { t } = useLocale();
   if (!stat || (stat.views === 0 && stat.helpful === 0 && stat.notHelpful === 0)) {
-    return <span className="text-[11px] text-text-secondary">{t("common", K.stats.none)}</span>;
+    return <span className="text-2xs text-text-secondary">{t("common", K.stats.none)}</span>;
   }
   return (
-    <span className="flex items-center gap-2 text-[11px] text-text-secondary">
+    <span className="flex items-center gap-2 text-2xs text-text-secondary">
       <span title={t("common", K.stats.viewsSplit, { panel: stat.panelViews, bot: stat.botViews })}>
         {t("common", K.stats.views, { n: stat.views })}
       </span>

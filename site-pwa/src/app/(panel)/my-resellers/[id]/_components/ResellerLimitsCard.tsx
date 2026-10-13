@@ -72,18 +72,18 @@ export function ResellerLimitsCard({ tenantId }: { tenantId: string }) {
                   </div>
                 )}
                 {st && st.overageQty > 0 && (
-                  <div className="text-[11px] text-text-primary">{t("common", Q.extra, { count: st.overageQty, cost: money(st.overageAmount, row.overage?.currencyCode ?? null) })}</div>
+                  <div className="text-2xs text-text-primary">{t("common", Q.extra, { count: st.overageQty, cost: money(st.overageAmount, row.overage?.currencyCode ?? null) })}</div>
                 )}
-                {st && <div className="text-[11px] text-text-secondary">{t("common", Q.periods[st.period.kind])}</div>}
-                {row.overage && <div className="text-[11px] text-text-secondary">{past(row.overage)}</div>}
-                {until && <div className="text-[11px] text-text-secondary">{t("common", Q.lockedUntil, { date: until })}</div>}
-                <div className="text-[11px] text-text-secondary">{t("common", K.sources[row.source])}</div>
+                {st && <div className="text-2xs text-text-secondary">{t("common", Q.periods[st.period.kind])}</div>}
+                {row.overage && <div className="text-2xs text-text-secondary">{past(row.overage)}</div>}
+                {until && <div className="text-2xs text-text-secondary">{t("common", Q.lockedUntil, { date: until })}</div>}
+                <div className="text-2xs text-text-secondary">{t("common", K.sources[row.source])}</div>
               </li>
             );
           })}
         </ul>
       )}
-      <p className="text-[11px] text-text-secondary">{t("common", K.raise)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", K.raise)}</p>
     </section>
   );
 }

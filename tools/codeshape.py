@@ -241,6 +241,9 @@ SMELLS = {
                       "C-31", "use logical sides (ms/me/ps/pe/start/end) so RTL and LTR both work"),
     "hex-color": (r"['\"`]#[0-9a-fA-F]{3,8}['\"`]", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
                   "C-31", "use a theme token"),
+    # px/rem only: an `em` size follows the text around it (inline code in prose).
+    "arbitrary-text-size": (r"\btext-\[[\d.]+(px|rem)\]", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
+                            "C-31", "use a type-scale class (text-3xs, text-2xs, text-xs …, globals.css @theme)"),
 }
 
 NEXT_EXPORTS = {"default", "metadata", "generateMetadata", "generateStaticParams", "generateViewport",

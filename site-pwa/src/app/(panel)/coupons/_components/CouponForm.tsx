@@ -110,11 +110,11 @@ export function CouponForm({
       </label>
       {control}
       {errors[k] ? (
-        <span role="alert" className="text-[11px] font-bold text-error">
+        <span role="alert" className="text-2xs font-bold text-error">
           {t("common", errors[k]!)}
         </span>
       ) : (
-        hint && <span className="text-[11px] text-text-secondary">{hint}</span>
+        hint && <span className="text-2xs text-text-secondary">{hint}</span>
       )}
     </div>
   );
@@ -159,7 +159,7 @@ export function CouponForm({
     <section className="flex flex-col gap-4 rounded-2xl border border-card-border p-4">
       <div>
         <h3 className="text-sm font-bold text-text-primary">{t("common", F.sections[id].title)}</h3>
-        <p className="text-[11px] text-text-secondary">{t("common", F.sections[id].subtitle)}</p>
+        <p className="text-2xs text-text-secondary">{t("common", F.sections[id].subtitle)}</p>
       </div>
       {children}
     </section>
@@ -221,7 +221,7 @@ export function CouponForm({
                 {field("code", t("common", F.code), text("code", { ltr: true }), t("common", F.codeHint))}
                 {field("label", t("common", F.label), text("label"))}
               </div>
-              {frozen && <p className="rounded-xl bg-[var(--leaf-bg)] p-2 text-[11px] text-text-secondary">{t("common", F.frozen)}</p>}
+              {frozen && <p className="rounded-xl bg-[var(--leaf-bg)] p-2 text-2xs text-text-secondary">{t("common", F.frozen)}</p>}
               <div className="grid gap-3 sm:grid-cols-3">
                 {field(
                   "discountType",
@@ -329,7 +329,7 @@ export function CouponForm({
                 gateways === null ? (
                   <Loader2 size={14} className="animate-spin text-primary" aria-hidden />
                 ) : gatewayChoices.length === 0 ? (
-                  <span className="text-[11px] text-text-secondary">{t("common", F.noGateways)}</span>
+                  <span className="text-2xs text-text-secondary">{t("common", F.noGateways)}</span>
                 ) : (
                   chips(
                     gatewayChoices.map((g) => `${g.source}:${g.id}`),

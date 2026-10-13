@@ -278,7 +278,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
                 <div className="gift-rise [animation-delay:200ms]">
                   <label
                     htmlFor="gift-code"
-                    className="mb-2 block text-[10px] font-black uppercase tracking-widest text-text-secondary opacity-80"
+                    className="mb-2 block text-3xs font-black uppercase tracking-widest text-text-secondary opacity-80"
                   >
                     {t("common", G.inputLabel)}
                   </label>
@@ -346,7 +346,7 @@ function GiftCodeDialog({ onClose, onRedeemed }: Omit<GiftCodeModalProps, "open"
                           {error.message}
                           {error.ref && (
                             <span
-                              className="mt-1 block font-mono text-[0.65rem] opacity-70"
+                              className="mt-1 block font-mono text-3xs opacity-70"
                               dir="ltr"
                             >
                               {error.ref}

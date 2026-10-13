@@ -247,7 +247,7 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
                     </span>
                   </p>
                 </div>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE[user.status]}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-3xs font-medium ${STATUS_TONE[user.status]}`}>
                   {t("common", K.userStatus[user.status])}
                 </span>
                 {statusActionsOf(user.status, canBan).map((action) => (

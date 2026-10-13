@@ -158,7 +158,7 @@ export const NatureCaptchaUI = ({
           style={{ width: `${sliderValue}%` }}
         />
         <span
-          className={`absolute text-[13px] z-10 transition-colors duration-300 ${
+          className={`absolute text-xs z-10 transition-colors duration-300 ${
             checking
               ? "text-primary font-bold"
               : "text-text-secondary"

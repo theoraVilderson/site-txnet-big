@@ -199,13 +199,13 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
         {LINE_NAME_PLACEHOLDERS.map((p) => (
           <Button variant="quiet" size="sm" key={p} className="border border-card-border" onClick={() => insert(p)} icon={<Plus size={12} aria-hidden />}>
             {t("common", LINE_NAME_PLACEHOLDER_KEYS[p])}
-            <code className="font-mono text-[11px] text-text-secondary" dir="ltr">{`{${p}}`}</code>
+            <code className="font-mono text-2xs text-text-secondary" dir="ltr">{`{${p}}`}</code>
           </Button>
         ))}
       </div>
 
       <div className="space-y-1 rounded-xl border border-card-border bg-bg-inner p-4" aria-live="polite">
-        <p className="text-[11px] font-bold text-text-secondary">{t("common", L.preview)}</p>
+        <p className="text-2xs font-bold text-text-secondary">{t("common", L.preview)}</p>
         {previewing && answered === null ? (
           <Loader2 size={14} className="animate-spin text-text-secondary" aria-hidden />
         ) : problem ? (
@@ -215,7 +215,7 @@ function LineNameSection({ id, saved, onSaved }: { id: string; saved: string | n
             <p className="text-base font-bold text-text-primary" dir="auto">
               {preview.name}
             </p>
-            <p className="text-[11px] text-text-secondary">{t("common", L.numbered, { name: preview.name })}</p>
+            <p className="text-2xs text-text-secondary">{t("common", L.numbered, { name: preview.name })}</p>
           </>
         ) : (
           <p className="text-sm text-text-secondary">{t("common", L.previewNone)}</p>

@@ -81,7 +81,7 @@ export function QrDialog({
         )}
 
         <code
-          className="mt-4 block max-h-20 select-all overflow-y-auto break-all rounded-xl bg-bg-inner p-2 font-mono text-[11px] text-text-secondary"
+          className="mt-4 block max-h-20 select-all overflow-y-auto break-all rounded-xl bg-bg-inner p-2 font-mono text-2xs text-text-secondary"
           dir="ltr"
         >
           {value}

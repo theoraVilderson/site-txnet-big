@@ -126,7 +126,7 @@ export function FileDropZone({ onFiles, disabled, testId, children }: { onFiles:
       >
         <Upload size={20} className="text-primary" aria-hidden />
         <span className="font-bold">{t("common", K.ticket.filesDrop)}</span>
-        <span className="text-[11px]">{t("common", K.thread.attachHint)}</span>
+        <span className="text-2xs">{t("common", K.thread.attachHint)}</span>
       </button>
       {children && <div className="mt-3">{children}</div>}
     </div>

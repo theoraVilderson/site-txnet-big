@@ -54,7 +54,7 @@ export function DepositPresetsCard({ surface, initial, currency }: { surface: Ga
       </div>
 
       <p className="mb-1.5 text-xs font-bold text-text-primary">{t("common", P.defaultTitle)}</p>
-      <p className="mb-3 text-[11px] leading-5 text-text-secondary">{t("common", P.defaultHint)}</p>
+      <p className="mb-3 text-2xs leading-5 text-text-secondary">{t("common", P.defaultHint)}</p>
       <PresetsEditor
         id="default-presets"
         currency={currency}

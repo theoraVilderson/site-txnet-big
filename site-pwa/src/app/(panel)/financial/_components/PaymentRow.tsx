@@ -156,14 +156,14 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
           <p className="truncate text-sm font-bold text-text-primary">
             {row.gateway?.displayName ?? t("common", F.gatewaySource.none)}
           </p>
-          <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary" dir="ltr">
+          <p className="mt-0.5 truncate font-mono text-3xs text-text-secondary" dir="ltr">
             {row.trackingCode ?? row.id}
           </p>
         </div>
 
         <div className="col-span-6 flex flex-col md:col-span-2 md:items-start">
           {adjusted && (
-            <span dir="ltr" className="text-[10px] text-text-secondary line-through">
+            <span dir="ltr" className="text-3xs text-text-secondary line-through">
               {money(row.amountRequested)}
             </span>
           )}
@@ -177,7 +177,7 @@ export function PaymentRow({ row }: { row: WalletPaymentRow }) {
 
         <div className="col-span-6 flex flex-col items-end gap-1 md:col-span-2 md:items-center">
           {when && (
-            <span dir="ltr" className="font-mono text-[11px] text-text-primary">
+            <span dir="ltr" className="font-mono text-2xs text-text-primary">
               {when}
             </span>
           )}

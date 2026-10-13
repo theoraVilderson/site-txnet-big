@@ -134,7 +134,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
 
   const errorText = (k: keyof GatewayForm) =>
     errors[k] ? (
-      <span role="alert" className="text-[11px] font-bold text-error">
+      <span role="alert" className="text-2xs font-bold text-error">
         {fieldErrorText(t, errors[k]!)}
       </span>
     ) : null;
@@ -226,7 +226,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
                       <span className="text-sm font-bold text-text-primary" dir="ltr">
                         {applyProvider(emptyForm("tenant"), p).displayName}
                       </span>
-                      <span className="text-[11px] text-text-secondary">{t("common", W.categories[applyProvider(emptyForm("tenant"), p).gatewayCategory as (typeof CATEGORIES)[number]])}</span>
+                      <span className="text-2xs text-text-secondary">{t("common", W.categories[applyProvider(emptyForm("tenant"), p).gatewayCategory as (typeof CATEGORIES)[number]])}</span>
                     </span>
                   </span>
                   <span className="text-xs leading-5 text-text-secondary">{t("common", W.providers[p].desc)}</span>
@@ -264,7 +264,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
         </div>
         {labeled("minAcceptAmount", t("common", F.minAmount), textInput("minAcceptAmount", { ltr: true, decimal: true, suffix: code, placeholder: t("common", G.range.noLimit) }), undefined, true)}
         {labeled("maxAcceptAmount", t("common", F.maxAmount), textInput("maxAcceptAmount", { ltr: true, decimal: true, suffix: code, placeholder: t("common", G.range.noLimit) }), undefined, true)}
-        <p className="-mt-2 text-[11px] text-text-secondary sm:col-span-2">{t("common", W.hints.amounts)}</p>
+        <p className="-mt-2 text-2xs text-text-secondary sm:col-span-2">{t("common", W.hints.amounts)}</p>
         <div className="sm:col-span-2">
           <Toggle
             checked={form.isActive}
@@ -278,7 +278,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
             {t("common", FrontendI18nKeys.common.gateways.presets.title)}
             <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>
           </label>
-          <p className="text-[11px] leading-5 text-text-secondary">{t("common", FrontendI18nKeys.common.gateways.presets.gatewayHint)}</p>
+          <p className="text-2xs leading-5 text-text-secondary">{t("common", FrontendI18nKeys.common.gateways.presets.gatewayHint)}</p>
           <PresetsEditor
             id="gw-depositPresets"
             currency={code}
@@ -318,7 +318,7 @@ export function GatewayWizard({ surface, me, currency, onClose, onCreated }: Gat
           )}
         </div>
         {secretFields(provider).length > 0 && (
-          <p className="flex items-center gap-1.5 text-[11px] font-bold text-success">
+          <p className="flex items-center gap-1.5 text-2xs font-bold text-success">
             <ShieldCheck size={14} aria-hidden />
             {t("common", W.secrets.safe)}
           </p>
@@ -497,7 +497,7 @@ function DoneScreen({ name, onAnother, onFinish }: { name: string; onAnother: ()
       <ol className="flex w-full max-w-md flex-col gap-2 text-start">
         {[W.done.step1, W.done.step2, W.done.step3].map((k, i) => (
           <li key={k} className="flex items-center gap-3 rounded-xl border border-card-border bg-[var(--bg-inner)] p-3 text-xs text-text-primary">
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--leaf-bg)] text-[11px] font-bold text-primary">{i + 1}</span>
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--leaf-bg)] text-2xs font-bold text-primary">{i + 1}</span>
             {t("common", k)}
           </li>
         ))}

@@ -255,7 +255,7 @@ export function SpendingCap({
               ] as const
             ).map(([key, value]) => (
               <div key={key} className="rounded-xl bg-bg-inner px-2 py-2">
-                <dt className="text-[10px] font-bold text-text-secondary">{t("common", key)}</dt>
+                <dt className="text-3xs font-bold text-text-secondary">{t("common", key)}</dt>
                 <dd className="mt-0.5 font-mono text-xs font-bold text-text-primary">{money(value, cap.currencyCode)}</dd>
               </div>
             ))}
@@ -321,7 +321,7 @@ function ErrorLine({ error }: { error: Refusal }) {
       <span className="min-w-0">
         {error.message}
         {error.ref && (
-          <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+          <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
             {error.ref}
           </span>
         )}

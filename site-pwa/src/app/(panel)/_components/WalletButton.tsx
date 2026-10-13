@@ -154,7 +154,7 @@ export function WalletButton() {
                 there instead — see the component note. */}
             <span className="hidden min-w-0 flex-col text-start leading-tight sm:flex">
               <span
-                className={`text-[10px] font-bold ${open ? "text-on-accent/80" : "text-text-secondary"}`}
+                className={`text-3xs font-bold ${open ? "text-on-accent/80" : "text-text-secondary"}`}
               >
                 {t("common", holding ? W.available : W.label)}
               </span>
@@ -175,7 +175,7 @@ export function WalletButton() {
             hunt for, and this is the panel that every wallet action starts
             from. */}
         <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-leaf-bg px-3 py-2 sm:hidden">
-          <span className="text-[10px] font-bold text-text-secondary">{t("common", holding ? W.available : W.label)}</span>
+          <span className="text-3xs font-bold text-text-secondary">{t("common", holding ? W.available : W.label)}</span>
           <span className="font-mono text-sm font-bold">{figure}</span>
         </div>
 
@@ -185,7 +185,7 @@ export function WalletButton() {
             <p className="text-xs font-bold text-text-primary" dir="auto">
               {t("common", W.held, { amount: formatMoney(held, currencyCode, { lang, t }) })}
             </p>
-            <p className="mt-0.5 text-[10px] leading-4 text-text-secondary">{t("common", W.heldHint)}</p>
+            <p className="mt-0.5 text-3xs leading-4 text-text-secondary">{t("common", W.heldHint)}</p>
           </div>
         )}
 
@@ -194,7 +194,7 @@ export function WalletButton() {
             {t("common", W.quickActions)}
           </span>
           {failed && (
-            <Button size="sm" variant="quiet" icon={<RotateCw size={12} aria-hidden />} onClick={refresh} className="h-6 px-2 text-[10px]">
+            <Button size="sm" variant="quiet" icon={<RotateCw size={12} aria-hidden />} onClick={refresh} className="h-6 px-2 text-3xs">
               {t("common", W.retry)}
             </Button>
           )}

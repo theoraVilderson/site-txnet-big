@@ -86,7 +86,7 @@ export function TenantBillingView() {
             {data && (
               <div className="flex items-center gap-3">
                 <div className="rounded-2xl border border-card-border bg-card-bg px-5 py-3">
-                  <p className="text-[11px] text-text-secondary">{t("common", B.balance)}</p>
+                  <p className="text-2xs text-text-secondary">{t("common", B.balance)}</p>
                   <p dir="ltr" className="text-lg font-bold text-gold">
                     {formatMoney(data.balance, data.currencyCode, { lang, t })}
                   </p>

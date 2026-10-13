@@ -53,7 +53,7 @@ export function DetailItem({
     <div className={`rounded-xl border border-card-border bg-card-bg p-3 ${className}`}>
       <div className="mb-1 flex items-center gap-1.5 text-text-secondary">
         <Icon size={12} aria-hidden />
-        <span className="text-[10px]">{label}</span>
+        <span className="text-3xs">{label}</span>
       </div>
       <div className="flex items-center justify-between gap-2">
         <span

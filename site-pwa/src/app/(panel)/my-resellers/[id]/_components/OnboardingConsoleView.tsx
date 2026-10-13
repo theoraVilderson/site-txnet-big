@@ -255,7 +255,7 @@ function StepCard({ id, step }: { id: string; step: Step }) {
             )}
           </div>
           <p className="text-xs text-text-secondary">{t("common", keys.hint)}</p>
-          {!href && !step.done && <p className="text-[11px] text-text-secondary">{t("common", K.notYet)}</p>}
+          {!href && !step.done && <p className="text-2xs text-text-secondary">{t("common", K.notYet)}</p>}
         </div>
       </div>
       {href && (

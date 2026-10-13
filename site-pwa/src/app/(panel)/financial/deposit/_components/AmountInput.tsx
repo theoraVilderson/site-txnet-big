@@ -145,7 +145,7 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
             onChange={(e) => onAmountChange(fromCents(Number(e.target.value)))}
             className="range-slider"
           />
-          <div className="mt-3 flex justify-between text-[10px] font-bold text-text-secondary">
+          <div className="mt-3 flex justify-between text-3xs font-bold text-text-secondary">
             <span>{t("common", D.min, { amount: money(fromCents(min)) })}</span>
             <span>{t("common", D.max, { amount: money(fromCents(max)) })}</span>
           </div>
@@ -154,7 +154,7 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
 
       {/* The gateway refuses these itself with a 400; saying so here saves the
           user a round trip, and the server is still the one that decides. */}
-      <p className="mt-3 min-h-[1.25rem] text-[11px] font-bold text-error" role="status">
+      <p className="mt-3 min-h-[1.25rem] text-2xs font-bold text-error" role="status">
         {cents !== null && min !== null && cents > 0 && cents < min
           ? t("common", D.belowMin, { amount: money(fromCents(min)) })
           : cents !== null && max !== null && cents > max

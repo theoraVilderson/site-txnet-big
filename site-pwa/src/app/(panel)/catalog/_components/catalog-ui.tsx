@@ -98,7 +98,7 @@ export function KeyField({ value, onChange, error, forceOpen }: { value: string;
     );
   }
   return (
-    <p className="flex flex-wrap items-center gap-2 text-[11px] text-text-secondary">
+    <p className="flex flex-wrap items-center gap-2 text-2xs text-text-secondary">
       <span>
         {t("common", K.wizard.key, { key: "" })}
         <span dir="ltr" className="font-mono">

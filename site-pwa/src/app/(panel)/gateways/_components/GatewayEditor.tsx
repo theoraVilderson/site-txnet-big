@@ -220,7 +220,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
   const rangeReadable = AMOUNT.test(form.minAcceptAmount) && AMOUNT.test(form.maxAcceptAmount) && !errors.minAcceptAmount;
 
   const chip = (text: string, ok: boolean) => (
-    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ok ? "bg-[var(--leaf-bg)] text-success" : "bg-[var(--bg-inner)] text-text-secondary"}`}>{text}</span>
+    <span className={`rounded-full px-2 py-0.5 text-3xs font-bold ${ok ? "bg-[var(--leaf-bg)] text-success" : "bg-[var(--bg-inner)] text-text-secondary"}`}>{text}</span>
   );
 
   const navItem = (id: EditorSectionId, compact: boolean) => {
@@ -265,7 +265,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
           </span>
           <span className="flex min-w-0 flex-1 flex-col">
             <span className={`text-xs font-bold ${current ? "text-text-primary" : "text-text-secondary"}`}>{t("common", E.sections[id].title)}</span>
-            <span className="line-clamp-1 text-[10px] text-text-secondary">{t("common", E.sections[id].subtitle)}</span>
+            <span className="line-clamp-1 text-3xs text-text-secondary">{t("common", E.sections[id].subtitle)}</span>
           </span>
           {marker}
         </button>
@@ -339,14 +339,14 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
           <SlidersHorizontal size={14} className="shrink-0 text-primary" aria-hidden />
           <span>{t("common", E.accepts)}:</span>
           <b dir="ltr">{rangeReadable ? rangeText(form.minAcceptAmount, form.maxAcceptAmount) : "—"}</b>
-          <span className="basis-full text-[11px] text-text-secondary">{t("common", E.amountsHint)}</span>
+          <span className="basis-full text-2xs text-text-secondary">{t("common", E.amountsHint)}</span>
         </div>
         <div className="flex flex-col gap-1.5 border-t border-card-border pt-4">
           <label htmlFor="gw-editor-presets" className="flex items-center gap-2 text-xs font-bold text-text-primary">
             {t("common", G.presets.title)}
             <span className="font-normal text-text-secondary">({t("common", W.optional)})</span>
           </label>
-          <p className="text-[11px] leading-5 text-text-secondary">{t("common", G.presets.gatewayHint)}</p>
+          <p className="text-2xs leading-5 text-text-secondary">{t("common", G.presets.gatewayHint)}</p>
           <PresetsEditor
             id="gw-editor-presets"
             currency={gateway.currencyCode}
@@ -395,11 +395,11 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
                   hideLabel={t("common", W.secrets.hide)}
                 />
                 {errors[k] ? (
-                  <span role="alert" className="text-[11px] font-bold text-error">
+                  <span role="alert" className="text-2xs font-bold text-error">
                     {fieldErrorText(t, errors[k]!)}
                   </span>
                 ) : (
-                  <span className="text-[11px] leading-5 text-text-secondary">{t("common", state?.configured ? E.keepCurrent : E.enterNew)}</span>
+                  <span className="text-2xs leading-5 text-text-secondary">{t("common", state?.configured ? E.keepCurrent : E.enterNew)}</span>
                 )}
               </div>
             );
@@ -437,7 +437,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
       >
         {/* Section list — the side rail on lg; tabs in the header below it. */}
         <aside className="hidden w-64 shrink-0 flex-col gap-4 border-e border-card-border bg-[var(--bg-inner)] p-5 lg:flex">
-          <p className="text-[11px] font-bold text-text-secondary">{t("common", F.editTitle)}</p>
+          <p className="text-2xs font-bold text-text-secondary">{t("common", F.editTitle)}</p>
           <ol className="flex flex-col gap-1">{EDITOR_SECTIONS.map((s) => navItem(s.id, false))}</ol>
         </aside>
 
@@ -480,7 +480,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
                         {t("common", E.sections[id].title)}
                         {changedSections.has(id) && <span className="size-1.5 rounded-full bg-primary" title={t("common", E.changed)} />}
                       </h3>
-                      <p className="text-[11px] leading-5 text-text-secondary">{t("common", E.sections[id].subtitle)}</p>
+                      <p className="text-2xs leading-5 text-text-secondary">{t("common", E.sections[id].subtitle)}</p>
                     </div>
                   </header>
                   {sections[id]}
@@ -509,7 +509,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
                   transition={{ duration: 0.15 }}
                   className="overflow-hidden"
                 >
-                  <p className="mb-2 text-[11px] font-bold text-text-secondary">{t("common", E.changesTitle)}</p>
+                  <p className="mb-2 text-2xs font-bold text-text-secondary">{t("common", E.changesTitle)}</p>
                   <ul className="mb-3 flex flex-wrap gap-1.5">
                     {changed.map((k) => (
                       <li key={k}>
@@ -519,7 +519,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
                             const s = sectionOf(k);
                             if (s) jump(s);
                           }}
-                          className="rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-2.5 py-1 text-[11px] font-bold text-primary transition-colors hover:border-[var(--accent-primary)]"
+                          className="rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-2.5 py-1 text-2xs font-bold text-primary transition-colors hover:border-[var(--accent-primary)]"
                         >
                           {FIELD_LABELS[k] ? t("common", FIELD_LABELS[k]!) : k}
                         </button>
@@ -577,10 +577,10 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
 function SecretBadge({ state }: { state: GatewaySecretState | null | undefined }) {
   const { t } = useLocale();
   if (!state) {
-    return <span className="rounded-full bg-card-bg px-2 py-0.5 text-[10px] font-bold text-text-secondary">{t("common", G.unknown)}</span>;
+    return <span className="rounded-full bg-card-bg px-2 py-0.5 text-3xs font-bold text-text-secondary">{t("common", G.unknown)}</span>;
   }
   return state.configured ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-success">
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-success">
       <ShieldCheck size={12} aria-hidden />
       {t("common", G.configured)}
       {state.version != null && (
@@ -590,7 +590,7 @@ function SecretBadge({ state }: { state: GatewaySecretState | null | undefined }
       )}
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-[10px] font-bold text-error">
+    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-3xs font-bold text-error">
       <ShieldOff size={12} aria-hidden />
       {t("common", G.notConfigured)}
     </span>

@@ -208,7 +208,7 @@ export function GrantConfigs({
         <div role="alert" className="rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
           {actError.message}
           {actError.ref && (
-            <span className="mt-1 block font-mono text-[0.65rem] opacity-70" dir="ltr">
+            <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
               {actError.ref}
             </span>
           )}

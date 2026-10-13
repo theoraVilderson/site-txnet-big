@@ -50,11 +50,11 @@ export function TenantBillingRow({
         <p className="truncate text-sm font-bold text-text-primary">
           {reasonKey ? t("common", reasonKey) : row.reasonType}
         </p>
-        <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary" dir="ltr">
+        <p className="mt-0.5 truncate font-mono text-3xs text-text-secondary" dir="ltr">
           {row.id}
         </p>
         {referenceLabel && row.referenceId && (
-          <p className="mt-0.5 truncate text-[10px] text-text-secondary">
+          <p className="mt-0.5 truncate text-3xs text-text-secondary">
             {referenceLabel}: <span dir="ltr" className="font-mono">{row.referenceId}</span>
           </p>
         )}
@@ -71,7 +71,7 @@ export function TenantBillingRow({
 
       <div className="col-span-6 flex flex-col items-end gap-1 md:col-span-2 md:items-center">
         {when && (
-          <span dir="ltr" className="font-mono text-[11px] text-text-primary">
+          <span dir="ltr" className="font-mono text-2xs text-text-primary">
             {when}
           </span>
         )}
@@ -81,7 +81,7 @@ export function TenantBillingRow({
       </div>
 
       <div className="col-span-12 flex items-center justify-between md:col-span-3 md:flex-col md:items-end">
-        <span className="text-[10px] text-text-secondary md:hidden">{t("common", B.columns.balanceAfter)}</span>
+        <span className="text-3xs text-text-secondary md:hidden">{t("common", B.columns.balanceAfter)}</span>
         <span dir="ltr" className="font-mono text-xs font-medium text-gold">
           {money(row.balanceAfter)}
         </span>

@@ -84,7 +84,7 @@ export function GatewayAudienceSection({
         </span>
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-text-primary">{t("common", A.title)}</h3>
-          <p className="text-[11px] leading-5 text-text-secondary">{t("common", A.subtitle)}</p>
+          <p className="text-2xs leading-5 text-text-secondary">{t("common", A.subtitle)}</p>
         </div>
       </header>
 

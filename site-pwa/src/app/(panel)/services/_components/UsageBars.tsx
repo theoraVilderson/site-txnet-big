@@ -46,10 +46,10 @@ export function UsageBars({
     };
   }, [grantId, read]);
 
-  if (failed) return <p className="text-[11px] text-text-secondary">{t("common", G.unavailable)}</p>;
+  if (failed) return <p className="text-2xs text-text-secondary">{t("common", G.unavailable)}</p>;
   if (!usage) {
     return (
-      <p className="flex items-center gap-2 text-[11px] text-text-secondary">
+      <p className="flex items-center gap-2 text-2xs text-text-secondary">
         <Loader2 size={12} className="animate-spin" aria-hidden />
         {t("common", G.loading)}
       </p>
@@ -63,8 +63,8 @@ export function UsageBars({
   return (
     <div className="rounded-2xl border border-card-border bg-bg-inner p-3">
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[10px] font-black uppercase tracking-widest text-text-secondary">{t("common", G.title)}</p>
-        <p className="text-[11px] font-bold text-text-primary">{t("common", G.total, { total })}</p>
+        <p className="text-3xs font-black uppercase tracking-widest text-text-secondary">{t("common", G.title)}</p>
+        <p className="text-2xs font-bold text-text-primary">{t("common", G.total, { total })}</p>
       </div>
       {/* Oldest on the left in both directions: a time axis does not mirror. */}
       <div dir="ltr">
@@ -110,11 +110,11 @@ export function UsageBars({
           })}
         </svg>
       </div>
-      <div className="mt-1 flex justify-between font-mono text-[10px] text-text-secondary" dir="ltr">
+      <div className="mt-1 flex justify-between font-mono text-3xs text-text-secondary" dir="ltr">
         <span>{usage.from}</span>
         <span>{usage.to}</span>
       </div>
-      <div className="mt-1 flex gap-3 text-[10px] text-text-secondary">
+      <div className="mt-1 flex gap-3 text-3xs text-text-secondary">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-2 rounded-sm bg-primary" aria-hidden />
           {t("common", G.download)}

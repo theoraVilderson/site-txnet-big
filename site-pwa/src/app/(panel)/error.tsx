@@ -45,7 +45,7 @@ export default function PanelError({ error, reset }: { error: Error & { digest?:
         {error.digest && (
           <div className="flex w-full items-center justify-between gap-2 rounded-xl border border-card-border bg-bg-inner px-3 py-2 text-start">
             <span className="flex min-w-0 flex-col">
-              <span className="text-[11px] text-text-secondary">{t("common", E.digest)}</span>
+              <span className="text-2xs text-text-secondary">{t("common", E.digest)}</span>
               <code dir="ltr" className="truncate font-mono text-xs text-text-primary">
                 {error.digest}
               </code>

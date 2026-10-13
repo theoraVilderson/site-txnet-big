@@ -22,7 +22,7 @@ const WINDOWS = [
 function Line({ label, amount }: { label: string; amount: string }) {
   return (
     <dd className="mt-1 flex items-baseline justify-between gap-2">
-      <span className="text-[11px] text-text-secondary">{label}</span>
+      <span className="text-2xs text-text-secondary">{label}</span>
       <span className="truncate text-sm font-black tabular-nums text-text-primary" dir="ltr">
         {amount}
       </span>
@@ -71,7 +71,7 @@ export default function RevenueWidget() {
                   <dd className="mt-1 truncate text-lg font-black tabular-nums text-text-primary" dir="ltr">
                     {show(a.sales.total, a.currencyCode)}
                   </dd>
-                  <dd className="text-[11px] text-text-secondary">{t("common", D.revenue.sales, { count: a.sales.count })}</dd>
+                  <dd className="text-2xs text-text-secondary">{t("common", D.revenue.sales, { count: a.sales.count })}</dd>
                 </>
               )}
             </div>

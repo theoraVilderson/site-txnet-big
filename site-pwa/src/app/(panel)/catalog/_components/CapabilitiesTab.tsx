@@ -31,7 +31,7 @@ export function CapabilitiesTab({
   const confirm = useConfirm();
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[11px] text-text-secondary">{t("common", C.listHint)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", C.listHint)}</p>
       {capabilities.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-card-border p-6 text-center text-xs text-text-secondary">{t("common", C.empty)}</p>
       ) : (
@@ -42,7 +42,7 @@ export function CapabilitiesTab({
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-text-primary">{label(c)}</p>
-                  <p className="text-[11px] text-text-secondary">
+                  <p className="text-2xs text-text-secondary">
                     <span dir="ltr" className="font-mono">
                       {c.key}
                     </span>
@@ -66,7 +66,7 @@ export function CapabilitiesTab({
                     </Button>
                   </div>
                 ) : (
-                  <span className="text-[11px] text-text-secondary">{t("common", C.platformOnly)}</span>
+                  <span className="text-2xs text-text-secondary">{t("common", C.platformOnly)}</span>
                 )}
               </li>
             );

@@ -262,7 +262,7 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
         <div className="rounded-2xl bg-[image:var(--card-gradient)] p-4 text-white shadow-md">
           <p className="mb-3 text-xs font-bold opacity-90">{t("common", W.preview.title)}</p>
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <label className="flex flex-col gap-1 text-[11px] opacity-90">
+            <label className="flex flex-col gap-1 text-2xs opacity-90">
               {t("common", W.preview.amount)}
               <span className="relative" dir="ltr">
                 <input
@@ -271,17 +271,17 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
                   onChange={(e) => setSample(e.target.value)}
                   className="w-32 rounded-lg border border-white/30 bg-white/15 px-2 py-1.5 pe-10 text-sm font-bold text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-white/40"
                 />
-                <span className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-[10px] font-bold opacity-80">{currency}</span>
+                <span className="pointer-events-none absolute inset-y-0 end-2 flex items-center text-3xs font-bold opacity-80">{currency}</span>
               </span>
             </label>
             <div className="text-end">
-              <p className="text-[11px] opacity-90">{t("common", W.preview.fee)}</p>
+              <p className="text-2xs opacity-90">{t("common", W.preview.fee)}</p>
               <p className="text-xl font-bold" dir="ltr">
                 {fee === null ? "—" : money(fee)}
               </p>
             </div>
           </div>
-          {fee === null && sample.trim() !== "" && <p className="mt-2 text-[11px] opacity-90">{t("common", W.preview.invalid)}</p>}
+          {fee === null && sample.trim() !== "" && <p className="mt-2 text-2xs opacity-90">{t("common", W.preview.invalid)}</p>}
         </div>
       )}
     </div>

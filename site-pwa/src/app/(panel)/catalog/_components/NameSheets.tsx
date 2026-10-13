@@ -121,7 +121,7 @@ export function CategorySheet({
 
   return (
     <Sheet title={t("common", K.newCategory)} onClose={onClose}>
-      <p className="text-[11px] text-text-secondary">{t("common", K.guide.category.body)}</p>
+      <p className="text-2xs text-text-secondary">{t("common", K.guide.category.body)}</p>
       <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} categories={categories} label={label} />
       {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">

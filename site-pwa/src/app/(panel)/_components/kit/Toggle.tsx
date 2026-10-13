@@ -33,7 +33,7 @@ export function Toggle({ checked, onChange, label, hint, disabled, className }: 
     >
       <span className="flex flex-col gap-0.5">
         <span className="text-sm font-bold text-text-primary">{label}</span>
-        {hint && <span className="text-[11px] text-text-secondary">{hint}</span>}
+        {hint && <span className="text-2xs text-text-secondary">{hint}</span>}
       </span>
       <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? "bg-primary" : "bg-[var(--leaf-bg)] ring-1 ring-inset ring-card-border"}`}>
         <span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? "start-[1.375rem]" : "start-0.5"}`} />

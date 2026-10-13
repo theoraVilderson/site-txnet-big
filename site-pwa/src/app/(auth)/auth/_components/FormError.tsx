@@ -47,7 +47,7 @@ export function FormError({
             </ul>
           )}
           {reference && (
-            <p className="mt-2 font-mono text-[0.65rem] opacity-70" dir="ltr">
+            <p className="mt-2 font-mono text-3xs opacity-70" dir="ltr">
               {reference}
             </p>
           )}

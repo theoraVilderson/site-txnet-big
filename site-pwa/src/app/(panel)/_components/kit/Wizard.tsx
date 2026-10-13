@@ -234,7 +234,7 @@ function WizardLayer({
                     </span>
                     <span className="flex min-w-0 flex-col">
                       <span className={cn("text-xs font-bold", current || isDone ? "text-text-primary" : "text-text-secondary")}>{s.title}</span>
-                      {s.subtitle && <span className="line-clamp-1 text-[10px] text-text-secondary">{s.subtitle}</span>}
+                      {s.subtitle && <span className="line-clamp-1 text-3xs text-text-secondary">{s.subtitle}</span>}
                     </span>
                   </button>
                 </li>
@@ -258,7 +258,7 @@ function WizardLayer({
                     </span>
                   )}
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold text-text-secondary">{t("common", K.wizard.stepOf, { current: String(index + 1), total: String(total) })}</p>
+                    <p className="text-2xs font-bold text-text-secondary">{t("common", K.wizard.stepOf, { current: String(index + 1), total: String(total) })}</p>
                     <h2 id={`${id}-title`} className="truncate text-base font-bold text-text-primary">
                       {step.title}
                     </h2>

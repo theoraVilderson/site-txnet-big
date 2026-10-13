@@ -194,7 +194,7 @@ export function AccountSwitcher() {
 
         {group.members.length > 0 && (
           <div className="py-1">
-            <p className="px-4 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wide text-text-secondary">
+            <p className="px-4 pb-1 pt-2 text-2xs font-bold uppercase tracking-wide text-text-secondary">
               {t("common", C.accounts.switchTo)}
             </p>
             {group.members.map((member) =>

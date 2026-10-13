@@ -23,7 +23,7 @@ export function CatalogGuide({ onClose }: { onClose: () => void }) {
         {STEPS.map((s, i) => (
           <li key={s} className="relative flex flex-col gap-1 rounded-xl border border-card-border bg-card-bg p-3">
             <p className="text-xs font-bold text-primary">{t("common", K.guide[s].title)}</p>
-            <p className="text-[11px] leading-5 text-text-secondary">{t("common", K.guide[s].body)}</p>
+            <p className="text-2xs leading-5 text-text-secondary">{t("common", K.guide[s].body)}</p>
             {i < STEPS.length - 1 && <ArrowRight size={14} className="absolute -end-3 top-1/2 hidden text-primary rtl:-scale-x-100 sm:block" aria-hidden />}
           </li>
         ))}

@@ -99,7 +99,7 @@ export function ProductQuotasCard({ tenantId }: { tenantId: string }) {
               <li key={p.productId} role="group" aria-label={name} className="space-y-2 rounded-xl bg-bg-inner p-3">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-bold text-text-primary">{name}</span>
-                  {!p.listed && <span className="text-[11px] text-text-secondary">{t("common", Q.products.heldUntilEnd)}</span>}
+                  {!p.listed && <span className="text-2xs text-text-secondary">{t("common", Q.products.heldUntilEnd)}</span>}
                 </div>
                 {p.windows.map((w) => {
                   const r = includedReading(w.included, w.includedUsed);
@@ -112,8 +112,8 @@ export function ProductQuotasCard({ tenantId }: { tenantId: string }) {
                     </div>
                   );
                 })}
-                {sold > 0 && <div className="text-[11px] text-text-secondary">{t("common", Q.extraMonth, { cost: money(cost, p.overage.currencyCode) })}</div>}
-                <div className="text-[11px] text-text-secondary">{past(p.overage)}</div>
+                {sold > 0 && <div className="text-2xs text-text-secondary">{t("common", Q.extraMonth, { cost: money(cost, p.overage.currencyCode) })}</div>}
+                <div className="text-2xs text-text-secondary">{past(p.overage)}</div>
               </li>
             );
           })}
@@ -179,7 +179,7 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
               ? t("common", Q.cap.spentNoCap, { spent: money(view.spent, view.currencyCode) })
               : t("common", Q.cap.spentOf, { spent: money(view.spent, view.currencyCode), cap: money(view.cap, view.currencyCode) })}
           </p>
-          <p className="text-[11px] text-text-secondary">{t("common", Q.cap.month, { end: formatInstant(view.month.end, lang, { withTime: false }) ?? "" })}</p>
+          <p className="text-2xs text-text-secondary">{t("common", Q.cap.month, { end: formatInstant(view.month.end, lang, { withTime: false }) ?? "" })}</p>
           <div className="flex flex-wrap items-center gap-2">
             <Input
               className="w-32"
@@ -199,7 +199,7 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
               </Button>
             )}
           </div>
-          <p className="text-[11px] text-text-secondary">{t("common", Q.cap.hint)}</p>
+          <p className="text-2xs text-text-secondary">{t("common", Q.cap.hint)}</p>
         </>
       )}
       {failure && <Alert tone="error">{failure}</Alert>}

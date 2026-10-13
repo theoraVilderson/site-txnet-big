@@ -403,7 +403,7 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
         <p className="min-w-0 flex-1 text-sm font-bold text-text-primary" dir="auto">
           {action ? t("common", G.label[action]) : job.action} · {label}
         </p>
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${STATUS_TONE[job.status]}`}>{t("common", J.status[job.status])}</span>
+        <span className={`rounded-full border px-2 py-0.5 text-3xs font-medium ${STATUS_TONE[job.status]}`}>{t("common", J.status[job.status])}</span>
         {job.status === "running" && (
           <Button variant="quiet" size="sm" disabled={busy} onClick={() => void cancel()} icon={<Square size={12} aria-hidden />}>
             {t("common", J.cancel)}

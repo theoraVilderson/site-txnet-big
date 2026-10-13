@@ -115,7 +115,7 @@ export function UsageMeter({
                 </span>
                 <span className="text-xs text-text-secondary">{t("common", M.of, { total: boundText })}</span>
               </p>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold tabular-nums ${PILL[trafficLevel]}`}>
+              <span className={`rounded-full px-2 py-0.5 text-2xs font-bold tabular-nums ${PILL[trafficLevel]}`}>
                 {t("common", M.percentLeft, { percent: percentLeft(trafficLeft) })}
               </span>
             </div>
@@ -126,7 +126,7 @@ export function UsageMeter({
               splash={splash}
               label={t("common", S.ring.label, { used: consumed, bought: boundText, remaining })}
             />
-            <p className="text-[11px] text-text-secondary">{t("common", S.usage, { consumed, purchased: boundText })}</p>
+            <p className="text-2xs text-text-secondary">{t("common", S.usage, { consumed, purchased: boundText })}</p>
           </Tile>
         ) : row.trafficUnlimited ? (
           <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.traffic)}>
@@ -135,7 +135,7 @@ export function UsageMeter({
               {t("common", M.unlimited)}
             </p>
             <Tank used={1} level="ok" live={live} splash={splash} />
-            <p className="text-[11px] text-text-secondary">{t("common", S.usageUnlimited, { consumed })}</p>
+            <p className="text-2xs text-text-secondary">{t("common", S.usageUnlimited, { consumed })}</p>
           </Tile>
         ) : (
           <Tile icon={<Gauge size={14} aria-hidden />} label={t("common", M.trafficUsed)}>
@@ -155,7 +155,7 @@ export function UsageMeter({
                 {t("common", M.unlimited)}
               </p>
               <Tank used={1} level="ok" />
-              <p className="text-[11px] text-text-secondary">{t("common", S.periodUnlimited, { from })}</p>
+              <p className="text-2xs text-text-secondary">{t("common", S.periodUnlimited, { from })}</p>
             </>
           ) : (
             <>
@@ -163,7 +163,7 @@ export function UsageMeter({
                 {days}
               </p>
               <Tank used={time.spent} level={timeLevel} />
-              {until && <p className="text-[11px] text-text-secondary">{t("common", M.until, { at: until })}</p>}
+              {until && <p className="text-2xs text-text-secondary">{t("common", M.until, { at: until })}</p>}
             </>
           )}
         </Tile>
@@ -204,13 +204,13 @@ function PaygTraffic({ row, period, live, splash }: { row: GrantRow; period: Per
       <p className="meter-figure text-xl font-black tabular-nums leading-tight text-text-primary" dir="ltr">
         {view && period ? bytes(livePeriodBytes(view.current.consumedBytes, period.baseline, row.consumedBytes)) : lifetime}
       </p>
-      <p className="flex items-center gap-1 text-[11px] font-bold text-primary">
+      <p className="flex items-center gap-1 text-2xs font-bold text-primary">
         <Unlimited size={14} aria-hidden />
         {t("common", M.payg)}
       </p>
       <Tank used={1} level="ok" live={live} splash={splash} />
       {view && (
-        <div className="space-y-0.5 text-[11px] text-text-secondary">
+        <div className="space-y-0.5 text-2xs text-text-secondary">
           {money(view.current.spent) && <p className="font-bold text-text-primary">{t("common", M.periodCost, { amount: money(view.current.spent)! })}</p>}
           <p>{t("common", M.periodRange, { from: day(view.current.from), to: day(view.current.to) })}</p>
           {view.previous && (
@@ -236,7 +236,7 @@ function PaygTraffic({ row, period, live, splash }: { row: GrantRow; period: Per
 function Tile({ icon, label, level = "ok", children }: { icon: ReactNode; label: string; level?: Level; children: ReactNode }) {
   return (
     <div className={`flex min-w-0 flex-col gap-2 rounded-2xl border p-3 transition-colors duration-500 ${TILE[level]}`}>
-      <p className="flex items-center gap-1.5 text-[11px] font-bold text-text-secondary">
+      <p className="flex items-center gap-1.5 text-2xs font-bold text-text-secondary">
         {icon}
         {label}
       </p>

@@ -184,7 +184,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
     const text = errors[k] ? t("common", errors[k]!) : serverErrors[k];
     if (!text) return null;
     return (
-      <motion.span initial={reduceMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="text-[11px] font-bold text-error">
+      <motion.span initial={reduceMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} role="alert" className="text-2xs font-bold text-error">
         {text}
       </motion.span>
     );
@@ -268,7 +268,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                           {DRIVER_LABELS[d]}
                         </span>
                         <span
-                          className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-3xs font-bold ${
                             ready ? "bg-[var(--leaf-bg)] text-success" : "bg-card-bg text-text-secondary"
                           }`}
                         >
@@ -308,14 +308,14 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
             <p className="text-xs font-bold text-text-primary">
               {t("common", W.profile.title)} <span dir="ltr">{DRIVER_LABELS[form.driverType]}</span>
             </p>
-            <div className="flex flex-wrap gap-1.5 text-[11px]">
+            <div className="flex flex-wrap gap-1.5 text-2xs">
               <Chip>{t("common", R.transport[profile.transport])}</Chip>
               <Chip>{t("common", R.counter[profile.counterSemantics])}</Chip>
               <Chip>{t("common", profile.login === "apiKey" ? W.profile.apiKey : W.profile.userPassword)}</Chip>
               {profile.clientBaseUrl && <Chip>{t("common", W.profile.clientBaseUrl)}</Chip>}
             </div>
             {!profile.supported && (
-              <p className="flex items-start gap-2 text-[11px] leading-5 text-text-secondary">
+              <p className="flex items-start gap-2 text-2xs leading-5 text-text-secondary">
                 <Clock size={12} className="mt-1 shrink-0" aria-hidden />
                 {t("common", W.notReadyNote)}
               </p>
@@ -369,7 +369,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
                   animate={{ opacity: 1, scale: 1 }}
                   exit={reduceMotion ? undefined : { opacity: 0, scale: 0.9 }}
                   onClick={() => set("ipAddress", suggestedIp)}
-                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-3 py-1 text-[11px] font-bold text-primary hover:brightness-105"
+                  className="inline-flex w-fit items-center gap-1.5 rounded-full border border-[var(--accent-primary)]/40 bg-[var(--leaf-bg)] px-3 py-1 text-2xs font-bold text-primary hover:brightness-105"
                 >
                   <Sparkles size={12} aria-hidden />
                   <span dir="ltr">{t("common", W.useIp, { ip: suggestedIp })}</span>
@@ -401,7 +401,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
               options={COUNTER_SEMANTICS.map((v) => ({ value: v, title: t("common", R.counter[v]) }))}
               onPick={(v) => set("counterSemantics", v)}
             />
-            <span className="text-[11px] leading-5 text-text-secondary">{t("common", F.counterSemanticsHint)}</span>
+            <span className="text-2xs leading-5 text-text-secondary">{t("common", F.counterSemanticsHint)}</span>
           </div>
         </Advanced>
       </div>
@@ -434,7 +434,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
         {errorText("credentials")}
         {form.transport === "push" &&
           labeled("radiusSecret", t("common", F.radiusSecret), secret("radiusSecret", form.radiusSecret, (v) => set("radiusSecret", v)), t("common", F.radiusSecretHint))}
-        <p className="flex items-center gap-1.5 text-[11px] font-bold text-success">
+        <p className="flex items-center gap-1.5 text-2xs font-bold text-success">
           <ShieldCheck size={14} aria-hidden />
           {t("common", W.login.safe)}
         </p>
@@ -536,7 +536,7 @@ function BudgetField({ value, onChange, error }: { value: string; onChange: (v: 
         )}
       </AnimatePresence>
       {error}
-      <p className="text-[11px] leading-5 text-text-secondary">{t("common", SYSTEMS_KEYS.budget.tradeOff)}</p>
+      <p className="text-2xs leading-5 text-text-secondary">{t("common", SYSTEMS_KEYS.budget.tradeOff)}</p>
     </div>
   );
 }
@@ -550,7 +550,7 @@ function Advanced({ title, hint, forceOpen, children }: { title: string; hint: s
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={shown} className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-start">
         <span className="flex flex-col">
           <span className="text-xs font-bold text-text-primary">{title}</span>
-          <span className="text-[11px] leading-5 text-text-secondary">{hint}</span>
+          <span className="text-2xs leading-5 text-text-secondary">{hint}</span>
         </span>
         <motion.span animate={{ rotate: shown ? 180 : 0 }} transition={{ duration: reduceMotion ? 0 : 0.2 }} className="shrink-0 text-text-secondary">
           <ChevronDown size={16} aria-hidden />
@@ -703,13 +703,13 @@ function DoneScreen({ name, answer, onAnother, onFinish }: { name: string; answe
             transition={{ delay: reduceMotion ? 0 : 0.45 + i * 0.1 }}
             className="flex items-center gap-3 rounded-xl border border-card-border bg-[var(--bg-inner)] p-3 text-xs text-text-primary"
           >
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--leaf-bg)] text-[11px] font-bold text-primary">{i + 1}</span>
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--leaf-bg)] text-2xs font-bold text-primary">{i + 1}</span>
             {t("common", k)}
           </motion.li>
         ))}
       </ol>
       {stored.length > 0 && (
-        <p className="flex items-center gap-1.5 text-[11px] font-bold text-success">
+        <p className="flex items-center gap-1.5 text-2xs font-bold text-success">
           <ShieldCheck size={14} aria-hidden />
           {stored.map((k) => t("common", k)).join(" ")}
         </p>

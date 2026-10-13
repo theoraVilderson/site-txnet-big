@@ -83,7 +83,7 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
         <div className="col-span-10 min-w-0 md:col-span-4">
           <p className="truncate text-sm font-bold text-text-primary">{title}</p>
           {note && <p className="mt-0.5 text-xs text-text-secondary">{note}</p>}
-          <p className="mt-0.5 truncate font-mono text-[10px] text-text-secondary" dir="ltr">
+          <p className="mt-0.5 truncate font-mono text-3xs text-text-secondary" dir="ltr">
             {row.id}
           </p>
         </div>
@@ -102,7 +102,7 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
 
         <div className="col-span-6 flex flex-col items-end gap-1 md:col-span-2 md:items-center">
           {when && (
-            <span dir="ltr" className="font-mono text-[11px] text-text-primary">
+            <span dir="ltr" className="font-mono text-2xs text-text-primary">
               {when}
             </span>
           )}
@@ -112,7 +112,7 @@ export function LedgerRow({ row }: { row: WalletLedgerRow }) {
         </div>
 
         <div className="col-span-12 hidden flex-col items-end md:col-span-3 md:flex">
-          <span className="text-[10px] text-text-secondary">{t("common", F.detail.balanceAfter)}</span>
+          <span className="text-3xs text-text-secondary">{t("common", F.detail.balanceAfter)}</span>
           <span dir="ltr" className="font-mono text-xs font-medium text-gold">
             {money(row.balanceAfter)}
           </span>
