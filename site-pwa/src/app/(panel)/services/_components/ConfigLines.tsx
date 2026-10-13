@@ -191,16 +191,15 @@ function Line({ line, config, onRenamed }: { line: string; config?: UserConfigRo
         </code>
       )}
 
-      {qrOpen && (
-        <QrDialog
-          title={name}
-          value={line}
-          label={t("common", N.qrLabel, { name })}
-          copied={copied}
-          onCopy={() => void copy()}
-          onClose={() => setQrOpen(false)}
-        />
-      )}
+      <QrDialog
+        open={qrOpen}
+        title={name}
+        value={line}
+        label={t("common", N.qrLabel, { name })}
+        copied={copied}
+        onCopy={() => void copy()}
+        onClose={() => setQrOpen(false)}
+      />
     </li>
   );
 }

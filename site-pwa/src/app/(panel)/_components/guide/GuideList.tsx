@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { AlertCircle, ArrowRight, ChevronLeft, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, ArrowRight, ChevronLeft } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -120,46 +119,5 @@ export function GuideList({
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * A panel over the page for guides — a side sheet from `lg`, the full width
- * below. Rendered into `document.body` for the reason `QrDialog.tsx` gives:
- * the top bar's `backdrop-filter` would contain a `fixed` child.
- */
-export function GuideSheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  const { t } = useLocale();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/50" onClick={onClose}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full max-w-md flex-col border-s border-card-border bg-card-bg shadow-xl"
-      >
-        <div className="flex items-center justify-between gap-3 border-b border-card-border px-5 py-4">
-          <p className="min-w-0 truncate text-sm font-bold text-text-primary">{title}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("common", H.close)}
-            autoFocus
-            className="rounded-full p-1.5 text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-          >
-            <X size={18} aria-hidden />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">{children}</div>
-      </div>
-    </div>,
-    document.body,
   );
 }

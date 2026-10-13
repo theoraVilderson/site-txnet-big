@@ -19,7 +19,7 @@ gets their `/sub` link — copied or as a QR, as often as asked — and the only
 place a leaked one is reset. The panel never says "key".
 
 Its pieces: `_components/MyServicesView.tsx` (the page), `_components/ServiceRow.tsx`
-(one Grant), `ConfigLines.tsx` (its lines, F-307-c), `QrDialog.tsx`,
+(one Grant), `ConfigLines.tsx` (its lines, F-307-c), `QrDialog.tsx` (on the kit `Dialog`, FE-1-m),
 `GrantConfigs.tsx` (its configs' actions under "manage", F-027-ac),
 `UsageBars.tsx`, `_hooks/useGrantConfigs.ts` and `useSubscriptionLink.ts`
 (one read each, shared by the row),

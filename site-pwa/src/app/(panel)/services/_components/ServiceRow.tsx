@@ -362,16 +362,15 @@ export const ServiceRow = memo(function ServiceRow({
           {sub.error && <LinkError error={sub.error} />}
         </section>
 
-        {qrOpen && sub.link && (
-          <QrDialog
-            title={t("common", L.label)}
-            value={sub.link}
-            label={t("common", L.qrLabel)}
-            copied={sub.copied}
-            onCopy={() => void sub.copy()}
-            onClose={() => setQrOpen(false)}
-          />
-        )}
+        <QrDialog
+          open={qrOpen && !!sub.link}
+          title={t("common", L.label)}
+          value={sub.link ?? ""}
+          label={t("common", L.qrLabel)}
+          copied={sub.copied}
+          onCopy={() => void sub.copy()}
+          onClose={() => setQrOpen(false)}
+        />
       </div>
 
       <button

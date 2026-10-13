@@ -313,7 +313,7 @@
   "site-pwa/src/app/(panel)/payments/manual/_components/ManualPaymentsView.tsx": 411,
   "site-pwa/src/app/(panel)/resellers/[id]/_components/ResellerDetailView.tsx": 499,
   "site-pwa/src/app/(panel)/resellers/buy/_components/BuyResellerView.tsx": 478,
-  "site-pwa/src/app/(panel)/services/_components/ServiceRow.tsx": 476,
+  "site-pwa/src/app/(panel)/services/_components/ServiceRow.tsx": 475,
   "site-pwa/src/app/(panel)/shop/_components/ShopView.tsx": 781,
   "site-pwa/src/app/(panel)/support/_components/AgentThreadView.tsx": 603,
   "site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx": 410,

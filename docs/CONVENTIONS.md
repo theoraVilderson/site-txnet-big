@@ -1233,12 +1233,11 @@ message: expand first, move the readers, then drop — end the destructive line 
 
 **Why.** A reseller's customers are whoever buys from them — on a phone, with
 a screen reader, with a keyboard, in a bright street. The kit already does the
-hard part; these are the ways a screen built beside it undoes it. Two
-hand-rolled backdrops are the `except` today and leave with FE-1-m.
+hard part; these are the ways a screen built beside it undoes it.
 
 ```check C-40
 forbid: ^(?!\s*(//|\*|/\*|\{/\*)).*(<(img|Image)\b(?![^>]*\balt=)[^>]*>|<(div|span|li|td|tr|p)\b[^>]*\bonClick=)
 in: site-pwa/src/**/*.tsx, coinsite/src/**/*.tsx
-except: site-pwa/src/**/*.test.tsx, site-pwa/src/app/(panel)/services/_components/QrDialog.tsx, site-pwa/src/app/(panel)/_components/guide/GuideList.tsx
+except: site-pwa/src/**/*.test.tsx
 message: use a kit primitive or a native button/a, and give an image its alt (C-40, contract.ux.md K3–K7)
 ```

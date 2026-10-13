@@ -367,16 +367,15 @@ function SubscriptionLink({ api, grantId }: { api: ResellerUserGrantsApi; grantI
           <Alert tone="error">{message(error)}</Alert>
         </div>
       )}
-      {qr && link && (
-        <QrDialog
-          title={t("common", S.subscription)}
-          value={link}
-          label={t("common", S.subscription)}
-          copied={copied}
-          onCopy={() => void copy()}
-          onClose={() => setQr(false)}
-        />
-      )}
+      <QrDialog
+        open={qr && !!link}
+        title={t("common", S.subscription)}
+        value={link ?? ""}
+        label={t("common", S.subscription)}
+        copied={copied}
+        onCopy={() => void copy()}
+        onClose={() => setQr(false)}
+      />
     </div>
   );
 }

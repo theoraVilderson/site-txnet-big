@@ -7,7 +7,8 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { guideReadApi } from "@/lib/guide-api";
 import { sectionOfPath } from "../../_lib/guide-help";
-import { GuideList, GuideSheet, useSlotGuides } from "./GuideList";
+import { Sheet } from "../kit";
+import { GuideList, useSlotGuides } from "./GuideList";
 import { GuideSearchBox, GuideSearchResults } from "./GuideSearch";
 
 const H = FrontendI18nKeys.common.guideHelp;
@@ -35,12 +36,15 @@ export function HelpButton() {
       >
         <CircleHelp size={20} aria-hidden />
       </button>
-      {open && <HelpSheet onClose={() => setOpen(false)} />}
+      <Sheet open={open} onClose={() => setOpen(false)} title={t("common", H.title)}>
+        <HelpBody />
+      </Sheet>
     </>
   );
 }
 
-function HelpSheet({ onClose }: { onClose: () => void }) {
+/** Mounted only while the sheet is open, so the section is the one the path is in then. */
+function HelpBody() {
   const { t } = useLocale();
   const section = sectionOfPath(usePathname() ?? "/");
   const slot = useSlotGuides(`route:${section}`, () => guideReadApi.forSlot("route", section));
@@ -48,15 +52,13 @@ function HelpSheet({ onClose }: { onClose: () => void }) {
   // F-414-j: typing searches every guide this tenant shows; an empty box is this page's help again.
   const [query, setQuery] = useState("");
   return (
-    <GuideSheet title={t("common", H.title)} onClose={onClose}>
-      <div className="flex flex-col gap-4">
-        <GuideSearchBox value={query} onChange={setQuery} />
-        {query.trim() !== "" ? (
-          <GuideSearchResults query={query} />
-        ) : (
-          <GuideList {...slot} empty={t("common", H.empty)} open={openKey} onOpen={setOpenKey} />
-        )}
-      </div>
-    </GuideSheet>
+    <div className="flex flex-col gap-4">
+      <GuideSearchBox value={query} onChange={setQuery} />
+      {query.trim() !== "" ? (
+        <GuideSearchResults query={query} />
+      ) : (
+        <GuideList {...slot} empty={t("common", H.empty)} open={openKey} onOpen={setOpenKey} />
+      )}
+    </div>
   );
 }
