@@ -46,6 +46,15 @@ what `resolveLanguage` answers when nothing matches.
 Cache is replaced atomically per language, never merged. Reconnect uses
 exponential backoff and re-fetches on recovery.
 
+## Request language (Nest services, CS-1-a)
+
+Each service's `LanguageMiddleware` runs on every route and records
+`resolveLanguage(Accept-Language)` with `setRequestLanguage` (shared-core
+`lib/i18n/request-language.ts`, the one place the field is named). Everything
+that answers in a language — controllers and the shared-core envelope — reads
+it with `requestLanguage(req, locale)`, whose fallback is that service's
+`LocaleService.getDefaultLanguage()` (`DEFAULT_LANGUAGE`), never a literal (C-17).
+
 ## Consumers
 
 | Consumer | Resolution | Scope |

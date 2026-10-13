@@ -1,5 +1,5 @@
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
@@ -42,7 +42,7 @@ export class WalletHistoryController {
     const { userId } = identityOf(req);
     // The search is matched against labels in the language the request asked
     // for — the same one the panel is rendering those labels in.
-    const lang = (req as { language?: string }).language || this.locale.getDefaultLanguage();
+    const lang = requestLanguage(req, this.locale);
     return this.history.ledger({ userId, lang, ...query });
   }
 

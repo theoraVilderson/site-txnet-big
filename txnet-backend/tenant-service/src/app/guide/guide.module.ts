@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { FilesModule } from '../files/files.module';
+import { LocaleModule } from '../locale/locale.module';
 import { GuideAdmin } from './guide-admin';
 import { GuideAdminController } from './guide-admin.controller';
 import { GuideFeedbackController } from './guide-feedback.controller';
@@ -19,7 +20,7 @@ import { GuideStats } from './guide-stats';
  * `PrismaModule` and `RedisModule` are `@Global`, so neither is imported here.
  */
 @Module({
-  imports: [FilesModule],
+  imports: [FilesModule, LocaleModule],
   controllers: [GuidePublicController, GuideSearchController, GuideAdminController, GuideFeedbackController, GuideInternalController, GuideInternalSearchController],
   providers: [GuideReader, GuideGenerations, GuideAdmin, GuideStats, GuideFileSweep],
   exports: [GuideReader, GuideGenerations],

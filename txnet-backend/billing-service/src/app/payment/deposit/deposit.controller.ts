@@ -15,18 +15,7 @@ import {
 } from '@nestjs/common';
 import { CouponChannel, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
-import {
-  BackendI18nKeys,
-  CredentialUnavailable,
-  headerValue,
-  IdentityHeaders,
-  presentsServiceToken,
-  RateLimitBucket,
-  RequestHeaders,
-  holdsPermission,
-  rateLimitBucketKey,
-  TenantCapability,
-} from '@txnet-backend/shared-core';
+import { BackendI18nKeys, CredentialUnavailable, headerValue, IdentityHeaders, presentsServiceToken, RateLimitBucket, RequestHeaders, holdsPermission, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../../locale/locale.service';
@@ -181,7 +170,7 @@ export class DepositController {
   })
   async quote(@Body(new ZodValidationPipe(depositQuoteSchema)) body: DepositQuoteBody, @Req() req: Request) {
     const { userId } = identityOf(req);
-    const lang = (req as { language?: string }).language || this.locale.getDefaultLanguage();
+    const lang = requestLanguage(req, this.locale);
 
     try {
       const quote = await this.deposits.quote({
@@ -236,7 +225,7 @@ export class DepositController {
         origin: req.headers.origin ?? null,
         canTest: canTest(req),
         chat: this.chatOf(req),
-        lang: (req as { language?: string }).language || this.locale.getDefaultLanguage(),
+        lang: requestLanguage(req, this.locale),
       });
     } catch (e) {
       throw toHttp(e);

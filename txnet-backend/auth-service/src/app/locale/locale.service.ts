@@ -32,10 +32,8 @@ export class LocaleService implements OnModuleInit, OnModuleDestroy {
       'localhost:50051',
     );
     const scope = this.configService.get<string>('LOCALE_SCOPE', 'backend');
-    this.defaultLanguage = this.configService.get<string>(
-      'DEFAULT_LANGUAGE',
-      'fa',
-    );
+    // env.validation.ts holds the default (C-17): no second one here.
+    this.defaultLanguage = this.configService.getOrThrow<string>('DEFAULT_LANGUAGE');
 
     // preloadLangs omitted → load every language locale-service advertises.
     this.client = createLocaleClient({

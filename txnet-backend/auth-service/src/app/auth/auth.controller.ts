@@ -1,8 +1,4 @@
-import {
-  RateLimitBucket,
-  rateLimitBucketKey,
-  TenantCapability,
-} from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -20,6 +16,7 @@ import { REFRESH_TOKEN_COOKIE } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuthService } from './auth.service';
+import { LocaleService } from '../locale/locale.service';
 import {
   forgotPasswordSchema,
   forgotVerifySchema,
@@ -47,16 +44,15 @@ import { resolveSwitchScope } from '../common/security/switch-scope';
 @TenantCapability('signIn')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly locale: LocaleService,
+  ) {}
 
   private ua(req: Request) {
     return req.get('user-agent') ?? 'unknown';
   }
 
-  // Resolved by LanguageMiddleware from Accept-Language; always defined.
-  private lang(req: Request): string {
-    return (req as any).language ?? 'fa';
-  }
 
   @Post('login/password')
   @HttpCode(HttpStatus.OK)
@@ -78,7 +74,7 @@ export class AuthController {
       body,
       ip,
       this.ua(req),
-      this.lang(req),
+      requestLanguage(req, this.locale),
       resolveSwitchScope(req),
     );
     return this.withRefreshCookie(res, result);
@@ -101,7 +97,7 @@ export class AuthController {
       body.phoneNumber,
       body.channel,
       ip,
-      this.lang(req),
+      requestLanguage(req, this.locale),
     );
   }
 
@@ -245,7 +241,7 @@ export class AuthController {
     windowSec: 900,
   })
   forgot(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
-    return this.auth.forgotPassword(body, ip, this.lang(req));
+    return this.auth.forgotPassword(body, ip, requestLanguage(req, this.locale));
   }
 
   @Post('password/forgot/verify-otp')

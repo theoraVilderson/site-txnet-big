@@ -1,4 +1,5 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
+import { setRequestLanguage } from '@txnet-backend/shared-core';
 import type { NextFunction, Request, Response } from 'express';
 
 import { LocaleService } from './locale.service';
@@ -14,8 +15,7 @@ export class LanguageMiddleware implements NestMiddleware {
 
   use(req: Request, _res: Response, next: NextFunction) {
     const acceptLanguage = req.headers['accept-language'];
-    (req as Request & { language?: string }).language =
-      this.locale.resolveLanguage(acceptLanguage);
+    setRequestLanguage(req, this.locale.resolveLanguage(acceptLanguage));
     next();
   }
 }

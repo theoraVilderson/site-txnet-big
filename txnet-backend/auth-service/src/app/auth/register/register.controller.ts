@@ -1,8 +1,4 @@
-import {
-  RateLimitBucket,
-  rateLimitBucketKey,
-  TenantCapability,
-} from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -20,6 +16,7 @@ import { RegisterService } from './register.service';
 import { AuthService } from '../auth.service';
 import { registerSchema, verifyPhoneSchema } from './register.schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { LocaleService } from '../../locale/locale.service';
 import { ResponseType } from '../../common/response/response.util';
 import { setRefreshCookie } from '../../common/http/refresh-cookie';
 import { RateLimit } from '../decorators/rate-limit.decorator';
@@ -34,6 +31,7 @@ export class RegisterController {
   constructor(
     private readonly registerService: RegisterService,
     private readonly authService: AuthService,
+    private readonly locale: LocaleService,
   ) {}
 
   // 202, not 201 (F-067-a): nothing is created here — the `user` row lands at
@@ -54,7 +52,7 @@ export class RegisterController {
     @Ip() ip: string,
     @Req() req: Request,
   ) {
-    const lang = (req as any).language ?? 'fa';
+    const lang = requestLanguage(req, this.locale);
     // No tenant argument: the request's tenant is ambient from here down
     // (ADR-0024). `identity` still never reads `tenant_domain` (§8) — it reads
     // the scope `TenantContextMiddleware` opened from what `tenant` resolved.

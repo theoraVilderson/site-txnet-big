@@ -1,8 +1,4 @@
-import {
-  RateLimitBucket,
-  rateLimitBucketKey,
-  TenantCapability,
-} from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -22,6 +18,7 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../auth/decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../auth/decorators/require-captcha.decorator';
 import { AccountSwitchService } from './account-switch.service';
+import { LocaleService } from '../locale/locale.service';
 import {
   addByOtpRequestSchema,
   addByOtpVerifySchema,
@@ -64,11 +61,11 @@ import { AllowRestricted } from '../auth/decorators/allow-restricted.decorator';
 @AllowRestricted()
 @Controller('auth/accounts')
 export class AccountSwitchController {
-  constructor(private readonly accounts: AccountSwitchService) {}
+  constructor(
+    private readonly accounts: AccountSwitchService,
+    private readonly locale: LocaleService,
+  ) {}
 
-  private lang(req: Request): string {
-    return (req as any).language ?? 'fa';
-  }
 
   private callerId(req: Request): string {
     return (req as any).user.sub;
@@ -100,7 +97,7 @@ export class AccountSwitchController {
       body.phoneNumber,
       body.channel,
       ip,
-      this.lang(req),
+      requestLanguage(req, this.locale),
     );
   }
 

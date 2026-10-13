@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
+import { requestLanguage } from '../i18n/request-language';
 import type { EnvelopeTranslator } from './response';
 import { sanitizeError } from './sanitize-error';
 
@@ -30,9 +31,7 @@ export class I18nExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const safe = sanitizeError(exception);
-    const lang =
-      (request as unknown as { language?: string }).language ||
-      this.localeService.getDefaultLanguage();
+    const lang = requestLanguage(request, this.localeService);
     const translate = (key: string) =>
       this.localeService.getKey(lang, 'errors', key) || key;
 

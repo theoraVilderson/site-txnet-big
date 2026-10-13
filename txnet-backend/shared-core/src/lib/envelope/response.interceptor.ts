@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { requestLanguage } from '../i18n/request-language';
 import type { EnvelopeTranslator } from './response';
 
 /**
@@ -27,8 +28,7 @@ export class ResponseInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-    const lang =
-      (request as any).language || this.localeService.getDefaultLanguage();
+    const lang = requestLanguage(request, this.localeService);
 
     return next.handle().pipe(
       map((data) => {

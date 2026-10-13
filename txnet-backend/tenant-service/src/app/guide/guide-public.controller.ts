@@ -1,5 +1,5 @@
 import { Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
-import { PublicRoute, TenantContext, publicPath } from '@txnet-backend/shared-core';
+import { PublicRoute, TenantContext, publicPath, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
@@ -7,6 +7,7 @@ import { guideKeySchema, guideListQuerySchema, guideSearchQuerySchema } from './
 import { GuidePlacementQuery, GuideRead, GuideReader, ResolvedGuide } from './guide-reader';
 import type { GuideHit, GuideMatch } from './guide-search';
 import { GuideStats, viewerHash } from './guide-stats';
+import { LocaleService } from '../locale/locale.service';
 
 /** `GET /api/public/tenant/guides` (F-414-b). */
 export const GUIDES_PATH = publicPath('tenant', 'guides');
@@ -33,6 +34,7 @@ export class GuidePublicController {
   constructor(
     private readonly reader: GuideReader,
     private readonly stats: GuideStats,
+    private readonly locale: LocaleService,
   ) {}
 
   @Get()
@@ -43,7 +45,7 @@ export class GuidePublicController {
     @Query(new ZodValidationPipe(guideListQuerySchema)) q: GuidePlacementQuery,
   ): Promise<{ guides: ResolvedGuide[] } | undefined> {
     const tenantId = TenantContext.current('guides by host').id;
-    const lang = languageOf(req);
+    const lang = requestLanguage(req, this.locale);
     const etag = await this.reader.etag(tenantId, ['list', q.targetKind, q.targetRef, q.surface, lang]);
     if (notModified(req, res, etag)) return undefined;
     return answer(res, await this.reader.list(tenantId, q, lang));
@@ -58,7 +60,7 @@ export class GuidePublicController {
     @Param('key', new ZodValidationPipe(guideKeySchema)) key: string,
   ): Promise<{ guide: ResolvedGuide } | undefined> {
     const tenantId = TenantContext.current('guide by host').id;
-    const lang = languageOf(req);
+    const lang = requestLanguage(req, this.locale);
     const etag = await this.reader.etag(tenantId, ['one', key, lang]);
     if (notModified(req, res, etag)) return undefined;
     const read = await this.reader.one(tenantId, key, lang);
@@ -77,7 +79,7 @@ export class GuidePublicController {
   async view(@Req() req: Request, @Param('key', new ZodValidationPipe(guideKeySchema)) key: string): Promise<void> {
     const tenantId = TenantContext.current('guide view by host').id;
     const viewer = viewerHash(req.ip ?? '', String(req.headers['user-agent'] ?? ''));
-    await this.stats.view(tenantId, key, 'panel', viewer, languageOf(req));
+    await this.stats.view(tenantId, key, 'panel', viewer, requestLanguage(req, this.locale));
   }
 }
 
@@ -88,7 +90,10 @@ export class GuidePublicController {
  */
 @Controller(GUIDE_SEARCH_PATH)
 export class GuideSearchController {
-  constructor(private readonly reader: GuideReader) {}
+  constructor(
+    private readonly reader: GuideReader,
+    private readonly locale: LocaleService,
+  ) {}
 
   @Get()
   @PublicRoute({ doors: ['panel'] })
@@ -98,15 +103,12 @@ export class GuideSearchController {
     @Query(new ZodValidationPipe(guideSearchQuerySchema)) q: { q: string; surface: 'panel' | 'bot'; match: GuideMatch },
   ): Promise<{ hits: GuideHit[] } | undefined> {
     const tenantId = TenantContext.current('guide search by host').id;
-    const read = await this.reader.search(tenantId, q.q, q.surface, languageOf(req), q.match);
+    const read = await this.reader.search(tenantId, q.q, q.surface, requestLanguage(req, this.locale), q.match);
     if (notModified(req, res, read.etag)) return undefined;
     return answer(res, read);
   }
 }
 
-function languageOf(req: Request): string {
-  return (req as Request & { language?: string }).language ?? 'fa';
-}
 
 /** A 304 when the caller holds the current ETag; Express drops the body. */
 function notModified(req: Request, res: Response, etag: string | null): boolean {

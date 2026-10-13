@@ -21,7 +21,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { GuideKind } from '@prisma/client';
-import { ResellerLimitReached } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -51,6 +51,7 @@ import {
 import { GuideManageGuard } from './guide-manage.guard';
 import { guideKeySchema, guideStatsQuerySchema } from './guide-public.schema';
 import { GuideStat, GuideStats } from './guide-stats';
+import { LocaleService } from '../locale/locale.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<GuideRejection, 400 | 404 | 409 | 413 | 415> = {
@@ -79,11 +80,12 @@ export class GuideAdminController {
   constructor(
     private readonly guides: GuideAdmin,
     private readonly numbers: GuideStats,
+    private readonly locale: LocaleService,
   ) {}
 
   @Get()
   list(@Req() req: Request): Promise<GuideList> {
-    return this.guides.list(actorOf(req), languageOf(req));
+    return this.guides.list(actorOf(req), requestLanguage(req, this.locale));
   }
 
   @Post()
@@ -160,7 +162,7 @@ export class GuideAdminController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Query(new ZodValidationPipe(previewQuerySchema)) q: { lang?: string },
   ): Promise<GuidePreview> {
-    return refusing(() => this.guides.preview(actorOf(req), id, q.lang ?? languageOf(req)));
+    return refusing(() => this.guides.preview(actorOf(req), id, q.lang ?? requestLanguage(req, this.locale)));
   }
 
   @Post(':id/publish')
@@ -244,6 +246,3 @@ function actorOf(req: Request): GuideActor {
   return { userId, tenantId, permissions };
 }
 
-function languageOf(req: Request): string {
-  return (req as Request & { language?: string }).language ?? 'fa';
-}

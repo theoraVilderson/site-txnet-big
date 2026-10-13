@@ -1,7 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus, Req, UseGuards } from '@nestjs/common';
+import { requestLanguage } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { AuthGuard } from '../auth.guard';
+import { LocaleService } from '../../locale/locale.service';
 import { PermissionRegistryService } from './permission-registry.service';
 
 /**
@@ -13,11 +15,14 @@ import { PermissionRegistryService } from './permission-registry.service';
 @Controller('auth/permissions')
 @UseGuards(AuthGuard)
 export class PermissionRegistryController {
-  constructor(private readonly registry: PermissionRegistryService) {}
+  constructor(
+    private readonly registry: PermissionRegistryService,
+    private readonly locale: LocaleService,
+  ) {}
 
   @Get()
   @HttpCode(HttpStatus.OK)
   list(@Req() req: Request) {
-    return this.registry.list((req as unknown as { language?: string }).language ?? 'fa');
+    return this.registry.list(requestLanguage(req, this.locale));
   }
 }

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NoticeMessenger } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { SensitiveActionGuard } from '../../impersonation/guards/sensitive-action.guard';
@@ -22,6 +22,7 @@ import { MeMessengerService } from './me-messenger.service';
 import { MeTimeZoneService, type TimeZoneReport } from './me-time-zone.service';
 import { MeAccountService, type PasswordChange } from './me-account.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
+import { LocaleService } from '../../locale/locale.service';
 import {
   meEmailRequestSchema,
   meEmailVerifySchema,
@@ -53,6 +54,7 @@ export class MeController {
     private readonly messenger: MeMessengerService,
     private readonly timeZone: MeTimeZoneService,
     private readonly account: MeAccountService,
+    private readonly locale: LocaleService,
   ) {}
 
   @Get('me')
@@ -88,7 +90,7 @@ export class MeController {
     @Ip() ip: string,
     @Req() req: Request,
   ) {
-    return this.email.requestCode(claimsOf(req), body.email, ip, langOf(req));
+    return this.email.requestCode(claimsOf(req), body.email, ip, requestLanguage(req, this.locale));
   }
 
   /** Confirm the code; only now does `user.email` change. */
@@ -204,6 +206,3 @@ function claimsOf(req: Request): AuthClaims {
   return (req as unknown as { user: AuthClaims }).user;
 }
 
-function langOf(req: Request): string {
-  return (req as unknown as { language?: string }).language ?? 'fa';
-}

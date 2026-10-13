@@ -226,7 +226,7 @@ export function resolveGuides(candidates: GuideStoreRow[], shadowed: Set<string>
     .sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
 }
 
-/** The text in `lang`, else in the platform's fallback chain (i18n contract: `en` → `fa`), else any. */
+/** The text in `lang`, else along the locale client's `FALLBACK_LANGS` (i18n contract), else any. */
 export function pickTranslation<T extends { lang: string }>(texts: T[], lang: string): T | undefined {
   for (const l of [lang, ...FALLBACK_LANGS]) {
     const hit = texts.find((t) => t.lang === l);

@@ -14,7 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -46,6 +46,7 @@ import {
   SupportCaller,
   SupportConversationService,
 } from './conversations.service';
+import { LocaleService } from '../locale/locale.service';
 
 const READ = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SUPPORT_READ, identityOf(req).userId),
@@ -122,12 +123,13 @@ export class SupportConversationsController {
   constructor(
     private readonly support: SupportConversationService,
     private readonly attachments: SupportAttachmentService,
+    private readonly locale: LocaleService,
   ) {}
 
   @Get('categories')
   @RateLimit(READ)
   categories(@Req() req: Request): Promise<CategoryView[]> {
-    return this.support.categories(callerOf(req), languageOf(req));
+    return this.support.categories(callerOf(req), requestLanguage(req, this.locale));
   }
 
   /** Whether a human answers now, else when support opens (F-033-g) — the wait notice before and after opening. */
@@ -245,10 +247,6 @@ export function callerOf(req: Request): SupportCaller {
   return { tenantId: identity.tenantId, userId: identity.userId };
 }
 
-/** What `LanguageMiddleware` resolved from `Accept-Language`. */
-export function languageOf(req: Request): string {
-  return (req as Request & { language?: string }).language ?? 'fa';
-}
 
 export async function refusing<T>(work: () => Promise<T>): Promise<T> {
   try {

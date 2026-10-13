@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard, runWithTenant } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, runWithTenant, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
@@ -15,6 +15,7 @@ import { GuidePlacementQuery, GuideReader, ResolvedGuide } from './guide-reader'
 import type { GuideHit, GuideMatch } from './guide-search';
 import { GuideFileSweep, SweepResult } from './guide-file-sweep';
 import { GuideStats, viewerHash } from './guide-stats';
+import { LocaleService } from '../locale/locale.service';
 
 /**
  * A tenant's guides for the bot (F-414-f): the same resolver, cache and
@@ -32,6 +33,7 @@ export class GuideInternalController {
     private readonly reader: GuideReader,
     private readonly stats: GuideStats,
     private readonly files: GuideFileSweep,
+    private readonly locale: LocaleService,
   ) {}
 
   /**
@@ -51,7 +53,7 @@ export class GuideInternalController {
     @Query(new ZodValidationPipe(guideInternalListQuerySchema)) q: GuidePlacementQuery & { tenantId: string },
   ): Promise<{ guides: ResolvedGuide[] }> {
     const { tenantId, ...placement } = q;
-    return (await runWithTenant({ id: tenantId }, () => this.reader.list(tenantId, placement, languageOf(req)))).body;
+    return (await runWithTenant({ id: tenantId }, () => this.reader.list(tenantId, placement, requestLanguage(req, this.locale)))).body;
   }
 
   @Get(':key')
@@ -60,7 +62,7 @@ export class GuideInternalController {
     @Param('key', new ZodValidationPipe(guideKeySchema)) key: string,
     @Query(new ZodValidationPipe(guideInternalOneQuerySchema)) q: { tenantId: string },
   ): Promise<{ guide: ResolvedGuide | null }> {
-    return (await runWithTenant({ id: q.tenantId }, () => this.reader.one(q.tenantId, key, languageOf(req)))).body;
+    return (await runWithTenant({ id: q.tenantId }, () => this.reader.one(q.tenantId, key, requestLanguage(req, this.locale)))).body;
   }
 
   /** A guide the bot sent (F-414-l): counted once a day per chat, as the panel's per viewer. */
@@ -72,7 +74,7 @@ export class GuideInternalController {
     @Query(new ZodValidationPipe(guideInternalViewQuerySchema)) q: { tenantId: string },
     @Body(new ZodValidationPipe(guideInternalViewBodySchema)) body: { viewer: string },
   ): Promise<void> {
-    await runWithTenant({ id: q.tenantId }, () => this.stats.view(q.tenantId, key, 'bot', viewerHash('bot', body.viewer), languageOf(req)));
+    await runWithTenant({ id: q.tenantId }, () => this.stats.view(q.tenantId, key, 'bot', viewerHash('bot', body.viewer), requestLanguage(req, this.locale)));
   }
 }
 
@@ -80,21 +82,17 @@ export class GuideInternalController {
 @Controller('internal/guide-search')
 @UseGuards(ServiceOnlyGuard)
 export class GuideInternalSearchController {
-  constructor(private readonly reader: GuideReader) {}
+  constructor(
+    private readonly reader: GuideReader,
+    private readonly locale: LocaleService,
+  ) {}
 
   @Get()
   async search(
     @Req() req: Request,
     @Query(new ZodValidationPipe(guideInternalSearchQuerySchema)) q: { tenantId: string; q: string; surface: 'panel' | 'bot'; match: GuideMatch },
   ): Promise<{ hits: GuideHit[] }> {
-    return (await runWithTenant({ id: q.tenantId }, () => this.reader.search(q.tenantId, q.q, q.surface, languageOf(req), q.match))).body;
+    return (await runWithTenant({ id: q.tenantId }, () => this.reader.search(q.tenantId, q.q, q.surface, requestLanguage(req, this.locale), q.match))).body;
   }
 }
 
-/** The language asked for: the middleware's when it ran, else the header's first tag. */
-function languageOf(req: Request): string {
-  const set = (req as Request & { language?: string }).language;
-  if (set) return set;
-  const header = req.headers['accept-language'];
-  return (typeof header === 'string' && header.split(/[,;-]/)[0]?.trim().toLowerCase()) || 'fa';
-}
