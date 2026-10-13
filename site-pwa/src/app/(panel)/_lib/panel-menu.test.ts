@@ -47,7 +47,7 @@ const HOLDS_EVERYTHING = ["settlement.manage", "worker.manage"];
 describe("PANEL_MENU", () => {
   it("links only to pages that exist under the (panel) route group", () => {
     // A tenant's own page is built from `me.tenant.id`; the route tree names it `[id]`.
-    const hrefs = visibleMenu(PANEL_MENU, [...HOLDS_EVERYTHING, "platform.tenant.manage"], null, false, null, "TENANT").flatMap((entry) =>
+    const hrefs = visibleMenu(PANEL_MENU, [...HOLDS_EVERYTHING, "platform.tenant.manage", "user.read"], null, false, null, "TENANT").flatMap((entry) =>
       "children" in entry ? entry.children.map((c) => c.href) : [entry.href],
     ).map((href) => href.replace("/TENANT", "/[id]"));
 
@@ -251,14 +251,15 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => h.endsWith("/users"));
   const people = (type: "reseller" | "platform_owner", tenantId: string | null = "T1") =>
-    visibleMenu(PANEL_MENU, type === "platform_owner" ? ["platform.tenant.manage", "user_group.manage"] : ["user.read", "user_group.manage"], type, false, null, tenantId).flatMap((e) =>
+    visibleMenu(PANEL_MENU, ["user.read", "user_group.manage"], type, false, null, tenantId).flatMap((e) =>
       "children" in e ? e.children.map((c) => c.href) : [e.href],
     ).filter((h) => /\/(users|groups|team|roles)$/.test(h));
 
   // The session's own users are not a reseller's workspace: `/users`, never
   // `/my-resellers/<own id>/users`, which read as "my reseller" (2026-10-09).
+  // GR-1-p: `user.read` on the platform too, as on a reseller.
   it("links platform staff to /users, the session's own users", () => {
-    expect(users("platform_owner", ["platform.tenant.manage"])).toEqual(["/users"]);
+    expect(users("platform_owner", ["user.read"])).toEqual(["/users"]);
     expect(users("platform_owner", ["*"])).toEqual(["/users"]);
   });
 
@@ -268,13 +269,13 @@ describe("visibleMenu, the caller's own tenant (F-311-ab)", () => {
     expect(people("platform_owner", null)).toEqual(["/groups"]);
   });
 
-  // A seat sees each by its own key (AC-1-e2): users `user.read`, groups
-  // `user_group.manage` — never the platform's.
+  // Each by its own key on every tenant (AC-1-e2, GR-1-p): users `user.read`,
+  // groups `user_group.manage` — a platform key opens neither.
   it("links a reseller's staff to /users and /groups by their own keys", () => {
     expect(users("reseller", ["user.read"], "R 1")).toEqual(["/users"]);
     expect(people("reseller", "R 1")).toEqual(["/users", "/groups"]);
     expect(users("reseller", ["platform.tenant.manage"], "R 1")).toEqual([]);
-    expect(users("platform_owner", ["user.read"])).toEqual([]);
+    expect(users("platform_owner", ["platform.tenant.manage"])).toEqual([]);
   });
 
   it("is hidden from a caller without the permission, and while the tenant id is unknown", () => {
