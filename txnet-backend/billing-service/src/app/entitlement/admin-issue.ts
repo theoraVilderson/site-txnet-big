@@ -1,5 +1,5 @@
 import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
-import { consumeProductSale, productSaleRef, TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
+import { consumeProductSale, productOpenTo, productSaleRef, TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
 
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
@@ -48,6 +48,7 @@ const issuedOf = (g: { id: string; variantId: string | null; status: GrantStatus
  * (`variant_not_deliverable`): a kind with no handler, a network variant with
  * no group or none that could ever place one (F-111-i), a prepaid network
  * variant stating no traffic (F-111-p). `admin_only` is assignable (F-506).
+ * A product whose audience leaves the user out is not (`not_in_audience`, PT-1-b).
  *
  * **One request, one Grant.** `(source, requestId)` is unique, so a
  * repeat answers the Grant it issued with `issued: false`; the same id for
@@ -72,6 +73,11 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
     sellsTrafficToday({ fulfilmentKind: variant.product.fulfilmentKind, billingMode: variant.billingMode, quotas: variant.quotas }) &&
     (route !== 'panel_group' || (await deliverableGroupIds(tx, [variant.panelGroupId as string])).has(variant.panelGroupId as string));
   if (!deliverable) throw new EntitlementRefused('variant_not_deliverable', input.variantId);
+  // A product sold to chosen groups is not handed out to anyone else either, by anyone (PT-1-b, the user's
+  // call 2026-10-13): staff add the user to a group first.
+  if (!(await productOpenTo(tx, TenantContext.current('admin issue').id, input.userId, variant.product))) {
+    throw new EntitlementRefused('not_in_audience', input.variantId);
+  }
   // After the repeat above, so asking again for the same issue is never refused.
   if (input.bounded) {
     // A platform product the reseller's package does not list is not handed out by its people either (F-019-v5).

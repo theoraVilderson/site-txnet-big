@@ -503,6 +503,7 @@ export function CatalogView() {
                     {categoryNames(p.categoryIds)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
                     {p.platform && ` · ${t("common", K.platform)}`}
                     {!p.isActive && ` · ${t("common", K.inactive)}`}
+                    {(p.userGroupIds?.length ?? 0) > 0 && ` · ${t("common", K.audience.limited)}`}
                   </p>
                   {p.featureKeys.length > 0 && (
                     <p className="mt-1 flex flex-wrap gap-1">

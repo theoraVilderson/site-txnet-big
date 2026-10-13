@@ -69,6 +69,8 @@ function fakeTx(variant: ReturnType<typeof variantRow> | null, placeable = 1) {
   const tx = {
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
     productVariant: { findUnique: vi.fn(async () => variant) },
+    // PT-1-b: the product names no group, so everyone may be issued it.
+    productAudience: { findMany: async () => [] },
     panelGroup: {
       findMany: vi.fn(async () => [{ id: GROUP, minHealthyPanels: 1, members: Array.from({ length: placeable }, (_, i) => ({ panelId: `p${i}` })) }]),
     },

@@ -44,6 +44,7 @@ import {
 import { CapabilityPicker } from "./CapabilityPicker";
 import { FirstRateFields, RateCardSection, RegenerateCardSection } from "./RateCardSection";
 import { ProductCategories } from "./CategoryPickers";
+import { ProductAudienceSection, ownsAudience } from "./ProductAudienceSection";
 import { CopyId, Field, Sheet, useMessage } from "./catalog-ui";
 import { Alert, Button, Input } from "../../_components/kit";
 
@@ -77,7 +78,8 @@ export function ProductDetailSheet({
 }) {
   const { t, lang } = useLocale();
   const message = useMessage();
-  const { api } = useCatalogSurface();
+  const { api, tenantId: surfaceTenantId } = useCatalogSurface();
+  const { me } = usePanelSession();
   const [detail, setDetail] = useState<CatalogProductDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -123,6 +125,9 @@ export function ProductDetailSheet({
         label={capabilityLabel}
         onCreated={onCapabilityCreated}
         onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
+      {detail && ownsAudience(detail, surfaceTenantId, me?.tenant.id ?? null) && (
+        <ProductAudienceSection key={detail.id} product={detail} onSaved={onChanged} />
+      )}
 
       <h3 className="text-xs font-bold text-text-secondary">{t("common", K.open)}</h3>
       {error && <Alert tone="error">{error}</Alert>}

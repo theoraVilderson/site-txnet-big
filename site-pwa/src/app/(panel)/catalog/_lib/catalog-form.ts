@@ -60,6 +60,7 @@ export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
   capability_not_found: CATALOG_KEYS.refusals.capability_not_found,
   capability_unknown: CATALOG_KEYS.refusals.capability_unknown,
   capability_in_use: CATALOG_KEYS.refusals.capability_in_use,
+  group_not_found: CATALOG_KEYS.refusals.group_not_found,
   traffic_quota_required: CATALOG_KEYS.refusals.traffic_quota_required,
   meter_not_found: CATALOG_KEYS.refusals.meter_not_found,
   rate_card_not_found: CATALOG_KEYS.refusals.rate_card_not_found,

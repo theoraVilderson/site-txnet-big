@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { productsClosedTo } from '@txnet-backend/shared-core';
 
 /** One product as the users pages name it (F-311-ab1): no price, no fulfilment detail. */
 export type UsersCatalogProduct = {
@@ -14,9 +15,10 @@ export type UsersCatalogProduct = {
  * filtered by. The platform's are its tenant id's, like anyone's (ADR-0142).
  * **The tenant is in the query** (C-15): catalog RLS is shared-read, so the
  * scope alone would add the platform's products to every reseller's list.
+ * With `forUser`, only those that user may be issued (PT-1-b).
  */
-export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: string): Promise<UsersCatalogProduct[]> {
-  return tx.product.findMany({
+export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: string, forUser?: string): Promise<UsersCatalogProduct[]> {
+  const products = await tx.product.findMany({
     where: { tenantId, archivedAt: null },
     select: {
       id: true,
@@ -26,4 +28,8 @@ export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: str
     },
     orderBy: { key: 'asc' },
   });
+  if (!forUser) return products;
+  // An issue for one user: the products whose audience leaves them out are not offered (PT-1-b).
+  const closed = await productsClosedTo(tx, tenantId, forUser, products.map((p) => ({ id: p.id, tenantId })));
+  return products.filter((p) => !closed.has(p.id));
 }

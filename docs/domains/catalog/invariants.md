@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: draft
-updated: 2026-09-29
+updated: 2026-10-13
 ---
 
 # Invariants — catalog
@@ -25,6 +25,7 @@ Held by the database since F-026-a; proved by
 | 10 | A prepaid `network_access` variant states its traffic: a `traffic_bytes` quota, where `0` means unlimited — the only place 0 means that; downstream it is an explicit flag (F-111-q). A row made before this is refused at sale, not locked against edits (F-111-p) | `CatalogAdminService.refuseUnstatedTraffic` (`traffic_quota_required`); `sellsTrafficToday` at invoice create and in the shop | a Grant filled with 0 bytes: never placed on a panel, refunded an hour after it was paid |
 | 12 | A meter is a platform row written only by a migration, and its `key` and `unit` never change (F-118-c, ADR-0105 decision 2); its name is committed in `locales/shareds/<lang>/catalog.json` for every panel language with the code that adds it (F-118-s) | service roles SELECT only; trigger `meter_is_immutable`; `meter-names.spec.ts` | a tenant inventing a meter nothing reports, or a rate card and a Grant priced in a unit that changed under them |
 | 13 | A rate card prices a meter that exists, and says what it serves: a `stop` card includes some quantity; a VPN Grant locks only a card the byte engine serves (prepaid, 2^30 bytes, 0 included, then metered) and a newer card of another shape is no rate, never the older one (F-118-d) | FK on `meter.key`, `rate_card_stop_includes_some`; `vpnTrafficRateAt` (`rate-card.spec.ts`) | usage no meter reports, billed; a postpaid or hybrid card sold at a stale prepaid price |
+| 14 | A product with an audience is sold — listed, invoiced, issued, issued by hand — only to a live user member of one of its groups, and only its own tenant's buyers are asked; a Grant already sold is kept (PT-1-b, ADR-0142 (4)) | `productsClosedTo` at every door (`contract.audience.md` rule 5-6); composite FKs to the product's tenant's groups | a product meant for a group sold to everyone, or a reseller's buyers filtered by the platform's groups |
 | 11 | A tenant is offered only prices and rates in its operating currency; a row in another is no price, never converted (F-116-d, ADR-0098 part 2) | `effectiveIn`, `pricesInEffect` / `rateCardsInEffect` (`price-currency.spec.ts`) | a rial user quoted the platform's dollar amount as rial, or a debit the ledger refuses at the last step |
 
 ## How to test

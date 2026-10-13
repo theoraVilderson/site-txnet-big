@@ -268,11 +268,14 @@ interface IssuableVariant {
 export function IssueGrant({
   api,
   tenantId,
+  userId,
   texts,
   onIssued,
 }: {
   api: ResellerUserGrantsApi;
   tenantId: string;
+  /** Whom the issue is for: a product sold to groups they are in none of is not offered (PT-1-b). */
+  userId: string;
   texts: Record<string, string>;
   onIssued: () => void;
 }) {
@@ -291,7 +294,7 @@ export function IssueGrant({
 
   async function readVariants() {
     // The users-admin door's list (F-311-ab2, D-57): no `catalog.manage`, the platform's too.
-    const products = issuableProducts(await resellerGrantsApi(tenantId).usersCatalog());
+    const products = issuableProducts(await resellerGrantsApi(tenantId).usersCatalog(userId));
     return products.flatMap((p) =>
       p.variants.map((v) => {
         const name = texts[v.nameKey ?? p.nameKey] || texts[p.nameKey];

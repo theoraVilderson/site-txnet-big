@@ -2,8 +2,8 @@
 id: catalog
 layer: domain
 status: draft
-version: 9
-updated: 2026-10-01
+version: 11
+updated: 2026-10-13
 ---
 
 # Contract — catalog
@@ -36,6 +36,7 @@ cross-tenant pool.
 | `POST /categories`, `PATCH /categories/:id` | `tenantId?` (absent = the caller's — the platform's for its staff, ADR-0142 — or another tenant's uuid, owner only), `parentId?` (F-026-r: the platform's or its own tenant's, not archived; `null` = top level), `key`, `sourceLang?`, `name: {lang: text}`, `translateAll?` (F-1533-i); patch `parentId`, `sourceLang`, `name`, `translateAll`, `isActive`, `archived: false` (back from the archive, still off) | category | `category_cycle` 409 (under itself or its own subtree), `category_too_deep` 400 (over `CATEGORY_MAX_DEPTH` = 3 levels, a moved category's subtree counted), `not_platform_owner` 403, `category_not_found` 404 (a parent too), `key_taken` 409, `lang_unknown` / `source_text_missing` 400, `texts_unavailable` 503 |
 | `POST /categories/remove` (F-026-j/l/r) | `ids[]` (1-100, distinct), `withProducts?` | `[{id, outcome, products?}]`, `outcome` `deleted` / `archived` (only with `withProducts`) / `has_products` / `has_children` (a category sits under it; nothing touched) / `not_found`, each id on its own; `products: {deleted, archived, unlinked}` with `withProducts` | — (a refusal is that id's `not_found`) |
 | `GET /products` | `categoryId?` (filed in it, first or not), `tenantId?` (owner: uuid or `platform`), `archived?` (only `true`: the archived alone; without it they are left out) | products, each with `categoryIds` and `archivedAt` | — |
+| `PUT /products/:id/audience` (PT-1-b) | `userGroupIds[]` | who may buy it; `GET /products` and `/products/:id` answer `userGroupIds` | [contract.audience.md](contract.audience.md) |
 | `POST /products/remove` (F-026-h) | `ids[]` (1-100, distinct) | `[{id, outcome}]`, `outcome` `deleted` / `archived` / `not_found`, each id on its own | — (a refusal is that id's `not_found`) |
 | `POST /products`, `GET\|PATCH /products/:id` | `categoryIds[]` (F-026-r: 1-20, distinct, the first shown first; a patch replaces them all), `key`, `sourceLang?`, `name: {lang: text}`, `description?: {lang: text} \| null`, `translateAll?` (F-1533-i, create and patch), `fulfilmentKind` (never `wallet_topup` — retired, F-111-g: top-ups are the deposit page — nor `external_order` — retired, F-111-h, until a real provider exists; the schema's `RETIRED_FULFILMENT_KINDS`, a 400), `featureKeys?`, `defaultQuotas?`; patch has no key or kind, and `archived: false` brings an archived product back (still off) | product; `GET` with variants and each price history | `category_not_found` (another tenant's category), `capability_unknown` 400 (a `featureKeys` entry that is not the platform's capability or the product's tenant's, F-114-f-a), `product_not_found`, `key_taken`, `lang_unknown`, `source_text_missing`, `texts_unavailable` |
 | `GET /capabilities` (F-114-f-a) | — | the platform's and the caller's own (owner: all), each `{id, tenantId, key, nameKey, descriptionKey, sourceLang}` by key | — |
@@ -191,10 +192,10 @@ is refused (`metered_rate_missing`), never made at the older card.
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
 | `listOffers(at?)` — built | tenant (ambient), instant (default now) | every `public` variant under an active product filed in at least one live category (it and every one above it on — `category-tree.ts`, F-026-r), with the price in effect in the tenant's currency; a variant with no such price is not offered | sync | — |
-| `listOffersIn(tx, at)` — built | the caller's `tenantTransaction`, instant | what `listOffers` answers, read in the caller's transaction; each offer carries `panelGroupId` — billing's shop list narrows it to what can be delivered (F-111-e) | sync | — |
+| `listOffersIn(tx, at, buyer?)` — built | the caller's `tenantTransaction`, instant, the buyer (a product's audience, PT-1-b — `contract.audience.md`) | what `listOffers` answers, read in the caller's transaction; each offer carries `panelGroupId` — billing's shop list narrows it to what can be delivered (F-111-e) | sync | — |
 | `offerBySku(sku, at?)` — built | sku | the offer, `public` or `unlisted`; the caller's own SKU over the platform's | sync | `null`: unknown, `admin_only`, switched off, or no price |
 | `offeredToTenant(tenantId, platformId, at, currencyCode, listed?)` — built | tenant id, the platform's tenant id (ADR-0142), instant, its operating currency (F-116-d), a reseller's listed platform products (F-019-v5; `null` narrows nothing) | a Prisma `where` for a variant `listOffers` would return to that tenant: `listedVariantWhere`, own or platform row, a price in effect — for a reader on the cross-tenant pool, where RLS does not narrow (F-018-ah) | sync | — |
-| `sellableOfferById(tx, variantId, at)` — built | the caller's `tenantTransaction`, variant id, instant | the offer as `offerBySku` would sell it (`public` or `unlisted`, live, priced), read in the caller's transaction — billing's invoice (F-111-a) | sync | `null` |
+| `sellableOfferById(tx, variantId, at, buyer?)` — built | the caller's `tenantTransaction`, variant id, instant, the buyer (PT-1-b) | the offer as `offerBySku` would sell it (`public` or `unlisted`, live, priced), read in the caller's transaction — billing's invoice (F-111-a) | sync | `null` |
 | `priceAt(variantId, at)` — built | variantId, instant | the newest active price row in the tenant's currency with `effectiveFrom <= at` (F-0602, F-116-d) | sync | `null` |
 | manage category / product / variant, write a new price | admin payload, `catalog.manage` | row (F-026-d) | sync | — |
 

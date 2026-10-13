@@ -114,6 +114,8 @@ create refuses to sell is refused before a Grant exists: `variant_not_deliverabl
 (no handler for the kind, no placeable group, a prepaid network variant stating no
 traffic). **One request, one Grant**: a repeat of `requestId` answers that Grant
 (`issued: false`); the same id for another user or variant is `request_reused`.
+A product sold to chosen groups is not issued to a user in none of them, by
+anyone: `not_in_audience` (PT-1-b, catalog [contract.audience.md](../catalog/contract.audience.md)).
 Also refused: `variant_not_found`, `variant_not_assignable` (switched off; or, by a
 reseller's own people, a platform product its package does not list — F-019-v5),
 **409** `reseller_quota_exhausted` with facts (theirs: one of the reseller's sales of

@@ -139,10 +139,11 @@ export class ResellerUserGrantsService {
    * The products and plans the users pages name — issue, bulk by product
    * (F-311-ab1, D-57): `read` on this door, so managing users never needs
    * `catalog.manage`. The platform's own carry its tenant id, as any tenant's (ADR-0142).
+   * `forUser` narrows it to what may be issued to that user (PT-1-b).
    */
-  catalog(actor: ResellerActor, tenantId: string): Promise<UsersCatalogProduct[]> {
+  catalog(actor: ResellerActor, tenantId: string, forUser?: string): Promise<UsersCatalogProduct[]> {
     return this.admitted(actor, tenantId, 'read', (admitted) =>
-      tenantTransaction(this.prisma, (tx) => usersCatalogOf(tx, admitted.id)),
+      tenantTransaction(this.prisma, (tx) => usersCatalogOf(tx, admitted.id, forUser)),
     );
   }
 

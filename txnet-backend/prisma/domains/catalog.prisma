@@ -174,9 +174,36 @@ model Product {
   discountRules       DiscountRule[]
   /// F-019-v5: the reseller packages that sell this platform product.
   packages            PackageProduct[]
+  /// The groups it is sold to; none = every user (PT-1-b, ADR-0142 (4)).
+  audience            ProductAudience[]
 
+  /// The composite key `product_audience` points at, so an audience row is its product's tenant's.
+  @@unique([id, tenantId])
   @@index([tenantId])
   @@map("product")
+  @@schema("catalog")
+}
+
+/// PT-1-b (ADR-0142 (4)) — a product sold only to chosen user groups of its
+/// tenant. No row = every user, as before; rows = only a live **user** member
+/// of one of them (`productsClosedTo`, as a gateway's audience). Only the
+/// product's own tenant's buyers: a platform product a reseller sells is
+/// bounded by its package, not the platform's groups. A Grant already sold is
+/// kept when its owner leaves the group. The composite keys keep group and
+/// product in one tenant; a group in use is not deleted (`group_in_use`).
+model ProductAudience {
+  productId String   @db.Uuid
+  tenantId  String   @db.Uuid
+  groupId   String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  product Product   @relation(fields: [productId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  group   UserGroup @relation(fields: [groupId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@id([productId, groupId])
+  @@index([tenantId])
+  @@index([groupId])
+  @@map("product_audience")
   @@schema("catalog")
 }
 

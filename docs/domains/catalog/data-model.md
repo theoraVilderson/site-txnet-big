@@ -1,7 +1,7 @@
 ---
 id: catalog
 layer: domain
-updated: 2026-09-29
+updated: 2026-10-13
 ---
 
 # Data model — catalog
@@ -17,6 +17,7 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 | product_capability | what a product may unlock (F-114-f-a): `key` (immutable, unique among what one tenant sees — trigger `capability_key_free`), `nameKey`/`descriptionKey`, `sourceLang` | `tenantId` (the platform's own id on its rows, ADR-0142), shared-read | deletable only while no product or Grant holds its key |
 | meter | what is counted and billed on use (F-118-c, ADR-0105): `key` (unique, immutable), `unit` `bytes \| count \| seconds \| tokens` (immutable — trigger `meter_is_immutable`), `reportedBy` (the service whose code reports it), `nameKey` (`catalog.meter.<key>.name`, its text in `locales/shareds/<lang>/catalog.json`, F-118-s)/`descriptionKey`; seeded `vpn.traffic`, `vpn.config.regenerate` (F-118-q), `vpn.unlimited.time` (seconds, a package rate only — an unlimited plan's wholesale days, F-118-z) | no `tenantId`: platform rows only, every tenant reads; service roles SELECT only | permanent — written by migrations |
 | product | marketing object (its categories are `product_category_link`, F-026-q): `key`, `nameKey`/`descriptionKey`, `fulfilmentKind`, `featureKeys[]`, `defaultQuotas`, `archivedAt` | `tenantId` (the platform's own id on its rows, ADR-0142), shared-read | deletable with its variants until one is referenced, then permanent (`isActive`, `archivedAt`) — F-026-h |
+| product_audience | the groups a product is sold to (PT-1-b, `20261013000300`): PK (`productId`, `groupId`); FK (`productId`, `tenantId`) -> `product` CASCADE, (`groupId`, `tenantId`) -> `governance.user_group` RESTRICT. No row = every user | `tenantId` = its product's, **strict** (no shared read) | as long as its product |
 | product_variant | the SKU: `quotas` (JSONB by metric), `durationDays` (null = permanent), `billingMode`, `visibility`, `panelGroupId` (FK `network.panel_group`, a platform group or its own tenant's — F-027-bk), `qualityTier` | `tenantId` = its product's, shared-read | permanent (`isActive`) |
 | price | a variant's `amount` in its `currencyCode` (F-116-d) from `effectiveFrom`; append-only. `campaignId` / `campaignEndsAt` (F-503-a): the campaign that wrote it, fixed at insert | `tenantId` = its variant's, shared-read | as long as its variant (FK `ON DELETE CASCADE`) |
 | price_campaign | a time-boxed price (F-503-a, `20261002001900`): amount, currency, `startsAt` < `endsAt` (CHECK), `cancelledAt`; its two price rows name it; `seasonId` when a season wrote it — once per (season, variant, start), partial unique (F-505-a) | `tenantId` = its variant's, shared-read | as long as its variant |
@@ -29,6 +30,7 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 |---|---|---|---|
 | all five `.tenantId` | -> | tenant.tenant.id | a tenant's own catalog |
 | product / product_variant (referenced) | <- | billing.coupon_service_scope.productId / variantId | coupon scope |
+| product_audience.groupId | -> | governance.user_group (id, tenantId) | who may buy a product (PT-1-b); RESTRICT, so a group in use is not deleted |
 | product_variant (referenced) | <- | entitlement.grant.variantId (F-026-b) | what a Grant was issued from |
 | rate_card (read at sale) | -> | entitlement.grant_meter (F-118-e, F-118-l) | the card in effect is copied onto the Grant at issue (ADR-0073); a metered VPN Grant's `vpn.traffic` row is its only rate |
 

@@ -36,6 +36,8 @@ export type ResellerCatalogRefusal =
   | "capability_not_found"
   | "capability_unknown"
   | "capability_in_use"
+  /** PT-1-b: a group for a product's audience that is not the product's tenant's. */
+  | "group_not_found"
   | "traffic_quota_required"
   | "meter_not_found"
   | "rate_card_not_found"

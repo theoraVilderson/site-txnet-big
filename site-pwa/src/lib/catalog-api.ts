@@ -64,6 +64,8 @@ export type CatalogRejection =
   | "capability_not_found"
   | "capability_unknown"
   | "capability_in_use"
+  /** PT-1-b: a group for a product's audience that is not the product's tenant's. */
+  | "group_not_found"
   | "traffic_quota_required"
   | "meter_not_found"
   | "rate_card_not_found"
@@ -139,6 +141,8 @@ export interface CatalogProduct {
   isActive: boolean;
   /** Set when a removal found it sold and kept it (F-026-h); such a product is only in the `archived` list. */
   archivedAt: string | null;
+  /** The groups it is sold to; empty = every user (PT-1-b). On the list and the detail, not on a write's answer. */
+  userGroupIds?: string[];
 }
 
 /**
@@ -391,6 +395,11 @@ export function catalogAdminApi(tenantId: string | null) {
 
     async updateProduct(productId: string, body: UpdateProductBody): Promise<CatalogProduct> {
       return call<CatalogProduct>(`${at}/products/${id(productId)}`, { method: "PATCH", ...json(body) });
+    },
+
+    /** Who may buy it (PT-1-b): the groups, replaced whole; `[]` = every user. */
+    async setAudience(productId: string, userGroupIds: string[]): Promise<{ userGroupIds: string[] }> {
+      return call<{ userGroupIds: string[] }>(`${at}/products/${id(productId)}/audience`, { method: "PUT", ...json({ userGroupIds }) });
     },
 
     /** One outcome per id; a sold product is archived, never deleted (F-026-h). */

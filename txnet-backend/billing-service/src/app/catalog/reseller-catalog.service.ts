@@ -26,6 +26,7 @@ import {
   PriceView,
   RateCardView,
   ProductView,
+  AudiencedProductView,
   RemovalOutcome,
   PublishTextsInput,
   SetPriceInput,
@@ -161,14 +162,14 @@ export class ResellerCatalogService {
 
   // ------------------------------------------------------------------ products
 
-  listProducts(actor: ResellerCatalogActor, tenantId: string, filter: ResellerProductFilter): Promise<ProductView[]> {
+  listProducts(actor: ResellerCatalogActor, tenantId: string, filter: ResellerProductFilter): Promise<AudiencedProductView[]> {
     // The tenant is settled by the path; only the category narrows the answer.
     return this.run(actor, tenantId, 'read', (as) =>
       this.catalog.listProducts(as, { ...(filter.categoryId ? { categoryId: filter.categoryId } : {}), ...(filter.archived ? { archived: true } : {}) }),
     );
   }
 
-  getProduct(actor: ResellerCatalogActor, tenantId: string, id: string): Promise<ProductView & { variants: VariantView[] }> {
+  getProduct(actor: ResellerCatalogActor, tenantId: string, id: string): Promise<AudiencedProductView & { variants: VariantView[] }> {
     return this.run(actor, tenantId, 'read', (as) => this.catalog.getProduct(as, id));
   }
 
@@ -178,6 +179,11 @@ export class ResellerCatalogService {
 
   updateProduct(actor: ResellerCatalogActor, tenantId: string, id: string, patch: UpdateProductInput): Promise<ProductView> {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.updateProduct(as, id, patch));
+  }
+
+  /** PT-1-b: the groups are the reseller's own — its `user_group` rows, read by the path in auth (F-102-g-d). */
+  setProductAudience(actor: ResellerCatalogActor, tenantId: string, id: string, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.catalog.setProductAudience(as, id, groupIds));
   }
 
   removeProducts(actor: ResellerCatalogActor, tenantId: string, ids: string[]): Promise<RemovalOutcome[]> {

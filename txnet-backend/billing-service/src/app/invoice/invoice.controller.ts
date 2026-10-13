@@ -241,8 +241,9 @@ export class OffersController {
     configKey: 'SHOP_OFFERS_RATE_LIMIT',
     windowSec: 900,
   })
-  async list() {
-    const offers = await this.invoices.forSale();
+  async list(@Req() req: Request) {
+    // The buyer's own list: a product sold to chosen groups shows only to their members (PT-1-b).
+    const offers = await this.invoices.forSale(identityOf(req).userId);
     return offers.map((o) => ({
       variantId: o.variantId,
       sku: o.sku,

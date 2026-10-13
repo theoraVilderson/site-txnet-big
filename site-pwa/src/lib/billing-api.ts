@@ -973,8 +973,15 @@ export function resellerGrantsApi(tenantId: string) {
     /**
      * The tenant's own products and plans, switched-off ones included (F-311-ab1):
      * the users-admin door's, so no `catalog.manage` — the platform's too (D-57).
+     * `forUser`: only what may be issued to that user — a product sold to groups they are in none of is left out (PT-1-b).
      */
-    usersCatalog: async () => (await call<{ products: UsersCatalogProduct[] }>(resellerUsersCatalogPath(tenantId), { method: "GET" })).products,
+    usersCatalog: async (forUser?: string) =>
+      (
+        await call<{ products: UsersCatalogProduct[] }>(
+          `${resellerUsersCatalogPath(tenantId)}${forUser ? `?userId=${encodeURIComponent(forUser)}` : ""}`,
+          { method: "GET" },
+        )
+      ).products,
     /** The panels holding the reseller's services, the retired included (F-311-x1): a filter's picker. */
     bulkPanels: async () => (await call<{ panels: BulkPanel[] }>(`${at}/bulk-jobs/panels`, { method: "GET" })).panels,
     /** How many Grants a filter matches now (F-311-u2): what the confirm shows. */

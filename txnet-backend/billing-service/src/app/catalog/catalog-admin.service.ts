@@ -102,6 +102,8 @@ export type CatalogAdminRejection =
   | 'capability_not_found'
   | 'capability_unknown'
   | 'capability_in_use'
+  /** PT-1-b: a group named for a product's audience is not the product's tenant's. */
+  | 'group_not_found'
   /** A prepaid network variant with no `traffic_bytes` quota (F-111-p): 0 is unlimited, absent is refused. */
   | 'traffic_quota_required'
   /** F-118-m: a card names a meter the registry does not have. */
@@ -382,6 +384,8 @@ export type ProductView = {
   /** Set when a removal found the product referenced and kept it (F-026-h). */
   archivedAt: Date | null;
 };
+/** A product as a list or an editor reads it: with the groups it is sold to — none = every user (PT-1-b). */
+export type AudiencedProductView = ProductView & { userGroupIds: string[] };
 export type VariantView = {
   id: string;
   tenantId: string;
@@ -964,7 +968,7 @@ export class CatalogAdminService {
 
   // ------------------------------------------------------------------ products
 
-  async listProducts(actor: CatalogActor, filter: ListProductsFilter = {}): Promise<ProductView[]> {
+  async listProducts(actor: CatalogActor, filter: ListProductsFilter = {}): Promise<AudiencedProductView[]> {
     const { owner } = await this.access(actor);
     const pid = await this.platformId();
     const tenant = owner ? (filter.tenantId === 'platform' ? pid : filter.tenantId) : actor.tenantId;
@@ -977,13 +981,17 @@ export class CatalogAdminService {
         },
         orderBy: { key: 'asc' },
       })) as unknown as Row[];
-      const categories = await this.categoryIdsOf(db, rows.map((r) => r['id'] as string));
-      return rows.map((r) => productView(r, this.texts.defaultLanguage(), pid, categories.get(r['id'] as string) ?? []));
+      const ids = rows.map((r) => r['id'] as string);
+      const [categories, audience] = await Promise.all([this.categoryIdsOf(db, ids), this.audienceOf(db, ids)]);
+      return rows.map((r) => ({
+        ...productView(r, this.texts.defaultLanguage(), pid, categories.get(r['id'] as string) ?? []),
+        userGroupIds: audience.get(r['id'] as string) ?? [],
+      }));
     });
   }
 
   /** A product with its variants and each variant's whole price and rate card history. */
-  async getProduct(actor: CatalogActor, id: string): Promise<ProductView & { variants: VariantView[] }> {
+  async getProduct(actor: CatalogActor, id: string): Promise<AudiencedProductView & { variants: VariantView[] }> {
     const { owner } = await this.access(actor);
     const pid = await this.platformId();
     return this.within(owner, async (db) => {
@@ -995,8 +1003,12 @@ export class CatalogAdminService {
         const prices = (await db.price.findMany({ where: { variantId } })) as unknown as Row[];
         withPrices.push(variantView(v, pid, prices, (await db.rateCard.findMany({ where: { variantId } })) as unknown as Row[]));
       }
-      const categories = await this.categoryIdsOf(db, [id]);
-      return { ...productView(product, this.texts.defaultLanguage(), pid, categories.get(id) ?? []), variants: withPrices };
+      const [categories, audience] = await Promise.all([this.categoryIdsOf(db, [id]), this.audienceOf(db, [id])]);
+      return {
+        ...productView(product, this.texts.defaultLanguage(), pid, categories.get(id) ?? []),
+        userGroupIds: audience.get(id) ?? [],
+        variants: withPrices,
+      };
     });
   }
 
@@ -1077,6 +1089,41 @@ export class CatalogAdminService {
     });
     if (patch.translateAll) void this.texts.draftOthers(draft);
     return view;
+  }
+
+  /**
+   * Who may buy a product (PT-1-b, ADR-0142 (4)): replaces the set of groups it
+   * is sold to; `[]` = every user again. Each group must be the **product's**
+   * tenant's — a group of anyone else is `group_not_found` before anything is
+   * written (the composite key refuses the same). Only new sales close: a Grant
+   * already sold is untouched. Audited as `catalog_product_update`.
+   */
+  async setProductAudience(actor: CatalogActor, id: string, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
+    const { owner } = await this.access(actor);
+    const ids = [...new Set(groupIds)];
+    return this.within(owner, async (tx) => {
+      const product = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
+      const tenantId = product['tenantId'] as string;
+      if (ids.length > 0) {
+        const found = await tx.userGroup.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true } });
+        const missing = ids.filter((g) => !found.some((f) => f.id === g));
+        if (missing.length > 0) throw new CatalogAdminRefused('group_not_found', missing.join(', '));
+      }
+      const before = (await this.audienceOf(tx, [id])).get(id) ?? [];
+      await tx.productAudience.deleteMany({ where: { productId: id } });
+      if (ids.length > 0) await tx.productAudience.createMany({ data: ids.map((groupId) => ({ productId: id, tenantId, groupId })) });
+      await this.audit(tx, actor, tenantId, 'catalog_product_update', 'product', id, { userGroupIds: before }, { userGroupIds: ids });
+      return { userGroupIds: ids };
+    });
+  }
+
+  /** The groups each product is sold to, by product id (PT-1-b); none = every user. */
+  private async audienceOf(db: Prisma.TransactionClient, productIds: string[]): Promise<Map<string, string[]>> {
+    const byProduct = new Map<string, string[]>(productIds.map((id) => [id, []]));
+    if (productIds.length === 0) return byProduct;
+    const rows = await db.productAudience.findMany({ where: { productId: { in: productIds } }, orderBy: { createdAt: 'asc' }, select: { productId: true, groupId: true } });
+    for (const r of rows) byProduct.get(r.productId)?.push(r.groupId);
+    return byProduct;
   }
 
   /**

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Req } from '@nestjs/common';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -13,7 +13,9 @@ import { ResellerUserGrantsRefused, ResellerUserGrantsService } from './reseller
  * issues and what a bulk filter picks by product. The users-admin door
  * (`runIncludingPlatform`, `read`), not the catalog's: a support admin who
  * manages users is not thereby one who edits prices. It spends the users
- * reads' bucket, as every other read those pages make.
+ * reads' bucket, as every other read those pages make. `?userId=` is the
+ * user an issue is for: a product whose audience leaves them out is left out
+ * (PT-1-b), so the dialog never offers an issue that answers `not_in_audience`.
  */
 @Controller('billing/tenants/:tenantId/users-catalog')
 export class ResellerUsersCatalogController {
@@ -25,9 +27,13 @@ export class ResellerUsersCatalogController {
     configKey: 'RESELLER_USER_GRANTS_READ_RATE_LIMIT',
     windowSec: 900,
   })
-  async catalog(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+  async catalog(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Req() req: Request,
+    @Query('userId', new ParseUUIDPipe({ optional: true })) userId?: string,
+  ) {
     try {
-      return { products: await this.service.catalog(actorOf(req), tenantId) };
+      return { products: await this.service.catalog(actorOf(req), tenantId, userId) };
     } catch (e) {
       if (e instanceof ResellerUserGrantsRefused) throw resellerRefusal(e);
       throw e;

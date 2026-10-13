@@ -22,6 +22,8 @@ import {
   operatingCurrencyOf,
   platformProductsSoldBy,
   platformTenantIdOf,
+  productOpenTo,
+  productsClosedTo,
   sellsProduct,
   tenantSellsProduct,
 } from '@txnet-backend/shared-core';
@@ -183,17 +185,30 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
 }
 
 /**
+ * The buyer (PT-1-b, ADR-0142 (4)): a product sold to chosen groups is offered
+ * to them only if they are a live user member of one. **Every caller acting
+ * for a user passes it.** Absent is a tenant-level reader, and no audience applies.
+ */
+type Buyer = string | null | undefined;
+
+/** Whether `buyer` may buy `product` in the caller's tenant; no buyer, no audience. */
+const openTo = (tx: Prisma.TransactionClient, buyer: Buyer, product: { id: string; tenantId: string }) =>
+  buyer ? productOpenTo(tx, TenantContext.current('catalog offer').id, buyer, product) : Promise.resolve(true);
+
+/**
  * One variant by its id, as {@link CatalogReadService.offerBySku} would sell it
  * — `public` or `unlisted`, live, with a price in effect at `at` — or `null`.
  * Runs on the caller's `tx` (a `tenantTransaction`), so an invoice reads the
  * price it stores in the transaction that stores it (F-111-a). Another tenant's
- * variant is `null`: RLS never returns it.
+ * variant is `null`: RLS never returns it; nor is one whose audience leaves
+ * `buyer` out (PT-1-b) — the same neutral `null`, never told apart.
  */
-export async function sellableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date): Promise<CatalogOffer | null> {
+export async function sellableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date, buyer?: Buyer): Promise<CatalogOffer | null> {
   const currencyCode = await tenantCurrency(tx);
   const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at, currencyCode) });
   // A platform product the reseller's package does not list is not for sale to it (F-019-v5).
   if (!row || !(await tenantSellsProduct(tx, TenantContext.current('catalog offer').id, row.product))) return null;
+  if (!(await openTo(tx, buyer, row.product))) return null;
   return toOffer(row, at, currencyCode, isSellableBySku);
 }
 
@@ -203,7 +218,8 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
  * answers, for a caller that narrows it further in its own transaction (the
  * shop, F-111-e).
  */
-export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Promise<CatalogOffer[]> {
+export async function listOffersIn(tx: Prisma.TransactionClient, at: Date, buyer?: Buyer): Promise<CatalogOffer[]> {
+  const tenantId = TenantContext.current('catalog offer').id;
   const currencyCode = await tenantCurrency(tx);
   const listed = await listedForTenant(tx);
   const rows = await tx.productVariant.findMany({
@@ -211,26 +227,29 @@ export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Prom
     include: withPrices(at, currencyCode),
     orderBy: [{ sku: 'asc' }],
   });
-  return rows.flatMap((v) => (sellsProduct(listed, v.product, TenantContext.current('catalog offer').id) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
+  // What the buyer's groups leave out (PT-1-b): one read when no product names a group.
+  const closed = buyer ? await productsClosedTo(tx, tenantId, buyer, rows.map((v) => v.product), at) : new Set<string>();
+  return rows.flatMap((v) => (sellsProduct(listed, v.product, tenantId) && !closed.has(v.product.id) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
 }
 
 @Injectable()
 export class CatalogReadService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Every listed variant the caller's tenant may buy, with the price in effect at `at`. */
-  listOffers(at: Date = new Date()): Promise<CatalogOffer[]> {
-    return tenantTransaction(this.prisma, (tx) => listOffersIn(tx, at));
+  /** Every listed variant the caller's tenant may buy — `buyer`, when named (PT-1-b) — with the price in effect at `at`. */
+  listOffers(at: Date = new Date(), buyer?: Buyer): Promise<CatalogOffer[]> {
+    return tenantTransaction(this.prisma, (tx) => listOffersIn(tx, at, buyer));
   }
 
-  /** One variant by its SKU — `public` or `unlisted` — or `null`. The caller's own SKU over the platform's. */
-  offerBySku(sku: string, at: Date = new Date()): Promise<CatalogOffer | null> {
+  /** One variant by its SKU — `public` or `unlisted` — or `null`. The caller's own SKU over the platform's; `buyer` as {@link listOffers}. */
+  offerBySku(sku: string, at: Date = new Date(), buyer?: Buyer): Promise<CatalogOffer | null> {
     const tenant = TenantContext.current('catalog offer by sku');
     return tenantTransaction(this.prisma, async (tx) => {
       const [currencyCode, platformId] = await Promise.all([operatingCurrencyOf(tx, tenant.id), platformTenantIdOf(tx)]);
       const rows = await tx.productVariant.findMany({ where: { sku }, include: withPrices(at, currencyCode) });
       const row = pickBySku(rows, tenant.id, platformId);
       if (!row || !(await tenantSellsProduct(tx, tenant.id, row.product))) return null;
+      if (!(await openTo(tx, buyer, row.product))) return null;
       return toOffer(row, at, currencyCode, isSellableBySku);
     });
   }

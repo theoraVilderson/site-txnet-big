@@ -105,6 +105,8 @@ function fakeTx(opts: {
       ),
     },
     productVariant: { findUnique: vi.fn(async () => variant) },
+    // PT-1-b: the product names no group, so everyone may buy it.
+    productAudience: { findMany: async () => [] },
     grant: {
       findFirst: vi.fn(async () => null),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {

@@ -47,6 +47,8 @@ import {
   UpdateCapabilityBody,
   UpdateCategoryBody,
   UpdateProductBody,
+  ProductAudienceBody,
+  productAudienceSchema,
   UpdateVariantBody,
   createCapabilitySchema,
   createCategorySchema,
@@ -113,6 +115,7 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 4
   capability_not_found: 404,
   capability_unknown: 400,
   capability_in_use: 409,
+  group_not_found: 400,
   traffic_quota_required: 400,
   meter_not_found: 404,
   rate_card_not_found: 404,
@@ -267,6 +270,18 @@ export class CatalogAdminController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.catalog.updateProduct(this.actor(req, ip), id, body as UpdateProductInput));
+  }
+
+  /** PT-1-b: the groups the product is sold to, replaced whole; `[]` = every user. */
+  @Put('products/:id/audience')
+  @RateLimit(WRITE)
+  async setProductAudience(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(productAudienceSchema)) body: ProductAudienceBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.catalog.setProductAudience(this.actor(req, ip), id, body.userGroupIds as string[]));
   }
 
   @Post('products/:id/variants')

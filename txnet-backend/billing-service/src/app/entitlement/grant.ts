@@ -11,6 +11,7 @@ import {
   rateCardsInEffect,
   consumeProductSale,
   productSaleRef,
+  productOpenTo,
   tenantSellsProduct,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -49,8 +50,10 @@ import { NO_VPN_RESERVE, VpnReserve } from '../traffic/vpn-reserve';
 /** Why a Grant operation was refused. Nothing was written. */
 export type EntitlementRejection =
   | 'variant_not_found'
-  /** Switched off, or `admin_only` for a purchase. */
+  /** Switched off, or `admin_only` for a purchase — or, bought or redeemed, a product whose audience leaves the user out (PT-1-b). */
   | 'variant_not_assignable'
+  /** An admin's issue (PT-1-b): the product is sold to chosen groups and the user is a member of none. */
+  | 'not_in_audience'
   /** A concurrent issue for the same cause won; retry to read its Grant. */
   | 'already_issued'
   /** Unknown, another tenant's, or — for a token rotation — another user's. Never told apart. */
@@ -540,6 +543,11 @@ export class GrantService {
     // A platform product the reseller's package does not list is not sold to its users, nor
     // redeemed by them (F-019-v5). A reseller admin's issue is bounded by its caller (`issueGrantByAdmin`).
     if ((input.source === GrantSource.purchase || input.source === GrantSource.coupon) && !(await tenantSellsProduct(tx, tenant.id, variant.product))) {
+      throw new EntitlementRefused('variant_not_assignable', input.variantId);
+    }
+    // Nor to a user its audience leaves out (PT-1-b): asked at invoice create, and again here, at the sale.
+    // A renewal is not a new sale — a Grant already sold is kept when its owner leaves the group.
+    if ((input.source === GrantSource.purchase || input.source === GrantSource.coupon) && !(await productOpenTo(tx, tenant.id, input.userId, variant.product))) {
       throw new EntitlementRefused('variant_not_assignable', input.variantId);
     }
 

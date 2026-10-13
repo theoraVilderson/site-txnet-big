@@ -166,6 +166,8 @@ export const updateCapabilitySchema = z
   .strict();
 
 /** F-026-h: up to 100 distinct products, each answered on its own. F-026-j: the same body for categories. */
+/** PT-1-b: who may buy a product — the groups it is sold to, replaced whole; `[]` = every user. */
+export const productAudienceSchema = z.object({ userGroupIds: z.array(uuid('userGroupIds')).max(50) }).strict();
 export const removeProductsSchema = z
   .object({ ids: z.array(uuid('ids')).min(1).max(100).refine((ids) => new Set(ids).size === ids.length, 'ids must be distinct') })
   .strict();
@@ -300,6 +302,7 @@ export type PricingCurrencyQuery = z.infer<typeof pricingCurrencySchema>;
 export type ListCategoriesQuery = z.infer<typeof listCategoriesSchema>;
 export type CreateProductBody = z.infer<typeof createProductSchema>;
 export type UpdateProductBody = z.infer<typeof updateProductSchema>;
+export type ProductAudienceBody = z.infer<typeof productAudienceSchema>;
 export type CreateCapabilityBody = z.infer<typeof createCapabilitySchema>;
 export type UpdateCapabilityBody = z.infer<typeof updateCapabilitySchema>;
 export type CreateResellerCapabilityBody = z.infer<typeof createResellerCapabilitySchema>;

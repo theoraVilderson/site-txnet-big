@@ -146,7 +146,7 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
                 <Button variant="quiet" size="sm" onClick={retry} icon={<RefreshCw size={12} aria-hidden />}>
                   {t("common", K.refresh)}
                 </Button>
-                {mayGrant("grant.assign") && <IssueGrant api={api} tenantId={id} texts={texts} onIssued={retry} />}
+                {mayGrant("grant.assign") && <IssueGrant api={api} tenantId={id} userId={userId} texts={texts} onIssued={retry} />}
               </>
             )
           }

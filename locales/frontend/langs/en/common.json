@@ -1556,7 +1556,8 @@
       "price_scheduled_in_campaign": "A price is already scheduled within these dates; the campaign's end would undo it.",
       "price_in_campaign": "This price belongs to a campaign. Cancel the campaign instead.",
       "season_not_found": "This season does not exist.",
-      "season_date_invalid": "That day does not exist in that month."
+      "season_date_invalid": "That day does not exist in that month.",
+      "group_not_found": "One of these groups is not this product's owner's. Open the product again and pick again."
     },
     "rename": "Edit names",
     "translations": {
@@ -1751,6 +1752,21 @@
       "none": "No price — the variant's count limit applies",
       "newCard": "New price",
       "history": "Price history"
+    },
+    "audience": {
+      "title": "Who can buy this product",
+      "subtitle": "You can sell this product only to chosen groups of your users. A service already sold stays with its owner if they leave the group.",
+      "everyone": "All users",
+      "everyoneHint": "Every user sees it in the shop and can buy it.",
+      "groups": "Chosen groups only",
+      "groupsHint": "Only users in at least one of these groups see it, buy it, or are given it by hand.",
+      "noGroups": "You have no user groups yet. Create one on the Groups page first.",
+      "groupsFailed": "The groups could not be read. Open the product again.",
+      "members": "{{count}} users",
+      "pickOne": "Pick at least one group.",
+      "save": "Save access",
+      "saved": "Saved",
+      "limited": "Groups only"
     }
   },
   "settings": {
@@ -2683,7 +2699,8 @@
       "price_scheduled_in_campaign": "a price is already scheduled within these dates; the campaign's end would undo it.",
       "price_in_campaign": "this price belongs to a campaign. Cancel the campaign instead.",
       "season_not_found": "this season does not exist.",
-      "season_date_invalid": "that day does not exist in that month."
+      "season_date_invalid": "that day does not exist in that month.",
+      "group_not_found": "One of these groups is not this reseller's. Open the product again and pick again."
     }
   },
   "resellerBots": {
@@ -4310,7 +4327,8 @@
         "already_renewed": "This renewal is already in progress. Refresh in a moment.",
         "devices_unchanged": "It already has this limit.",
         "rate_limit_unsupported": "A panel of this service cannot cap speed. Move its configs to another panel first.",
-        "no_configs": "This service has no configs yet."
+        "no_configs": "This service has no configs yet.",
+        "not_in_audience": "This product is sold only to chosen groups, and this user is in none of them. Add them to a group first."
       }
     },
     "find": {

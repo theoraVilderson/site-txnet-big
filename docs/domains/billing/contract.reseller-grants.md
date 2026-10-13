@@ -218,7 +218,7 @@ fulfilment like a delivered purchase. A priced custom plan is F-506-a.
 | Rule | Why |
 |---|---|
 | Door `staffWrite` and the reseller's user (**404** `user_not_found`) before anything is read; bucket `RESELLER_USER_CONFIG_ACTION` | the same fences as every admin write here |
-| **404** `variant_not_found` (not in the reseller's scope either); **409** `variant_not_assignable`, `variant_not_deliverable`, `metered_rate_missing`, `metered_rate_not_positive`, `request_reused`, `already_issued` | a Grant nothing could place is refused, never issued to wait silently |
+| **404** `variant_not_found` (not in the reseller's scope either); **409** `variant_not_assignable`, `not_in_audience` (PT-1-b), `variant_not_deliverable`, `metered_rate_missing`, `metered_rate_not_positive`, `request_reused`, `already_issued` | a Grant nothing could place is refused, never issued to wait silently |
 | A repeat of `requestId` for the same user and variant is **200** with the first Grant | a double click or a repeated bot callback must not give a second free service |
 
 **Not covered:** telling the user (F-311-s). A repeat (`issued: false`) writes no audit row. Consumers F-311-w (panel), F-311-y (bot).

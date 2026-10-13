@@ -1,6 +1,6 @@
 import { FeeCalcMode, Prisma, TenantType, UserGroupMemberType } from '@prisma/client';
 
-import { liveMembership } from '@txnet-backend/shared-core';
+import { admittedByAudience, liveMembership } from '@txnet-backend/shared-core';
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 import type { PaymentProvider } from '../gateway/payment-provider';
@@ -61,14 +61,6 @@ export type SelectOptions = {
    */
   userId?: string | null;
 };
-
-/**
- * Who a gateway is offered to (F-102-g): no group = everyone; groups = a user
- * in at least one of them. The same rule as a discount rule's group.
- */
-export function admittedByAudience(audience: readonly string[], memberOf: readonly string[]): boolean {
-  return audience.length === 0 || audience.some((g) => memberOf.includes(g));
-}
 
 /**
  * The offers `userId` may see, of the tenant's **own** gateways (F-102-g). A

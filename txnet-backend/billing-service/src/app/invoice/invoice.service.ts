@@ -116,7 +116,8 @@ export class InvoiceService {
 
     return tenantTransaction(this.prisma, async (tx) => {
       const now = new Date();
-      const offer = await sellableOfferById(tx, variantId, now);
+      // A product sold to chosen groups is not sold to anyone else (PT-1-b): the same neutral refusal.
+      const offer = await sellableOfferById(tx, variantId, now, userId);
       if (!offer) throw new InvoiceVariantNotFound(variantId);
       // Nothing is sold that nothing can deliver (F-111-d, the user's call
       // 2026-09-25): a paid Grant with no handler could only be refunded.
@@ -212,11 +213,12 @@ export class InvoiceService {
    * effect, less those nothing can deliver — no handler, or a group with no
    * panel that could place it (F-111-i), or no traffic to fill (F-111-p) —
    * the rule {@link create} refuses with, so the list never offers a buy
-   * that answers `variantNotFound`.
+   * that answers `variantNotFound`. `userId` is the buyer: a product sold to
+   * chosen groups is listed only to their members (PT-1-b).
    */
-  forSale(at: Date = new Date()): Promise<CatalogOffer[]> {
+  forSale(userId: string, at: Date = new Date()): Promise<CatalogOffer[]> {
     return tenantTransaction(this.prisma, async (tx) => {
-      const routed = (await listOffersIn(tx, at))
+      const routed = (await listOffersIn(tx, at, userId))
         .filter(sellsTrafficToday)
         .map((offer) => ({ offer, route: deliveryRouteOf(offer.fulfilmentKind, offer.panelGroupId) }))
         .filter((r) => r.route !== null);

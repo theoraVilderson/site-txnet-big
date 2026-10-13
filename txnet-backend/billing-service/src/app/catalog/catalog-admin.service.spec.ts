@@ -224,6 +224,8 @@ function build() {
       },
     ),
     productCategoryLink: table(links, 'productCategoryLink', writes),
+    // PT-1-b: no product here names a group.
+    productAudience: table([], 'productAudience', writes),
     // F-503-a: no campaign here; a price write reads them under the variant's lock.
     priceCampaign: table([], 'priceCampaign', writes),
     productVariant: table(

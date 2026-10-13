@@ -473,14 +473,14 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
 
   it('lists a listed, priced variant with the price in effect', async () => {
     const { service } = buildList([variantRow()]);
-    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    const offers = await asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')));
     expect(offers).toHaveLength(1);
     expect(offers[0]).toMatchObject({ variantId: VARIANT, sku: 'VPN-30', productId: PRODUCT, price: { amount: '12.50' } });
   });
 
   it("names the product apart from the variant, and every live category it is filed in, in the product's order (F-114-d)", async () => {
     const { service } = buildList([{ ...variantRow(), nameKey: 'catalog.variant.vpn30.name' } as never]);
-    const [offer] = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    const [offer] = await asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')));
     expect(offer.nameKey).toBe('catalog.variant.vpn30.name');
     expect(offer.productNameKey).toBe('catalog.product.vpn.name');
     expect(offer.categories).toEqual([
@@ -494,7 +494,7 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
       variantRow({ panelGroupId: null }),
       { ...variantRow({ fulfilmentKind: FulfilmentKind.external_order }), id: INVOICE_2 },
     ]);
-    await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+    await expect(asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
   });
 
   it('leaves out a network variant whose group has no deliverable panel, keeping the one that has (F-111-i)', async () => {
@@ -503,7 +503,7 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
       [variantRow(), { ...variantRow({ panelGroupId: OTHER_GROUP }), id: INVOICE_2 }],
       [groupRow(), groupRow({ id: OTHER_GROUP, members: [] })],
     );
-    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    const offers = await asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')));
     expect(offers.map((o) => o.variantId)).toEqual([VARIANT]);
   });
 
@@ -514,13 +514,13 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
       { ...variantRow({ quotas: traffic(0) }), id: INVOICE_2 },
       { ...variantRow({ quotas: {}, billingMode: 'metered' }), id: METERED },
     ]);
-    const offers = await asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')));
+    const offers = await asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')));
     expect(offers.map((o) => o.variantId)).toEqual([INVOICE_2, METERED]);
   });
 
   it('leaves out an unlisted variant: a direct link sells it, the list does not show it', async () => {
     const { service } = buildList([variantRow({ visibility: VariantVisibility.unlisted })]);
-    await expect(asTenant(() => service.forSale(new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
+    await expect(asTenant(() => service.forSale(USER, new Date('2026-09-25T12:00:00Z')))).resolves.toEqual([]);
   });
 });
 

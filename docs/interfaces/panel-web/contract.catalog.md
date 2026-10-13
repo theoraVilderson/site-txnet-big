@@ -157,6 +157,13 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    would only repeat the review. Only a failed variant opens the sheet, with
    `wizard.partial`, because adding it is the work left.
 
+## Who can buy a product (PT-1-b)
+
+The product sheet's "who can buy this product" section (`ProductAudienceSection.tsx`): every user, or chosen groups,
+with its own save (`PUT …/products/:id/audience`, catalog [contract.audience.md](../../domains/catalog/contract.audience.md)).
+Only on the surface's own tenant's products (`ownsAudience`); the groups are the surface's (`CatalogSurface.groups`).
+"Groups" with none ticked does not save — that is switching the product off. The list marks a limited product.
+
 ## Capabilities by name (F-114-f-b, ADR-0086)
 
 What a product unlocks is ticked from billing's `GET /capabilities`, never
