@@ -1460,6 +1460,14 @@ ingested rows reuse the catalog id verbatim as their row id.
 | FE-1-i | Split oversized views into parts or `useReducer`: CatalogView (27 useState), PanelGroups (24), SupportThreadView (22), AgentThreadView, ShopView, BulkByFilter; drop the hooks eslint-disables they carry | panel-web | todo | FE-1-b FE-1-c | — |  | Asked 2026-10-13 (user). One view per session; split this row when started. |
 | FE-1-j | Small-text type tokens: the 273 arbitrary sizes like `text-[11px]` become theme tokens | panel-web | todo | — | — |  | Asked 2026-10-13 (user). |
 | FE-1-k | coinsite skeleton tidy: Next on site-pwa's major (15.5.27 today), empty `lib/auth.ts` and `register.ts`, unused `Image` import, localStorage/classList theme util, Persian comments | marketing-web | todo | — | — |  | Asked 2026-10-13 (user). The 2026-09 compromise came through Next 15.x. |
+| CS-1 | Code standard debt outside the panel: the files C-01, C-17, C-18, C-19 list in `except` and codeshape's backend deps leave their lists (umbrella) | i18n | todo | CS-1-a CS-1-b CS-1-c CS-1-d CS-1-e CS-1-f CS-1-g | — |  | Umbrella. Asked 2026-10-13 (user): one standard, front and back, a team can continue. Panel side is FE-1. |
+| CS-1-a | One request-language reader per service, falling back to `DEFAULT_LANGUAGE`: the ten controllers answering `?? 'fa'` (auth, tenant guide, support) and their `(req as any).language` casts | i18n | todo | — | — |  | Asked 2026-10-13 (user). C-17; each file leaves C-17's except. |
+| CS-1-b | Formatting locale as a named constant: inline `"en"` in `_lib/money.ts`, `_lib/datetime.ts`, `AmountInput`, `deposit-start.service.ts`, `catalog-admin.schema.ts` | i18n | todo | — | — |  | Asked 2026-10-13 (user). C-17. |
+| CS-1-c | Backend: "is this the platform tenant" asked of `shared-core/.../platform-tenant.ts` only; the 15 backend files comparing `'platform_owner'` | tenant | todo | — | — |  | Asked 2026-10-13 (user). C-18; panel side is FE-1-b. |
+| CS-1-d | Backend script tables in one shared-core module: persian-search, guide-search, slug-suggestion, config-text normalisers | i18n | todo | — | — |  | Asked 2026-10-13 (user). C-19; panel side is FE-1-c. suggestion-copy and bot-copy.fallbacks stay: language data, not normalising. |
+| CS-1-e | Backend and Go comments to English: auth.schema, impersonation.module, messenger capabilities, sms-provider, guide-search.spec, sub-service line_names | i18n | todo | — | — |  | Asked 2026-10-13 (user). C-01; panel side is FE-1-f. |
+| CS-1-f | Backend deps nothing imports: `chokidar`, `class-validator`, `class-transformer`, `@prisma/orm-postgres` — find who loads them (Nest peer, Prisma adapter, watch), then ALLOW_DEPS or remove | hosting | todo | — | — |  | Asked 2026-10-13 (user). C-21; codeshape.py baseline `deps`. |
+| CS-1-g | One `PermissionsGuard`: `auth/guards/permissions.guard.ts` and `impersonation/guards/permissions.guard.ts` are identical copies, both imported | auth-api | todo | — | — |  | Asked 2026-10-13 (user). Found with the SensitiveActionGuard copy FE-1-d removed. C-21. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1906,6 +1914,11 @@ User, 2026-10-13 (ADR-0142). PT-1-a first; PT-1-b after it; PT-1-c … PT-1-k in
 User, 2026-10-13. Bugs first, then shared values, then deletion before renames:
 FE-1-a → FE-1-b → FE-1-c → FE-1-e → FE-1-f (FE-1-d done 2026-10-13); FE-1-g, FE-1-h, FE-1-j, FE-1-k at any time;
 FE-1-i last, one view per session.
+
+## Order of work — the CS-1 code standard series
+
+User, 2026-10-13. Any order; each row empties one `except` list or baseline entry.
+CS-1-a before CS-1-b (both C-17); CS-1-g at any time.
 
 ## Rules
 

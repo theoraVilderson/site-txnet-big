@@ -1,3 +1,4 @@
+// codeshape: spec-only — the in-memory EdgeProvider that edge and tenant-domain specs drive
 import { TenantDomainEdgeProvider } from '@prisma/client';
 
 import { EdgeHostname, EdgeProvider } from './edge-provider';

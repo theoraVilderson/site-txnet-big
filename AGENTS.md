@@ -172,7 +172,7 @@ budget is actually won or lost. Every number below was measured in this repo on
 2026-09-12: a rule with a number beside it gets followed, and one without it does
 not.
 
-**1. Measure before optimising.** The six checks under "Before declaring any work
+**1. Measure before optimising.** The six checks (seven since `codeshape.py`) under "Before declaring any work
 done" total **5.5s**. They are not the slow part and never were — reading is, and
 it is most of a session's cost before the first line of code. Time the thing you
 are about to speed up, or you will speed up the wrong thing.
@@ -365,6 +365,31 @@ already existed on reading. Four rules change how a normal session ends:
 None of these are optional and none are worth routing around. If one blocks a
 task, name it and ask — the same rule as a `CONVENTIONS.md` id.
 
+## Code a team can continue
+
+**Standing instruction from the user (2026-10-13), for every session, every
+agent and every person on the team:** code is written so the next person can
+pick it up without asking. It is held by `docs/CONVENTIONS.md` C-17 … C-22,
+and mostly by checks, not by memory:
+
+- **No hardcoding.** A language comes from the locale meta, never `"fa"`/`"en"`
+  (C-17); a domain question is one imported function, never a literal compared
+  again (C-18); text a person reads is a locale key (C-19); a number that means
+  something is a named constant (C-22). Write code that follows the data — the
+  next language, tenant type or gateway must need no edit at the call site.
+- **Small parts.** 400 lines a file, 10 `useState` a React file (C-20,
+  `tools/codeshape.py`). Split by job — `_components` / `_hooks` / `_lib`,
+  controller / service / pure function — before the cap, not after.
+- **Comments say why**, in English, with the id they come from; every export
+  of a lib module has one doc line (C-01, C-22).
+- **What is replaced is deleted in the same change** — the file, its spec, its
+  dependency, its doc lines (C-21). Do not leave the old path "just in case";
+  git keeps it.
+
+A file you touch that is already on a debt list (an `except:` line or
+`tools/codeshape.baseline.json`) may not get worse, and when you fix it, take
+it off the list in the same change (`python3 tools/codeshape.py --tighten`).
+
 ## House style
 
 `docs/CONVENTIONS.md` holds every rule about *how* code is written, each with a
@@ -385,9 +410,10 @@ python3 tools/features-scan.py --check
 python3 tools/where.py --check
 python3 tools/conventions.py
 python3 tools/contracts.py
+python3 tools/codeshape.py
 ```
 
-All six must pass. For a change that touched TypeScript, so must these two,
+All seven must pass. For a change that touched TypeScript, so must these two,
 from `txnet-backend/` — **over the projects the change reaches, not the whole
 workspace** (user, 2026-09-18):
 

@@ -1,7 +1,7 @@
 ---
 id: conventions
 status: active
-updated: 2026-10-09
+updated: 2026-10-13
 ---
 
 # House style
@@ -32,7 +32,14 @@ needs to move up that table.
 
 | id | rule | enforced by |
 |---|---|---|
-| C-01 | Technical docs, code, commit messages and logs are in English. Existing Persian inline comments may stay; do not add new ones. | review |
+| C-22 | A comment says *why* — the rule, the case or the id it comes from — never what the next line plainly does. Every export of a `lib/`, `_lib/` or service module has a one-line doc. No commented-out code. A file does one job: a page is thin, its view is in `_components`, its state in `_hooks`, its pure logic in `_lib`; a controller is thin over a service. | review |
+| C-21 | Code that is replaced is deleted in the same change, with its tests and its doc mentions. No file only tests import, no `dependencies` entry nothing imports (`codeshape.py` `dead`/`deps`), no `console.log`/`console.debug` in app code, no `TODO`/`FIXME` without a backlog id: `TODO(FE-1-e)`. | check |
+| C-20 | A source file is at most 400 lines and a React file declares at most 10 `useState` (`tools/codeshape.py`). Files over it today are a baseline that may only shrink. | check |
+| C-19 | Text a person reads is never in code: it is a locale key (C-06, C-07). Arabic-script literals live only in a module whose job is the script itself — normalising digits and letters, transliterating, matching. | check |
+| C-18 | A domain question is one named function: *is this the platform's tenant*, *may this user buy* — asked of the module that owns the type, never re-derived from a literal at the call site. `"platform_owner"` outside its owners is a violation. | check |
+| C-17 | A language is never a literal. The languages offered come from the locale meta (`availableLocales`, `locale-service`); the fallback is `DEFAULT_LANGUAGE`, read in one place per app; a machine locale used only to format or parse digits is a named constant. | check |
+| C-16 | Code asks what a tenant may do — a feature key or a limit — never which package it bought (catalog §3.11). | check |
+| C-01 | Technical docs, code, commit messages and logs are in English. A Persian comment is a violation; the files that still hold one are listed in the check and leave with FE-1-f / CS-1-e. | check |
 | C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
 | C-15 | Who holds a key is asked of `findKeyHolders` (shared-core, ADR-0138) — a role, a key given, a group of the tenant, less a key taken. A Prisma filter on `rolePermissions: { some: { permission: ... } }` outside it is a violation: it misses a key given to one person and tells someone it was taken from. | check |
 | C-14 | A page never polls the server for state that someone else's work changes — it subscribes and re-reads (`useLiveReread`, ADR-0121). Under `site-pwa/src/app/` and `site-pwa/src/hooks/`, a `setInterval(` is a violation unless it is a clock (`setNow(`, `setSeconds(`) or carries a `live-exempt: <reason>` comment on its line. | check |
@@ -121,17 +128,24 @@ to `active`, revisit whether its repository layer can carry a real `check`.
 
 ## C-01 — English only
 
-**Rule.** Docs, code, commit messages and logs are written in English. Persian
-inline comments that already exist in the code may stay as-is; do not add new
-ones.
+**Rule.** Docs, code, commit messages and logs are written in English,
+comments included.
 
 **Why.** A polyglot backend (Go + TypeScript) already forces contributors to
 context-switch between two languages; mixing in a third for comments makes
 `git blame` and code review slower for the next person, whoever they are.
 
-**Not mechanically checkable** — a comment can't be judged English/Persian by
-a cheap regex without false positives on names, URLs and error codes. Held in
-review.
+Three Arabic-script words in a row inside a comment is prose, not a quoted
+example (`"۱۲۳"`, `ی`), so that is what the check matches. The files in
+`except` held such comments on 2026-10-13 and leave with FE-1-f (panel) and
+CS-1-e (backend, Go); a new one is refused.
+
+```check C-01
+forbid: (//|/\*|^\s*\*|\{/\*).*[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts, auth-handler/**/*.go, i18n-platform/**/*.go, network-service/**/*.go, sub-service/**/*.go
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go, coinsite/src/app/(Auth)/login/page.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/AuthCardShell.tsx, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_components/ThemeDropdown.tsx, site-pwa/src/app/(auth)/auth/_hooks/useFirstPaint.ts, site-pwa/src/app/(auth)/auth/loading.tsx, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/layout.tsx, site-pwa/src/context/LocaleContext.tsx, site-pwa/src/context/LocaleShell.tsx, site-pwa/src/context/ThemeContext.tsx, site-pwa/src/env.ts, site-pwa/src/instrumentation.ts, site-pwa/src/lib/locale-store.ts, site-pwa/src/lib/theme-script.ts, site-pwa/src/services/locale.ts, site-pwa/src/services/theme.ts, site-pwa/src/services/user-locale-mock.ts, site-pwa/src/stores/locale-store.ts, site-pwa/src/stores/theme-store.ts, txnet-backend/auth-service/src/app/auth/auth.schema.ts, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts, txnet-backend/messenger/src/lib/capabilities.ts, txnet-backend/shared-core/src/lib/sms/sms-provider.service.ts, txnet-backend/tenant-service/src/app/guide/guide-search.spec.ts
+message: write the comment in English (C-01)
+```
 
 ---
 
@@ -544,3 +558,130 @@ in: txnet-backend/**/*.ts, site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, auth-han
 except: txnet-backend/**/*.spec.ts, txnet-backend/**/seed*.ts, txnet-backend/prisma/**, site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, **/*_test.go
 message: gate on a feature key (@RequiresFeature / TenantEntitlements.check) or a limit (resellerLimitOf) — never on a package or plan name (C-16, catalog §3.11)
 ```
+
+## C-17 — a language is never a literal
+
+**Rule.** No `"fa"` or `"en"` in code. The set of languages comes from where it
+is decided — the panel's `availableLocales` (locale meta), `locale-service` in
+the backend. A request's fallback is `DEFAULT_LANGUAGE`, read once per app
+(`site-pwa/src/env.ts`, each service's `env.validation.ts`). A locale chosen to
+format or parse digits, not to speak to a person, is a named constant beside
+the formatter (`MACHINE_LOCALE`), never an inline `"en"`.
+
+**Why.** The platform sells to resellers in more than one market. On 2026-10-13
+the guides editor and the support categories offered exactly `["fa", "en"]`,
+and ten backend controllers answered `?? 'fa'` instead of the configured
+default — a third language would have been a hunt through 33 files. `except`
+lists those files today; each leaves with its row (FE-1-b, CS-1-a, CS-1-b).
+`localeCompare` and `Intl.DisplayNames` lines are skipped: there the locale
+sorts or names, it does not choose a language.
+
+```check C-17
+forbid: ^(?!.*(?:localeCompare|DisplayNames)).*['"`](?:fa|en)['"`]
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/**/env.validation.ts, site-pwa/src/env.ts, coinsite/src/env.ts, site-pwa/src/app/(panel)/_components/CommandPalette.tsx, site-pwa/src/app/(panel)/_components/ImpersonationBanner.tsx, site-pwa/src/app/(panel)/_components/dashboard/widgets/UsersWidget.tsx, site-pwa/src/app/(panel)/_components/guide/GuideList.tsx, site-pwa/src/app/(panel)/_lib/datetime.ts, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/(panel)/financial/deposit/_components/AmountInput.tsx, site-pwa/src/app/(panel)/guides/_components/GuideEditor.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/guides/_lib/guides.ts, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/lib/guide-api.ts, site-pwa/src/services/user-locale-mock.ts, txnet-backend/auth-service/src/app/account-switch/account-switch.controller.ts, txnet-backend/auth-service/src/app/auth/auth.controller.ts, txnet-backend/auth-service/src/app/auth/me/me.controller.ts, txnet-backend/auth-service/src/app/auth/permissions/permission-registry.controller.ts, txnet-backend/auth-service/src/app/auth/register/register.controller.ts, txnet-backend/auth-service/src/app/common/validation/phone.schema.ts, txnet-backend/auth-service/src/app/locale/locale.service.ts, txnet-backend/billing-service/src/app/catalog/catalog-admin.schema.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-start.service.ts, txnet-backend/bot-service/src/app/locale/locale.service.ts, txnet-backend/bot-service/src/app/webhook/bot-webhook.registrar.ts, txnet-backend/shared-core/src/lib/i18n/translator/translator.ts, txnet-backend/support-service/src/app/conversations/conversations.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-admin.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-feedback.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-internal.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-public.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-reader.ts
+message: take the language from the locale meta or DEFAULT_LANGUAGE, and a formatting locale from a named constant (C-17)
+```
+
+## C-18 — a domain question is one named function
+
+**Rule.** A question the product asks in more than one place — *is this the
+platform's own tenant*, *is this caller the owner*, *may this user buy a
+reseller* — is one exported function in the module that owns the type, and
+every caller imports it. A literal compared at the call site is the question
+asked again, and each copy drifts on its own.
+
+**Why.** On 2026-10-13 the panel asked "is this the platform" 21 times inline
+and six files each kept a local helper; two of them, both named
+`isPlatformOwner`, meant different things (one also required `isOwner`). The
+check holds the one literal that has already drifted; the rule holds the rest
+in review. Owners: `site-pwa/src/app/(panel)/_lib/panel-menu.ts` (the
+`TenantType` union) and `shared-core/src/lib/tenant/platform-tenant.ts`.
+The other files in `except` are debt (FE-1-b, CS-1-c).
+
+```check C-18
+forbid: ['"`]platform_owner['"`]
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, txnet-backend/**/seed*.ts, site-pwa/src/app/(panel)/_hooks/usePaletteData.ts, site-pwa/src/app/(panel)/_hooks/useVisibleMenu.ts, site-pwa/src/app/(panel)/_lib/panel-menu.ts, site-pwa/src/app/(panel)/_lib/reseller-menu.ts, site-pwa/src/app/(panel)/ai/_components/AiView.tsx, site-pwa/src/app/(panel)/ai/_components/UsageForecastView.tsx, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, site-pwa/src/app/(panel)/coupons/_components/GiftCodes.tsx, site-pwa/src/app/(panel)/coupons/_lib/coupon-form.ts, site-pwa/src/app/(panel)/gateways/_lib/gateway-form.ts, site-pwa/src/app/(panel)/groups/_lib/user-groups.ts, site-pwa/src/app/(panel)/my-resellers/_lib/support-access.ts, site-pwa/src/app/(panel)/my-resellers/_lib/users.ts, site-pwa/src/app/(panel)/resellers/_lib/purchase.ts, site-pwa/src/app/(panel)/resellers/_lib/resellers.ts, site-pwa/src/app/(panel)/services/_hooks/useOwnedReseller.ts, site-pwa/src/app/(panel)/settings/_lib/settings.ts, site-pwa/src/app/(panel)/settings/page.tsx, site-pwa/src/lib/auth-api.ts, txnet-backend/ai-service/src/app/profile/profile-builder.service.ts, txnet-backend/auth-service/src/app/auth/register/register.service.ts, txnet-backend/auth-service/src/app/tenant/tenant.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-quote.service.ts, txnet-backend/billing-service/src/app/payment/gateway/gateway-merchant.ts, txnet-backend/shared-core/src/lib/billing/operating-currency.ts, txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts, txnet-backend/shared-core/src/lib/tenant/door.ts, txnet-backend/shared-core/src/lib/tenant/entitlements.ts, txnet-backend/shared-core/src/lib/tenant/host-surface.ts, txnet-backend/shared-core/src/lib/tenant/host.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts, txnet-backend/tenant-service/src/app/currency/operating-currency.service.ts
+message: import the question from the module that owns the tenant type (C-18) — isPlatformTenant(), not a literal compared here
+```
+
+## C-19 — text a person reads is never in code
+
+**Rule.** A label, a message, a separator a reader sees (`"، "`, `"روشن"`) is a
+locale key — C-06 in the panel, C-07 in the backend. Arabic-script literals
+are allowed only in a module whose job is the script: digit and letter
+normalisation, transliteration, language-specific matching. Those modules are
+the first block of `except`; the rest are debt and leave with FE-1-a, FE-1-b,
+FE-1-c and CS-1-d.
+
+**Why.** The theme picker said `"اقیانوسی"` to English readers, and lists
+were joined with a Persian comma in every language. A literal renders the same
+in every locale, and no key-based check can see it.
+
+```check C-19
+forbid: ^(?!\s*(?://|\*|/\*|\{/\*)).*['"`][^'"`]*[\u0600-\u06FF]
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, site-pwa/src/util/helper.ts, site-pwa/src/app/(panel)/_lib/palette.ts, site-pwa/src/app/(panel)/services/_lib/service-configs.ts, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, txnet-backend/billing-service/src/app/wallet/persian-search.ts, txnet-backend/tenant-service/src/app/guide/guide-search.ts, txnet-backend/tenant-service/src/app/purchase/slug-suggestion.ts, txnet-backend/billing-service/src/app/traffic/config-text.ts, txnet-backend/shared-core/src/lib/ai/suggestion-copy.ts, txnet-backend/bot-service/src/app/locale/bot-copy.fallbacks.ts, coinsite/src/app/layout.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_components/ThemeDropdown.tsx, site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx, site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx, site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/resellers/packages/_components/PackagesView.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/context/LocaleContext.tsx, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts
+message: move the text to locales/ and reference its generated key (C-19); script tables belong in the app's one script module
+```
+
+## C-20 — a file is small enough to read in one sitting
+
+**Rule.** A source file (TypeScript, TSX, Go) is at most **400 lines**; a React
+file declares at most **10** `useState`. Past that, split by job: sub-views
+into `_components/`, state into a `_hooks/use<Thing>.ts` (or one `useReducer`),
+pure logic into `_lib/` where it can be tested without rendering; in the
+backend, a service's helpers into their own files beside it.
+
+**Why.** On 2026-10-13, 113 files were over 400 lines (`billing-api.ts` 2501)
+and `CatalogView` held 27 pieces of state. A file that long cannot be reviewed,
+so nobody on a team can safely change it. `tools/codeshape.py` checks it: the
+files over the line today are its baseline, each may shrink and none may grow,
+and `--tighten` locks in a split.
+
+## C-21 — what is replaced is deleted
+
+**Rule.** The change that makes code unnecessary deletes it, with its spec and
+every doc line naming it. `tools/codeshape.py` fails on a file nothing but
+specs imports (`dead`) and a `dependencies` entry nothing imports (`deps`); a
+file that exists for specs says so in its first lines
+(`// codeshape: spec-only — <why>`), and a dependency used without an import is
+in its `ALLOW_DEPS` with the reason. App code logs through the app's logger
+(`console.info`/`warn`/`error` in Next server code), never `console.log`. A
+`TODO` names the row that will do it.
+
+**Why.** On 2026-10-13: five unused helper exports (one still logging
+`"geelow"`), five files nothing imported, a guard kept in two copies, and 20
+npm packages — `mongoose`, `ioredis`, `axios`, `install` — in apps that never
+used them, each one a build and audit cost. Dead code also reads as live: the
+next person copies the pattern from it.
+
+```check C-21
+forbid: console\.(log|debug)\(|\b(TODO|FIXME|HACK)\b(?!\([A-Z]+-[\w-]+\))
+in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/*/src/**/*.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, site-pwa/src/services/user-locale-mock.ts
+message: delete the debug line, log through the logger, and give a TODO its backlog id: TODO(FE-1-e) (C-21)
+```
+
+## C-22 — a comment says why; a file does one job
+
+**Rule.**
+- A comment explains *why*: the rule, the incident, the id (`F-093-h`,
+  `ADR-0121`, `C-14`). It never narrates the next line.
+- Every export of a `lib/`, `_lib/` or service module has a one-line `/** */`
+  saying what it is for — that line is what the next person reads in their
+  editor's hover.
+- No commented-out code; git has it.
+- Panel: `page.tsx` reads params and renders one view; the view is in
+  `_components/`, its data and state in `_hooks/`, its pure logic in `_lib/`.
+  Backend: a controller validates and calls a service; the service's pure parts
+  are functions with their own spec.
+- A number that means something is a named constant at the top of its module
+  (`COPY_FEEDBACK_MS`, `MAX_RETRIES`); a value used in two files lives in one
+  module and both import it (C-09 for closed sets).
+
+**Why.** These are what let a second person — or a team — continue from where
+the last one stopped without asking them. None is checkable by a regex, so
+they rest on review; when one keeps being broken, it gets a check (see "The
+format").

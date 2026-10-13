@@ -1,3 +1,4 @@
+// codeshape: spec-only — the allow-list reader-role.spec.ts holds against the ai_reader_role migration
 /**
  * The tables `ai-service`'s reader may SELECT (ADR-0109 point 6), each under
  * its tenant's RLS. `20261002000300_ai_reader_role` grants exactly these and

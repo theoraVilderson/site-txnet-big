@@ -1,0 +1,257 @@
+#!/usr/bin/env python3
+"""Hold the shape of the code: size, state, dead files, dead dependencies.
+
+`conventions.py` checks one line at a time. These four rules need a whole file
+or the whole import graph, so they live here (C-20, C-21 in CONVENTIONS.md):
+
+    size   a source file is at most MAX_LINES lines
+    state  a React component file declares at most MAX_STATE `useState`s
+    dead   every source file is imported by something that is not a test
+    deps   every runtime dependency in a package.json is imported somewhere
+
+Code written before these rules is listed in tools/codeshape.baseline.json.
+The baseline is a ratchet: a listed file may shrink but not grow, an entry
+that is fixed must leave the list, and nothing new may join it. `--tighten`
+rewrites the baseline from the tree, and refuses if that would raise any
+number or add any entry.
+
+usage:
+    python3 tools/codeshape.py              check (exit 1 on a violation)
+    python3 tools/codeshape.py --tighten    lock in what got better (first run: create the baseline)
+    python3 tools/codeshape.py --list dead  print one rule's current findings
+"""
+import json
+import os
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BASELINE = Path(__file__).with_name("codeshape.baseline.json")
+
+MAX_LINES = 400
+MAX_STATE = 10
+
+# App roots: the source tree, the tsconfig whose `paths` resolve its aliases,
+# and the package.json whose `dependencies` it owns.
+APPS = [
+    {"src": "site-pwa/src", "tsconfig": "site-pwa/tsconfig.json", "pkg": "site-pwa"},
+    {"src": "coinsite/src", "tsconfig": "coinsite/tsconfig.json", "pkg": "coinsite"},
+    {"src": "txnet-backend", "tsconfig": "txnet-backend/tsconfig.base.json", "pkg": "txnet-backend"},
+]
+GO_ROOTS = ["auth-handler", "i18n-platform", "network-service", "sub-service"]
+
+SKIP_DIRS = {"node_modules", ".git", "dist", "build", ".next", ".nx", "coverage",
+             "generated", "vendor", "tmp", ".agents", ".claude", ".cursor", ".devin"}
+TEST_RE = re.compile(r"(\.(spec|test|e2e-spec)\.tsx?$|_test\.go$|/test-support/|-e2e/|/__tests__/)")
+SOURCE_EXT = (".ts", ".tsx")
+
+# Files a framework loads by name, never by import.
+NEXT_ENTRY = re.compile(
+    r"/app/.*/?(page|layout|route|loading|error|not-found|template|default|global-error|"
+    r"opengraph-image|twitter-image|icon|apple-icon|manifest|sitemap|robots)\.tsx?$"
+    r"|/src/(proxy|middleware|instrumentation)\.ts$")
+BACKEND_ENTRY = re.compile(r"(/src/main\.ts$|/src/index\.ts$|/prisma/|/scripts/|\.config\.m?ts$|/seed[^/]*\.ts$)")
+
+# Dependencies nothing imports by name that are still needed, each with why.
+ALLOW_DEPS = {
+    "react-dom": "Next renders through it; no app file imports it by name",
+    "@grpc/grpc-js": "peer dependency of @txnet/locale-client",
+    "@grpc/proto-loader": "peer dependency of @txnet/locale-client",
+    "@nestjs/cli": "the `nest build` / `nest start` scripts",
+    "tslib": "txnet-backend compiles with importHelpers",
+}
+
+# A file only specs import may say so in its first lines, with the reason:
+#     // codeshape: spec-only — <why it is not dead>
+SPEC_ONLY = re.compile(r"codeshape:\s*spec-only\s*—\s*\S")
+
+IMPORT_RE = re.compile(
+    r"""(?:import|export)\s[^'"`;]*?from\s*['"]([^'"]+)['"]"""
+    r"""|import\s*\(\s*['"]([^'"]+)['"]\s*\)"""
+    r"""|import\s+['"]([^'"]+)['"]"""
+    r"""|require\(\s*['"]([^'"]+)['"]\s*\)"""
+    r"""|vi\.mock\(\s*['"]([^'"]+)['"]""")
+
+
+def walk(base, exts):
+    for dirpath, dirs, files in os.walk(ROOT / base):
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+        for f in files:
+            if f.endswith(exts) and not f.endswith(".d.ts"):
+                yield Path(dirpath) / f
+
+
+def rel(p):
+    return p.relative_to(ROOT).as_posix()
+
+
+def read(p):
+    try:
+        return p.read_text(encoding="utf-8")
+    except (UnicodeDecodeError, OSError):
+        return ""
+
+
+def load_paths(tsconfig):
+    """tsconfig `paths` as [(prefix, [target dirs])]; JSONC comments stripped."""
+    p = ROOT / tsconfig
+    text = re.sub(r"^\s*//.*$|(?<=[,{\[\"])\s*//[^\n\"]*$", "", read(p), flags=re.M)
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    try:
+        paths = json.loads(text).get("compilerOptions", {}).get("paths", {})
+    except json.JSONDecodeError:
+        return []
+    out = []
+    for key, targets in paths.items():
+        out.append((key.rstrip("*"), [(p.parent / t.rstrip("*")).resolve() for t in targets],
+                    key.endswith("*")))
+    return out
+
+
+def resolve(spec, from_file, aliases):
+    """-> the source file an import specifier names, or None (a package)."""
+    bases = []
+    if spec.startswith("."):
+        bases.append((from_file.parent / spec).resolve())
+    else:
+        for prefix, targets, wild in aliases:
+            if (wild and spec.startswith(prefix)) or spec == prefix:
+                rest = spec[len(prefix):] if wild else ""
+                bases += [t / rest if wild and rest else t for t in targets]
+    for b in bases:
+        if b.is_file():
+            return b
+        for ext in SOURCE_EXT:
+            for cand in (Path(str(b) + ext), b / f"index{ext}"):
+                if cand.is_file():
+                    return cand
+    return None
+
+
+def find_size():
+    out = {}
+    for base in [a["src"] for a in APPS] + GO_ROOTS:
+        for p in walk(base, SOURCE_EXT + (".go",)):
+            r = rel(p)
+            if TEST_RE.search(r):
+                continue
+            n = read(p).count("\n")
+            if n > MAX_LINES:
+                out[r] = n
+    return out
+
+
+def find_state():
+    out = {}
+    for a in APPS:
+        for p in walk(a["src"], (".tsx",)):
+            r = rel(p)
+            if TEST_RE.search(r):
+                continue
+            n = len(re.findall(r"\buseState\b\s*[<(]", read(p)))
+            if n > MAX_STATE:
+                out[r] = n
+    return out
+
+
+def find_dead():
+    out = {}
+    for a in APPS:
+        aliases = load_paths(a["tsconfig"])
+        files = [p for p in walk(a["src"], SOURCE_EXT)]
+        used = set()
+        for p in files:
+            if TEST_RE.search(rel(p)):
+                continue
+            for m in IMPORT_RE.finditer(read(p)):
+                spec = next(g for g in m.groups() if g)
+                hit = resolve(spec, p, aliases)
+                if hit and hit != p:
+                    used.add(hit)
+        for p in files:
+            r = rel(p)
+            if TEST_RE.search(r) or NEXT_ENTRY.search("/" + r) or BACKEND_ENTRY.search("/" + r):
+                continue
+            if p.resolve() not in used and not SPEC_ONLY.search("\n".join(read(p).splitlines()[:15])):
+                out[r] = 1
+    return out
+
+
+def find_deps():
+    out = {}
+    for a in APPS:
+        pkg = ROOT / a["pkg"] / "package.json"
+        deps = json.loads(read(pkg) or "{}").get("dependencies", {})
+        text = []
+        for p in walk(a["pkg"], SOURCE_EXT + (".js", ".mjs", ".cjs", ".mts", ".css")):
+            text.append(read(p))
+        for cfg in (ROOT / a["pkg"]).glob("*.json"):
+            if cfg.name not in ("package.json", "package-lock.json"):
+                text.append(read(cfg))
+        blob = "\n".join(text)
+        for d in deps:
+            if d.startswith("@types/") or d in ALLOW_DEPS:
+                continue
+            if not re.search(r"""['"]""" + re.escape(d) + r"""(/[^'"]*)?['"]""", blob):
+                out[f"{a['pkg']}/package.json:{d}"] = 1
+    return out
+
+
+RULES = {
+    "size": (find_size, f"over {MAX_LINES} lines — split it (C-20)"),
+    "state": (find_state, f"over {MAX_STATE} useState — move state into a hook or useReducer, or split the view (C-20)"),
+    "dead": (find_dead, "imported by nothing but tests — delete it, or import it where it is meant to run (C-21)"),
+    "deps": (find_deps, "a dependency nothing imports — remove it from package.json (C-21)"),
+}
+
+
+def current():
+    return {name: fn() for name, (fn, _) in RULES.items()}
+
+
+def main(argv):
+    now = current()
+    base = json.loads(read(BASELINE) or "{}")
+
+    if argv[:1] == ["--list"]:
+        for k, v in sorted(now.get(argv[1], {}).items()):
+            print(f"{v:6}  {k}")
+        return 0
+
+    bad, better = [], []
+    for name, (_, why) in RULES.items():
+        b, c = base.get(name, {}), now[name]
+        for k, v in sorted(c.items()):
+            if k not in b:
+                bad.append(f"  {name:5}  {k} ({v}) — {why}")
+            elif v > b[k]:
+                bad.append(f"  {name:5}  {k} grew {b[k]} -> {v} — it is listed as debt, and debt may only shrink (C-20)")
+        for k, v in b.items():
+            if c.get(k, 0) < v:
+                better.append((name, k))
+
+    if argv[:1] == ["--tighten"]:
+        if bad and BASELINE.exists():
+            print("refused: the tree is worse than the baseline somewhere; fix that first")
+            print("\n".join(bad))
+            return 1
+        BASELINE.write_text(json.dumps(now, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        print(f"baseline tightened: {len(better)} entr(y/ies) improved")
+        return 0
+
+    for name in RULES:
+        print(f"  {name:5}  {len(now[name]):4} listed as debt" if not any(b.startswith(f"  {name:5}") for b in bad)
+              else f"  {name:5}  FAIL")
+    if better:
+        print(f"\n{len(better)} baseline entr(y/ies) got better — run `python3 tools/codeshape.py --tighten` to lock it in")
+    if bad:
+        print("\n" + "\n".join(bad))
+        print(f"\n{len(bad)} violation(s)")
+        return 1
+    print("\n0 violation(s)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
