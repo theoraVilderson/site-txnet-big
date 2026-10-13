@@ -35,6 +35,7 @@ import {
 import { useWorkspaceSelf } from "../../../../_lib/workspace";
 import { AccessHistory } from "./AccessHistory";
 import { UserPermissions } from "./UserPermissions";
+import { UserRestrictions } from "./UserRestrictions";
 import { useUserMessage } from "./useUserMessage";
 
 const P = K.profile;
@@ -56,6 +57,8 @@ const P = K.profile;
  *    replaces what is shown;
  *  - **every key they hold and where it comes from**, give / take / lift one
  *    (AC-1-n): `UserPermissions`, below the role;
+ *  - **the caps and bars on them**, add / change / lift one (F-030-f):
+ *    `UserRestrictions`, below the permissions;
  *  - **who changed their access, when and why** (AC-1-p): `AccessHistory`,
  *    below the permissions, re-read after a role or key written here;
  *  - **"sign in as this user"** (AC-1-i) on the caller's own tenant, or for
@@ -315,6 +318,7 @@ export function UserProfile({
       </section>
 
       <UserPermissions id={id} userId={userId} canAct={editable} onChange={() => setAccessMoved((n) => n + 1)} />
+      <UserRestrictions id={id} userId={userId} canAct={editable} />
       <AccessHistory id={id} userId={userId} refresh={accessMoved} />
     </div>
   );

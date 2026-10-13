@@ -9,6 +9,7 @@ import { signInCalls } from "./auth/sign-in";
 export * from "./auth/account";
 export { ImpersonationEnded, type Impersonation } from "./auth/credential";
 export * from "./auth/reseller-users";
+export * from "./auth/restrictions";
 export * from "./auth/roles";
 export * from "./auth/sign-in";
 export * from "./auth/support-consent";

@@ -6097,6 +6097,47 @@
       "fromUntil": "from {{start}} until {{end}}"
     }
   },
+  "personRestrictions": {
+    "title": "Restrictions",
+    "hint": "Limits on this one person. Everything else stays open to them.",
+    "none": "No restrictions.",
+    "add": "Add a restriction",
+    "change": "Change",
+    "lift": "Lift",
+    "liftConfirm": "Lift the restriction on {{key}}?",
+    "liftHint": "They are no longer limited here. The history keeps it.",
+    "lifted": "Restriction lifted.",
+    "dialogAdd": "Add a restriction",
+    "dialogChange": "Change a restriction",
+    "key": "Restriction",
+    "pickKey": "Choose a restriction",
+    "count": "At most",
+    "countHint": "A whole number from 0 to {{max}}. 0 allows none.",
+    "options": "Barred",
+    "optionsHint": "Pick at least one.",
+    "reason": "Reason",
+    "reasonHint": "3 to 500 characters. It is kept in the history.",
+    "expires": "Ends",
+    "expiresHint": "Optional: leave empty to hold until lifted.",
+    "noEnd": "No end",
+    "save": "Save",
+    "cancel": "Cancel",
+    "saved": "Saved.",
+    "atMost": "at most {{count}}",
+    "until": "until {{date}}",
+    "keys": {
+      "services_active_max": "Active services",
+      "configs_max": "Configs",
+      "topup_categories_barred": "Top-up methods"
+    },
+    "refusals": {
+      "no_authority": "You cannot restrict this person: they hold as much as you, or own the reseller.",
+      "restriction_unknown": "That restriction does not exist.",
+      "restriction_value_invalid": "That value is not allowed for this restriction.",
+      "restriction_not_found": "That restriction is already gone — refresh.",
+      "expiry_past": "The end has already passed — pick a later one."
+    }
+  },
   "accessHistory": {
     "title": "Access history",
     "hint": "Who changed what they may do, when and why.",
