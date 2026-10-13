@@ -9,7 +9,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import type { EntitlementSource } from '@prisma/client';
+import type { EntitlementSource, TenantType } from '@prisma/client';
+
+import { isPlatformTenant, PLATFORM_TENANT_TYPE } from './platform-tenant';
 import { BackendI18nKeys } from '../i18n/keys.backend.generated';
 import { TenantContext } from '../tenant-context/tenant-context';
 import type { TenantFeatureKey } from './feature-keys';
@@ -34,7 +36,7 @@ export interface TenantEntitlementRow {
 /** The two reads this needs. An app binds its Prisma client (the cross-tenant pool: `tenant` has no `tenantId`). */
 export interface TenantEntitlementReader {
   tenant: {
-    findUnique(args: { where: { id: string }; select: { tenantType: true } }): Promise<{ tenantType: string } | null>;
+    findUnique(args: { where: { id: string }; select: { tenantType: true } }): Promise<{ tenantType: TenantType } | null>;
   };
   tenantFeatureEntitlement: {
     findMany(args: {
@@ -45,7 +47,7 @@ export interface TenantEntitlementReader {
 }
 
 export type TenantEntitlementDecision =
-  | { allowed: true; source: EntitlementSource | 'platform_owner'; expiresAt: Date | null }
+  | { allowed: true; source: EntitlementSource | typeof PLATFORM_TENANT_TYPE; expiresAt: Date | null }
   | { allowed: false };
 
 /** The DI token an app binds its {@link TenantEntitlementReader} to. */
@@ -63,7 +65,7 @@ export class TenantEntitlements {
   async check(tenantId: string, featureKey: TenantFeatureKey, now: Date = new Date()): Promise<TenantEntitlementDecision> {
     const tenant = await this.db.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
     if (!tenant) return { allowed: false };
-    if (tenant.tenantType === 'platform_owner') return { allowed: true, source: 'platform_owner', expiresAt: null };
+    if (isPlatformTenant(tenant.tenantType)) return { allowed: true, source: PLATFORM_TENANT_TYPE, expiresAt: null };
 
     const rows = await this.db.tenantFeatureEntitlement.findMany({
       where: { tenantId, featureKey, isEnabled: true },

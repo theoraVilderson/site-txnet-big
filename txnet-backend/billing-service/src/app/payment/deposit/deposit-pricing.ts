@@ -1,6 +1,6 @@
 import { FeeCalcMode, Prisma, TenantType, UserGroupMemberType } from '@prisma/client';
 
-import { admittedByAudience, liveMembership } from '@txnet-backend/shared-core';
+import { admittedByAudience, liveMembership, isPlatformTenant } from '@txnet-backend/shared-core';
 import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 import type { PaymentProvider } from '../gateway/payment-provider';
@@ -184,7 +184,7 @@ export async function defaultTaxRate(tx: Prisma.TransactionClient, tenantId: str
  */
 export async function isPlatformOwner(tx: Prisma.TransactionClient, tenantId: string): Promise<boolean> {
   const row = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-  return row?.tenantType === TenantType.platform_owner;
+  return isPlatformTenant(row?.tenantType);
 }
 
 /**

@@ -6,8 +6,9 @@ import {
   ResellerActor,
   SupportConsentRefused,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
-import { TenantType, type Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import {
   BadRequestException,
   ForbiddenException,
@@ -154,7 +155,7 @@ export class ImpersonationService {
       authorityOver(
         { userId: admin.id, permissions: adminAccess.keys, as: opts.authority.as },
         { userId: target.id, permissions: targetKeys },
-        { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
+        { ownerUserId: tenant?.ownerUserId ?? null, platform: isPlatformTenant(tenant?.tenantType) },
       )
     ) {
       throw new ForbiddenException('You cannot impersonate this user');

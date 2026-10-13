@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, SessionRevokedReason, TenantType, UserStatus } from '@prisma/client';
-import { holdsPermission, tenantTransaction } from '@txnet-backend/shared-core';
+import { AdminAction, AuditTargetType, SessionRevokedReason, UserStatus } from '@prisma/client';
+import { holdsPermission, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SessionService } from '../session/session.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
@@ -95,7 +95,7 @@ export class UserStatusService {
         { userId: actor.userId, permissions: actor.permissions, as: 'member' },
         // Their whole answer (ADR-0138): a key given to them counts as theirs.
         { userId: user.id, permissions: (await this.answers.ofLoaded(user, tx)).keys.filter((k) => !k.startsWith('self.')) },
-        { ownerUserId: owner?.ownerUserId ?? null, platform: owner?.tenantType === TenantType.platform_owner },
+        { ownerUserId: owner?.ownerUserId ?? null, platform: isPlatformTenant(owner?.tenantType) },
       );
       if (refused) throw new UserStatusRefused(refused, userId);
 

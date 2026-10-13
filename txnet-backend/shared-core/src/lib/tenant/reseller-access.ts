@@ -9,6 +9,7 @@ import { TenantCapabilityName, tenantAllows } from './status-policy';
 import type { PlatformKey } from './platform-keys';
 import type { ResellerKey } from './reseller-keys';
 import { liveEmergencyEntry, liveSupportConsent } from './support-consent';
+import { isPlatformTenant } from './platform-tenant';
 
 /**
  * The reads the rule needs. An app binds its app pool (`PrismaService`): `tenant.tenant` has no RLS, and a member's seat is their own tenant's row.
@@ -202,9 +203,9 @@ export class ResellerAccess {
     ]);
     // The platform's staff door asks a platform key (AC-1-d, ADR-0135): figures are a cross-tenant report.
     const staffKeys = this.staffKeys ?? [route === 'figures' ? 'platform.report.read' : 'platform.tenant.manage'];
-    const fromPlatform = caller?.tenantType === TenantType.platform_owner;
+    const fromPlatform = isPlatformTenant(caller?.tenantType);
     const staff = fromPlatform && staffKeys.some((key) => holdsPermission(actor.permissions, key));
-    if (platform && tenant?.tenantType === TenantType.platform_owner) {
+    if (platform && tenant && isPlatformTenant(tenant.tenantType)) {
       // Its own people are a tenant's like any other's (GR-1-o, ADR-0139 (7)): a
       // user of the platform holding the route's key by name — its Support group's
       // `grant.read` — is admitted as its staff are. Figures stay staff-only.

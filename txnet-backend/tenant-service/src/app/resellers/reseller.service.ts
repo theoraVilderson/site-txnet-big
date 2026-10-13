@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, TenantType, UserStatus } from '@prisma/client';
-import { platformCurrencyOf } from '@txnet-backend/shared-core';
+import { platformCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -133,7 +133,7 @@ export class ResellerService {
   /** The one owner check; a non-owner is refused before the cross-tenant pool is touched (ADR-0053). */
   private async access(actor: ResellerActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new ResellerRefused('not_platform_owner', 'reseller administration');
     }
   }

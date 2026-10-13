@@ -10,7 +10,7 @@ import {
   TenantSuspensionCause,
   TenantType,
 } from '@prisma/client';
-import { OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor } from '@txnet-backend/shared-core';
+import { OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor, isPlatformTenant } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
@@ -500,7 +500,7 @@ export class TenantSubscriptionService {
   /** The platform owner's tenant — the same check as reseller administration. */
   private async access(actor: TenantSubscriptionActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new TenantSubscriptionRefused('not_platform_owner', 'subscription administration');
     }
   }

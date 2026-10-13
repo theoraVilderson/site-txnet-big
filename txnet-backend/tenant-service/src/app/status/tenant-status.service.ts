@@ -5,6 +5,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import type { ChangeTenantStatusInput } from './tenant-status.schema';
 import { applyTenantStatus, makeSuspensionManual } from './tenant-status.transition';
+import { isPlatformTenant } from '@txnet-backend/shared-core';
 
 /**
  * The platform owner suspends, reactivates and terminates a reseller (F-018-f,
@@ -161,7 +162,7 @@ export class TenantStatusService {
   /** The platform owner's tenant — the same check as reseller administration. */
   private async access(actor: TenantStatusActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new TenantStatusRefused('not_platform_owner', 'status administration');
     }
   }

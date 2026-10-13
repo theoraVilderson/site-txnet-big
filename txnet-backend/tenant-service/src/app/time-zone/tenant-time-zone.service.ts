@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TenantType } from '@prisma/client';
 import {
   type TenantCapabilityName,
   PLATFORM_DEFAULT_TIMEZONE,
@@ -9,6 +8,7 @@ import {
   ResellerActor,
   canonicalTimeZone,
   holdsPermission,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -68,7 +68,7 @@ export class TenantTimeZoneService {
       where: { id: tenantId },
       select: { tenantType: true, deletedAt: true, timezone: true },
     });
-    if (tenant?.tenantType === TenantType.platform_owner && !tenant.deletedAt) {
+    if (isPlatformTenant(tenant?.tenantType) && !tenant.deletedAt) {
       if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'settings.manage')) {
         throw new TenantTimeZoneRefused('not_allowed', tenantId);
       }

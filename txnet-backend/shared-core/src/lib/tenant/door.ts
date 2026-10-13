@@ -1,3 +1,5 @@
+import type { TenantType } from '@prisma/client';
+
 /**
  * What a host is, as far as the door rules care: the purpose of its
  * `tenant_domain` row, how the row was issued, and whose tenant it is. Every
@@ -6,7 +8,7 @@
 export interface DoorSurface {
   purpose?: 'panel' | 'subscription' | 'assets' | 'api' | null;
   domainType?: 'subdomain' | 'custom_domain' | null;
-  tenantType?: 'platform_owner' | 'reseller' | null;
+  tenantType?: TenantType | null;
 }
 
 /**

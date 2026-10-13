@@ -16,7 +16,7 @@ export type GatewaySource = GatewayCredentialSource;
 
 /** One gateway row, as the vault is asked about it. */
 export type MerchantGatewayRef = {
-  /** The tenant whose vault holds it — for a platform gateway, the `platform_owner` tenant. */
+  /** The tenant whose vault holds it — for a platform gateway, the platform tenant. */
   tenantId: string;
   source: GatewaySource;
   gatewayId: string;

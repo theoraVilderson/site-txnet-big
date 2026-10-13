@@ -8,6 +8,7 @@ import {
   recordPlatformAccess,
   runWithTenant,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
@@ -63,7 +64,7 @@ export class PlatformSupportDoor {
         select: { id: true, status: true },
       }),
     ]);
-    if (home?.tenantType !== TenantType.platform_owner || !holdsPermission(caller.permissions, SUPPORT_AGENT_PERMISSION)) {
+    if (!isPlatformTenant(home?.tenantType) || !holdsPermission(caller.permissions, SUPPORT_AGENT_PERMISSION)) {
       throw new ConversationRefused('not_platform_staff');
     }
     if (!reseller || reseller.status === TenantStatus.terminated) throw new ConversationRefused('reseller_not_found');

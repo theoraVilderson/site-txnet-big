@@ -1,7 +1,8 @@
-import { TenantType, type PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 import type { RegisteredPermission } from '../http/permission-registry.generated';
 import { holdsPermission } from '../http/permissions';
+import { isPlatformTenant } from './platform-tenant';
 
 /** Every platform key starts with this, and nothing else does: the prefix is the set (AC-1-c). */
 export const PLATFORM_KEY_PREFIX = 'platform.';
@@ -56,5 +57,5 @@ export async function isPlatformStaff(
 ): Promise<boolean> {
   if (!holdsPermission(actor.permissions, key)) return false;
   const home = await reader.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-  return home?.tenantType === TenantType.platform_owner;
+  return isPlatformTenant(home?.tenantType);
 }

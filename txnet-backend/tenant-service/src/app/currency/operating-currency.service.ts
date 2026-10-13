@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TenantType } from '@prisma/client';
 import {
   type CurrencyChangeSummary,
   type TenantCapabilityName,
@@ -12,6 +11,7 @@ import {
   convertOperatingCurrency,
   holdsPermission,
   readFxPair,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -19,7 +19,7 @@ import { RedisService } from '../redis/redis.service';
 
 /**
  * A tenant's operating currency (F-116-a, ADR-0098 part 1): the currency it
- * keeps its books in. The `platform_owner` row's is the platform's, and the
+ * keeps its books in. The platform tenant's is the platform's, and the
  * money between a tenant and the platform is in it (part 4).
  *
  * **Who.** A reseller's through {@link ResellerAccess}, as its branding is. The
@@ -151,7 +151,7 @@ export class TenantOperatingCurrencyService {
       where: { id: tenantId },
       select: { tenantType: true, deletedAt: true, operatingCurrencyCode: true },
     });
-    if (tenant?.tenantType === TenantType.platform_owner && !tenant.deletedAt) {
+    if (isPlatformTenant(tenant?.tenantType) && !tenant.deletedAt) {
       if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'settings.manage')) {
         throw new OperatingCurrencyRefused('not_allowed', tenantId);
       }

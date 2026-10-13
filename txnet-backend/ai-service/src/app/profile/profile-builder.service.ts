@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { isPlatformTenant, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { DecisionRun } from '../decision/decision-run';
 import { ResellerDecisionRun } from '../decision/reseller-decision';
@@ -104,7 +104,7 @@ export class ProfileBuilder {
         this.logger.error(`profile rebuild for tenant ${id} failed: ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
-      if (tenantType === 'platform_owner') {
+      if (isPlatformTenant(tenantType)) {
         try {
           const resold = await this.rebuildResellers(id, now);
           result.resellers += resold.resellers;

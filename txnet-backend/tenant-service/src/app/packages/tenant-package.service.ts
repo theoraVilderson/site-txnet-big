@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus, TenantType } from '@prisma/client';
-import { platformCurrencyOf } from '@txnet-backend/shared-core';
+import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus } from '@prisma/client';
+import { platformCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
@@ -239,7 +239,7 @@ export class TenantPackageService {
   /** The platform owner's tenant — the same check as reseller administration. */
   private async access(actor: TenantPackageActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new TenantPackageRefused('not_platform_owner', 'package administration');
     }
   }

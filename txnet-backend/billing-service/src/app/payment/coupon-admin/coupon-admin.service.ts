@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CouponChannel, CouponVisibility, DiscountType, Prisma, TenantType } from '@prisma/client';
+import { CouponChannel, CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 
-import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -213,7 +213,7 @@ export class CouponAdminService {
   /** Whether the caller is the platform owner. The door every coupon surface goes through. */
   async access(actor: CouponActor): Promise<{ owner: boolean }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    return { owner: tenant?.tenantType === TenantType.platform_owner };
+    return { owner: isPlatformTenant(tenant?.tenantType) };
   }
 
   /**

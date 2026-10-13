@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { Prisma, TenantType, UserStatus } from '@prisma/client';
-import { BackendI18nKeys, ok } from '@txnet-backend/shared-core';
+import { Prisma, UserStatus } from '@prisma/client';
+import { BackendI18nKeys, ok, isPlatformTenant } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
 import { maskPhone, parsePhone } from '../../common/validation/phone.schema';
 import type { UserSearchInput } from '../auth.schema';
@@ -42,7 +42,7 @@ export class UserSearchService {
       where: { id: claims.tenantId },
       select: { tenantType: true },
     });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new ForbiddenException(BackendI18nKeys.errors.auth.userSearchRefused);
     }
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, SessionRevokedReason, TenantType, UserStatus } from '@prisma/client';
+import { Prisma, SessionRevokedReason, UserStatus } from '@prisma/client';
 import {
   AdmittedReseller,
   ResellerAccess,
@@ -10,6 +10,7 @@ import {
   SupportConsentRejection,
   TenantCapabilityName,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -355,10 +356,7 @@ export class ResellerUsersService {
       where: { id },
       select: { ownerUserId: true, tenantType: true },
     });
-    return {
-      ownerUserId: tenant?.ownerUserId ?? null,
-      platform: tenant?.tenantType === TenantType.platform_owner,
-    };
+    return { ownerUserId: tenant?.ownerUserId ?? null, platform: isPlatformTenant(tenant?.tenantType) };
   }
 
   private async mustRead(userId: string) {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PanelOwnershipType, TenantCredentialKind, TenantType } from '@prisma/client';
-import { CredentialUnavailable, CredentialVaultService, PanelSecret, panelSecretLabel, panelSecretRef } from '@txnet-backend/shared-core';
+import { PanelOwnershipType, TenantCredentialKind } from '@prisma/client';
+import { CredentialUnavailable, CredentialVaultService, PanelSecret, panelSecretLabel, panelSecretRef, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import type { SecretState } from './gateway-credential.service';
@@ -114,6 +114,6 @@ export class PanelCredentialService {
       return;
     }
     const tenant = await this.prisma.tenant.findUnique({ where: { id: target.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) throw new PanelCredentialRefused('not_owner', target.panelId);
+    if (!isPlatformTenant(tenant?.tenantType)) throw new PanelCredentialRefused('not_owner', target.panelId);
   }
 }

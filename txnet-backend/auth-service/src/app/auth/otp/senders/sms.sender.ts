@@ -13,6 +13,7 @@ import {
   SmsProviderService,
   smsLineConfigured,
   smsLineCredentials,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 /**
@@ -102,7 +103,7 @@ export class SmsOtpSender implements IOtpSender {
       select: { id: true, tenantType: true, ownerUserId: true },
     });
     if (!tenant) return null;
-    if (tenant.tenantType === TenantType.platform_owner) return tenant.id;
+    if (isPlatformTenant(tenant.tenantType)) return tenant.id;
 
     const isOwner =
       !!to &&

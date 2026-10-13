@@ -691,13 +691,15 @@ named that one `ownsPlatform`). The
 check holds the one literal that has already drifted; the rule holds the rest
 in review. Owners: `site-pwa/src/lib/tenant-type.ts` (the `TenantType`
 union, `isPlatformTenant`, `ownsPlatform`, `isPlatformUser`; FE-1-b) and
-`shared-core/src/lib/tenant/platform-tenant.ts`. The other files in `except`
-are debt (CS-1-c).
+`shared-core/src/lib/tenant/platform-tenant.ts` (`isPlatformTenant`,
+`PLATFORM_TENANT_TYPE`; CS-1-c). The check also refuses
+`=== TenantType.platform_owner` — the enum compared inline is the same
+question asked again; a query naming the type is not a question.
 
 ```check C-18
-forbid: ['"`]platform_owner['"`]
+forbid: ['"`]platform_owner['"`]|[!=]==\s*TenantType\.platform_owner
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, txnet-backend/**/seed*.ts, site-pwa/src/lib/tenant-type.ts, txnet-backend/ai-service/src/app/profile/profile-builder.service.ts, txnet-backend/auth-service/src/app/auth/register/register.service.ts, txnet-backend/auth-service/src/app/tenant/tenant.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-quote.service.ts, txnet-backend/billing-service/src/app/payment/gateway/gateway-merchant.ts, txnet-backend/shared-core/src/lib/billing/operating-currency.ts, txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts, txnet-backend/shared-core/src/lib/tenant/door.ts, txnet-backend/shared-core/src/lib/tenant/entitlements.ts, txnet-backend/shared-core/src/lib/tenant/host-surface.ts, txnet-backend/shared-core/src/lib/tenant/host.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts, txnet-backend/tenant-service/src/app/currency/operating-currency.service.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, txnet-backend/**/seed*.ts, site-pwa/src/lib/tenant-type.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts
 message: import the question from the module that owns the tenant type (C-18) — isPlatformTenant(), not a literal compared here
 ```
 

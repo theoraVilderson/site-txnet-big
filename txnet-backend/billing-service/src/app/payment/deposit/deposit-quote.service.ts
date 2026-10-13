@@ -28,7 +28,7 @@ import { resolvePresets } from './deposit-presets';
  *    other read would see nothing rather than fail.
  *  - `platform` — the platform brand's `payment_gateway`, selectable when
  *    active, and offered **only** when the request tenant is the
- *    `platform_owner` (ADR-0006, D-25). That table has no tenant column and no
+ *    platform tenant (ADR-0006, D-25). That table has no tenant column and no
  *    policy, so the tenant type read there is the whole of the boundary.
  * The platform owner is offered both. Every gateway's merchant id is its own:
  * the request tenant's vault entry labelled with that gateway row (D-26,

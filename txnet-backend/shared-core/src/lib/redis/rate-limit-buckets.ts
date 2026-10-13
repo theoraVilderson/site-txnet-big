@@ -354,7 +354,7 @@ export const RateLimitBucket = {
    * more often than it is written — an operator refreshes what is owed while
    * making a transfer, and grants a gateway a handful of times ever.
    *
-   * Neither budget is a security control: the door is the `platform_owner`
+   * Neither budget is a security control: the door is the isPlatformTenant
    * check and the permission, and an operator who reaches these routes at all
    * is already the one person allowed to. They are here because
    * `request/rate-limit-coverage.spec.ts` admits no unlimited route, and

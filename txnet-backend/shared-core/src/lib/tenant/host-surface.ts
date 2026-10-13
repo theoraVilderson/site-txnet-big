@@ -1,7 +1,7 @@
-import type {
-  TenantDomainPurpose,
-  TenantDomainType,
+import {
   TenantType,
+  type TenantDomainPurpose,
+  type TenantDomainType,
 } from '@prisma/client';
 
 /**
@@ -59,7 +59,7 @@ export const HOST_SURFACE_MISS = '-';
 
 const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets', 'api'];
 const DOMAIN_TYPES: readonly string[] = ['subdomain', 'custom_domain'];
-const TENANT_TYPES: readonly string[] = ['platform_owner', 'reseller'];
+const TENANT_TYPES: readonly string[] = Object.values(TenantType);
 
 /**
  * A cached value carries a tenant at all. An entry written before its owner was

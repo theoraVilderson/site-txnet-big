@@ -1,3 +1,4 @@
+import type { TenantType } from '@prisma/client';
 import { answersAsPanel, IdentityHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
@@ -35,7 +36,7 @@ export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets' | 'api';
 export type TenantSurfaceDomainType = 'subdomain' | 'custom_domain';
 
 /** Who owns the surface's tenant — the platform, or a reseller (ADR-0063). */
-export type TenantSurfaceTenantType = 'platform_owner' | 'reseller';
+export type TenantSurfaceTenantType = TenantType;
 
 /**
  * The paths each non-panel surface serves, as path prefixes.

@@ -8,12 +8,11 @@ import {
   RateCardAfterIncluded,
   RateCardMode,
   SeasonKind,
-  TenantType,
   VariantBillingMode,
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, seasonOccurrences, servedByBytes, tenantTransaction } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -573,7 +572,7 @@ export class CatalogAdminService {
   /** Whether the caller is the platform owner. */
   async access(actor: CatalogActor): Promise<{ owner: boolean }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    return { owner: tenant?.tenantType === TenantType.platform_owner };
+    return { owner: isPlatformTenant(tenant?.tenantType) };
   }
 
   /** Run `fn` in one transaction on the pool that serves this caller (ADR-0053). */

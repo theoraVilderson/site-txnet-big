@@ -8,9 +8,8 @@ import {
   PaymentProviderName,
   Prisma,
   RateRoundingMode,
-  TenantType,
 } from '@prisma/client';
-import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -644,7 +643,7 @@ export class GatewayAdminService {
 
   private async isOwner(actor: GatewayActor): Promise<boolean> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    return tenant?.tenantType === TenantType.platform_owner;
+    return isPlatformTenant(tenant?.tenantType);
   }
 
   /** The row, if the caller may manage it. Anything else is not found — including before the read, for a platform row. */

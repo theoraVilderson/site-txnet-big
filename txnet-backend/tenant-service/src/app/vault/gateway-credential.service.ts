@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { TenantCredentialKind, TenantType } from '@prisma/client';
-import { CredentialVaultService, gatewayCredentialLabel, type GatewayCredentialSource } from '@txnet-backend/shared-core';
+import { TenantCredentialKind } from '@prisma/client';
+import { CredentialVaultService, gatewayCredentialLabel, type GatewayCredentialSource, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 
@@ -136,7 +136,7 @@ export class GatewayCredentialService {
       const gateway = await this.prisma.paymentGateway.findUnique({ where: { id: target.gatewayId }, select: { id: true } });
       if (!gateway) throw new GatewayCredentialRefused('gateway_not_found', target.gatewayId);
       const tenant = await this.prisma.tenant.findUnique({ where: { id: target.tenantId }, select: { tenantType: true } });
-      if (tenant?.tenantType !== TenantType.platform_owner) {
+      if (!isPlatformTenant(tenant?.tenantType)) {
         throw new GatewayCredentialRefused('not_owner', target.gatewayId);
       }
       return;

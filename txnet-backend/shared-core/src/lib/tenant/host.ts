@@ -1,3 +1,7 @@
+import type { TenantType } from '@prisma/client';
+
+import { isPlatformTenant } from './platform-tenant';
+
 /**
  * The host of a request, reduced to the form `tenant_domain.domainValue` is
  * stored in (ADR-0025).
@@ -82,12 +86,12 @@ export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'cu
  */
 export function panelHostOf(
   rows: ReadonlyArray<{ domainValue: string; domainType: 'subdomain' | 'custom_domain' }>,
-  ownerType: 'platform_owner' | 'reseller',
+  ownerType: TenantType,
 ): string | null {
   const rank = (t: string) => (t === 'custom_domain' ? 0 : 1);
   const best = rows
     .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
-    .filter((r) => ownerType !== 'reseller' || r.domainType === 'custom_domain')
+    .filter((r) => isPlatformTenant(ownerType) || r.domainType === 'custom_domain')
     .sort((a, b) => rank(a.domainType) - rank(b.domainType) || a.domainValue.localeCompare(b.domainValue))[0];
   return best?.domainValue ?? null;
 }

@@ -6,6 +6,7 @@ import {
   TenantStatusValue,
   UnscopedRedisKeys,
   serializeTenantStatusState,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -107,7 +108,7 @@ export class TenantStatusListener extends PgNotificationListener {
         graceEndsAt: row.graceEndsAt ? row.graceEndsAt.toISOString() : null,
         // The platform owner is never onboarding: it is the platform's own
         // domain, and it sells there (F-018-l).
-        onboarding: row.tenantType !== TenantType.platform_owner && row.domains.length === 0,
+        onboarding: !isPlatformTenant(row.tenantType) && row.domains.length === 0,
       }),
     );
   }

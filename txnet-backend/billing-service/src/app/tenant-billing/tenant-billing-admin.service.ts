@@ -14,6 +14,7 @@ import {
   TenantBillingLedger,
   TenantBillingVersionConflict,
   platformCurrencyOf,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -236,7 +237,7 @@ export class TenantBillingAdminService {
   /** The one owner check; a non-owner is refused before the cross-tenant pool is touched (ADR-0053). */
   private async access(actor: TenantBillingReader): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new TenantBillingAdminRefused('not_platform_owner', "another tenant's billing wallet");
     }
   }

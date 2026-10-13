@@ -22,7 +22,7 @@ export async function operatingCurrencyOf(tx: Prisma.TransactionClient, tenantId
 }
 
 /**
- * The platform's own currency: the `platform_owner` tenant's operating
+ * The platform's own currency: the platform tenant's operating
  * currency (ADR-0098 part 1). A platform gateway, a platform coupon and a
  * tenant's billing top-up are written in it (part 4).
  */

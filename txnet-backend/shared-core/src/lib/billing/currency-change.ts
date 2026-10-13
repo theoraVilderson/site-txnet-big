@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
-import { AdminAction, AuditTargetType, Prisma, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma, type TenantType } from '@prisma/client';
 
 import { OutboxEventType } from '../automation/routing-keys';
 import type { FxPair } from '../currency/fx-rate';
+import { isPlatformTenant } from '../tenant/platform-tenant';
 
 /**
  * F-116-f (ADR-0098 part 5) — a tenant's operating currency changes, and what
@@ -152,7 +153,7 @@ export async function convertOperatingCurrency(
     to: toCode,
     rate: rate.toString(),
     dp: target.decimalPlaces,
-    platform: tenant.type === TenantType.platform_owner,
+    platform: isPlatformTenant(tenant.type),
     actor: input.actorUserId,
   };
   const summary: CurrencyChangeSummary = {
@@ -209,11 +210,7 @@ export async function convertedByChanges(
   fromCode: string,
   toCode: string,
 ): Promise<Prisma.Decimal | null> {
-  const changes = await tx.currencyChange.findMany({
-    where: { tenantId },
-    orderBy: { createdAt: 'desc' },
-    select: { fromCode: true, toCode: true, rate: true },
-  });
+  const changes = await tx.currencyChange.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, select: { fromCode: true, toCode: true, rate: true } });
   let code = toCode;
   let factor = new Prisma.Decimal(1);
   for (const change of changes) {

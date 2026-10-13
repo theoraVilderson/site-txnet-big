@@ -81,7 +81,7 @@ export class RegisterService {
       // because "no tenant" has a translated answer here; throwing would show
       // the user an internal error for a deployment's misconfiguration.
       // An unresolved tenant is a refusal, never
-      // a fallback — substituting `platform_owner` is what this row exists to
+      // a fallback — substituting the platform tenant is what this row exists to
       // stop, and on a deployment serving resellers it would file a stranger's
       // account under the platform owner and look like a success.
       const tenant = TenantContext.currentOrNull();

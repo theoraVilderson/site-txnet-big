@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
-import { convertedByChanges, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { convertedByChanges, operatingCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -171,7 +171,7 @@ export class SettlementService {
       where: { id: operator.tenantId },
       select: { tenantType: true },
     });
-    if (tenant?.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant?.tenantType)) {
       throw new SettlementRefused('not_platform_owner', operator.tenantId);
     }
   }

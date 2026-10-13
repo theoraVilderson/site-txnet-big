@@ -25,6 +25,7 @@ import {
   resellerUsagesOf,
   productQuotaStatementsOf,
   type QuotaMeterStatement,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
@@ -89,7 +90,6 @@ export type OverageCapView = QuotaSpend;
 
 /** What an audit row says a level held: a value, `null` (no limit), or `'unset'` (no row). */
 type Held = number | null | 'unset';
-
 
 /** What an overage audit row says a level held. */
 type HeldOverage = OverageView | 'unset';
@@ -507,7 +507,7 @@ export class ResellerLimitsService {
   /** The platform owner's tenant — the same check as package and reseller administration. */
   private async access(actor: ResellerLimitsActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) throw new ResellerLimitsRefused('not_platform_owner', 'reseller limits');
+    if (!isPlatformTenant(tenant?.tenantType)) throw new ResellerLimitsRefused('not_platform_owner', 'reseller limits');
   }
 
   private audit(

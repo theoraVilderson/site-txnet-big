@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, TenantType, UserGroupKind, UserGroupMemberType } from '@prisma/client';
+import { Prisma, UserGroupKind, UserGroupMemberType } from '@prisma/client';
 import {
   RESELLER_KEYS,
   ResellerLimitReached,
@@ -10,6 +10,7 @@ import {
   resellerLimitOf,
   resellerUsageOf,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { AccessReader } from '../../auth/permissions/access.reader';
@@ -576,7 +577,7 @@ export class UserGroupAdminService {
       const refused = authorityOver(
         { userId: actor.adminId, permissions: actor.permissions, as: actor.as ?? 'member' },
         { userId: person.id, permissions: answers.get(person.id)?.keys ?? [] },
-        { ownerUserId: owner?.ownerUserId ?? null, platform: owner?.tenantType === TenantType.platform_owner },
+        { ownerUserId: owner?.ownerUserId ?? null, platform: isPlatformTenant(owner?.tenantType) },
       );
       if (refused) throw new UserGroupRefused('no_authority', person.id);
     }
@@ -649,8 +650,7 @@ export class UserGroupAdminService {
 
   /** Whether the caller's tenant is the platform owner. `tenant.tenant` has no RLS policy (as `panelScopeOf`). */
   private async isPlatform(tx: Tx, tenantId: string): Promise<boolean> {
-    const t = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    return t?.tenantType === TenantType.platform_owner;
+    return isPlatformTenant((await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } }))?.tenantType);
   }
 
   /** Users as this caller may see them: every tenant's for the platform owner, its own for anyone else. */

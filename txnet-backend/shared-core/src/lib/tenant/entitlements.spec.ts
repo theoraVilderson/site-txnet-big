@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi } from 'vitest';
+import type { TenantType } from '@prisma/client';
 import { runWithTenant } from '../tenant-context/tenant-context';
 import {
   RequiresFeature,
@@ -15,7 +16,7 @@ const NOW = new Date('2026-09-18T12:00:00Z');
 const LATER = new Date('2026-10-18T12:00:00Z');
 const EARLIER = new Date('2026-08-18T12:00:00Z');
 
-function reader(tenantType: string | null, rows: TenantEntitlementRow[]) {
+function reader(tenantType: TenantType | null, rows: TenantEntitlementRow[]) {
   const findUnique = vi.fn(async () => (tenantType ? { tenantType } : null));
   const findMany = vi.fn(async () => rows);
   return { db: { tenant: { findUnique }, tenantFeatureEntitlement: { findMany } }, findUnique, findMany };

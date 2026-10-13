@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode, TenantType } from '@prisma/client';
-import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf } from '@txnet-backend/shared-core';
+import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode } from '@prisma/client';
+import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -93,7 +93,7 @@ export class PackageProductsService {
   /** The platform owner's tenant — the same check as every limit write. */
   private async access(actor: ResellerLimitsActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) throw new ResellerLimitsRefused('not_platform_owner', 'package products');
+    if (!isPlatformTenant(tenant?.tenantType)) throw new ResellerLimitsRefused('not_platform_owner', 'package products');
   }
 
   /** The row's quota columns; an overage price is stamped with the platform's currency, as every overage price. */

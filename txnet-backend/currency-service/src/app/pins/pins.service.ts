@@ -4,12 +4,12 @@ import {
   AuditTargetType,
   Prisma,
   RateSource,
-  TenantType,
 } from '@prisma/client';
 import {
   DERIVED_CURRENCIES,
   UnscopedRedisKeys,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 
 import { BillingClient } from '../billing/billing.client';
@@ -319,7 +319,7 @@ export class CurrencyPinService {
     });
     if (!tenant)
       throw new CurrencyPinRefused('not_platform_owner', actor.tenantId);
-    return tenant.tenantType === TenantType.platform_owner
+    return isPlatformTenant(tenant.tenantType)
       ? { kind: 'platform', tenantId: null }
       : {
           kind: 'tenant',

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, Language, NotificationChannel, Prisma, TenantStatus, TenantType } from '@prisma/client';
-import { ResellerQuota, tenantTransaction } from '@txnet-backend/shared-core';
+import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, Language, NotificationChannel, Prisma, TenantStatus } from '@prisma/client';
+import { ResellerQuota, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -387,7 +387,7 @@ export class CampaignAdminService {
    */
   private async access(actor: CampaignActor): Promise<{ owner: boolean; db: CampaignDb }> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    const owner = tenant?.tenantType === TenantType.platform_owner;
+    const owner = isPlatformTenant(tenant?.tenantType);
     return { owner, db: owner ? this.all : this.prisma };
   }
 

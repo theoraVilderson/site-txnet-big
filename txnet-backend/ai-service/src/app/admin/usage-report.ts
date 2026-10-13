@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { TenantType } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { refusal } from '../envelope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,7 +45,7 @@ export class UsageReport {
   async capacity(tenantId: string, now: Date): Promise<{ meters: MeterForecast[]; tenantsMeasured: number; tenants: number }> {
     // `tenant.tenant` has no RLS; the app pool reads it as every service does.
     const caller = await this.prisma.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
-    if (caller?.tenantType !== TenantType.platform_owner) throw refusal(403, 'not_platform_owner');
+    if (!isPlatformTenant(caller?.tenantType)) throw refusal(403, 'not_platform_owner');
     const tenants = await this.prisma.tenant.findMany({ where: { deletedAt: null }, select: { id: true }, orderBy: { id: 'asc' } });
     const total = new Map<string, HourRow>();
     let measured = 0;

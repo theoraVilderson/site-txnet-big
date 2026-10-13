@@ -17,8 +17,8 @@
  */
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantCredentialKind, TenantSmsMode, TenantType } from '@prisma/client';
-import { CredentialVaultService } from '@txnet-backend/shared-core';
+import { TenantCredentialKind, TenantSmsMode } from '@prisma/client';
+import { CredentialVaultService, isPlatformTenant } from '@txnet-backend/shared-core';
 import { AppModule } from './app/app.module';
 import { CrossTenantPrismaService } from './app/prisma/cross-tenant-prisma.service';
 
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     await vault.put({ tenantId: tenant.id, kind: TenantCredentialKind.sms_api_key }, apiKey);
     if (sender) await vault.put({ tenantId: tenant.id, kind: TenantCredentialKind.sms_sender_line }, sender);
 
-    if (tenant.tenantType !== TenantType.platform_owner) {
+    if (!isPlatformTenant(tenant.tenantType)) {
       await prisma.tenantSmsConfig.upsert({
         where: { tenantId: tenant.id },
         create: { tenantId: tenant.id, mode: TenantSmsMode.own_credentials },

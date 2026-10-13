@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { TenantType, type Prisma } from '@prisma/client';
-import { isPlatformKey, liveMembership } from '@txnet-backend/shared-core';
+import type { Prisma } from '@prisma/client';
+import { isPlatformKey, liveMembership, isPlatformTenant } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { accessOf, type AccessSources, type UserAccess } from './access';
 
@@ -142,7 +142,7 @@ export class AccessReader {
       }),
       client.user.findMany({ where: { id: { in: ids } }, select: { id: true, tenantId: true, tenant: { select: { tenantType: true } } } }),
     ]);
-    const platformHome = new Set(tenants.filter((u) => u.tenant?.tenantType === TenantType.platform_owner).map((u) => u.id));
+    const platformHome = new Set(tenants.filter((u) => isPlatformTenant(u.tenant?.tenantType)).map((u) => u.id));
     const entry = (id: string) =>
       out.get(id) ?? (out.set(id, { given: [], taken: [], groups: [], platformTenant: platformHome.has(id) }).get(id) as Entry);
     for (const row of rows) (row.effect === 'take' ? entry(row.userId).taken : entry(row.userId).given).push(row.permission.key);

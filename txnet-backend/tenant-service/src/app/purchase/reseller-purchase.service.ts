@@ -8,6 +8,7 @@ import {
   WalletLedgerService,
   WalletVersionConflict,
   operatingCurrencyOf,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
@@ -253,7 +254,7 @@ export class ResellerPurchaseService {
   /** The one door: a user of the platform owner's tenant. A non-owner is refused before the cross-tenant pool is touched (ADR-0053). */
   private async access(buyer: PurchaseBuyer): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: buyer.tenantId }, select: { tenantType: true } });
-    if (tenant?.tenantType !== TenantType.platform_owner) throw new ResellerPurchaseRefused('not_platform_user', 'reseller purchase');
+    if (!isPlatformTenant(tenant?.tenantType)) throw new ResellerPurchaseRefused('not_platform_user', 'reseller purchase');
   }
 
   /** A reseller the user owns that is not terminated or deleted: one live reseller per user. */

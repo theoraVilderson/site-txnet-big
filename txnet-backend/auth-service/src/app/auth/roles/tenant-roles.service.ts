@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, TenantType } from '@prisma/client';
+import { AdminAction, AuditTargetType, type Prisma } from '@prisma/client';
 import {
   AdmittedReseller,
   ResellerAccess,
@@ -14,8 +14,8 @@ import {
   isPlatformKey,
   recordAccessChange,
   tenantTransaction,
+  isPlatformTenant,
 } from '@txnet-backend/shared-core';
-import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessReader } from '../permissions/access.reader';
@@ -187,7 +187,7 @@ export class TenantRolesService {
         const refused = authorityOver(
           { userId: actor.userId, permissions: actor.permissions, as: admitted.as },
           { userId: user.id, permissions: (await this.answers.ofLoaded(user, tx)).keys },
-          { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
+          { ownerUserId: tenant?.ownerUserId ?? null, platform: isPlatformTenant(tenant?.tenantType) },
         );
         if (refused) throw new TenantRolesRefused('no_authority', `${userId}: ${refused}`);
 
@@ -301,7 +301,7 @@ export class TenantRolesService {
         const refused = authorityOver(
           { userId: actor.userId, permissions: actor.permissions, as: admitted.as },
           { userId, permissions: before.keys },
-          { ownerUserId: tenant?.ownerUserId ?? null, platform: tenant?.tenantType === TenantType.platform_owner },
+          { ownerUserId: tenant?.ownerUserId ?? null, platform: isPlatformTenant(tenant?.tenantType) },
         );
         if (refused) throw new TenantRolesRefused('no_authority', `${userId}: ${refused}`);
 

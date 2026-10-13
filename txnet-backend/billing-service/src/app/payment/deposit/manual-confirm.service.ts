@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ConfirmationSource, PaymentStatus, Prisma, TenantType } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { ConfirmationSource, PaymentStatus, Prisma } from '@prisma/client';
+import { runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -342,6 +342,6 @@ export class ManualConfirmService {
   /** As `GatewayAdminService.isOwner`: `tenant.tenant` has no RLS policy, so the caller's pool answers it. */
   private async isOwner(actor: ManualActor): Promise<boolean> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    return tenant?.tenantType === TenantType.platform_owner;
+    return isPlatformTenant(tenant?.tenantType);
   }
 }

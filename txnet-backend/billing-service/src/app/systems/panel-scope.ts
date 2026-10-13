@@ -1,6 +1,7 @@
-import { PanelOwnershipType, TenantType } from '@prisma/client';
+import { PanelOwnershipType } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { isPlatformTenant } from '@txnet-backend/shared-core';
 
 /** Who is acting on the systems surface: the gate's user and tenant, never a body field. */
 export type SystemsActor = { adminId: string; tenantId: string };
@@ -30,7 +31,7 @@ export class PanelScopeRefused extends Error {
  */
 export async function panelScopeOf(prisma: PrismaService, actor: SystemsActor) {
   const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-  if (tenant?.tenantType !== TenantType.platform_owner) throw new PanelScopeRefused('not_platform_owner');
+  if (!isPlatformTenant(tenant?.tenantType)) throw new PanelScopeRefused('not_platform_owner');
   return { ownershipType: PanelOwnershipType.platform, tenantId: null };
 }
 
