@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { haptic } from "@/lib/haptics";
 import { cn } from "./cn";
 
@@ -57,16 +57,17 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** At the end side — a chevron, an external-link mark. */
   iconEnd?: ReactNode;
   fullWidth?: boolean;
+  /** A plain prop on React 19 — no forwardRef (FE-1-g). */
+  ref?: Ref<HTMLButtonElement>;
 }
 
 /**
  * The panel's one button (UX-1-c, `contract.ux.md` K3). `type` defaults to
  * `button`: a kit button inside a form submits only when it says so.
  */
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "md", loading = false, icon, iconEnd, fullWidth, className, children, disabled, type = "button", onClick, ...rest },
-  ref,
-) {
+export function Button({
+  variant = "secondary", size = "md", loading = false, icon, iconEnd, fullWidth, className, children, disabled, type = "button", onClick, ref, ...rest
+}: ButtonProps) {
   const spinner = <Loader2 size={ICON_PX[size]} aria-hidden className="animate-spin" />;
   return (
     <button
@@ -93,7 +94,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {iconEnd}
     </button>
   );
-});
+}
 
 export interface IconButtonProps extends Omit<ButtonProps, "children" | "iconEnd" | "fullWidth"> {
   /** Required: an icon alone names nothing (K3). */
@@ -102,10 +103,9 @@ export interface IconButtonProps extends Omit<ButtonProps, "children" | "iconEnd
 }
 
 /** A square `Button` holding one icon, named by the `aria-label` it requires. */
-export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { variant = "quiet", size = "md", loading = false, icon, className, disabled, type = "button", ...rest },
-  ref,
-) {
+export function IconButton({
+  variant = "quiet", size = "md", loading = false, icon, className, disabled, type = "button", ref, ...rest
+}: IconButtonProps) {
   return (
     <button
       ref={ref}
@@ -118,4 +118,4 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       {loading ? <Loader2 size={ICON_PX[size]} aria-hidden className="animate-spin" /> : icon}
     </button>
   );
-});
+}

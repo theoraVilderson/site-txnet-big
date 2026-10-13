@@ -2,12 +2,12 @@
 
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import {
-  forwardRef,
   useId,
   useLayoutEffect,
   useState,
   type InputHTMLAttributes,
   type ReactNode,
+  type Ref,
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
@@ -118,10 +118,12 @@ const CONTROL =
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   /** Drawn inside the box at the end — a unit, a button. */
   end?: ReactNode;
+  /** A plain prop on React 19 — no forwardRef (FE-1-g). */
+  ref?: Ref<HTMLInputElement>;
 }
 
 /** A text box, h-11 (K4). Inside a `Field` it takes its id and description from it. */
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ className, end, onChange, ...rest }, ref) {
+export function Input({ className, end, onChange, ref, ...rest }: InputProps) {
   const wired = useWired(rest);
   const input = (
     <input
@@ -144,13 +146,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ c
       <div className="absolute inset-y-0 end-0 flex items-center pe-1.5">{end}</div>
     </div>
   );
-});
+}
 
 /** A multi-line box, `rounded-xl`, growing with `rows`. */
-export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(
-  { className, onChange, rows = 4, ...rest },
-  ref,
-) {
+export function Textarea({
+  className, onChange, rows = 4, ref, ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   const wired = useWired(rest);
   return (
     <textarea
@@ -167,17 +168,16 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
       className={cn(CONTROL, "min-h-24 resize-y py-2.5 leading-relaxed", className)}
     />
   );
-});
+}
 
 /**
  * The browser's own select in the kit's box (K4) — for a long list (time zones,
  * currencies) where the native type-to-find is worth more than the kit
  * `Select`'s listbox. Inside a `Field` it takes its id and description.
  */
-export const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function NativeSelect(
-  { className, ...rest },
-  ref,
-) {
+export function NativeSelect({
+  className, ref, ...rest
+}: SelectHTMLAttributes<HTMLSelectElement> & { ref?: Ref<HTMLSelectElement> }) {
   const wired = useWired({ ...rest, value: undefined });
   return (
     <select
@@ -189,10 +189,10 @@ export const NativeSelect = forwardRef<HTMLSelectElement, SelectHTMLAttributes<H
       className={cn(CONTROL, "h-11", className)}
     />
   );
-});
+}
 
 /** A password box with a show/hide eye; what it shows is never kept anywhere else. */
-export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputProps, "type" | "end">>(function PasswordInput(props, ref) {
+export function PasswordInput({ ref, ...props }: Omit<InputProps, "type" | "end">) {
   const { t } = useLocale();
   const [visible, setVisible] = useState(false);
   const label = t("common", visible ? K.password.hide : K.password.show);
@@ -216,4 +216,4 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputProps, "type
       }
     />
   );
-});
+}
