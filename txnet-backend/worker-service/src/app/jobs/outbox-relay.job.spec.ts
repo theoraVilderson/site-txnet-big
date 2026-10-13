@@ -32,6 +32,7 @@ describe('OutboxRelayJob', () => {
     type: string;
     payload: unknown;
     occurredAt: Date;
+    requestId: string | null;
   };
 
   const row = (id: string, type = 'payment.confirmed'): Row => ({
@@ -41,6 +42,7 @@ describe('OutboxRelayJob', () => {
     type,
     payload: { amount: '1000' },
     occurredAt: new Date('2026-09-10T10:00:00Z'),
+    requestId: 'trace-0001',
   });
 
   /**
@@ -123,7 +125,7 @@ describe('OutboxRelayJob', () => {
     expect(committed[0]).toMatchObject({ where: { id: 'a' } });
   });
 
-  it('sends the row to outbox.<type>, as the wire shape, with the row id as the event id', async () => {
+  it('sends the row to outbox.<type>, as the wire shape, with the row id as the event id and its request id (H13)', async () => {
     const { prisma } = prismaWith([row('a')]);
     const publish = vi.fn().mockResolvedValue(undefined);
 
@@ -136,7 +138,7 @@ describe('OutboxRelayJob', () => {
       type: 'payment.confirmed',
       occurredAt: '2026-09-10T10:00:00.000Z',
       payload: { amount: '1000' },
-    });
+    }, 'trace-0001');
   });
 
   it('does not stamp a row the broker would not take, and stops the batch there', async () => {

@@ -1,11 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app/app.module';
 import type { EnvConfig } from './app/config/env.validation';
 import { installEnvelope } from './app/envelope';
 import { LocaleService } from './app/locale/locale.service';
+import { createNestApp } from '@txnet-backend/shared-core';
 
 /**
  * ai-service (ADR-0109 point 2) — every model call and every proactive
@@ -17,7 +17,7 @@ import { LocaleService } from './app/locale/locale.service';
  * so a redeploy does not leave triggers unacked until the broker times out.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createNestApp(AppModule);
   app.enableShutdownHooks();
   // F-038-j0: the shared envelope, as billing installs it — a refusal's reason reaches the panel.
   installEnvelope(app, app.get(LocaleService));

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders, type GuideBlock } from '@txnet-backend/shared-core';
+import { type GuideBlock, serviceCallHeaders } from '@txnet-backend/shared-core';
 
 /** tenant-service's `ResolvedGuide`, the parts a chat shows. */
 export interface BotGuide {
@@ -90,7 +90,7 @@ export class GuideApiClient {
     try {
       const response = await fetch(`${this.baseUrl}/api/internal/guides/${encodeURIComponent(key)}/view?${new URLSearchParams({ tenantId })}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'accept-language': lang, [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', 'accept-language': lang, ...serviceCallHeaders(this.serviceToken) },
         body: JSON.stringify({ viewer: chat }),
         signal: AbortSignal.timeout(this.timeoutMs),
       });
@@ -118,7 +118,7 @@ export class GuideApiClient {
           'content-type': 'application/json',
           'accept-language': lang,
           authorization: `Bearer ${accessToken}`,
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
         },
         body: JSON.stringify({ helpful }),
         signal: AbortSignal.timeout(this.timeoutMs),
@@ -138,7 +138,7 @@ export class GuideApiClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        headers: { 'accept-language': lang, [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'accept-language': lang, ...serviceCallHeaders(this.serviceToken) },
         signal: controller.signal,
       });
       const envelope = (await response.json().catch((): null => null)) as { ok?: boolean; data?: T } | null;

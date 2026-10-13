@@ -1,4 +1,6 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+
+import { outboxRequestIdQueryMap } from '../logging/outbox-request-id';
 import {
   TenantContext,
   TenantScopeConflict,
@@ -284,7 +286,9 @@ export function tenantScopeQueryMap(bind: TenantBinder) {
 export function withTenant(client: TenantBindableClient) {
   return Prisma.defineExtension({
     name: 'withTenant',
-    query: tenantScopeQueryMap(bindTenantThroughTransaction(client)),
+    // Also stamps the request id on outbox events (H13) — this is the one
+    // extension every injected client has, and `outboxEvent` is not scoped.
+    query: { ...tenantScopeQueryMap(bindTenantThroughTransaction(client)), ...outboxRequestIdQueryMap },
   } as Parameters<typeof Prisma.defineExtension>[0]);
 }
 

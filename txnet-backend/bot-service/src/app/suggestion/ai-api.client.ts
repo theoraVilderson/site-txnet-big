@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 
 export type OptOutSubject = { tenantId: string; subjectKind: 'user'; subjectId: string };
 export type OptOutAnswer = { ok: boolean; status: number; actionType?: string };
@@ -31,7 +31,7 @@ export class AiApiClient {
     try {
       const response = await fetch(`${this.baseUrl}/api/internal/ai/actions/${actionId}/opt-out`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
         body: JSON.stringify(subject),
         signal: controller.signal,
       });

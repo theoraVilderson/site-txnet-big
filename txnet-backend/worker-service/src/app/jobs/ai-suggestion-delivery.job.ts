@@ -1,4 +1,4 @@
-import { remainingLabel, RequestHeaders, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
+import { remainingLabel, serviceCallHeaders, SUGGESTION_NOTICE } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory, Prisma } from '@prisma/client';
@@ -351,7 +351,7 @@ export class AiSuggestionDeliveryJob implements Job {
     try {
       const response = await fetch(`${base}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });

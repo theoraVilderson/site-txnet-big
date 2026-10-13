@@ -1,9 +1,9 @@
-import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Server as HttpServer } from 'node:http';
 import { AppModule } from './app/app.module';
 import { RealtimeGateway } from './app/realtime/realtime.gateway';
+import { createNestApp } from '@txnet-backend/shared-core';
 
 /**
  * gateway-service — the WebSocket gateway (F-067-h, D-9).
@@ -20,7 +20,7 @@ import { RealtimeGateway } from './app/realtime/realtime.gateway';
  * heartbeat at a time.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createNestApp(AppModule);
   app.enableShutdownHooks();
 
   const config = app.get(ConfigService);

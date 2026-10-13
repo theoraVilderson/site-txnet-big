@@ -20,6 +20,7 @@ import {
   OTP_DELIVERY_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
+  RequestHeaders,
   topicBindingAll,
   type ConfirmedPublish,
   type OutboxMessage,
@@ -531,23 +532,17 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
    * requires of every consumer — delivery is at-least-once, so a consumer must
    * be able to recognise an event it has already handled before it parses the
    * body. `confirmedPublisher` would otherwise invent a correlation id here,
-   * and a correlation id is not an identity.
+   * and a correlation id is not an identity. `requestId` rides as the
+   * `x-request-id` header (H13), never in the body a consumer validates.
    */
-  async publishOutboxEvent(
-    routingKey: string,
-    event: OutboxMessage,
-  ): Promise<void> {
+  async publishOutboxEvent(routingKey: string, event: OutboxMessage, requestId: string | null): Promise<void> {
     if (!this.publish) throw new Error('broker channel is not open');
-    await this.publish(
-      this.exchange,
-      routingKey,
-      Buffer.from(JSON.stringify(event)),
-      {
-        persistent: true,
-        contentType: 'application/json',
-        messageId: event.id,
-      },
-    );
+    await this.publish(this.exchange, routingKey, Buffer.from(JSON.stringify(event)), {
+      persistent: true,
+      contentType: 'application/json',
+      messageId: event.id,
+      ...(requestId ? { headers: { [RequestHeaders.requestId]: requestId } } : {}),
+    });
   }
 
   /**

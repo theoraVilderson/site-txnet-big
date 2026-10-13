@@ -1,10 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { NestFactory } from '@nestjs/core';
-import {
-  I18nExceptionFilter,
-  ResponseInterceptor,
-} from '@txnet-backend/shared-core';
+import { createNestApp, I18nExceptionFilter, ResponseInterceptor } from '@txnet-backend/shared-core';
 
 import { AppModule } from './app/app.module';
 import type { EnvConfig } from './app/config/env.validation';
@@ -19,7 +15,7 @@ import { LocaleService } from './app/locale/locale.service';
  * refusing to boot without an origin in production.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createNestApp(AppModule);
   app.enableShutdownHooks();
 
   const locale = app.get(LocaleService);

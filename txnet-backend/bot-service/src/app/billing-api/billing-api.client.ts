@@ -1,5 +1,5 @@
 import { BotPlatform } from '@txnet-backend/messenger';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { RequestHeaders, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiResult } from '../auth-api/auth-api.types';
@@ -314,7 +314,7 @@ export class BillingApiClient {
     if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
     return this.send(method, `${this.baseUrl}${path}`, body, ctx.lang, {
       authorization: `Bearer ${ctx.accessToken}`,
-      [RequestHeaders.serviceToken]: this.serviceToken,
+      ...serviceCallHeaders(this.serviceToken),
       [RequestHeaders.botPlatform]: ctx.platform,
       [RequestHeaders.botTenantId]: ctx.botTenantId,
     });
@@ -325,7 +325,7 @@ export class BillingApiClient {
       this.logger.error(`billing relay ${path}: BILLING_INTERNAL_BASE_URL is unset`);
       return Promise.resolve(this.unreachable(lang));
     }
-    return this.send('POST', `${this.internalBaseUrl}${path}`, body, lang, { [RequestHeaders.serviceToken]: this.serviceToken });
+    return this.send('POST', `${this.internalBaseUrl}${path}`, body, lang, { ...serviceCallHeaders(this.serviceToken) });
   }
 
   private async send<T>(

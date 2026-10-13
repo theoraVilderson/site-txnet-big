@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 
 /** The Mini App's invoice, as `start` hands it to the bot that will be paid (F-104-q). */
 export type InvoiceLinkRequest = {
@@ -54,7 +54,7 @@ export class InvoiceLinkClient {
     try {
       const response = await fetch(`${this.baseUrl}${SEAM}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.token },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.token) },
         body: JSON.stringify(request),
         signal: controller.signal,
       });

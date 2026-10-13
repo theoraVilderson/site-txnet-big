@@ -135,18 +135,23 @@ one line per call, keys `time` (ISO), `level` (`INFO`/`WARN`/`ERROR`/`DEBUG`,
 as slog), `msg`, `service` (`APP_NAME`), `context`, and when known `requestId`,
 `tenantId`, `userId`; an error adds `err` (message) and `stack`. `LOG_FORMAT`
 = `json` (default when `NODE_ENV=production`) | `pretty` (Nest's logger).
-Installed in every `main.ts`: `NestFactory.create(AppModule, { bufferLogs: true })`
-then `app.useLogger(app.get(JsonLogger))`. A service spreads `loggingEnvShape`
-into its `envSchema` (`APP_NAME` required — the image sets it) and lists
-`JSON_LOGGER_PROVIDER`; `noteRequestUser` adds `userId` once identified.
+Installed by `shared-core`, once: every `main.ts` boots with `createNestApp`
+(`createNestContext` for worker and metering), which buffers boot lines until
+`app.useLogger(app.get(JsonLogger))`; every `AppModule` imports
+`JsonLoggerModule`. `APP_NAME`/`LOG_FORMAT` are validated in `logging/env.ts`,
+not in each `envSchema`; `APP_NAME` is required (the image sets it).
 
-**H13 — Request id.** `shared-core` `RequestIdMiddleware`: takes `X-Request-Id`
-if it is 8–128 chars of `[A-Za-z0-9-]`, else a new UUID v4; holds it in an
-`AsyncLocalStorage` the logger reads; sets it on the response. Applied
-first in `configure`, `forRoutes('{*path}')`. Internal HTTP
-calls between services forward it. Outbox events carry it as a message header
-`x-request-id` when one is in scope. Promtail parses JSON and labels only
-`level` and `service`; `tenantId`, `requestId` are queried with `| json`.
+**H13 — Request id.** `shared-core` `RequestIdMiddleware`, installed by
+`createNestApp` with `app.use` so it runs before every module's middleware:
+takes `X-Request-Id` if it is 8–128 chars of `[A-Za-z0-9-]`, else a new UUID
+v4; holds it, and the gate's `X-User-Id`, in an `AsyncLocalStorage` the logger
+reads; sets it on the
+response. A call to another service sends `serviceCallHeaders(token)`, which
+forwards it (C-27; `codeshape.py` `raw-service-call`). An outbox event written
+inside a request gets it in `outbox_event.requestId` (the `withTenant` extension
+stamps it; a `CrossTenantPrismaService` write does not), and the relay publishes
+it as the message header `x-request-id`. Promtail parses JSON and labels only
+`level` (and `service`); `tenantId`, `requestId` are queried with `| json`.
 
 ## Data growth
 

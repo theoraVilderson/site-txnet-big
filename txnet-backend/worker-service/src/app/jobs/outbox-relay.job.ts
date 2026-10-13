@@ -18,6 +18,7 @@ interface OutboxRow {
   type: string;
   payload: Prisma.JsonValue;
   occurredAt: Date;
+  requestId: string | null;
 }
 
 /**
@@ -94,7 +95,7 @@ export class OutboxRelayJob implements Job {
     try {
       await this.prisma.$transaction(async (tx) => {
         const rows = await tx.$queryRaw<OutboxRow[]>`
-          SELECT "id", "aggregate", "aggregateId", "type", "payload", "occurredAt"
+          SELECT "id", "aggregate", "aggregateId", "type", "payload", "occurredAt", "requestId"
           FROM "automation"."outbox_event"
           WHERE "publishedAt" IS NULL
           ORDER BY "occurredAt" ASC
@@ -111,6 +112,7 @@ export class OutboxRelayJob implements Job {
             await this.broker.publishOutboxEvent(
               outboxRoutingKey(row.type),
               messageOf(row),
+              row.requestId,
             );
           } catch (err) {
             failed.push({ id: row.id, message: reasonOf(err) });

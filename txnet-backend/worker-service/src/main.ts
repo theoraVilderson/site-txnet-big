@@ -1,7 +1,7 @@
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
+import { createNestContext } from '@txnet-backend/shared-core';
 
 /**
  * worker-service — background work, and nothing else (ADR-0027).
@@ -17,7 +17,7 @@ import { AppModule } from './app/app.module';
  * ticks until the broker times it out.
  */
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await createNestContext(AppModule);
   app.enableShutdownHooks();
 
   const logger = new Logger('bootstrap');

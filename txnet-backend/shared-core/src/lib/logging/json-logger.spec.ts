@@ -1,6 +1,7 @@
 import { runWithTenant } from '../tenant-context/tenant-context';
+import { loggingEnv } from './env';
 import { JsonLogger } from './json-logger';
-import { noteRequestUser, runWithRequestId } from './request-scope';
+import { runWithRequestId } from './request-scope';
 
 /**
  * H12 (`platform/hosting/contract.md`): one JSON line per call, keyed the way
@@ -37,12 +38,7 @@ describe('JsonLogger', () => {
   it('adds requestId, tenantId and userId when they are in scope, and nothing when not', () => {
     const { logger, parsed } = capture();
     logger.log('outside');
-    runWithRequestId('trace-0001', () =>
-      runWithTenant({ id: 'tenant-1' }, () => {
-        noteRequestUser('user-1');
-        logger.log('inside');
-      }),
-    );
+    runWithRequestId('trace-0001', () => runWithTenant({ id: 'tenant-1' }, () => logger.log('inside')), 'user-1');
     const [outside, inside] = parsed();
     expect(outside).not.toHaveProperty('requestId');
     expect(outside).not.toHaveProperty('tenantId');
@@ -63,5 +59,18 @@ describe('JsonLogger', () => {
     const { logger, lines } = capture();
     logger.log('a\nb', 'C');
     expect(lines[0].trimEnd().split('\n')).toHaveLength(1);
+  });
+});
+
+describe('loggingEnv', () => {
+  it('defaults to JSON in production and to Nest\'s own output elsewhere, so dev reads as it did', () => {
+    expect(loggingEnv({ APP_NAME: 'billing-service', NODE_ENV: 'production' })).toEqual({ service: 'billing-service', format: 'json' });
+    expect(loggingEnv({ APP_NAME: 'billing-service', NODE_ENV: 'development', LOG_FORMAT: '' })).toEqual({ service: 'billing-service', format: 'pretty' });
+    expect(loggingEnv({ APP_NAME: 'billing-service', LOG_FORMAT: 'json' }).format).toBe('json');
+  });
+
+  it('refuses to boot without a service name or with an unknown format', () => {
+    expect(() => loggingEnv({ NODE_ENV: 'production' })).toThrow();
+    expect(() => loggingEnv({ APP_NAME: 'x', LOG_FORMAT: 'xml' })).toThrow();
   });
 });

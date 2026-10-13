@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PanelSecret, RequestHeaders } from '@txnet-backend/shared-core';
+import { PanelSecret, serviceCallHeaders } from '@txnet-backend/shared-core';
 
 import type { PanelCredentialState, PanelCredentialWriter } from './panel-registration';
 
@@ -54,7 +54,7 @@ export class PanelCredentialClient implements PanelCredentialWriter {
     try {
       response = await fetch(`${this.baseUrl}${SEAM}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.token },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.token) },
         body: JSON.stringify({ ...target, credentials, actorId, secret }),
         signal: controller.signal,
       });

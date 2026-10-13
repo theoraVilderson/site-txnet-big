@@ -2,7 +2,6 @@ import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/commo
 import {
   IdentityHeaders,
   headerValue,
-  noteRequestUser,
   runWithTenant,
 } from '@txnet-backend/shared-core';
 import type { NextFunction, Request, Response } from 'express';
@@ -94,7 +93,6 @@ export class IdentityMiddleware implements NestMiddleware {
       throw new UnauthorizedException('request carries no forward-auth identity');
     }
     (req as IdentifiedRequest).identity = identity;
-    noteRequestUser(identity.userId);
     runWithTenant({ id: identity.tenantId }, () => next());
   }
 }

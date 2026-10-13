@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -79,7 +79,7 @@ export class BotUpdateConsumer implements OnApplicationBootstrap {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
         },
         body: JSON.stringify(message),
         signal: controller.signal,

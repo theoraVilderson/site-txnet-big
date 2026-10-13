@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { envConfigOptions } from './config/env.validation';
@@ -25,6 +25,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     RedisModule,
     LocaleModule,
     NotificationsModule,
+    JsonLoggerModule,
     CampaignsModule,
     QuotaModule,
   ],

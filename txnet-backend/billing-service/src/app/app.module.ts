@@ -2,12 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SupportContextModule } from './support-context/support-context.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import {
-  JSON_LOGGER_PROVIDER,
-  RateLimitGuard,
-  RequestIdMiddleware,
-  TenantStatusGuard,
-} from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { CatalogModule } from './catalog/catalog.module';
 import { EngagementModule } from './engagement/engagement.module';
@@ -64,6 +59,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     RedisModule,
     LocaleModule,
     WalletModule,
+    JsonLoggerModule,
     GatewayModule,
     CouponModule,
     DepositModule,
@@ -84,7 +80,6 @@ const INTERNAL_ROUTES = 'internal/*path';
   ],
   controllers: [HealthController],
   providers: [
-    JSON_LOGGER_PROVIDER,
     // Every billing route is rate-limited per user (F-092-r): a route opts in
     // with `@RateLimit`, and `request/rate-limit-coverage.spec.ts` fails on one
     // that did not. Guards run after the middleware below, so the identity a
@@ -99,8 +94,6 @@ const INTERNAL_ROUTES = 'internal/*path';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // The request id before anything that can log, so every line carries it (H13).
-    consumer.apply(RequestIdMiddleware).forRoutes('{*path}');
     // Language first, so the 401 IdentityMiddleware throws is translated.
     consumer.apply(LanguageMiddleware).forRoutes('{*path}');
     // Every route but the container health check, the gateway callback and the

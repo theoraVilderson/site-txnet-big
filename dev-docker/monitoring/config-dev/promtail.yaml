@@ -28,3 +28,13 @@ scrape_configs:
       - source_labels:
           ["__meta_docker_container_label_com_docker_compose_service"]
         target_label: "service"
+
+    # H13 (hosting/contract.md): a JSON line (H12) gives Loki one label, `level`.
+    # requestId / tenantId are too many values for labels — query them with `| json`.
+    # A line that is not JSON passes through unlabelled.
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:

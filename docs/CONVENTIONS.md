@@ -142,7 +142,7 @@ row that removes it; one that is permanent says why in the section.
 | C-24 | Types are honest: no `any`, no `as unknown as`, no non-null `!`, no `@ts-ignore`/`@ts-nocheck`. Outside input is `unknown` until zod parses it; a `switch` over a union ends in `assertNever`. | check |
 | C-25 | An error is handled once and on purpose: no empty `catch`, a caught error is converted, rethrown or logged with context — never dropped; a promise is awaited or marked `void` with a reason; what the user reads is a locale key. | check |
 | C-26 | Config is read only in the app's validated env module (`env.validation.ts`, `site-pwa/src/env.ts`); everything else imports the typed value. | check |
-| C-27 | One home per need (the table in C-27). The second copy is extracted, not pasted: `codeshape.py` `dupes` fails on a pasted block, `smells` on a bypassed home (`raw-fetch`, `raw-storage`). | check |
+| C-27 | One home per need (the table in C-27). The second copy is extracted, not pasted: `codeshape.py` `dupes` fails on a pasted block, `smells` on a bypassed home (`raw-fetch`, `raw-storage`, `raw-service-call`). | check |
 | C-28 | Data access is bounded: no query per loop iteration, every list paged with a maximum, select what is used, an index ships with a new filter or sort on a growing table, slow work goes to a queue, every outside call has a timeout and a capped retry, every cache key a TTL. | review |
 | C-29 | A write that may run twice is safe twice (a dedupe key or a unique constraint); a change across rows is one transaction; read-modify-write is a conditional update; tenant data goes through `tenantTransaction`/`withTenant`; an event leaves through the outbox; a transaction makes no outside call and locks rows in one order. | review |
 | C-30 | React renders from minimal state: derive instead of mirroring, an effect only syncs with something outside React and cleans up, list keys are ids, an `eslint-disable` says why after ` -- `. Server components by default; heavy client code is a dynamic import. | check |
@@ -890,6 +890,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | need | panel (`site-pwa`) | backend (`txnet-backend`) |
 |---|---|---|
 | call the API | `lib/api-request.ts` and the `lib/*-api.ts` clients | — |
+| call another service | — | `serviceCallHeaders` (`shared-core/src/lib/http/service-call.ts`, H13) |
 | a route | `lib/routes.ts` (C-10) | — |
 | a header / cookie / permission name | `@/generated/wire` (C-04) | `shared-core/src/lib/http` (C-04) |
 | a translated string | `@/generated/i18n-keys` (C-06) | `BackendI18nKeys` / `BotKeys` (C-07) |
@@ -912,7 +913,7 @@ in this table.
 "is this the platform", two identical guards, two network drivers sharing 300
 pasted blocks. A fix made to one copy is a bug left in the others.
 `codeshape.py` fails on a new block of 8 meaningful lines pasted across files
-(`dupes`) and on a home bypassed (`raw-fetch`, `raw-storage`); the copies there
+(`dupes`) and on a home bypassed (`raw-fetch`, `raw-storage`, `raw-service-call`); the copies there
 today are its baseline.
 
 ## C-28 — data access is bounded

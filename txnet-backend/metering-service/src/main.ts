@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app/app.module';
+import { createNestContext } from '@txnet-backend/shared-core';
 
 /**
  * metering-service — collection passes become usage, and nothing else
@@ -17,7 +17,7 @@ import { AppModule } from './app/app.module';
  * broker times it out, and those bytes wait that long to be counted.
  */
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule);
+  const app = await createNestContext(AppModule);
   app.enableShutdownHooks();
   new Logger('bootstrap').log('metering-service running');
 }

@@ -81,3 +81,8 @@ the partial index stays the size of the backlog rather than of the history.
 `AFTER INSERT` trigger on `outbox_event` and its function
 `automation.notify_outbox_ready()`, which `pg_notify('outbox_ready', '')` once
 per statement. No column changes; dropping both leaves the relay on the tick.
+
+`20261013000400_outbox_event_carries_request_id` adds the nullable
+`outbox_event.requestId` (OPS-1-l, hosting H13): the request that wrote the
+event, stamped by the `withTenant` extension and published as `x-request-id`.
+Additive, no backfill; a row from before it, or from outside a request, is null.

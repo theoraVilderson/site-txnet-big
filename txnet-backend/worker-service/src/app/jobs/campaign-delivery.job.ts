@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
@@ -58,7 +58,7 @@ export class CampaignDeliveryJob implements Job {
     try {
       const response = await fetch(`${this.baseUrl}${DELIVER_PATH}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
         body: '{}',
         signal: controller.signal,
       });

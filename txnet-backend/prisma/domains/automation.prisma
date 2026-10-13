@@ -266,6 +266,9 @@ model OutboxEvent {
   attempts    Int      @default(0)
   /// Why the last attempt did not publish. Cleared when one does.
   lastError   String?
+  /// The request that wrote it (H13), published as the `x-request-id` header.
+  /// Null outside a request, and from a client without `withTenant`.
+  requestId   String?
 
   @@index([publishedAt, occurredAt])
   @@map("outbox_event")

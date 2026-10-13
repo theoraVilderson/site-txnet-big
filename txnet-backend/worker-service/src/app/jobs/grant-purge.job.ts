@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotWorkerCategory } from '@prisma/client';
@@ -94,7 +94,7 @@ export class GrantPurgeJob implements Job {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
         },
         body: '{}',
         signal: controller.signal,

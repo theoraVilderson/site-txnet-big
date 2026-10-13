@@ -230,6 +230,9 @@ SMELLS = {
     "raw-fetch": (r"(?<![.\w])fetch\(", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT)
                   and not r.endswith("lib/api-request.ts"),
                   "C-27", "call the API through lib/api-request.ts"),
+    "raw-service-call": (r"\[RequestHeaders\.serviceToken\]\s*:", lambda r: r.startswith("txnet-backend/")
+                         and r.endswith(SOURCE_EXT) and not r.endswith("lib/http/service-call.ts"),
+                         "C-27", "send serviceCallHeaders() (shared-core), which also forwards the request id (H13)"),
     "physical-side": (r"\b(ml|mr|pl|pr|left|right)-(\d|\[|auto|px)|\btext-(left|right)\b|\brounded-(l|r)-",
                       lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
                       "C-31", "use logical sides (ms/me/ps/pe/start/end) so RTL and LTR both work"),

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 
@@ -33,7 +33,7 @@ export class BillingClient {
     }
     try {
       const response = await fetch(`${this.baseUrl}/api/internal/billing/tenants/${tenantId}/charge-currencies`, {
-        headers: { [RequestHeaders.serviceToken]: this.token, accept: 'application/json' },
+        headers: { ...serviceCallHeaders(this.token), accept: 'application/json' },
         signal: AbortSignal.timeout(this.timeoutMs),
       });
       if (!response.ok) throw new Error(`answered ${response.status}`);

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
  */
 interface RequestScope {
   requestId: string;
-  /** Set once the request is identified ({@link noteRequestUser}); absent before. */
+  /** The gate's `X-User-Id`, when the request came through `forward-auth`. */
   userId?: string;
 }
 
@@ -23,9 +23,9 @@ export function acceptRequestId(raw: string | undefined): string {
   return raw !== undefined && ACCEPTED_REQUEST_ID.test(raw) ? raw : randomUUID();
 }
 
-/** Run `fn` with `requestId` in scope. Opened once per request or message, at the edge. */
-export function runWithRequestId<T>(requestId: string, fn: () => T): T {
-  return storage.run({ requestId }, fn);
+/** Run `fn` with `requestId` (and the caller, when known) in scope. Opened once per request or message, at the edge. */
+export function runWithRequestId<T>(requestId: string, fn: () => T, userId?: string): T {
+  return storage.run({ requestId, userId }, fn);
 }
 
 /** The request id in scope, or `undefined` outside a request (boot, a timer). */
@@ -33,16 +33,7 @@ export function currentRequestId(): string | undefined {
   return storage.getStore()?.requestId;
 }
 
-/**
- * Record who the request turned out to be, for the log lines after it (H12's
- * `userId`). A no-op outside a request scope: there is no line to attach it to.
- */
-export function noteRequestUser(userId: string): void {
-  const scope = storage.getStore();
-  if (scope) scope.userId = userId;
-}
-
-/** The user {@link noteRequestUser} recorded for this request, or `undefined`. */
+/** The user the request was opened for, or `undefined`. */
 export function currentRequestUserId(): string | undefined {
   return storage.getStore()?.userId;
 }

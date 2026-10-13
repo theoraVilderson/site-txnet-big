@@ -1,6 +1,6 @@
-import { RequestHeaders } from '../http/headers';
+import { IdentityHeaders, RequestHeaders } from '../http/headers';
 import { RequestIdMiddleware } from './request-id.middleware';
-import { acceptRequestId, currentRequestId, runWithRequestId } from './request-scope';
+import { acceptRequestId, currentRequestId, currentRequestUserId, runWithRequestId } from './request-scope';
 
 /**
  * H13 (`platform/hosting/contract.md`): a caller's `X-Request-Id` is kept only
@@ -28,10 +28,12 @@ describe('RequestIdMiddleware', () => {
     const set: Record<string, string> = {};
     const res = { setHeader: (name: string, value: string) => (set[name] = value) };
     let seen: string | undefined;
+    let user: string | undefined;
     new RequestIdMiddleware().use({ headers }, res, () => {
       seen = currentRequestId();
+      user = currentRequestUserId();
     });
-    return { seen, set };
+    return { seen, set, user };
   }
 
   it('puts the caller\'s id in scope for the rest of the request and on the response', () => {
@@ -44,6 +46,11 @@ describe('RequestIdMiddleware', () => {
     const { seen, set } = run({});
     expect(seen).toMatch(UUID_V4);
     expect(set[RequestHeaders.requestId]).toBe(seen);
+  });
+
+  it('knows the user the gate identified, and nobody when it identified nobody', () => {
+    expect(run({ [IdentityHeaders.userId.toLowerCase()]: 'user-1' }).user).toBe('user-1');
+    expect(run({}).user).toBeUndefined();
   });
 
   it('has no id outside a request', () => {

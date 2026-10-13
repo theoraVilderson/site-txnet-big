@@ -1,4 +1,4 @@
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiResult } from '../auth-api/auth-api.types';
@@ -183,7 +183,7 @@ export class SupportApiClient {
           ...(typeof body === 'string' ? { 'content-type': 'application/json' } : {}),
           'accept-language': ctx.lang,
           authorization: `Bearer ${ctx.accessToken}`,
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
         },
         ...(body === undefined ? {} : { body }),
         signal: controller.signal,

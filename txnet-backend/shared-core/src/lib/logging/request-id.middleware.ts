@@ -1,7 +1,7 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { RequestHeaders, headerValue } from '../http/headers';
+import { IdentityHeaders, RequestHeaders, headerValue } from '../http/headers';
 import { acceptRequestId, runWithRequestId } from './request-scope';
 
 /**
@@ -15,6 +15,8 @@ export class RequestIdMiddleware implements NestMiddleware {
   use(req: Pick<Request, 'headers'>, res: { setHeader(name: string, value: string): unknown }, next: () => void) {
     const requestId = acceptRequestId(headerValue(req.headers, RequestHeaders.requestId));
     res.setHeader(RequestHeaders.requestId, requestId);
-    runWithRequestId(requestId, () => next());
+    // The gate's identity header is trusted (Traefik strips a client's), so the
+    // log lines know the user without every service's identity middleware.
+    runWithRequestId(requestId, () => next(), headerValue(req.headers, IdentityHeaders.userId));
   }
 }

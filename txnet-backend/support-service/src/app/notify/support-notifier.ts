@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IdentityHeaders, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { IdentityHeaders, RedisTtl, serviceCallHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { RedisService } from '../redis/redis.service';
@@ -117,7 +117,7 @@ export class HttpNoticeSeam implements NoticeSeam {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        [RequestHeaders.serviceToken]: this.serviceToken,
+        ...serviceCallHeaders(this.serviceToken),
         [IdentityHeaders.tenantId]: tenantId,
       },
       body: JSON.stringify(body),

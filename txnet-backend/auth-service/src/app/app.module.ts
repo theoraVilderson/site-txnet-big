@@ -20,10 +20,12 @@ import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
 import { TenantMiddleware } from './common/middlewares/tenant.middleware';
 import { TenantContextMiddleware } from './tenant-context/tenant-context.middleware';
+import { JsonLoggerModule } from '@txnet-backend/shared-core';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
+    JsonLoggerModule,
     PrismaModule,
     RedisModule,
     AuthModule,

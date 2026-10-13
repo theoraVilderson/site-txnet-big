@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders, tenantTransaction } from '@txnet-backend/shared-core';
+import { serviceCallHeaders, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { ConversationRefused, SupportCaller } from '../conversations/refusal';
@@ -73,7 +73,7 @@ export class HttpBillingFactsSeam implements BillingFactsSeam {
     if (!this.baseUrl || !this.serviceToken) throw new Error('BILLING_API_BASE_URL or SERVICE_AUTH_TOKEN is not set');
     const response = await fetch(
       `${this.baseUrl}/api/internal/billing/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}/support-context`,
-      { headers: { [RequestHeaders.serviceToken]: this.serviceToken }, signal: AbortSignal.timeout(this.timeoutMs) },
+      { headers: { ...serviceCallHeaders(this.serviceToken) }, signal: AbortSignal.timeout(this.timeoutMs) },
     );
     if (!response.ok) throw new Error(`billing answered ${response.status}`);
     // billing's envelope (`{ok, msg, data}`): the facts are `data`.

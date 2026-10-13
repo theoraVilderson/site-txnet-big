@@ -1,8 +1,4 @@
-import {
-  IdentityHeaders,
-  REFRESH_TOKEN_COOKIE,
-  RequestHeaders,
-} from '@txnet-backend/shared-core';
+import { IdentityHeaders, REFRESH_TOKEN_COOKIE, RequestHeaders, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { BotCopy } from '../locale/bot-copy';
@@ -370,7 +366,7 @@ export class AuthApiClient {
         headers: {
           'content-type': 'application/json',
           'accept-language': ctx.lang,
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
           // Which tenant this chat belongs to — the one its bot's webhook
           // path resolved to (F-320). A bot request has no host to resolve and
           // auth-api has no fallback tenant (ADR-0025), so a call that names

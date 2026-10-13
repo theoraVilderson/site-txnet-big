@@ -1,4 +1,4 @@
-import { noticeClassOf, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { noticeClassOf, type OutboxMessage, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -173,7 +173,7 @@ export class RetentionNoticeConsumer implements OnApplicationBootstrap {
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });

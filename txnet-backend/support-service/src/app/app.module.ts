@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { SupportAgentModule } from './agent/agent.module';
 import { SupportCannedModule } from './canned/canned.module';
@@ -25,7 +25,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
 const INTERNAL_ROUTES = 'internal/*path';
 
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportCategoriesModule, SupportLifecycleModule, SupportRetentionModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportCategoriesModule, SupportLifecycleModule, SupportRetentionModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },

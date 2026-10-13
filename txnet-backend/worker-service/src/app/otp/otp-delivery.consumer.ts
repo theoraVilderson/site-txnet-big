@@ -1,4 +1,4 @@
-import { IdentityHeaders, RequestHeaders } from '@txnet-backend/shared-core';
+import { IdentityHeaders, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -81,7 +81,7 @@ export class OtpDeliveryConsumer implements OnApplicationBootstrap {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
           [IdentityHeaders.tenantId]: message.tenantId,
         },
         body: JSON.stringify(message),

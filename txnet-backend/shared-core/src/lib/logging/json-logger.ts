@@ -1,28 +1,8 @@
 import { ConsoleLogger, type LoggerService, type Provider } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { z } from 'zod';
 
 import { TenantContext } from '../tenant-context/tenant-context';
+import { type LogFormat, loggingEnv } from './env';
 import { currentRequestId, currentRequestUserId } from './request-scope';
-
-/** H12: `json` for Loki, `pretty` for a person reading `docker logs` in dev. */
-export const LOG_FORMATS = ['json', 'pretty'] as const;
-export type LogFormat = (typeof LOG_FORMATS)[number];
-
-/**
- * The two variables every service's `envSchema` spreads in (C-26: config is
- * read only in the app's validated env module). `APP_NAME` is the image's own
- * `ENV` (`txnet-backend/Dockerfile`), so it is never unset in a container.
- */
-export const loggingEnvShape = {
-  APP_NAME: z.string().min(1),
-  LOG_FORMAT: z.enum(LOG_FORMATS).optional(),
-};
-
-/** H12: unset means `json` in production and `pretty` everywhere else, so dev reads as it did. */
-export function resolveLogFormat(nodeEnv: string, configured: LogFormat | undefined): LogFormat {
-  return configured ?? (nodeEnv === 'production' ? 'json' : 'pretty');
-}
 
 /** The slog level names (H12), so a Loki `level` label means the same for Go and Node. */
 type LogLevelName = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
@@ -133,20 +113,8 @@ function splitParams(params: unknown[]): { context?: string; stack?: string } {
   return only.includes('\n') ? { stack: only } : { context: only };
 }
 
-/** The variables {@link loggingEnvShape} adds, plus the `NODE_ENV` every schema has. */
-interface LoggingEnv {
-  NODE_ENV: string;
-  APP_NAME: string;
-  LOG_FORMAT?: LogFormat;
-}
-
 /** Registers {@link JsonLogger} for `app.useLogger(app.get(JsonLogger))` (H12). */
 export const JSON_LOGGER_PROVIDER: Provider = {
   provide: JsonLogger,
-  inject: [ConfigService],
-  useFactory: (config: ConfigService<LoggingEnv, true>) =>
-    new JsonLogger({
-      service: config.get('APP_NAME', { infer: true }),
-      format: resolveLogFormat(config.get('NODE_ENV', { infer: true }), config.get('LOG_FORMAT', { infer: true })),
-    }),
+  useFactory: () => new JsonLogger(loggingEnv()),
 };

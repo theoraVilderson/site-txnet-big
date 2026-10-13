@@ -1,8 +1,7 @@
-import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
-import { trustProxySetting } from '@txnet-backend/shared-core';
+import { createNestApp, trustProxySetting } from '@txnet-backend/shared-core';
 
 /**
  * bot-service — the bot as a product surface (`bot-app`, ADR-0009/0011).
@@ -13,7 +12,7 @@ import { trustProxySetting } from '@txnet-backend/shared-core';
  * by the chat.
  */
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createNestApp(AppModule);
   const config = app.get(ConfigService);
   const logger = new Logger('bootstrap');
 

@@ -9,10 +9,12 @@ import { OtpModule } from './otp/otp.module';
 import { BotModule } from './bot/bot.module';
 import { OutboxModule } from './outbox/outbox.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { JsonLoggerModule } from '@txnet-backend/shared-core';
 
 @Module({
   imports: [
     ConfigModule.forRoot(envConfigOptions),
+    JsonLoggerModule,
     PrismaModule,
     RedisModule,
     RealtimeModule,

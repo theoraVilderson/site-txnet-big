@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { AdminModule } from './admin/admin.module';
 import { AttentionModule } from './attention/attention.module';
@@ -28,7 +28,7 @@ import { TriggersModule } from './triggers/triggers.module';
  * reaches them.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), LocaleModule, PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
+  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, LocaleModule, PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard },

@@ -1,5 +1,4 @@
-import { RequestHeaders, trustProxySetting } from '@txnet-backend/shared-core';
-import { NestFactory } from '@nestjs/core';
+import { createNestApp, RequestHeaders, trustProxySetting } from '@txnet-backend/shared-core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app/app.module';
 import { ConfigService } from '@nestjs/config';
@@ -8,7 +7,7 @@ import { I18nExceptionFilter } from './app/common/filters/i18n-exception.filter'
 import { ResponseInterceptor } from './app/common/interceptors/response.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await createNestApp(AppModule);
   const configService = app.get(ConfigService);
   const logger = new Logger('bootstrap');
 

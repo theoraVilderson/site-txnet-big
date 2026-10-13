@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RequestHeaders } from '@txnet-backend/shared-core';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 
 import type {
   GatewaySecretState,
@@ -84,7 +84,7 @@ export class VaultSecretClient implements GatewaySecretWriter {
     try {
       response = await fetch(`${this.baseUrl}${SEAM}${path}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.token },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.token) },
         body: JSON.stringify(body),
         signal: controller.signal,
       });

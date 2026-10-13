@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { IdentityHeaders, NOTICE_CLASS_OF, NOTICE_CLASSES, NoticeClass, noticeClassOf, RedisTtl, RequestHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
+import { IdentityHeaders, NOTICE_CLASS_OF, NOTICE_CLASSES, NoticeClass, noticeClassOf, RedisTtl, serviceCallHeaders, UnscopedRedisKeys } from '@txnet-backend/shared-core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -331,7 +331,7 @@ export class EventNoticeSender {
       try {
         const response = await fetch(`${this.billingUrl}${NAMES_PATH}`, {
           method: 'POST',
-          headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+          headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
           body: JSON.stringify({ tenantId, userId, grantIds }),
           signal: controller.signal,
         });
@@ -367,7 +367,7 @@ export class EventNoticeSender {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
           [IdentityHeaders.tenantId]: person.tenantId,
         },
         body: JSON.stringify({ userId: person.userId, channel, ...(every ? { every } : {}), template: person.template, params: person.params, count, services }),

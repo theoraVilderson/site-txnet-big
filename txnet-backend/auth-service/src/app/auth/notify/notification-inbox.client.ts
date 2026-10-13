@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { IdentityHeaders, RequestHeaders } from '@txnet-backend/shared-core';
+import { IdentityHeaders, serviceCallHeaders } from '@txnet-backend/shared-core';
 
 /** notification-service's seam for putting a row in a user's inbox (`notification/contract.md`). */
 const INBOX_PATH = '/api/internal/notifications';
@@ -52,7 +52,7 @@ export class NotificationInboxClient {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          [RequestHeaders.serviceToken]: this.serviceToken,
+          ...serviceCallHeaders(this.serviceToken),
           [IdentityHeaders.tenantId]: tenantId,
         },
         body: JSON.stringify(payload),

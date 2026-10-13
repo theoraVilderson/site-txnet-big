@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
 
 import { AccessModule } from './access/access.module';
 import { BrandingModule } from './branding/branding.module';
@@ -58,6 +58,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
 @Module({
   imports: [
     ConfigModule.forRoot(envConfigOptions),
+    JsonLoggerModule,
     PrismaModule,
     RedisModule,
     LocaleModule,

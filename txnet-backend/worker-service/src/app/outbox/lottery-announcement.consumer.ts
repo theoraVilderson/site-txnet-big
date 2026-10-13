@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import { OutboxEventType, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, type OutboxMessage, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -154,7 +154,7 @@ export class LotteryAnnouncementConsumer implements OnApplicationBootstrap {
     try {
       const response = await fetch(`${base}${path}`, {
         method: payload ? 'POST' : 'GET',
-        headers: { 'content-type': 'application/json', [RequestHeaders.serviceToken]: this.serviceToken },
+        headers: { 'content-type': 'application/json', ...serviceCallHeaders(this.serviceToken) },
         ...(payload ? { body: JSON.stringify(payload) } : {}),
         signal: controller.signal,
       });

@@ -66,9 +66,9 @@ that reason in `lastError` instead.
 **Delivery is at-least-once and never exactly-once**, which ADR-0021 says
 plainly and this implementation cannot improve on: the relay can publish a row
 and lose the process before it stamps `publishedAt`. The row's `id` is the
-event id and travels as the AMQP `messageId`, so a consumer dedupes on it
-before it parses anything. **A consumer that cannot safely process the same
-event twice is a bug in the consumer.**
+event id and travels as the AMQP `messageId` (its `requestId` as the header
+`x-request-id`, hosting H13); a consumer dedupes on the id before it parses
+anything. **A consumer that cannot safely process the same event twice is a bug.**
 
 That is the whole of the consumer-side contract that exists today, and it is
 less than ADR-0021 asks for: there is no shared `processed_event` store and no
