@@ -19,21 +19,11 @@
  *    (`wallet-history.service.ts`), so a term is never interpolated into SQL.
  *
  * The term is escaped before any of this: a user typing `.` or `(` is typing
- * text, not a pattern.
+ * text, not a pattern. The letters folded are shared-core's `sameLetterPattern`
+ * (C-19).
  */
 
-/** Both sides of each pair mean the same letter; a search must not tell them apart. */
-const VARIANTS: Record<string, string> = {
-  آ: '(آ|ا)',
-  ا: '(آ|ا)',
-  ی: '(ی|ي|ئ)',
-  ي: '(ی|ي|ئ)',
-  ئ: '(ی|ي|ئ)',
-  ک: '(ک|ك)',
-  ك: '(ک|ك)',
-  ه: '(ه|ة)',
-  ة: '(ه|ة)',
-};
+import { sameLetterPattern } from '@txnet-backend/shared-core';
 
 const REGEX_SPECIAL = /[.*+?^${}()|[\]\\]/g;
 
@@ -52,7 +42,7 @@ export function foldedSearch(term: string): RegExp | null {
 
   const escaped = trimmed.replace(REGEX_SPECIAL, '\\$&').replace(GAP, '\u0000');
   const folded = [...escaped]
-    .map((char) => (char === '\u0000' ? '[\\s\\u200c]+' : (VARIANTS[char] ?? char)))
+    .map((char) => (char === '\u0000' ? '[\\s\\u200c]+' : (sameLetterPattern(char) ?? char)))
     .join('');
   return new RegExp(folded, 'i');
 }

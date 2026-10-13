@@ -1,4 +1,4 @@
-import type { GuideBlock } from '@txnet-backend/shared-core';
+import { foldForSearch, PERSIAN_STOP_WORDS, type GuideBlock } from '@txnet-backend/shared-core';
 
 import type { ResolvedGuide } from './guide-reader';
 
@@ -17,22 +17,12 @@ export interface GuideHit {
 }
 
 /**
- * The same word however it was typed (F-414-j): lower case; Arabic ي/ى/ك/ة and
- * the hamza seats as the Persian letters; Persian and Arabic digits as ASCII;
- * no diacritics, tatweel or zero-width joiners (a half-space is a space); runs
- * of space as one.
+ * The same word however it was typed (F-414-j): lower case; the script folded
+ * by shared-core's `foldForSearch` (C-19); no zero-width joiners (a half-space
+ * is a space); runs of space as one.
  */
 export function normalizeForSearch(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[يى]/g, 'ی')
-    .replace(/ك/g, 'ک')
-    .replace(/ة/g, 'ه')
-    .replace(/[أإآ]/g, 'ا')
-    .replace(/ؤ/g, 'و')
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
-    .replace(/[ً-ٰٟـ]/g, '')
+  return foldForSearch(text.toLowerCase())
     .replace(/[​-‏⁠﻿]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -58,15 +48,14 @@ export function guideSearchText(blocks: readonly GuideBlock[]): string {
 
 /**
  * Words that say nothing about which guide is meant (F-414-k): a greeting, a
- * pronoun, a particle. Dropped in `any` mode only — there a whole support
- * message is the query, and "سلام" would otherwise match every guide.
+ * pronoun, a particle; the Persian ones are shared-core's. Dropped in `any`
+ * mode only — there a whole support message is the query, and "سلام" would
+ * otherwise match every guide.
  */
-const STOP_WORDS = new Set(
-  normalizeForSearch(
-    'سلام روی برای این اون آن که از به با را در تا هم من ما شما یک چرا چطور چه چی نمی میشه نمیشه کنم کنید دارم است هست ولی اما لطفا ممنون مرسی خیلی ' +
-      'the and for you your with this that not does doesnt dont cant cannot have has was are but please hello thanks thank hey can how why what when',
-  ).split(' '),
-);
+const STOP_WORDS = new Set([
+  ...PERSIAN_STOP_WORDS,
+  ...'the and for you your with this that not does doesnt dont cant cannot have has was are but please hello thanks thank hey can how why what when'.split(' '),
+]);
 
 /** In `any` mode a word shorter than this is noise ("vp", "is", "از"). */
 const ANY_MIN_WORD = 3;

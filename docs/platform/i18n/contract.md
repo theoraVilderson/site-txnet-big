@@ -177,3 +177,19 @@ campaign texts (`message`).
 |---|---|---|---|
 | "vendor a per-service copy of the client" (stale comment in `client.go` / `client.ts`) | 2026-09-04 | — | the one shared Go module + one shared Node tarball (ADR-0003, README) |
 | `LOCALES_DIR` / `LOCALES_WATCH` env in consumers | 2026-09-04 | — | only `locale-service` reads files now |
+
+## Arabic-script folds (CS-1-d, C-19)
+
+`shared-core/src/lib/i18n/arabic-script.ts` is the backend's one module that
+knows the script's letters and digits. Each caller keeps its own fold, because
+each folds a different amount:
+
+| export | folds | caller |
+|---|---|---|
+| `foldToOneSpelling` | `ي`/`ى`/`ك` → Persian, every digit → ASCII; exactly the pairs migration `20260926001000_config_label_one_spelling` folded | `billing-service` `foldConfigText` |
+| `foldForSearch` | the above + hamza seats, `ة`, harakat and tatweel | `tenant-service` `normalizeForSearch` |
+| `sameLetterPattern` | a regex class per letter a search must not tell apart | `billing-service` `foldedSearch` |
+| `transliterateToLatin` | each letter's usual Latin spelling | `tenant-service` `slugFromName` |
+| `PERSIAN_STOP_WORDS` | already in `foldForSearch`'s spelling | guide search, `any` mode |
+
+A new fold adds a table here. It is never written at the call site.

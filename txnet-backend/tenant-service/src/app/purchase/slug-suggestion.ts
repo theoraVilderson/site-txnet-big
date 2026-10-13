@@ -6,18 +6,10 @@
  * dropping them would leave nothing to suggest, so each letter becomes its
  * usual Latin spelling first. Vowels Persian does not write stay unwritten —
  * `علی` is `aly` — which is close enough to recognise and the buyer edits it.
+ * The spelling table is shared-core's `transliterateToLatin` (C-19).
  */
 
-const TRANSLITERATION: Record<string, string> = {
-  ا: 'a', آ: 'a', أ: 'a', إ: 'e', ء: '', ئ: 'y', ؤ: 'v',
-  ب: 'b', پ: 'p', ت: 't', ث: 's', ج: 'j', چ: 'ch', ح: 'h', خ: 'kh',
-  د: 'd', ذ: 'z', ر: 'r', ز: 'z', ژ: 'zh', س: 's', ش: 'sh', ص: 's',
-  ض: 'z', ط: 't', ظ: 'z', ع: 'a', غ: 'gh', ف: 'f', ق: 'gh', ک: 'k',
-  ك: 'k', گ: 'g', ل: 'l', م: 'm', ن: 'n', و: 'v', ه: 'h', ة: 'h',
-  ی: 'y', ي: 'y', ى: 'y',
-  '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-  '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
-};
+import { transliterateToLatin } from '@txnet-backend/shared-core';
 
 /** What a name with nothing usable in it suggests. */
 export const SLUG_FALLBACK = 'reseller';
@@ -30,8 +22,7 @@ export const SUFFIX_TRIES = 20;
 
 /** The name as one lower-case DNS label, at most {@link MAX_BASE} characters; never empty. */
 export function slugFromName(name: string): string {
-  const latin = Array.from(name, (ch) => TRANSLITERATION[ch] ?? ch)
-    .join('')
+  const latin = transliterateToLatin(name)
     .normalize('NFKD')
     .replace(/\p{M}/gu, '')
     .toLowerCase();

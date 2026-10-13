@@ -709,8 +709,9 @@ message: import the question from the module that owns the tenant type (C-18) �
 locale key — C-06 in the panel, C-07 in the backend. Arabic-script literals
 are allowed only in a module whose job is the script: digit and letter
 normalisation, transliteration, language-specific matching. Those modules are
-the first block of `except`; the rest are debt and leave with FE-1-a, FE-1-b,
-FE-1-c and CS-1-d.
+the first block of `except` — the backend's one is
+`shared-core/src/lib/i18n/arabic-script.ts` (CS-1-d), and a backend fold,
+search or slug imports its table from there; the rest are debt.
 
 **Why.** The theme picker said `"اقیانوسی"` to English readers, and lists
 were joined with a Persian comma in every language. A literal renders the same
@@ -719,7 +720,7 @@ in every locale, and no key-based check can see it.
 ```check C-19
 forbid: ^(?!\s*(?://|\*|/\*|\{/\*)).*['"`][^'"`]*[\u0600-\u06FF]
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, site-pwa/src/util/helper.ts, site-pwa/src/app/(panel)/_lib/palette.ts, site-pwa/src/app/(panel)/services/_lib/service-configs.ts, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, txnet-backend/billing-service/src/app/wallet/persian-search.ts, txnet-backend/tenant-service/src/app/guide/guide-search.ts, txnet-backend/tenant-service/src/app/purchase/slug-suggestion.ts, txnet-backend/billing-service/src/app/traffic/config-text.ts, txnet-backend/shared-core/src/lib/ai/suggestion-copy.ts, txnet-backend/bot-service/src/app/locale/bot-copy.fallbacks.ts, coinsite/src/app/layout.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx, site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx, site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/resellers/packages/_components/PackagesView.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/context/LocaleContext.tsx, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, site-pwa/src/util/helper.ts, site-pwa/src/app/(panel)/_lib/palette.ts, site-pwa/src/app/(panel)/services/_lib/service-configs.ts, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, txnet-backend/shared-core/src/lib/i18n/arabic-script.ts, txnet-backend/shared-core/src/lib/ai/suggestion-copy.ts, txnet-backend/bot-service/src/app/locale/bot-copy.fallbacks.ts, coinsite/src/app/layout.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx, site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx, site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/resellers/packages/_components/PackagesView.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/context/LocaleContext.tsx, txnet-backend/auth-service/src/app/impersonation/impersonation.module.ts
 message: move the text to locales/ and reference its generated key (C-19); script tables belong in the app's one script module
 ```
 
@@ -904,6 +905,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02) |
 | a date or time | `_lib/datetime.ts` (`formatInstant`, `dayIn`, `platformToday`, `platformDayStart`), `lib/time-zone.ts` | `shared-core/src/lib/time` |
 | digits, numbers and lists | `_lib/digits.ts` (`numberLocale`, `formatList`); typed digits read by `toEnglishDigits` (`util/helper.ts`) | — |
+| Arabic-script folds, transliteration, stop words | `util/helper.ts` | `shared-core/src/lib/i18n/arabic-script.ts` (C-19) |
 | a control, a dialog, a table | `(panel)/_components/kit` (C-13) | — |
 | live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
 | browser storage | `lib/storage.ts` (FE-1-l) | — |
