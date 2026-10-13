@@ -49,10 +49,13 @@ it; the rest is review.
   exhaustive — C-24 **check**.
 - An error is handled once, on purpose: no empty `catch`, no swallowed promise,
   a user-facing failure is a locale key — C-25 **check**.
-- Money is `Decimal`/string in its currency (C-02); time is UTC on the wire and
-  in the database, zoned only at the edge (C-37).
+- Money is `Decimal`/string in its currency, never a float (C-02 **check**);
+  time is UTC on the wire and in the database, zoned only at the edge (C-37).
 - A write that can run twice runs safely twice; a multi-row change is one
-  transaction; tenant data goes through `tenantTransaction` — C-29.
+  short transaction with no outside call inside it, locking rows in one
+  order; tenant data goes through `tenantTransaction` — C-29.
+- Go: every goroutine can be stopped and is waited for, fan-out is bounded,
+  shared state has one guard, `-race` runs on it — C-36.
 - Config is read from the app's validated env module only — C-26 **check**.
 
 **Fast by default**
@@ -63,10 +66,23 @@ it; the rest is review.
 - React: derive, do not mirror state; effects only sync with the outside; keys
   are ids — C-30 **check**. Styling is tokens and logical sides — C-31 **check**.
 
+**Changes that do not break what is running**
+- An API, a queue message and an outbox event only gain fields; a renamed
+  meaning is a new name — C-37.
+- A schema change is expand, migrate, contract; a drop carries
+  `-- contract: <row id>`; a committed migration is never edited — C-39 **check**.
+
+**Every reader**
+- Kit primitives or native `button`/`a`, never a clickable `div`; `alt` on
+  every image; `aria-label` on icon-only controls; never colour alone — C-40
+  **check**.
+
 **Safe by default**
 - Authorise on the server for every route; the UI hiding a button is not
   security. No raw unsafe SQL, no `dangerouslySetInnerHTML`, no secret in code,
   no token or phone number in a log — C-32 **check**, C-38.
+- Lockfiles are committed; a critical advisory in a dependency is its own row,
+  ahead of features (the 2026-09 compromise was one) — C-34.
 
 **Done**
 - The seven checks in AGENTS.md pass; a debt entry you touched got smaller and
@@ -81,124 +97,65 @@ ones are only hoped for.
 
 | enforced by | means |
 |---|---|
-| `check` | `python3 tools/conventions.py` fails on a violation |
-| `lint` | your linter fails on it (rule named in the notes) |
+| `check` | `tools/conventions.py` fails on a violation (a ```` ```check ```` block in the rule's section), or `tools/codeshape.py` fails when a per-file count grows past its baseline |
+| `lint` | a linter fails on it (rule named in the section). `site-pwa` runs ESLint; `txnet-backend` has no linter today |
 | `review` | nothing enforces it. It will be violated eventually. |
 
 A convention that keeps getting violated does not need a firmer sentence. It
 needs to move up that table.
 
+**Ids are permanent.** A rule is never renumbered or reused; a rule that is
+retired keeps its row, marked `retired — <why>`, so every commit and review
+that cites it still resolves. A new rule takes the next free number and is
+added in four places in one change: its row in the table below (the one line
+`tools/brief.py` prints), its section, a line in "The short version", and its
+check block if a regex can hold it. An `except:` entry that is debt names the
+row that removes it; one that is permanent says why in the section.
+
 ## Conventions
 
 | id | rule | enforced by |
 |---|---|---|
-| C-38 | A log line says what happened, to which ids, at the right level, through the app's logger (Nest `Logger` with the class name; `console.info`/`warn`/`error` in Next server code). Never a token, password, OTP, card or full phone number. | review |
-| C-37 | An API change is backwards compatible until every consumer moved: add a field, never rename or retype one in place; the unit's `contract.md` changes in the same commit. Time is ISO-8601 UTC on the wire and in the database, zoned only for display (`_lib/datetime.ts`, `shared-core/lib/time`). | review |
-| C-36 | Go: `gofmt`/`go vet` clean; `context.Context` is the first parameter of anything that does I/O; errors are wrapped with `%w` and returned, not logged and dropped; `panic` only for a broken invariant, with its reason; an ignored error is a response write and says so. | review |
-| C-35 | A function does one thing: about 50 lines at most, at most 3 positional parameters (more is an options object), nesting at most 3 (return early), no boolean flag parameter, no nested ternary. | review |
-| C-34 | One library per job. A new dependency is asked for first, with what it replaces and its size; an unused one is removed (`codeshape.py` `deps`). | check |
-| C-33 | A bug fix starts with a spec that fails on the bug. Specs test behaviour through the public surface, use fake timers not sleeps, and never ship `.only` / `.skip`. | check |
-| C-32 | Every route authorises on the server; input is validated at the edge; no `$queryRawUnsafe`/`$executeRawUnsafe`, no `dangerouslySetInnerHTML` (the theme scripts excepted), no `eval`, no key material in code, no `Math.random` in the backend. | check |
-| C-31 | Panel styling is theme tokens and logical sides: no hex colour in a component, no `ml-`/`mr-`/`left-`/`text-left`, so RTL and LTR both work; contrast per `contract.ux.md`. | check |
-| C-30 | React renders from minimal state: derive instead of mirroring, an effect only syncs with something outside React and cleans up, list keys are ids, an `eslint-disable` says why after ` -- `. Server components by default; heavy client code is a dynamic import. | check |
-| C-29 | A write that may run twice is safe twice (a dedupe key or a unique constraint); a change across rows is one transaction; read-modify-write is a conditional update; tenant data goes through `tenantTransaction`/`withTenant`; an event leaves through the outbox. | review |
-| C-28 | Data access is bounded: no query per loop iteration, every list paged with a maximum, select what is used, an index ships with a new filter or sort on a growing table, slow work goes to a queue, every outside call has a timeout and a capped retry, every cache key a TTL. | review |
-| C-27 | One home per need (the table in C-27). The second copy is extracted, not pasted: `codeshape.py` `dupes` fails on a pasted block, `smells` on a bypassed home (`raw-fetch`, `raw-storage`). | check |
-| C-26 | Config is read only in the app's validated env module (`env.validation.ts`, `site-pwa/src/env.ts`); everything else imports the typed value. | check |
-| C-25 | An error is handled once and on purpose: no empty `catch`, a caught error is converted, rethrown or logged with context — never dropped; a promise is awaited or marked `void` with a reason; what the user reads is a locale key. | check |
-| C-24 | Types are honest: no `any`, no `as unknown as`, no non-null `!`, no `@ts-ignore`/`@ts-nocheck`. Outside input is `unknown` until zod parses it; a `switch` over a union ends in `assertNever`. | check |
-| C-23 | A name says what the thing is, in the product's words (`grant`, `tenant`, `panel`, not `data`, `info`, `item2`); it carries its unit (`timeoutMs`, `sizeBytes`, `amountMinor`); a boolean reads as a question (`isOwner`, `hasGrant`, `canBuy`). TypeScript: `camelCase` values, `PascalCase` types and components, `UPPER_SNAKE` module constants, files `kebab-case.ts`, components `PascalCase.tsx`, hooks `useThing.ts`. No `var`. | check |
-| C-22 | A comment says *why* — the rule, the case or the id it comes from — never what the next line plainly does. Every export of a `lib/`, `_lib/` or service module has a one-line doc. No commented-out code. A file does one job: a page is thin, its view is in `_components`, its state in `_hooks`, its pure logic in `_lib`; a controller is thin over a service. | review |
-| C-21 | Code that is replaced is deleted in the same change, with its tests and its doc mentions. No file or export only tests reach, no `dependencies` entry nothing imports (`codeshape.py` `dead`/`exports`/`deps`), no `console.log`/`console.debug` in app code, no `TODO`/`FIXME` without a backlog id: `TODO(FE-1-e)`. | check |
-| C-20 | A source file is at most 400 lines and a React file declares at most 10 `useState` (`tools/codeshape.py`). Files over it today are a baseline that may only shrink. | check |
-| C-19 | Text a person reads is never in code: it is a locale key (C-06, C-07). Arabic-script literals live only in a module whose job is the script itself — normalising digits and letters, transliterating, matching. | check |
-| C-18 | A domain question is one named function: *is this the platform's tenant*, *may this user buy* — asked of the module that owns the type, never re-derived from a literal at the call site. `"platform_owner"` outside its owners is a violation. | check |
-| C-17 | A language is never a literal. The languages offered come from the locale meta (`availableLocales`, `locale-service`); the fallback is `DEFAULT_LANGUAGE`, read in one place per app; a machine locale used only to format or parse digits is a named constant. | check |
-| C-16 | Code asks what a tenant may do — a feature key or a limit — never which package it bought (catalog §3.11). | check |
 | C-01 | Technical docs, code, commit messages and logs are in English. A Persian comment is a violation; the files that still hold one are listed in the check and leave with FE-1-f / CS-1-e. | check |
-| C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | review |
-| C-15 | Who holds a key is asked of `findKeyHolders` (shared-core, ADR-0138) — a role, a key given, a group of the tenant, less a key taken. A Prisma filter on `rolePermissions: { some: { permission: ... } }` outside it is a violation: it misses a key given to one person and tells someone it was taken from. | check |
-| C-14 | A page never polls the server for state that someone else's work changes — it subscribes and re-reads (`useLiveReread`, ADR-0121). Under `site-pwa/src/app/` and `site-pwa/src/hooks/`, a `setInterval(` is a violation unless it is a clock (`setNow(`, `setSeconds(`) or carries a `live-exempt: <reason>` comment on its line. | check |
-| C-13 | A panel control is a kit primitive (`(panel)/_components/kit`, `contract.ux.md` K3–K14). Under `site-pwa/src/app/(panel)/`, outside the kit, `window.confirm(` (use `useConfirm`), a local button or input class constant (`primaryButton`, `quietButton`, `secondaryButton`, `dangerButton`, `input`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`) and `text-white` beside `bg-primary` (use `text-on-accent`) are violations. | check |
-| C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
-| C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
-| C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
-| C-09 | A closed set of wire values is declared once — a Prisma enum (`z.nativeEnum`) or an `as const` tuple beside its type — and a zod schema derives from it. A hand-written `z.enum([...])` is a violation (env validation excepted). | check |
-| C-08 | A broker routing key or outbox event type is imported from `shared-core/src/lib/automation/routing-keys.ts` (or `bot-update.ts` / `outbox.ts`). Nothing else spells one. | check |
-| C-07 | A backend i18n key is a generated constant — `BackendI18nKeys.*`, or `BotKeys.*` in `bot-service`. A literal key in `key:` or an exception constructor is a violation, and so is a key spliced from a template: a key chosen at runtime comes from an exhaustive `Record` over its union. See ADR-0036. | check |
-| C-06 | An i18n key in the panel is referenced through the generated constants (`site-pwa/src/generated/i18n-keys.ts`). A bare string literal as the key of a `t(...)` call is a violation. Keys built by concatenation are F-084's exhaustive maps, not literals. See ADR-0036. | check |
-| C-05 | A rate-limit bucket is a `RateLimitBucket` registry entry joined with `rateLimitBucketKey()`. A bare string where a bucket belongs is a violation. See ADR-0036. | check |
-| C-04 | A header, cookie or permission name that crosses a process boundary is declared in `contracts/http/wire.json` and imported from `shared-core/src/lib/http/` (TypeScript) or `auth-handler/internal/api/handlers/headers.go` (Go). Nothing else writes one as a literal. See ADR-0036. | check |
+| C-02 | Money is `Decimal`, never a float, and every money row records its `currencyCode` (ADR-0098) — one currency per row, never a second amount column in another. A payment's gateway receipt, `amountReceivedMinor` + `receivedCurrency` (D-32), is evidence, not money of record. Balances are ledger-derived; never write a balance field directly outside a ledger-append transaction. See ADR-0002. | check |
 | C-03 | Redis keys are built only through `RedisKeys.*` (`shared-core/src/lib/redis/keys.ts`, re-exported per app) or `cache.SessionKey` in Go — nothing else hand-writes a key string. Every key is prefixed `${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:`. See `docs/platform/redis-keyspace/contract.md`. | check |
-
----
-
-## C-03 — Redis keys go through `RedisKeys` only
-
-**Rule.** Every Redis command's key argument is built via `RedisKeys.*` (Node)
-or the equivalent Go builder in `auth-handler`. A raw template-literal key
-passed straight to a Redis call is a violation.
-
-**Why.** `REDIS_KEYSPACE_VERSION` exists so the entire keyspace can be
-abandoned at once (a forced logout of every session) by bumping one value. That
-only works if every key is actually built through the shared prefix — a
-hand-written key string silently escapes the version bump and the namespace,
-and now "log everyone out" quietly leaves sessions alive.
-
-```ts
-// wrong — escapes RedisKeys and the namespace prefix
-await this.redis.set(`otp:code:${purpose}:${phone}`, hash);
-
-// right
-await this.redis.set(RedisKeys.otpCode(purpose, phone), hash);
-```
-
-**Two check blocks, because the violation lived where the first one could not
-look.** C-03 has always said "or the matching `auth-handler` config", and no Go
-builder existed: the gateway concatenated `h.keyPrefix + "session:" + id`
-inline — the exact raw key string this rule forbids, in the one language the
-check did not cover. F-076 built `internal/cache/keys.go` and the second block
-below is what keeps it the only place that does it.
-
-The `except:` list is also narrower than it was. It used to exempt every
-`*.spec.ts`, which exempted the files most likely to hand-write a key while
-asserting one; now only the catalogue and its own contract spec are outside.
-
-```check C-03
-forbid: redis\.(get|set|del|expire|incr|decr|hset|hget|hdel|sadd|srem|exists)\(\s*`
-in: txnet-backend/**/*.ts
-except: txnet-backend/shared-core/src/lib/redis/**, txnet-backend/**/redis.keys.ts, txnet-backend/**/redis-fixture.ts
-message: build the key through RedisKeys.* (redis.keys.ts) — never a raw template-literal key (C-03)
-```
-
-```check C-03
-forbid: keyPrefix\s*\+
-in: auth-handler/**/*.go
-except: auth-handler/internal/cache/keys.go
-message: build the key through cache.SessionKey (internal/cache/keys.go) — never concatenate the keyspace prefix by hand (C-03)
-```
-
----
-
-## C-02 — money is `Decimal` in its row's currency, balances are ledger-derived
-
-**Rule.** A monetary value is stored once, as `Decimal`, and its row records the
-currency it is in: `currencyCode`, NOT NULL with no default, so a writer names it
-(ADR-0098 part 3, amending ADR-0002's single base currency). A row's currency is
-never derived from its tenant, whose currency may change. A ledger row is in its
-wallet's currency. `payment_transaction`'s gateway receipt (`amountReceivedMinor` + `receivedCurrency`, D-32) is evidence of what arrived, never credited as is — `amountCredited` is in the row's `currencyCode`. A wallet-style
-`cachedBalance` is never written outside the same transaction that appends the
-proving ledger row.
-
-**Why.** Storing an amount in more than one currency, or trusting a cached
-balance as truth, guarantees the two copies drift — and the drift is discovered
-as a refund or a payout that does not reconcile, usually months later. See
-ADR-0002 for the full reasoning and the units it binds.
-
-**Not mechanically checkable here** — telling a legitimate cache field from a
-truth-bearing one needs the transaction boundary, not a regex. This lives in
-review until a domain implementing it exists; when `billing` goes from `draft`
-to `active`, revisit whether its repository layer can carry a real `check`.
+| C-04 | A header, cookie or permission name that crosses a process boundary is declared in `contracts/http/wire.json` and imported from `shared-core/src/lib/http/` (TypeScript) or `auth-handler/internal/api/handlers/headers.go` (Go). Nothing else writes one as a literal. See ADR-0036. | check |
+| C-05 | A rate-limit bucket is a `RateLimitBucket` registry entry joined with `rateLimitBucketKey()`. A bare string where a bucket belongs is a violation. See ADR-0036. | check |
+| C-06 | An i18n key in the panel is referenced through the generated constants (`site-pwa/src/generated/i18n-keys.ts`). A bare string literal as the key of a `t(...)` call is a violation. Keys built by concatenation are F-084's exhaustive maps, not literals. See ADR-0036. | check |
+| C-07 | A backend i18n key is a generated constant — `BackendI18nKeys.*`, or `BotKeys.*` in `bot-service`. A literal key in `key:` or an exception constructor is a violation, and so is a key spliced from a template: a key chosen at runtime comes from an exhaustive `Record` over its union. See ADR-0036. | check |
+| C-08 | A broker routing key or outbox event type is imported from `shared-core/src/lib/automation/routing-keys.ts` (or `bot-update.ts` / `outbox.ts`). Nothing else spells one. | check |
+| C-09 | A closed set of wire values is declared once — a Prisma enum (`z.nativeEnum`) or an `as const` tuple beside its type — and a zod schema derives from it. A hand-written `z.enum([...])` is a violation (env validation excepted). | check |
+| C-10 | A panel route is a constant in `site-pwa/src/lib/routes.ts`. A path literal in `href=`, `redirect(` or `router.push/replace(` is a violation. | check |
+| C-11 | A backend app that opens a tenant scope (`runWithTenant(...)`) registers `TenantStatusGuard` as an `APP_GUARD`, so every route it serves obeys `TenantStatusPolicy`. See `docs/domains/tenant/rules.md`. | check |
+| C-12 | A Nest route or middleware path names its wildcard: `'{*path}'`, `'internal/*path'`, `@Get('*key')`. A bare `*` — `forRoutes('*')`, `'internal/*'` — is a violation. | check |
+| C-13 | A panel control is a kit primitive (`(panel)/_components/kit`, `contract.ux.md` K3–K14). Under `site-pwa/src/app/(panel)/`, outside the kit, `window.confirm(` (use `useConfirm`), a local button or input class constant (`primaryButton`, `quietButton`, `secondaryButton`, `dangerButton`, `input`, `inputClass`, `PRIMARY`, `SECONDARY`, `INPUT`) and `text-white` beside `bg-primary` (use `text-on-accent`) are violations. | check |
+| C-14 | A page never polls the server for state that someone else's work changes — it subscribes and re-reads (`useLiveReread`, ADR-0121). Under `site-pwa/src/app/` and `site-pwa/src/hooks/`, a `setInterval(` is a violation unless it is a clock (`setNow(`, `setSeconds(`) or carries a `live-exempt: <reason>` comment on its line. | check |
+| C-15 | Who holds a key is asked of `findKeyHolders` (shared-core, ADR-0138) — a role, a key given, a group of the tenant, less a key taken. A Prisma filter on `rolePermissions: { some: { permission: ... } }` outside it is a violation: it misses a key given to one person and tells someone it was taken from. | check |
+| C-16 | Code asks what a tenant may do — a feature key or a limit — never which package it bought (catalog §3.11). | check |
+| C-17 | A language is never a literal. The languages offered come from the locale meta (`availableLocales`, `locale-service`); the fallback is `DEFAULT_LANGUAGE`, read in one place per app; a machine locale used only to format or parse digits is a named constant. | check |
+| C-18 | A domain question is one named function: *is this the platform's tenant*, *may this user buy* — asked of the module that owns the type, never re-derived from a literal at the call site. `"platform_owner"` outside its owners is a violation. | check |
+| C-19 | Text a person reads is never in code: it is a locale key (C-06, C-07). Arabic-script literals live only in a module whose job is the script itself — normalising digits and letters, transliterating, matching. | check |
+| C-20 | A source file is at most 400 lines and a React file declares at most 10 `useState` (`tools/codeshape.py`). Files over it today are a baseline that may only shrink. | check |
+| C-21 | Code that is replaced is deleted in the same change, with its tests and its doc mentions. No file or export only tests reach, no `dependencies` entry nothing imports (`codeshape.py` `dead`/`exports`/`deps`), no `console.log`/`console.debug` in app code, no `TODO`/`FIXME` without a backlog id: `TODO(FE-1-e)`. | check |
+| C-22 | A comment says *why* — the rule, the case or the id it comes from — never what the next line plainly does. Every export of a `lib/`, `_lib/` or service module has a one-line doc. No commented-out code. A file does one job: a page is thin, its view is in `_components`, its state in `_hooks`, its pure logic in `_lib`; a controller is thin over a service. | review |
+| C-23 | A name says what the thing is, in the product's words (`grant`, `tenant`, `panel`, not `data`, `info`, `item2`); it carries its unit (`timeoutMs`, `sizeBytes`, `amountMinor`); a boolean reads as a question (`isOwner`, `hasGrant`, `canBuy`). TypeScript: `camelCase` values, `PascalCase` types and components, `UPPER_SNAKE` module constants, files `kebab-case.ts`, components `PascalCase.tsx`, hooks `useThing.ts`. No `var`. | check |
+| C-24 | Types are honest: no `any`, no `as unknown as`, no non-null `!`, no `@ts-ignore`/`@ts-nocheck`. Outside input is `unknown` until zod parses it; a `switch` over a union ends in `assertNever`. | check |
+| C-25 | An error is handled once and on purpose: no empty `catch`, a caught error is converted, rethrown or logged with context — never dropped; a promise is awaited or marked `void` with a reason; what the user reads is a locale key. | check |
+| C-26 | Config is read only in the app's validated env module (`env.validation.ts`, `site-pwa/src/env.ts`); everything else imports the typed value. | check |
+| C-27 | One home per need (the table in C-27). The second copy is extracted, not pasted: `codeshape.py` `dupes` fails on a pasted block, `smells` on a bypassed home (`raw-fetch`, `raw-storage`). | check |
+| C-28 | Data access is bounded: no query per loop iteration, every list paged with a maximum, select what is used, an index ships with a new filter or sort on a growing table, slow work goes to a queue, every outside call has a timeout and a capped retry, every cache key a TTL. | review |
+| C-29 | A write that may run twice is safe twice (a dedupe key or a unique constraint); a change across rows is one transaction; read-modify-write is a conditional update; tenant data goes through `tenantTransaction`/`withTenant`; an event leaves through the outbox; a transaction makes no outside call and locks rows in one order. | review |
+| C-30 | React renders from minimal state: derive instead of mirroring, an effect only syncs with something outside React and cleans up, list keys are ids, an `eslint-disable` says why after ` -- `. Server components by default; heavy client code is a dynamic import. | check |
+| C-31 | Panel styling is theme tokens and logical sides: no hex colour in a component, no `ml-`/`mr-`/`left-`/`text-left`, so RTL and LTR both work; contrast per `contract.ux.md`. | check |
+| C-32 | Every route authorises on the server; input is validated at the edge; no `$queryRawUnsafe`/`$executeRawUnsafe`, no `dangerouslySetInnerHTML` (the theme scripts excepted), no `eval`, no key material in code, no `Math.random` in the backend. | check |
+| C-33 | A bug fix starts with a spec that fails on the bug. Specs test behaviour through the public surface, use fake timers not sleeps, and never ship `.only` / `.skip`. | check |
+| C-34 | One library per job. A new dependency is asked for first, with what it replaces and its size; an unused one is removed (`codeshape.py` `deps`). Lockfiles are committed; a critical advisory is its own row, ahead of feature work. | check |
+| C-35 | A function does one thing: about 50 lines at most, at most 3 positional parameters (more is an options object), nesting at most 3 (return early), no boolean flag parameter, no nested ternary. | review |
+| C-36 | Go: `gofmt`/`go vet` clean; `context.Context` is the first parameter of anything that does I/O; errors are wrapped with `%w` and returned, not logged and dropped; `panic` only for a broken invariant, with its reason; every goroutine is stoppable and waited for, fan-out is bounded, shared state has one guard and `-race` runs on it. | review |
+| C-37 | An API change is backwards compatible until every consumer moved: add a field, never rename or retype one in place — queue messages and outbox events included; the unit's `contract.md` changes in the same commit. Time is ISO-8601 UTC on the wire and in the database, zoned only for display (`_lib/datetime.ts`, `shared-core/lib/time`). | review |
+| C-38 | A log line says what happened, to which ids, at the right level, through the app's logger (Nest `Logger` with the class name; `console.info`/`warn`/`error` in Next server code). Never a token, password, OTP, card or full phone number. | review |
+| C-39 | A schema change ships in steps: add, move every reader and writer, then remove. A destructive statement (drop, rename, retype) carries `-- contract: <row id>` naming the row that moved the readers; an applied migration is never edited; a new tenant table gets its RLS policy in the same migration. | check |
+| C-40 | A screen works for every reader: controls are kit primitives or native `button`/`a` (never a clickable `div`), an icon-only control has an `aria-label`, an image has `alt` (`""` when decorative), state is never shown by colour alone, motion honours reduced motion. | check |
 
 ---
 
@@ -223,7 +180,80 @@ except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.clau
 message: write the comment in English (C-01)
 ```
 
----
+## C-02 — money is `Decimal` in its row's currency, balances are ledger-derived
+
+**Rule.** A monetary value is stored once, as `Decimal`, and its row records the
+currency it is in: `currencyCode`, NOT NULL with no default, so a writer names it
+(ADR-0098 part 3, amending ADR-0002's single base currency). A row's currency is
+never derived from its tenant, whose currency may change. A ledger row is in its
+wallet's currency. `payment_transaction`'s gateway receipt (`amountReceivedMinor` + `receivedCurrency`, D-32) is evidence of what arrived, never credited as is — `amountCredited` is in the row's `currencyCode`. A wallet-style
+`cachedBalance` is never written outside the same transaction that appends the
+proving ledger row.
+
+**Why.** Storing an amount in more than one currency, or trusting a cached
+balance as truth, guarantees the two copies drift — and the drift is discovered
+as a refund or a payout that does not reconcile, usually months later. See
+ADR-0002 for the full reasoning and the units it binds.
+
+**Half of it is a check.** A float is the one money bug a regex can see: a
+money-named column declared `Float`, or `parseFloat` in backend code (an amount
+is read with `new Decimal(x)`; an integer of minor units is `BigInt`, which is
+not a float). None existed on 2026-10-13, so the check holds that. Whether a
+`cachedBalance` was written inside its ledger transaction needs the
+transaction boundary, not a regex — that half stays in review.
+
+```check C-02
+forbid: ^\s*\w*([Aa]mount|[Pp]rice|[Bb]alance|[Cc]ost|[Ff]ee)\w*\s+Float\b
+in: txnet-backend/prisma/domains/*.prisma
+message: store money as Decimal with its currencyCode, or BigInt minor units — never Float (C-02, ADR-0002)
+```
+
+```check C-02
+forbid: \bparseFloat\(
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/**/*.spec.ts
+message: read a number as Decimal (money) or Number.parseInt / Number (counts) — a float rounds money silently (C-02)
+```
+
+## C-03 — Redis keys go through `RedisKeys` only
+
+**Rule.** Every Redis command's key argument is built via `RedisKeys.*` (Node)
+or the equivalent Go builder in `auth-handler`. A raw template-literal key
+passed straight to a Redis call is a violation.
+
+**Why.** `REDIS_KEYSPACE_VERSION` exists so the entire keyspace can be
+abandoned at once (a forced logout of every session) by bumping one value. That
+only works if every key is actually built through the shared prefix — a
+hand-written key string silently escapes the version bump and the namespace,
+and now "log everyone out" quietly leaves sessions alive.
+
+```ts
+// wrong — escapes RedisKeys and the namespace prefix
+await this.redis.set(`otp:code:${purpose}:${phone}`, hash);
+
+// right
+await this.redis.set(RedisKeys.otpCode(purpose, phone), hash);
+```
+
+**Two check blocks, one per language.** The Go gateway once concatenated
+`h.keyPrefix + "session:" + id` inline, where the TypeScript-only check could
+not see it; F-076 built `internal/cache/keys.go` and the second block keeps it
+the only builder. Specs are not excepted: they are the files most likely to
+hand-write a key while asserting one.
+
+```check C-03
+forbid: redis\.(get|set|del|expire|incr|decr|hset|hget|hdel|sadd|srem|exists)\(\s*`
+in: txnet-backend/**/*.ts
+except: txnet-backend/shared-core/src/lib/redis/**, txnet-backend/**/redis.keys.ts, txnet-backend/**/redis-fixture.ts
+message: build the key through RedisKeys.* (redis.keys.ts) — never a raw template-literal key (C-03)
+```
+
+```check C-03
+forbid: keyPrefix\s*\+
+in: auth-handler/**/*.go
+except: auth-handler/internal/cache/keys.go
+message: build the key through cache.SessionKey (internal/cache/keys.go) — never concatenate the keyspace prefix by hand (C-03)
+```
 
 ## C-04 — a boundary-crossing name is declared once and imported
 
@@ -283,8 +313,6 @@ except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/gene
 message: import the name from @/generated/wire (C-04) — it is generated from contracts/http/wire.json; add a name there, then run python3 tools/wire-gen.py
 ```
 
----
-
 ## C-05 — a rate-limit bucket comes from the registry
 
 **Rule.** The `<bucket>` segment of `ratelimit:<tenantId>:<bucket>:<subject>` is
@@ -325,8 +353,6 @@ except: txnet-backend/**/*.spec.ts
 message: build the bucket with rateLimitBucketKey(RateLimitBucket.X, subject) (C-05) — a bare bucket string is a key segment nothing checks
 ```
 
----
-
 ## C-06 — a panel i18n key comes from the generated constants
 
 **Rule.** In `site-pwa`, the key passed to `t(namespace, key)` is a generated
@@ -336,10 +362,7 @@ never a string literal.
 **Why.** Both locale clients return the key itself when it is missing and never
 throw, so a typo or a key renamed in `locales/` renders as a raw dot path on a
 real screen with every suite green. A generated constant turns that into a
-compile error at the call site. F-083 migrated the last static literal sites and
-deleted the twenty keys nothing reached, so this block is green from the day it
-exists — added earlier, it would have been red for three sessions and learned to
-be ignored.
+compile error at the call site.
 
 ```tsx
 // wrong — renders "accounts.addd" to the user, compiles fine
@@ -360,8 +383,6 @@ in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx
 except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/generated/**
 message: pass a generated constant from @/generated/i18n-keys as the key (C-06) — a literal key that is wrong renders as the raw key and fails nothing
 ```
-
----
 
 ## C-07 — a backend i18n key comes from the generated constants
 
@@ -409,8 +430,6 @@ except: txnet-backend/**/*.spec.ts, txnet-backend/*-e2e/**, txnet-backend/shared
 message: pick the key from an exhaustive Record over the union, or botLinkMessageKey() for a value from HTTP (C-07) — a spliced key compiles whatever the union gains
 ```
 
----
-
 ## C-08 — a routing key is declared once, in shared-core
 
 **Rule.** `OutboxEventType.*`, `automationTickRoutingKey()`,
@@ -450,8 +469,6 @@ except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/gene
 message: import RealtimeEvents from @/generated/wire (C-08) — generated from contracts/realtime/events.json
 ```
 
----
-
 ## C-09 — a closed set of values is declared once
 
 **Rule.** A zod schema for a value from a closed set derives from its one
@@ -472,8 +489,6 @@ in: txnet-backend/**/*.ts
 except: txnet-backend/**/*.spec.ts, txnet-backend/**/env.validation.ts, txnet-backend/*-e2e/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**
 message: derive the schema from the enum or as-const tuple (C-09) — z.nativeEnum(PrismaEnum) or z.enum(TUPLE)
 ```
-
----
 
 ## C-10 — a panel route comes from `lib/routes.ts`
 
@@ -929,12 +944,22 @@ they are expensive to retrofit because callers come to rely on the shape.
   version } })`, an atomic increment, a Lua script in Redis), never read, then
   compute, then write.
 - Tenant data is read and written inside `tenantTransaction` / `withTenant`; a
-  bare client on an RLS table sees nothing and is refused (see memory of
-  2026-09).
+  bare client on an RLS table sees nothing and is refused
+  (`docs/platform/tenant-context/contract.md`). A spec with a fake client
+  cannot see this; a new tenant query is run once against the dev database.
 - Money moves only by appending a ledger row (C-02).
+- A transaction is short and touches only the database: no HTTP call, gateway
+  call, broker publish or sleep while it is open. The call goes before it, or
+  after it through the outbox. A transaction held open on a slow provider
+  holds its row locks and a pool connection for as long as the provider takes.
+- Rows are locked in one order everywhere (by id, parent before child), so two
+  transactions never wait on each other. `SELECT … FOR UPDATE` is for the case
+  a conditional update cannot express, and names it in a comment.
 
 **Why.** Queues redeliver, users double-click, gateways call back twice. Each
-of these bugs passes every spec that sends one request.
+of these bugs passes every spec that sends one request. The lock rules are the
+same bugs under load: a deadlock or an exhausted pool appears at a hundred
+resellers, never on a developer's machine.
 
 ## C-30 — React renders from minimal state
 
@@ -1037,9 +1062,20 @@ naming what it replaces, its size and its maintenance. One that nothing imports
 fails `codeshape.py` `deps`; one needed without an import is in `ALLOW_DEPS`
 with its reason.
 
+- Versions are locked: the lockfile (`package-lock.json`, `go.sum`) is
+  committed and changes only in a change that meant to change a dependency.
+- A dependency with a published critical or high advisory that reaches our
+  code (a framework, an HTTP, auth or parsing library) is upgraded as its own
+  backlog row, ahead of feature work. `npm audit --omit=dev` and
+  `govulncheck ./...` are read when a dependency changes.
+- One major version per library across the repo: `coinsite` and `site-pwa`
+  run the same Next major, so one advisory has one fix.
+
 **Why.** Two libraries for one job means two behaviours, two upgrade paths and
 two places a security advisory lands. On 2026-10-13 the panel carried 16
-packages it never imported.
+packages it never imported. The 2026-09 host compromise came in through a
+known Next.js advisory on a version `coinsite` had not upgraded (FE-1-k):
+an advisory is an incident that has not happened yet.
 
 ## C-35 — a function does one thing
 
@@ -1067,8 +1103,21 @@ decides; a handler logs once. `panic` only for a broken invariant, with a
 message naming it. `_ = f()` only on a response write after the status is sent,
 with a comment. Shared names come from their declaration (C-04, C-03).
 
+- Every goroutine has an owner that can stop it: it takes a `ctx`, returns
+  when `ctx.Done()` closes, and the owner waits for it (`errgroup`,
+  `sync.WaitGroup`) on shutdown. No `go f()` whose end nobody waits for.
+- Work fanned out over a list a caller controls is bounded (a worker pool or
+  `errgroup.SetLimit`), never one goroutine per item.
+- State shared between goroutines is behind one `sync.Mutex` declared beside
+  the fields it guards, or owned by one goroutine and reached by channel.
+  `go test -race` runs on a package that starts goroutines.
+- Every outbound `http.Client` has a `Timeout`; `http.DefaultClient` is not
+  used (C-28).
+
 **Why.** The Go services sit on the hot path (ForwardAuth, metering); an error
-dropped there is an outage nobody can trace.
+dropped there is an outage nobody can trace. A goroutine nobody stops is a
+leak that grows with traffic, and a data race passes every test that does not
+run with `-race`.
 
 ## C-37 — an API change does not break its consumers
 
@@ -1080,9 +1129,15 @@ dropped there is an outage nobody can trace.
   display, through `_lib/datetime.ts` / `shared-core/src/lib/time`.
 - Money on the wire is a decimal string with its currency code (C-02).
 - An error response carries a locale key, never prose.
+- A queue message and an outbox event are an API too: a consumer ignores
+  fields it does not know, a producer only adds fields, and a payload whose
+  meaning changes gets a new event type rather than a changed one (C-08). A
+  message already in a queue during a deploy is read by the new consumer.
+- A database column follows the same rule, in steps (C-39).
 
 **Why.** The panel, the bot and the services deploy separately; a breaking
-change lands as a blank page in whichever deploys second.
+change lands as a blank page in whichever deploys second — and a message
+queued before the deploy is consumed after it.
 
 ## C-38 — a log line can be acted on
 
@@ -1095,3 +1150,73 @@ number or full phone number; mask what identifies a person.
 
 **Why.** On a multi-tenant platform a log is read during an incident, by
 someone who did not write the code, about a tenant they do not know.
+
+## C-39 — a schema change ships in steps
+
+**Rule.**
+- A change that would break code still running — dropping or renaming a
+  column or table, changing a type, making an existing column `NOT NULL` — is
+  done as expand, migrate, contract:
+  1. **expand** — add the new shape beside the old; code writes both (or the
+     new one and a backfill fills it);
+  2. **migrate** — every reader and writer moves to the new shape, in its own
+     change, across every service that reads the table;
+  3. **contract** — a later migration removes the old shape. Each destructive
+     line ends `-- contract: <row id>`, naming the row that finished step 2.
+- `NOT NULL` on a column with rows: add it nullable, backfill, then set it.
+- A migration that has been committed is never edited — on any machine it may
+  already be applied, and `prisma migrate` then refuses or diverges. A mistake
+  is fixed by the next migration.
+- A table that carries `tenantId` gets RLS enabled, forced and its policy in
+  the migration that creates it (`docs/platform/tenant-context/contract.md`;
+  `rls-coverage.spec.ts` fails without it).
+- An index on a table that already holds production data is built so that it
+  does not block writes for the length of the build, in a migration of its
+  own; one that grows with users or time ships with the filter it serves
+  (C-28).
+- The migration's name says what changed in product words
+  (`a_grant_remembers_its_days`), like a commit subject.
+
+**Why.** Services deploy one by one, and during a rolling deploy the old and
+new code run against the same database at once. A column dropped in the same
+release that stops reading it is a 500 on every instance that has not
+restarted yet — and in production there is no `migrate reset`. 69 of the first
+315 migrations dropped or renamed in place, which was safe only because there
+was no production data and no rolling deploy yet. Those are excepted by date;
+from 2026-10-14 the marker is what makes the step a decision.
+
+```check C-39
+forbid: ^(?!.*--\s*contract:\s*[A-Z]+-[\w-]+).*\b(DROP\s+(COLUMN|TABLE)|RENAME\s+(COLUMN|TO)|ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE)\b
+in: txnet-backend/prisma/domains/migrations/**/*.sql
+except: txnet-backend/prisma/domains/migrations/202609*/**, txnet-backend/prisma/domains/migrations/2026100*/**, txnet-backend/prisma/domains/migrations/20261010*/**, txnet-backend/prisma/domains/migrations/20261011*/**, txnet-backend/prisma/domains/migrations/20261012*/**, txnet-backend/prisma/domains/migrations/20261013*/**
+message: expand first, move the readers, then drop — end the destructive line with `-- contract: <row id>` naming the row that moved them (C-39)
+```
+
+## C-40 — a screen works for every reader
+
+**Rule.**
+- A control is a kit primitive (C-13) or a native `<button>` / `<a>`. A
+  clickable `<div>`, `<span>` or `<li>` cannot be reached by keyboard and is
+  not announced; a backdrop that closes on click is the kit `Dialog` / `Sheet`.
+- An icon-only control has an `aria-label` (the kit `IconButton` requires it),
+  from a locale key (C-19).
+- An `<img>` / `<Image>` has `alt`: what it shows, or `alt=""` when it is
+  decoration.
+- A state is never told by colour alone: a status has its word or icon too
+  (`StatusPill`), so it reads in every theme and to a colour-blind reader.
+- Motion honours `prefers-reduced-motion` (`contract.ux.md` M3); focus is
+  visible (K2) and returns to the trigger when an overlay closes (K7).
+- Text meets the contrast `contract.ux.md` sets, in all three themes and under
+  a tenant's brand colour.
+
+**Why.** A reseller's customers are whoever buys from them — on a phone, with
+a screen reader, with a keyboard, in a bright street. The kit already does the
+hard part; these are the ways a screen built beside it undoes it. Two
+hand-rolled backdrops are the `except` today and leave with FE-1-m.
+
+```check C-40
+forbid: ^(?!\s*(//|\*|/\*|\{/\*)).*(<(img|Image)\b(?![^>]*\balt=)[^>]*>|<(div|span|li|td|tr|p)\b[^>]*\bonClick=)
+in: site-pwa/src/**/*.tsx, coinsite/src/**/*.tsx
+except: site-pwa/src/**/*.test.tsx, site-pwa/src/app/(panel)/services/_components/QrDialog.tsx, site-pwa/src/app/(panel)/_components/guide/GuideList.tsx
+message: use a kit primitive or a native button/a, and give an image its alt (C-40, contract.ux.md K3–K7)
+```

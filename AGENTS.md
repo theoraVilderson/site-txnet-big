@@ -372,7 +372,7 @@ agent and every person on the team:** code is written so the next person can
 pick it up without asking — readable, not repeated, nothing dead, nothing
 hardcoded, no hidden bug and no bottleneck. **Before the first line of code in
 any session, read "The short version" at the top of `docs/CONVENTIONS.md`**
-(~60 lines; C-01 … C-38 behind it, looked up by id). Most of it is held by
+(~80 lines; C-01 … C-40 behind it, looked up by id). Most of it is held by
 `conventions.py` and `codeshape.py`, not by memory:
 
 - **No hardcoding.** A language comes from the locale meta, never `"fa"`/`"en"`

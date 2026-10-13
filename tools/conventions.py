@@ -58,7 +58,7 @@ def parse():
     declared = []
     for ln in text.splitlines():
         m = re.match(r"^\|\s*(C-\d{2,3})\s*\|", ln.strip())
-        if m and "_" not in ln:
+        if m:
             declared.append(m.group(1))
 
     checks = []
@@ -85,6 +85,14 @@ def parse():
             continue
         checks.append(c)
     return checks, declared
+
+
+def held_by_codeshape():
+    """C-nn ids the table marks `check` that have no block here: codeshape.py's
+    per-file counts hold those, so they are not prose-only."""
+    return {m.group(1) for m in re.finditer(
+        r"^\|\s*(C-\d{2,3})\s*\|.*\|\s*check\s*\|\s*$",
+        CONV.read_text(encoding="utf-8"), re.M)}
 
 
 _ALL_FILES = None
@@ -181,10 +189,12 @@ def main() -> int:
         checked = {c["id"] for c in checks}
         declared = sorted(set(declared) | checked)
         print(f"{len(declared)} convention(s) declared, {len(checked)} mechanically checked\n")
+        held = held_by_codeshape()
         for cid in declared:
-            mark = "check" if cid in checked else "review only"
+            mark = ("check" if cid in checked
+                    else "codeshape.py" if cid in held else "review only")
             print(f"  {cid}   {mark}")
-        unchecked = [c for c in declared if c not in checked]
+        unchecked = [c for c in declared if c not in checked and c not in held]
         if unchecked:
             print(f"\n{len(unchecked)} convention(s) rest on the agent reading and "
                   f"obeying prose.\nThat works most of the time. If one of them "
@@ -214,7 +224,8 @@ def main() -> int:
         if len(hits) > MAX_REPORT:
             print(f"          … {len(hits) - MAX_REPORT} more")
 
-    unchecked = len(set(declared)) - len({c["id"] for c in checks}) if not only else 0
+    held = {c["id"] for c in checks} | held_by_codeshape()
+    unchecked = len(set(declared) - held) if not only else 0
     print(f"\n{total} violation(s)"
           + (f"   ({unchecked} convention(s) not mechanically checked — "
              f"`--list`)" if unchecked > 0 else ""))
