@@ -30,7 +30,36 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { PANEL_AI, PANEL_CATALOG, PANEL_COUPONS, PANEL_DEPOSIT, PANEL_FINANCIAL, PANEL_GATEWAYS, PANEL_GUIDES, PANEL_HOME, PANEL_LOTTERIES, PANEL_LOTTERIES_MANAGE, PANEL_MANUAL_PAYMENTS, PANEL_MY_SERVICES, PANEL_RESELLER_LIMITS, PANEL_RESELLER_PACKAGES, PANEL_RESELLER_PURCHASE, PANEL_RESELLERS, PANEL_SETTINGS, PANEL_SHOP, PANEL_SUPPORT, PANEL_SUPPORT_INBOX, PANEL_SUPPORT_SETTINGS, PANEL_SYSTEMS, PANEL_TENANT_BILLING, PANEL_GROUPS, PANEL_WHEEL, PANEL_WHEEL_SETTINGS, PANEL_USERS, panelSectionPath } from "@/lib/routes";
+import {
+  PANEL_AI,
+  PANEL_CATALOG,
+  PANEL_COUPONS,
+  PANEL_DEPOSIT,
+  PANEL_FINANCIAL,
+  PANEL_GATEWAYS,
+  PANEL_GUIDES,
+  PANEL_HOME,
+  PANEL_LOTTERIES,
+  PANEL_LOTTERIES_MANAGE,
+  PANEL_MANUAL_PAYMENTS,
+  PANEL_MY_SERVICES,
+  PANEL_RESELLER_LIMITS,
+  PANEL_RESELLER_PACKAGES,
+  PANEL_RESELLER_PURCHASE,
+  PANEL_RESELLERS,
+  PANEL_SETTINGS,
+  PANEL_SHOP,
+  PANEL_SUPPORT,
+  PANEL_SUPPORT_INBOX,
+  PANEL_SUPPORT_SETTINGS,
+  PANEL_SYSTEMS,
+  PANEL_TENANT_BILLING,
+  PANEL_GROUPS,
+  PANEL_WHEEL,
+  PANEL_WHEEL_SETTINGS,
+  PANEL_USERS,
+  panelSectionPath,
+} from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
 
@@ -166,10 +195,28 @@ export type VisibleMenuEntry = (VisibleMenuLink | VisibleMenuGroup) & Placed;
  */
 export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // ── account ──
-  { section: "account", id: "dashboard", label: M.dashboard, icon: Home, href: PANEL_HOME },
-  { section: "account", id: "buy", label: M.buy, icon: ShoppingCart, href: PANEL_SHOP },
+  {
+    section: "account",
+    id: "dashboard",
+    label: M.dashboard,
+    icon: Home,
+    href: PANEL_HOME,
+  },
+  {
+    section: "account",
+    id: "buy",
+    label: M.buy,
+    icon: ShoppingCart,
+    href: PANEL_SHOP,
+  },
   // F-502-s
-  { section: "account", id: "my-services", label: M.myServices, icon: Globe, href: PANEL_MY_SERVICES },
+  {
+    section: "account",
+    id: "my-services",
+    label: M.myServices,
+    icon: Globe,
+    href: PANEL_MY_SERVICES,
+  },
   {
     section: "account",
     id: "wallet",
@@ -177,18 +224,46 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     icon: Wallet,
     children: [
       // F-093-d
-      { id: "financial-history", label: M.financialHistory, icon: ReceiptText, href: PANEL_FINANCIAL },
+      {
+        id: "financial-history",
+        label: M.financialHistory,
+        icon: ReceiptText,
+        href: PANEL_FINANCIAL,
+      },
       // F-093-e
-      { id: "deposit", label: M.deposit, icon: CreditCard, href: PANEL_DEPOSIT },
+      {
+        id: "deposit",
+        label: M.deposit,
+        icon: CreditCard,
+        href: PANEL_DEPOSIT,
+      },
     ],
   },
   // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel
   // runs today and why this user may not spin it.
-  { section: "account", id: "wheel", label: M.wheel, icon: Gift, href: PANEL_WHEEL },
+  {
+    section: "account",
+    id: "wheel",
+    label: M.wheel,
+    icon: Gift,
+    href: PANEL_WHEEL,
+  },
   // F-707-n. Every signed-in user: billing shows each user only the lotteries of its groups.
-  { section: "account", id: "lotteries", label: M.lotteries, icon: Ticket, href: PANEL_LOTTERIES },
+  {
+    section: "account",
+    id: "lotteries",
+    label: M.lotteries,
+    icon: Ticket,
+    href: PANEL_LOTTERIES,
+  },
   // F-033-o. Every signed-in user: support answers each with their own threads only.
-  { section: "account", id: "support", label: M.support, icon: Headphones, href: PANEL_SUPPORT },
+  {
+    section: "account",
+    id: "support",
+    label: M.support,
+    icon: Headphones,
+    href: PANEL_SUPPORT,
+  },
   // F-019-i. The other side of the reseller product: any user of the platform
   // owner's tenant may buy a reseller, so this one names no permission key —
   // only the tenant type, which is the service's own `not_platform_user`.
@@ -203,28 +278,83 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     tenantTypes: ["platform_owner"],
     hiddenFrom: ["tenantOwner", "resellerOwner"],
   },
-  { section: "account", id: "tutorials", label: M.tutorials, icon: BookOpen, href: null },
+  {
+    section: "account",
+    id: "tutorials",
+    label: M.tutorials,
+    icon: BookOpen,
+    href: null,
+  },
 
   // ── sales ──
   // F-026-f. The permission hides it, billing scopes what it lists (D-34).
-  { section: "sales", id: "catalog", label: M.catalog, icon: Package, href: PANEL_CATALOG, requires: ["catalog.manage"] },
+  {
+    section: "sales",
+    id: "catalog",
+    label: M.catalog,
+    icon: Package,
+    href: PANEL_CATALOG,
+    requires: ["catalog.manage"],
+  },
   // F-502-g. The permission hides it, billing scopes what it lists (D-33).
-  { section: "sales", id: "coupons", label: M.coupons, icon: TicketPercent, href: PANEL_COUPONS, requires: ["coupon.manage"] },
+  {
+    section: "sales",
+    id: "coupons",
+    label: M.coupons,
+    icon: TicketPercent,
+    href: PANEL_COUPONS,
+    requires: ["coupon.manage"],
+  },
   // F-038-j2. Every tenant has its own AI: the permission hides it, and ai
   // answers each tenant its own (F-038-j1).
-  { section: "sales", id: "ai", label: M.ai, icon: Sparkles, href: PANEL_AI, requires: ["ai.manage"] },
+  {
+    section: "sales",
+    id: "ai",
+    label: M.ai,
+    icon: Sparkles,
+    href: PANEL_AI,
+    requires: ["ai.manage"],
+  },
   // F-707-f. Every tenant runs its own wheel: the permission hides it, RLS
   // answers each tenant its own (F-707-c).
-  { section: "sales", id: "wheel-settings", label: M.wheelSettings, icon: Dices, href: PANEL_WHEEL_SETTINGS, requires: ["engagement.manage"] },
+  {
+    section: "sales",
+    id: "wheel-settings",
+    label: M.wheelSettings,
+    icon: Dices,
+    href: PANEL_WHEEL_SETTINGS,
+    requires: ["engagement.manage"],
+  },
   // F-707-o. The same permission as the wheel's settings; RLS keeps each tenant to its own lotteries.
-  { section: "sales", id: "lottery-settings", label: M.lotterySettings, icon: Ticket, href: PANEL_LOTTERIES_MANAGE, requires: ["engagement.manage"] },
+  {
+    section: "sales",
+    id: "lottery-settings",
+    label: M.lotterySettings,
+    icon: Ticket,
+    href: PANEL_LOTTERIES_MANAGE,
+    requires: ["engagement.manage"],
+  },
 
   // ── finance ──
   // F-102-d. The permission hides it; what the page then shows is decided
   // by the tenant type, server-side (D-31).
-  { section: "finance", id: "gateways", label: M.gateways, icon: Landmark, href: PANEL_GATEWAYS, requires: ["gateway.manage"] },
+  {
+    section: "finance",
+    id: "gateways",
+    label: M.gateways,
+    icon: Landmark,
+    href: PANEL_GATEWAYS,
+    requires: ["gateway.manage"],
+  },
   // F-093-n. Like gateways: the permission hides it, billing scopes what it lists.
-  { section: "finance", id: "manual-payments", label: M.manualPayments, icon: ShieldCheck, href: PANEL_MANUAL_PAYMENTS, requires: ["payment.confirm_manual"] },
+  {
+    section: "finance",
+    id: "manual-payments",
+    label: M.manualPayments,
+    icon: ShieldCheck,
+    href: PANEL_MANUAL_PAYMENTS,
+    requires: ["payment.confirm_manual"],
+  },
   // F-019-d. A reseller's own balance with the platform; the service admits
   // its owner too, who may hold no role that grants the permission (F-019-f).
   {
@@ -247,11 +377,25 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   // `ResellerAccess.…IncludingPlatform` is the door, and a seat it refuses reads
   // as that page's refusal. The owner signs in to the platform (ADR-0059), so
   // their reseller's users stay behind its console.
-  { section: "people", id: "users", label: M.users, icon: UserCog, href: () => PANEL_USERS, requires: ["user.read"] },
+  {
+    section: "people",
+    id: "users",
+    label: M.users,
+    icon: UserCog,
+    href: () => PANEL_USERS,
+    requires: ["user.read"],
+  },
   // F-114-m, GR-1-f. Every tenant has its own groups: the permission hides it,
   // and auth-service answers each tenant its own (F-114-j). The one place the
   // panel gives access (ADR-0139 (1)): Team and Roles left the menu for it.
-  { section: "people", id: "groups", label: M.groups, icon: Users, href: PANEL_GROUPS, requires: ["user_group.manage"] },
+  {
+    section: "people",
+    id: "groups",
+    label: M.groups,
+    icon: Users,
+    href: PANEL_GROUPS,
+    requires: ["user_group.manage"],
+  },
   // F-018-k. Administration of other tenants is the platform owner's alone: a
   // platform key counts only on the platform's tenant (ADR-0135), so the tenant type gates it too.
   // Packages (F-118-n5) and limits (F-019-r) sit under the same gate.
@@ -264,25 +408,77 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     requiresAnyOf: ["platform.tenant.manage", "platform.support"],
     tenantTypes: ["platform_owner"],
     children: [
-      { id: "reseller-list", label: M.resellerList, icon: List, href: PANEL_RESELLERS },
-      { id: "reseller-packages", label: M.resellerPackages, icon: Boxes, href: PANEL_RESELLER_PACKAGES, requires: ["platform.tenant.manage"] },
-      { id: "reseller-limits", label: M.resellerLimits, icon: Gauge, href: PANEL_RESELLER_LIMITS, requires: ["platform.tenant.manage"] },
+      {
+        id: "reseller-list",
+        label: M.resellerList,
+        icon: List,
+        href: PANEL_RESELLERS,
+      },
+      {
+        id: "reseller-packages",
+        label: M.resellerPackages,
+        icon: Boxes,
+        href: PANEL_RESELLER_PACKAGES,
+        requires: ["platform.tenant.manage"],
+      },
+      {
+        id: "reseller-limits",
+        label: M.resellerLimits,
+        icon: Gauge,
+        href: PANEL_RESELLER_LIMITS,
+        requires: ["platform.tenant.manage"],
+      },
     ],
   },
 
   // ── infra ──
   // F-027-ad. The platform's own panels. billing refuses anyone but the
   // platform owner (`panelScopeOf`), so the tenant type gates it here too.
-  { section: "infra", id: "systems", label: M.systems, icon: Server, href: PANEL_SYSTEMS, requires: ["platform.node.manage"], tenantTypes: ["platform_owner"] },
+  {
+    section: "infra",
+    id: "systems",
+    label: M.systems,
+    icon: Server,
+    href: PANEL_SYSTEMS,
+    requires: ["platform.node.manage"],
+    tenantTypes: ["platform_owner"],
+  },
 
   // ── support ──
   // F-033-p. RLS keeps an agent to its own tenant's threads; the permission hides the page.
-  { section: "support", id: "support-inbox", label: M.supportInbox, icon: Inbox, href: PANEL_SUPPORT_INBOX, requires: ["support.agent"] },
-  { section: "support", id: "support-settings", label: M.supportSettings, icon: SlidersHorizontal, href: PANEL_SUPPORT_SETTINGS, requires: ["support.manage"] },
+  {
+    section: "support",
+    id: "support-inbox",
+    label: M.supportInbox,
+    icon: Inbox,
+    href: PANEL_SUPPORT_INBOX,
+    requires: ["support.agent"],
+  },
+  {
+    section: "support",
+    id: "support-settings",
+    label: M.supportSettings,
+    icon: SlidersHorizontal,
+    href: PANEL_SUPPORT_SETTINGS,
+    requires: ["support.manage"],
+  },
   // F-414-d. tenant-service decides whose guides: the platform's for its own admin, else the tenant's.
-  { section: "support", id: "guides", label: M.guides, icon: BookMarked, href: PANEL_GUIDES, requires: ["guide.manage"] },
+  {
+    section: "support",
+    id: "guides",
+    label: M.guides,
+    icon: BookMarked,
+    href: PANEL_GUIDES,
+    requires: ["guide.manage"],
+  },
 
-  { section: "footer", id: "settings", label: M.settings, icon: Settings, href: PANEL_SETTINGS },
+  {
+    section: "footer",
+    id: "settings",
+    label: M.settings,
+    icon: Settings,
+    href: PANEL_SETTINGS,
+  },
 ];
 
 export function isMenuGroup<T extends PanelMenuEntry | VisibleMenuEntry>(
@@ -325,11 +521,14 @@ export function visibleMenu(
   ownsReseller: boolean | null = null,
   tenantId: string | null = null,
 ): VisibleMenuEntry[] {
-  const permitted = (e: PermissionGated) => admits(e, held, tenantType, isOwner, ownsReseller);
+  const permitted = (e: PermissionGated) =>
+    admits(e, held, tenantType, isOwner, ownsReseller);
   const withPage = (l: PanelMenuLink): VisibleMenuLink | null => {
     // `self`: a reseller's session, on its own domain — the id-less address (F-061-n).
     if (typeof l.href === "function")
-      return tenantId === null ? null : { ...l, href: l.href(tenantId, tenantType === "reseller") };
+      return tenantId === null
+        ? null
+        : { ...l, href: l.href(tenantId, tenantType === "reseller") };
     return l.href === null ? null : { ...l, href: l.href };
   };
   const out: VisibleMenuEntry[] = [];
@@ -363,13 +562,21 @@ export function admits(
 ): boolean {
   const hidden =
     (e.hiddenFrom?.includes("tenantOwner") === true && isOwner) ||
-    (e.hiddenFrom?.includes("resellerOwner") === true && ownsReseller !== false);
+    (e.hiddenFrom?.includes("resellerOwner") === true &&
+      ownsReseller !== false);
   return (
     !hidden &&
-    (!e.tenantTypes || (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
+    (!e.tenantTypes ||
+      (tenantType !== null && e.tenantTypes.includes(tenantType))) &&
     ((isOwner && e.ownerSuffices === true) ||
-      (holdsEveryPermission(held, (tenantType === "reseller" ? e.resellerRequires : undefined) ?? e.requires ?? []) &&
-        (!e.requiresAnyOf || e.requiresAnyOf.some((key) => holdsEveryPermission(held, [key])))))
+      (holdsEveryPermission(
+        held,
+        (tenantType === "reseller" ? e.resellerRequires : undefined) ??
+          e.requires ??
+          [],
+      ) &&
+        (!e.requiresAnyOf ||
+          e.requiresAnyOf.some((key) => holdsEveryPermission(held, [key])))))
   );
 }
 
@@ -410,7 +617,9 @@ export interface VisibleMenuSection {
  * The sidebar draws headings only when more than one section is left — a
  * caller who sees only `account` sees none.
  */
-export function menuSections(entries: readonly VisibleMenuEntry[]): VisibleMenuSection[] {
+export function menuSections(
+  entries: readonly VisibleMenuEntry[],
+): VisibleMenuSection[] {
   return MENU_SECTIONS.map((s) => ({
     id: s.id,
     label: s.label,
@@ -419,7 +628,9 @@ export function menuSections(entries: readonly VisibleMenuEntry[]): VisibleMenuS
 }
 
 /** The entries drawn in the sidebar's footer, above logout (N1: settings). */
-export function menuFooter(entries: readonly VisibleMenuEntry[]): VisibleMenuEntry[] {
+export function menuFooter(
+  entries: readonly VisibleMenuEntry[],
+): VisibleMenuEntry[] {
   return entries.filter((e) => e.section === "footer");
 }
 
@@ -472,32 +683,64 @@ export interface MenuCrumb {
  * in the id's place, and the crumb links to the segment the path holds — the
  * tenant the page is already on, so no session is needed to draw it.
  */
-export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string): MenuCrumb[] {
+export function menuTrail(
+  entries: readonly PanelMenuEntry[],
+  pathname: string,
+): MenuCrumb[] {
   const hrefOf = (l: PanelMenuLink) => {
     if (typeof l.href !== "function") return l.href;
     // A reseller's own domain addresses it with no id at all (F-061-n).
     const self = l.href("TENANTPROBE", true);
-    if (!self.includes("TENANTPROBE") && (pathname === self || pathname.startsWith(`${self}/`))) return self;
+    if (
+      !self.includes("TENANTPROBE") &&
+      (pathname === self || pathname.startsWith(`${self}/`))
+    )
+      return self;
     // An address with no id at all (`/users`): it is the path or it is not.
     if (!l.href("TENANTPROBE", false).includes("TENANTPROBE")) return null;
     // Letters only, so a path builder that encodes its id hands the probe back unchanged.
     const [before, after] = l.href("TENANTPROBE", false).split("TENANTPROBE");
-    const escape = (part: string) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return pathname.match(new RegExp(`^${escape(before)}[^/]+${escape(after)}(?=/|$)`))?.[0] ?? null;
+    const escape = (part: string) =>
+      part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return (
+      pathname.match(
+        new RegExp(`^${escape(before)}[^/]+${escape(after)}(?=/|$)`),
+      )?.[0] ?? null
+    );
   };
   const trails: { href: string; trail: MenuCrumb[] }[] = [];
   for (const entry of entries) {
     const placed = entry.section ?? "account";
     const section = MENU_SECTIONS.find((s) => s.id === placed);
-    const top: MenuCrumb[] = section ? [{ label: section.label, href: panelSectionPath(section.id), section: true }] : [];
+    const top: MenuCrumb[] = section
+      ? [
+          {
+            label: section.label,
+            href: panelSectionPath(section.id),
+            section: true,
+          },
+        ]
+      : [];
     if (isMenuGroup(entry)) {
       for (const child of entry.children) {
         const href = hrefOf(child);
-        if (href) trails.push({ href, trail: [...top, { label: entry.label, href: section ? panelSectionPath(section.id, entry.id) : null }, { label: child.label, href }] });
+        if (href)
+          trails.push({
+            href,
+            trail: [
+              ...top,
+              {
+                label: entry.label,
+                href: section ? panelSectionPath(section.id, entry.id) : null,
+              },
+              { label: child.label, href },
+            ],
+          });
       }
     } else {
       const href = hrefOf(entry);
-      if (href) trails.push({ href, trail: [...top, { label: entry.label, href }] });
+      if (href)
+        trails.push({ href, trail: [...top, { label: entry.label, href }] });
     }
   }
   const active = activeHref(
@@ -516,6 +759,13 @@ export function menuTrail(entries: readonly PanelMenuEntry[], pathname: string):
  * reseller route, which an impersonated token never reaches (ADR-0136),
  * whatever the person holds.
  */
-export function impersonationMenu<T extends { section?: string }>(entries: readonly T[]): T[] {
-  return entries.filter((e) => e.section === undefined || e.section === "account" || e.section === "footer");
+export function impersonationMenu<T extends { section?: string }>(
+  entries: readonly T[],
+): T[] {
+  return entries.filter(
+    (e) =>
+      e.section === undefined ||
+      e.section === "account" ||
+      e.section === "footer",
+  );
 }
