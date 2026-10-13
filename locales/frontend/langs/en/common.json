@@ -4447,15 +4447,11 @@
       "tenantInputHint": "A whole number from 0 to 1000; 0 sells none. Leave it empty to use the platform default.",
       "save": "Save",
       "saved": "Saved.",
-      "userHint": "When this user asks for more in a ticket, set their own number here. It replaces the default, higher or lower.",
+      "userHint": "Their own number is set as the “Pay-as-you-go services” restriction on their Profile tab; it replaces the default, higher or lower.",
       "userOpen": "Open now: {{open}} of {{effective}}",
       "userOwn": "This user's own number: {{count}}",
       "userFromDefault": "From the default: {{count}}",
       "userReasonShown": "Why: {{reason}}",
-      "userInput": "New number",
-      "userReason": "Reason (for example, the ticket)",
-      "userSet": "Set for this user",
-      "userRemove": "Back to the default",
       "ceiling": "The most your plan allows for one user: {{count}}"
     },
     "compensationCap": {
@@ -6127,6 +6123,7 @@
     "until": "until {{date}}",
     "keys": {
       "services_active_max": "Active services",
+      "metered_services_max": "Pay-as-you-go services",
       "configs_max": "Configs",
       "topup_categories_barred": "Top-up methods"
     },
@@ -6135,7 +6132,8 @@
       "restriction_unknown": "That restriction does not exist.",
       "restriction_value_invalid": "That value is not allowed for this restriction.",
       "restriction_not_found": "That restriction is already gone — refresh.",
-      "expiry_past": "The end has already passed — pick a later one."
+      "expiry_past": "The end has already passed — pick a later one.",
+      "restriction_above_ceiling": "Above the reseller's ceiling for this number — set a lower one."
     }
   },
   "accessHistory": {

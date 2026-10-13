@@ -8,7 +8,8 @@ import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-valida
 import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
-import { defaultTaxRate, type GatewayOffer, offeredInCurrency, offeredInThisChat, priceDeposit, selectableGateways, selectGateway, type SelectOptions } from './deposit-pricing';
+import { defaultTaxRate, type GatewayOffer, offeredInCurrency, offeredInThisChat, priceDeposit, selectableGateways, type SelectOptions } from './deposit-pricing';
+import { offeredToPayer, selectPayerGateway } from './payer-gateway';
 import { resolvePresets } from './deposit-presets';
 
 /**
@@ -140,7 +141,7 @@ export class DepositQuoteService {
     // The caller's default list, not a lender's: the amounts follow what this
     // tenant sells, whoever's gateway takes the payment.
     const { rows, tenantPresets, currencyCode } = await tenantTransaction(this.prisma, async (tx) => ({
-      rows: await selectableGateways(tx, this.crossTenant, tenant.id, options),
+      rows: await offeredToPayer(tx, await selectableGateways(tx, this.crossTenant, tenant.id, options), options.userId),
       tenantPresets: (await tx.depositSetting.findUnique({ where: { tenantId: tenant.id } }))?.presets ?? [],
       currencyCode: await operatingCurrencyOf(tx, tenant.id),
     }));
@@ -200,7 +201,7 @@ export class DepositQuoteService {
 
     const { gateway, coupons, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
       const currencyCode = await operatingCurrencyOf(tx, tenant.id);
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest, userId });
+      const gateway = await selectPayerGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest, userId });
       if (!gateway || !this.offeredHere(gateway, request.chatPlatform) || !offeredInCurrency(gateway, currencyCode)) {
         throw new DepositGatewayNotFound(gatewayId, request.source);
       }

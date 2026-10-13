@@ -1,7 +1,12 @@
 import { GatewayCategory, type Prisma } from '@prisma/client';
 
-/** A whole number from 0 to `max` — a ceiling on how many of something the person may hold. */
-type CountRestriction = { kind: 'count'; max: number };
+import type { ResellerLimitKey } from '../tenant/reseller-limits';
+
+/**
+ * A whole number from 0 to `max` — a ceiling on how many of something the
+ * person may hold. `ceiling`: a reseller limit no number set may pass (ADR-0106).
+ */
+type CountRestriction = { kind: 'count'; max: number; ceiling?: ResellerLimitKey };
 /** Some of `options`, at least one — the things the person is barred from. */
 type SetRestriction = { kind: 'set'; options: readonly string[] };
 
@@ -16,6 +21,13 @@ type SetRestriction = { kind: 'set'; options: readonly string[] };
 export const USER_RESTRICTIONS = {
   /** Services (open Grants) the person may hold at once. */
   services_active_max: { kind: 'count', max: 10_000 },
+  /**
+   * Open metered (pay-as-you-go) services — F-118-ao's own number for one
+   * person, moved here (F-030-e). Unset, the tenant's default and the
+   * platform's apply (`metered-cap.ts`); never above the reseller's
+   * `user_metered_cap_max` (F-019-n), and `MAX_METERED_CAP` is this `max`.
+   */
+  metered_services_max: { kind: 'count', max: 1000, ceiling: 'user_metered_cap_max' },
   /** Configs the person may hold across their services. */
   configs_max: { kind: 'count', max: 100_000 },
   /** Top-up methods the person may not pay with, by gateway category. */
@@ -39,6 +51,33 @@ export function restrictionValueOf(key: UserRestrictionKey, raw: unknown): UserR
   const picked = new Set(raw);
   if (picked.size !== raw.length || ![...picked].every((o) => typeof o === 'string' && rule.options.includes(o))) return null;
   return [...(picked as Set<string>)].sort();
+}
+
+/** Reads `userRestriction` only, so a service's transaction client and a spec's fake both fit. */
+type RestrictionReader = { userRestriction: { findMany(args: { where: Prisma.UserRestrictionWhereInput; select: { key: true; value: true } }): Promise<Array<{ key: string; value: Prisma.JsonValue }>> } };
+
+/**
+ * The restrictions on `userId` that hold at `now`, by key (F-030-e) — `keys`
+ * narrows the read. In the person's tenant scope: the table is strict RLS. A
+ * stored value the registry no longer reads is skipped, never guessed at.
+ */
+export async function liveRestrictionsOf(
+  tx: RestrictionReader,
+  userId: string,
+  keys?: readonly UserRestrictionKey[],
+  now: Date = new Date(),
+): Promise<Map<UserRestrictionKey, UserRestrictionValue>> {
+  const rows = await tx.userRestriction.findMany({
+    where: { userId, ...(keys ? { key: { in: [...keys] } } : {}), ...liveRestriction(now) },
+    select: { key: true, value: true },
+  });
+  const live = new Map<UserRestrictionKey, UserRestrictionValue>();
+  for (const r of rows) {
+    if (!isUserRestrictionKey(r.key)) continue;
+    const value = restrictionValueOf(r.key, r.value);
+    if (value !== null) live.set(r.key, value);
+  }
+  return live;
 }
 
 /** A restriction that holds at `now`: no expiry, or one still ahead. Every read that applies one adds it. */

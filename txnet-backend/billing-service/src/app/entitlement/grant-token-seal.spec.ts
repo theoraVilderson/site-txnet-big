@@ -86,6 +86,8 @@ describe('GrantService keeps the token it answers', () => {
     const stored = (data: Record<string, unknown>) =>
       Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === Prisma.DbNull ? null : v]));
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {

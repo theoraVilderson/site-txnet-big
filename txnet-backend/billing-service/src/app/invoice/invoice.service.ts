@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
+import { CouponChannel, GrantSource, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
 import { admitProductSale, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
-import { assertMeteredRoom } from '../entitlement/metered-cap';
+import { assertBuyerRoom } from '../entitlement/user-restrictions';
 import { assertPurchaseRoom } from '../entitlement/purchase-limits';
 import { assertPlatformGrantRoom } from '../entitlement/reseller-room';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
@@ -131,9 +131,9 @@ export class InvoiceService {
         throw new InvoiceVariantNotFound(variantId);
       }
 
-      // A metered buy past the cap is refused before an invoice exists, and
-      // again at issue under the same lock (F-118-ao).
-      if (routed?.billingMode === VariantBillingMode.metered) await assertMeteredRoom(tx, userId);
+      // A buy past the buyer's metered cap (F-118-ao) or a restriction staff set on them (F-030-e) is
+      // refused before an invoice exists, and again at issue under the same lock.
+      await assertBuyerRoom(tx, userId, { source: GrantSource.purchase, metered: routed?.billingMode === VariantBillingMode.metered });
       // ...nor past the buyer's purchases in a day, week or month (F-019-t7), told before paying and again at issue.
       await assertPurchaseRoom(tx, userId);
       // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.

@@ -25,7 +25,7 @@ const HOUR = 60 * 60 * 1000;
 
 type Row = { userId: string; tenantId: string; key: string; value: unknown; reason: string; setByUserId: string; expiresAt: Date | null; updatedAt: Date };
 
-function harness(initial: Row[] = [], options: { as?: 'owner' | 'member' } = {}) {
+function harness(initial: Row[] = [], options: { as?: 'owner' | 'member'; ceiling?: number } = {}) {
   const rows = [...initial];
   const audit: Record<string, unknown>[] = [];
   const people: Record<string, string[]> = { [AGENT]: ['support.agent', 'coupon.manage'], [BUYER]: [], [LEAD]: ['restriction.assign', 'support.agent', 'user.read'] };
@@ -43,6 +43,11 @@ function harness(initial: Row[] = [], options: { as?: 'owner' | 'member' } = {})
     userPermission: { findMany: vi.fn(async () => []) },
     userGroupMember: { findMany: vi.fn(async () => []) },
     tenant: { findUnique: vi.fn(async () => ({ ownerUserId: 'u-owner', tenantType: 'reseller' })) },
+    // ADR-0106's levels, for a key that names a reseller limit as its ceiling (F-019-n).
+    tenantSubscription: { findUnique: vi.fn(async () => null) },
+    resellerLimit: { findMany: vi.fn(async () => []) },
+    packageLimit: { findMany: vi.fn(async () => []) },
+    resellerLimitSetting: { findMany: vi.fn(async () => (options.ceiling === undefined ? [] : [{ key: 'user_metered_cap_max', value: options.ceiling }])) },
     userRestriction: {
       findMany: vi.fn(async ({ where }: { where: { userId: string } & Parameters<typeof live>[1] }) => rows.filter((r) => r.userId === where.userId && live(r, where))),
       findUnique: vi.fn(async ({ where }: { where: { userId_key: { userId: string; key: string } } }) => rows.find((r) => r.userId === where.userId_key.userId && r.key === where.userId_key.key) ?? null),
@@ -101,7 +106,7 @@ describe('a restriction on one person (F-030-d)', () => {
       expect.objectContaining({ action: 'user_restriction_set', targetEntityId: BUYER, reason: 'too many chargebacks', oldValue: undefined, newValue: expect.objectContaining({ key: 'services_active_max', value: 2 }) }),
     ]);
     expect(view.restrictions).toEqual([expect.objectContaining({ key: 'services_active_max', value: 2, by: LEAD, expiresAt: new Date(NOW.getTime() + HOUR).toISOString() })]);
-    expect(view.keys.map((k) => k.key)).toEqual(['services_active_max', 'configs_max', 'topup_categories_barred']);
+    expect(view.keys.map((k) => k.key)).toEqual(['services_active_max', 'metered_services_max', 'configs_max', 'topup_categories_barred']);
   });
 
   it('keeps a set of barred options sorted, and changes in place with the old value audited', async () => {
@@ -133,6 +138,14 @@ describe('a restriction on one person (F-030-d)', () => {
 
     await expect(h.set(BUYER, key, { value })).rejects.toEqual(expect.objectContaining({ reason }));
     expect(h.rows).toEqual([]);
+  });
+
+  it('refuses a metered number above the reseller\'s ceiling, and writes nothing (F-019-n, F-030-e)', async () => {
+    const { set, rows, audit } = harness([], { ceiling: 10 });
+    await expect(set(BUYER, 'metered_services_max', { value: 11 })).rejects.toMatchObject({ reason: 'restriction_above_ceiling' });
+    expect(rows).toEqual([]);
+    expect(audit).toEqual([]);
+    await expect(set(BUYER, 'metered_services_max', { value: 10 })).resolves.toMatchObject({ restrictions: [{ key: 'metered_services_max', value: 10 }] });
   });
 
   it('refuses an expiry already past', async () => {

@@ -95,6 +95,8 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
   asked = [];
   audienceRead = false;
   const tx = {
+    // No restriction on the person (F-030-e).
+    userRestriction: { findMany: async () => [] },
     gatewayAudience: {
       findMany: async () => ((audienceRead = true), audience.map((a) => ({ ...a, gatewayId: null }))),
     },
@@ -420,6 +422,8 @@ describe('OtherGatewayService (F-038-m)', () => {
   function build(opts: { paidSince?: boolean; gateways?: unknown[]; payment?: unknown } = {}) {
     const payment = opts.payment === undefined ? { gatewayId: null, tenantGatewayConfigId: TRIED, amountRequested: d('500000'), currencyCode: 'IRR', createdAt: new Date('2026-10-05T08:00:00Z') } : opts.payment;
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 1,
       paymentTransaction: {
         findFirst: async ({ where }: { where: { status?: string } }) => (where.status === 'success' ? (opts.paidSince ? { id: 'p2' } : null) : payment),

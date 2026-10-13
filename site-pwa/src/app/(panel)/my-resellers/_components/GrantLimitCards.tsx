@@ -110,18 +110,16 @@ export function TenantGrantLimitCard({ tenantId }: { tenantId: string }) {
 }
 
 /**
- * One user's limit (F-118-aq over F-118-ap), on their page: the number in
- * effect and where it comes from, how many they hold open, and staff's answer
- * to their ticket — a number with a reason, or back to the default.
+ * One user's limit (F-118-aq), on their page, read only: the number in
+ * effect and where it comes from, and how many they hold open. Staff's answer
+ * to their ticket is set on their Profile tab as the `metered_services_max`
+ * restriction (F-030-e) — one place for a cap on one person.
  */
 export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; userId: string }) {
   const { t } = useLocale();
   const message = useUserMessage();
   const api = useMemo(() => grantLimitsApi(tenantId), [tenantId]);
   const [view, setView] = useState<UserGrantLimit | null>(null);
-  const [typed, setTyped] = useState("");
-  const [reason, setReason] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
@@ -134,24 +132,6 @@ export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; use
       live = false;
     };
   }, [api, userId]);
-
-  const run = async (step: () => Promise<UserGrantLimit>) => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      setView(await step());
-      setTyped("");
-      setReason("");
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cap = capOf(typed);
-  const canSet = typeof cap === "number" && reason.trim().length > 0 && !busy;
 
   return (
     <section aria-label={t("common", L.title)} className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
@@ -170,28 +150,6 @@ export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; use
           {view.own?.reason && <p>{t("common", L.userReasonShown, { reason: view.own.reason })}</p>}
           {typeof view.ceiling === "number" && <p>{t("common", L.ceiling, { count: view.ceiling })}</p>}
         </div>
-      )}
-      <div className="grid gap-2 sm:grid-cols-[8rem_1fr_auto] sm:items-end">
-        <Field label={t("common", L.userInput)}>
-          <Input type="text" inputMode="numeric" dir="ltr" value={typed} onChange={(e) => setTyped(e.target.value)} />
-        </Field>
-        <Field label={t("common", L.userReason)}>
-          <Input type="text" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />
-        </Field>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={view === null || !canSet}
-          onClick={() => void run(() => api.setUser(userId, cap as number, reason.trim()))}
-          loading={busy}
-        >
-          {t("common", L.userSet)}
-        </Button>
-      </div>
-      {view?.own && (
-        <Button variant="quiet" size="sm" disabled={busy} onClick={() => void run(() => api.removeUser(userId))}>
-          {t("common", L.userRemove)}
-        </Button>
       )}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </section>

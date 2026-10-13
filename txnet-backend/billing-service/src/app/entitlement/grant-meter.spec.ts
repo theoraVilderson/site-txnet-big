@@ -105,6 +105,8 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
     const grants: Array<Record<string, unknown>> = [];
     const meters: Array<Record<string, unknown>> = [];
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {

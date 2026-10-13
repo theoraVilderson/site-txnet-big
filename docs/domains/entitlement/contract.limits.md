@@ -20,8 +20,9 @@ count for nothing. A package plan (prepaid) was paid for in full and never count
 
 N, first found wins (`meteredCapOf`, `entitlement/metered-cap.ts`):
 
-1. the user's own number, `user_grant_limit` — set by staff, the answer to a
-   ticket; it replaces the default, higher **or lower**;
+1. the user's own number, the `metered_services_max` restriction (governance
+   `contract.md`, F-030-e) — set by staff on their Profile tab, the answer to
+   a ticket; it replaces the default, higher **or lower**;
 2. the tenant's default, `grant_limit_setting` — each tenant sets its own;
 3. the platform's, `PLATFORM_METERED_CAP` = **5** (in code, not a row).
 
@@ -91,23 +92,21 @@ caller's session.
 |---|---|---|
 | `GET /api/billing/tenants/:tenantId/grant-limits` | — | `{platformDefault, tenantDefault \| null, effective}` |
 | `PUT` the same | `{meteredOpenCap: 0..1000 \| null}` — `null` = back to the platform's | the same view |
-| `GET .../users/:userId/grant-limit` | — | `{userId, own: {meteredOpenCap, reason, setByUserId, updatedAt} \| null, tenantDefault, platformDefault, effective, open}` |
-| `PUT` the same | `{meteredOpenCap: 0..1000, reason: 1..500}` | the same view |
-| `DELETE` the same | — | the same view, `own: null` |
+| `GET .../users/:userId/grant-limit` | — | `{userId, own: {meteredOpenCap, reason, setByUserId, updatedAt} \| null, tenantDefault, platformDefault, effective, open}` — `own` is the live `metered_services_max` restriction. Read only: its `PUT`/`DELETE` were removed (F-030-e, v32) |
 
 | Rule | Why |
 |---|---|
 | `effective` is `meteredCapOf`'s, `open` counts `OPEN_GRANT_STATUSES` metered Grants | the panel shows the number a sale is refused by, never one it computed |
 | Reads pass `read`, writes `staffWrite`: a suspended reseller sees its numbers and changes none | the door's matrix, as every write on a user |
 | A user the tenant does not hold is **404** `user_not_found`, before anything is read or written; the door's refusals are the user-grants surface's (`resellerRefusal`) | C-15; one set of answers for one door |
-| A user's number needs a `reason`; the tenant's takes none. Out of range: **400** `errors.billing.grantLimitInvalid` | the number is a ticket's answer, and the reason is how the next person finds it. 1000 catches a typo; 0 sells none |
-| Every change writes `admin_audit_log` in its transaction (`auditLimit`): `grant_limit_tenant_set` against the tenant, `grant_limit_user_set` / `grant_limit_user_remove` against the user, before/after `{meteredOpenCap}`. A change to nothing (same number, removing none) writes no row and is not refused | who raised whom is the question a panel full of seats asks |
+| The tenant's number takes no reason. Out of range: **400** `errors.billing.grantLimitInvalid`. A user's number is a restriction and takes one there (3-500) | 1000 catches a typo (the restriction key's own `max`); 0 sells none |
+| Every change writes `admin_audit_log` in its transaction (`auditLimit`): `grant_limit_tenant_set` against the tenant, before/after `{meteredOpenCap}` (a user's number is audited as `user_restriction_set` / `_lift`; the old `grant_limit_user_*` rows stay as history). A change to nothing (same number, removing none) writes no row and is not refused | who raised whom is the question a panel full of seats asks |
 | Buckets: reads `RESELLER_USER_GRANTS_READ`, writes `RESELLER_USER_CONFIG_ACTION` | part of reading a user's services, and an admin's act on a user |
 | Nobody is notified | it changes what may be bought, not what the user holds |
-| A user's number or a tenant default **above the reseller's ceiling** is **409** `reseller_limit_reached`, `errors.billing.grantLimitAboveCeiling`, `facts {key, limit, used}` (`used` = the number asked), **whoever asks** — the platform's staff too; nothing is written. Both views carry `ceiling` (`null`: none) | the ceiling bounds the number in effect anyway, so one stored above it would read as something it is not; the platform's staff raise the ceiling itself, one row (`tenant/contract.limits.md`) |
+| A tenant default **above the reseller's ceiling** is **409** `reseller_limit_reached`, `errors.billing.grantLimitAboveCeiling`, `facts {key, limit, used}` (`used` = the number asked), **whoever asks** — the platform's staff too; nothing is written. Both views carry `ceiling` (`null`: none) | the ceiling bounds the number in effect anyway, so one stored above it would read as something it is not; the platform's staff raise the ceiling itself, one row (`tenant/contract.limits.md`). A user's number above it is refused by governance, `restriction_above_ceiling` |
 
 
 The panel shows both numbers on the users pages and the shop names the refusal
 (F-118-aq, `panel-web/contract.reseller-users.md` rule 24, `contract.shop.md` rule 7a).
 
-Proved by `entitlement/metered-cap.spec.ts` and `payment/gift/grant-limits.spec.ts`.
+Proved by `entitlement/metered-cap.spec.ts`, `entitlement/user-restrictions.spec.ts` and `payment/gift/grant-limits.spec.ts`.

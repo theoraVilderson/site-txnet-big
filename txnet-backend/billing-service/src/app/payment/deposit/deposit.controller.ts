@@ -18,6 +18,7 @@ import { ConfigService } from '@nestjs/config';
 import { BackendI18nKeys, CredentialUnavailable, headerValue, IdentityHeaders, presentsServiceToken, RateLimitBucket, RequestHeaders, holdsPermission, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
+import { RESTRICTED_I18N_KEY, UserRestricted } from '../../entitlement/user-restrictions';
 import { LocaleService } from '../../locale/locale.service';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
@@ -76,6 +77,8 @@ export function toHttp(e: unknown): unknown {
   const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   if (e instanceof DepositGatewayNotFound) return new NotFoundException({ i18nKey: E.gatewayNotFound, message });
   if (e instanceof AmountOutOfGatewayRange) return new BadRequestException({ i18nKey: E.amountOutOfRange, message });
+  // A top-up method staff barred for this payer (F-030-e): theirs to know, so they pick another.
+  if (e instanceof UserRestricted) return new ConflictException({ i18nKey: RESTRICTED_I18N_KEY[e.key], reason: e.reason, message, facts: e.facts });
   // A coupon that validated a moment ago and can no longer be held is a state
   // of the world, not a bad field: the panel re-quotes and shows the breakdown
   // without it (F-092-h). Nothing was written — the hold's refusal rolled the

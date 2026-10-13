@@ -34,7 +34,12 @@ function fakeTx(opts: { open: number; tenantCap?: number; userCap?: number; bill
       return 1;
     }),
     grantLimitSetting: { findUnique: vi.fn(async () => (opts.tenantCap === undefined ? null : { meteredOpenCap: opts.tenantCap })) },
-    userGrantLimit: { findUnique: vi.fn(async () => (opts.userCap === undefined ? null : { meteredOpenCap: opts.userCap })) },
+    // The person's own number is the `metered_services_max` restriction (F-030-e); a read of other keys finds none.
+    userRestriction: {
+      findMany: vi.fn(async ({ where }: { where: { key?: { in: string[] } } }) =>
+        opts.userCap === undefined || (where.key && !where.key.in.includes('metered_services_max')) ? [] : [{ key: 'metered_services_max', value: opts.userCap }],
+      ),
+    },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'EUR', tenantType: 'platform' }) },
     tenantSubscription: { findUnique: async () => null },
     tenantPackageMeterRate: { findMany: async () => [] },

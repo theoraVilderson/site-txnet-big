@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, Delete, Get, Ip, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Ip, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -6,7 +6,7 @@ import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { CompensationCapBody, compensationCapSchema } from './grant-compensation.schema';
-import { TenantGrantLimitBody, tenantGrantLimitSchema, UserGrantLimitBody, userGrantLimitSchema } from './grant-limits.schema';
+import { TenantGrantLimitBody, tenantGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
 import { bytesOfGb } from './grant-traffic.schema';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';
@@ -81,29 +81,6 @@ export class GrantLimitsController {
   @readLimit
   userLimit(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('userId', new ParseUUIDPipe()) userId: string, @Req() req: Request) {
     return this.refusing(() => this.limits.userLimit(actorOf(req), tenantId, userId));
-  }
-
-  @Put('users/:userId/grant-limit')
-  @writeLimit
-  setUserLimit(
-    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Body(new ZodValidationPipe(userGrantLimitSchema)) body: UserGrantLimitBody,
-    @Req() req: Request,
-    @Ip() ip: string,
-  ) {
-    return this.refusing(() => this.limits.setUserLimit({ ...actorOf(req), ip }, tenantId, userId, body.meteredOpenCap, body.reason));
-  }
-
-  @Delete('users/:userId/grant-limit')
-  @writeLimit
-  removeUserLimit(
-    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Req() req: Request,
-    @Ip() ip: string,
-  ) {
-    return this.refusing(() => this.limits.removeUserLimit({ ...actorOf(req), ip }, tenantId, userId));
   }
 
   /** The door's refusals and an unknown user, as the user-grants surface answers them. */

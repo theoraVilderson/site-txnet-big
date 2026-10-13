@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, VariantBillingMode } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerKey, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { liveRestriction, ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerKey, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { meteredCapOf, meteredCeilingOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP, underCeiling } from '../../entitlement/metered-cap';
 import { auditCompensationCap, auditLimit } from '../../grant-audit/grant-audit';
@@ -33,7 +33,8 @@ export type UserGrantLimitView = {
 
 /**
  * Staff's half of the metered cap (F-118-ap, `entitlement/contract.limits.md`):
- * a tenant's default and one user's own number, read and set.
+ * a tenant's default, read and set, and one user's number read — set on their
+ * Profile tab as the `metered_services_max` restriction (F-030-e).
  *
  * **The tenant is the path's**, admitted by the users-admin door
  * (`ResellerAccess.runIncludingPlatform`): the platform's staff on any tenant
@@ -113,38 +114,6 @@ export class GrantLimitsService {
     return this.onUser(actor, tenantId, userId, 'read', (tx) => this.userView(tx, userId));
   }
 
-  /** The answer to a ticket: replaces the tenant's default for this user, higher or lower. */
-  setUserLimit(actor: AdminActor, tenantId: string, userId: string, cap: number, reason: string): Promise<UserGrantLimitView> {
-    return this.onUser(actor, tenantId, userId, 'staffWrite', async (tx) => {
-      const scoped = TenantContext.current('grant limits').id;
-      await aboveNoCeiling(tx, cap);
-      const where = { tenantId_userId: { tenantId: scoped, userId } };
-      const before = await tx.userGrantLimit.findUnique({ where, select: { meteredOpenCap: true, reason: true } });
-      if (before?.meteredOpenCap !== cap || before?.reason !== reason) {
-        await tx.userGrantLimit.upsert({
-          where,
-          create: { tenantId: scoped, userId, meteredOpenCap: cap, reason, setByUserId: actor.userId },
-          update: { meteredOpenCap: cap, reason, setByUserId: actor.userId },
-        });
-        await auditLimit(tx, actor, scoped, 'grant_limit_user_set', { type: 'user', id: userId }, before?.meteredOpenCap ?? null, cap, reason);
-      }
-      return this.userView(tx, userId);
-    });
-  }
-
-  /** Back to the tenant's default. Nothing to remove is an answer, not a refusal. */
-  removeUserLimit(actor: AdminActor, tenantId: string, userId: string): Promise<UserGrantLimitView> {
-    return this.onUser(actor, tenantId, userId, 'staffWrite', async (tx) => {
-      const scoped = TenantContext.current('grant limits').id;
-      const before = await tx.userGrantLimit.findUnique({ where: { tenantId_userId: { tenantId: scoped, userId } }, select: { meteredOpenCap: true } });
-      if (before) {
-        await tx.userGrantLimit.deleteMany({ where: { tenantId: scoped, userId } });
-        await auditLimit(tx, actor, scoped, 'grant_limit_user_remove', { type: 'user', id: userId }, before.meteredOpenCap, null, null);
-      }
-      return this.userView(tx, userId);
-    });
-  }
-
   private async tenantView(tx: Prisma.TransactionClient): Promise<TenantGrantLimit> {
     const tenantId = TenantContext.current('grant limits').id;
     const row = await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
@@ -155,9 +124,10 @@ export class GrantLimitsService {
 
   private async userView(tx: Prisma.TransactionClient, userId: string): Promise<UserGrantLimitView> {
     const tenantId = TenantContext.current('grant limits').id;
-    const own = await tx.userGrantLimit.findUnique({
-      where: { tenantId_userId: { tenantId, userId } },
-      select: { meteredOpenCap: true, reason: true, setByUserId: true, updatedAt: true },
+    // The person's own number is the `metered_services_max` restriction (F-030-e), set on their Profile tab.
+    const own = await tx.userRestriction.findFirst({
+      where: { userId, tenantId, key: 'metered_services_max', ...liveRestriction() },
+      select: { value: true, reason: true, setByUserId: true, updatedAt: true },
     });
     const { tenantDefault, platformDefault, ceiling } = await this.tenantView(tx);
     const open = await tx.grant.count({
@@ -165,7 +135,7 @@ export class GrantLimitsService {
     });
     return {
       userId,
-      own: own && { meteredOpenCap: own.meteredOpenCap, reason: own.reason, setByUserId: own.setByUserId, updatedAt: own.updatedAt.toISOString() },
+      own: own && typeof own.value === 'number' ? { meteredOpenCap: own.value, reason: own.reason, setByUserId: own.setByUserId, updatedAt: own.updatedAt.toISOString() } : null,
       tenantDefault,
       platformDefault,
       effective: await meteredCapOf(tx, userId),

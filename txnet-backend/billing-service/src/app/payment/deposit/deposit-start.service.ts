@@ -1,14 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  CouponChannel,
-  DomainVerificationStatus,
-  PaymentStatus,
-  Prisma,
-  TenantDomainPurpose,
-  TenantDomainType,
-  WalletReasonType,
-} from '@prisma/client';
+import { CouponChannel, DomainVerificationStatus, PaymentStatus, Prisma, TenantDomainPurpose, TenantDomainType, WalletReasonType } from '@prisma/client';
 import { TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
@@ -24,7 +16,8 @@ import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider'
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { Chat } from './chat-platform';
-import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit, selectGateway } from './deposit-pricing';
+import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit } from './deposit-pricing';
+import { selectPayerGateway } from './payer-gateway';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
@@ -175,7 +168,7 @@ export class DepositStartService {
       // platform, so it is in the platform's (ADR-0098 part 4, F-116-b). Read
       // before pricing: the price is computed in it (F-116-e).
       const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
-      const gateway = await selectGateway(tx, this.crossTenant, tenant.id, gatewayId, source, {
+      const gateway = await selectPayerGateway(tx, this.crossTenant, tenant.id, gatewayId, source, {
         canTest: request.canTest,
         // A user's top-up is offered by their groups (F-102-g); a reseller's billing top-up is tenant-level.
         userId: request.billingTenantId ? null : userId,

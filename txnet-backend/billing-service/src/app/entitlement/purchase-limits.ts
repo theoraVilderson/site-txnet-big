@@ -1,7 +1,7 @@
 import { GrantSource, Prisma } from '@prisma/client';
 import { type ResellerLimitKey, resellerLimitsOf, TenantContext } from '@txnet-backend/shared-core';
 
-import { PurchaseLimitReached, type PurchaseWindow } from './grant';
+import { PurchaseLimitReached, type PurchaseWindow } from './entitlement-refusals';
 
 export { PurchaseLimitReached, type PurchaseWindow };
 

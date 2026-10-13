@@ -196,6 +196,8 @@ describe('GrantService.issue', () => {
   function fakeTx(variant: ReturnType<typeof variantRow> | null) {
     const grants: Array<Record<string, unknown>> = [];
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
@@ -277,6 +279,8 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     const grants: Array<Record<string, unknown>> = [];
     const meters: Array<Record<string, unknown>> = [];
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
@@ -349,6 +353,8 @@ describe('GrantNamesService — the services a combined notice names (F-601-p)',
       { grantId: 'g1', userId: USER, userLabel: 'laptop' },
     ];
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       $executeRaw: vi.fn(),
       grant: {
         findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; userId: string } }) =>

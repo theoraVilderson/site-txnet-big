@@ -1,7 +1,7 @@
 import { Prisma, VariantBillingMode } from '@prisma/client';
-import { OPEN_GRANT_STATUSES, resellerLimitOf, TenantContext } from '@txnet-backend/shared-core';
+import { liveRestrictionsOf, OPEN_GRANT_STATUSES, resellerLimitOf, TenantContext, USER_RESTRICTIONS } from '@txnet-backend/shared-core';
 
-import { MeteredCapReached } from './grant';
+import { MeteredCapReached } from './entitlement-refusals';
 
 export { MeteredCapReached };
 
@@ -10,13 +10,14 @@ export { MeteredCapReached };
  * nothing at the sale, so a user holds at most this many open ones. A panel
  * seat is held from the sale, whether the service is used or not.
  *
- * The number is the user's own (`user_grant_limit`, staff's answer to a
- * ticket), else the tenant's default (`grant_limit_setting`), else this.
+ * The number is the user's own (the `metered_services_max` restriction,
+ * staff's answer to a ticket — F-030-e), else the tenant's default
+ * (`grant_limit_setting`), else this.
  */
 export const PLATFORM_METERED_CAP = 5;
 
-/** The highest number staff may set (F-118-ap): above it is a typo, not a ticket's answer. */
-export const MAX_METERED_CAP = 1000;
+/** The highest number staff may set (F-118-ap): above it is a typo, not a ticket's answer. The restriction's own `max`. */
+export const MAX_METERED_CAP = USER_RESTRICTIONS.metered_services_max.max;
 
 /** What holds a seat — shared-core's, which the reseller limits count with too. */
 export { OPEN_GRANT_STATUSES };
@@ -36,9 +37,9 @@ export const underCeiling = (n: number, ceiling: number | null): number => (ceil
 /** The number in effect for this user of the current tenant — never above its reseller's ceiling. */
 export async function meteredCapOf(tx: Prisma.TransactionClient, userId: string): Promise<number> {
   const tenantId = TenantContext.current('metered cap').id;
-  const own = await tx.userGrantLimit.findUnique({ where: { tenantId_userId: { tenantId, userId } }, select: { meteredOpenCap: true } });
-  const tenant = own ? null : await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
-  const n = own?.meteredOpenCap ?? tenant?.meteredOpenCap ?? PLATFORM_METERED_CAP;
+  const own = (await liveRestrictionsOf(tx, userId, ['metered_services_max'])).get('metered_services_max');
+  const tenant = typeof own === 'number' ? null : await tx.grantLimitSetting.findUnique({ where: { tenantId }, select: { meteredOpenCap: true } });
+  const n = typeof own === 'number' ? own : (tenant?.meteredOpenCap ?? PLATFORM_METERED_CAP);
   return underCeiling(n, await meteredCeilingOf(tx));
 }
 

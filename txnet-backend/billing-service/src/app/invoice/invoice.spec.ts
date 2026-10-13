@@ -108,6 +108,8 @@ function buildCreate(setup: CreateSetup = {}) {
     groupQueries: [] as unknown[],
   };
   const tx = {
+    // No restriction on the person (F-030-e).
+    userRestriction: { findMany: async () => [] },
     // Every tenant here keeps its books in USD (F-116-b).
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     $executeRaw: async () => 0,
@@ -336,6 +338,8 @@ describe('InvoiceExpiryService.expirePending', () => {
     };
     const scoped = () => TenantContext.currentOrNull()?.id ?? null;
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,
       invoice: {
         updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
@@ -401,6 +405,8 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
   function buildGet(row: typeof ROW | null, redemptions: Array<{ discountAppliedAmount: Prisma.Decimal; coupon: { code: string } }> = []) {
     const asked = { invoice: [] as unknown[], redemptions: [] as unknown[] };
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,
       invoice: {
         findFirst: async (q: unknown) => {
@@ -457,6 +463,8 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
   function buildList(rows: Array<ReturnType<typeof variantRow>>, groups: GroupRow[] = [groupRow()]) {
     const asked: unknown[] = [];
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       $executeRaw: async () => 0,
       panelGroup: { findMany: async () => groups },
@@ -532,6 +540,8 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
       read: [] as unknown[],
     };
     const tx = {
+      // No restriction on the person (F-030-e).
+      userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,
       invoice: {
         updateMany: async (q: { where: Record<string, unknown>; data: Record<string, unknown> }) => {

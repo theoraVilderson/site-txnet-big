@@ -14,6 +14,7 @@ import {
   isPlatformTenant,
   isUserRestrictionKey,
   liveRestriction,
+  resellerLimitOf,
   restrictionValueOf,
   tenantTransaction,
   type UserRestrictionKey,
@@ -33,6 +34,7 @@ export type UserRestrictionsRejection =
   | 'restriction_unknown'
   | 'restriction_value_invalid'
   | 'restriction_not_found'
+  | 'restriction_above_ceiling'
   | 'expiry_past';
 
 export class UserRestrictionsRefused extends Error {
@@ -105,6 +107,7 @@ export class UserRestrictionsService {
     const reason = input.reason.trim();
 
     return this.writing(actor, tenantId, userId, ip, async (tx, person) => {
+      await underItsCeiling(tx, key, value, person.tenantId);
       const where = { userId_key: { userId, key } };
       const current = await tx.userRestriction.findUnique({ where });
       if (current && sameValue(current.value, value) && current.reason === reason && current.expiresAt?.getTime() === expiresAt?.getTime()) return null;
@@ -178,6 +181,18 @@ export class UserRestrictionsService {
       throw err;
     }
   }
+}
+
+/**
+ * A count no higher than the reseller limit its key names (`ceiling`, F-019-n):
+ * the ceiling bounds the number in effect anyway, so one stored above it would
+ * read as something it is not. The platform's own tenant has none.
+ */
+async function underItsCeiling(tx: Tx, key: UserRestrictionKey, value: UserRestrictionValue, tenantId: string): Promise<void> {
+  const rule = USER_RESTRICTIONS[key];
+  if (!('ceiling' in rule) || typeof value !== 'number') return;
+  const { limit } = await resellerLimitOf(tx, tenantId, rule.ceiling);
+  if (limit !== null && value > limit) throw new UserRestrictionsRefused('restriction_above_ceiling', `${key} ${value} > ${limit}`);
 }
 
 /** A stored value against a parsed one: the set is stored sorted, so its order is the same. */

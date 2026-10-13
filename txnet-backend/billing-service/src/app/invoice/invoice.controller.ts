@@ -22,6 +22,7 @@ import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
 import { identityOf } from '../request/identity.middleware';
 import { EntitlementRefused, MeteredCapReached } from '../entitlement/grant';
 import { PurchaseLimitReached } from '../entitlement/purchase-limits';
+import { RESTRICTED_I18N_KEY, UserRestricted } from '../entitlement/user-restrictions';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
@@ -86,6 +87,10 @@ function toHttp(e: unknown): unknown {
   if (e instanceof PurchaseLimitReached) {
     const i18nKey = { day: E.invoice.purchaseLimitDay, week: E.invoice.purchaseLimitWeek, month: E.invoice.purchaseLimitMonth }[e.window];
     return new ConflictException({ i18nKey, reason: e.reason, message, facts: e.facts });
+  }
+  // Past a restriction staff set on this buyer (F-030-e): theirs to know, so the key and figures ride as `facts`.
+  if (e instanceof UserRestricted) {
+    return new ConflictException({ i18nKey: RESTRICTED_I18N_KEY[e.key], reason: e.reason, message, facts: e.facts });
   }
   if (e instanceof MeteredCapReached) {
     return new ConflictException({

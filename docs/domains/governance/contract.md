@@ -16,7 +16,7 @@ rows are intent derived from `txnet-backend/prisma/domains/governance.prisma`.
 ## TL;DR
 
 User groups — a named set of a tenant's users, the one target discount rules,
-campaigns and restrictions share (built). Low-traffic key/value config for users, and `user_restriction` (a cap or a bar on one person, built — enforced where it bites by F-030-e). Extra access for a window is not here: it is a key given to the person with a window, identity's `user_permission` (F-030-a, ADR-0138 (7)).
+campaigns and restrictions share (built). Low-traffic key/value config for users, and `user_restriction` (a cap or a bar on one person, built, and enforced where it bites — F-030-e). Extra access for a window is not here: it is a key given to the person with a window, identity's `user_permission` (F-030-a, ADR-0138 (7)).
 
 ## Provides
 
@@ -38,11 +38,25 @@ registry `shared-core/src/lib/governance/user-restrictions.ts`. Wire shapes:
 
 | Rule | Held by |
 |---|---|
-| A restriction is one registry key (`USER_RESTRICTIONS`) on one person: `services_active_max` and `configs_max` (a whole number, 0 to the key's `max`), `topup_categories_barred` (some `GatewayCategory` values, at least one, stored sorted). A new one is a line in the registry and its enforcement (F-030-e), no table change | `restrictionValueOf` (`user-restrictions.spec.ts`) |
+| A restriction is one registry key (`USER_RESTRICTIONS`) on one person: `services_active_max`, `metered_services_max` and `configs_max` (a whole number, 0 to the key's `max`), `topup_categories_barred` (some `GatewayCategory` values, at least one, stored sorted). A new one is a line in the registry and its enforcement (F-030-e), no table change | `restrictionValueOf` (`user-restrictions.spec.ts`) |
 | Not the `restricted` status (ADR-0133): that closes the account to all but support; a restriction narrows one thing. The same key guards both, `restriction.assign` | the door: `ResellerAccess.for('restriction.assign')` |
 | One row per person and key, on the person's tenant (strict RLS); set again replaces it, the same value, reason and expiry again writes nothing; lifted by deleting the row | `UserRestrictionsService` |
 | A write asks ADR-0103's authority rule over the person's whole answer less `self.` keys, and leaves one `user_restriction_set` / `_lift` audit row (`oldValue`/`newValue` `{key, value, reason, expiresAt?}`) | `writing` |
 | An expiry is never in the past (`expiry_past`); past it the restriction counts for nothing (`liveRestriction`) and is not listed. No sweep: nothing is told when one lapses | `liveRestriction` in every read that applies one |
+| A count whose key names a reseller limit (`ceiling`) is never set above it: `metered_services_max` under `user_metered_cap_max` (F-019-n) — **409** `restriction_above_ceiling`, nothing written | `underItsCeiling` |
+
+### Where each bites (F-030-e)
+
+Billing reads them with `liveRestrictionsOf` (shared-core) in the person's tenant scope; a refusal is `restriction_reached` with the key and its figures as `facts`, and the person's sentence `errors.billing.restricted.<key>`.
+
+| Key | Refused at | Held by |
+|---|---|---|
+| `services_active_max` | a buy (invoice create, and again at issue) or a redeemed coupon, when the open Grants held reach it | `assertBuyerRoom` (billing `entitlement/user-restrictions.ts`) |
+| `configs_max` | the same sale, when the live configs held reach it — a sale brings at least one. A paid Grant's fulfilment is never refused, and a move retires one for each it makes | the same |
+| `metered_services_max` | a metered buy: the person's own N of F-118-ao, above the tenant default (entitlement `contract.limits.md`) | `meteredCapOf` |
+| `topup_categories_barred` | a top-up: not in the gateway list, refused at quote and start | `selectPayerGateway`, `offeredToPayer` |
+
+Staff never are: an admin's issue, a renewal or a migration counts and passes (user, 2026-10-13). Counts are taken under one per-user lock to the transaction's end.
 
 ## User groups (F-114-j)
 

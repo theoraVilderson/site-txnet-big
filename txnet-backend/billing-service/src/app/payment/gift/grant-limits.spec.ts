@@ -1,13 +1,13 @@
 /**
  * Staff read and set the metered cap (F-118-ap, over F-118-ao): a tenant's
- * default, and one user's own number — the answer to a ticket.
+ * default; one user's own number is read here and set on their Profile tab as
+ * the `metered_services_max` restriction (F-030-e).
  *
  * What breaks without anyone seeing it:
  *  - **the wrong tenant's number.** The tenant is the path's, admitted by the
  *    users-admin door; the rows are written in its scope and carry its id;
  *  - **a number nobody can account for.** Every change writes an
- *    `admin_audit_log` row in its transaction — before, after, the reason — and
- *    a user's number is refused without a reason;
+ *    `admin_audit_log` row in its transaction — before and after;
  *  - **a suspended reseller raising caps.** Reads pass `read`, writes
  *    `staffWrite`: a suspended reseller sees its numbers and changes none;
  *  - **another tenant's user.** A user id the tenant does not hold is
@@ -17,7 +17,7 @@
  */
 import { ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
 
-import { grantLimitSchema, tenantGrantLimitSchema, userGrantLimitSchema } from './grant-limits.schema';
+import { grantLimitSchema, tenantGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
@@ -32,7 +32,7 @@ const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as strin
 const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'], ip: '203.0.113.8' };
 const stranger = { userId: CUSTOMER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.9' };
 
-function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string | null }; open?: number; ceiling?: number | null } = {}) {
+function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string }; open?: number; ceiling?: number | null } = {}) {
   const scope = () => TenantContext.currentOrNull()?.id;
   const tenants: Record<string, unknown> = {
     [PLATFORM]: { id: PLATFORM, slug: 'platform', tenantType: 'platform_owner', ownerUserId: null, status: 'active', graceEndsAt: null, deletedAt: null },
@@ -53,8 +53,9 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
   const userTenant: Record<string, string> = { [CUSTOMER]: RESELLER, [LATE_CUSTOMER]: SUSPENDED };
   let tenantRow: { tenantId: string; meteredOpenCap: number } | null =
     seed.tenantCap === undefined ? null : { tenantId: RESELLER, meteredOpenCap: seed.tenantCap };
-  let userRow: Record<string, unknown> | null = seed.userCap
-    ? { tenantId: RESELLER, userId: CUSTOMER, ...seed.userCap, setByUserId: STAFF_USER, updatedAt: new Date('2026-09-30T10:00:00Z') }
+  // The person's own number is a restriction row now (F-030-e).
+  const userRow = seed.userCap
+    ? { key: 'metered_services_max', value: seed.userCap.meteredOpenCap, reason: seed.userCap.reason, setByUserId: STAFF_USER, updatedAt: new Date('2026-09-30T10:00:00Z') }
     : null;
   const audit: Array<Record<string, unknown>> = [];
   const writes: Array<{ what: string; scope: string | undefined; data: unknown }> = [];
@@ -86,19 +87,9 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
         return { count };
       },
     },
-    userGrantLimit: {
-      findUnique: async () => userRow,
-      upsert: async (args: { create: Record<string, unknown> }) => {
-        writes.push({ what: 'user.upsert', scope: scope(), data: args.create });
-        userRow = { ...args.create, updatedAt: new Date('2026-09-30T12:00:00Z') };
-        return userRow;
-      },
-      deleteMany: async () => {
-        writes.push({ what: 'user.delete', scope: scope(), data: null });
-        const count = userRow ? 1 : 0;
-        userRow = null;
-        return { count };
-      },
+    userRestriction: {
+      findFirst: async () => userRow,
+      findMany: async () => (userRow ? [userRow] : []),
     },
     adminAuditLog: {
       create: async (args: { data: Record<string, unknown> }) => {
@@ -173,36 +164,8 @@ describe('GrantLimitsService — one user\'s number', () => {
     });
   });
 
-  it('sets it with a reason, in the tenant\'s scope, audited against the user', async () => {
-    const { service, audit, writes } = build({ tenantCap: 2 });
-    const answer = await service.setUserLimit(owner, RESELLER, CUSTOMER, 0, 'abuse, ticket 7');
-    expect(answer).toMatchObject({ own: { meteredOpenCap: 0, reason: 'abuse, ticket 7', setByUserId: OWNER_USER }, effective: 0 });
-    expect(writes).toEqual([
-      { what: 'user.upsert', scope: RESELLER, data: { tenantId: RESELLER, userId: CUSTOMER, meteredOpenCap: 0, reason: 'abuse, ticket 7', setByUserId: OWNER_USER } },
-    ]);
-    expect(audit).toEqual([
-      expect.objectContaining({
-        action: 'grant_limit_user_set',
-        targetEntityType: 'user',
-        targetEntityId: CUSTOMER,
-        oldValue: { meteredOpenCap: null },
-        newValue: { meteredOpenCap: 0 },
-        reason: 'abuse, ticket 7',
-      }),
-    ]);
-  });
-
-  it('removes it, back to the tenant\'s default, audited once', async () => {
-    const { service, audit } = build({ tenantCap: 2, userCap: { meteredOpenCap: 10, reason: 'ticket 41' } });
-    await expect(service.removeUserLimit(owner, RESELLER, CUSTOMER)).resolves.toMatchObject({ own: null, effective: 2 });
-    expect(audit).toEqual([expect.objectContaining({ action: 'grant_limit_user_remove', oldValue: { meteredOpenCap: 10 }, newValue: { meteredOpenCap: null } })]);
-    await service.removeUserLimit(owner, RESELLER, CUSTOMER);
-    expect(audit).toHaveLength(1);
-  });
-
-  it('refuses a user the tenant does not hold before anything is written', async () => {
+  it('refuses a user the tenant does not hold before anything is read', async () => {
     const { service, writes, audit } = build();
-    await expect(service.setUserLimit(owner, RESELLER, LATE_CUSTOMER, 3, 'x')).rejects.toMatchObject({ reason: 'user_not_found' });
     await expect(service.userLimit(owner, RESELLER, LATE_CUSTOMER)).rejects.toMatchObject({ reason: 'user_not_found' });
     expect(writes).toEqual([]);
     expect(audit).toEqual([]);
@@ -210,16 +173,15 @@ describe('GrantLimitsService — one user\'s number', () => {
 });
 
 describe('the reseller\'s ceiling (F-019-n, ADR-0106 user_metered_cap_max)', () => {
-  it('refuses a user\'s number or a tenant default above it, whoever asks, and writes nothing', async () => {
+  it('refuses a tenant default above it, whoever asks, and writes nothing', async () => {
     const { service, writes, audit } = build({ ceiling: 10 });
     for (const who of [owner, staff]) {
-      const err = await service.setUserLimit(who, RESELLER, CUSTOMER, 11, 'ticket').catch((e: unknown) => e);
+      const err = await service.setTenantLimit(who, RESELLER, 11).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(ResellerLimitReached);
       expect(err).toMatchObject({ key: 'user_metered_cap_max', limit: 10, used: 11 });
     }
-    await expect(service.setTenantLimit(owner, RESELLER, 11)).rejects.toBeInstanceOf(ResellerLimitReached);
-    await expect(service.setUserLimit(owner, RESELLER, CUSTOMER, 10, 'ticket')).resolves.toMatchObject({ effective: 10, ceiling: 10 });
-    expect(writes.map((w) => w.what)).toEqual(['user.upsert']);
+    await expect(service.setTenantLimit(owner, RESELLER, 10)).resolves.toMatchObject({ effective: 10, ceiling: 10 });
+    expect(writes.map((w) => w.what)).toEqual(['tenant.upsert']);
     expect(audit).toHaveLength(1);
   });
 
@@ -230,23 +192,18 @@ describe('the reseller\'s ceiling (F-019-n, ADR-0106 user_metered_cap_max)', () 
   });
 
   it('no ceiling (null) bounds nothing; the platform\'s own tenant has none', async () => {
-    await expect(build({ ceiling: null }).service.setUserLimit(owner, RESELLER, CUSTOMER, 1000, 'big')).resolves.toMatchObject({ effective: 1000, ceiling: null });
+    await expect(build({ ceiling: null, userCap: { meteredOpenCap: 1000, reason: 'big' } }).service.userLimit(owner, RESELLER, CUSTOMER)).resolves.toMatchObject({ effective: 1000, ceiling: null });
     await expect(build({ ceiling: 1 }).service.setTenantLimit(staff, PLATFORM, 30)).resolves.toMatchObject({ effective: 30, ceiling: null });
   });
 });
 
 describe('the bodies', () => {
-  it('take a whole number 0..1000; the tenant\'s may be null, a user\'s needs a reason', () => {
+  it('take a whole number 0..1000; the tenant\'s may be null', () => {
     expect(grantLimitSchema.safeParse(0).success).toBe(true);
     expect(grantLimitSchema.safeParse(1000).success).toBe(true);
     for (const bad of [-1, 1001, 2.5, '3']) expect(grantLimitSchema.safeParse(bad).success).toBe(false);
 
     expect(tenantGrantLimitSchema.parse({ meteredOpenCap: null })).toEqual({ meteredOpenCap: null });
     expect(tenantGrantLimitSchema.safeParse({}).success).toBe(false);
-
-    expect(userGrantLimitSchema.parse({ meteredOpenCap: 12, reason: '  ticket 9 ' })).toEqual({ meteredOpenCap: 12, reason: 'ticket 9' });
-    expect(userGrantLimitSchema.safeParse({ meteredOpenCap: 12 }).success).toBe(false);
-    expect(userGrantLimitSchema.safeParse({ meteredOpenCap: 12, reason: '   ' }).success).toBe(false);
-    expect(userGrantLimitSchema.safeParse({ meteredOpenCap: null, reason: 'x' }).success).toBe(false);
   });
 });

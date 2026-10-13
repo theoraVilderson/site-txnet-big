@@ -22,6 +22,7 @@ const STATUS: Record<UserRestrictionsRejection, 400 | 403 | 404 | 409> = {
   restriction_unknown: 400,
   restriction_value_invalid: 400,
   restriction_not_found: 404,
+  restriction_above_ceiling: 409,
   expiry_past: 400,
 };
 

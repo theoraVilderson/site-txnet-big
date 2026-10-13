@@ -189,10 +189,8 @@ export function grantLimitsApi(tenantId: string) {
     /** `null` goes back to the platform's default. */
     setTenant: (meteredOpenCap: number | null) =>
       call<TenantGrantLimit>(`${at}/grant-limits`, { method: "PUT", body: JSON.stringify({ meteredOpenCap }) }),
+    /** Read only: their own number is the `metered_services_max` restriction (F-030-e, `userRestrictionsApi`). */
     user: (userId: string) => call<UserGrantLimit>(user(userId), { method: "GET" }),
-    setUser: (userId: string, meteredOpenCap: number, reason: string) =>
-      call<UserGrantLimit>(user(userId), { method: "PUT", body: JSON.stringify({ meteredOpenCap, reason }) }),
-    removeUser: (userId: string) => call<UserGrantLimit>(user(userId), { method: "DELETE" }),
     /** What `grant.compensate` may add per Grant over 30 days (KS-1-c): read with it or `grant.assign`. */
     compensation: () => call<CompensationCap>(`${at}/compensation-cap`, { method: "GET" }),
     /** Set with `grant.assign` only; `null` goes back to the platform's default. */

@@ -35,8 +35,6 @@ const api = {
   tenant: vi.fn(),
   setTenant: vi.fn(),
   user: vi.fn(),
-  setUser: vi.fn(),
-  removeUser: vi.fn(),
 };
 
 beforeEach(() => {
@@ -106,33 +104,15 @@ describe("UserGrantLimitCard", () => {
     render(<UserGrantLimitCard tenantId={TENANT} userId={USER} />);
     expect(await screen.findByText(`${L}.userOpen:2,2`)).toBeInTheDocument();
     expect(screen.getByText(`${L}.userFromDefault:2`)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: `${L}.userRemove` })).not.toBeInTheDocument();
   });
 
-  it("sets a number only with a reason, then offers going back to the default", async () => {
-    api.user.mockResolvedValue(view);
-    api.setUser.mockResolvedValue({
-      ...view,
-      own: { meteredOpenCap: 10, reason: "ticket 41", setByUserId: "s", updatedAt: "2026-09-30T12:00:00.000Z" },
-      effective: 10,
-    });
-    api.removeUser.mockResolvedValue(view);
+  it("shows their own number and why, read only — it is set as a restriction on their Profile tab (F-030-e)", async () => {
+    api.user.mockResolvedValue({ ...view, own: { meteredOpenCap: 10, reason: "ticket 41", setByUserId: "s", updatedAt: "2026-09-30T12:00:00.000Z" }, effective: 10 });
     render(<UserGrantLimitCard tenantId={TENANT} userId={USER} />);
-    await screen.findByText(`${L}.userOpen:2,2`);
-
-    fireEvent.change(screen.getByLabelText(`${L}.userInput`), { target: { value: "10" } });
-    const set = screen.getByRole("button", { name: `${L}.userSet` });
-    expect(set).toBeDisabled();
-    fireEvent.change(screen.getByLabelText(`${L}.userReason`), { target: { value: " ticket 41 " } });
-    fireEvent.click(set);
-
-    await waitFor(() => expect(api.setUser).toHaveBeenCalledWith(USER, 10, "ticket 41"));
     expect(await screen.findByText(`${L}.userOwn:10`)).toBeInTheDocument();
     expect(screen.getByText(`${L}.userReasonShown:ticket 41`)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: `${L}.userRemove` }));
-    await waitFor(() => expect(api.removeUser).toHaveBeenCalledWith(USER));
-    expect(await screen.findByText(`${L}.userFromDefault:2`)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("says the door's refusal, as the rest of the user page does", async () => {

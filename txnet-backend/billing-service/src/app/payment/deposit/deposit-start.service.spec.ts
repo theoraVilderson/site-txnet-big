@@ -122,6 +122,8 @@ function build(setup: Setup = {}) {
   let nextId = 0;
 
   const tx = {
+    // No restriction on the person (F-030-e).
+    userRestriction: { findMany: async () => [] },
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ tenantType, operatingCurrencyCode: 'USD' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row

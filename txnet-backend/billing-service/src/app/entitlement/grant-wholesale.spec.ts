@@ -92,6 +92,8 @@ function fakeTx(opts: {
   const variant = variantRow(opts.billingMode ?? VariantBillingMode.metered);
   const rates = opts.rates ?? [];
   const tx = {
+    // No restriction on the person (F-030-e).
+    userRestriction: { findMany: async () => [] },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'EUR', tenantType: opts.tenantType }) },
     tenantSubscription: {
       findUnique: vi.fn(async () => (opts.subscribed === false ? null : { package: { id: PACKAGE, currencyCode: 'USD' } })),
