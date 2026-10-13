@@ -30,7 +30,7 @@ import { UserProfile } from "./UserProfile";
 import { useUserMessage } from "./useUserMessage";
 import { Alert, Button, PageHeader, Tabs } from "../../../../../_components/kit";
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
-import { isPlatformTenant } from "../../../../_lib/users";
+import { isPlatformWorkspace } from "../../../../_lib/users";
 import { useOwnTenantRedirect } from "../../../../_lib/useOwnTenantRedirect";
 
 const S = K.services;
@@ -65,7 +65,7 @@ export function UserServicesView({ id, userId, own = false }: { id: string; user
   const focusGrant = query.get("grant");
   // The platform's own users (F-311-ab) are not a reseller's workspace.
   const { me } = usePanelSession();
-  const platform = isPlatformTenant(id, me);
+  const platform = isPlatformWorkspace(id, me);
   // KS-1-a: a member of this tenant is offered only the acts their `grant.*` keys open.
   const mayGrant = (key: GrantKey) => grantKeyHeld(me ?? null, id, key);
   useOwnTenantRedirect(own, me?.tenant.id);

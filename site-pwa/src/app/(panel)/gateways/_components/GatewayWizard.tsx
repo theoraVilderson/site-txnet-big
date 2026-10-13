@@ -16,7 +16,6 @@ import {
   PROVIDERS,
   createBody,
   emptyForm,
-  isPlatformOwner,
   type FormErrors,
   type GatewayForm,
 } from "../_lib/gateway-form";
@@ -33,6 +32,7 @@ import { ChoiceCards, FeeFields, Field, PROVIDER_ICONS, SecretInput, fieldErrorT
 import { Toggle } from "../../_components/kit/Toggle";
 import { Wizard, useWizard } from "../../_components/kit/Wizard";
 import { Button, Input } from "../../_components/kit";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -74,7 +74,7 @@ interface GatewayWizardProps {
 export function GatewayWizard({ surface, me, currency, onClose, onCreated }: GatewayWizardProps) {
   const { t, lang } = useLocale();
   const errorMessage = useGatewayMessage(surface);
-  const owner = isPlatformOwner(me);
+  const owner = isPlatformTenant(me?.tenant?.type);
 
   const initialForm = () => emptyForm(owner ? "platform" : "tenant");
   const [form, setForm] = useState<GatewayForm>(initialForm);

@@ -14,24 +14,9 @@ import { DataTable } from "../../../../_components/kit/DataTable";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Badge } from "../../../../financial/_components/Badge";
 import { Field } from "../../../../catalog/_components/catalog-ui";
-import {
-  CHECK_LINE_KEYS,
-  DOMAIN_KEYS as K,
-  DOMAIN_LIVE_EVENTS,
-  DOMAIN_PURPOSES,
-  DOMAIN_STATUS_KEYS,
-  EDGE_HINT_KEYS,
-  EDGE_STATUS_KEYS,
-  canRequestCheck,
-  domainHost,
-  domainLiveChannels,
-  domainRefusalKey,
-  dnsName,
-  isApex,
-  isLive,
-  isRoutable,
-} from "../../../_lib/domains";
+import { CHECK_LINE_KEYS, DOMAIN_KEYS as K, DOMAIN_LIVE_EVENTS, DOMAIN_PURPOSES, DOMAIN_STATUS_KEYS, EDGE_HINT_KEYS, EDGE_STATUS_KEYS, canRequestCheck, domainHost, domainLiveChannels, domainRefusalKey, dnsName, isApex, isLive, isRoutable } from "../../../_lib/domains";
 import { Alert, Button, IconButton, Input, PageHeader } from "../../../../_components/kit";
+import { COPY_FEEDBACK_MS, copyText } from "../../../../_lib/clipboard";
 
 /** The refusal's own sentence, else the generic answer for that error. */
 function useMessage() {
@@ -445,9 +430,9 @@ function CopyButton({ text }: { text: string }) {
       title={label}
       className="shrink-0"
       onClick={() => {
-        void navigator.clipboard?.writeText(text).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
+        void copyText(text).then((ok) => {
+          setCopied(ok);
+          setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
         });
       }}
       icon={copied ? <Check size={14} aria-hidden className="text-primary" /> : <Copy size={14} aria-hidden />}

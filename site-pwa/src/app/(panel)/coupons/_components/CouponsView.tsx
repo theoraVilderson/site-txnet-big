@@ -10,7 +10,7 @@ import { Pagination } from "../../_components/kit/Pagination";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
-import { COUPON_KEYS as K, STATUS_TONES, isPlatformOwner, refusalKey } from "../_lib/coupon-form";
+import { COUPON_KEYS as K, STATUS_TONES, refusalKey } from "../_lib/coupon-form";
 import { CouponForm } from "./CouponForm";
 import { CouponUsage } from "./CouponUsage";
 import { DiscountRules } from "./DiscountRules";
@@ -19,6 +19,7 @@ import { ListSkeleton } from "./ListSkeleton";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Button, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const PAGE_SIZE = 20;
 type Tab = "discount" | "gift" | "rules";
@@ -39,7 +40,7 @@ type Tab = "discount" | "gift" | "rules";
 export function CouponsView() {
   const { t } = useLocale();
   const { me, isLoading: sessionLoading } = usePanelSession();
-  const owner = isPlatformOwner(me);
+  const owner = isPlatformTenant(me?.tenant?.type);
   const [tab, setTab] = useState<Tab>("discount");
 
   return (

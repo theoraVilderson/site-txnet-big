@@ -663,15 +663,17 @@ the formatter (`MACHINE_LOCALE`), never an inline `"en"`.
 the guides editor and the support categories offered exactly `["fa", "en"]`,
 and ten backend controllers answered `?? 'fa'` instead of the configured
 default — a third language would have been a hunt through 33 files. `except`
-lists those files today; each leaves with its row (FE-1-b, CS-1-a, CS-1-b).
+lists those files today; each leaves with its row (CS-1-a, CS-1-b, FE-1-e);
+FE-1-b moved the guides, the categories and every list join onto the locale
+meta and `formatList` (`_lib/digits.ts`).
 `localeCompare` and `Intl.DisplayNames` lines are skipped: there the locale
 sorts or names, it does not choose a language.
 
 ```check C-17
-forbid: ^(?!.*(?:localeCompare|DisplayNames)).*['"`](?:fa|en)['"`]
+forbid: ^(?!.*(?:localeCompare|DisplayNames)).*['"`](?:fa|en)['"`]|join\(['"`]،
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/**/env.validation.ts, site-pwa/src/env.ts, coinsite/src/env.ts, site-pwa/src/app/(panel)/_components/CommandPalette.tsx, site-pwa/src/app/(panel)/_components/ImpersonationBanner.tsx, site-pwa/src/app/(panel)/_components/dashboard/widgets/UsersWidget.tsx, site-pwa/src/app/(panel)/_components/guide/GuideList.tsx, site-pwa/src/app/(panel)/_lib/datetime.ts, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/(panel)/financial/deposit/_components/AmountInput.tsx, site-pwa/src/app/(panel)/guides/_components/GuideEditor.tsx, site-pwa/src/app/(panel)/guides/_components/GuidesView.tsx, site-pwa/src/app/(panel)/guides/_lib/guides.ts, site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx, site-pwa/src/app/(panel)/support/_components/SupportSettingsView.tsx, site-pwa/src/lib/guide-api.ts, site-pwa/src/services/user-locale-mock.ts, txnet-backend/auth-service/src/app/account-switch/account-switch.controller.ts, txnet-backend/auth-service/src/app/auth/auth.controller.ts, txnet-backend/auth-service/src/app/auth/me/me.controller.ts, txnet-backend/auth-service/src/app/auth/permissions/permission-registry.controller.ts, txnet-backend/auth-service/src/app/auth/register/register.controller.ts, txnet-backend/auth-service/src/app/common/validation/phone.schema.ts, txnet-backend/auth-service/src/app/locale/locale.service.ts, txnet-backend/billing-service/src/app/catalog/catalog-admin.schema.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-start.service.ts, txnet-backend/bot-service/src/app/locale/locale.service.ts, txnet-backend/bot-service/src/app/webhook/bot-webhook.registrar.ts, txnet-backend/shared-core/src/lib/i18n/translator/translator.ts, txnet-backend/support-service/src/app/conversations/conversations.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-admin.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-feedback.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-internal.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-public.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-reader.ts
-message: take the language from the locale meta or DEFAULT_LANGUAGE, and a formatting locale from a named constant (C-17)
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/**/env.validation.ts, site-pwa/src/env.ts, coinsite/src/env.ts, site-pwa/src/app/(panel)/_components/CommandPalette.tsx, site-pwa/src/app/(panel)/_lib/datetime.ts, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/(panel)/financial/deposit/_components/AmountInput.tsx, site-pwa/src/services/user-locale-mock.ts, txnet-backend/auth-service/src/app/account-switch/account-switch.controller.ts, txnet-backend/auth-service/src/app/auth/auth.controller.ts, txnet-backend/auth-service/src/app/auth/me/me.controller.ts, txnet-backend/auth-service/src/app/auth/permissions/permission-registry.controller.ts, txnet-backend/auth-service/src/app/auth/register/register.controller.ts, txnet-backend/auth-service/src/app/common/validation/phone.schema.ts, txnet-backend/auth-service/src/app/locale/locale.service.ts, txnet-backend/billing-service/src/app/catalog/catalog-admin.schema.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-start.service.ts, txnet-backend/bot-service/src/app/locale/locale.service.ts, txnet-backend/bot-service/src/app/webhook/bot-webhook.registrar.ts, txnet-backend/shared-core/src/lib/i18n/translator/translator.ts, txnet-backend/support-service/src/app/conversations/conversations.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-admin.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-feedback.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-internal.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-public.controller.ts, txnet-backend/tenant-service/src/app/guide/guide-reader.ts
+message: take the language from the locale meta or DEFAULT_LANGUAGE, a formatting locale from a named constant, a list separator from formatList (C-17)
 ```
 
 ## C-18 — a domain question is one named function
@@ -687,14 +689,15 @@ and six files each kept a local helper; two of them, both named
 `isPlatformOwner`, meant different things (one also required `isOwner`; FE-1-a
 named that one `ownsPlatform`). The
 check holds the one literal that has already drifted; the rule holds the rest
-in review. Owners: `site-pwa/src/app/(panel)/_lib/panel-menu.ts` (the
-`TenantType` union) and `shared-core/src/lib/tenant/platform-tenant.ts`.
-The other files in `except` are debt (FE-1-b, CS-1-c).
+in review. Owners: `site-pwa/src/lib/tenant-type.ts` (the `TenantType`
+union, `isPlatformTenant`, `ownsPlatform`, `isPlatformUser`; FE-1-b) and
+`shared-core/src/lib/tenant/platform-tenant.ts`. The other files in `except`
+are debt (CS-1-c).
 
 ```check C-18
 forbid: ['"`]platform_owner['"`]
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, txnet-backend/**/seed*.ts, site-pwa/src/app/(panel)/_hooks/usePaletteData.ts, site-pwa/src/app/(panel)/_hooks/useVisibleMenu.ts, site-pwa/src/app/(panel)/_lib/panel-menu.ts, site-pwa/src/app/(panel)/_lib/reseller-menu.ts, site-pwa/src/app/(panel)/ai/_components/AiView.tsx, site-pwa/src/app/(panel)/ai/_components/UsageForecastView.tsx, site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts, site-pwa/src/app/(panel)/coupons/_components/GiftCodes.tsx, site-pwa/src/app/(panel)/coupons/_lib/coupon-form.ts, site-pwa/src/app/(panel)/gateways/_lib/gateway-form.ts, site-pwa/src/app/(panel)/groups/_lib/user-groups.ts, site-pwa/src/app/(panel)/my-resellers/_lib/support-access.ts, site-pwa/src/app/(panel)/my-resellers/_lib/users.ts, site-pwa/src/app/(panel)/resellers/_lib/purchase.ts, site-pwa/src/app/(panel)/resellers/_lib/resellers.ts, site-pwa/src/app/(panel)/services/_hooks/useOwnedReseller.ts, site-pwa/src/app/(panel)/settings/_lib/settings.ts, site-pwa/src/app/(panel)/settings/page.tsx, site-pwa/src/lib/auth-api.ts, txnet-backend/ai-service/src/app/profile/profile-builder.service.ts, txnet-backend/auth-service/src/app/auth/register/register.service.ts, txnet-backend/auth-service/src/app/tenant/tenant.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-quote.service.ts, txnet-backend/billing-service/src/app/payment/gateway/gateway-merchant.ts, txnet-backend/shared-core/src/lib/billing/operating-currency.ts, txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts, txnet-backend/shared-core/src/lib/tenant/door.ts, txnet-backend/shared-core/src/lib/tenant/entitlements.ts, txnet-backend/shared-core/src/lib/tenant/host-surface.ts, txnet-backend/shared-core/src/lib/tenant/host.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts, txnet-backend/tenant-service/src/app/currency/operating-currency.service.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.spec.ts, **/*.test.ts, **/*.test.tsx, txnet-backend/*-e2e/**, txnet-backend/prisma/**, txnet-backend/**/seed*.ts, site-pwa/src/lib/tenant-type.ts, txnet-backend/ai-service/src/app/profile/profile-builder.service.ts, txnet-backend/auth-service/src/app/auth/register/register.service.ts, txnet-backend/auth-service/src/app/tenant/tenant.ts, txnet-backend/billing-service/src/app/payment/deposit/deposit-quote.service.ts, txnet-backend/billing-service/src/app/payment/gateway/gateway-merchant.ts, txnet-backend/shared-core/src/lib/billing/operating-currency.ts, txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts, txnet-backend/shared-core/src/lib/tenant/door.ts, txnet-backend/shared-core/src/lib/tenant/entitlements.ts, txnet-backend/shared-core/src/lib/tenant/host-surface.ts, txnet-backend/shared-core/src/lib/tenant/host.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts, txnet-backend/tenant-service/src/app/currency/operating-currency.service.ts
 message: import the question from the module that owns the tenant type (C-18) — isPlatformTenant(), not a literal compared here
 ```
 
@@ -893,15 +896,16 @@ is needed it is moved to its home and both callers import it — not pasted.
 | call the API | `lib/api-request.ts` and the `lib/*-api.ts` clients | — |
 | call another service | — | `serviceCallHeaders` (`shared-core/src/lib/http/service-call.ts`, H13) |
 | a route | `lib/routes.ts` (C-10) | — |
+| the tenant type | `lib/tenant-type.ts` (C-18) | `shared-core/src/lib/tenant/platform-tenant.ts` (C-18) |
 | a header / cookie / permission name | `@/generated/wire` (C-04) | `shared-core/src/lib/http` (C-04) |
 | a translated string | `@/generated/i18n-keys` (C-06) | `BackendI18nKeys` / `BotKeys` (C-07) |
 | money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02) |
 | a date or time | `_lib/datetime.ts`, `lib/time-zone.ts` | `shared-core/src/lib/time` |
-| digits and numbers | `_lib/digits.ts` (`numberLocale`) | — |
+| digits, numbers and lists | `_lib/digits.ts` (`numberLocale`, `formatList`) | — |
 | a control, a dialog, a table | `(panel)/_components/kit` (C-13) | — |
 | live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
 | browser storage | `lib/storage.ts` (FE-1-l) | — |
-| copy to clipboard | `_lib/clipboard.ts` | — |
+| copy to clipboard | `_lib/clipboard.ts` (`copyText`, `COPY_FEEDBACK_MS`) | — |
 | keys and moves for an editable list | `_hooks/useRowKeys.ts`, `_lib/rows.ts` (C-30) | — |
 | a Redis key, a rate-limit bucket | — | `RedisKeys` (C-03), the bucket registry (C-05) |
 | tenant scope | — | `tenantTransaction` / `withTenant` / `runWithTenant` |

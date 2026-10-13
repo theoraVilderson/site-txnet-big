@@ -15,7 +15,7 @@ import {
   statusActionsOf,
   canBanHere,
   userRefusalKey,
-  isPlatformTenant,
+  isPlatformWorkspace,
   issuableProducts,
   usersQuery,
   userPagePath,
@@ -194,10 +194,10 @@ describe("the platform's own users and the catalog the forms name (F-311-ab, -ab
   });
 
   it("knows the path's tenant is the platform's only when it is the session's platform tenant", () => {
-    expect(isPlatformTenant("P", me("P", "platform_owner"))).toBe(true);
-    expect(isPlatformTenant("R", me("P", "platform_owner"))).toBe(false);
-    expect(isPlatformTenant("R", me("R", "reseller"))).toBe(false);
-    expect(isPlatformTenant("P", null)).toBe(false);
+    expect(isPlatformWorkspace("P", me("P", "platform_owner"))).toBe(true);
+    expect(isPlatformWorkspace("R", me("P", "platform_owner"))).toBe(false);
+    expect(isPlatformWorkspace("R", me("R", "reseller"))).toBe(false);
+    expect(isPlatformWorkspace("P", null)).toBe(false);
   });
 
   // D-57: the users-admin door's list, not the catalog admin routes — a support

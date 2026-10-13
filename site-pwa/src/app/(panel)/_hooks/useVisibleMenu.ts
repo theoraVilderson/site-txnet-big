@@ -7,6 +7,7 @@ import { PANEL_MENU, impersonationMenu, ownTenantOf, visibleMenu, type VisibleMe
 import { withResellerMenu } from "../_lib/reseller-menu";
 import { useResellerWorkspace } from "../_context/ResellerWorkspaceContext";
 import { usePanelSession } from "../_context/PanelSessionContext";
+import { isPlatformUser } from "@/lib/tenant-type";
 
 /**
  * Whether the caller holds a live reseller — `GET /purchase/mine`, the one the
@@ -69,7 +70,7 @@ export function useVisibleMenu(): VisibleMenuEntry[] {
   const held = me?.permissions;
   const tenantType = me?.tenant.type ?? null;
   const isOwner = me?.tenant.isOwner ?? false;
-  const ownsReseller = useHoldsLiveReseller(me ? tenantType === "platform_owner" && !isOwner : null);
+  const ownsReseller = useHoldsLiveReseller(me ? isPlatformUser(me.tenant) : null);
   // Asked only where it can change the answer: a reseller's user holding a reseller key (AC-1-e2).
   const canAdminister = useCanAdminister(
     me && tenantType === "reseller" && holdsAnyResellerKey(held) ? me.tenant.id : null,

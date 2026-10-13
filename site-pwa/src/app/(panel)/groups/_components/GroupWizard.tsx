@@ -22,6 +22,7 @@ import {
 } from "../_lib/user-groups";
 import { Alert, Field, useGroupsScope, useMessage } from "./user-groups-ui";
 import { Alert as Note, Button, Checkbox, Input, RadioCards, Wizard, useWizard } from "../../_components/kit";
+import { formatList } from "../../_lib/digits";
 
 const K = USER_GROUP_KEYS;
 const W = K.wizard;
@@ -44,7 +45,7 @@ type Loaded = { areas: PermissionArea[]; presets: GroupPreset[]; grantable: stri
  * sends only the access, so a retry never makes a second group.
  */
 export function GroupWizard({ onClose, onDone }: { onClose: (changed: boolean) => void; onDone: (g: UserGroup, addMembers: boolean) => void }) {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const { me } = usePanelSession();
   const { tenantId, api } = useGroupsScope();
   const message = useMessage();
@@ -221,7 +222,7 @@ export function GroupWizard({ onClose, onDone }: { onClose: (changed: boolean) =
           <Note tone="info">{t("common", K.access.everyReseller)}</Note>
         ) : (
           <div className="space-y-4">
-            {dropped.length > 0 && <Note tone="warning">{t("common", W.dropped, { keys: dropped.map(label).join("، ") })}</Note>}
+            {dropped.length > 0 && <Note tone="warning">{t("common", W.dropped, { keys: formatList(dropped.map(label), lang) })}</Note>}
             <KeyPicker label={t("common", K.access.keys)} registry={loaded.areas} grantable={loaded.grantable} held={[]} value={keys} onChange={setKeys} />
           </div>
         )

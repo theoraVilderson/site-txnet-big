@@ -8,26 +8,7 @@ import { type CatalogAdminApi, type CatalogCapability, type CatalogCategory, typ
 import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
-import {
-  CATALOG_KEYS as K,
-  afterWizard,
-  catalogText,
-  categoryPath,
-  categoryTree,
-  categoryRemovalReport,
-  heldByProducts,
-  mergeRemovals,
-  flattenTexts,
-  isPlatformOwner,
-  productCounts,
-  removalReport,
-  RESTORE_CATEGORY,
-  stillSelected,
-  surfaceActor,
-  switchReport,
-  switchTargets,
-  type CatalogTexts,
-} from "../_lib/catalog-form";
+import { CATALOG_KEYS as K, afterWizard, catalogText, categoryPath, categoryTree, categoryRemovalReport, heldByProducts, mergeRemovals, flattenTexts, productCounts, removalReport, RESTORE_CATEGORY, stillSelected, surfaceActor, switchReport, switchTargets, type CatalogTexts } from "../_lib/catalog-form";
 import { CapabilitiesTab } from "./CapabilitiesTab";
 import { CapabilitySheet } from "./CapabilityPicker";
 import { CatalogGuide } from "./CatalogGuide";
@@ -39,6 +20,8 @@ import { useMessage } from "./catalog-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Alert, Button, buttonClass, Checkbox, Tabs, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { formatList } from "../../_lib/digits";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /**
  * The published `catalog` namespace in every language locale-service has —
@@ -94,7 +77,7 @@ export function CatalogView() {
   const { api } = surface;
   // Nobody is an owner on a reseller's screen: billing runs the work as the
   // reseller and refuses a platform item there, whoever is signed in (F-066-w8).
-  const owner = isPlatformOwner(surfaceActor(me, surface.tenantId));
+  const owner = isPlatformTenant(surfaceActor(me, surface.tenantId)?.tenant?.type);
   const [tab, setTab] = useState<"products" | "categories" | "capabilities">("products");
   const [categories, setCategories] = useState<CatalogCategory[]>([]);
   // Categories archived with their sold products (F-026-l): out of the tab, still naming those products.
@@ -190,7 +173,7 @@ export function CatalogView() {
     const all = [...categories, ...archivedCategories];
     return all.some((x) => x.id === id) ? categoryPath(all, id, nameOf) : "—";
   };
-  const categoryNames = (ids: readonly string[]) => ids.map(categoryName).join("، ");
+  const categoryNames = (ids: readonly string[]) => formatList(ids.map(categoryName), lang);
   const tree = useMemo(() => categoryTree(categories), [categories]);
   const capabilityName = (k: string) => {
     const c = capabilities.find((x) => x.key === k);

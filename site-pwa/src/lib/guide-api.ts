@@ -21,8 +21,8 @@ export type GuideKind = "product" | "os" | "app" | "section";
 export type GuideSurface = "panel" | "bot" | "any";
 /** Prisma's `GuideTargetKind`. */
 export type GuideTargetKind = "route" | "bot_screen" | "product" | "os" | "app";
-/** Prisma's `Language`. */
-export type GuideLang = "fa" | "en";
+/** A language code from the locale meta; tenant-service holds it to Prisma's `Language` (C-17). */
+export type GuideLang = string;
 /** Derived by tenant-service: `archived` when inactive, `published` once published, else `draft`. */
 export type GuideState = "draft" | "published" | "archived";
 export type CalloutTone = "info" | "tip" | "warning" | "danger";

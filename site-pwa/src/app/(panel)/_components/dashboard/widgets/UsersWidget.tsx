@@ -11,6 +11,7 @@ import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { useWidgetSource } from "../useWidgetSource";
 import { WidgetBody } from "../WidgetFrame";
 import { FooterLink } from "../parts";
+import { numberLocale } from "../../../_lib/digits";
 
 const D = FrontendI18nKeys.common.dashboard;
 
@@ -37,7 +38,7 @@ export default function UsersWidget() {
     <WidgetBody source={source}>
       {(total) => (
         <div className="flex h-full flex-col gap-3">
-          <p className="text-2xl font-black tabular-nums text-text-primary">{total.toLocaleString(lang === "fa" ? "fa-IR" : "en-US")}</p>
+          <p className="text-2xl font-black tabular-nums text-text-primary">{total.toLocaleString(numberLocale(lang))}</p>
           <form
             role="search"
             onSubmit={(e) => {

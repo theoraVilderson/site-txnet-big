@@ -9,32 +9,7 @@ import { currencyDecimals, formatMoney } from "../../_lib/money";
 import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
-import {
-  CATALOG_KEYS as K,
-  DESCRIPTION_MAX,
-  CREATABLE_FULFILMENT_KINDS,
-  NAME_MAX,
-  WIZARD_STEPS,
-  capabilitiesFor,
-  wizardCategoryBody,
-  isPlatformOwner,
-  productBody,
-  suggestKey,
-  surfaceActor,
-  suggestSku,
-  variantBody,
-  takesPanelGroup,
-  groupsForVariant,
-  wizardVariantTenant,
-  wizardStepErrors,
-  emptyWizard,
-  firstInvalidStep,
-  rateDecimals,
-  type ProductForm,
-  type ProductWizard as Wizard,
-  type VariantForm,
-  type WizardStep,
-} from "../_lib/catalog-form";
+import { CATALOG_KEYS as K, DESCRIPTION_MAX, CREATABLE_FULFILMENT_KINDS, NAME_MAX, WIZARD_STEPS, capabilitiesFor, wizardCategoryBody, productBody, suggestKey, surfaceActor, suggestSku, variantBody, takesPanelGroup, groupsForVariant, wizardVariantTenant, wizardStepErrors, emptyWizard, firstInvalidStep, rateDecimals, type ProductForm, type ProductWizard as Wizard, type VariantForm, type WizardStep } from "../_lib/catalog-form";
 import { CapabilityPicker } from "./CapabilityPicker";
 import { CategoryFields } from "./NameSheets";
 import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
@@ -42,6 +17,8 @@ import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
 import { Field, KeyField, LanguageSelect, useDirOf, useMessage } from "./catalog-ui";
 import { Wizard as KitWizard, useWizard } from "../../_components/kit/Wizard";
 import { Button, Checkbox, Input, Textarea } from "../../_components/kit";
+import { formatList } from "../../_lib/digits";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** Which step a refusal belongs to, so the wizard returns the admin to the field billing named. */
 const REFUSAL_STEP: Record<string, WizardStep> = {
@@ -100,7 +77,7 @@ export function ProductWizard({
   // On a reseller's screen nobody is an owner: billing runs the work as the
   // reseller, and its schema refuses the `tenantId` an owner's form would send.
   const actor = surfaceActor(me, tenantId);
-  const owner = isPlatformOwner(actor);
+  const owner = isPlatformTenant(actor?.tenant?.type);
   const [initial] = useState<Wizard>(() => ({
     ...emptyWizard(DEFAULT_LOCALE),
     categoryMode: categories.length ? "existing" : "new",
@@ -350,7 +327,7 @@ export function ProductWizard({
       {step === "review" && (
         <dl className="grid gap-x-4 gap-y-2 rounded-2xl border border-card-border p-3 text-xs sm:grid-cols-[10rem_1fr]">
           <Row label={t("common", K.wizard.steps.category)} onEdit={() => go("category")}>
-            {w.categoryMode === "new" ? w.newCategory.name : picked.length ? picked.map(categoryLabel).join("، ") : t("common", K.wizard.none)}
+            {w.categoryMode === "new" ? w.newCategory.name : picked.length ? formatList(picked.map(categoryLabel), lang) : t("common", K.wizard.none)}
           </Row>
           <Row label={t("common", K.product.name)} onEdit={() => go("names")}>
             <span dir={nameDir}>{w.product.name}</span>{" "}
@@ -362,7 +339,7 @@ export function ProductWizard({
             {t("common", K.fulfilmentKind[w.product.fulfilmentKind])}
           </Row>
           <Row label={t("common", K.capabilities.label)} onEdit={() => go("access")}>
-            {w.product.featureKeys.map(capabilityName).join("، ") || t("common", K.wizard.none)}
+            {formatList(w.product.featureKeys.map(capabilityName), lang) || t("common", K.wizard.none)}
           </Row>
           <Row label={t("common", K.wizard.steps.variant)} onEdit={() => go("variant")}>
             {w.withVariant ? (

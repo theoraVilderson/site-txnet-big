@@ -17,7 +17,6 @@ import {
   createBody,
   emptyCouponForm,
   formFromCoupon,
-  isPlatformOwner,
   isFrozen,
   refusalKey,
   updateBody,
@@ -29,6 +28,7 @@ import { variantOwnerTenant } from "../_lib/variant-choices";
 import { VariantPicker } from "./VariantPicker";
 import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const F = K.form;
 
@@ -55,7 +55,7 @@ export function CouponForm({
   const { t } = useLocale();
   const confirm = useConfirm();
   const errorMessage = useApiErrorMessage();
-  const owner = isPlatformOwner(me);
+  const owner = isPlatformTenant(me?.tenant?.type);
   const frozen = coupon ? isFrozen(coupon) : false;
   const [form, setForm] = useState<Form>(() => (coupon ? formFromCoupon(coupon) : emptyCouponForm()));
   const [errors, setErrors] = useState<CouponFormErrors>({});

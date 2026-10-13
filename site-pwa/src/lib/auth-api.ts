@@ -3,11 +3,11 @@
 // refresh cookie is first-party to whichever domain the panel is on (ADR-0060).
 import { RequestHeaders } from "@/generated/wire";
 import type { UiPreferences, UiPreferencesPatch } from "@/stores/ui-preferences-store";
-import { API_BASE } from "./api-origin";
+import { API_BASE as API_URL } from "./api-origin";
 import { createApiClient } from "./api-request";
 import type { ResolvedTimeZone, TimeZoneSource } from "./time-zone";
+import type { TenantType } from "./tenant-type";
 
-const API_URL = API_BASE;
 let accessToken: string | null = null;
 
 /** "Sign in as this user" (AC-1-i): whom this tab is signed in as, until when, and the page to come back to. */
@@ -312,7 +312,7 @@ export type Me = {
   role: { id: string; name: string };
   permissions: string[];
   /** `isOwner`: the caller is the tenant's owner (F-019-f). */
-  tenant: { id: string; type: "platform_owner" | "reseller"; isOwner: boolean };
+  tenant: { id: string; type: TenantType; isOwner: boolean };
   /** Always verified when present: only *confirm email* writes it (F-035-g). */
   email: string | null;
   isImpersonated: boolean;

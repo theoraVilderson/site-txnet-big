@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Copy, ReceiptText } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { copyText } from "../../_lib/clipboard";
+import { COPY_FEEDBACK_MS, copyText } from "../../_lib/clipboard";
 import { PAYMENT_RESULT_KEYS as P } from "../_lib/payment-result";
 
 /**
@@ -22,7 +22,7 @@ export function ReferenceCard({ reference }: { reference: string }) {
   const copy = async () => {
     if (!(await copyText(reference))) return;
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
   };
 
   return (

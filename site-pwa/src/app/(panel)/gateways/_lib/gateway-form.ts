@@ -2,6 +2,7 @@ import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, CreateGatewayBody, GatewaySource, UpdateGatewayBody } from "@/lib/billing-api";
 import { samePresets } from "./presets";
 import { PROVIDER_FIELDS, secretFields, takesStaticRate, type Provider } from "./provider-fields";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** The values billing's enums accept. Shown as they are: a provider name is a logo, not a sentence. */
 export const PROVIDERS = Object.keys(PROVIDER_FIELDS) as Provider[];
@@ -117,8 +118,7 @@ const EDITABLE = [
 ] as const;
 
 /** Only the platform owner links gateways, verifies them, or manages another tenant's (D-31). */
-export const isPlatformOwner = (me: Me | null | undefined) => me?.tenant.type === "platform_owner";
-export const canManageLinks = (me: Me | null | undefined) => isPlatformOwner(me);
+export const canManageLinks = (me: Me | null | undefined) => isPlatformTenant(me?.tenant.type);
 
 /**
  * The actor the gateway form may build a body from, on this surface.
@@ -270,7 +270,7 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
     const v = value(form, k);
     if (v !== null) body[k] = v;
   }
-  if (isPlatformOwner(me) && form.source === "tenant") {
+  if (isPlatformTenant(me?.tenant?.type) && form.source === "tenant") {
     if (form.tenantId.trim()) body.tenantId = form.tenantId.trim();
   }
   // Billing requires a fee value; an automatic-fee gateway left it empty.
@@ -293,7 +293,7 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
   }
   // F-104-ak: a reason blocks, an emptied box lifts the block.
   const reason = form.blockedReason.trim();
-  if (isPlatformOwner(me) && original.source === "tenant" && reason !== before.blockedReason.trim()) {
+  if (isPlatformTenant(me?.tenant?.type) && original.source === "tenant" && reason !== before.blockedReason.trim()) {
     body.blockedReason = reason || null;
   }
   if (!samePresets(form.depositPresets, before.depositPresets)) body.depositPresets = form.depositPresets;

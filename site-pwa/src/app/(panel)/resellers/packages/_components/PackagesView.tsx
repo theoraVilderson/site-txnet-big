@@ -14,6 +14,7 @@ import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/p
 import { PackageSheet } from "./PackageSheet";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { Button, useConfirm } from "../../../_components/kit";
+import { formatList } from "../../../_lib/digits";
 
 /**
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
@@ -159,7 +160,7 @@ export function PackagesView() {
             {
               id: "features",
               header: t("common", K.columns.features),
-              cell: (p) => p.includedFeatureKeys.map((k) => ((K.features as Record<string, string>)[k] ? t("common", (K.features as Record<string, string>)[k]) : k)).join("، ") || "—",
+              cell: (p) => formatList(p.includedFeatureKeys.map((k) => ((K.features as Record<string, string>)[k] ? t("common", (K.features as Record<string, string>)[k]) : k)), lang) || "—",
               className: "text-xs text-text-secondary",
               hideOnCard: true,
             },

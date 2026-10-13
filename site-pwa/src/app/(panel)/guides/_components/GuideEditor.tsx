@@ -23,12 +23,11 @@ import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { useRowKeys } from "../../_hooks/useRowKeys";
 import { moveRow } from "../../_lib/rows";
 import { Select } from "../../_components/kit/Select";
-import { Field, useDirOf } from "../../catalog/_components/catalog-ui";
+import { Field, useDirOf, useLanguageName } from "../../catalog/_components/catalog-ui";
 import {
   CALLOUT_TONES,
   EDITABLE_BLOCKS,
   GUIDE_KEYS as K,
-  GUIDE_LANGS,
   GUIDE_SLOTS,
   GUIDE_TARGET_KINDS,
   KIND_KEYS,
@@ -54,7 +53,7 @@ const TABS: readonly Tab[] = ["texts", "placements", "preview"];
  * once. A platform guide seen by a reseller is read-only here.
  */
 export function GuideEditor({ id }: { id: string }) {
-  const { t } = useLocale();
+  const { t, availableLocales } = useLocale();
   const message = useGuideMessage();
   const router = useRouter();
   const [guide, setGuide] = useState<GuideDetail | null>(null);
@@ -69,9 +68,9 @@ export function GuideEditor({ id }: { id: string }) {
 
   const apply = useCallback((g: GuideDetail) => {
     setGuide(g);
-    setForm(textsForm(g.draft.length > 0 ? g.draft : g.published));
+    setForm(textsForm(g.draft.length > 0 ? g.draft : g.published, availableLocales.map((l) => l.code)));
     setDirty(false);
-  }, []);
+  }, [availableLocales]);
 
   useEffect(() => {
     let alive = true;
@@ -234,6 +233,7 @@ function BackLink() {
 function ReadOnly({ guide }: { guide: GuideDetail }) {
   const { t } = useLocale();
   const dirOf = useDirOf();
+  const languageName = useLanguageName();
   const router = useRouter();
   const { busy, note, act } = useAct();
   return (
@@ -253,7 +253,7 @@ function ReadOnly({ guide }: { guide: GuideDetail }) {
       <NoteLine note={note} />
       {guide.published.map((text) => (
         <article key={text.lang} className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
-          <Badge>{t("common", K.language[text.lang])}</Badge>
+          <Badge>{languageName(text.lang)}</Badge>
           <h2 dir={dirOf(text.lang)} className="text-lg font-bold text-text-primary">
             {text.title}
           </h2>
@@ -267,9 +267,9 @@ function ReadOnly({ guide }: { guide: GuideDetail }) {
 // ------------------------------------------------------------------ texts
 
 function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: GuideText[]; errors: Record<string, string>; onChange: (f: GuideText[]) => void }) {
-  const { t } = useLocale();
+  const { t, lang: readerLang, availableLocales } = useLocale();
   const dirOf = useDirOf();
-  const [lang, setLang] = useState<GuideLang>("fa");
+  const [lang, setLang] = useState<GuideLang>(readerLang);
   const text = form.find((x) => x.lang === lang) ?? { lang, title: "", blocks: [] };
   const set = (next: GuideText) => onChange(form.map((x) => (x.lang === lang ? next : x)));
   const setBlocks = (blocks: GuideBlock[]) => set({ ...text, blocks });
@@ -283,9 +283,9 @@ function TextsTab({ guideId, form, errors, onChange }: { guideId: string; form: 
         variant="pills"
         value={lang}
         onChange={setLang}
-        tabs={GUIDE_LANGS.map((l) => ({
+        tabs={availableLocales.map(({ code: l, name }) => ({
           value: l,
-          label: t("common", K.language[l]),
+          label: name,
           // A language with a refused field is marked, so the error is found from any tab.
           badge: Object.keys(errors).some((k) => k.startsWith(`${l}.`)) ? <span className="text-error">•</span> : undefined,
         }))}
@@ -556,10 +556,10 @@ function PlacementsTab({ guide, onSaved }: { guide: GuideDetail; onSaved: (g: Gu
 // ------------------------------------------------------------------ preview
 
 function PreviewTab({ guideId, dirty }: { guideId: string; dirty: boolean }) {
-  const { t } = useLocale();
+  const { t, lang: readerLang, availableLocales } = useLocale();
   const dirOf = useDirOf();
   const message = useGuideMessage();
-  const [lang, setLang] = useState<GuideLang>("fa");
+  const [lang, setLang] = useState<GuideLang>(readerLang);
   // The answer with the language it was asked in: a switch shows the skeleton until its own arrives.
   const [loaded, setLoaded] = useState<{ lang: GuideLang; preview?: GuidePreview; error?: unknown } | null>(null);
 
@@ -580,7 +580,7 @@ function PreviewTab({ guideId, dirty }: { guideId: string; dirty: boolean }) {
 
   return (
     <div className="space-y-3">
-      <Tabs ariaLabel={t("common", K.tabs.preview)} variant="pills" value={lang} onChange={setLang} tabs={GUIDE_LANGS.map((l) => ({ value: l, label: t("common", K.language[l]) }))} />
+      <Tabs ariaLabel={t("common", K.tabs.preview)} variant="pills" value={lang} onChange={setLang} tabs={availableLocales.map((l) => ({ value: l.code, label: l.name }))} />
       {dirty && <p className="text-xs text-text-secondary">{t("common", K.unsaved)}</p>}
       {error ? (
         <Alert tone="error">{message(error)}</Alert>

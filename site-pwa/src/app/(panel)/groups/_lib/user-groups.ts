@@ -3,6 +3,7 @@ import { groupsApiPath } from "@/lib/auth-api";
 import { endOfDay } from "../../my-resellers/_lib/team";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** The page's strings as generated constants (C-06). */
 export const USER_GROUP_KEYS = FrontendI18nKeys.common.userGroups;
@@ -54,7 +55,6 @@ export function refusalKey(e: unknown): string | null {
 }
 
 const holds = (me: Me | null, key: string) => holdsPermission(me?.permissions, key);
-const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /**
  * Who may open the page — the menu entry's rule, for a visitor who typed the
@@ -83,7 +83,7 @@ export function memberSearchOf(me: Me | null, tenantId: string | null = null): M
   if (!me) return "ids";
   // A tenant's page by its path searches that tenant's users, through the same door the page came in by.
   if (tenantId !== null && tenantId !== me.tenant.id) return "reseller";
-  if (onPlatform(me)) return holds(me, USER_SEARCH) ? "platform" : "ids";
+  if (isPlatformTenant(me?.tenant?.type)) return holds(me, USER_SEARCH) ? "platform" : "ids";
   return me.tenant.isOwner || holds(me, USER_READ) ? "reseller" : "ids";
 }
 
@@ -271,7 +271,7 @@ export function accessBody(was: UserGroupAccess, roleKeys: readonly string[], ke
  * by its path — the one group that may give a `platform.` key, and only to
  * the platform's own users (GR-1-e, ADR-0139 (4)).
  */
-export const isPlatformGroup = (me: Me | null, tenantId: string | null) => onPlatform(me) && (tenantId === null || tenantId === me?.tenant.id);
+export const isPlatformGroup = (me: Me | null, tenantId: string | null) => isPlatformTenant(me?.tenant?.type) && (tenantId === null || tenantId === me?.tenant.id);
 
 /** The registry as a group's sheet offers it: a `platform.` key only on the platform's own group. */
 export function groupKeyAreas(registry: readonly PermissionArea[], platformGroup: boolean): PermissionArea[] {

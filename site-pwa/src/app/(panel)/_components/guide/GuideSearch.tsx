@@ -9,7 +9,7 @@ import { guideReadApi, type GuideHit, type ResolvedGuide } from "@/lib/guide-api
 import { Skeleton } from "../kit/Skeleton";
 import { GuideBlocks } from "./GuideBlocks";
 import { GuideFeedback } from "./GuideFeedback";
-import { guideDir } from "./GuideList";
+import { useDirOf } from "../../catalog/_components/catalog-ui";
 
 const H = FrontendI18nKeys.common.guideHelp;
 
@@ -56,6 +56,7 @@ type Answer = { q: string; hits?: GuideHit[]; error?: unknown };
  */
 export function GuideSearchResults({ query }: { query: string }) {
   const { t } = useLocale();
+  const guideDir = useDirOf();
   const errorMessage = useApiErrorMessage();
   const q = query.trim();
   const [answer, setAnswer] = useState<Answer | null>(null);

@@ -13,7 +13,7 @@ import { Pagination } from "../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../_lib/datetime";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
-import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, canBanHere, isPlatformTenant, statusActionsOf, userPagePath, usersQuery, type StatusAction } from "../../../_lib/users";
+import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, canBanHere, isPlatformWorkspace, statusActionsOf, userPagePath, usersQuery, type StatusAction } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
 import { CompensationCapCard, TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
 import { grantKeyHeld } from "../../../_lib/grant-actions";
@@ -59,7 +59,7 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
   // The platform's own users (F-311-ab) have no console to go back to.
   const { me } = usePanelSession();
   const self = useWorkspaceSelf(id);
-  const platform = isPlatformTenant(id, me);
+  const platform = isPlatformWorkspace(id, me);
   const message = useUserMessage();
   useOwnTenantRedirect(own, me?.tenant.id);
 

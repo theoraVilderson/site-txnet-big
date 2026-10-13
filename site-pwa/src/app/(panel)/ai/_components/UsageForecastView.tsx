@@ -11,6 +11,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { formatBytes } from "../../services/_lib/service-configs";
 import { K, card } from "./ai-ui";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** The one meter counted in bytes today; every other is a count of its own unit. */
 const BYTE_METERS: readonly string[] = ["vpn.traffic"];
@@ -26,7 +27,7 @@ export function UsageForecastView() {
   const { t, lang } = useLocale();
   const errorMessage = useApiErrorMessage();
   const { me } = usePanelSession();
-  const owner = me?.tenant?.type === "platform_owner";
+  const owner = isPlatformTenant(me?.tenant?.type);
   const [own, setOwn] = useState<{ meters: MeterForecast[]; wallet: WalletForecast | null } | null>(null);
   const [capacity, setCapacity] = useState<{ meters: MeterForecast[]; tenantsMeasured: number; tenants: number } | null>(null);
   const [texts, setTexts] = useState<Record<string, string>>({});

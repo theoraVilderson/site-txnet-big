@@ -7,6 +7,8 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { supportSettingsApi, type AdminCategory, type CategoryList, type SlaTarget } from "@/lib/support-api";
 import { DataTable } from "../../_components/kit/DataTable";
 import { useRowKeys } from "../../_hooks/useRowKeys";
+import { formatList } from "../../_lib/digits";
+import { useLanguageName } from "../../catalog/_components/catalog-ui";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { AGENT_KEYS, PRIORITIES, PRIORITY_KEYS, categoryTexts, fromHhmm, slaFormErrors, toHhmm } from "../_lib/support-agent";
 import { PageHeader } from "../../_components/kit/PageHeader";
@@ -26,7 +28,6 @@ const WEEK: readonly { day: number; key: string }[] = [
   { day: 5, key: K.hours.weekday.fri },
 ];
 /** Prisma's `Language`: the languages a category can be named in. */
-const CATEGORY_LANGS = ["fa", "en"] as const;
 
 /**
  * A tenant admin's support settings (F-033-p) over `/api/support/settings/*`:
@@ -252,11 +253,11 @@ const draftOf = (c: AdminCategory): Draft => ({
   key: c.key,
   sortOrder: c.sortOrder,
   isActive: c.isActive,
-  names: Object.fromEntries(CATEGORY_LANGS.map((l) => [l, c.texts.find((x) => x.lang === l)?.name ?? ""])),
+  names: Object.fromEntries(c.texts.map((x) => [x.lang, x.name])),
 });
 
 function CategoriesTab() {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
   const errorMessage = useApiErrorMessage();
   const { data, setData, error, reload } = useLoad(() => supportSettingsApi.categories());
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -286,14 +287,14 @@ function CategoriesTab() {
     return write(() => (d.id ? supportSettingsApi.updateCategory(d.id, body) : supportSettingsApi.createCategory(body)));
   }
 
-  const nameOf = (c: AdminCategory) => c.texts.find((x) => x.lang === "fa")?.name ?? c.texts[0]?.name ?? c.key;
+  const nameOf = (c: AdminCategory) => c.texts.find((x) => x.lang === lang)?.name ?? c.texts[0]?.name ?? c.key;
 
   return (
     <section className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-4">
       {data.usingPlatform ? (
         <div className="space-y-1 text-xs text-text-secondary">
           <p>{t("common", C.usingPlatform)}</p>
-          <p className="font-bold text-text-primary">{data.platform.map((p) => p.name).join("، ")}</p>
+          <p className="font-bold text-text-primary">{formatList(data.platform.map((p) => p.name), lang)}</p>
         </div>
       ) : (
         <p className="text-xs text-text-secondary">{t("common", C.ownHint)}</p>
@@ -350,9 +351,7 @@ function CategoriesTab() {
           variant="primary"
           size="sm"
           disabled={busy}
-          onClick={() =>
-            setDraft({ id: null, key: "", sortOrder: (data.own.at(-1)?.sortOrder ?? 0) + 1, isActive: true, names: Object.fromEntries(CATEGORY_LANGS.map((l) => [l, ""])) })
-          }
+          onClick={() => setDraft({ id: null, key: "", sortOrder: (data.own.at(-1)?.sortOrder ?? 0) + 1, isActive: true, names: {} })}
           icon={<Plus size={12} aria-hidden />}
         >
           {t("common", C.add)}
@@ -377,11 +376,11 @@ function CategoryForm({
 }) {
   const { t, availableLocales } = useLocale();
   const C = K.categories;
-  const langName = (code: string) => availableLocales.find((l) => l.code === code)?.name ?? code;
+  const langName = useLanguageName();
   const ready = /^[a-z0-9_]{1,40}$/.test(draft.key) && categoryTexts(draft.names).length > 0;
   return (
     <div className="space-y-3 rounded-xl border border-card-border bg-bg-inner p-3 text-xs">
-      {CATEGORY_LANGS.map((l) => (
+      {availableLocales.map(({ code: l }) => (
         <label key={l} className="block font-bold text-text-primary">
           {t("common", C.name, { lang: langName(l) })}
           <Input dir="auto" className="mt-1" maxLength={80} value={draft.names[l] ?? ""} onChange={(e) => onChange({ ...draft, names: { ...draft.names, [l]: e.target.value } })} />

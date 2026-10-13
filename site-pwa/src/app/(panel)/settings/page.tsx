@@ -18,6 +18,7 @@ import { NotificationsSection } from "./_components/NotificationsSection";
 import { ProfileSection } from "./_components/ProfileSection";
 import { SessionsSection } from "./_components/SessionsSection";
 import { TimeZoneSection } from "./_components/TimeZoneSection";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /**
  * The user's settings on tabs (UX-1-s, `contract.ux.md` S1–S2), `?tab=`:
@@ -76,7 +77,7 @@ export default function SettingsPage() {
         <>
           {canSetPlatformCurrency(me) && <OperatingCurrencyCard tenantId={me.tenant.id} scope="platform" />}
           {canSetPlatformCurrency(me) && <TenantTimeZoneCard tenantId={me.tenant.id} scope="platform" />}
-          {canPinRates(me) && <ManualRateCard scope={me.tenant.type === "platform_owner" ? "platform" : "reseller"} />}
+          {canPinRates(me) && <ManualRateCard scope={isPlatformTenant(me.tenant.type) ? "platform" : "reseller"} />}
         </>
       ),
   };

@@ -9,8 +9,9 @@ import { GUIDE_STATS_DAYS, guideApi, type GuideKind, type GuideLang, type GuideL
 import { panelGuidePath } from "@/lib/routes";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { Select } from "../../_components/kit/Select";
-import { Field } from "../../catalog/_components/catalog-ui";
-import { GUIDE_KEYS as K, GUIDE_KEY_PATTERN, GUIDE_KINDS, GUIDE_LANGS, KIND_KEYS } from "../_lib/guides";
+import { Field, LanguageSelect, useLanguageName } from "../../catalog/_components/catalog-ui";
+import { formatList } from "../../_lib/digits";
+import { GUIDE_KEYS as K, GUIDE_KEY_PATTERN, GUIDE_KINDS, KIND_KEYS } from "../_lib/guides";
 import { Badge, NoteLine, StateBadge, useAct, useGuideMessage } from "./guide-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Button, Input, Textarea, buttonClass } from "../../_components/kit";
@@ -21,7 +22,8 @@ import { Button, Input, Textarea, buttonClass } from "../../_components/kit";
  * each to override or hide. Over tenant-service's `/api/guides/settings`.
  */
 export function GuidesView() {
-  const { t } = useLocale();
+  const { t, lang } = useLocale();
+  const languageName = useLanguageName();
   const message = useGuideMessage();
   const [data, setData] = useState<GuideList | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -120,7 +122,7 @@ export function GuidesView() {
                     <Badge>{t("common", KIND_KEYS[g.kind])}</Badge>
                     <StateBadge state={g.state} />
                     {g.hasDraft && g.state !== "draft" && <Badge className="bg-gold-bg text-text-primary">{t("common", K.hasDraft)}</Badge>}
-                    <span className="text-[11px] text-text-secondary">{g.publishedLangs.map((l) => t("common", K.language[l])).join("، ")}</span>
+                    <span className="text-[11px] text-text-secondary">{formatList(g.publishedLangs.map(languageName), lang)}</span>
                     {stats && <GuideNumbers stat={stats.get(g.id)} />}
                     <Link href={panelGuidePath(g.id)} className={buttonClass({ variant: "quiet", size: "sm", className: "ms-auto" })}>
                       <Pencil size={12} aria-hidden />
@@ -202,11 +204,11 @@ function GuideNumbers({ stat }: { stat: GuideStat | undefined }) {
 }
 
 function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
-  const { t } = useLocale();
+  const { t, lang: readerLang } = useLocale();
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState("");
   const [kind, setKind] = useState<GuideKind>("os");
-  const [lang, setLang] = useState<GuideLang>("fa");
+  const [lang, setLang] = useState<GuideLang>(readerLang);
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const { busy, note, act } = useAct();
@@ -235,7 +237,7 @@ function NewGuide({ onCreated }: { onCreated: (id: string) => void }) {
         <Select value={kind} onChange={(v) => setKind(v as GuideKind)} options={GUIDE_KINDS.map((k) => ({ value: k, label: t("common", KIND_KEYS[k]) }))} />
       </Field>
       <Field label={t("common", K.langLabel)}>
-        <Select value={lang} onChange={(v) => setLang(v as GuideLang)} options={GUIDE_LANGS.map((l) => ({ value: l, label: t("common", K.language[l]) }))} />
+        <LanguageSelect value={lang} onChange={setLang} />
       </Field>
       <Field label={t("common", K.titleLabel)}>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} />

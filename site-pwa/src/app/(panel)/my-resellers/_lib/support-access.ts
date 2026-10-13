@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ConsentView } from "@/lib/auth-api";
+import { isPlatformTenant, type TenantType } from "@/lib/tenant-type";
 
 /** The support-access strings, both sides (C-06). */
 export const SUPPORT_KEYS = FrontendI18nKeys.common.supportAccess;
@@ -68,10 +69,10 @@ export function consentRefusal(e: unknown): ConsentRefusal | null {
  */
 export function staffVisitor(
   id: string,
-  me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,
+  me: { tenant: { id: string; type: TenantType } } | null,
   owned: readonly string[],
 ): boolean {
-  return me?.tenant.type === "platform_owner" && me.tenant.id !== id && !owned.includes(id);
+  return me != null && isPlatformTenant(me.tenant.type) && me.tenant.id !== id && !owned.includes(id);
 }
 
 /** `requestConsentSchema` / `emergencyEntrySchema` (`EMERGENCY_REASON_MIN`): a reason's least length after a trim. */

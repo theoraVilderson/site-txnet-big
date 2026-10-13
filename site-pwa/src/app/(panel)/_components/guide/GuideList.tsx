@@ -10,11 +10,9 @@ import type { ResolvedGuide } from "@/lib/guide-api";
 import { Skeleton } from "../kit/Skeleton";
 import { GuideBlocks } from "./GuideBlocks";
 import { GuideFeedback } from "./GuideFeedback";
+import { useDirOf } from "../../catalog/_components/catalog-ui";
 
 const H = FrontendI18nKeys.common.guideHelp;
-
-/** A guide's text direction, from the language tenant-service served it in. */
-export const guideDir = (lang: string) => (lang === "fa" ? "rtl" : "ltr");
 
 type Loaded = { key: string; guides?: ResolvedGuide[]; error?: unknown };
 
@@ -62,6 +60,7 @@ export function GuideList({
   onOpen: (key: string | null) => void;
 }) {
   const { t } = useLocale();
+  const guideDir = useDirOf();
   const errorMessage = useApiErrorMessage();
 
   if (error) {

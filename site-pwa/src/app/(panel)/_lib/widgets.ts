@@ -1,6 +1,7 @@
 import { lazy, type ComponentType, type LazyExoticComponent } from "react";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { admits, type PermissionGated, type TenantType } from "./panel-menu";
+import { admits, type PermissionGated } from "./panel-menu";
+import { type TenantType } from "@/lib/tenant-type";
 
 const W = FrontendI18nKeys.common.dashboard.widgets;
 

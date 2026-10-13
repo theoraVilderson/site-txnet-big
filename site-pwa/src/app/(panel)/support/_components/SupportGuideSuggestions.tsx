@@ -7,7 +7,8 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { guideReadApi, type ResolvedGuide } from "@/lib/guide-api";
 import { GuideBlocks } from "../../_components/guide/GuideBlocks";
 import { GuideFeedback } from "../../_components/guide/GuideFeedback";
-import { guideDir, useSlotGuides } from "../../_components/guide/GuideList";
+import { useSlotGuides } from "../../_components/guide/GuideList";
+import { useDirOf } from "../../catalog/_components/catalog-ui";
 import { supportGuideQuery } from "../../_lib/guide-help";
 
 const H = FrontendI18nKeys.common.guideHelp;
@@ -70,6 +71,7 @@ export function SupportGuideSuggestions({ subject, body, empty = null }: { subje
 
 /** One offered guide: its title, opening to its text in place (read by key unless the slot already brought it). */
 function OfferedGuide({ guide, placed }: { guide: Offered; placed?: ResolvedGuide }) {
+  const guideDir = useDirOf();
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState<ResolvedGuide | null>(placed ?? null);
 

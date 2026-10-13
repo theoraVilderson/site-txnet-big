@@ -13,6 +13,7 @@ import type {
   UsageQuery,
 } from "@/lib/billing-api";
 import { REDEMPTION_STATUSES } from "@/lib/billing-api";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** Every string the coupons page can show (C-06). */
 export const COUPON_KEYS = FrontendI18nKeys.common.coupons;
@@ -151,8 +152,6 @@ export function emptyCouponForm(): CouponForm {
   };
 }
 
-export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner";
-
 /**
  * Billing froze this coupon's type, value and grant variant. The counters are
  * not the rule — a released redemption leaves none and still freezes it — so
@@ -271,7 +270,7 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
   };
 
   if (!CODE.test(f.code.trim().toUpperCase())) put("code", E.code);
-  if (!original && isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) put("tenantId", E.uuid);
+  if (!original && isPlatformTenant(me?.tenant?.type) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) put("tenantId", E.uuid);
 
   if (f.discountType === "free_grant") {
     // A free service names the variant it grants and gives no money (F-502-l-c).
@@ -386,7 +385,7 @@ export function createBody(f: CouponForm, me: Me | null): CreateCouponBody {
     if (k in body) continue;
     if (JSON.stringify(v) !== JSON.stringify(EMPTY_WIRE[k as keyof typeof EMPTY_WIRE])) body[k] = v;
   }
-  if (isPlatformOwner(me) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
+  if (isPlatformTenant(me?.tenant?.type) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
   return body as unknown as CreateCouponBody;
 }
 

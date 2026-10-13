@@ -90,9 +90,9 @@ describe("refusals", () => {
 describe("the texts form", () => {
   const fa = (over: Partial<GuideText> = {}): GuideText => ({ lang: "fa", title: "نصب", blocks: [{ type: "text", text: "یک" }], ...over });
 
-  it("holds every language, and sends only the written ones, trimmed", () => {
-    const form = textsForm([fa({ title: "  نصب  " })]);
-    expect(form.map((t) => t.lang)).toEqual(["fa", "en"]);
+  it("holds every language the locale meta has, and sends only the written ones, trimmed", () => {
+    const form = textsForm([fa({ title: "  نصب  " })], ["fa", "en", "ar"]);
+    expect(form.map((t) => t.lang)).toEqual(["fa", "en", "ar"]);
     expect(textsBody(form)).toEqual([{ lang: "fa", title: "نصب", blocks: [{ type: "text", text: "یک" }] }]);
   });
 
@@ -114,7 +114,7 @@ describe("the texts form", () => {
   });
 
   it("stops what tenant-service would refuse", () => {
-    expect(Object.keys(validateTexts(textsForm([])))).toEqual(["texts"]);
+    expect(Object.keys(validateTexts(textsForm([], ["fa", "en"])))).toEqual(["texts"]);
     expect(Object.keys(validateTexts([fa({ title: "" })]))).toEqual(["fa.title"]);
     expect(Object.keys(validateTexts([fa({ title: "x".repeat(121) })]))).toEqual(["fa.title"]);
     expect(Object.keys(validateTexts([fa({ blocks: [] })]))).toEqual(["fa.blocks"]);

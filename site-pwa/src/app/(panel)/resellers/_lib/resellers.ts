@@ -10,6 +10,7 @@ import type {
 } from "@/lib/tenant-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerUsersPath, panelResellerPath } from "@/lib/routes";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** The page's strings as generated constants (C-06). */
 export const RESELLER_KEYS = FrontendI18nKeys.common.resellers;
@@ -77,23 +78,22 @@ export function refusalKey(e: unknown): string | null {
 export const isNoSubscription = (e: unknown) => (e as { reason?: unknown } | null)?.reason === "subscription_not_found";
 
 const holds = (me: Me | null, key: string) => holdsPermission(me?.permissions, key);
-const onPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /**
  * Who may open the page — the menu entry's rule, for a visitor who typed the
  * path. Both halves: a platform key counts only on the platform's tenant (ADR-0135), and the
  * service would refuse it anyway (`not_platform_owner`).
  */
-export const canAdministerResellers = (me: Me | null) => onPlatform(me) && holds(me, RESELLERS_MANAGE);
+export const canAdministerResellers = (me: Me | null) => isPlatformTenant(me?.tenant?.type) && holds(me, RESELLERS_MANAGE);
 /** Who may read the list (GR-1-r): its administrators, and Support, which only finds a reseller in it. */
-export const canSeeResellers = (me: Me | null) => canAdministerResellers(me) || (onPlatform(me) && holds(me, RESELLERS_SUPPORT));
+export const canSeeResellers = (me: Me | null) => canAdministerResellers(me) || (isPlatformTenant(me?.tenant?.type) && holds(me, RESELLERS_SUPPORT));
 /** A row opens the reseller's page for an administrator; for Support, its users, where the consent banner asks (F-117-g). */
 export const resellerRowHref = (me: Me | null, id: string) => (canAdministerResellers(me) ? panelResellerPath(id) : myResellerUsersPath(id));
-export const canAdjustWallet = (me: Me | null) => onPlatform(me) && holds(me, WALLET_ADJUST);
+export const canAdjustWallet = (me: Me | null) => isPlatformTenant(me?.tenant?.type) && holds(me, WALLET_ADJUST);
 /** Whether the create sheet can search for the owner; without it the sheet takes a user id. */
-export const canSearchUsers = (me: Me | null) => onPlatform(me) && holds(me, USER_SEARCH);
+export const canSearchUsers = (me: Me | null) => isPlatformTenant(me?.tenant?.type) && holds(me, USER_SEARCH);
 /** Whether one reseller's billing ledger can be read (F-019-j). */
-export const canReadTenantLedger = (me: Me | null) => onPlatform(me) && holds(me, WALLET_READ);
+export const canReadTenantLedger = (me: Me | null) => isPlatformTenant(me?.tenant?.type) && holds(me, WALLET_READ);
 
 /**
  * The reseller page's tabs (F-019-k), in the order they are shown. `overview`

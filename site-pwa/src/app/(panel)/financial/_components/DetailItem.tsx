@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Copy, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { copyText } from "../../_lib/clipboard";
+import { COPY_FEEDBACK_MS, copyText } from "../../_lib/clipboard";
 import { IconButton } from "../../_components/kit";
 
 const F = FrontendI18nKeys.common.financial;
@@ -46,7 +46,7 @@ export function DetailItem({
     e.stopPropagation();
     if (!(await copyText(value))) return;
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
   };
 
   return (

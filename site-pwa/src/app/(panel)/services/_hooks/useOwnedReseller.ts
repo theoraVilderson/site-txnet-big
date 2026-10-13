@@ -6,6 +6,7 @@ import { useLiveReread } from "@/hooks/useLiveReread";
 import { userChannel } from "@/lib/realtime";
 import { resellerPurchaseApi, type OwnedReseller } from "@/lib/tenant-api";
 import { usePanelSession } from "../../_context/PanelSessionContext";
+import { isPlatformUser } from "@/lib/tenant-type";
 
 /**
  * A paid renewal (F-019-c1), any status change — by hand or by the platform
@@ -34,7 +35,7 @@ const RENEWAL_EVENTS = [
 export function useOwnedReseller(): OwnedReseller | null {
   const { me, group } = usePanelSession();
   const userId = group?.current.userId ?? null;
-  const canHold = me != null && me.tenant.type === "platform_owner" && !me.tenant.isOwner;
+  const canHold = me != null && isPlatformUser(me.tenant);
   const [reseller, setReseller] = useState<OwnedReseller | null>(null);
   const [asked, setAsked] = useState(0);
 

@@ -1,6 +1,7 @@
 import type { Me } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsPermission } from "@/lib/permissions";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const SETTINGS_MANAGE = "settings.manage";
 
@@ -10,7 +11,7 @@ const SETTINGS_MANAGE = "settings.manage";
  * can grant itself either key, so the tenant type gates it as well.
  */
 export function canSetPlatformCurrency(me: Me | null): boolean {
-  return me?.tenant?.type === "platform_owner" && holdsPermission(me.permissions, SETTINGS_MANAGE);
+  return me != null && isPlatformTenant(me.tenant.type) && holdsPermission(me.permissions, SETTINGS_MANAGE);
 }
 
 const CURRENCY_PIN = "currency.pin";
@@ -40,7 +41,7 @@ export function settingsTabs(me: Me | null): { value: SettingsTab; label: string
     { value: "appearance", label: T.appearance },
   ];
   if (canSetPlatformCurrency(me) || canPinRates(me)) {
-    tabs.push({ value: "workspace", label: me?.tenant?.type === "platform_owner" ? T.platform : T.reseller });
+    tabs.push({ value: "workspace", label: isPlatformTenant(me?.tenant?.type) ? T.platform : T.reseller });
   }
   return tabs;
 }

@@ -1,6 +1,7 @@
 import type { Me } from "@/lib/auth-api";
 import type { CatalogProductDetail } from "@/lib/catalog-api";
-import { isPlatformOwner, type CouponOwnerChoice } from "./coupon-form";
+import { type CouponOwnerChoice } from "./coupon-form";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** One line of the free-service variant picker. */
 export interface VariantChoice {
@@ -17,7 +18,7 @@ export interface VariantChoice {
  * billing's `ownerOfNew` decides.
  */
 export function variantOwnerTenant(owner: CouponOwnerChoice, tenantId: string, me: Me | null): string | null {
-  if (!isPlatformOwner(me)) return me?.tenant?.id ?? null;
+  if (!isPlatformTenant(me?.tenant?.type)) return me?.tenant?.id ?? null;
   if (owner === "platform") return null;
   if (owner === "tenant") return tenantId.trim();
   return me?.tenant?.id ?? null;

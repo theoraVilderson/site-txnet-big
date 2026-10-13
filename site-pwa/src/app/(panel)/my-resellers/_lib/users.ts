@@ -4,6 +4,7 @@ import type { ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
 import { myResellerUserPath, panelUserPath, resellerWorkspaceRoot } from "@/lib/routes";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
+import { isPlatformTenant, type TenantType } from "@/lib/tenant-type";
 
 /** The screens' strings as generated constants (C-06). */
 export const USER_KEYS = FrontendI18nKeys.common.resellerUsers;
@@ -170,11 +171,12 @@ export function ownTenantRedirect(pathname: string, sessionTenantId: string | nu
   return /^\/(users|team|roles)(\/|$)/.test(rest) ? rest : null;
 }
 
-export function isPlatformTenant(
+/** Is the workspace `id` the platform's own tenant, as the caller sees it? */
+export function isPlatformWorkspace(
   id: string,
-  me: { tenant: { id: string; type: "platform_owner" | "reseller" } } | null,
+  me: { tenant: { id: string; type: TenantType } } | null,
 ): boolean {
-  return me?.tenant.type === "platform_owner" && me.tenant.id === id;
+  return me != null && isPlatformTenant(me.tenant.type) && me.tenant.id === id;
 }
 
 /**

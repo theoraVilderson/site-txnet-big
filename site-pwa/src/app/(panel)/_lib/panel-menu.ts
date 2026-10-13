@@ -62,6 +62,7 @@ import {
 } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { holdsEveryPermission } from "@/lib/permissions";
+import { PLATFORM_TENANT_TYPE, isPlatformTenant, type TenantType } from "@/lib/tenant-type";
 
 /** The shell's menu labels as generated constants (C-06). */
 const M = FrontendI18nKeys.common.shell.menu;
@@ -94,7 +95,7 @@ export type MenuPlacement = MenuSectionId | "footer";
  * entry the edge would have refused anyway.
  *
  * A permission is **not** always the whole answer: an operator-only surface
- * must also check `tenant.type === "platform_owner"`, because a reseller
+ * must also ask `isPlatformTenant` (`lib/tenant-type.ts`), because a reseller
  * administers its own roles and can grant itself the key
  * (`docs/domains/audit/contract.settlement.md`, invariant #9).
  */
@@ -132,7 +133,6 @@ export type PermissionGated = {
   hiddenFrom?: readonly ("tenantOwner" | "resellerOwner")[];
 };
 
-export type TenantType = "platform_owner" | "reseller";
 
 export interface PanelMenuLink extends PermissionGated {
   id: string;
@@ -275,7 +275,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     label: M.buyReseller,
     icon: Rocket,
     href: PANEL_RESELLER_PURCHASE,
-    tenantTypes: ["platform_owner"],
+    tenantTypes: [PLATFORM_TENANT_TYPE],
     hiddenFrom: ["tenantOwner", "resellerOwner"],
   },
   {
@@ -406,7 +406,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     icon: Store,
     // Support reads the list to find a reseller (ADR-0141); packages and limits stay its administrators'.
     requiresAnyOf: ["platform.tenant.manage", "platform.support"],
-    tenantTypes: ["platform_owner"],
+    tenantTypes: [PLATFORM_TENANT_TYPE],
     children: [
       {
         id: "reseller-list",
@@ -441,7 +441,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     icon: Server,
     href: PANEL_SYSTEMS,
     requires: ["platform.node.manage"],
-    tenantTypes: ["platform_owner"],
+    tenantTypes: [PLATFORM_TENANT_TYPE],
   },
 
   // ── support ──
@@ -593,7 +593,7 @@ export function ownTenantOf(
   canRead: boolean | null,
 ): string | null {
   if (!tenant) return null;
-  if (tenant.type === "platform_owner") return tenant.id;
+  if (isPlatformTenant(tenant.type)) return tenant.id;
   return canRead === true ? tenant.id : null;
 }
 

@@ -1,3 +1,6 @@
+/** How long a "copied" mark stays on a copy button, everywhere in the panel (FE-1-b). */
+export const COPY_FEEDBACK_MS = 2000;
+
 /**
  * Copy text to the clipboard (F-093-b) — a reference number, a gift code.
  * Resolves `false` rather than throwing when the browser refuses, so the

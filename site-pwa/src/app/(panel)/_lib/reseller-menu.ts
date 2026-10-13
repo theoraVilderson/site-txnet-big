@@ -22,6 +22,7 @@ import {
 } from "@/lib/routes";
 import type { SetupProgress } from "../my-resellers/_lib/setup";
 import { menuHrefs, type MenuSectionId, type PanelMenuGroup, type PanelMenuLink, type VisibleMenuEntry, type VisibleMenuGroup } from "./panel-menu";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** The reseller menu's strings as generated constants (C-06). */
 const R = FrontendI18nKeys.common.resellerNav;
@@ -110,7 +111,7 @@ export function workspaceOfPath(
   const segment = pathname.slice(PANEL_MY_RESELLERS.length + 1).split("/")[0];
   if (!segment) return null;
   const id = decodeURIComponent(segment);
-  if (me?.tenant.type === "platform_owner" && me.tenant.id === id) return null;
+  if (me != null && isPlatformTenant(me.tenant.type) && me.tenant.id === id) return null;
   // Its own, by id for a moment before the layout moves it to `/reseller` (F-061-n).
   return { id, self: id === selfId };
 }

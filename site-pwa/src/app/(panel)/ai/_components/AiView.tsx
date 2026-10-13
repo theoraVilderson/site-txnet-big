@@ -14,6 +14,7 @@ import { ResellersAtRisk } from "./ResellersAtRisk";
 import { UsageForecastView } from "./UsageForecastView";
 import { UpliftReportView } from "./UpliftReportView";
 import { PageHeader, Tabs } from "../../_components/kit";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const TABS = ["settings", "offers", "atRisk", "margins", "layout", "usage", "report", "resellers"] as const;
 type Tab = (typeof TABS)[number];
@@ -35,7 +36,7 @@ export function AiView() {
   const { t } = useLocale();
   const { me } = usePanelSession();
   const [tab, setTab] = useState<Tab>("settings");
-  const tabs = TABS.filter((id) => id !== "resellers" || me?.tenant?.type === "platform_owner");
+  const tabs = TABS.filter((id) => id !== "resellers" || isPlatformTenant(me?.tenant?.type));
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">

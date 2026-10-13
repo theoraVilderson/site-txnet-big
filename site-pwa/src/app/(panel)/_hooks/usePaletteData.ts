@@ -11,6 +11,7 @@ import { isMenuGroup, type VisibleMenuEntry } from "../_lib/panel-menu";
 import { PALETTE_GROUP_LIMIT, type PaletteDataGroup, type PaletteItem } from "../_lib/palette";
 import { STATUS_KEYS } from "../support/_lib/support";
 import { pastedLines } from "../services/_lib/my-services";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** N7: a source is asked once typing has rested this long, and only from this many characters. */
 export const PALETTE_DATA_DEBOUNCE_MS = 300;
@@ -95,7 +96,7 @@ function sourcesFor(me: Me | null, menu: readonly VisibleMenuEntry[], pasted: bo
       group: "users",
       min: USERS_MIN,
       ask: async (q) => {
-        const hits = me.tenant.type === "platform_owner" ? (await authApi.searchUsers(q)).users : (await resellerUsersApi.list(tenantId, { q, page: 1, pageSize: PALETTE_GROUP_LIMIT })).items;
+        const hits = isPlatformTenant(me.tenant.type) ? (await authApi.searchUsers(q)).users : (await resellerUsersApi.list(tenantId, { q, page: 1, pageSize: PALETTE_GROUP_LIMIT })).items;
         return hits.slice(0, PALETTE_GROUP_LIMIT).map((u) => ({
           key: `users:${u.id}`,
           group: "users",

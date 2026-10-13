@@ -87,7 +87,7 @@ reason on its own line (`FormError` `detail`, `banDetail`).
 | `/support/inbox` | `SupportInboxView.tsx` | `support.agent` | the four views (`pending`, `live`, `mine`, `unassigned`) in support's queue order; priority, SLA badge, owner by name (`assigneeOf`, F-033-r), unread; presence on/off; re-read every minute |
 | `/support/inbox/[id]` | `AgentThreadView.tsx` | `support.agent` | messages and notes, take/release, priority, resolve, close; reply or note, canned insert; the user's sidebar (F-033-m) with their name, a link to their page and each service opened there (`userLinksOf`, `/users/:id?grant=`, F-033-r); drawn per `contract.ux.md` T4 |
 | (sidebar) | `UserStatusControl.tsx` | `restriction.assign` / `user.ban` | the person's status and reason; restrict and ban with a reason, lift after a confirm — each offered by the caller's own key (BAN-1-f, ADR-0133) |
-| `/support/settings` | `SupportSettingsView.tsx` | `support.manage` | tabs: working hours (`HH:MM`, `24:00` allowed, the tenant's zone), SLA targets per priority, categories (F-033-e) |
+| `/support/settings` | `SupportSettingsView.tsx` | `support.manage` | tabs: working hours (`HH:MM`, `24:00` allowed, the tenant's zone), SLA targets per priority, categories (F-033-e) — a name per language of the locale meta, listed in the reader's (C-17, FE-1-b) |
 
 Menu: `support-inbox` and `support-settings`, each hidden without its
 permission; the routes still answer 403 on their own. Rules:

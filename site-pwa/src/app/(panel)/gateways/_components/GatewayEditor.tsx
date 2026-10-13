@@ -39,7 +39,6 @@ import {
   PROVIDERS,
   changedFields,
   formFromGateway,
-  isPlatformOwner,
   updateBody,
   validateForm,
   type FormErrors,
@@ -48,6 +47,7 @@ import {
 import { PROVIDER_DEFAULTS, type Provider } from "../_lib/gateway-wizard";
 import { Button, IconButton, useConfirm } from "../../_components/kit";
 import { useOverlayLayer } from "../../_components/kit/overlay";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const G = FrontendI18nKeys.common.gateways;
 const F = G.form;
@@ -115,7 +115,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
   const confirm = useConfirm();
   const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotionConfig();
-  const owner = isPlatformOwner(me);
+  const owner = isPlatformTenant(me?.tenant?.type);
 
   const initial = useMemo(() => formFromGateway(gateway), [gateway]);
   const [form, setForm] = useState<GatewayForm>(initial);

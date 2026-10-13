@@ -21,7 +21,6 @@ import {
   VISIBILITIES,
   capabilitiesFor,
   currentPrice,
-  isPlatformOwner,
   surfaceActor,
   emptyVariantForm,
   groupsForVariant,
@@ -48,6 +47,7 @@ import { ProductCategories } from "./CategoryPickers";
 import { ProductAudienceSection, ownsAudience } from "./ProductAudienceSection";
 import { CopyId, Field, Sheet, useMessage } from "./catalog-ui";
 import { Alert, Button, Input } from "../../_components/kit";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /**
  * One product: what it unlocks (editable with the picker), and each variant
@@ -183,7 +183,7 @@ function Capabilities({
   const { api, tenantId } = useCatalogSurface();
   const { me } = usePanelSession();
   // Only the platform owner names whose a new capability is; a reseller's screen's schema refuses a `tenantId`.
-  const owner = isPlatformOwner(surfaceActor(me, tenantId));
+  const owner = isPlatformTenant(surfaceActor(me, tenantId)?.tenant?.type);
   const nameOf = (k: string) => {
     const c = capabilities.find((x) => x.key === k);
     return c ? label(c) : k;

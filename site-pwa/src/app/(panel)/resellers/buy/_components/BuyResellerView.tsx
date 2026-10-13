@@ -36,7 +36,6 @@ import {
   offerChoices,
   offerPrice,
   ownedHosts,
-  ownsPlatform,
   purchaseBody,
   purchaseRefusalKey,
   suggestibleName,
@@ -46,6 +45,7 @@ import {
 import type { Errors } from "../../_lib/resellers";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { Button, Input, buttonClass } from "../../../_components/kit";
+import { ownsPlatform } from "@/lib/tenant-type";
 
 /** The suggestion is asked as the name is typed; the same wait the owner picker uses. */
 const SUGGEST_AFTER_MS = 300;
@@ -177,7 +177,7 @@ export function BuyResellerView() {
   if (!mayBuy) {
     return (
       <Shell title={t("common", K.title)} subtitle={t("common", K.subtitle)}>
-        <Alert>{t("common", ownsPlatform(me) ? K.ownerNotice : K.refusals.not_platform_user)}</Alert>
+        <Alert>{t("common", ownsPlatform(me?.tenant) ? K.ownerNotice : K.refusals.not_platform_user)}</Alert>
       </Shell>
     );
   }

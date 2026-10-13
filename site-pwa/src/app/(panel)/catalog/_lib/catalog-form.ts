@@ -25,6 +25,7 @@ import type {
   UpdateVariantBody,
   Visibility,
 } from "@/lib/catalog-api";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RATE_CARD_MODES, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
@@ -81,8 +82,6 @@ export function refusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;
   return typeof reason === "string" && reason in REFUSAL_KEYS ? REFUSAL_KEYS[reason as CatalogRejection] : null;
 }
-
-export const isPlatformOwner = (me: Me | null) => me?.tenant?.type === "platform_owner";
 
 /**
  * Who the forms may treat as the caller on this surface (F-066-w8). On a
@@ -458,7 +457,7 @@ export const emptyProductForm = (defaultLang: string): ProductForm => ({
 
 export function validateProductForm(f: ProductForm, me: Me | null): Errors<ProductForm> {
   const errors: Errors<ProductForm> = {};
-  if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = E.uuid;
+  if (isPlatformTenant(me?.tenant?.type) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = E.uuid;
   if (unique(f.categoryIds).length === 0) errors.categoryIds = E.required;
   if (!KEY.test(f.key.trim())) errors.key = E.key;
   if (blank(f.sourceLang)) errors.sourceLang = E.required;
@@ -479,7 +478,7 @@ export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
   };
   if (!blank(f.description)) body.description = { [f.sourceLang.trim()]: f.description.trim() };
   if (f.translateAll) body.translateAll = true;
-  if (isPlatformOwner(me) && f.owner === "tenant") body.tenantId = f.tenantId.trim();
+  if (isPlatformTenant(me?.tenant?.type) && f.owner === "tenant") body.tenantId = f.tenantId.trim();
   return body;
 }
 
@@ -602,7 +601,7 @@ export const pricedIn = (label: string, code: string | null) => (code ? `${label
 
 /** Whose the wizard's variant will be, when the platform owner chose it; anyone else's is billing's to narrow. */
 export function wizardVariantTenant(f: ProductForm, me: Me | null): string | undefined {
-  if (!isPlatformOwner(me)) return undefined;
+  if (!isPlatformTenant(me?.tenant?.type)) return undefined;
   return f.owner === "tenant" ? f.tenantId.trim() : me!.tenant.id;
 }
 

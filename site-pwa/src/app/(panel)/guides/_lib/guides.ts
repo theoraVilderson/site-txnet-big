@@ -20,8 +20,6 @@ const K = GUIDE_KEYS;
 export const GUIDE_MANAGE = "guide.manage";
 export const canManageGuides = (me: Me | null) => holdsPermission(me?.permissions, GUIDE_MANAGE);
 
-/** Prisma's `Language`, in the order the editor shows them. */
-export const GUIDE_LANGS: readonly GuideLang[] = ["fa", "en"];
 export const GUIDE_KINDS: readonly GuideKind[] = ["os", "app", "product", "section"];
 export const CALLOUT_TONES: readonly CalloutTone[] = ["info", "tip", "warning", "danger"];
 /** Block types the editor offers — every one shared-core has (video since F-414-i). */
@@ -96,9 +94,9 @@ export function emptyBlock(type: EditableBlockType): GuideBlock {
   }
 }
 
-/** The editor's texts: every language, an untouched one empty. */
-export function textsForm(texts: readonly GuideText[]): GuideText[] {
-  return GUIDE_LANGS.map((lang) => texts.find((t) => t.lang === lang) ?? { lang, title: "", blocks: [] });
+/** The editor's texts: every language of the locale meta, in its order, an untouched one empty. */
+export function textsForm(texts: readonly GuideText[], langs: readonly GuideLang[]): GuideText[] {
+  return langs.map((lang) => texts.find((t) => t.lang === lang) ?? { lang, title: "", blocks: [] });
 }
 
 const blank = (t: GuideText) => t.title.trim() === "" && t.blocks.length === 0;

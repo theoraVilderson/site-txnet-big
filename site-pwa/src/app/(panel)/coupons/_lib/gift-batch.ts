@@ -1,6 +1,7 @@
 import type { Me } from "@/lib/auth-api";
 import type { GenerateGiftBatchBody } from "@/lib/billing-api";
-import { COUPON_KEYS, dayToInstant, isPlatformOwner, type CouponOwnerChoice } from "./coupon-form";
+import { COUPON_KEYS, dayToInstant, type CouponOwnerChoice } from "./coupon-form";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 /** Every string the gift tab can show (C-06). */
 export const GIFT_KEYS = COUPON_KEYS.gift;
@@ -45,7 +46,7 @@ export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErr
     errors.value = COUPON_KEYS.errors.decimal;
   }
   if (f.prefix.trim() && !/^[A-Za-z0-9]{1,8}$/.test(f.prefix.trim())) errors.prefix = GIFT_KEYS.errors.prefix;
-  if (isPlatformOwner(me) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = COUPON_KEYS.errors.uuid;
+  if (isPlatformTenant(me?.tenant?.type) && f.owner === "tenant" && !UUID.test(f.tenantId.trim())) errors.tenantId = COUPON_KEYS.errors.uuid;
   return errors;
 }
 
@@ -56,7 +57,7 @@ export function giftBatchBody(f: GiftBatchForm, me: Me | null): GenerateGiftBatc
   if (f.note.trim()) body.note = f.note.trim();
   if (f.prefix.trim()) body.prefix = f.prefix.trim().toUpperCase();
   if (f.expiresAt) body.expiresAt = dayToInstant(f.expiresAt, "end");
-  if (isPlatformOwner(me) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
+  if (isPlatformTenant(me?.tenant?.type) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
   return body;
 }
 

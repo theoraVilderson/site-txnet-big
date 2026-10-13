@@ -17,6 +17,7 @@ import { CouponUsage } from "./CouponUsage";
 import { ListSkeleton } from "./ListSkeleton";
 import { VariantPicker } from "./VariantPicker";
 import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
+import { isPlatformTenant } from "@/lib/tenant-type";
 
 const PAGE_SIZE = 20;
 
@@ -206,7 +207,7 @@ function RowButton({ icon: Icon, label, onClick, tone = "primary", disabled }: {
 function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: () => void; onCreated: (b: GiftBatch) => void | Promise<void> }) {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
-  const owner = me?.tenant?.type === "platform_owner";
+  const owner = isPlatformTenant(me?.tenant?.type);
   const [form, setForm] = useState<GiftBatchForm>(emptyGiftBatchForm);
   const [errors, setErrors] = useState<GiftBatchErrors>({});
   const [saving, setSaving] = useState(false);

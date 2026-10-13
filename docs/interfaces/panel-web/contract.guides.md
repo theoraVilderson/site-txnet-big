@@ -14,8 +14,8 @@ Settings built by F-414-d over tenant-service's `/api/guides/settings`; guides s
 
 | Route | Shows |
 |---|---|
-| `/guides` (`PANEL_GUIDES`) | the caller's own guides (the platform's, for the platform owner's admin) with kind, state, "unpublished changes", published languages; a new-guide form (key, kind, language, title, first paragraph → a draft); for a reseller, the platform's inherited guides with **view**, **make my own version** (override → its editor) and **hide / show again** |
-| `/guides/[id]` (`panelGuidePath`) | one guide: **Text** (per language: title and blocks — text, image, video, steps, callout — add, move, remove; image upload), **Where it shows** (placements), **Preview** (per language); actions save draft, publish, discard draft, archive / restore, delete |
+| `/guides` (`PANEL_GUIDES`) | the caller's own guides (the platform's, for the platform owner's admin) with kind, state, "unpublished changes", published languages; a new-guide form (key, kind, language from the locale meta, title, first paragraph → a draft); for a reseller, the platform's inherited guides with **view**, **make my own version** (override → its editor) and **hide / show again** |
+| `/guides/[id]` (`panelGuidePath`) | one guide: **Text** (per language of the locale meta, starting at the reader's — no list in code (C-17, FE-1-b): title and blocks — text, image, video, steps, callout — add, move, remove; image upload), **Where it shows** (placements), **Preview** (per language); actions save draft, publish, discard draft, archive / restore, delete |
 
 ## Rules
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LATIN_DIGITS, numberLocale } from "./digits";
+import { LATIN_DIGITS, formatList, numberLocale } from "./digits";
 import { formatInstant } from "./datetime";
 import { formatMoney } from "./money";
 
@@ -31,5 +31,14 @@ describe("Latin digits in every language", () => {
 
   it("hands the date picker ten Latin digits", () => {
     expect(LATIN_DIGITS).toEqual(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+  });
+});
+
+describe("a list in the reader's language (FE-1-b)", () => {
+  it("joins with the language's own separator, not a Persian comma everywhere", () => {
+    expect(formatList(["a", "b", "c"], "en")).toBe("a, b, and c");
+    expect(formatList(["a", "b"], "fa")).not.toContain(", ");
+    expect(formatList(["a"], "en")).toBe("a");
+    expect(formatList([], "en")).toBe("");
   });
 });

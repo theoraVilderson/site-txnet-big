@@ -24,6 +24,7 @@ import { USER_KEYS, issuableProducts } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
 import { useMayGrant } from "./grant-keys-context";
 import { Alert, Button, Field, Input, NativeSelect } from "../../../../../_components/kit";
+import { formatList } from "../../../../../_lib/digits";
 
 const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
 
@@ -223,7 +224,7 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
       break;
     case "devices":
       lines.push(result.limitAfter == null ? t("common", G.done.devicesLifted) : t("common", G.done.devices, { value: result.limitAfter }));
-      if (result.panelsNotEnforcing?.length) lines.push(t("common", G.done.notEnforcing, { panels: result.panelsNotEnforcing.map((p) => p.name).join(lang === "fa" ? "، " : ", ") }));
+      if (result.panelsNotEnforcing?.length) lines.push(t("common", G.done.notEnforcing, { panels: formatList(result.panelsNotEnforcing.map((p) => p.name), lang) }));
       break;
     case "rotate":
       lines.push(t("common", G.done.rotate));

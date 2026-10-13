@@ -4,6 +4,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerSetupPath } from "@/lib/routes";
 import { PACKAGE_FEATURE_KEYS } from "./packages";
 import { RESERVED_SLUGS, type Errors } from "./resellers";
+import { isPlatformUser } from "@/lib/tenant-type";
 
 /** The page's strings as generated constants (C-06). */
 export const PURCHASE_KEYS = FrontendI18nKeys.common.resellerPurchase;
@@ -51,10 +52,7 @@ export const isInsufficientBalance = (e: unknown) => reasonOf(e) === "insufficie
  * key (tenant invariant 6), so the page refuses it as the sidebar hides it
  * (user, 2026-10-06).
  */
-export const canBuyReseller = (me: Me | null) => me?.tenant?.type === "platform_owner" && !me.tenant.isOwner;
-
-/** The caller this page turns away because they own the platform, not because they are outside it. */
-export const ownsPlatform = (me: Me | null) => me?.tenant?.type === "platform_owner" && me.tenant.isOwner;
+export const canBuyReseller = (me: Me | null) => isPlatformUser(me?.tenant);
 
 /**
  * What every reseller gets whatever the package (user, 2026-10-06): its own

@@ -8,6 +8,7 @@ import { Alert as KitAlert, Button, Dialog, Input } from "../../_components/kit"
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS as K, refusalKey } from "../_lib/catalog-form";
 import { useCatalogSurface } from "../_lib/surface";
+import { COPY_FEEDBACK_MS, copyText } from "../../_lib/clipboard";
 
 /** The pieces every catalog sheet and the wizard share. */
 
@@ -36,6 +37,12 @@ export function LanguageSelect({ value, onChange }: { value: string; onChange: (
 export function useDirOf() {
   const { availableLocales } = useLocale();
   return (code: string) => availableLocales.find((l) => l.code === code)?.dir ?? "ltr";
+}
+
+/** A language's own name, from locale-service's metadata; an unknown code reads as itself. */
+export function useLanguageName() {
+  const { availableLocales } = useLocale();
+  return (code: string) => availableLocales.find((l) => l.code === code)?.name ?? code;
 }
 
 /**
@@ -116,9 +123,9 @@ export function CopyId({ id }: { id: string }) {
       title={id}
       icon={copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
       onClick={() => {
-        void navigator.clipboard?.writeText(id).then(() => {
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
+        void copyText(id).then((ok) => {
+          setCopied(ok);
+          setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
         });
       }}
     >
