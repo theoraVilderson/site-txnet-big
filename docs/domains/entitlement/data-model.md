@@ -1,7 +1,7 @@
 ---
 id: entitlement
 layer: domain
-updated: 2026-09-29
+updated: 2026-10-13
 ---
 
 # Data model — entitlement
@@ -32,6 +32,8 @@ schema `entitlement`), migrations `20260914001600_entitlement_grant` and
 | grant_limit_setting | a tenant's default cap of open metered Grants per user (F-118-ao, [contract.limits.md](contract.limits.md)), one per tenant (PK `tenantId`): `meteredOpenCap` (CHECK ≥ 0), `updatedByUserId` (no FK); none = the platform's 5 | yes, strict RLS | permanent |
 | user_grant_limit | one user's own cap, set by staff (F-118-ao), unique `(tenantId, userId)`: `meteredOpenCap` (CHECK ≥ 0), optional `reason`, `setByUserId` (no FK); replaces the tenant's default | yes, strict RLS | permanent |
 | grant_link_reset | one reset of a Grant's link on the owner's path (F-114-e-d): `grantId`, `createdAt`; at most 3 in any 24 hours (`link-reset.ts`), counted under the Grant's row lock; staff and a reseller's admin write none; index `(grantId, createdAt)`; append-only (`grant_link_reset_is_history`), its Grant's tenant's (`same_tenant()`) | yes, strict RLS | permanent |
+| grant_compensation_cap | a tenant's cap on what `grant.compensate` may add to one Grant over 30 days (KS-1-c, billing [contract.grant-keys.md](../billing/contract.grant-keys.md)): `days`, `bytes`, one per tenant (PK `tenantId`), none = the platform's; CHECK >= 0; strict tenant RLS |
+| grant_compensation | one compensation given: `grantId`, `actorUserId`, `reason`, `days` or `bytes` (CHECK: exactly one > 0), `createdAt`; index (`grantId`, `createdAt`) for the 30-day sum; never edited; strict tenant RLS |
 
 `grant` is a reserved word: SQL quotes it (`entitlement."grant"`).
 

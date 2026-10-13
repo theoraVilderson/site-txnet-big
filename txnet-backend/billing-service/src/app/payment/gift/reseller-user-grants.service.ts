@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, VariantBillingMode } from '@prisma/client';
 import {
   AdmittedReseller,
   ResellerAccess,
@@ -8,6 +8,7 @@ import {
   ResellerActor,
   SupportConsentRefused,
   SupportConsentRejection,
+  TenantContext,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -27,15 +28,20 @@ import { GrantUsageService, GrantUsageView } from '../../traffic/grant-usage';
 import { RemainderCreditService } from '../../traffic/remainder-credit';
 import { AdminConfigCommand, UserConfigOutcome, UserConfigsService, UserConfigView } from '../../traffic/user-configs';
 import { UsageSettlementService } from '../../usage/usage-settlement';
+import { claimCompensation, CompensationAsk } from './grant-compensation';
 import { GrantBulkBody } from './grant-bulk.schema';
 import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
 import { actOnEach, GrantBulkOutcome } from './reseller-grants-bulk';
 import { SubscriptionLinkService } from './subscription-link.service';
 import { UsersCatalogProduct, usersCatalogOf } from './reseller-users-catalog';
 
+/** The member-door keys of a user's services, one per kind of act (KS-1-a, KS-1-c, ADR-0140). */
+type GrantKey = 'grant.read' | 'grant.repair' | 'grant.compensate' | 'grant.assign';
+
+/** One compensation given (KS-1-c): its ledger row, and the act it was — days, or traffic. */
+export type Compensated = { compensationId: string } & ({ duration: DurationChange } | { traffic: TrafficChange });
+
 /** The door's refusals, and the one this surface adds: the path's user is not the reseller's. */
-/** The member-door keys of a user's services, one per kind of act (KS-1-a, ADR-0140). */
-type GrantKey = 'grant.read' | 'grant.repair' | 'grant.assign';
 
 export type ResellerUserGrantsRejection = ResellerAccessRejection | SupportConsentRejection | 'user_not_found';
 
@@ -234,6 +240,48 @@ export class ResellerUserGrantsService {
   giftTraffic(actor: AdminActor, tenantId: string, userId: string, grantId: string, bytes: bigint, reason: string): Promise<TrafficChange> {
     return this.audited(actor, tenantId, userId, grantId, { action: 'grant_traffic_gift', reason, outcome: (r) => r }, (tx, admitted) =>
       giftGrantBytes(tx, grantId, { at: new Date(), actorUserId: actor.userId, bytes, reason, giver: giverOf(admitted) }),
+    );
+  }
+
+  /**
+   * A `grant.compensate` holder adds days or traffic to this user's Grant
+   * (KS-1-c, ADR-0140 (2)) — the apology for an outage, with no `grant.assign`.
+   * The tenant's cap per Grant over 30 days is claimed first, the Grant locked
+   * (`claimCompensation`); then the act is the admin's own one — days onto the
+   * end, bytes onto a prepaid bag or as a metered gift (bought wholesale, as a
+   * gift is) — audited and told to the user as that act. One transaction: a
+   * refused act takes its ledger row back with it.
+   */
+  compensate(actor: AdminActor, tenantId: string, userId: string, grantId: string, ask: CompensationAsk, reason: string): Promise<Compensated> {
+    return this.run(
+      actor,
+      tenantId,
+      userId,
+      (admitted) =>
+        this.onGrant(userId, grantId, async (tx) => {
+          const at = new Date();
+          const by = { tenantId: TenantContext.current('compensation').id, actorUserId: actor.userId, reason, at };
+          const { id: compensationId } = await claimCompensation(tx, grantId, ask, by);
+          const outcome = <T>(r: T) => ({ ...r, compensationId });
+          if ('days' in ask) {
+            const duration = await auditedGrantAct(tx, actor, tenantId, grantId, { action: 'grant_duration_change', reason, outcome }, () =>
+              changeGrantDuration(tx, grantId, { at, actorUserId: actor.userId, change: { days: ask.days }, reason }),
+            );
+            return { compensationId, duration };
+          }
+          const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { billingMode: true } });
+          const traffic =
+            grant?.billingMode === VariantBillingMode.metered
+              ? await auditedGrantAct(tx, actor, tenantId, grantId, { action: 'grant_traffic_gift', reason, outcome }, () =>
+                  giftGrantBytes(tx, grantId, { at, actorUserId: actor.userId, bytes: ask.bytes, reason, giver: giverOf(admitted) }),
+                )
+              : await auditedGrantAct(tx, actor, tenantId, grantId, { action: 'grant_traffic_change', reason, outcome }, () =>
+                  adjustGrantTraffic(tx, grantId, { at, actorUserId: actor.userId, deltaBytes: ask.bytes, reason }),
+                );
+          return { compensationId, traffic };
+        }),
+      'staffWrite',
+      'grant.compensate',
     );
   }
 

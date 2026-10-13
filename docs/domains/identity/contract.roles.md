@@ -3,7 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 30
-updated: 2026-10-09
+updated: 2026-10-13
 ---
 
 # Contract — roles and permissions
@@ -95,7 +95,8 @@ role may hold it, so a reseller's role was everything (the owner) or nothing.
 It is split: each reseller surface names its own key with
 `ResellerAccess.for(key)`, and `RESELLER_KEYS` (`shared-core/.../tenant/reseller-keys.ts`)
 lists them — `domain.manage`, `theme.manage`, `bot.manage`, `grant.read`,
-`grant.repair`, `grant.assign` (one per kind of act, KS-1-a, ADR-0140),
+`grant.repair`, `grant.compensate`, `grant.assign` (one per kind of act, KS-1-a,
+KS-1-c, ADR-0140),
 `staff.manage`, `role.manage`, `settings.manage` (currency, time zone,
 onboarding), `report.read` (revenue), and the existing `user.read`,
 `user.write`, `user.impersonate`, `user_group.manage`, `catalog.manage`,

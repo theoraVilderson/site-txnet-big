@@ -87,6 +87,10 @@ function build() {
   const grantState = () => ({ userId: CUSTOMER, status: log.includes('act') ? 'suspended' : 'active', statusReason: null, endsAt: null, purchasedBytes: BigInt(10), quotas: {}, tokenRotatedAt: new Date('2026-09-01T00:00:00Z') });
   const tx = {
     $executeRaw: async () => 1,
+    // A compensation's lock and ledger (KS-1-c): nothing given yet, the platform's cap.
+    $queryRaw: async () => [{ id: GRANT }],
+    grantCompensationCap: { findUnique: async () => null },
+    grantCompensation: { aggregate: async () => ({ _sum: { days: 0, bytes: BigInt(0) } }), create: async () => ({ id: 'comp-1' }) },
     user: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === CUSTOMER && scope() === RESELLER ? { id: CUSTOMER } : null) },
     // A bulk request's kept outcomes (F-311-u1): none yet, so the act runs.
     grantBulkOutcome: { findFirst: async () => null, findUnique: async () => null, create: async () => ({}) },
@@ -131,6 +135,7 @@ const EVERY_WRITE: Case[] = [
   { method: 'changeDuration', action: 'grant_duration_change', reason: 'outage', call: (s) => s.changeDuration(admin, RESELLER, CUSTOMER, GRANT, { days: 7 }, 'outage') },
   { method: 'changeTraffic', action: 'grant_traffic_change', reason: 'goodwill', call: (s) => s.changeTraffic(admin, RESELLER, CUSTOMER, GRANT, BigInt(10), 'goodwill') },
   { method: 'resetTraffic', action: 'grant_traffic_reset', reason: 'new month', call: (s) => s.resetTraffic(admin, RESELLER, CUSTOMER, GRANT, 'new month') },
+  { method: 'compensate', action: 'grant_duration_change', reason: 'outage', call: (s) => s.compensate(admin, RESELLER, CUSTOMER, GRANT, { days: 2 }, 'outage') },
   { method: 'giftTraffic', action: 'grant_traffic_gift', reason: 'gift', call: (s) => s.giftTraffic(admin, RESELLER, CUSTOMER, GRANT, BigInt(20), 'gift') },
   { method: 'setSpeed', action: 'grant_speed_set', reason: 'abuse', call: (s) => s.setSpeed(admin, RESELLER, CUSTOMER, GRANT, 20, 'abuse') },
   { method: 'setDevices', action: 'grant_devices_set', reason: 'sharing', call: (s) => s.setDevices(admin, RESELLER, CUSTOMER, GRANT, 2, 'sharing') },

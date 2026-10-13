@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, VariantBillingMode } from '@prisma/client';
-import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerKey, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { meteredCapOf, meteredCeilingOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP, underCeiling } from '../../entitlement/metered-cap';
-import { auditLimit } from '../../grant-audit/grant-audit';
+import { auditCompensationCap, auditLimit } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CompensationCap, compensationCapView, CompensationCapView } from './grant-compensation';
 import { ResellerUserGrantsRefused } from './reseller-user-grants.service';
 import type { AdminActor } from './reseller-user-grants.service';
 
@@ -72,6 +73,38 @@ export class GrantLimitsService {
           await auditLimit(tx, actor, scoped, 'grant_limit_tenant_set', { type: 'tenant', id: scoped }, was, cap, null);
         }
         return this.tenantView(tx);
+      }),
+    );
+  }
+
+  /**
+   * The tenant's compensation cap (KS-1-c): read by whoever gives within it
+   * (`grant.compensate`) or sets it (`grant.assign`), so the panel can say
+   * how much is left before an act is refused.
+   */
+  compensationCap(actor: ResellerActor, tenantId: string): Promise<CompensationCapView> {
+    return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => compensationCapView(tx, TenantContext.current('compensation cap').id)), [
+      'grant.compensate',
+      'grant.assign',
+    ]);
+  }
+
+  /** Set by a `grant.assign` holder only — the key that moves value without one (ADR-0140 (2)); `null` goes back to the platform's. */
+  setCompensationCap(actor: AdminActor, tenantId: string, cap: CompensationCap | null): Promise<CompensationCapView> {
+    return this.admitted(actor, tenantId, 'staffWrite', () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const scoped = TenantContext.current('compensation cap').id;
+        const before = (await compensationCapView(tx, scoped)).own;
+        const after = cap && { days: cap.days, bytes: cap.bytes.toString() };
+        if (JSON.stringify(before) !== JSON.stringify(after)) {
+          if (cap === null) await tx.grantCompensationCap.deleteMany({ where: { tenantId: scoped } });
+          else {
+            const row = { days: cap.days, bytes: cap.bytes, updatedByUserId: actor.userId };
+            await tx.grantCompensationCap.upsert({ where: { tenantId: scoped }, create: { tenantId: scoped, ...row }, update: row });
+          }
+          await auditCompensationCap(tx, actor, scoped, before, after);
+        }
+        return compensationCapView(tx, scoped);
       }),
     );
   }
@@ -158,9 +191,15 @@ export class GrantLimitsService {
     );
   }
 
-  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
+  private async admitted<T>(
+    actor: ResellerActor,
+    tenantId: string,
+    capability: 'read' | 'staffWrite',
+    work: () => Promise<T>,
+    keys: ResellerKey[] = ['grant.assign'],
+  ): Promise<T> {
     try {
-      return await this.access.for('grant.assign').runIncludingPlatform(actor, tenantId, capability, work);
+      return await this.access.for(...keys).runIncludingPlatform(actor, tenantId, capability, work);
     } catch (e) {
       if (e instanceof ResellerAccessRefused || e instanceof SupportConsentRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
       throw e;

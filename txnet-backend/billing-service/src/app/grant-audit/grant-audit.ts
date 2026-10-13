@@ -118,6 +118,21 @@ export async function auditLimit(
 }
 
 /**
+ * A tenant's compensation cap set or cleared (KS-1-c): before and after as
+ * `{ days, bytes }` (bytes as a string), `null` for the platform's default.
+ * Nobody is told: it bounds what staff may give, not anything a user holds.
+ */
+export async function auditCompensationCap(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  before: { days: number; bytes: string } | null,
+  after: { days: number; bytes: string } | null,
+): Promise<void> {
+  await write(tx, actor, tenantId, 'grant_compensation_cap_set', AuditTargetType.tenant, tenantId, { cap: before }, { cap: after }, null);
+}
+
+/**
  * A bulk job by filter, written down as one admin act (F-311-u3): its start
  * and its cancel, against the job, in that act's own transaction. Nobody is
  * told — each Grant it reaches is told by its own act's row (F-311-s).

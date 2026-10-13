@@ -25,7 +25,7 @@ export const GROUP_PRESETS: readonly GroupPreset[] = [
     id: 'support',
     every: false,
     // `user.write`: edit the person's details, and block or unblock them (GR-1-t).
-    keys: ['user.read', 'user.write', 'support.agent', 'restriction.assign', 'realtime.tenant.read', 'grant.read', 'grant.repair'],
+    keys: ['user.read', 'user.write', 'support.agent', 'restriction.assign', 'realtime.tenant.read', 'grant.read', 'grant.repair', 'grant.compensate'],
     platformKeys: ['platform.support'],
   },
   {

@@ -9,15 +9,17 @@ export const GRANT_KEYS = USER_KEYS.grant;
  * An admin's actions on one of a user's Grants (F-311-w), each billing's
  * `POST …/users/:userId/grants/:grantId/<route>` (`billing/contract.reseller-grants.md`):
  * freeze (F-311-h), days (-i, -z), traffic (-j), reset (-k), gift (-l),
- * speed (-p), devices (-q), the `/sub` link (-n), renew (-d), delete (-m).
+ * speed (-p), devices (-q), the `/sub` link (-n), renew (-d), delete (-m),
+ * and compensate (KS-1-c): days or GB within the tenant's cap.
  * Issue (-o) is the user's, not a Grant's: {@link issueBody}.
  */
-export const GRANT_ACTIONS = ["freeze", "unfreeze", "days", "traffic", "reset", "gift", "speed", "devices", "rotate", "renew", "delete"] as const;
+export const GRANT_ACTIONS = ["freeze", "unfreeze", "compensate", "days", "traffic", "reset", "gift", "speed", "devices", "rotate", "renew", "delete"] as const;
 export type GrantAction = (typeof GRANT_ACTIONS)[number];
 
 export const GRANT_ACTION_ROUTES: Record<GrantAction, string> = {
   freeze: "freeze",
   unfreeze: "unfreeze",
+  compensate: "compensate",
   days: "duration",
   traffic: "traffic",
   reset: "traffic/reset",
@@ -30,14 +32,14 @@ export const GRANT_ACTION_ROUTES: Record<GrantAction, string> = {
 };
 
 /** The actions whose schema requires a `reason`; the others take one optionally. */
-export const REASON_REQUIRED = ["days", "traffic", "reset", "gift", "speed", "devices", "delete"] as const satisfies readonly GrantAction[];
+export const REASON_REQUIRED = ["compensate", "days", "traffic", "reset", "gift", "speed", "devices", "delete"] as const satisfies readonly GrantAction[];
 
 /** What the one open form holds; each action reads only its own fields. */
 export interface GrantActionDraft {
   reason: string;
-  /** Days, GB, Mbps or devices — the one number the action takes; a renewal's GB. */
+  /** Days, GB, Mbps or devices — the one number the action takes; a renewal's or a compensation's GB. */
   amount: string;
-  /** A renewal's days. */
+  /** A renewal's or a compensation's days. */
   days: string;
   /** A freeze's last day, `YYYY-MM-DD` in the admin's own time; empty = until unfrozen. */
   until: string;
@@ -105,6 +107,14 @@ export function grantActionBody(action: GrantAction, d: GrantActionDraft, now: D
     case "rotate":
     case "reset":
       return why;
+    case "compensate": {
+      // One of the two (billing's schema): days typed, or GB typed, never both.
+      const typedDays = latin(d.days) !== "";
+      if (typedDays === (latin(d.amount) !== "")) return null;
+      const days = numberOf(d.days);
+      if (typedDays) return wholeIn(days, 1, MAX_COMPENSATION_DAYS) ? { days, ...why } : null;
+      return n !== null && n <= MAX_GB && Math.round(n * GIB) > 0 ? { gb: n, ...why } : null;
+    }
     case "days":
       return wholeIn(n, -3650, 3650) && n !== 0 ? { days: n, ...why } : null;
     case "traffic":
@@ -132,6 +142,18 @@ export function grantActionBody(action: GrantAction, d: GrantActionDraft, now: D
   }
 }
 
+/** Billing's bound on a cap (`MAX_COMPENSATION_CAP`): it refuses past it, the box only helps. */
+const MAX_COMPENSATION_DAYS = 365;
+const MAX_COMPENSATION_GB = 10_000;
+
+/** A compensation cap's body (KS-1-c): whole days and GB, 0 closing that kind; `null` while either box is not one. */
+export function compensationCapBody(rawDays: string, rawGb: string): { days: number; gb: number } | null {
+  const days = latin(rawDays) === "" ? null : numberOf(rawDays);
+  const gb = latin(rawGb) === "" ? null : numberOf(rawGb);
+  if (!wholeIn(days, 0, MAX_COMPENSATION_DAYS) || gb === null || gb < 0 || gb > MAX_COMPENSATION_GB) return null;
+  return { days, gb };
+}
+
 /** An issue's body (F-311-o), or `null` with no variant picked. */
 export function issueBody(variantId: string, requestId: string, rawReason: string): Record<string, unknown> | null {
   const reason = reasonOf(rawReason);
@@ -151,8 +173,11 @@ export function issueBody(variantId: string, requestId: string, rawReason: strin
 export function grantActionsOf(row: Pick<GrantRow, "status" | "endsAt" | "billingMode" | "trafficUnlimited">): GrantAction[] {
   if (row.status !== "active" && row.status !== "suspended") return ["rotate"];
   const prepaidBag = row.billingMode === "prepaid" && !row.trafficUnlimited;
+  const metered = row.billingMode === "metered" && !row.trafficUnlimited;
   const offered: (GrantAction | false)[] = [
     row.status === "active" ? "freeze" : "unfreeze",
+    // Days onto an end, or GB onto a bag (KS-1-c): billing refuses the kind this Grant has not.
+    (row.endsAt !== null || prepaidBag || metered) && "compensate",
     row.endsAt !== null && "days",
     prepaidBag && "traffic",
     prepaidBag && "reset",
@@ -182,12 +207,12 @@ export function grantRefusalKey(e: unknown): string | null {
 
 // ------------------------------------------------------------------ the keys
 
-/** The member-door keys of a user's services, one per kind of act (KS-1-a, ADR-0140). */
-export type GrantKey = "grant.read" | "grant.repair" | "grant.assign";
+/** The member-door keys of a user's services, one per kind of act (KS-1-a, KS-1-c, ADR-0140). */
+export type GrantKey = "grant.read" | "grant.repair" | "grant.compensate" | "grant.assign";
 
-/** The key billing asks for each Grant act: a new link is a repair, every other act moves value. */
+/** The key billing asks for each Grant act: a new link is a repair, a compensation its own capped key, every other act moves value. */
 export const GRANT_ACTION_KEY: Record<GrantAction, GrantKey> = Object.fromEntries(
-  GRANT_ACTIONS.map((a) => [a, a === "rotate" ? "grant.repair" : "grant.assign"]),
+  GRANT_ACTIONS.map((a) => [a, a === "rotate" ? "grant.repair" : a === "compensate" ? "grant.compensate" : "grant.assign"]),
 ) as Record<GrantAction, GrantKey>;
 
 /** The key billing asks for each config action: a retired config is not given back, so retiring moves value. */

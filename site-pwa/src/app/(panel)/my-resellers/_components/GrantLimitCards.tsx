@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { grantLimitsApi, type TenantGrantLimit, type UserGrantLimit } from "@/lib/billing-api";
+import { grantLimitsApi, type CompensationCap, type TenantGrantLimit, type UserGrantLimit } from "@/lib/billing-api";
+import { compensationCapBody } from "../_lib/grant-actions";
 import { USER_KEYS } from "../_lib/users";
+import { formatBytes } from "../../services/_lib/service-configs";
 import { useUserMessage } from "../[id]/users/[userId]/_components/useUserMessage";
 import { Alert, Button, Field, Input } from "../../_components/kit";
 
 const L = USER_KEYS.grantLimit;
+const C = USER_KEYS.compensationCap;
+const GIB = 1024 ** 3;
 /** Billing's bound (`MAX_METERED_CAP`); billing refuses past it, the box only helps. */
 const MAX = 1000;
 
@@ -189,6 +193,105 @@ export function UserGrantLimitCard({ tenantId, userId }: { tenantId: string; use
           {t("common", L.userRemove)}
         </Button>
       )}
+      {error !== null && <Alert tone="error">{message(error)}</Alert>}
+    </section>
+  );
+}
+
+/**
+ * What a `grant.compensate` holder may add to one service over 30 days
+ * (KS-1-c), on the users page beside the limit above. Everyone who
+ * compensates reads it; only a `grant.assign` holder (`canSet`) gets the
+ * boxes — billing's door decides either way. Empty boxes are the platform's.
+ */
+export function CompensationCapCard({ tenantId, canSet }: { tenantId: string; canSet: boolean }) {
+  const { t, lang } = useLocale();
+  const message = useUserMessage();
+  const api = useMemo(() => grantLimitsApi(tenantId), [tenantId]);
+  const [view, setView] = useState<CompensationCap | null>(null);
+  const [days, setDays] = useState("");
+  const [gb, setGb] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const show = (v: CompensationCap) => {
+    setView(v);
+    setDays(v.own ? String(v.own.days) : "");
+    setGb(v.own ? String(Number(v.own.bytes) / GIB) : "");
+  };
+
+  useEffect(() => {
+    let live = true;
+    api.compensation().then(
+      (v) => live && show(v),
+      (e) => live && setError(e),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api]);
+
+  const run = async (cap: { days: number; gb: number } | null) => {
+    if (busy) return;
+    setBusy(true);
+    setSaved(false);
+    setError(null);
+    try {
+      show(await api.setCompensation(cap));
+      setSaved(true);
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const size = (bytes: string) => formatBytes(bytes, lang) ?? "";
+  const body = compensationCapBody(days, gb);
+
+  return (
+    <section aria-label={t("common", C.title)} className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4">
+      <div>
+        <h2 className="text-sm font-bold text-text-primary">{t("common", C.title)}</h2>
+        <p className="mt-1 text-xs leading-5 text-text-secondary">{t("common", C.hint)}</p>
+      </div>
+      {view && (
+        <div className="space-y-1 text-xs text-text-secondary">
+          <p className="font-bold text-text-primary">
+            {t("common", C.inEffect, { days: view.effective.days, size: size(view.effective.bytes), window: view.windowDays })}
+          </p>
+          <p>{view.own ? t("common", C.own) : t("common", C.platform, { days: view.platform.days, size: size(view.platform.bytes) })}</p>
+        </div>
+      )}
+      {canSet && (
+        <>
+          <div className="grid gap-2 sm:grid-cols-[8rem_8rem_auto] sm:items-end">
+            <Field label={t("common", C.days)}>
+              <Input type="text" inputMode="numeric" dir="ltr" value={days} placeholder={view ? String(view.platform.days) : ""} onChange={(e) => setDays(e.target.value)} />
+            </Field>
+            <Field label={t("common", C.gb)}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                dir="ltr"
+                value={gb}
+                placeholder={view ? String(Number(view.platform.bytes) / GIB) : ""}
+                onChange={(e) => setGb(e.target.value)}
+              />
+            </Field>
+            <Button variant="primary" size="sm" disabled={view === null || body === null} onClick={() => void run(body)} loading={busy}>
+              {t("common", C.save)}
+            </Button>
+          </div>
+          {view?.own && (
+            <Button variant="quiet" size="sm" disabled={busy} onClick={() => void run(null)}>
+              {t("common", C.reset)}
+            </Button>
+          )}
+        </>
+      )}
+      {saved && <p className="text-xs font-bold text-primary">{t("common", C.saved)}</p>}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </section>
   );

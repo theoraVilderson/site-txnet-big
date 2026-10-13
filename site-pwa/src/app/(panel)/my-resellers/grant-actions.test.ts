@@ -13,6 +13,7 @@ import {
   REASON_REQUIRED,
   grantKeyHeld,
   emptyDraft,
+  compensationCapBody,
   grantActionBody,
   grantActionsOf,
   grantRefusalKey,
@@ -131,6 +132,23 @@ describe("a body", () => {
     expect(grantActionBody("renew", draft({ amount: "0", days: "0" }), NOW)).toBeNull();
   });
 
+  it("compensates days or GB, one of the two, always with a reason (KS-1-c)", () => {
+    expect(grantActionBody("compensate", draft({ days: "3", reason: "outage" }), NOW)).toEqual({ days: 3, reason: "outage" });
+    expect(grantActionBody("compensate", draft({ amount: "1.5", reason: "outage" }), NOW)).toEqual({ gb: 1.5, reason: "outage" });
+    expect(grantActionBody("compensate", draft({ days: "3", amount: "1", reason: "outage" }), NOW)).toBeNull();
+    expect(grantActionBody("compensate", draft({ reason: "outage" }), NOW)).toBeNull();
+    expect(grantActionBody("compensate", draft({ days: "-3", reason: "outage" }), NOW)).toBeNull();
+    expect(grantActionBody("compensate", draft({ days: "3" }), NOW)).toBeNull();
+  });
+
+  it("reads a compensation cap as billing takes it, or null for none", () => {
+    expect(compensationCapBody("7", "20")).toEqual({ days: 7, gb: 20 });
+    expect(compensationCapBody("0", "0")).toEqual({ days: 0, gb: 0 });
+    expect(compensationCapBody("", "20")).toBeNull();
+    expect(compensationCapBody("-1", "20")).toBeNull();
+    expect(compensationCapBody("1.5", "20")).toBeNull();
+  });
+
   it("issues a variant under one request id", () => {
     expect(issueBody("v-1", "req-1", "")).toEqual({ variantId: "v-1", requestId: "req-1" });
     expect(issueBody("v-1", "req-1", " welcome ")).toEqual({ variantId: "v-1", requestId: "req-1", reason: "welcome" });
@@ -152,6 +170,13 @@ describe("what a Grant offers", () => {
     const metered = grantActionsOf(row({ billingMode: "metered" }));
     expect(metered).toContain("gift");
     expect(metered).not.toContain("reset");
+  });
+
+  it("compensates a live Grant with an end or a bag, and no closed one", () => {
+    expect(grantActionsOf(row({}))).toContain("compensate");
+    expect(grantActionsOf(row({ billingMode: "metered", endsAt: null }))).toContain("compensate");
+    expect(grantActionsOf(row({ endsAt: null, trafficUnlimited: true }))).not.toContain("compensate");
+    expect(grantActionsOf(row({ status: "cancelled" }))).not.toContain("compensate");
   });
 
   it("re-dates none that is permanent, and acts on no closed Grant but its link", () => {
@@ -198,7 +223,9 @@ describe("the key each act asks", () => {
       ["retire", "grant.assign"],
       ["move", "grant.repair"],
     ]);
-    for (const action of GRANT_ACTIONS) expect(GRANT_ACTION_KEY[action], action).toBe(action === "rotate" ? "grant.repair" : "grant.assign");
+    expect(readFileSync(BILLING, "utf8")).toMatch(/'staffWrite',\s*'grant.compensate',/);
+    const keyOf = (a: string) => (a === "rotate" ? "grant.repair" : a === "compensate" ? "grant.compensate" : "grant.assign");
+    for (const action of GRANT_ACTIONS) expect(GRANT_ACTION_KEY[action], action).toBe(keyOf(action));
   });
 
   const T = "t-reseller";

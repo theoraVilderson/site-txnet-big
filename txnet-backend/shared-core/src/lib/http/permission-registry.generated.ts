@@ -17,6 +17,7 @@ export const PERMISSION_REGISTRY = [
   { permission: "export.request", area: "export", platformOnly: false },
   { permission: "gateway.manage", area: "gateway", platformOnly: false },
   { permission: "grant.assign", area: "grant", platformOnly: false },
+  { permission: "grant.compensate", area: "grant", platformOnly: false },
   { permission: "grant.read", area: "grant", platformOnly: false },
   { permission: "grant.repair", area: "grant", platformOnly: false },
   { permission: "guide.manage", area: "guide", platformOnly: false },

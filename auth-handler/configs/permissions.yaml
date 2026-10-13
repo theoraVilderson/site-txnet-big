@@ -134,6 +134,8 @@ roles:
       # repair without moving value, and `grant.assign` for the rest.
       - grant.read
       - grant.repair
+      # Days or traffic up to the tenant's cap (KS-1-c).
+      - grant.compensate
       - grant.assign
       - staff.manage
       - settings.manage

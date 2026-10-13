@@ -5,8 +5,10 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
+import { CompensationCapBody, compensationCapSchema } from './grant-compensation.schema';
 import { TenantGrantLimitBody, tenantGrantLimitSchema, UserGrantLimitBody, userGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
+import { bytesOfGb } from './grant-traffic.schema';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';
 import { ResellerUserGrantsRefused } from './reseller-user-grants.service';
 
@@ -54,6 +56,25 @@ export class GrantLimitsController {
     @Ip() ip: string,
   ) {
     return this.refusing(() => this.limits.setTenantLimit({ ...actorOf(req), ip }, tenantId, body.meteredOpenCap));
+  }
+
+  /** The compensation cap (KS-1-c): `days` and `bytes` per Grant over `windowDays`, the tenant's own or the platform's. */
+  @Get('compensation-cap')
+  @readLimit
+  compensationCap(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.refusing(() => this.limits.compensationCap(actorOf(req), tenantId));
+  }
+
+  @Put('compensation-cap')
+  @writeLimit
+  setCompensationCap(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(compensationCapSchema)) body: CompensationCapBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    const cap = body.cap && { days: body.cap.days, bytes: bytesOfGb(body.cap.gb) };
+    return this.refusing(() => this.limits.setCompensationCap({ ...actorOf(req), ip }, tenantId, cap));
   }
 
   @Get('users/:userId/grant-limit')

@@ -473,6 +473,40 @@ model GrantLimitSetting {
   @@schema("entitlement")
 }
 
+/// How much a `grant.compensate` holder may add to one Grant over a rolling
+/// 30 days (KS-1-c, ADR-0140 (2)), set by a `grant.assign` holder. One row per
+/// tenant; none = the platform's default (`PLATFORM_COMPENSATION_CAP`). 0 closes that kind.
+model GrantCompensationCap {
+  tenantId        String   @id @db.Uuid
+  /// >= 0 (CHECK).
+  days            Int
+  /// >= 0 (CHECK).
+  bytes           BigInt
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@map("grant_compensation_cap")
+  @@schema("entitlement")
+}
+
+/// One compensation given (KS-1-c): what the cap counts. Never edited; the act
+/// itself is audited beside it (`grant_duration_change` / `grant_traffic_*`).
+model GrantCompensation {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  grantId     String   @db.Uuid
+  actorUserId String   @db.Uuid
+  reason      String
+  /// One of the two is > 0, the other 0 (CHECK).
+  days        Int      @default(0)
+  bytes       BigInt   @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([grantId, createdAt])
+  @@map("grant_compensation")
+  @@schema("entitlement")
+}
+
 /// One user's own number (F-118-ao), set by staff — the answer to a ticket.
 /// It replaces the tenant's default for that user, higher or lower.
 model UserGrantLimit {

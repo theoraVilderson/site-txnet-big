@@ -870,6 +870,21 @@ export interface UserGrantLimit {
   open: number;
 }
 
+/** Days and bytes (a string: past 2^53 a number loses them) per Grant over the window (KS-1-c). */
+export interface CompensationFigures {
+  days: number;
+  bytes: string;
+}
+
+/** The compensation cap (KS-1-c): billing says which one is in effect, never the panel. */
+export interface CompensationCap {
+  /** The tenant's own, or `null` when the platform's applies. */
+  own: CompensationFigures | null;
+  platform: CompensationFigures;
+  effective: CompensationFigures;
+  windowDays: number;
+}
+
 /**
  * How many open pay-as-you-go services a user may hold (F-118-ap,
  * `entitlement/contract.limits.md`): the tenant's default and one user's own
@@ -888,6 +903,11 @@ export function grantLimitsApi(tenantId: string) {
     setUser: (userId: string, meteredOpenCap: number, reason: string) =>
       call<UserGrantLimit>(user(userId), { method: "PUT", body: JSON.stringify({ meteredOpenCap, reason }) }),
     removeUser: (userId: string) => call<UserGrantLimit>(user(userId), { method: "DELETE" }),
+    /** What `grant.compensate` may add per Grant over 30 days (KS-1-c): read with it or `grant.assign`. */
+    compensation: () => call<CompensationCap>(`${at}/compensation-cap`, { method: "GET" }),
+    /** Set with `grant.assign` only; `null` goes back to the platform's default. */
+    setCompensation: (cap: { days: number; gb: number } | null) =>
+      call<CompensationCap>(`${at}/compensation-cap`, { method: "PUT", body: JSON.stringify({ cap }) }),
   };
 }
 

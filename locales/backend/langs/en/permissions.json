@@ -186,6 +186,10 @@
       "repair": {
         "label": "Repair users' services",
         "description": "Regenerate, switch off or on, or move a config, and renew the subscription link, without moving money or traffic."
+      },
+      "compensate": {
+        "label": "Compensate users' services",
+        "description": "Add days or traffic to a user's service, up to the cap set for one service over 30 days."
       }
     },
     "guide": {
@@ -364,7 +368,7 @@
   "presets": {
     "support": {
       "label": "Support",
-      "description": "Answer support conversations, see users and their services, repair configs, edit a user's details and restrict or block accounts. On the platform: help resellers' users under their consent."
+      "description": "Answer support conversations, see users and their services, repair configs, compensate within the cap, edit a user's details and restrict or block accounts. On the platform: help resellers' users under their consent."
     },
     "finance": {
       "label": "Finance",

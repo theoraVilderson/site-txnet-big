@@ -4198,6 +4198,7 @@
       "label": {
         "freeze": "Freeze",
         "unfreeze": "Unfreeze",
+        "compensate": "Compensate",
         "days": "Change days",
         "traffic": "Change traffic",
         "reset": "Reset traffic",
@@ -4212,6 +4213,7 @@
       "confirm": {
         "freeze": "The service stops and all its configs are switched off. Its clock stops too: unfreezing adds the frozen time to its end.",
         "unfreeze": "The service comes back on, and the time it was frozen is added to its end.",
+        "compensate": "Add days or GB to this service as an apology, within the cap set for one service over 30 days. Fill one of the two.",
         "days": "The service's end moves by this many days. A negative number takes days off.",
         "traffic": "The service's traffic goes up or down by this many GB. Below what is used, the service stops.",
         "reset": "What was used since the last reset goes back to the bag, so the user has all of it again. The usage record is not erased.",
@@ -4226,6 +4228,7 @@
       "submit": {
         "freeze": "Freeze",
         "unfreeze": "Unfreeze",
+        "compensate": "Compensate",
         "days": "Change the days",
         "traffic": "Change the traffic",
         "reset": "Reset the traffic",
@@ -4243,6 +4246,8 @@
         "reasonPlaceholder": "e.g. support ticket 123",
         "until": "Until (optional — empty means until you unfreeze it)",
         "days": "Days (e.g. 7 or -3)",
+        "compensateDays": "Days to add",
+        "compensateGb": "GB to add",
         "gbSigned": "GB (e.g. 5 or -2)",
         "gb": "GB",
         "mbps": "Mbit/s",
@@ -4438,6 +4443,18 @@
       "userSet": "Set for this user",
       "userRemove": "Back to the default",
       "ceiling": "The most your plan allows for one user: {{count}}"
+    },
+    "compensationCap": {
+      "title": "Compensation cap",
+      "hint": "How much people with the compensate key may add to one service over 30 days. 0 closes that kind. Empty boxes go back to the platform's default.",
+      "inEffect": "In effect: {{days}} days and {{size}} per service every {{window}} days",
+      "platform": "Platform default: {{days}} days and {{size}}",
+      "own": "Set for this business",
+      "days": "Days",
+      "gb": "GB",
+      "save": "Save",
+      "saved": "Saved.",
+      "reset": "Back to the platform default"
     },
     "ban": "ban",
     "unban": "lift ban",

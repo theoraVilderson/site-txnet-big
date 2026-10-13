@@ -1,7 +1,7 @@
 ---
 id: adr-0140
 status: active
-updated: 2026-10-10
+updated: 2026-10-13
 ---
 
 # ADR 0140 — A key opens one kind of act
@@ -59,7 +59,8 @@ found that several keys each open acts of very different weight:
    service checks is a defect. KS-1-h adds the check to `contracts.py`, so a
    new dead key fails before it reaches the panel.
 5. **The presets follow** in the same row as each split: support gains
-   `grant.read` and `grant.repair`, finance gains `wallet.credit`, sales gains
+   `grant.read`, `grant.repair` and `grant.compensate` (KS-1-c, 2026-10-13:
+   capped, so an agent can apologise without being able to give a service away), finance gains `wallet.credit`, sales gains
    `catalog.price` and `campaign.send`.
 
 ## Consequences

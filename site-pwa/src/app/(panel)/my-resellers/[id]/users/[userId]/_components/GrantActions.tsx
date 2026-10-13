@@ -149,6 +149,13 @@ export function ActionFields({ action, draft, set }: { action: GrantAction; draf
   switch (action) {
     case "freeze":
       return <DatePicker label={t("common", G.field.until)} value={draft.until || null} onChange={(v) => set({ until: v ?? "" })} />;
+    case "compensate":
+      return (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {number(G.field.compensateDays, draft.days, (days) => ({ days }))}
+          {number(G.field.compensateGb, draft.amount, (amount) => ({ amount }))}
+        </div>
+      );
     case "days":
       return number(G.field.days, draft.amount, (amount) => ({ amount }));
     case "traffic":
@@ -202,6 +209,11 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
     case "traffic":
     case "gift":
       lines.push(t("common", G.done[action], { size: size(result.purchasedBytesAfter) }));
+      break;
+    // Days or traffic, as billing answered (KS-1-c): the same sentences as those acts.
+    case "compensate":
+      if (result.endsAtAfter) lines.push(t("common", G.done.days, { date: formatInstant(result.endsAtAfter, lang, { withTime: false }) ?? "" }));
+      else lines.push(t("common", G.done.traffic, { size: size(result.purchasedBytesAfter) }));
       break;
     case "reset":
       lines.push(t("common", G.done.reset, { size: size(result.resetBytes) }));

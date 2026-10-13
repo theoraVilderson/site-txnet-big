@@ -30,6 +30,8 @@ import { AdminConfigActionBody, adminConfigActionSchema } from '../../traffic/us
 import { GrantHistoryQuery, grantHistorySchema, GrantReasonBody, grantReasonSchema } from './grant-audit.schema';
 import { GrantDeleteBody, grantDeleteSchema } from './grant-delete.schema';
 import { GrantDevicesBody, grantDevicesSchema } from './grant-devices.schema';
+import { GrantCompensateBody, grantCompensateSchema } from './grant-compensation.schema';
+import { CompensationOverCap } from './grant-compensation';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
 import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
@@ -376,6 +378,39 @@ export class ResellerUserGrantsController {
   }
 
   /**
+   * A `grant.compensate` holder adds `days` or `gb` to this Grant (KS-1-c),
+   * within the tenant's cap per Grant over 30 days. **409**
+   * `compensation_over_cap` carries the cap and what was already given, so
+   * the panel can say how much is left.
+   */
+  @Post('grants/:grantId/compensate')
+  @HttpCode(HttpStatus.OK)
+  @actionLimit
+  async compensate(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('userId', new ParseUUIDPipe()) userId: string,
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Body(new ZodValidationPipe(grantCompensateSchema)) body: GrantCompensateBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    const ask = body.days !== undefined ? { days: body.days } : { bytes: bytesOfGb(body.gb as number) };
+    const done = await this.refusing(() => this.service.compensate(adminOf(req, ip), tenantId, userId, grantId, ask, body.reason));
+    if ('duration' in done) {
+      const d = done.duration;
+      return { grantId, compensationId: done.compensationId, endsAtBefore: d.endsAtBefore.toISOString(), endsAtAfter: d.endsAtAfter.toISOString(), revived: d.revived };
+    }
+    const t = done.traffic;
+    return {
+      grantId,
+      compensationId: done.compensationId,
+      purchasedBytesBefore: t.purchasedBytesBefore.toString(),
+      purchasedBytesAfter: t.purchasedBytesAfter.toString(),
+      revived: t.revived,
+    };
+  }
+
+  /**
    * An admin sets this Grant's speed cap (F-311-p): `mbps` both ways, or
    * `null` to lift it. **409** `rate_limit_unsupported` names the panels that
    * cannot hold one; `no_configs` is a Grant with nothing placed yet.
@@ -494,6 +529,10 @@ export class ResellerUserGrantsController {
     } catch (e) {
       if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      // Past the tenant's cap (KS-1-c): its figures, so the admin knows what is left.
+      if (e instanceof CompensationOverCap) {
+        throw new ConflictException({ i18nKey: E.compensationOverCap, reason: e.reason, message: e.message, facts: e.facts });
       }
       if (e instanceof SpeedCapRefused) {
         throw new ConflictException({ reason: e.reason, panels: e.panels, message: e.message });

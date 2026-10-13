@@ -15,7 +15,8 @@ import { formatInstant } from "../../../../_lib/datetime";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { USERS_PAGE_SIZE, USERS_QUERY_MIN, USER_KEYS as K, canBanHere, isPlatformTenant, statusActionsOf, userPagePath, usersQuery, type StatusAction } from "../../../_lib/users";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
-import { TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
+import { CompensationCapCard, TenantGrantLimitCard } from "../../../_components/GrantLimitCards";
+import { grantKeyHeld } from "../../../_lib/grant-actions";
 import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../_lib/support-access";
 import { BulkByFilter } from "./BulkByFilter";
@@ -204,6 +205,10 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
       <FindByLink id={id} own={own} />
       <BulkByFilter id={id} />
       <TenantGrantLimitCard tenantId={id} />
+      {/* Read by whoever compensates, set by `grant.assign` (KS-1-c); for the owner and the platform the door decides. */}
+      {(grantKeyHeld(me ?? null, id, "grant.compensate") || grantKeyHeld(me ?? null, id, "grant.assign")) && (
+        <CompensationCapCard tenantId={id} canSet={grantKeyHeld(me ?? null, id, "grant.assign")} />
+      )}
 
       {blockError !== null && <Alert tone="error">{message(blockError)}</Alert>}
 
