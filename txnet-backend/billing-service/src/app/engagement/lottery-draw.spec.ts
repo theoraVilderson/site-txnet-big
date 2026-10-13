@@ -91,7 +91,10 @@ describe('the draw algorithm (shared-core, run again by the verify page)', () =>
     }
     // Expected 1000 each; 4.5 standard deviations is ±116.
     for (const c of counts) expect(Math.abs(c - 1000)).toBeLessThan(116);
-  });
+    // 3000 draws: ~0.7s alone, but 5s+ when `test:affected` shares the cores
+    // with the other projects (2026-10-14) — the seeds are fixed, so only the
+    // clock could fail it. Fewer draws would weaken what it proves.
+  }, 30_000);
 
   it('hands out the places: prizes in rank order, each its count, then the reserves', async () => {
     const places = await lotteryPlaces({ seed: SEED, listHash: HASH, entrantCount: 10, prizes: [{ rank: 2, winnersCount: 2 }, { rank: 1, winnersCount: 1 }], reservesCount: 2 });
