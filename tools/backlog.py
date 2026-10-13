@@ -45,11 +45,28 @@ UMBRELLA = re.compile(r"^\**\s*(?:umbrella\b|split\s+(?:\d{4}-\d{2}-\d{2}\s+)?in
 ID_RE = r"[A-Z]+-\d+(?:-[a-z0-9]+)*"
 
 
+def named_ids(note):
+    """Every id a note names, a range written `F-019-t1..t6` or `F-030-a..f`
+    expanded to each id in it. Unexpanded, `F-019-t1..t6` named only t1, so
+    the umbrella read ready to close with F-019-t3 still open (2026-10-14)."""
+    named = set(re.findall(rf"\b{ID_RE}\b", note))
+    for start, end in re.findall(rf"\b({ID_RE})\.\.([a-z0-9]+)\b", note):
+        num = re.match(r"^(.*?)(\d+)$", start)
+        if num:  # F-019-t1..t6 / F-019-v1..v11: the end repeats the letters or not
+            base, first = num.group(1), int(num.group(2))
+            last = re.search(r"(\d+)$", end)
+            if last:
+                named.update(f"{base}{i}" for i in range(first, int(last.group(1)) + 1))
+        elif re.search(r"-[a-z]$", start) and re.fullmatch(r"[a-z]", end):  # F-030-a..f
+            named.update(start[:-1] + chr(c) for c in range(ord(start[-1]), ord(end) + 1))
+    return named
+
+
 def umbrella_children(r, items):
     """None for an ordinary row; for an umbrella, its child rows."""
     if not UMBRELLA.match(r["note"].strip()):
         return None
-    named = set(re.findall(rf"\b{ID_RE}\b", r["note"]))
+    named = named_ids(r["note"])
     return [c for c in items if c["id"] != r["id"]
             and (c["id"].startswith(r["id"] + "-") or c["id"] in named)]
 
