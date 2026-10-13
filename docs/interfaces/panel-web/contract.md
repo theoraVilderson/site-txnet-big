@@ -19,7 +19,7 @@ loaded from, and Traefik routes it — no proxy hop through this app, no CORS, a
 the tenant is the domain's (F-066-u, ADR-0060; [contract.origin.md](contract.origin.md)).
 Server components still read translations from `locale-service` via the shared
 Node client (server-side only, `serverExternalPackages`). Access token is held
-in memory client-side (`lib/auth-api.ts`); the refresh token is the httpOnly,
+in memory client-side (`lib/auth/credential.ts`); the refresh token is the httpOnly,
 host-only cookie `auth-service` sets on this same host, so it is sent to this
 app's server too — which is what lets `src/proxy.ts` answer "is this visitor
 signed in?" without any client-side probe (see the auth-screen guard below).
