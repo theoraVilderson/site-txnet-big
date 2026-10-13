@@ -1448,6 +1448,18 @@ ingested rows reuse the catalog id verbatim as their row id.
 | PT-1-i | Notification: the platform's campaigns carry its id | notification | todo | PT-1-a | — |  | ADR-0142 (5). |
 | PT-1-j | Audit: entries with no tenant — find what null means there, then move or keep | audit | todo | PT-1-a | — |  | ADR-0142 (6): ask before changing. |
 | PT-1-k | Identity: role templates with no tenant (ADR-0062) — platform's or no one's; ask, then move or keep | identity | todo | PT-1-a | — |  | ADR-0142 (6): ask before changing. |
+| FE-1 | Panel front-end cleanup from the 2026-10-13 audit: hardcoded values, duplicates, dead code, oversized files (umbrella) | panel-web | todo | FE-1-a FE-1-b FE-1-c FE-1-d FE-1-e FE-1-f FE-1-g FE-1-h FE-1-i FE-1-j FE-1-k | — |  | Umbrella. Asked 2026-10-13 (user). A grep audit of site-pwa/src with conventions.py green, so every child is outside the checks that exist today. |
+| FE-1-a | Visible bugs: ThemeDropdown names through i18n keys; one meaning per `isPlatformOwner` (purchase.ts adds `isOwner`); stable keys in editable lists (GuideEditor, LotteryEditor, WheelEditor, ProductDetailSheet, SupportSettingsView); PaymentSummary rial through `formatMoney`; ImpersonationBanner on `numberLocale` | panel-web | todo | — | — |  | Asked 2026-10-13 (user). Theme names show in Persian to English users (sidebar, top bar); index keys move focus and state when a middle row is removed. |
+| FE-1-b | One declaration per shared value: tenant-type helpers in one module (21 inline `"platform_owner"`, 6 local copies); language lists from locale meta, not `["fa", "en"]`; list separator via an `Intl.ListFormat` helper (6 `join("، ")`); one copy-feedback duration; a C-nn check keeps the literals out | panel-web | todo | FE-1-a | — |  | Asked 2026-10-13 (user). A third language breaks guides and support categories today; the Persian comma shows in English UI. |
+| FE-1-c | One helper each: digit normalisation (5 copies onto `toEnglishDigits`), platform-today date (catalog-form, coupon-form), support.ts instant format onto `_lib/datetime.ts` | panel-web | todo | — | — |  | Asked 2026-10-13 (user). |
+| FE-1-d | Dead code: unused `util/helper.ts` exports (`parsePersianDate` with a stray console.log, `generateJIT`, `getEnv`, `getIp/HostFromHeader`), `types/i18n.ts`, `shared.ts`, `hooks/useLocaleVersion.ts` and its C-14 except line; unimported deps (axios, crypto-js, mongoose, ioredis, jwt-decode, install, rate-limiter-flexible, winston*, next-themes, cva, tslib) | panel-web | todo | — | — |  | Asked 2026-10-13 (user). Check @grpc/grpc-js against locale-client before removing it. |
+| FE-1-e | Locale and theme layers named once: the two `locale-store.ts` (stores/ client, lib/ server) get distinct names; ThemeContext, theme-store, services/theme and theme-script reduced to what each owns | panel-web | todo | FE-1-d | — |  | Asked 2026-10-13 (user). Ask before removing `services/user-locale-mock.ts`: layout reads it through services/theme and services/locale. |
+| FE-1-f | Persian comments to English (C-01) in site-pwa: PasswordField, LocaleContext, stores/locale-store, (auth)/loading, layout, helper.ts, ThemeDropdown; a check for Arabic script in comments | panel-web | todo | FE-1-d FE-1-e | — |  | Asked 2026-10-13 (user). After FE-1-d/e so deleted files are not translated first. |
+| FE-1-g | Kit refs without `forwardRef` (React 19 `ref` prop): Button, IconButton, Input, Textarea, NativeSelect, PasswordInput | panel-web | todo | — | — |  | Asked 2026-10-13 (user). Call sites unchanged. |
+| FE-1-h | Split `lib/billing-api.ts` (2501 lines) and `lib/auth-api.ts` (1023) by domain; the old modules re-export, no caller changes | panel-web | todo | — | — |  | Asked 2026-10-13 (user). List call sites first (§6.2b). |
+| FE-1-i | Split oversized views into parts or `useReducer`: CatalogView (27 useState), PanelGroups (24), SupportThreadView (22), AgentThreadView, ShopView, BulkByFilter; drop the hooks eslint-disables they carry | panel-web | todo | FE-1-b FE-1-c | — |  | Asked 2026-10-13 (user). One view per session; split this row when started. |
+| FE-1-j | Small-text type tokens: the 273 arbitrary sizes like `text-[11px]` become theme tokens | panel-web | todo | — | — |  | Asked 2026-10-13 (user). |
+| FE-1-k | coinsite skeleton tidy: Next on site-pwa's major (15.5.27 today), empty `lib/auth.ts` and `register.ts`, unused `Image` import, localStorage/classList theme util, Persian comments | marketing-web | todo | — | — |  | Asked 2026-10-13 (user). The 2026-09 compromise came through Next 15.x. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1888,6 +1900,12 @@ BAN-1-g after BAN-1-b.
 ## Order of work — the PT-1 platform-tenant series
 
 User, 2026-10-13 (ADR-0142). PT-1-a first; PT-1-b after it; PT-1-c … PT-1-k in any order after PT-1-a, one domain per row.
+
+## Order of work — the FE-1 front-end cleanup series
+
+User, 2026-10-13. Bugs first, then shared values, then deletion before renames:
+FE-1-a → FE-1-b → FE-1-c → FE-1-d → FE-1-e → FE-1-f; FE-1-g, FE-1-h, FE-1-j, FE-1-k at any time;
+FE-1-i last, one view per session.
 
 ## Rules
 
