@@ -174,6 +174,11 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[]; grants?: Row[] } = 
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
   const db = {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
+    // ADR-0106's levels, read for the discount cap (F-904): none set here.
+    tenantSubscription: table([], 'tenantSubscription', writes),
+    resellerLimit: table([], 'resellerLimit', writes),
+    packageLimit: table([], 'packageLimit', writes),
+    resellerLimitSetting: table([], 'resellerLimitSetting', writes),
     user: table([{ id: RESELLER_USER, tenantId: RESELLER }, { id: OWNER_USER, tenantId: OWNER }], 'user', writes),
     coupon: table(
       seed.coupons ?? [

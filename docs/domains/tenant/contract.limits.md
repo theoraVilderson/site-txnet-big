@@ -27,6 +27,7 @@ level that has a row wins.
 | `storage_mib_max` | MiB of its admins' files — stored objects under its `branding/` and `guides/`, rounded up; never its users' support attachments — refused at an upload that would pass it, the replaced file not counted | 1024 | 1 048 576 | F-414-m, ADR-0120, `platform/object-storage/contract.md` rule 11 |
 | `campaign_sends_daily_max` | campaigns it starts sending per fixed day — a quota, counted by the engine | 10 | 1000 | F-019-v4, `notification/contract.reseller.md` |
 | `bulk_job_grants_max` | services one bulk job of its people acts on — a ceiling, refused past it, `used` = the job's size | 10 000 | 100 000 | F-019-t5, `billing/contract.reseller-grants-bulk.md` |
+| `coupon_discount_pct_max` | the largest discount one of its coupons gives, in percent — a percentage's value, a free service's 100; a ceiling refused at coupon create, edit (a changed discount only) and batch create, `used` = the percent asked. Wallet credit is money and a fixed amount is open until F-904-a. Platform staff pass | **none** | 100 | F-904, `billing/contract.coupon.md` |
 
 `resellerLimitOf(tx, tenantId, key)` → `{limit, source}`; `resellerLimitsOf`
 answers every key. `source` is `reseller`, `package`, `platform`, `default`,
@@ -95,7 +96,7 @@ A paid upgrade applies at once and deletes the period's lock rows, so the new pa
 | Rule | Why |
 |---|---|
 | `RESELLER_LIMIT_USAGE[key](tx, tenantId, now)` is **the** count of a key: every refusal compares it with the limit, and `resellerUsagesOf` shows it to the reseller | the figure on the workspace is the figure that refuses; two counts drift |
-| `null` for a key that bounds a number typed or a size asked, not a count: `user_metered_cap_max`, `bulk_job_grants_max` — and for a `quota`, which the engine counts: `GET …/limits` shows its `used` as the period's units, included plus sold past (F-019-v4) | "0 used" there would be a lie; a second count of a quota would drift from the engine's |
+| `null` for a key that bounds a number typed or a size asked, not a count: `user_metered_cap_max`, `bulk_job_grants_max`, `coupon_discount_pct_max` — and for a `quota`, which the engine counts: `GET …/limits` shows its `used` as the period's units, included plus sold past (F-019-v4) | "0 used" there would be a lie; a second count of a quota would drift from the engine's |
 | `platform_open_grants_max`: open Grants (`OPEN_GRANT_STATUSES`) of variants whose group holds a platform panel; `admin_issues_30d_max`: `admin_grant`s created in the last 30 days; `custom_domains_max`: its custom domains, proved or not | each is the refusing row's own definition (F-019-o, p, q) |
 | The record is typed over `ResellerLimitKey` | a new key does not compile without its count |
 

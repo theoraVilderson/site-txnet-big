@@ -115,6 +115,11 @@ function build() {
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
   const db = {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
+    // ADR-0106's levels, read for the discount cap (F-904): none set here.
+    tenantSubscription: table([], 'tenantSubscription', writes),
+    resellerLimit: table([], 'resellerLimit', writes),
+    packageLimit: table([], 'packageLimit', writes),
+    resellerLimitSetting: table([], 'resellerLimitSetting', writes),
     coupon: table([{ id: 'live', tenantId: RESELLER, code: 'TAKEN-AAAAAAAAAA', deletedAt: null, usedCount: 0, reservedCount: 0, isActive: true }], 'coupon', writes),
     couponBatch: table([{ id: OTHER_BATCH, tenantId: OTHER, label: 'theirs', createdAt: new Date(), deactivatedAt: null }], 'couponBatch', writes),
     productVariant: table([{ id: VARIANT, tenantId: OWNER, isActive: true, product: { isActive: true, categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] } }], 'productVariant', writes),

@@ -91,6 +91,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   staff_members_max: staffThroughGroups,
   /** A ceiling on one job's size, checked against the job (F-019-t5). */
   bulk_job_grants_max: null,
+  /** A ceiling on one coupon's discount, checked against the coupon (F-904). */
+  coupon_discount_pct_max: null,
   /** Per user, not per reseller: counted for the buyer at the buy (F-019-t7). */
   user_purchases_daily_max: null,
   user_purchases_weekly_max: null,

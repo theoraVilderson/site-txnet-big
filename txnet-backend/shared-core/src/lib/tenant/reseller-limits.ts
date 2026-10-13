@@ -53,6 +53,12 @@ export const RESELLER_LIMITS = {
    * users' support attachments (`STORAGE_QUOTA_PREFIXES`, F-414-m, ADR-0120).
    */
   storage_mib_max: { kind: 'guard', default: 1024, max: 1_048_576 },
+  /**
+   * The largest discount one of the reseller's coupons gives, in percent: a
+   * percentage's value, a free service's 100 (F-904, user 2026-10-13). No
+   * limit unless the platform sets one; refused at create, edit and batch create.
+   */
+  coupon_discount_pct_max: { kind: 'guard', default: null as number | null, max: 100 },
 } as const satisfies Record<string, { kind: ResellerLimitKind; period?: QuotaPeriodKind; default: number | null; max: number }>;
 
 export type ResellerLimitKey = keyof typeof RESELLER_LIMITS;

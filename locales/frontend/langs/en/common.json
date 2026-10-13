@@ -2228,6 +2228,10 @@
         "storage_mib_max": {
           "name": "File storage (MiB)",
           "hint": "The files the reseller's admins upload: logos and brand images, guide pictures and videos. Its users' support attachments are not counted. Past it, a new upload is refused until a file is removed or the limit is raised. A guide file no text uses 7 days after upload is removed on its own."
+        },
+        "coupon_discount_pct_max": {
+          "name": "Largest coupon discount, %",
+          "hint": "The largest discount one of a reseller's coupons may give, in percent; a free-service code counts as 100. No limit unless set."
         }
       },
       "codeDefault": "Default: {{count}}",

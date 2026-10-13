@@ -18,7 +18,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -193,6 +193,10 @@ export class CouponAdminController {
     try {
       return await run();
     } catch (e) {
+      // Past the reseller's discount cap (F-904): the reseller's own limit, so it is named with its figures.
+      if (e instanceof ResellerLimitReached) {
+        throw new ConflictException({ i18nKey: BackendI18nKeys.errors.billing.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
+      }
       if (!(e instanceof CouponAdminRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
       switch (COUPON_REFUSAL_STATUS[e.reason]) {

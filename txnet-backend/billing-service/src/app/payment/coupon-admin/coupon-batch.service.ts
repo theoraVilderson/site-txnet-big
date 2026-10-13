@@ -5,6 +5,7 @@ import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 import { operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CouponActor, CouponAdminRefused, CouponAdminService, statusOf } from './coupon-admin.service';
+import { assertUnderDiscountCap } from './coupon-discount-cap';
 
 /** No 0/O, no 1/I/L: a code is read off a card and typed by a person. */
 export const GIFT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -91,6 +92,8 @@ export class CouponBatchService {
       owner,
       async (tx) => {
         if (grantVariantId) await this.coupons.assertGrantVariant(tx, tenantId, grantVariantId);
+        // A free-service batch is a 100% discount, bounded as one code is (F-904).
+        await assertUnderDiscountCap(tx, { actorTenantId: actor.tenantId, tenantId, next: { discountType: grantVariantId ? DiscountType.free_grant : DiscountType.wallet_credit, discountValue: value } });
         const codes = await this.draw(tx, tenantId, prefix, count);
         // A platform batch is in the platform's currency, a tenant's in its own (F-116-b).
         const currencyCode = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);

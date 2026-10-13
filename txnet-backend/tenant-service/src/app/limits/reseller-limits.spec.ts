@@ -351,6 +351,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'user_purchases_weekly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
       { key: 'user_purchases_monthly_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
       { key: 'storage_mib_max', kind: 'guard', limit: 1024, source: 'default', used: 3, overage: null, statement: null , lockedUntil: null },
+      { key: 'coupon_discount_pct_max', kind: 'guard', limit: null, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
     ]);
   });
 

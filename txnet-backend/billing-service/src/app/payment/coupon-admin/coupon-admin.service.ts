@@ -6,6 +6,7 @@ import { productCategoriesInclude, productCategoriesLive, tenantTransaction, typ
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { GatewaySource } from '../gateway/gateway-merchant';
+import { assertUnderDiscountCap } from './coupon-discount-cap';
 
 /** Who is acting, as the gate proved it. Never taken from a body. */
 export type CouponActor = { adminId: string; tenantId: string; ip: string };
@@ -150,9 +151,8 @@ type Tx = Prisma.TransactionClient;
 const CODE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
 const DECIMAL_COLUMNS = ['discountValue', 'maxDiscountCap', 'minPurchaseAmount', 'maxPurchaseAmount'] as const;
 const PLAIN_COLUMNS = [
-  'code', 'discountType', 'totalUsageLimit', 'perUserUsageLimit', 'isActive', 'visibility', 'activeWeekdays', 'activeHourFrom',
-  'activeHourTo', 'firstPurchaseOnly', 'newUserWithinDays', 'periodUsageLimit', 'periodDays', 'allowedChannels', 'label', 'note',
-  'grantVariantId',
+  'code', 'discountType', 'totalUsageLimit', 'perUserUsageLimit', 'isActive', 'visibility', 'activeWeekdays', 'activeHourFrom', 'activeHourTo', 'firstPurchaseOnly',
+  'newUserWithinDays', 'periodUsageLimit', 'periodDays', 'allowedChannels', 'label', 'note', 'grantVariantId',
 ] as const;
 const DATE_COLUMNS = ['expiresAt', 'validFrom'] as const;
 /**
@@ -161,8 +161,7 @@ const DATE_COLUMNS = ['expiresAt', 'validFrom'] as const;
  * a promise the redeem path does not keep.
  */
 const NOT_FOR_GIFT_CODES = [
-  'maxDiscountCap', 'minPurchaseAmount', 'maxPurchaseAmount', 'validFrom', 'activeHourFrom', 'activeHourTo', 'newUserWithinDays',
-  'periodUsageLimit', 'periodDays',
+  'maxDiscountCap', 'minPurchaseAmount', 'maxPurchaseAmount', 'validFrom', 'activeHourFrom', 'activeHourTo', 'newUserWithinDays', 'periodUsageLimit', 'periodDays',
 ] as const;
 const PAGE_MAX = 100;
 
@@ -573,8 +572,9 @@ export class CouponAdminService {
     tenantId: string | null,
     next: Row,
     patch: CouponFields,
-    current: Pick<CouponView, 'allowedUserIds' | 'gateways' | 'serviceScopes'>,
+    current: Pick<CouponView, 'allowedUserIds' | 'gateways' | 'serviceScopes'> & Partial<Pick<CouponView, 'discountType' | 'discountValue'>>,
   ): Promise<Pick<CouponView, 'allowedUserIds' | 'gateways'> & { serviceScopes: CouponScopeRef[] }> {
+    await assertUnderDiscountCap(db, { actorTenantId: actor.tenantId, tenantId, next, before: current.discountType ? current : null }); // F-904
     const allowedUserIds = [...new Set(patch.allowedUserIds ?? current.allowedUserIds)];
     const gateways = patch.gateways ?? current.gateways;
     const serviceScopes = patch.serviceScopes ?? current.serviceScopes;

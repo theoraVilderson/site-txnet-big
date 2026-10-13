@@ -34,9 +34,8 @@ import {
  * held under the invoice's id. A hold that can no longer be taken throws and
  * the whole transaction goes with it, as on a top-up (F-092-h).
  *
- * The tenant's status is the route's (`@TenantCapability('sell')`). Governance
- * restrictions and the reseller cap (F-904) are checked here once their units
- * exist. No money moves: paying is F-111-b, and one that nobody pays is
+ * The tenant's status is the route's (`@TenantCapability('sell')`); the
+ * buyer's restrictions are `assertBuyerRoom`'s (F-030-e). No money moves: paying is F-111-b, and one that nobody pays is
  * expired by `InvoiceExpiryService`, which gives its holds back.
  */
 

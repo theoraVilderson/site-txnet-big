@@ -16,6 +16,7 @@ export const RESELLER_LIMIT_KEYS = [
   "user_purchases_weekly_max",
   "user_purchases_monthly_max",
   "storage_mib_max",
+  "coupon_discount_pct_max",
 ] as const satisfies readonly ResellerLimitKey[];
 
 /**
@@ -25,8 +26,8 @@ export const RESELLER_LIMIT_KEYS = [
  */
 const SAID_BY_SERVER: readonly ResellerLimitKey[] = ["user_metered_cap_max"];
 
-/** Ceilings: `used` is the size asked for, not a count held — "at most N; this asks M" (F-019-t5). */
-const CEILINGS: readonly ResellerLimitKey[] = ["bulk_job_grants_max"];
+/** Ceilings: `used` is the size asked for, not a count held — "at most N; this asks M" (F-019-t5, F-904). */
+const CEILINGS: readonly ResellerLimitKey[] = ["bulk_job_grants_max", "coupon_discount_pct_max"];
 
 const isSaidHere = (key: unknown): key is ResellerLimitKey =>
   (RESELLER_LIMIT_KEYS as readonly unknown[]).includes(key) && !(SAID_BY_SERVER as readonly unknown[]).includes(key);
