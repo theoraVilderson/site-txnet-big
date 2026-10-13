@@ -82,7 +82,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			if errors.Is(err, jwt.ErrExpired) && claims.Sub != "" && claims.SessionID != "" {
 				return response.Err(keyTokenExpired, map[string]string{"reason": reasonTokenExpired}), nil
 			}
-			h.logger.Warn("token validation failed", "error", err)
+			h.logger.WarnContext(r.Context(), "token validation failed", "error", err)
 			return response.Err(keyInvalidToken, nil), nil
 		}
 
@@ -97,7 +97,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			cache.UserPermissionsKey(h.keyPrefix, claims.Sub),
 		)
 		if err != nil {
-			h.logger.Error("session lookup failed", "error", err, "session_id", claims.SessionID)
+			h.logger.ErrorContext(r.Context(), "session lookup failed", "error", err, "session_id", claims.SessionID)
 			return response.Err(keyUnexpected, nil), nil
 		}
 		if values[0] == "" {
@@ -107,7 +107,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 			return response.Err(keySessionRevoked, map[string]string{"reason": reasonSessionRevoked}), nil
 		}
 		if stalePermissions(claims, values[1], values[2], values[3]) {
-			h.logger.Info("token permissions are stale",
+			h.logger.InfoContext(r.Context(), "token permissions are stale",
 				"user_id", claims.Sub, "role_id", claims.RoleID)
 			return response.Err(keyPermissionsChanged, map[string]string{
 				"reason": reasonPermissionsChanged,
@@ -131,7 +131,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 				unauthorized, ok = h.engine.CheckPlatformKeys(unauthorized)
 			}
 			if !ok {
-				h.logger.Warn("token claims unauthorized permissions",
+				h.logger.WarnContext(r.Context(), "token claims unauthorized permissions",
 					"role", claims.RoleName, "role_id", claims.RoleID, "user_id", claims.Sub, "unauthorized", unauthorized)
 				return response.Err(keyForbidden, nil), nil
 			}
@@ -148,7 +148,7 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 		// routes on the impersonation list; one nobody listed is closed.
 		if claims.IsImpersonated &&
 			!impersonationMayReach(r.Header.Get("X-Forwarded-Method"), r.Header.Get("X-Forwarded-Uri")) {
-			h.logger.Warn("impersonated token refused a route",
+			h.logger.WarnContext(r.Context(), "impersonated token refused a route",
 				"user_id", claims.Sub, "impersonated_by", claims.ImpersonatedBy,
 				"method", r.Header.Get("X-Forwarded-Method"), "uri", r.Header.Get("X-Forwarded-Uri"))
 			return response.Err(keyImpersonationBlocked, map[string]string{"reason": reasonImpersonationBlocked}), nil

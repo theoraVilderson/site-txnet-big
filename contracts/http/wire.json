@@ -27,6 +27,10 @@
     "note": "Not an identity header: it says the gate ran and identified nobody (ADR-0031). Forwarded and stripped exactly like the identity set.",
     "anonymous": "X-Auth-Anonymous"
   },
+  "gateForwardedRequestHeaders": {
+    "note": "Keys of requestHeaders that auth-handler answers with and that BOTH forward-auth middlewares forward (authResponseHeaders), so the gate's value replaces the caller's upstream. Not stripped: the gate reads the caller's value first and keeps it when it fits the rule (hosting H13). tools/contracts.py adds these to the expected forward lists; headers_contract_test.go holds the Go name to them.",
+    "keys": ["requestId"]
+  },
   "requestHeaders": {
     "note": "Sent by a caller and read by a service. Declared lowercase because that is how Node exposes an inbound header name. The tenant header is not here: x-tenant-id and X-Tenant-Id are one case-insensitive name, so both directions use identityHeaders.tenantId.",
     "serviceToken": "x-service-token",

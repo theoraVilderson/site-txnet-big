@@ -20,6 +20,11 @@ export const GateHeaders = {
   "anonymous": "X-Auth-Anonymous",
 } as const;
 
+/** `contracts/http/wire.json` -> `gateForwardedRequestHeaders`. */
+export const GateForwardedRequestHeaders = {
+  "keys": ["requestId"],
+} as const;
+
 /** `contracts/http/wire.json` -> `requestHeaders`. */
 export const RequestHeaders = {
   "serviceToken": "x-service-token",

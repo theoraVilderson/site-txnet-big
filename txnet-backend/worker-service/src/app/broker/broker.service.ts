@@ -9,21 +9,22 @@ import * as amqp from 'amqplib';
 import {
   AUTOMATION_TICK_ROUTING_PREFIX,
   automationTickRoutingKey,
-  botUpdateQueueName,
   BOT_UPDATE_ROUTING_PREFIX,
+  botUpdateQueueName,
+  type ConfirmedPublish,
   confirmedPublisher,
+  GRANT_LINES_SETTLE_DELAY_ROUTING_KEY,
+  GRANT_LINES_SETTLE_ROUTING_KEY,
+  inMessageScope,
   NOTICE_BURST_DELAY_ROUTING_KEY,
   NOTICE_BURST_FLUSH_ROUTING_KEY,
   NOTICE_BURST_HOUR_DELAY_ROUTING_KEY,
-  GRANT_LINES_SETTLE_DELAY_ROUTING_KEY,
-  GRANT_LINES_SETTLE_ROUTING_KEY,
   OTP_DELIVERY_ROUTING_PREFIX,
   OutboxEventType,
+  type OutboxMessage,
   outboxRoutingKey,
   RequestHeaders,
   topicBindingAll,
-  type ConfirmedPublish,
-  type OutboxMessage,
 } from '@txnet-backend/shared-core';
 
 import { RETENTION_NOTICES } from '../outbox/retention-notices';
@@ -531,9 +532,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
    * `messageId` is the event's own id, which is the idempotency key ADR-0021
    * requires of every consumer — delivery is at-least-once, so a consumer must
    * be able to recognise an event it has already handled before it parses the
-   * body. `confirmedPublisher` would otherwise invent a correlation id here,
-   * and a correlation id is not an identity. `requestId` rides as the
-   * `x-request-id` header (H13), never in the body a consumer validates.
+   * body. `confirmedPublisher` would otherwise invent a correlation id here, and
+   * that is not an identity. `requestId` rides as the `x-request-id` header (H13).
    */
   async publishOutboxEvent(routingKey: string, event: OutboxMessage, requestId: string | null): Promise<void> {
     if (!this.publish) throw new Error('broker channel is not open');
@@ -586,7 +586,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming. One handler for every tick; it dispatches by `key`. */
   async consumeTicks(handle: TickHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.queue, async (message) => {
+    await channel.consume(this.queue, inMessageScope(async (message) => {
       if (message === null) return;
       let tick: TickMessage;
       try {
@@ -619,7 +619,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         }
         channel.nack(message, false, false);
       }
-    });
+    }));
   }
 
   /**
@@ -634,7 +634,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
    */
   async consumeOtpDeliveries(handle: OtpDeliveryHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.otpQueue, async (message) => {
+    await channel.consume(this.otpQueue, inMessageScope(async (message) => {
       if (message === null) return;
       let request: OtpDeliveryMessage;
       try {
@@ -658,7 +658,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         );
         channel.nack(message, false, false);
       }
-    });
+    }));
   }
 
   /**
@@ -739,7 +739,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     const channel = await connection.createChannel();
     await channel.prefetch(this.outboxPrefetch);
     this.consumerChannels.push(channel);
-    await channel.consume(queue, async (message) => {
+    await channel.consume(queue, inMessageScope(async (message) => {
       if (message === null) return;
       let event: OutboxMessage;
       try {
@@ -758,7 +758,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         );
         channel.nack(message, false, false);
       }
-    });
+    }));
   }
 
   /**
@@ -790,7 +790,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       await channel.prefetch(1);
       this.consumerChannels.push(channel);
 
-      await channel.consume(queue, async (message) => {
+      await channel.consume(queue, inMessageScope(async (message) => {
         if (message === null) return;
         let update: BotUpdateMessage;
         try {
@@ -814,7 +814,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
           );
           channel.nack(message, false, false);
         }
-      });
+      }));
     }
 
     this.logger.log(
@@ -833,7 +833,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
    */
   async consumeDeadLetters(handle: DeadLetterHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.deadQueue, async (message) => {
+    await channel.consume(this.deadQueue, inMessageScope(async (message) => {
       if (message === null) return;
       try {
         await handle({
@@ -850,7 +850,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         );
         channel.nack(message, false, true);
       }
-    });
+    }));
   }
 
   async onApplicationShutdown() {

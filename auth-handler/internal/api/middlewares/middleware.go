@@ -29,7 +29,7 @@ func RequestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 			start := time.Now()
 			sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(sw, r)
-			log.Info("request",
+			log.InfoContext(r.Context(), "request",
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", sw.status,
@@ -55,7 +55,7 @@ func Recoverer(log *slog.Logger) func(http.Handler) http.Handler {
 			defer func() {
 				if err := recover(); err != nil {
 					// The panic value stays in the log: it is a stack detail.
-					log.Error("panic recovered", "error", err, "path", r.URL.Path)
+					log.ErrorContext(r.Context(), "panic recovered", "error", err, "path", r.URL.Path)
 					WriteError(w, r, i18nkeys.ErrorsSystemUnexpected, http.StatusInternalServerError)
 				}
 			}()

@@ -37,6 +37,7 @@ and has no toolchain that could consume generated Go or TypeScript.
 | `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is a chat's: `bot:<tenantId>:<platform>:<chatId>` (F-061-g), or `bot:<platform>:<chatId>` minted before it (F-104-q) |
 | `X-Chat-User-Id` | that scope's `<chatId>` — a private chat's is the person's messenger id | beside `X-Chat-Platform` only, never alone (F-104-ab) |
 | `X-Auth-Anonymous` | `true` | `/validate-optional` only, **instead of** all of the above |
+| `X-Request-Id` | the caller's when it fits hosting H13, else a new UUID v4 | every response of both gates (`middlewares.RequestID`); forwarded, **not** stripped |
 
 The split between the first five and the impersonation pair is part of the
 contract, not an implementation detail: a consumer asking "did the gate
@@ -100,6 +101,11 @@ Reversing the two is the failure the gate exists to prevent. A middleware whose
 name contains `optional` is also expected to forward `X-Auth-Anonymous`; one
 pointing at `/validate` must not, because a gate that cannot answer "nobody"
 has nothing to say with it.
+
+`X-Request-Id` is forwarded by both gates (`gateForwardedRequestHeaders` in
+`wire.json`, OPS-1-z) and is the one forwarded header that is not stripped: it
+names a request, not a person, and the gate reads the caller's value first so
+a client's id survives the hop. Traefik's copy of the gate's answer replaces it.
 
 The gate's first run found that `X-Impersonated` and `X-Impersonated-By` were
 forwarded and never stripped. `my-auth` happened to cover them — Traefik

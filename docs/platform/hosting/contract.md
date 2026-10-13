@@ -143,15 +143,18 @@ not in each `envSchema`; `APP_NAME` is required (the image sets it).
 
 **H13 — Request id.** `shared-core` `RequestIdMiddleware`, installed by
 `createNestApp` with `app.use` so it runs before every module's middleware:
-takes `X-Request-Id` if it is 8–128 chars of `[A-Za-z0-9-]`, else a new UUID
-v4; holds it, and the gate's `X-User-Id`, in an `AsyncLocalStorage` the logger
-reads; sets it on the
-response. A call to another service sends `serviceCallHeaders(token)`, which
-forwards it (C-27; `codeshape.py` `raw-service-call`). An outbox event written
-inside a request gets it in `outbox_event.requestId` (the `withTenant` extension
-stamps it; a `CrossTenantPrismaService` write does not), and the relay publishes
-it as the message header `x-request-id`. Promtail parses JSON and labels only
-`level` (and `service`); `tenantId`, `requestId` are queried with `| json`.
+takes `X-Request-Id` if it is 8–128 chars of `[A-Za-z0-9-]`, else a new UUID v4;
+holds it, and the gate's `X-User-Id`, in an `AsyncLocalStorage` the logger
+reads; sets it on the response. At the edge `auth-handler` does the same
+(`middlewares.RequestID`, Go `slog` lines add `requestId` from the context) and
+both gates forward it (OPS-1-z). A call to another service sends
+`serviceCallHeaders(token)`, which forwards it (C-27; `codeshape.py`
+`raw-service-call`). An outbox event written inside a request gets it in
+`outbox_event.requestId` (the `withTenant` extension stamps it; a
+`CrossTenantPrismaService` write does not), and the relay publishes it as the
+message header `x-request-id`; every consumer runs inside `inMessageScope`, so
+the message's id is in scope before it logs. Promtail parses JSON and labels
+only `level` (and `service`); `tenantId`, `requestId` are queried with `| json`.
 
 ## Data growth
 

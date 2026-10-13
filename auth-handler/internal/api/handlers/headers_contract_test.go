@@ -5,8 +5,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"auth-handler/internal/api/middlewares"
 )
 
 // The Go half of the wire contract (ADR-0036, C-04).
@@ -29,6 +32,10 @@ type wireFixture struct {
 	AlwaysSetIdentityHeaders []string          `json:"alwaysSetIdentityHeaders"`
 	ImpersonationHeaders     []string          `json:"impersonationHeaders"`
 	GateHeaders              map[string]string `json:"gateHeaders"`
+	RequestHeaders           map[string]string `json:"requestHeaders"`
+	GateForwarded            struct {
+		Keys []string `json:"keys"`
+	} `json:"gateForwardedRequestHeaders"`
 }
 
 func loadWireFixture(t *testing.T) wireFixture {
@@ -100,6 +107,20 @@ func TestContractAnonymousMarkerName(t *testing.T) {
 	if got := withoutNote(fixture.GateHeaders)["anonymous"]; got != HeaderAnonymous {
 		t.Errorf("gateHeaders.anonymous = %q in the fixture, %q in headers.go",
 			got, HeaderAnonymous)
+	}
+}
+
+// The request id the gate answers with (H13) is the one Node reads: one name,
+// declared lowercase for Node and written canonically here, and listed as a
+// header both gates forward.
+func TestContractRequestIDName(t *testing.T) {
+	fixture := loadWireFixture(t)
+
+	if got := fixture.RequestHeaders["requestId"]; !strings.EqualFold(got, middlewares.HeaderRequestID) {
+		t.Errorf("fixture requestHeaders.requestId = %q, Go writes %q", got, middlewares.HeaderRequestID)
+	}
+	if !slices.Contains(fixture.GateForwarded.Keys, "requestId") {
+		t.Errorf("fixture gateForwardedRequestHeaders does not list requestId: %v", fixture.GateForwarded.Keys)
 	}
 }
 

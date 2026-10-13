@@ -75,6 +75,7 @@ func main() {
 	// so both sit inside LanguageMiddleware — otherwise the one answer a user
 	// gets when something breaks is the only one not in their language.
 	wrapped := middlewares.Chain(mux,
+		middlewares.RequestID, // outermost: every line, the access log's included, names it (H13)
 		middlewares.RequestLogger(log),
 		middlewares.LanguageMiddleware(localeStore),
 		middlewares.Recoverer(log),

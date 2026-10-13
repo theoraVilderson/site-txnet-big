@@ -4,6 +4,7 @@ import * as amqp from 'amqplib';
 
 import type { EnvConfig } from '../config/env.validation';
 import { AI_TRIGGER_ROUTING_KEYS, triggerMessageSchema, type TriggerMessage } from '../triggers/trigger-events';
+import { inMessageScope } from '@txnet-backend/shared-core';
 
 export type TriggerHandler = (message: TriggerMessage) => Promise<void>;
 
@@ -59,7 +60,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
 
   async consumeTriggers(handle: TriggerHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.config.get('AI_QUEUE', { infer: true }), async (message) => {
+    await channel.consume(this.config.get('AI_QUEUE', { infer: true }), inMessageScope(async (message) => {
       if (message === null) return;
       const parsed = triggerMessageSchema.safeParse(safeJson(message.content));
       if (!parsed.success) {
@@ -74,7 +75,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         this.logger.error(`trigger ${parsed.data.type} ${parsed.data.id} failed: ${err instanceof Error ? err.message : String(err)}`);
         channel.nack(message, false, false);
       }
-    });
+    }));
   }
 
   async onApplicationShutdown() {

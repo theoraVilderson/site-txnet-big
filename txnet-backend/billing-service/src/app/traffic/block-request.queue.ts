@@ -3,8 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import {
   BLOCK_REQUEST_ROUTING_KEY,
-  NETWORK_USAGE_ROUTING_PREFIX,
   blockRequestMessageSchema,
+  inMessageScope,
+  NETWORK_USAGE_ROUTING_PREFIX,
   topicBindingAll,
 } from '@txnet-backend/shared-core';
 
@@ -82,7 +83,7 @@ export class BlockRequestQueue implements OnApplicationBootstrap, OnApplicationS
       process.exit(1);
     });
 
-    await channel.consume(this.queue, async (message) => {
+    await channel.consume(this.queue, inMessageScope(async (message) => {
       if (message === null) return;
       // Anything else is a collection pass bound here before F-027-dk, still
       // queued: it is nobody's now, and is acked unread.
@@ -104,7 +105,7 @@ export class BlockRequestQueue implements OnApplicationBootstrap, OnApplicationS
         this.logger.error(`block request for grant ${request.data.grantId} failed: ${err instanceof Error ? err.message : String(err)}`);
         channel.nack(message, false, false);
       }
-    });
+    }));
 
     this.logger.log(
       `block requests consuming ${this.queue}; exchange=${this.exchange} binding=${BLOCK_REQUEST_ROUTING_KEY} prefetch=1 dlx=${this.deadExchange}`,

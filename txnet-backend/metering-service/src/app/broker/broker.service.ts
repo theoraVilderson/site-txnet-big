@@ -7,15 +7,16 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as amqp from 'amqplib';
 import {
+  inMessageScope,
   NETWORK_USAGE_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
   topicBindingAll,
+  type UsageDeltaMessage,
   usageDeltaMessageSchema,
+  type UsageEvent,
   usageEventMessageSchema,
   usageReleaseMessageSchema,
-  type UsageDeltaMessage,
-  type UsageEvent,
   type UsageReleasePayload,
 } from '@txnet-backend/shared-core';
 
@@ -120,7 +121,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   /** Start consuming: collection passes, released holds and usage events, each to its handler by routing key. */
   async consumeUsage(handle: UsageDeltaHandler, release: UsageReleaseHandler, usage: UsageEventHandler): Promise<void> {
     const channel = this.require();
-    await channel.consume(this.queue, async (message) => {
+    await channel.consume(this.queue, inMessageScope(async (message) => {
       if (message === null) return;
 
       if (message.fields.routingKey === USAGE_EVENT_KEY) {
@@ -180,7 +181,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
         );
         channel.nack(message, false, false);
       }
-    });
+    }));
     this.logger.log(`consuming usage deltas from ${this.queue}`);
   }
 

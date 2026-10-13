@@ -172,13 +172,17 @@ def check_forward(forward: dict[str, list[str]], fixture: dict) -> None:
 
     identity = [h.lower() for h in names(fixture.get("identityHeaders", {}))]
     anonymous = [h.lower() for h in names(fixture.get("gateHeaders", {}))]
+    # Request headers the gate answers with (H13): forwarded by every gate, and
+    # named by key so the fixture spells each header once.
+    request = fixture.get("requestHeaders", {})
+    answered = [request[k].lower() for k in fixture.get("gateForwardedRequestHeaders", {}).get("keys", [])]
 
     for middleware, listed in sorted(forward.items()):
         # A middleware pointing at /validate-optional also forwards the
         # anonymous marker; one pointing at /validate must not, because a
         # gate that cannot answer "nobody" has nothing to say with it.
-        expected = set(identity) | (set(anonymous) if "optional" in middleware
-                                    else set())
+        expected = set(identity) | set(answered) | (set(anonymous) if "optional" in middleware
+                                                     else set())
         got = set(listed)
         for header in sorted(expected - got):
             errors.append(

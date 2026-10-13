@@ -46,7 +46,7 @@ import { BlockRequestQueue } from './block-request.queue';
 const config = { getOrThrow: (key: string) => key };
 
 function message(routingKey: string, body: unknown) {
-  return { fields: { routingKey }, content: Buffer.from(JSON.stringify(body)) };
+  return { fields: { routingKey }, properties: {}, content: Buffer.from(JSON.stringify(body)) };
 }
 
 async function boot() {
