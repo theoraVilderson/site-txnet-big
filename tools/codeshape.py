@@ -311,18 +311,32 @@ def _norm(ln):
     return s
 
 
+# Two files kept identical on purpose, each with the spec that holds them so.
+# A block they share is a mirror, not a paste; one either shares with a third
+# file still counts.
+MIRRORS = {
+    frozenset({"site-pwa/src/lib/lottery-draw.ts", "txnet-backend/shared-core/src/lib/engagement/lottery-draw.ts"}):
+        "the verify page reruns the draw billing ran (ADR-0111 point 5); lotteries.test.ts holds them byte for byte",
+}
+
+# A whole import block — a TS `import {…} from` over many lines, a Go
+# `import (…)` — is a list of names, not code that could be pasted: _norm drops
+# an import's first line, and this drops the rest of it.
+IMPORT_BLOCK = re.compile(r"""^(?:import|export)\b[^;'"]*?\bfrom\s*['"][^'"]+['"];?|^import\s*\([^)]*\)""", re.M)
+
+
 def find_dupes():
     """A window of DUPE_WINDOW meaningful lines found in two files is a paste."""
     where = {}
     for p, r in list(app_sources()) + [(p, rel(p)) for g in GO_ROOTS for p in walk(g, (".go",))
                                         if not TEST_RE.search(rel(p))]:
-        lines = [n for n in (_norm(ln) for ln in read(p).splitlines()) if n]
+        lines = [n for n in (_norm(ln) for ln in IMPORT_BLOCK.sub("", read(p)).splitlines()) if n]
         for i in range(len(lines) - DUPE_WINDOW + 1):
             key = hash("\n".join(lines[i:i + DUPE_WINDOW]))
             where.setdefault(key, set()).add(r)
     out = {}
     for files in where.values():
-        if len(files) > 1:
+        if len(files) > 1 and frozenset(files) not in MIRRORS:
             for r in files:
                 out[r] = out.get(r, 0) + 1
     return out

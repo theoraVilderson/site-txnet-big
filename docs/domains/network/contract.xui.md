@@ -31,7 +31,8 @@ x-ui is two products: the **alireza0** fork, which publishes an API under
 
 ## x-ui, alireza0 fork — `x_ui_alireza` (F-027-bc)
 
-`internal/driver/xuialireza`. 3x-ui was forked from this panel, so the wire is
+`internal/driver/xuialireza`, the fork's dialect of `internal/driver/xuifamily`
+(redirect expiry, no `reset`, routes under `/xui/API`). 3x-ui was forked from this panel, so the wire is
 Sanaee's (`contract.drivers.md` "Sanaee") under other routes. Pull,
 `cumulative`, and the panel enforces its own per-client total: ADR-0072 as
 Marzban.

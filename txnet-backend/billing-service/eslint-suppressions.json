@@ -1,14 +1,4 @@
 {
-  "src/app/catalog/catalog-admin.controller.ts": {
-    "@typescript-eslint/switch-exhaustiveness-check": {
-      "count": 1
-    }
-  },
-  "src/app/catalog/reseller-catalog.controller.ts": {
-    "@typescript-eslint/switch-exhaustiveness-check": {
-      "count": 1
-    }
-  },
   "src/app/engagement/lottery-admin.controller.ts": {
     "@typescript-eslint/switch-exhaustiveness-check": {
       "count": 1

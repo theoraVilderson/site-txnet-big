@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
-import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { wheelAdminApi, type WheelVersion } from "@/lib/engagement-api";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { useRowKeys } from "../../../_hooks/useRowKeys";
+import { usePrizeSources } from "../../../_hooks/usePrizeSources";
+import { PrizeFields, PrizeRowHeader } from "../../../_components/prizes/PrizeFields";
 import { moveRow } from "../../../_lib/rows";
 import { formatMoney } from "../../../_lib/money";
 import { Select } from "../../../_components/kit/Select";
-import { VariantPicker } from "../../../coupons/_components/VariantPicker";
 import { formatDay, plainNumber } from "../../_lib/wheel";
 import {
   PRIZES_MAX,
@@ -30,7 +29,7 @@ import {
   type WheelForm,
 } from "../_lib/wheel-settings";
 import { Alert, Field, dayAfter, useMessage } from "./wheel-settings-ui";
-import { Button, Checkbox, IconButton, Input } from "../../../_components/kit";
+import { Button, Checkbox, Input } from "../../../_components/kit";
 
 /**
  * A new version of the wheel, opened on the one it starts from. The odds and
@@ -59,24 +58,7 @@ export function WheelEditor({
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Coupons to copy (ADR-0110): the tenant's own discount coupons, not a gift batch's.
-  const [templates, setTemplates] = useState<AdminCoupon[] | null | "failed">(null);
-  // Groups: `user_group.manage` lists them; without it the id is typed.
-  const [groups, setGroups] = useState<UserGroup[] | null | "failed">(null);
-  useEffect(() => {
-    let live = true;
-    billingApi.adminCoupons({ kind: "discount", status: "active", pageSize: 100 }).then(
-      (page) => live && setTemplates(page.items.filter((c) => c.tenantId === me?.tenant?.id)),
-      () => live && setTemplates("failed"),
-    );
-    userGroupsApi.list().then(
-      (list) => live && setGroups(list),
-      () => live && setGroups("failed"),
-    );
-    return () => {
-      live = false;
-    };
-  }, [me?.tenant?.id]);
+  const { templates, groups } = usePrizeSources();
 
   const check = useMemo(() => validateWheelForm(form), [form]);
   const odds = oddsPercents(form.prizes.map((p) => p.weight));
@@ -177,70 +159,32 @@ export function WheelEditor({
           const e = tried ? check.prizes[i] ?? {} : {};
           return (
             <div key={prizeKeys[i]} className="space-y-3 rounded-xl border border-card-border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-text-primary">
-                  {t("common", K.prizes.slot, { n: i + 1 })}
-                  {odds && <span className="ms-2 font-normal text-text-secondary">{t("common", K.prizes.odds)}: {plainNumber(odds[i])}%</span>}
-                </span>
-                <div className="flex gap-1">
-                  <IconButton size="sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)} icon={<ArrowUp size={12} aria-hidden />} />
-                  <IconButton size="sm" disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)} icon={<ArrowDown size={12} aria-hidden />} />
-                  <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))} icon={<Trash2 size={12} aria-hidden />}>
-                    {t("common", K.prizes.remove)}
-                  </Button>
-                </div>
-              </div>
-              <div className="grid gap-3 md:grid-cols-4">
-                <Field label={t("common", K.prizes.label)} error={e.label}>
-                  <Input dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
-                </Field>
-                <Field label={t("common", K.prizes.type)}>
-                  <Select
-                    value={p.prizeType}
-                    onChange={(v) => setPrize(i, { prizeType: v as PrizeForm["prizeType"], ...(v === "empty" || v === "free_grant" ? { prizeValue: "0" } : {}), ...(v === "empty" ? { costAmount: "0" } : {}) })}
-                    options={PRIZE_TYPES.map((type) => ({ value: type, label: t("common", PRIZE_TYPE_KEYS[type]) }))}
-                  />
-                </Field>
-                {(p.prizeType === "bonus_traffic_gb" || p.prizeType === "extra_days" || p.prizeType === "discount_coupon") && (
-                  <Field
-                    label={t("common", p.prizeType === "bonus_traffic_gb" ? K.prizes.valueGb : p.prizeType === "extra_days" ? K.prizes.valueDays : K.prizes.valuePercent)}
-                    error={e.prizeValue}
-                  >
-                    <Input dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
-                  </Field>
-                )}
-                {p.prizeType === "discount_coupon" && (
+              <PrizeRowHeader
+                title={
                   <>
-                    <Field label={t("common", K.prizes.template)} error={e.couponTemplateId}>
-                      {templates === null ? (
-                        <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.templatesLoading)}</p>
-                      ) : templates === "failed" ? (
-                        <Input
-                          dir="ltr"
-                          placeholder={t("common", K.prizes.templateId)}
-                          value={p.couponTemplateId}
-                          onChange={(ev) => setPrize(i, { couponTemplateId: ev.target.value })}
-                        />
-                      ) : templates.length === 0 ? (
-                        <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.noTemplates)}</p>
-                      ) : (
-                        <Select
-                          value={p.couponTemplateId}
-                          onChange={(v) => setPrize(i, { couponTemplateId: v })}
-                          options={templates.map((c) => ({ value: c.id, label: `${c.code}${c.label ? ` · ${c.label}` : ""}` }))}
-                        />
-                      )}
-                    </Field>
-                    <Field label={t("common", K.prizes.validDays)} error={e.couponValidDays}>
-                      <Input dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
-                    </Field>
+                    {t("common", K.prizes.slot, { n: i + 1 })}
+                    {odds && <span className="ms-2 font-normal text-text-secondary">{t("common", K.prizes.odds)}: {plainNumber(odds[i])}%</span>}
                   </>
-                )}
-                {p.prizeType === "free_grant" && (
-                  <Field label={t("common", K.prizes.variant)} error={e.variantId}>
-                    <VariantPicker id={`wheel-variant-${i}`} value={p.variantId} onChange={(v) => setPrize(i, { variantId: v })} ownerTenant={me?.tenant?.id ?? null} invalid={!!e.variantId} />
-                  </Field>
-                )}
+                }
+                index={i}
+                count={form.prizes.length}
+                keys={K.prizes}
+                onMove={(by) => move(i, by)}
+                onRemove={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))}
+              />
+              <div className="grid gap-3 md:grid-cols-4">
+                <PrizeFields
+                  prize={p}
+                  errors={e}
+                  keys={K.prizes}
+                  types={PRIZE_TYPES}
+                  typeKeys={PRIZE_TYPE_KEYS}
+                  templates={templates}
+                  variantFieldId={`wheel-variant-${i}`}
+                  ownerTenant={me?.tenant?.id ?? null}
+                  // An empty slot costs nothing.
+                  onPatch={(patch) => setPrize(i, { ...patch, ...(patch.prizeType === "empty" ? { costAmount: "0" } : {}) })}
+                />
                 <Field label={t("common", K.prizes.weight)} error={e.weight}>
                   <Input dir="ltr" inputMode="numeric" value={p.weight} onChange={(ev) => setPrize(i, { weight: ev.target.value })} />
                 </Field>

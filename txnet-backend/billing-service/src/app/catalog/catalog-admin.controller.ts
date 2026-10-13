@@ -1,14 +1,10 @@
 import {
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
   Ip,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,7 +12,6 @@ import {
   Post,
   Query,
   Req,
-  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -76,7 +71,6 @@ import {
 import {
   CatalogActor,
   CatalogAdminRefused,
-  CatalogAdminRejection,
   CatalogAdminService,
   CreateCapabilityInput,
   CreateCategoryInput,
@@ -93,44 +87,7 @@ import {
   UpdateProductInput,
 } from './catalog-admin.service';
 import { CatalogPermissionGuard } from './catalog-permission.guard';
-
-/** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, 400 | 403 | 404 | 409 | 503> = {
-  not_platform_owner: 403,
-  tenant_not_found: 404,
-  category_not_found: 404,
-  product_not_found: 404,
-  variant_not_found: 404,
-  panel_group_not_found: 404,
-  price_not_found: 404,
-  key_taken: 409,
-  sku_taken: 409,
-  price_in_the_past: 400,
-  text_key_invalid: 400,
-  texts_unavailable: 503,
-  lang_unknown: 400,
-  source_text_missing: 400,
-  category_cycle: 409,
-  category_too_deep: 400,
-  capability_not_found: 404,
-  capability_unknown: 400,
-  capability_in_use: 409,
-  group_not_found: 400,
-  traffic_quota_required: 400,
-  meter_not_found: 404,
-  rate_card_not_found: 404,
-  rate_card_not_served: 400,
-  campaign_not_found: 404,
-  campaign_overlaps: 409,
-  campaign_started: 409,
-  campaign_pending: 409,
-  no_price_to_restore: 409,
-  price_scheduled_in_campaign: 409,
-  price_in_campaign: 409,
-  season_not_found: 404,
-  season_date_invalid: 400,
-};
-
+import { CATALOG_REFUSAL_STATUS, catalogRefusal } from './catalog-refusal';
 
 /**
  * Catalog management (F-026-d, D-34): `/api/catalog`, served by billing-service
@@ -447,19 +404,7 @@ export class CatalogAdminController {
       return await run();
     } catch (e) {
       if (!(e instanceof CatalogAdminRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (CATALOG_REFUSAL_STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        case 503:
-          throw new ServiceUnavailableException(payload);
-        default:
-          throw new BadRequestException(payload);
-      }
+      throw catalogRefusal(CATALOG_REFUSAL_STATUS[e.reason], e.reason, e.message);
     }
   }
 }

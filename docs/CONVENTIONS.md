@@ -926,7 +926,8 @@ in this table.
 pasted blocks. A fix made to one copy is a bug left in the others.
 `codeshape.py` fails on a new block of 8 meaningful lines pasted across files
 (`dupes`) and on a home bypassed (`raw-fetch`, `raw-storage`, `raw-service-call`); the copies there
-today are its baseline.
+today are its baseline. An import list is not a block, and two files kept identical on
+purpose, with the spec that holds them so, are a `MIRRORS` entry with the reason.
 
 ## C-28 — data access is bounded
 

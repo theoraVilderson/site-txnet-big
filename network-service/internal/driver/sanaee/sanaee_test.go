@@ -25,7 +25,13 @@ import (
 type farEnd struct {
 	t *testing.T
 
-	mu      sync.Mutex
+	mu sync.Mutex
+	// password is the one the panel accepts; a scenario changes it to make
+	// the credentials that worked a refused login.
+	password string
+	// url and client reach the panel, for a scenario that opens a second driver.
+	url     string
+	client  *http.Client
 	clients map[string]*farClient // by email
 	order   []string
 	backup  map[string]farClient
@@ -45,6 +51,20 @@ type farEnd struct {
 	nextStall    time.Duration
 	nextStatus   int
 	ceilingDelay int
+}
+
+// wireClient is a client as the panel reads one from a write: the fake's own
+// view of the wire, not the driver's.
+type wireClient struct {
+	ID         string `json:"id"`
+	Password   string `json:"password"`
+	Email      string `json:"email"`
+	Enable     bool   `json:"enable"`
+	TotalGB    int64  `json:"totalGB"`
+	ExpiryTime int64  `json:"expiryTime"`
+	Comment    string `json:"comment"`
+	SubID      string `json:"subId"`
+	Reset      int    `json:"reset"`
 }
 
 type farClient struct {
@@ -73,7 +93,7 @@ var inbounds = []struct {
 }{{1, "vless", 443}, {2, "trojan", 8443}}
 
 func newFarEnd(t *testing.T) *farEnd {
-	return &farEnd{t: t, clients: map[string]*farClient{}, session: "s-1", hideAPI: true}
+	return &farEnd{t: t, password: "secret", clients: map[string]*farClient{}, session: "s-1", hideAPI: true}
 }
 
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +131,7 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost && path == "/login" {
 		_ = r.ParseForm()
-		if r.PostForm.Get("username") != "admin" || r.PostForm.Get("password") != "secret" {
+		if r.PostForm.Get("username") != "admin" || r.PostForm.Get("password") != f.password {
 			// 3x-ui refuses a login with a 200 and success=false.
 			reply(w, false, "Invalid username or password", nil)
 			return
@@ -227,7 +247,7 @@ func (f *farEnd) decode(w http.ResponseWriter, r *http.Request) (int, *farClient
 		return 0, nil, false
 	}
 	var settings struct {
-		Clients []client `json:"clients"`
+		Clients []wireClient `json:"clients"`
 	}
 	if err := json.Unmarshal([]byte(body.Settings), &settings); err != nil || len(settings.Clients) != 1 {
 		reply(w, false, "bad settings", nil)
@@ -378,7 +398,8 @@ func open(t *testing.T) (*farEnd, *Driver) {
 	f := newFarEnd(t)
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
-	d, err := New(srv.URL+"/base/", "", Credentials{Username: "admin", Password: "secret"}, srv.Client())
+	f.url, f.client = srv.URL+"/base/", srv.Client()
+	d, err := New(f.url, "", Credentials{Username: "admin", Password: "secret"}, f.client)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -515,8 +536,8 @@ func TestExpiredSessionLogsInOnce(t *testing.T) {
 		t.Errorf("logins = %d, want 2: one at open, one after the 404", f.logins)
 	}
 
-	d.creds.Password = "wrong"
 	f.mu.Lock()
+	f.password = "changed"
 	f.session = "s-3"
 	before := f.calls
 	f.mu.Unlock()
@@ -618,7 +639,7 @@ func TestClientLinksAreBuiltFromTheInbound(t *testing.T) {
 		t.Fatalf("ClientLinks = %q, %v, want the one line %q", lines, err, want)
 	}
 
-	served, err := New(d.base.String(), "https://users.example/", d.creds, d.http)
+	served, err := New(f.url, "https://users.example/", Credentials{Username: "admin", Password: "secret"}, f.client)
 	if err != nil {
 		t.Fatalf("New with a client base url: %v", err)
 	}
@@ -626,7 +647,7 @@ func TestClientLinksAreBuiltFromTheInbound(t *testing.T) {
 	if err != nil || len(lines) != 1 || !strings.Contains(lines[0], "@users.example:443?") {
 		t.Errorf("with clientBaseUrl set ClientLinks = %q, %v, want the line at users.example", lines, err)
 	}
-	if _, err := New(d.base.String(), "not a url", d.creds, d.http); err == nil {
+	if _, err := New(f.url, "not a url", Credentials{Username: "admin", Password: "secret"}, f.client); err == nil {
 		t.Error("a client base url that is not absolute was accepted")
 	}
 	if _, err := d.ClientLinks(ctx, driver.RemoteClient{RemoteID: "nobody"}); err == nil {

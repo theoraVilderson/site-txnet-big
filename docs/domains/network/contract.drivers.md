@@ -91,11 +91,11 @@ exists). `marzban_test.go` also pins rules 1-3 and the one-login retry.
 
 ## Sanaee — MHSanaei 3x-ui (F-027-ah)
 
-`internal/driver/sanaee`. Pull, `cumulative`, and the panel enforces its own
-per-client total, so it carries ADR-0072 as Marzban does. It speaks **v2.x**:
+`internal/driver/sanaee`: a dialect of `internal/driver/xuifamily`, the v2 x-ui
+driver it shares with `contract.xui.md` (CS-1-i). Pull, `cumulative`, and the
+panel enforces its own per-client total: ADR-0072 as Marzban. It speaks **v2.x**:
 3x-ui v3.x is `three_x_ui` below; the two x-ui forks are `contract.xui.md`,
-Hiddify Manager is `contract.hiddify.md`, and Marzneshin
-`contract.marzneshin.md`.
+Hiddify Manager `contract.hiddify.md`, Marzneshin `contract.marzneshin.md`.
 
 A client lives inside its inbound: its settings are one element of the
 inbound's `settings` JSON string, and its counters are one row of the
@@ -148,9 +148,9 @@ and 4, the create round trip and the one-login retry. **Opened by
 
 ## 3x-ui v3 — `three_x_ui` (F-027-bb)
 
-`internal/driver/threexui`. The same product as Sanaee, v3.x: v3 removed the
-`inbounds/addClient|updateClient|delClient` routes v2 writes through, so it is
-a family of its own (user, 2026-09-24). Pull, `cumulative`, ADR-0072 as above.
+`internal/driver/threexui`, with `xuifamily`'s wire values, rows and sub address.
+Sanaee's product, v3.x: v3 removed the `inbounds/addClient|updateClient|delClient`
+routes v2 writes through: its own family (user, 2026-09-24). Pull, `cumulative`, ADR-0072.
 
 | 3x-ui v3 | ours |
 |---|---|

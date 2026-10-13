@@ -20,14 +20,16 @@ import { stepHref } from "./_lib/onboarding";
  *    nothing is elevated there: a `tenantId` that the platform staff's own
  *    session would add is refused, so the forms are handed an actor with no
  *    owner powers whoever is signed in;
- *  - **a refusal with no sentence.** Both doors' reasons are read from the
- *    controller's own exhaustive `STATUS` map, so one added there fails here
+ *  - **a refusal with no sentence.** Both doors' reasons are read from their
+ *    exhaustive status maps — the controller's `STATUS` and the ambient
+ *    `CATALOG_REFUSAL_STATUS` it spreads — so one added to either fails here
  *    instead of reaching a reseller's owner as a blank line;
  *  - **the console's pricing step linking nothing**, which is what it did until
  *    this row, or linking the ambient page.
  */
 const REPO = join(__dirname, "../../../../..");
 const CONTROLLER = "txnet-backend/billing-service/src/app/catalog/reseller-catalog.controller.ts";
+const AMBIENT_STATUS = "txnet-backend/billing-service/src/app/catalog/catalog-refusal.ts";
 
 describe("the route the screen calls", () => {
   it("names the reseller in the path, never the session's tenant", () => {
@@ -58,9 +60,10 @@ describe("what a write may carry", () => {
 
 describe("what the reseller's catalog routes can refuse", () => {
   it("has a sentence for every reason, both doors' included", () => {
-    const map = /const STATUS: Record<ResellerCatalogRejection, [^>]*> = \{([\s\S]*?)\n\};/.exec(readFileSync(join(REPO, CONTROLLER), "utf8"));
-    if (!map) throw new Error("the controller no longer maps every reason to a status — this test is stale");
-    const reasons = [...map[1].matchAll(/^\s{2}([a-z_]+):/gm)].map((m) => m[1]);
+    const own = /const STATUS: Record<ResellerCatalogRejection, [^>]*> = \{([\s\S]*?)\n\};/.exec(readFileSync(join(REPO, CONTROLLER), "utf8"));
+    const ambient = /export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, [^>]*> = \{([\s\S]*?)\n\};/.exec(readFileSync(join(REPO, AMBIENT_STATUS), "utf8"));
+    if (!own || !ambient || !own[1].includes("...CATALOG_REFUSAL_STATUS")) throw new Error("the two doors no longer map every reason to a status — this test is stale");
+    const reasons = [own[1], ambient[1]].flatMap((map) => [...map.matchAll(/^\s{2}([a-z_]+):/gm)].map((m) => m[1]));
     expect(reasons.length).toBeGreaterThan(10);
     expect(Object.keys(CATALOG_REFUSAL_KEYS).sort()).toEqual([...new Set(reasons)].sort());
   });

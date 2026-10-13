@@ -42,6 +42,8 @@ import (
 
 // Driver is one Hiddify panel. It is safe for concurrent use.
 type Driver struct {
+	// BulkUsage is GetUsage and GetUsageFor, over usage's one read.
+	driver.BulkUsage
 	base *url.URL
 	// client is the scheme, host and client proxy path users are served
 	// under; nil when the owner registered none.
@@ -104,7 +106,9 @@ func New(baseURL, clientBaseURL, key string, client *http.Client) (*Driver, erro
 	// An unknown key is answered with Hiddify's logout redirect, and
 	// following it would read the login page as the answer.
 	own.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Driver{base: base, client: clientBase, key: strings.TrimSpace(key), http: &own, now: time.Now, uuids: map[string]string{}}, nil
+	d := &Driver{base: base, client: clientBase, key: strings.TrimSpace(key), http: &own, now: time.Now, uuids: map[string]string{}}
+	d.BulkUsage = d.usage
+	return d, nil
 }
 
 func absolute(raw string) (*url.URL, error) {
@@ -531,22 +535,6 @@ func (d *Driver) SetClientRateLimit(_ context.Context, _ string, rateBps int64) 
 		return nil
 	}
 	return driver.NewFault(driver.FaultUnsupported, "SetClientRateLimit", 0, errors.New("hiddify has no per-user rate limit"))
-}
-
-func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
-	return d.usage(ctx, "GetUsage", nil)
-}
-
-// GetUsageFor is filtered out of the whole list. An empty set is not read.
-func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.ClientUsage, error) {
-	if len(remoteIDs) == 0 {
-		return nil, nil
-	}
-	want := make(map[string]bool, len(remoteIDs))
-	for _, id := range remoteIDs {
-		want[id] = true
-	}
-	return d.usage(ctx, "GetUsageFor", want)
 }
 
 // usage leaves out a name more than one user holds: two counters under one

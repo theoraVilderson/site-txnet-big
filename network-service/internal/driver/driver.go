@@ -254,3 +254,26 @@ type ClientUsage struct {
 	// backup harmless (ADR-0074).
 	SessionID string
 }
+
+// BulkUsage is a family that reads every client's counters in one call: the
+// read, filtered to want (nil: every client). A driver embeds it, set to its
+// own read, and has GetUsage and GetUsageFor from it — one home for the rule
+// that a subset is one request and an empty one is not read (C-27).
+type BulkUsage func(ctx context.Context, op string, want map[string]bool) ([]ClientUsage, error)
+
+// GetUsage is every client's counters.
+func (read BulkUsage) GetUsage(ctx context.Context) ([]ClientUsage, error) {
+	return read(ctx, "GetUsage", nil)
+}
+
+// GetUsageFor is the bulk read filtered to remoteIDs. An empty set is not read.
+func (read BulkUsage) GetUsageFor(ctx context.Context, remoteIDs []string) ([]ClientUsage, error) {
+	if len(remoteIDs) == 0 {
+		return nil, nil
+	}
+	want := make(map[string]bool, len(remoteIDs))
+	for _, id := range remoteIDs {
+		want[id] = true
+	}
+	return read(ctx, "GetUsageFor", want)
+}

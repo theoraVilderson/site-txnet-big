@@ -29,7 +29,6 @@ package threexui
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +42,7 @@ import (
 	"time"
 
 	"network-service/internal/driver"
+	"network-service/internal/driver/xuifamily"
 )
 
 // Credentials is a 3x-ui panel login, read out of the owner's vault by
@@ -56,6 +56,8 @@ type Credentials struct {
 // Driver is one 3x-ui v3 panel. It is safe for concurrent use; driver.Pace is
 // what keeps concurrent use from becoming a flood.
 type Driver struct {
+	// BulkUsage is GetUsage and GetUsageFor, over usage's one read.
+	driver.BulkUsage
 	base  *url.URL
 	creds Credentials
 	http  *http.Client
@@ -91,7 +93,9 @@ func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error
 		// No client timeout: the caller's context is the deadline (driver.Driver).
 		client = &http.Client{}
 	}
-	return &Driver{base: base, creds: creds, http: client}, nil
+	d := &Driver{base: base, creds: creds, http: client}
+	d.BulkUsage = d.usage
+	return d, nil
 }
 
 // ---- wire ------------------------------------------------------------------
@@ -212,45 +216,6 @@ func (r record) remote() driver.RemoteClient {
 	return c
 }
 
-// ceiling is a ceiling as 3x-ui must be told it: never 0, which it reads as
-// unlimited (package doc).
-func ceiling(bytes int64) int64 {
-	if bytes < 1 {
-		return driver.CutOffBytes
-	}
-	return bytes
-}
-
-// limit is the figure a create or an update writes: 3x-ui's own 0 for a client
-// wanted with no limit (F-111-r), a ceiling otherwise.
-func limit(none bool, bytes int64) int64 {
-	if none {
-		return 0
-	}
-	return ceiling(bytes)
-}
-
-func expiry(at time.Time) int64 {
-	if at.IsZero() {
-		return 0
-	}
-	return at.UnixMilli()
-}
-
-// newSubID is the client's subscription token. It is a secret — whoever has
-// it has the client's links — so it is random, not derived.
-func newSubID() (string, error) {
-	const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-	raw := make([]byte, 16)
-	if _, err := rand.Read(raw); err != nil {
-		return "", err
-	}
-	for i, b := range raw {
-		raw[i] = alphabet[int(b)%len(alphabet)]
-	}
-	return string(raw), nil
-}
-
 // ---- transport -------------------------------------------------------------
 
 // call sends one request with the current session. A 401 is an expired
@@ -357,20 +322,9 @@ func merge(have, set []*http.Cookie) []*http.Cookie {
 }
 
 func (d *Driver) do(ctx context.Context, op, method string, path []string, body, out any, s *session) error {
-	var reader io.Reader
-	if body != nil {
-		raw, err := json.Marshal(body)
-		if err != nil {
-			return driver.NewFault(driver.FaultProtocol, op, 0, err)
-		}
-		reader = strings.NewReader(string(raw))
-	}
-	req, err := http.NewRequestWithContext(ctx, method, d.base.JoinPath(path...).String(), reader)
+	req, err := xuifamily.JSONRequest(ctx, op, method, d.base.JoinPath(path...).String(), body)
 	if err != nil {
-		return driver.NewFault(driver.FaultProtocol, op, 0, err)
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
+		return err
 	}
 	s.sign(req)
 	env, _, status, err := d.exchange(ctx, op, req)
@@ -505,22 +459,8 @@ func (d *Driver) HealthCheck(ctx context.Context) error {
 	return err
 }
 
-type inbound struct {
-	ID       int    `json:"id"`
-	Enable   bool   `json:"enable"`
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
-	Tag      string `json:"tag"`
-	// Listen, Remark, Settings and StreamSettings are what the inbound's
-	// lines are built from: the fingerprint an edit is seen by (rule 6b).
-	Listen         string `json:"listen"`
-	Remark         string `json:"remark"`
-	Settings       string `json:"settings"`
-	StreamSettings string `json:"streamSettings"`
-}
-
-func (d *Driver) inbounds(ctx context.Context, op string) ([]inbound, error) {
-	var list []inbound
+func (d *Driver) inbounds(ctx context.Context, op string) ([]xuifamily.Inbound, error) {
+	var list []xuifamily.Inbound
 	err := d.call(ctx, op, http.MethodGet, []string{"panel", "api", "inbounds", "list"}, nil, &list)
 	return list, err
 }
@@ -530,18 +470,7 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	if err != nil {
 		return nil, err
 	}
-	out := make([]driver.Inbound, 0, len(list))
-	for _, in := range list {
-		out = append(out, driver.Inbound{
-			RemoteID: strconv.Itoa(in.ID), Tag: in.Tag, Protocol: in.Protocol, Port: in.Port, Enabled: in.Enable,
-			Fingerprint: driver.XrayFingerprint(driver.XrayInbound{
-				Listen: in.Listen, Port: in.Port, Protocol: in.Protocol, Remark: in.Remark,
-				Settings: in.Settings, StreamSettings: in.StreamSettings,
-			}),
-		})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Tag < out[j].Tag })
-	return out, nil
+	return xuifamily.InboundsOf(list), nil
 }
 
 // ListClients reads the panel, never our last write: the limit reported is
@@ -573,15 +502,15 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0,
 			fmt.Errorf("inbound %q is not a 3x-ui inbound id", req.InboundRemoteID))
 	}
-	subID, err := newSubID()
+	subID, err := xuifamily.NewSubID()
 	if err != nil {
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultProtocol, op, 0, err)
 	}
 	r := record{
 		Email:      strings.ReplaceAll(req.UUID, "-", ""),
 		Enable:     req.Enabled,
-		TotalGB:    limit(req.NoDataLimit, req.DataLimitBytes),
-		ExpiryTime: expiry(req.ExpiresAt),
+		TotalGB:    xuifamily.Limit(req.NoDataLimit, req.DataLimitBytes),
+		ExpiryTime: xuifamily.Expiry(req.ExpiresAt),
 		Comment:    req.ClaimTag,
 		SubID:      subID,
 		LimitIP:    req.IPLimit,
@@ -620,8 +549,8 @@ func (d *Driver) UpdateClient(ctx context.Context, req driver.UpdateClientReques
 		next.Password = req.UUID
 	}
 	next.Enable = req.Enabled
-	next.TotalGB = limit(req.NoDataLimit, req.DataLimitBytes)
-	next.ExpiryTime = expiry(req.ExpiresAt)
+	next.TotalGB = xuifamily.Limit(req.NoDataLimit, req.DataLimitBytes)
+	next.ExpiryTime = xuifamily.Expiry(req.ExpiresAt)
 	next.Comment = req.ClaimTag
 	next.LimitIP = req.IPLimit
 	return d.call(ctx, op, http.MethodPost, []string{"panel", "api", "clients", "update", r.Email},
@@ -655,7 +584,7 @@ func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
 // SetClientDataLimit writes the ceiling 3x-ui enforces. Raising it above what
 // was used is also what lets a depleted client through again.
 func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {
-	return d.update(ctx, "SetClientDataLimit", remoteID, func(c *wireClient) { c.TotalGB = ceiling(ceilingBytes) })
+	return d.update(ctx, "SetClientDataLimit", remoteID, func(c *wireClient) { c.TotalGB = xuifamily.Ceiling(ceilingBytes) })
 }
 
 // SetClientRateLimit: 3x-ui has no per-client bandwidth cap. "No cap" is
@@ -670,23 +599,6 @@ func (d *Driver) SetClientRateLimit(_ context.Context, _ string, rateBps int64) 
 // SetClientIPLimit writes limitIp, the Grant's device limit (F-311-q).
 func (d *Driver) SetClientIPLimit(ctx context.Context, remoteID string, limit int) error {
 	return d.update(ctx, "SetClientIPLimit", remoteID, func(c *wireClient) { c.LimitIP = limit })
-}
-
-func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
-	return d.usage(ctx, "GetUsage", nil)
-}
-
-// GetUsageFor is served from the bulk call, filtered: one request whatever
-// the subset. An empty set is not read.
-func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.ClientUsage, error) {
-	if len(remoteIDs) == 0 {
-		return nil, nil
-	}
-	want := make(map[string]bool, len(remoteIDs))
-	for _, id := range remoteIDs {
-		want[id] = true
-	}
-	return d.usage(ctx, "GetUsageFor", want)
 }
 
 // usage reads each client's counters row. A client with none has served
@@ -757,39 +669,12 @@ func (d *Driver) subscription(ctx context.Context, op, subID string) (string, bo
 	if subID == "" {
 		return "", false, nil
 	}
-	var s struct {
-		SubEnable   bool   `json:"subEnable"`
-		SubPort     int    `json:"subPort"`
-		SubPath     string `json:"subPath"`
-		SubDomain   string `json:"subDomain"`
-		SubURI      string `json:"subURI"`
-		SubCertFile string `json:"subCertFile"`
-	}
+	var s xuifamily.SubSettings
 	if err := d.call(ctx, op, http.MethodPost, []string{"panel", "api", "setting", "all"}, nil, &s); err != nil {
 		return "", false, err
 	}
-	if !s.SubEnable {
-		return "", false, nil
-	}
-	if s.SubURI != "" {
-		return strings.TrimRight(s.SubURI, "/") + "/" + subID, true, nil
-	}
-	scheme := "http"
-	if s.SubCertFile != "" {
-		scheme = "https"
-	}
-	host := s.SubDomain
-	if host == "" {
-		host = d.base.Hostname()
-	}
-	if s.SubPort != 0 && !(scheme == "https" && s.SubPort == 443) && !(scheme == "http" && s.SubPort == 80) {
-		host += ":" + strconv.Itoa(s.SubPort)
-	}
-	path := "/" + strings.Trim(s.SubPath, "/") + "/"
-	if path == "//" {
-		path = "/"
-	}
-	return scheme + "://" + host + path + subID, true, nil
+	u, ok := s.Address(d.base.Hostname(), subID)
+	return u, ok, nil
 }
 
 func isProtocol(p string) bool {

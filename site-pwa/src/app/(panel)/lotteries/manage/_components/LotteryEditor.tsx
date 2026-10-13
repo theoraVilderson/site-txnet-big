@@ -1,18 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
-import { billingApi, type AdminCoupon } from "@/lib/billing-api";
-import { lotteryAdminApi, type AdminLottery, type LotteryPrizeType } from "@/lib/engagement-api";
+import { lotteryAdminApi, type AdminLottery } from "@/lib/engagement-api";
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { useRowKeys } from "../../../_hooks/useRowKeys";
+import { usePrizeSources } from "../../../_hooks/usePrizeSources";
+import { PrizeFields, PrizeRowHeader } from "../../../_components/prizes/PrizeFields";
 import { moveRow } from "../../../_lib/rows";
 import { Select } from "../../../_components/kit/Select";
 import { Field } from "../../../catalog/_components/catalog-ui";
-import { VariantPicker } from "../../../coupons/_components/VariantPicker";
 import {
   LOTTERY_ADMIN_KEYS as K,
   LOTTERY_PRIZE_TYPES,
@@ -27,7 +26,7 @@ import {
   type LotteryPrizeForm,
 } from "../_lib/lottery-admin";
 import { useLotteryMessage } from "./lottery-admin-ui";
-import { Alert, Button, Checkbox, IconButton, Input, Textarea } from "../../../_components/kit";
+import { Alert, Button, Checkbox, Input, Textarea } from "../../../_components/kit";
 
 /**
  * A lottery's draft: a new one, or a draft rewritten whole (F-707-i rule 1).
@@ -45,23 +44,7 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  // Coupons to copy (ADR-0110): the tenant's own discount coupons. Groups: `user_group.manage` lists them; without it the id is typed.
-  const [templates, setTemplates] = useState<AdminCoupon[] | null | "failed">(null);
-  const [groups, setGroups] = useState<UserGroup[] | null | "failed">(null);
-  useEffect(() => {
-    let live = true;
-    billingApi.adminCoupons({ kind: "discount", status: "active", pageSize: 100 }).then(
-      (page) => live && setTemplates(page.items.filter((c) => c.tenantId === me?.tenant?.id)),
-      () => live && setTemplates("failed"),
-    );
-    userGroupsApi.list().then(
-      (list) => live && setGroups(list),
-      () => live && setGroups("failed"),
-    );
-    return () => {
-      live = false;
-    };
-  }, [me?.tenant?.id]);
+  const { templates, groups } = usePrizeSources();
 
   const check = useMemo(() => validateLotteryForm(form, zone, new Date()), [form, zone]);
   const shown = (key: string | undefined) => (tried ? key : undefined);
@@ -145,67 +128,26 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
           const e = tried ? (check.prizes[i] ?? {}) : {};
           return (
             <div key={prizeKeys[i]} className="space-y-3 rounded-xl border border-card-border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-text-primary">{t("common", K.prizes.rank, { n: i + 1 })}</span>
-                <div className="flex gap-1">
-                  <IconButton size="sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label={t("common", K.prizes.moveUp)} icon={<ArrowUp size={12} aria-hidden />} />
-                  <IconButton size="sm" disabled={i === form.prizes.length - 1} onClick={() => move(i, 1)} aria-label={t("common", K.prizes.moveDown)} icon={<ArrowDown size={12} aria-hidden />} />
-                  <Button variant="quiet" size="sm" onClick={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))} icon={<Trash2 size={12} aria-hidden />}>
-                    {t("common", K.prizes.remove)}
-                  </Button>
-                </div>
-              </div>
+              <PrizeRowHeader
+                title={t("common", K.prizes.rank, { n: i + 1 })}
+                index={i}
+                count={form.prizes.length}
+                keys={K.prizes}
+                onMove={(by) => move(i, by)}
+                onRemove={() => setForm((f) => ({ ...f, prizes: f.prizes.filter((_, j) => j !== i) }))}
+              />
               <div className="grid gap-3 md:grid-cols-4">
-                <Field label={t("common", K.prizes.label)} error={e.label}>
-                  <Input dir="auto" value={p.label} onChange={(ev) => setPrize(i, { label: ev.target.value })} />
-                </Field>
-                <Field label={t("common", K.prizes.type)}>
-                  <Select
-                    value={p.prizeType}
-                    onChange={(v) => setPrize(i, { prizeType: v as LotteryPrizeType, ...(v === "free_grant" ? { prizeValue: "0" } : {}) })}
-                    options={LOTTERY_PRIZE_TYPES.map((type) => ({ value: type, label: t("common", PRIZE_TYPE_KEYS[type]) }))}
-                  />
-                </Field>
-                {p.prizeType !== "free_grant" && (
-                  <Field
-                    label={t("common", p.prizeType === "bonus_traffic_gb" ? K.prizes.valueGb : p.prizeType === "extra_days" ? K.prizes.valueDays : K.prizes.valuePercent)}
-                    error={e.prizeValue}
-                  >
-                    <Input dir="ltr" inputMode="decimal" value={p.prizeValue} onChange={(ev) => setPrize(i, { prizeValue: ev.target.value })} />
-                  </Field>
-                )}
-                {p.prizeType === "discount_coupon" && (
-                  <>
-                    <Field label={t("common", K.prizes.template)} error={e.couponTemplateId}>
-                      {templates === null ? (
-                        <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.templatesLoading)}</p>
-                      ) : templates === "failed" ? (
-                        <Input
-                          dir="ltr"
-                          placeholder={t("common", K.prizes.templateId)}
-                          value={p.couponTemplateId}
-                          onChange={(ev) => setPrize(i, { couponTemplateId: ev.target.value })}
-                        />
-                      ) : templates.length === 0 ? (
-                        <p className="py-2 text-xs text-text-secondary">{t("common", K.prizes.noTemplates)}</p>
-                      ) : (
-                        <Select
-                          value={p.couponTemplateId}
-                          onChange={(v) => setPrize(i, { couponTemplateId: v })}
-                          options={templates.map((c) => ({ value: c.id, label: `${c.code}${c.label ? ` · ${c.label}` : ""}` }))}
-                        />
-                      )}
-                    </Field>
-                    <Field label={t("common", K.prizes.validDays)} error={e.couponValidDays}>
-                      <Input dir="ltr" inputMode="numeric" value={p.couponValidDays} onChange={(ev) => setPrize(i, { couponValidDays: ev.target.value })} />
-                    </Field>
-                  </>
-                )}
-                {p.prizeType === "free_grant" && (
-                  <Field label={t("common", K.prizes.variant)} error={e.variantId}>
-                    <VariantPicker id={`lottery-variant-${i}`} value={p.variantId} onChange={(v) => setPrize(i, { variantId: v })} ownerTenant={me?.tenant?.id ?? null} invalid={!!e.variantId} />
-                  </Field>
-                )}
+                <PrizeFields
+                  prize={p}
+                  errors={e}
+                  keys={K.prizes}
+                  types={LOTTERY_PRIZE_TYPES}
+                  typeKeys={PRIZE_TYPE_KEYS}
+                  templates={templates}
+                  variantFieldId={`lottery-variant-${i}`}
+                  ownerTenant={me?.tenant?.id ?? null}
+                  onPatch={(patch) => setPrize(i, patch)}
+                />
                 <Field label={t("common", K.prizes.winnersCount)} error={e.winnersCount}>
                   <Input dir="ltr" inputMode="numeric" value={p.winnersCount} onChange={(ev) => setPrize(i, { winnersCount: ev.target.value })} />
                 </Field>
