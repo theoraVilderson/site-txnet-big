@@ -6,8 +6,10 @@
  *  - **a free service slipping past the cap.** It is a 100% discount, so a cap
  *    under 100 refuses it, one code or a batch (user 2026-10-13);
  *  - **money counted as a discount.** A wallet credit is money, not a
- *    discount, and a fixed amount has no price to compare to at create
- *    (its own row) — neither is read;
+ *    discount, and is never read;
+ *  - **a fixed amount past the cap.** It has no price at create, so it is
+ *    weighed against its minimum purchase: at most the cap's share of it, and
+ *    with no minimum it could be the whole price (F-904-a, user 2026-10-14);
  *  - **an old coupon locked.** An edit that leaves the discount as it was is
  *    never refused, even over a cap lowered since — only a new discount is;
  *  - **platform staff refused.** Acting on a reseller's coupon they pass, as
@@ -51,11 +53,22 @@ describe('assertUnderDiscountCap (F-904)', () => {
     await expect(assertUnderDiscountCap(fakeTx(null).tx as never, { ...own, next: freeService })).resolves.toBeUndefined();
   });
 
-  it('reads nothing for money: a wallet credit or a fixed amount', async () => {
+  it('reads nothing for a wallet credit: it is money, not a discount', async () => {
     const { tx, reads } = fakeTx(1);
     await assertUnderDiscountCap(tx as never, { ...own, next: { discountType: DiscountType.wallet_credit, discountValue: '50' } });
-    await assertUnderDiscountCap(tx as never, { ...own, next: { discountType: DiscountType.fixed_amount, discountValue: '50' } });
     expect(reads).toEqual([]);
+  });
+
+  it('weighs a fixed amount against its minimum purchase: at most the cap\'s share of it (F-904-a)', async () => {
+    const { tx } = fakeTx(30);
+    const fixed = (value: string, min: string | null) => ({ discountType: DiscountType.fixed_amount, discountValue: value, minPurchaseAmount: min });
+    await expect(assertUnderDiscountCap(tx as never, { ...own, next: fixed('30000', '100000') })).resolves.toBeUndefined();
+    await expect(assertUnderDiscountCap(tx as never, { ...own, next: fixed('30000', '50000') })).rejects.toMatchObject({ key: 'coupon_discount_pct_max', limit: 30, used: 60 });
+    // No minimum: it could be the whole price.
+    await expect(assertUnderDiscountCap(tx as never, { ...own, next: fixed('1000', null) })).rejects.toMatchObject({ used: 100 });
+    // Lowering the minimum is a new discount, asked again.
+    await expect(assertUnderDiscountCap(tx as never, { ...own, next: fixed('30000', '50000'), before: fixed('30000', '100000') })).rejects.toBeInstanceOf(ResellerLimitReached);
+    await expect(assertUnderDiscountCap(fakeTx(null).tx as never, { ...own, next: fixed('1000', null) })).resolves.toBeUndefined();
   });
 
   it('never refuses an edit that leaves the discount as it was', async () => {

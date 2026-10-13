@@ -27,7 +27,7 @@ level that has a row wins.
 | `storage_mib_max` | MiB of its admins' files — stored objects under its `branding/` and `guides/`, rounded up; never its users' support attachments — refused at an upload that would pass it, the replaced file not counted | 1024 | 1 048 576 | F-414-m, ADR-0120, `platform/object-storage/contract.md` rule 11 |
 | `campaign_sends_daily_max` | campaigns it starts sending per fixed day — a quota, counted by the engine | 10 | 1000 | F-019-v4, `notification/contract.reseller.md` |
 | `bulk_job_grants_max` | services one bulk job of its people acts on — a ceiling, refused past it, `used` = the job's size | 10 000 | 100 000 | F-019-t5, `billing/contract.reseller-grants-bulk.md` |
-| `coupon_discount_pct_max` | the largest discount one of its coupons gives, in percent — a percentage's value, a free service's 100; a ceiling refused at coupon create, edit (a changed discount only) and batch create, `used` = the percent asked. Wallet credit is money and a fixed amount is open until F-904-a. Platform staff pass | **none** | 100 | F-904, `billing/contract.coupon.md` |
+| `coupon_discount_pct_max` | the largest discount one of its coupons gives, in percent — a percentage's value, a free service's 100, a fixed amount's share of its minimum purchase (100 with none, F-904-a); a ceiling refused at coupon create, edit (a changed discount only) and batch create, `used` = the percent asked. Wallet credit is money, not read. Platform staff pass | **none** | 100 | F-904, `billing/contract.coupon.md` |
 
 `resellerLimitOf(tx, tenantId, key)` → `{limit, source}`; `resellerLimitsOf`
 answers every key. `source` is `reseller`, `package`, `platform`, `default`,
