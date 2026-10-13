@@ -34,8 +34,6 @@ const nextConfig: NextConfig = {
 
   serverExternalPackages: [
     "@txnet/locale-client",
-    "winston",
-    "winston-mongodb",
     "@grpc/grpc-js",
     "@grpc/proto-loader",
   ],

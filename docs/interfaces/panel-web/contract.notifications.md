@@ -8,8 +8,8 @@ updated: 2026-10-06
 
 # Contract — panel-web: the notifications control (F-093-h)
 
-`_components/NotificationsButton.tsx` + `_hooks/useNotifications.ts` +
-`_lib/notification-event.ts`, over `lib/notification-api.ts`. The bell in the
+`_components/NotificationsButton.tsx` + `_hooks/useNotifications.ts` (which
+hears `notification.created` through `useLiveReread`), over `lib/notification-api.ts`. The bell in the
 top bar, its unread badge, and the panel it opens. Its own file rather than a
 section of [contract.shell.md](contract.shell.md), which is at §10's 250-line
 ceiling.

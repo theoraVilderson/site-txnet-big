@@ -4,7 +4,7 @@ import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { RateLimit, type RateLimitOptions } from '../decorators/rate-limit.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
-import { SensitiveActionGuard } from '../../impersonation/guards/sensetive-action.guard';
+import { SensitiveActionGuard } from '../../impersonation/guards/sensitive-action.guard';
 import { terminateSessionSchema } from '../auth.schema';
 import type { AuthClaims } from '../token.service';
 import { ActiveSessionsService } from './active-sessions.service';

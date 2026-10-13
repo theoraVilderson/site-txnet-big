@@ -1,22 +1,12 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { ZodError, z } from "zod";
 import {
   isValidJsonObject,
-  parsePersianDate,
   toEnglishDigits,
   UNKNOWN_VALIDATION_KEY,
   VALIDATIONS_NS,
   zodErrorToString,
 } from "./helper";
-
-// `parsePersianDate` logs on every call; keep the suite output readable.
-beforeEach(() => {
-  vi.spyOn(console, "log").mockImplementation(() => undefined);
-  vi.spyOn(console, "error").mockImplementation(() => undefined);
-});
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe("toEnglishDigits", () => {
   it.each([
@@ -54,109 +44,6 @@ describe("toEnglishDigits", () => {
     ])("%s becomes ASCII", (_label, input, ascii) => {
       expect(toEnglishDigits(input)).toBe(ascii);
     });
-  });
-});
-
-describe("parsePersianDate", () => {
-  it("converts 1 Farvardin 1402 to 21 March 2023", () => {
-    const date = parsePersianDate("1402/01/01");
-    expect(date).toBeInstanceOf(Date);
-    expect(date?.getFullYear()).toBe(2023);
-    expect(date?.getMonth()).toBe(2); // March, zero-based
-    expect(date?.getDate()).toBe(21);
-  });
-
-  it.each([
-    ["1402/01/01", 2023, 2, 21],
-    ["1402/12/29", 2024, 2, 19], // last day of a non-leap jalaali year
-    ["1403/12/30", 2025, 2, 20], // 1403 is a leap year: Esfand has 30 days
-    ["1400/07/01", 2021, 8, 23],
-  ])("%s -> %i-%i-%i", (input, gy, gmIndex, gd) => {
-    const date = parsePersianDate(input);
-    expect(date?.getFullYear()).toBe(gy);
-    expect(date?.getMonth()).toBe(gmIndex);
-    expect(date?.getDate()).toBe(gd);
-  });
-
-  it("accepts dashes as well as slashes", () => {
-    expect(parsePersianDate("1402-01-01")?.getTime()).toBe(
-      parsePersianDate("1402/01/01")?.getTime(),
-    );
-  });
-
-  it("defaults to the start of the day", () => {
-    const date = parsePersianDate("1402/01/01");
-    expect([
-      date?.getHours(),
-      date?.getMinutes(),
-      date?.getSeconds(),
-      date?.getMilliseconds(),
-    ]).toEqual([0, 0, 0, 0]);
-  });
-
-  it("snaps to the last instant of the day when isEndOfDay is set", () => {
-    const date = parsePersianDate("1402/01/01", true);
-    expect([
-      date?.getHours(),
-      date?.getMinutes(),
-      date?.getSeconds(),
-      date?.getMilliseconds(),
-    ]).toEqual([23, 59, 59, 999]);
-  });
-
-  it("produces a from/to range that covers exactly one day", () => {
-    const from = parsePersianDate("1402/01/01") as Date;
-    const to = parsePersianDate("1402/01/01", true) as Date;
-    expect(to.getTime() - from.getTime()).toBe(86_400_000 - 1);
-  });
-
-  it.each([
-    ["empty string", ""],
-    ["undefined", undefined as unknown as string],
-    ["two parts only", "1402/01"],
-    ["four parts", "1402/01/01/01"],
-    ["no separator", "14020101"],
-  ])("%s -> undefined", (_label, input) => {
-    expect(parsePersianDate(input)).toBeUndefined();
-  });
-
-  describe("malformed parts produce a plausible-looking wrong Date, not undefined", () => {
-    // The guard only counts the parts. `parseInt` then yields NaN, jalaali-js
-    // maps NaN to year -100100, and the function returns a perfectly valid
-    // Date object. A caller that only checks for `undefined` will happily send
-    // that year to the API. Pinned so a fix is a visible test change.
-    it.each([
-      "abc/def/ghi",
-      "\u06f1\u06f4\u06f0\u06f2/\u06f0\u06f1/\u06f0\u06f1",
-      "//",
-    ])("%p", (input) => {
-      const date = parsePersianDate(input);
-      expect(date).toBeInstanceOf(Date);
-      expect(date?.getTime()).not.toBeNaN();
-      expect(date?.getFullYear()).toBe(-100100);
-    });
-
-    it("Persian digits are not normalized first — pipe them through toEnglishDigits", () => {
-      const persian = "\u06f1\u06f4\u06f0\u06f2/\u06f0\u06f1/\u06f0\u06f1";
-      expect(parsePersianDate(persian)?.getFullYear()).toBe(-100100);
-      expect(parsePersianDate(toEnglishDigits(persian))?.getFullYear()).toBe(
-        2023,
-      );
-    });
-
-    it("an out-of-range month or day rolls over instead of being rejected", () => {
-      // 1402/13/40 is not a date; jalaali-js normalizes it to 2024-04-29.
-      const date = parsePersianDate("1402/13/40");
-      expect(date?.getFullYear()).toBe(2024);
-      expect(date?.getMonth()).toBe(3);
-      expect(date?.getDate()).toBe(29);
-    });
-  });
-
-  it("does not throw on any malformed input", () => {
-    for (const input of ["", "x", "1402", "1402/13/40", "abc/def/ghi", "//"]) {
-      expect(() => parsePersianDate(input)).not.toThrow();
-    }
   });
 });
 

@@ -14,7 +14,7 @@ import { NoticeMessenger } from '@prisma/client';
 import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
-import { SensitiveActionGuard } from '../../impersonation/guards/sensetive-action.guard';
+import { SensitiveActionGuard } from '../../impersonation/guards/sensitive-action.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { MeService } from './me.service';
 import { MeEmailService } from './me-email.service';

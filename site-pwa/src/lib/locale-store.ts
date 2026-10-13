@@ -168,7 +168,7 @@ export function initStore(): Promise<void> {
       const metaMap = await loadMetaMap();
       globalForLocale.localeMetaMap = metaMap;
       globalForLocale.availableLocales = Object.keys(metaMap);
-      console.log("[locale] connected, version:", getVersion());
+      console.info("[locale] connected, version:", getVersion());
       if (Object.keys(metaMap).length === 0) {
         // ترجمه‌ها زنده‌اند ولی متادیتا نیامد — بگذار دفعه‌ی بعد دوباره امتحان شود
         throw new Error("locale metadata empty");
@@ -190,7 +190,7 @@ export async function reloadStore(): Promise<void> {
     // نسخه‌ها عوض شده‌اند؛ کش‌های مشتق را خالی کن تا از نو ساخته شوند
     globalForLocale.compiledCache?.clear();
     globalForLocale.nsCache?.clear();
-    console.log("[locale] re-synced, version:", getVersion());
+    console.info("[locale] re-synced, version:", getVersion());
   } catch (e) {
     console.error("[locale] re-sync failed, keeping cached data", e);
   }

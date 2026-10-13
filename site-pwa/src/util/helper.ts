@@ -1,40 +1,5 @@
-import { KeyObject } from "crypto";
-import { JWK, JWTPayload, SignJWT } from "jose";
-import { NextRequest } from "next/server";
-import { v4 as uuidv4 } from "uuid";
-import { toGregorian } from "jalaali-js";
 import { ZodError } from "zod";
-import { ProxyHeaders } from "@/generated/wire";
 
-export function getIpFromHeader(headers: NextRequest["headers"]) {
-  return (
-    headers.get(ProxyHeaders.forwardedFor)?.split?.(",")?.shift?.() ||
-    "127.0.0.1"
-  );
-}
-export function getHostFromHeader(headers: NextRequest["headers"]) {
-  return headers.get(ProxyHeaders.forwardedHost) ?? headers.get("host") ?? "";
-}
-
-export async function generateJIT<PayloadType>(
-  payload: Omit<PayloadType, keyof JWTPayload>,
-  key: Uint8Array<ArrayBufferLike> | CryptoKey | KeyObject | JWK,
-  expire: string | number,
-) {
-  const jti = uuidv4(); // تولید شناسه یکتا برای این توکن خاص
-
-  const token = await new SignJWT({ ...payload })
-    .setProtectedHeader({ alg: "HS256" })
-    .setJti(jti) // ست کردن JTI
-    .setIssuedAt()
-    .setExpirationTime(expire) // انقضای خود توکن
-    .sign(key);
-
-  return { token, jti };
-}
-export function getEnv(key: string) {
-  return process.env[key]!;
-}
 /** Persian (۰-۹) and Arabic-Indic (٠-٩) digits to ASCII; everything else as it was. */
 export const toEnglishDigits = (str: string) => {
   if (!str) return "";
@@ -42,51 +7,6 @@ export const toEnglishDigits = (str: string) => {
     .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
     .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
 };
-
-/**
- * تبدیل رشته تاریخ شمسی به آبجکت Date میلادی
- * @param persianDateStr رشته تاریخ مثل "1402/01/01"
- * @param isEndOfDay آیا زمان پایان روز باشد؟ (برای فیلتر "تا تاریخ")
- */
-export function parsePersianDate(
-  persianDateStr: string,
-  isEndOfDay: boolean = false,
-): Date | undefined {
-  console.log(persianDateStr, "geelow");
-  if (!persianDateStr) return undefined;
-
-  try {
-    // حذف جداکننده‌ها و تبدیل به اعداد
-    // فرض بر این است که ورودی به صورت YYYY/MM/DD یا YYYY-MM-DD است
-    const parts = persianDateStr.split(/[/-]/);
-
-    if (parts.length !== 3) return undefined;
-
-    const jy = parseInt(parts[0], 10);
-    const jm = parseInt(parts[1], 10);
-    const jd = parseInt(parts[2], 10);
-
-    // تبدیل به میلادی
-    const { gy, gm, gd } = toGregorian(jy, jm, jd);
-
-    // ساخت آبجکت تاریخ
-    // نکته: ماه در جاوااسکریپت از 0 شروع می‌شود (0 = ژانویه) پس gm - 1 می‌کنیم
-    const date = new Date(gy, gm - 1, gd);
-    console.log(date, jy, jm, jd);
-    if (isEndOfDay) {
-      // تنظیم روی آخرین لحظه روز (23:59:59.999)
-      date.setHours(23, 59, 59, 999);
-    } else {
-      // تنظیم روی شروع روز (00:00:00.000)
-      date.setHours(0, 0, 0, 0);
-    }
-
-    return date;
-  } catch (error) {
-    console.error("Invalid Persian Date:", persianDateStr);
-    return undefined;
-  }
-}
 
 /**
  * The panel's translator — `useLocale().t` from `@/context/LocaleContext`.

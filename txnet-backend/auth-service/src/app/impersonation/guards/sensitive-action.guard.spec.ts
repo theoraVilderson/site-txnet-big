@@ -1,20 +1,9 @@
 import { CanActivate, ForbiddenException } from '@nestjs/common';
 import { SensitiveActionGuard } from './sensitive-action.guard';
-import { SensitiveActionGuard as ImpersonationSensitiveActionGuard } from '../../impersonation/guards/sensetive-action.guard';
 import { fakeExecutionContext } from '../../../test-support/execution-context';
 
-/**
- * As with PermissionsGuard, this class exists twice — here and in
- * `impersonation/guards/sensetive-action.guard.ts` (the filename typo is in
- * the tree). The two are identical copies today, so both are held to the same
- * expectations; a future divergence has to break a test to happen.
- */
-const implementations: Array<[string, new () => CanActivate]> = [
-  ['auth', SensitiveActionGuard],
-  ['impersonation', ImpersonationSensitiveActionGuard],
-];
-
-describe.each(implementations)('SensitiveActionGuard (%s)', (_name, Guard) => {
+describe('SensitiveActionGuard', () => {
+  const Guard = SensitiveActionGuard;
   const contextFor = (user: unknown) => fakeExecutionContext({ user }).context;
   let guard: CanActivate;
 

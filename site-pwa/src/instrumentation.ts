@@ -19,7 +19,7 @@ export async function register() {
   try {
     await initStore();
     await startWatching();
-    console.log("[locale] warmed at server boot");
+    console.info("[locale] warmed at server boot");
   } catch (e) {
     console.error(
       "[locale] boot warm-up failed — will retry on first request",
