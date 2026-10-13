@@ -2,19 +2,19 @@
 id: governance
 layer: domain
 status: draft
-updated: 2026-09-25
+updated: 2026-10-13
 ---
 
 # Invariants — governance
 
-Rows 1–4 are **draft** — extracted from schema comments, not enforced in code yet. Rows 5–8 (user groups, F-114-j) are enforced.
+Row 1 is **draft** — extracted from schema comments, not enforced in code yet. Rows 3, 5–9 are enforced; row 2 and 4 were retired with the schema they described (F-030-a, F-030-d).
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
 | 1 | `user_setting` is unique per `(userId, key)` | planned service layer / schema | see contract | 
-| 2 | A `recurring_daily` grant uses `dailyStartTime`/`dailyEndTime` + `timezone`; a `one_time` grant uses `startAt`/`endAt` — never both | planned service layer / schema | see contract | 
-| 3 | `user_restriction` is logically unique per `(userId, restrictionKey)` on active rows only (needs a partial unique index — 'section 99') | planned service layer / schema | see contract | 
-| 4 | A `hard_block` restriction is enforced before the action; a `soft_warning` only annotates | planned service layer / schema | see contract | 
+| 2 | (retired 2026-10-13: `temporal_access_grant` dropped, F-030-a) | — | — |
+| 3 | A restriction is one registry key per person, its value as the key's kind reads it, on the person's tenant, and set or lifted only by a writer with authority over them, audited (F-030-d) | PK `(userId, key)`; strict RLS; `restrictionValueOf`; `UserRestrictionsService` (`user-restrictions.spec.ts`) | the enforcement (F-030-e) reads a value it cannot apply, or a peer caps a peer |
+| 4 | (retired 2026-10-13: `scope` dropped with the draft table — every restriction refuses, F-030-e) | — | — |
 | 5 | A user group and its member rows are exactly one tenant's | strict RLS on `user_group` / `user_group_member`; member FK on the group's `(id, tenantId)` | one tenant's discount or campaign reaches another's users |
 | 6 | Only the platform owner's group holds another tenant's user, a reseller, or `allTenants` | `memberRefusal` / `groupRefusal`; trigger `user_group_scope_ok()` | a reseller targets people it does not serve |
 | 7 | A member row names exactly one subject, matching `memberType`; once per group | CHECK `user_group_member_one_subject`; uniques `(groupId, userId)`, `(groupId, memberTenantId)` | a member counted twice, or as both |

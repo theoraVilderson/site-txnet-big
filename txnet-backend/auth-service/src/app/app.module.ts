@@ -15,6 +15,7 @@ import { SupportConsentModule } from './support-consent/support-consent.module';
 import { VaultModule } from './tenant/vault/vault.module';
 import { UserGroupModule } from './governance/user-groups/user-group.module';
 import { UiPreferencesModule } from './governance/ui-preferences/ui-preferences.module';
+import { UserRestrictionsModule } from './governance/user-restrictions/user-restrictions.module';
 import { LanguageMiddleware } from './common/middlewares/language.middleware';
 import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
@@ -40,6 +41,7 @@ import { JsonLoggerModule } from '@txnet-backend/shared-core';
     AccessHistoryModule,
     UserGroupModule,
     UiPreferencesModule,
+    UserRestrictionsModule,
   ],
 })
 export class AppModule implements NestModule {

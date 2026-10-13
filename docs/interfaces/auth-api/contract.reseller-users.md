@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 44
-updated: 2026-10-09
+version: 52
+updated: 2026-10-13
 ---
 
 # Contract — auth-api / a named reseller's users
@@ -41,6 +41,9 @@ person (ADR-0103); `staff` marks one who holds any permission, or the owner;
 | DELETE `/auth/tenants/:tenantId/users/:userId/block` | — | 200 `user` at `active`. **Unblock is the deletion of the block**, not a second verb on the user | 20 / 900s per caller (shared with `POST`) | Bearer + `ResellerAccess` (`staffWrite`) |
 | GET `/auth/tenants/:tenantId/users/:userId` (AC-1-a) | — | 200 `user` plus `emailMasked` (`a***@example.com` or null) | the list's (`RESELLER_USER_READ_RATE_LIMIT`) | Bearer + `ResellerAccess` (`read`) |
 | PATCH `/auth/tenants/:tenantId/users/:userId` (AC-1-a) | at least one of `fullName` 2-120, `username` 3-32 `[A-Za-z0-9_]` (register's), `email: null` — strict: any other key, an address, or `{}` is 400 | 200 the same shape as GET. Unchanged fields are not written; no change, no audit row | shared with block (`RESELLER_USER_WRITE_RATE_LIMIT`) | Bearer + `ResellerAccess` (`staffWrite`) |
+| GET `/auth/tenants/:tenantId/users/:userId/restrictions` (v52, F-030-d) | — | 200 `{userId, restrictions:[{key, value, reason, by, at, expiresAt}], keys:[{key, kind: "count"\|"set", max?, options?}]}` — only those that hold now. 404 `user_not_found` | `RESELLER_USER_READ` per caller | Bearer + `ResellerAccess.for('restriction.assign')` |
+| PUT `/auth/tenants/:tenantId/users/:userId/restrictions/:key` (v52) | `{value: number\|string[], reason}` (3-500), `expiresAt?` ISO or null — strict | 200 the view above. 400 `restriction_unknown` / `restriction_value_invalid` / `expiry_past`; 403 `no_authority`; 404 `user_not_found` | `RESELLER_USER_WRITE` per caller | same |
+| DELETE `/auth/tenants/:tenantId/users/:userId/restrictions/:key` (v52) | — | 200 the view above. 404 `restriction_not_found`; otherwise as `PUT` | same | same |
 
 Both ids are `ParseUUIDPipe`d, so a malformed one is a 400 before any door runs.
 

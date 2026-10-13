@@ -1,4 +1,4 @@
-// بخش هشت: Schema `governance` — تنظیمات، دسترسی زمان‌بندی‌شده، محدودیت کاربر
+// بخش هشت: Schema `governance` — تنظیمات، محدودیت کاربر، گروه‌ها
 // =============================================================================
 
 enum SettingCategory {
@@ -8,13 +8,6 @@ enum SettingCategory {
   display
   billing
   other
-
-  @@schema("governance")
-}
-
-enum RestrictionScope {
-  soft_warning
-  hard_block
 
   @@schema("governance")
 }
@@ -33,23 +26,26 @@ model UserSetting {
   @@schema("governance")
 }
 
-/// 9.3 — سقف/محدودیت عملکرد و مصرف کاربر.
+/// F-030-d (§3.9) — a cap or a bar on one person, one row per person and key
+/// (`USER_RESTRICTIONS` in shared-core says which keys exist and what each
+/// value is). Not the `restricted` status (ADR-0133). Lifting one deletes its
+/// row; the audit trail keeps what it was. Strict RLS on the person's tenant.
 model UserRestriction {
-  id              String           @id @default(uuid()) @db.Uuid
-  userId          String           @db.Uuid
-  restrictionKey  String // max_daily_traffic_gb, max_active_configs, max_daily_spend_amount, ...
-  limitValueJson  Json
-  scope           RestrictionScope
-  reason          String?
-  setByAdminId    String           @db.Uuid
-  isActive        Boolean          @default(true)
-  expiresAt       DateTime?
-  createdAt       DateTime         @default(now())
+  userId      String    @db.Uuid
+  tenantId    String    @db.Uuid
+  key         String    @db.VarChar(64)
+  /// A count, or the barred options sorted — as the key's kind reads it.
+  value       Json
+  /// Why, as staff wrote it; kept in the audit row too.
+  reason      String    @db.VarChar(500)
+  setByUserId String    @db.Uuid
+  /// Null: until lifted. Past it the restriction counts for nothing (`liveRestriction`).
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
 
-  // یونیک منطقی (userId, restrictionKey) فقط روی رکوردهای isActive=true؛
-  // در پریزما به‌صورت یونیک ساده تعریف شده، نسخه Partial در بخش ۹۹.
-  @@unique([userId, restrictionKey])
-  @@index([userId])
+  @@id([userId, key])
+  @@index([tenantId])
   @@map("user_restriction")
   @@schema("governance")
 }

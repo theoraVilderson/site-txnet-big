@@ -188,6 +188,8 @@ enum AdminAction {
   // `newValue` {key, effect, reason}) and lifted (`user_permission_lift`).
   user_permission_set
   user_permission_lift
+  user_restriction_set // F-030-d: a restriction on one person set or changed
+  user_restriction_lift // F-030-d: lifted by hand
   // AC-1-m — a group's role and extra keys replaced (`oldValue`/`newValue`
   // {roleId, keys}).
   user_group_access_set

@@ -21,6 +21,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AccessReader } from '../permissions/access.reader';
 import { answerMoved } from '../permissions/access';
 import { authorityOver, permissionsOf } from '../users/authority';
+import { auditPersonAct } from '../users/person-act-audit';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 import { RoleScope, RoleView, RolesService } from './roles.service';
 import { type KeyPerson, type KeyWindowRejection, type KeyWrite, type PersonKeys, PERSON, keyWindowRefusal, personKeysOf, storedWindow } from './user-keys.view';
@@ -292,20 +293,8 @@ export class TenantRolesService {
 
         const change = await write(tx, person, permission.id);
         if (change) {
-          const act = await tx.adminAuditLog.create({
-            data: {
-              tenantId: admitted.id,
-              adminId: actor.userId,
-              action: change.action,
-              targetEntityType: AuditTargetType.user,
-              targetEntityId: userId,
-              oldValue: change.before ?? undefined,
-              newValue: change.after ?? undefined,
-              reason: change.after?.['reason'] ?? null,
-              adminIpAddress: ip,
-            },
-            select: { id: true },
-          });
+          const at = { tenantId: admitted.id, adminId: actor.userId, userId, ip };
+          const act = await auditPersonAct(tx, at, { ...change, reason: change.after?.['reason'] ?? null });
           const after = await this.answers.ofLoaded(person, tx);
           // AC-1-q: their panel moves now; the trigger moves their token (ADR-0138 (5)). AC-1-p: their history keeps it.
           await recordAccessChange(tx, [

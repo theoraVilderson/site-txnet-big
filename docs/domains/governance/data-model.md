@@ -14,7 +14,7 @@ Source of truth: `txnet-backend/prisma/domains/governance.prisma` (Postgres sche
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | user_setting | `(userId, key)` unique KV, JSON value, category-tagged | via user | latest |
-| user_restriction | per-user cap keyed by `restrictionKey`, JSON limit, soft-warning or hard-block | via user | until inactive/expired |
+| user_restriction | a cap or a bar on one person (F-030-d): PK `(userId, key)`, `value` JSON as the registry key reads it, `reason`, `setByUserId`, optional `expiresAt` | `tenantId` (the person's), strict RLS | until lifted; counts for nothing past `expiresAt` |
 | user_group | a named set (F-114-j): `name` unique per tenant, `kind` (`manual`), `allTenants` (platform owner's only, trigger); `(id, tenantId)` unique — the key members and discount rules point at | `tenantId`, strict RLS | until deleted |
 | user_group_permission | one extra key a group gives its user members (AC-1-m); PK `(groupId, permissionId)`; FK on the group's `(id, tenantId)` cascade | `tenantId`, strict RLS | with its group (cascade) |
 | user_group_member | one member: `memberType` `user` (`userId`) or `tenant` (`memberTenantId`, platform owner's only), CHECK one subject; `tenantId` is the group's; `expiresAt` optional, an ended one counts for nothing (`liveMembership`, ADR-0139 (3)) | `tenantId`, strict RLS | with its group (cascade) |

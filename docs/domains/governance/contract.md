@@ -2,21 +2,21 @@
 id: governance
 layer: domain
 status: active
-version: 4
-updated: 2026-10-05
+version: 5
+updated: 2026-10-13
 ---
 
 # Contract — governance
 
 **User groups are built** (F-114-j, below), and so are display preferences
-(UX-1-k, below) — the first keys of `user_setting`. Other settings and
-restrictions are still **schema only** — no service implements them; their
+(UX-1-k, below) — the first keys of `user_setting` — and restrictions on one
+person (F-030-d, below). Other settings are still **schema only** — no service implements them; their
 rows are intent derived from `txnet-backend/prisma/domains/governance.prisma`.
 
 ## TL;DR
 
 User groups — a named set of a tenant's users, the one target discount rules,
-campaigns and restrictions share (built). Low-traffic key/value config for users, and `user_restriction` (a cap on one user). Extra access for a window is not here: it is a key given to the person with a window, identity's `user_permission` (F-030-a, ADR-0138 (7)).
+campaigns and restrictions share (built). Low-traffic key/value config for users, and `user_restriction` (a cap or a bar on one person, built — enforced where it bites by F-030-e). Extra access for a window is not here: it is a key given to the person with a window, identity's `user_permission` (F-030-a, ADR-0138 (7)).
 
 ## Provides
 
@@ -28,7 +28,21 @@ campaigns and restrictions share (built). Low-traffic key/value config for users
 | is this person / this reseller in group G — **built** | a member list, a user id or a tenant id | `admitsUser` / `admitsTenant` (`user-group.ts`) | sync | — |
 | read / write the caller's display preferences — **built** (UX-1-k) | the token's user; any subset of `ui.motion`, `ui.dashboard`, `ui.pins`, `ui.sidebar` | every key, defaults filled in | sync | `unknown_preference`, `invalid_preference`, `preference_too_large` |
 | get/set any other user setting (intended) | userId, key, JSON value | row | sync | — |
-| assign restriction | userId, restrictionKey, limit JSON, scope | `user_restriction` | sync | — |
+| set, change, lift a restriction on one person — **built** (F-030-d) | `restriction.assign` through the reseller door; a registry key, its value, a reason (3-500), an optional `expiresAt` | the person's restrictions that hold now and the registry's keys; audited | sync | `restriction_unknown`, `restriction_value_invalid`, `expiry_past`, `restriction_not_found`, `no_authority`, `user_not_found` |
+
+## Restrictions on one person (F-030-d)
+
+Code: `txnet-backend/auth-service/src/app/governance/user-restrictions/`, the
+registry `shared-core/src/lib/governance/user-restrictions.ts`. Wire shapes:
+[auth-api/contract.reseller-users.md](../../interfaces/auth-api/contract.reseller-users.md).
+
+| Rule | Held by |
+|---|---|
+| A restriction is one registry key (`USER_RESTRICTIONS`) on one person: `services_active_max` and `configs_max` (a whole number, 0 to the key's `max`), `topup_categories_barred` (some `GatewayCategory` values, at least one, stored sorted). A new one is a line in the registry and its enforcement (F-030-e), no table change | `restrictionValueOf` (`user-restrictions.spec.ts`) |
+| Not the `restricted` status (ADR-0133): that closes the account to all but support; a restriction narrows one thing. The same key guards both, `restriction.assign` | the door: `ResellerAccess.for('restriction.assign')` |
+| One row per person and key, on the person's tenant (strict RLS); set again replaces it, the same value, reason and expiry again writes nothing; lifted by deleting the row | `UserRestrictionsService` |
+| A write asks ADR-0103's authority rule over the person's whole answer less `self.` keys, and leaves one `user_restriction_set` / `_lift` audit row (`oldValue`/`newValue` `{key, value, reason, expiresAt?}`) | `writing` |
+| An expiry is never in the past (`expiry_past`); past it the restriction counts for nothing (`liveRestriction`) and is not listed. No sweep: nothing is told when one lapses | `liveRestriction` in every read that applies one |
 
 ## User groups (F-114-j)
 
