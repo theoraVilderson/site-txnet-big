@@ -64,6 +64,8 @@ ALLOW_DEPS = {
     "@grpc/proto-loader": "peer dependency of @txnet/locale-client",
     "@nestjs/cli": "the `nest build` / `nest start` scripts",
     "tslib": "txnet-backend compiles with importHelpers",
+    "class-validator": "auth-service's global ValidationPipe (main.ts, its e2e harness) loads it at bootstrap",
+    "class-transformer": "auth-service's global ValidationPipe (main.ts, its e2e harness) loads it at bootstrap",
 }
 
 # A file only specs import may say so in its first lines, with the reason:

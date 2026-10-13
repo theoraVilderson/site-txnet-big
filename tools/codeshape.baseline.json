@@ -1,11 +1,6 @@
 {
  "dead": {},
- "deps": {
-  "txnet-backend/package.json:@prisma/orm-postgres": 1,
-  "txnet-backend/package.json:chokidar": 1,
-  "txnet-backend/package.json:class-transformer": 1,
-  "txnet-backend/package.json:class-validator": 1
- },
+ "deps": {},
  "dupes": {
   "auth-handler/internal/cache/redis.go": 9,
   "auth-handler/pkg/logger/logger.go": 4,
