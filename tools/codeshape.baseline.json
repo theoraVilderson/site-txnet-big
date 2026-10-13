@@ -307,7 +307,6 @@
   "txnet-backend/worker-service/src/app/redis/redis.service.ts": 24
  },
  "exports": {
-  "coinsite/src/util/theme.ts:toggleTheme": 1,
   "site-pwa/src/app/(auth)/auth/_lib/translations.ts:Lang": 1,
   "site-pwa/src/app/(panel)/_hooks/usePaletteData.ts:resetPaletteDataForTests": 1,
   "site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts:isFeatureKey": 1,

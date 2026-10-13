@@ -5,9 +5,14 @@
   --foreground: #171717;
 }
 
-body.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+/* The site has no theme toggle, so the visitor's system setting is the only
+   input: CSS answers it before first paint, where a script ran after hydration
+   and flashed the light theme (FE-1-k). */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
 }
 
 body {
