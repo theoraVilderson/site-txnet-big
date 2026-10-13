@@ -3,7 +3,6 @@
 import { LocaleProvider } from "@/context/LocaleContext";
 import type { LocaleMeta } from "@/context/LocaleContext";
 import type { CompiledTranslation } from "@/stores/locale-store";
-// 👈 تایپ را به جای layout از locale-store ایمپورت می‌کنیم
 
 interface Props {
   children: React.ReactNode;

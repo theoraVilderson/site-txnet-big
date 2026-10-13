@@ -170,14 +170,14 @@ context-switch between two languages; mixing in a third for comments makes
 
 Three Arabic-script words in a row inside a comment is prose, not a quoted
 example (`"۱۲۳"`, `ی`), so that is what the check matches; a `//` after a
-`:` is a URL in a string, not a comment. The files in `except` held such
-comments on 2026-10-13 and leave with FE-1-f (panel); CS-1-e cleared the
-backend's and Go's. A new one is refused.
+`:` is a URL in a string, not a comment. The two coinsite files in `except`
+still hold such comments; FE-1-f cleared the panel's, CS-1-e the backend's
+and Go's. A new one is refused.
 
 ```check C-01
 forbid: ((?<!:)//|/\*|^\s*\*|\{/\*).*[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}\s+[\u0600-\u06FF]{2,}
 in: site-pwa/src/**/*.ts, site-pwa/src/**/*.tsx, coinsite/src/**/*.ts, coinsite/src/**/*.tsx, txnet-backend/**/*.ts, auth-handler/**/*.go, i18n-platform/**/*.go, network-service/**/*.go, sub-service/**/*.go
-except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go, coinsite/src/app/(Auth)/login/page.tsx, coinsite/src/util/theme.ts, site-pwa/src/app/(auth)/auth/_components/AuthCardShell.tsx, site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx, site-pwa/src/app/(auth)/auth/_hooks/useFirstPaint.ts, site-pwa/src/app/(auth)/auth/loading.tsx, site-pwa/src/app/(panel)/_lib/money.ts, site-pwa/src/app/layout.tsx, site-pwa/src/context/LocaleContext.tsx, site-pwa/src/context/LocaleShell.tsx, site-pwa/src/env.ts, site-pwa/src/instrumentation.ts, site-pwa/src/lib/locale-catalog.ts, site-pwa/src/services/locale.ts, site-pwa/src/services/user-locale-mock.ts, site-pwa/src/stores/locale-store.ts
+except: site-pwa/src/generated/**, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go, coinsite/src/app/(Auth)/login/page.tsx, coinsite/src/util/theme.ts
 message: write the comment in English (C-01)
 ```
 

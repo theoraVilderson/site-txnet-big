@@ -234,9 +234,10 @@ export function amountInWords(
 
 /**
  * A rial amount spelled in toman — how a person says it, and what they check
- * against the bank's page: `"2500000"`, fa -> `دویست و پنجاه هزار تومان`. Ten
- * rial to the toman is a unit. An odd rial rounds to the nearest toman: "صد
- * هزار تومان و دو ریال" confused people (user, 2026-09-29), and the exact
+ * against the bank's page: `"2500000"`, fa -> "two hundred and fifty thousand
+ * toman" in Persian words. Ten rial to the toman is a unit. An odd rial rounds
+ * to the nearest toman: "a hundred thousand toman and two rial" confused people
+ * (user, 2026-09-29), and the exact
  * figure is printed beside the words anyway. Null for anything but a whole
  * rial amount.
  */

@@ -19,12 +19,12 @@ interface LocaleProviderProps {
   children: ReactNode;
   initialLang: string;
   initialDir: "rtl" | "ltr";
-  /** namespace های عمومی برای همه‌ی زبان‌ها: lang → ns → key → compiled */
+  /** The shared namespaces for every language: lang → ns → key → compiled. */
   initialNamespaces: Record<
     string,
     Record<string, Record<string, CompiledTranslation>>
   >;
-  /** لیست زبان‌های موجود از metadata */
+  /** The languages on offer, from their metadata. */
   initialAvailable: LocaleMeta[];
 }
 
@@ -35,8 +35,8 @@ export function LocaleProvider({
   initialNamespaces,
   initialAvailable,
 }: LocaleProviderProps) {
-  // یک‌بار در طول عمر این mount ساخته می‌شه — روی سرور هم چون هر
-  // ریکوئست درخت React جدا داره، هیچ استیتی بین کاربرها لو نمی‌ره.
+  // Built once per mount; on the server every request has its own React
+  // tree, so no state leaks between visitors.
   const [store] = useState<LocaleStoreApi>(() =>
     createLocaleStore({
       lang: initialLang,
@@ -64,15 +64,13 @@ export function LocaleProvider({
   return (
     <LocaleStoreContext.Provider value={store}>
       {/*
-        قبلاً اینجا `key={lang}` روی این div بود که باعث می‌شد کل درخت
-        children موقع تغییر زبان unmount/remount بشه. یعنی اگه کاربر وسط
-        فرم OTP بود (مرحله ۲، تایمر در حال شمارش، کد نیمه‌وارد‌شده)،
-        عوض کردن زبان همه‌چیز رو پاک می‌کرد و به مرحله ۱ برمی‌گشت.
+        No `key={lang}` here: it used to remount the whole children tree on
+        a language switch, so a user mid-OTP (step 2, timer running, code
+        half typed) lost everything and landed back on step 1.
 
-        الان children اصلاً remount نمی‌شه. به‌جاش یه overlay بلور نرم
-        (که فقط بر اساس isTransitioning از استور نمایش/مخفی می‌شه) روی
-        صفحه میفته تا تغییر متن محسوس و نرم باشه، بدون این‌که هیچ استیتی
-        از بین بره.
+        Children never remount now. A soft blur overlay, shown only while
+        the store's isTransitioning is true, covers the text change so it
+        reads as smooth, and no state is lost.
       */}
       <div className="relative w-full min-h-screen">
         {children}
@@ -83,8 +81,8 @@ export function LocaleProvider({
               initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
               animate={{ opacity: 1, backdropFilter: "blur(10px)" }}
               exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-              // فید-این سریع (متن قدیم را می‌پوشاند)، فید-اوت آرام‌تر
-              // (متن جدید + جهت جدید نرم ظاهر می‌شوند، بدون پرش)
+              // Fast fade-in (covers the old text), slower fade-out (the new
+              // text and direction appear smoothly, no jump).
               transition={{
                 opacity: { duration: 0.18, ease: "easeOut" },
                 backdropFilter: { duration: 0.28, ease: "easeInOut" },
@@ -123,10 +121,9 @@ export function useLocale() {
   ): string => {
     const val = cache[language]?.[ns]?.[key];
 
-    // قبلاً `if (!val) return key` بود — یعنی اگه یه کلید عمداً مقدارش
-    // رشته‌ی خالی "" بود، به‌جای نمایش متن خالی، خودِ کلید خام رو نشون
-    // می‌داد. فقط باید undefined بودن (یعنی کلید/namespace اصلاً پیدا
-    // نشده) رو fallback بگیریم.
+    // Only a missing key or namespace falls back to the key: a key whose
+    // value is deliberately "" renders empty (a bare `!val` used to show the
+    // raw key instead).
     if (val === undefined) return key;
 
     if (typeof val === "string") {

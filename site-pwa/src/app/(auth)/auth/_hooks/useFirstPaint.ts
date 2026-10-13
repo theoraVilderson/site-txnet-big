@@ -3,17 +3,17 @@
 import { useEffect, useState } from "react";
 
 /**
- * روی *اولین* رندرِ کلاینت در طول عمر همین تبِ مرورگر `true` برمی‌گرداند و
- * بعد از آن همیشه `false`.
+ * `true` on the *first* client render in this browser tab's lifetime, `false`
+ * ever after.
  *
- * کاربرد: انیمیشن‌های ورودِ framer-motion که از `opacity:0` شروع می‌شوند،
- * محتوای SSR را تا پایانِ hydration + اجرای انیمیشن نامرئی نگه می‌دارند. با
- * `initial={useFirstPaint() ? false : {...}}` فقط روی لودِ اولِ صفحه انیمیشن
- * رد می‌شود (محتوا فوری دیده می‌شود) ولی ناوبری سمت کلاینت که بعد از
- * hydration رخ می‌دهد همچنان انیمیشن دارد.
+ * Why: framer-motion enter animations that start at `opacity:0` keep the SSR
+ * content invisible until hydration and the animation finish. With
+ * `initial={useFirstPaint() ? false : {...}}` the animation is skipped on the
+ * page's first load only (content shows at once), while client-side
+ * navigation after hydration still animates.
  *
- * چون فلگ ماژول‌سطح است و فقط داخل effect ست می‌شود، در یک رندر همه‌ی
- * صداکننده‌ها مقدار یکسان می‌گیرند.
+ * The flag is module-level and set only inside an effect, so every caller in
+ * one render gets the same value.
  */
 let paintedOnce = false;
 

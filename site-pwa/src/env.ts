@@ -40,7 +40,7 @@ export const LOCALE_SCOPE = process.env.LOCALE_SCOPE || "frontend";
 /** Cookie name for user's locale preference */
 export const LOCALE_COOKIE = "NEXT_LOCALE";
 
-/** لیست تم‌های موجود — هر تم جدید فقط اینجا و در globals.css اضافه می‌شه */
+/** The themes on offer — a new one is added here and in globals.css, nowhere else. */
 export const AVAILABLE_THEMES = ["light", "dark", "ocean"] as const;
 export type ThemeName = (typeof AVAILABLE_THEMES)[number];
 export const DEFAULT_THEME: ThemeName = "dark";

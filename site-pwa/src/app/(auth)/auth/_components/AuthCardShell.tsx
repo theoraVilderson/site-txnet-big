@@ -42,8 +42,8 @@ export function AuthCardShell({
   subtitle,
   children,
 }: AuthCardShellProps) {
-  // روی لودِ اولِ صفحه انیمیشنِ ورود را رد کن تا فرم بلافاصله دیده شود؛
-  // مانت‌های بعدی (ناوبری سمت کلاینت) دوباره انیمیشن دارند.
+  // Skip the enter animation on the page's first load so the form shows at
+  // once; later mounts (client-side navigation) still animate.
   const firstPaint = useFirstPaint();
 
   return (

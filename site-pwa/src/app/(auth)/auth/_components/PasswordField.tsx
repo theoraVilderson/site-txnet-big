@@ -65,7 +65,7 @@ export function PasswordField({
 
   useEffect(() => () => clearTimeout(timeoutRef.current), []);
 
-  // اگه کاربر همه متن رو پاک کرد، حالت نمایش پسورد رو ریست کن
+  // Cleared field: hide the password again.
   useEffect(() => {
     // resetting the reveal toggle when the parent clears the field is a
     // prop→state reset; deriving it would also flip the eye icon on an empty
@@ -95,7 +95,7 @@ export function PasswordField({
 
   return (
     <div className="relative mb-5">
-      {/* Container اصلی: dir="ltr" را حذف کردیم تا با توجه به HTML (RTL/LTR) تنظیم شود */}
+      {/* No dir="ltr" on the container, so it follows the page's RTL/LTR. */}
       <div
         className={`relative rounded-2xl bg-bg-inner border-[1.5px] transition-colors duration-300 ${
           error
@@ -105,9 +105,8 @@ export function PasswordField({
               : "border-card-border hover:border-text-secondary"
         }`}
       >
-        {/* Label:
-            از start-5 استفاده می‌کند تا در فارسی سمت راست و در انگلیسی چپ باشد.
-            rtl:origin-right باعث می‌شود در فارسی موقع کوچک شدن به درستی به سمت راست جمع شود.
+        {/* Label: start-5 puts it on the right in RTL and the left in LTR;
+            rtl:origin-right makes it shrink toward the right in RTL.
         */}
         <motion.label
           htmlFor={id}
@@ -125,9 +124,9 @@ export function PasswordField({
           {label}
         </motion.label>
 
-        {/* فیلد اصلی:
-            دارای dir="ltr" است. به جای ps/pe از پدینگ فیزیکی pl-5 و pr-12 استفاده کردیم
-            تا در هر زبانی تایپ از چپ شروع شود و جای دکمه چشم در راست حفظ شود.
+        {/* The input itself is dir="ltr" with physical pl-5/pr-12 instead of
+            ps/pe, so typing starts at the left in every language and the eye
+            button keeps its place on the right.
         */}
         <input
           ref={ref}
@@ -148,8 +147,8 @@ export function PasswordField({
           style={{ transition: "none" }}
         />
 
-        {/* لایه انیمیشن: 
-            اینجا هم از dir="ltr" و pl-5 pr-12 استفاده شده تا کاملاً روی فیلد اصلی مچ شود.
+        {/* Animation layer: the same dir="ltr" and pl-5 pr-12, so it sits
+            exactly over the input.
         */}
         {isAnimating && (
           <div
@@ -210,7 +209,7 @@ export function PasswordField({
           </div>
         )}
 
-        {/* دکمه چشمک‌زن: فقط وقتی متنی نوشته شده باشه ظاهر میشه */}
+        {/* The eye toggle shows only once something is typed. */}
         {value.length > 0 && (
           <motion.button
             type="button"

@@ -49,16 +49,16 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // ۱. اطمینان از لود شدن فایل‌های زبان در مموری سرور و استارت شدن واچر
+  // 1. The language catalog is in server memory and its watcher is running.
   await ensureReady(startWatching);
 
-  // ۲. دریافت تنظیمات زبان و تم کاربر
+  // 2. The visitor's language and theme.
   const locale = await getUserLocale();
   const dir = getDir(locale);
   const { theme, isResolved, choice } = await getServerTheme();
   const brand = await domainBrand();
 
-  // ۳. جمع‌آوری متادیتای تمام زبان‌ها برای استفاده در منوی Dropdown
+  // 3. Every language's metadata, for the language picker.
   const available = getAvailableLocales();
   const metaList: LocaleMeta[] = [];
   for (const code of available) {
@@ -66,10 +66,11 @@ export default async function RootLayout({
     if (m) metaList.push(m);
   }
 
-  // ۴. namespace های عمومی را برای *همه‌ی* زبان‌ها اینجا کامپایل می‌کنیم.
-  // چون هر سه زبان از قبل در کش gRPC سرور هستند این کار تقریباً رایگان است،
-  // ولی باعث می‌شود سوییچ زبان در کلاینت *فوری* باشد (بدون هیچ fetch).
-  // namespace های اختصاصی مثل auth در Layout خودشان (باز هم برای همه‌ی زبان‌ها) لود می‌شوند.
+  // 4. The shared namespaces, compiled here for *every* language. Every
+  // language is already in the server's gRPC cache, so this is nearly free,
+  // and it makes a language switch on the client instant (no fetch).
+  // Route-specific namespaces such as auth load in their own layout (again
+  // for every language).
   const initialNamespaces: Record<
     string,
     Record<string, Record<string, string | string[]>>
@@ -101,7 +102,7 @@ export default async function RootLayout({
             <LocaleShell
               initialLang={locale}
               initialDir={dir}
-              initialNamespaces={initialNamespaces} // ارسال دیتاهای عمومی به کلاینت
+              initialNamespaces={initialNamespaces}
               initialAvailable={metaList}
             >
               {children}

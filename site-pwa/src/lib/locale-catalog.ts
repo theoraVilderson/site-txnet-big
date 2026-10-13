@@ -6,11 +6,11 @@ import {
   type LocaleClient,
 } from "@txnet/locale-client";
 
-/** درخت خام ترجمه‌ها: هر برگ یک رشته است، هر شاخه یک Namespace تودرتو */
+/** The raw translation tree: every leaf a string, every branch a nested Namespace. */
 type Namespace = { [key: string]: string | Namespace };
 type LocaleData = Record<string, Record<string, Namespace>>;
 
-/** ساختار فایل metadata.json داخل هر پوشه زبان */
+/** The shape of each language folder's metadata.json. */
 export interface LocaleMeta {
   code: string;
   name: string;
@@ -22,42 +22,41 @@ export interface LocaleMeta {
 }
 
 /**
- * چطور دیتای زبان لود می‌شود (مهم):
+ * How the language data loads (important):
  *
- * کلاینت gRPC (`@txnet/locale-client`) *یک‌بار* موقع `ready()` کل زبان‌ها را
- * می‌گیرد و بعد آن‌ها را با یک استریم Watch زنده نگه می‌دارد. یعنی
- * `client.namespace()` / `client.cached()` فقط از حافظه‌ی همین پروسه می‌خوانند
- * و *هیچ رفت‌وبرگشت gRPC‌ای به‌ازای هر درخواست ندارند*. آپدیت‌ها خودشان از
- * سمت locale-service روی همان استریم می‌آیند و `version` هر زبان را بالا
- * می‌برند.
+ * The gRPC client (`@txnet/locale-client`) fetches every language *once*, on
+ * `ready()`, then keeps them live over a Watch stream. So
+ * `client.namespace()` / `client.cached()` read this process's memory only,
+ * with *no gRPC round trip per request*. Updates arrive from locale-service on
+ * the same stream and bump each language's `version`.
  *
- * دو هزینه‌ای که این فایل حذف می‌کند:
- *  ۱. بوت اولیه (`initStore`) که قبلاً روی اولین درخواستِ کاربر می‌نشست →
- *     حالا در `src/instrumentation.ts` موقع بالا آمدن سرور گرم می‌شود، و
- *     `ensureReady` دیگر یک درخواست را برای کل مهلتِ بوت بلاک نمی‌کند.
- *  ۲. کامپایلِ متن‌ها (`compileFlat`) که هر رندر تکرار می‌شد → حالا برحسب
- *     `version` هر (زبان، namespace) کش می‌شود و فقط وقتی استریم Watch نسخه
- *     را عوض کند دوباره ساخته می‌شود.
+ * Two costs this file removes:
+ *  1. The initial boot (`initStore`), which used to sit on the first visitor's
+ *     request -> now warmed in `src/instrumentation.ts` at server start, and
+ *     `ensureReady` no longer blocks a request for the whole boot deadline.
+ *  2. Compiling the texts (`compileFlat`), once repeated on every render ->
+ *     now cached per (language, namespace) `version` and rebuilt only when
+ *     the Watch stream changes that version.
  */
 
-// Next.js در dev هر ماژول را ممکن است چند بار reload کند؛ از global استفاده
-// می‌کنیم تا کلاینت gRPC و متادیتا بین reloadها گم نشوند.
+// In dev Next.js may reload a module many times; state lives on `global` so
+// the gRPC client and metadata survive the reloads.
 const globalForLocale = global as unknown as {
   localeClient: LocaleClient | undefined;
-  /** بوتِ single-flight: تا وقتی resolve نشده همه‌ی صداکننده‌ها همین را await می‌کنند */
+  /** Single-flight boot: until it resolves every caller awaits this one. */
   localeBoot: Promise<void> | undefined;
   localeMetaMap: Record<string, LocaleMeta> | undefined;
   availableLocales: string[] | undefined;
-  /** کش کامپایل: `${lang}:${ns}` → { version, data } */
+  /** Compile cache: `${lang}:${ns}` → { version, data } */
   compiledCache: Map<
     string,
     { version: string; data: Record<string, CompiledTranslation> }
   > | undefined;
-  /** کش unflatten برای API: `${lang}:${ns}` → { version, data } */
+  /** Unflatten cache for the API: `${lang}:${ns}` → { version, data } */
   nsCache: Map<string, { version: string; data: Namespace }> | undefined;
 };
 
-/** اگر بوت تا این مدت جواب نداد، رندر را با fallback ادامه بده (بوت در پس‌زمینه ادامه دارد) */
+/** Past this, render with the fallback; the boot carries on in the background. */
 const BOOT_DEADLINE_MS = 3_000;
 
 function client(): LocaleClient {
@@ -92,7 +91,7 @@ function unflatten(flat: Record<string, string>): Namespace {
   return out;
 }
 
-/** یک متن خام با {{var}} را به همان فرم توکنی flattenAndCompile تبدیل می‌کند */
+/** A raw text with {{var}} into the same token form flattenAndCompile makes. */
 function compileValue(text: string): CompiledTranslation {
   return text.includes("{{")
     ? text.split(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g)
@@ -107,15 +106,14 @@ function compileFlat(
   return out;
 }
 
-/** نسخه‌ی فعلیِ یک زبان از کشِ زنده‌ی کلاینت (با هر آپدیت Watch عوض می‌شود) */
+/** A language's current version in the client's live cache (changes on every Watch update). */
 function langVersion(lang: string): string {
   return globalForLocale.localeClient?.cached(lang)?.version ?? "?";
 }
 
 /**
- * دریافت و کامپایل کردن فقط یک Namespace خاص.
- * نتیجه برحسب version کش می‌شود؛ تا وقتی locale-service آپدیت نفرستد، فقط
- * یک‌بار کامپایل می‌شود و بقیه‌ی درخواست‌ها همان آبجکت را می‌گیرند.
+ * One namespace, fetched and compiled. Cached by version: until locale-service
+ * sends an update it is compiled once and every request gets the same object.
  */
 export function getCompiledNamespace(
   lang: string,
@@ -158,8 +156,8 @@ async function loadMetaMap(): Promise<Record<string, LocaleMeta>> {
 }
 
 /**
- * بوتِ یک‌باره و single-flight. چند صداکننده‌ی همزمان همگی همین یک Promise را
- * می‌گیرند؛ اگر شکست خورد پاک می‌شود تا درخواست بعدی دوباره تلاش کند.
+ * One single-flight boot. Concurrent callers all get this one Promise; a
+ * failure clears it so the next request tries again.
  */
 export function initStore(): Promise<void> {
   if (!globalForLocale.localeBoot) {
@@ -170,7 +168,7 @@ export function initStore(): Promise<void> {
       globalForLocale.availableLocales = Object.keys(metaMap);
       console.info("[locale] connected, version:", getVersion());
       if (Object.keys(metaMap).length === 0) {
-        // ترجمه‌ها زنده‌اند ولی متادیتا نیامد — بگذار دفعه‌ی بعد دوباره امتحان شود
+        // Translations are live but metadata did not come — let the next call retry.
         throw new Error("locale metadata empty");
       }
     })().catch((e) => {
@@ -228,10 +226,10 @@ export function isInitialized(): boolean {
 }
 
 /**
- * روی مسیرِ درخواست صدا زده می‌شود. اگر استور از قبل گرم است (که با
- * `instrumentation.ts` حالتِ عادی است) بلافاصله برمی‌گردد. اگر هنوز گرم نشده،
- * حداکثر `BOOT_DEADLINE_MS` صبر می‌کند و بعد رندر را با fallback ادامه می‌دهد؛
- * خودِ بوت در پس‌زمینه ادامه دارد و درخواست‌های بعدی دیتای کامل می‌گیرند.
+ * Called on the request path. Returns at once when the catalog is warm (the
+ * normal case, thanks to `instrumentation.ts`). Otherwise waits at most
+ * `BOOT_DEADLINE_MS` and lets rendering continue with the fallback; the boot
+ * carries on in the background and later requests get the full data.
  */
 export async function ensureReady(
   startWatching: () => Promise<void>,

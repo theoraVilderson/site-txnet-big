@@ -12,20 +12,19 @@ export interface LocaleMeta {
   locale: string;
 }
 
-// ۱. فقط دیتاها (استیت‌هایی که مقدار دارن و تابع نیستن)
-// در LocaleShell فقط همین فیلدها پاس داده می‌شوند (به‌جز isTransitioning
-// که همیشه false شروع می‌شه و نیازی نیست از بیرون پاس داده بشه)
+// 1. Data only (state with values, no functions). LocaleShell passes exactly
+// these fields, except isTransitioning, which always starts false.
 export interface LocaleState {
   lang: string;
   isRtl: boolean;
   availableLocales: LocaleMeta[];
-  /** کش ترجمه‌ها: lang → ns → key → CompiledTranslation */
+  /** Translation cache: lang → ns → key → CompiledTranslation */
   cache: Record<string, Record<string, Record<string, CompiledTranslation>>>;
-  /** true وقتی یه setLang در حال fetch/commit شدنه — برای افکت بلور استفاده میشه */
+  /** True while a setLang is fetching or committing — drives the blur overlay. */
   isTransitioning: boolean;
 }
 
-// ۲. فقط توابع (اکشن‌های تغییر دهنده استیت)
+// 2. Functions only (the actions that change state).
 export interface LocaleActions {
   /** merge per-language namespaces into the cache: lang → ns → key → compiled */
   addNamespaces: (
@@ -34,13 +33,13 @@ export interface LocaleActions {
   setLang: (newLang: string) => Promise<void>;
 }
 
-// ۳. ترکیب این دو برای ساختار نهایی استور (استفاده داخلی Zustand)
+// 3. The two combined: the store's full shape (Zustand-internal).
 export type LocaleStore = LocaleState & LocaleActions;
 export type LocaleStoreApi = ReturnType<typeof createLocaleStore>;
 
 /**
- * تابع مسطح‌ساز و کامپایلر متون
- * برای زمانی که فایل زبان جدیدی از API فچ می‌شود یا سرور قصد تزریق دارد
+ * Flattens and compiles a translation tree, for a language fetched from the
+ * API or injected by the server.
  */
 export function flattenAndCompile(
   obj: Record<string, unknown>,
@@ -59,7 +58,7 @@ export function flattenAndCompile(
       } else if (typeof value === "string") {
         const text = value;
 
-        // اگر متن شامل متغیر {{var}} بود، به آرایه توکن‌ها تبدیل می‌شود
+        // A text with {{var}} becomes a token array.
         if (text.includes("{{")) {
           acc[pre + k] = text.split(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g);
         } else {
@@ -72,25 +71,24 @@ export function flattenAndCompile(
   );
 }
 
-// ۴. ایجاد استور: آرگومان ورودی از نوع LocaleState منهای isTransitioning است
-// (اون فیلد داخلی استوره و همیشه با false شروع می‌شه)
+// 4. The store. Its input is LocaleState minus isTransitioning, which is
+// internal and always starts false.
 export function createLocaleStore(initial: Omit<LocaleState, "isTransitioning">) {
-  // این دو متغیر مخصوص همین instance از استوره (یعنی هر LocaleProvider
-  // نسخه‌ی خودش رو داره، بین کاربرها/mount های مختلف قاطی نمی‌شه).
+  // Per store instance (each LocaleProvider has its own, so mounts and
+  // visitors never mix).
   //
-  // مشکلی که حل می‌کنن: قبلاً اگه کاربر سریع زبان رو چند بار عوض می‌کرد
-  // (مثلاً fa → en → fa با فاصله‌ی کم)، چند تا fetch async همزمان در
-  // پرواز بودن و هرکدوم دیرتر resolve می‌شد state نهایی رو ست می‌کرد —
-  // که لزوماً با آخرین کلیک کاربر یکی نبود.
+  // Why: switching language quickly several times (e.g. fa → en → fa) left
+  // several fetches in flight, and whichever resolved last set the final
+  // state — not necessarily the user's last click.
   let latestRequestId = 0;
   let activeAbortController: AbortController | null = null;
 
   return createStore<LocaleStore>()((set, get) => ({
-    // پخش کردن مقادیر اولیه (lang, isRtl, availableLocales, cache)
+    // The initial values (lang, isRtl, availableLocales, cache).
     ...initial,
     isTransitioning: false,
 
-    // پیاده‌سازی اکشن‌ها
+    // The actions.
     addNamespaces: (byLang) =>
       set((state) => {
         const cache = { ...state.cache };
@@ -104,8 +102,8 @@ export function createLocaleStore(initial: Omit<LocaleState, "isTransitioning">)
       const { lang, cache, availableLocales } = get();
       if (newLang === lang) return;
 
-      // اگه یه setLang دیگه در حال fetch بود، abortش کن — نتیجه‌ش دیگه
-      // به دردی نمی‌خوره چون کاربر زبان دیگه‌ای انتخاب کرده
+      // Abort a setLang still fetching: the user has picked another language,
+      // so its result is no use.
       activeAbortController?.abort();
       const requestId = ++latestRequestId;
       const controller = new AbortController();
@@ -118,7 +116,7 @@ export function createLocaleStore(initial: Omit<LocaleState, "isTransitioning">)
 
       try {
         if (namespaces) {
-          // از کش می‌خوانیم — نیازی به فچ نیست
+          // Cached — no fetch needed.
           dir = availableLocales.find((m) => m.code === newLang)?.dir ?? "ltr";
         } else {
           const metaRes = await fetch(`/api/i18n/meta`, {
@@ -141,35 +139,35 @@ export function createLocaleStore(initial: Omit<LocaleState, "isTransitioning">)
                   signal: controller.signal,
                 });
                 if (res.ok) {
-                  // دیتای دریافتی را در همان لحظه مسطح و کامپایل می‌کنیم
+                  // Flattened and compiled as it arrives.
                   namespaces![ns] = flattenAndCompile(await res.json());
                 }
               } catch {
-                /* این namespace را رد کن (شامل abort شدن هم می‌شه) */
+                /* Skip this namespace (an abort included). */
               }
             }),
           );
 
           if (Object.keys(namespaces).length === 0) {
-            // چیزی لود نشد — اگه هنوز جدیدترین درخواست هستیم، overlay رو ببند
+            // Nothing loaded — close the overlay if this is still the latest request.
             if (requestId === latestRequestId) set({ isTransitioning: false });
             return;
           }
         }
       } catch {
-        // خطای شبکه یا abort — اگه هنوز جدیدترین درخواست هستیم overlay رو ببند
+        // Network error or abort — close the overlay if still the latest request.
         if (requestId === latestRequestId) set({ isTransitioning: false });
         return;
       }
 
-      // اگه در این فاصله یه setLang جدیدتر صدا زده شده، این نتیجه‌ی
-      // قدیمی/دیررسیده رو نادیده بگیر و state رو باهاش commit نکن
+      // A newer setLang was called meanwhile: drop this stale result and
+      // commit nothing.
       if (requestId !== latestRequestId) return;
 
-      // دیتا معمولاً از قبل کش شده و این‌جا فوری می‌رسیم. برای اینکه سوییچ
-      // «پرشی» نباشه، صبر می‌کنیم بلورِ overlay کامل بشینه، بعد متن + جهت
-      // (rtl/ltr) رو زیر بلور عوض می‌کنیم، یه لحظه نگه می‌داریم تا reflow
-      // تموم بشه، بعد overlay محو می‌شه و متنِ جدید نرم ظاهر می‌شه.
+      // The data is usually cached and we arrive here at once. So the switch
+      // does not jump: wait for the overlay's blur to settle, swap the text
+      // and direction (rtl/ltr) under it, hold a moment for the reflow, then
+      // fade the overlay and the new text appears smoothly.
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
       await sleep(200);
@@ -185,8 +183,8 @@ export function createLocaleStore(initial: Omit<LocaleState, "isTransitioning">)
       set({ isTransitioning: false });
 
       setUserLocale(newLang).catch(() => {
-        // خطای شبکه/سرور نباید تجربه کاربر را خراب کند؛
-        // زبان همچنان در همین سشن تغییر می‌کند، فقط در کوکی پایدار نمی‌ماند
+        // A network/server error must not spoil the switch: the language still
+        // changes for this session, it just is not kept in the cookie.
       });
     },
   }));

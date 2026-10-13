@@ -1,14 +1,14 @@
 /**
- * روی بالا آمدنِ سرور Next یک‌بار اجرا می‌شود (Node runtime).
+ * Runs once when the Next server starts (Node runtime).
  *
- * اینجا کلاینت gRPC زبان را بوت می‌کنیم تا:
- *  - کل زبان‌ها *یک‌بار* گرفته شوند و در حافظه‌ی همین پروسه بمانند،
- *  - استریم Watch باز شود تا آپدیت‌ها خودشان از locale-service بیایند،
- *  - هزینه‌ی بوت روی «اولین درخواستِ کاربر» نیفتد (علتِ دیر آمدنِ زبان
- *    در پنل بعد از هر ری‌استارت).
+ * Boots the locale gRPC client here so that:
+ *  - every language is fetched *once* and held in this process's memory,
+ *  - the Watch stream opens and updates arrive from locale-service on their own,
+ *  - the boot cost does not land on the first visitor's request (why the
+ *    panel's language came late after every restart).
  *
- * اگر بوت اینجا شکست بخورد صرفاً لاگ می‌شود؛ `ensureReady` روی مسیر درخواست
- * دوباره تلاش می‌کند و تا آن موقع رندر با fallback ادامه پیدا می‌کند.
+ * A failed boot here is only logged; `ensureReady` retries on the request
+ * path, and rendering carries on with the fallback until then.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

@@ -1,8 +1,9 @@
 "use server";
 
-// TODO: این فایل کاملاً موقتیه — وقتی سیستم auth/DB واقعی ساخته شد،
-// همین توابع رو با session واقعی و کوئری دیتابیس جایگزین کن.
-// امضای توابع عمداً همینه که با نسخه‌ی واقعی هم سازگار بمونه.
+// Temporary by design: when the real session and account store exist, these
+// functions are replaced by a session read and a database query. Their
+// signatures already match that version on purpose (panel-web open-questions,
+// 2026-09-04).
 
 // NOTE (F-068): these maps are module-level, so in a server process they are
 // shared by every visitor at once, not per-user. That is tolerable only while
