@@ -109,3 +109,17 @@ export const PLATFORM_UTC_OFFSET = "+03:30";
 
 /** A picked platform day's first instant, as billing stores it. */
 export const platformDayStart = (day: string): string => `${day}T00:00:00${PLATFORM_UTC_OFFSET}`;
+
+/** A moment as the visitor's wall time, `YYYY-MM-DDTHH:mm` — what `DatePicker withTime` holds (GR-1-k, F-030-c). */
+export type WallTime = string;
+
+/** A saved instant as the visitor's wall time, minute precise — what a draft compares against. */
+export function wallTimeOf(iso: string | null): WallTime | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+
+/** A wall time in the visitor's zone as the instant the server stores. */
+export const instantOf = (wall: WallTime) => new Date(`${wall}:00`).toISOString();

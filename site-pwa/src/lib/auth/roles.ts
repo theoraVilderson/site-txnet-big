@@ -42,8 +42,8 @@ export interface GroupPreset {
   platformKeys?: string[];
 }
 
-/** A key given or taken on one person: which, why, by whom, since when (AC-1-l). */
-export type KeyOverride = { key: string; reason: string; by: string; at: string };
+/** A key given or taken on one person: which, why, by whom, since when (AC-1-l), and its window, null ends when none (F-030-a). */
+export type KeyOverride = { key: string; reason: string; by: string; at: string; startsAt: string | null; endsAt: string | null };
 
 /** One person's keys by source, and the answer they add up to (AC-1-l, ADR-0138). */
 export type PersonKeys = {
@@ -55,6 +55,9 @@ export type PersonKeys = {
   given: KeyOverride[];
   taken: KeyOverride[];
 };
+
+/** A give or a take (AC-1-l); a give may hold from `startsAt` until `endsAt`, ISO instants (F-030-a). */
+export type KeyWriteBody = { effect: "give" | "take"; reason: string; startsAt?: string; endsAt?: string };
 
 /** `…/users/:userId/keys`, or one key under it (AC-1-l). */
 export const personKeysPath = (tenantId: string, userId: string, key?: string) =>
@@ -96,7 +99,7 @@ export const tenantRolesApi = {
     return request<PersonKeys>(personKeysPath(tenantId, userId), { method: "GET" });
   },
   /** Give or take one key, with a reason; a give replaces a take of the same key and the reverse. */
-  async setKey(tenantId: string, userId: string, key: string, body: { effect: "give" | "take"; reason: string }) {
+  async setKey(tenantId: string, userId: string, key: string, body: KeyWriteBody) {
     return request<PersonKeys>(personKeysPath(tenantId, userId, key), { method: "PUT", body: JSON.stringify(body) });
   },
   /** Lift a key given or taken: the role and groups decide it again. */

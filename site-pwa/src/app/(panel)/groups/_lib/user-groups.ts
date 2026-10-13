@@ -3,6 +3,7 @@ import { groupsApiPath } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { instantOf, type WallTime } from "../../_lib/datetime";
 
 /** The page's strings as generated constants (C-06). */
 export const USER_GROUP_KEYS = FrontendI18nKeys.common.userGroups;
@@ -142,20 +143,7 @@ export const memberKey = (m: { memberType: "user" | "tenant"; userId: string | n
 
 /** Someone picked to join: a person, or a reseller on the platform's own group. */
 export type MemberPick = { kind: "user" | "tenant"; id: string; label: string };
-/** When a membership ends, as the visitor's wall time `YYYY-MM-DDTHH:mm` (GR-1-k), or null for never. */
-export type WallTime = string;
 export type DraftAdd = MemberPick & { endAt: WallTime | null };
-
-/** A saved end (an ISO instant) as the visitor's wall time, minute precise — what the draft compares against. */
-export function wallTimeOf(iso: string | null): WallTime | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  const two = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
-}
-
-/** A wall time in the visitor's zone as the instant the server stores. */
-export const instantOf = (wall: WallTime) => new Date(`${wall}:00`).toISOString();
 
 /**
  * Every change the members sheet holds until Save (GR-1-j, user 2026-10-10):

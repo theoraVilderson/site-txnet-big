@@ -6,16 +6,29 @@ import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
 import { tenantRolesApi, type PermissionArea, type PersonKeys } from "@/lib/auth-api";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
+import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { Alert, Badge, Button, Dialog, Field, NativeSelect, SegmentedControl, Textarea, notify, useConfirm } from "../../../../../_components/kit";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { permissionIndex } from "../../../../_lib/roles";
-import { KEY_REASON_MAX, heldKeys, holdsEverything, keyRefusalKey, pickableKeys, reasonOk, type KeySource } from "../../../../_lib/person-keys";
+import {
+  KEY_REASON_MAX,
+  heldKeys,
+  holdsEverything,
+  keyRefusalKey,
+  keyWriteBody,
+  pickableKeys,
+  reasonOk,
+  waitingKeys,
+  windowOk,
+  type KeySource,
+  type KeyWindowDraft,
+} from "../../../../_lib/person-keys";
 import { useUserMessage } from "./useUserMessage";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const K = FrontendI18nKeys.common.personKeys;
 
-type Draft = { key: string; effect: "give" | "take"; reason: string };
+type Draft = { key: string; effect: "give" | "take"; reason: string } & KeyWindowDraft;
 
 /**
  * The Permissions section of one user's Profile tab (AC-1-n,
@@ -26,8 +39,9 @@ type Draft = { key: string; effect: "give" | "take"; reason: string };
  *    source that gives it — their role, a group (AC-1-m), a key given; the
  *    keys taken are listed apart, since a take wins over every source;
  *  - **give or take one key, with a reason**, from what this caller may grant
- *    (`grantable`, the Roles page's own list); **lift** puts the key back in
- *    the hands of the role and groups;
+ *    (`grantable`, the Roles page's own list) — a give for a window if it
+ *    names a start or an end (F-030-c); **lift** puts the key back in the
+ *    hands of the role and groups, also before a window opens;
  *  - **`canAct` decides whether anything is offered** (ADR-0103); a caller the
  *    role door refuses (no `role.manage`) is shown nothing — the section is
  *    not theirs, and the tab above it still is.
@@ -73,6 +87,8 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
         ? t("common", K.source.group, { name: s.name })
         : t("common", K.source.given, { reason: s.reason });
 
+  const when = (iso: string) => formatInstant(iso, lang, { withTime: true }) ?? iso;
+
   if (loadError instanceof ApiError && loadError.status === 403) return null;
 
   async function run(work: () => Promise<PersonKeys>, done: string) {
@@ -97,6 +113,7 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
 
   const areas = pickableKeys(registry, grantable);
   const held = view ? heldKeys(view) : [];
+  const waiting = view ? waitingKeys(view) : [];
   const wildcard = view ? holdsEverything(view) : false;
   const editable = canAct && !wildcard;
   const liftButton = (key: string) => (
@@ -120,7 +137,7 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
             disabled={busy}
             onClick={() => {
               setActionError(null);
-              setDraft({ key: "", effect: "give", reason: "" });
+              setDraft({ key: "", effect: "give", reason: "", startsAt: null, endsAt: null });
             }}
           >
             {t("common", K.give)}
@@ -147,10 +164,32 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
                       {sourceText(s)}
                     </Badge>
                   ))}
+                  {h.sources.map((s) => s.kind === "given" && s.endsAt && <Badge key="until">{t("common", K.source.until, { date: when(s.endsAt) })}</Badge>)}
                   {editable && h.sources.some((s) => s.kind === "given") && liftButton(h.key)}
                 </li>
               ))}
             </ul>
+          )}
+
+          {waiting.length > 0 && (
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-text-primary">{t("common", K.waiting)}</p>
+              <p className="text-xs text-text-secondary">{t("common", K.waitingHint)}</p>
+              <ul className="divide-y divide-card-border text-sm">
+                {waiting.map((o) => (
+                  <li key={o.key} className="flex flex-wrap items-center gap-2 py-2">
+                    <span className="font-bold text-text-primary">{label(o.key)}</span>
+                    <Badge tone="info">
+                      {o.endsAt && o.startsAt
+                        ? t("common", K.window.fromUntil, { start: when(o.startsAt), end: when(o.endsAt) })
+                        : t("common", K.window.from, { start: when(o.startsAt ?? o.at) })}
+                    </Badge>
+                    <span className="text-xs text-text-secondary">{o.reason}</span>
+                    {editable && liftButton(o.key)}
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {view.taken.length > 0 && (
@@ -185,8 +224,8 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
             <Button
               variant="primary"
               loading={busy}
-              disabled={!draft || !draft.key || !reasonOk(draft.reason)}
-              onClick={() => draft && void run(() => tenantRolesApi.setKey(id, userId, draft.key, { effect: draft.effect, reason: draft.reason.trim() }), K.saved)}
+              disabled={!draft || !draft.key || !reasonOk(draft.reason) || (draft.effect === "give" && !windowOk(draft))}
+              onClick={() => draft && void run(() => tenantRolesApi.setKey(id, userId, draft.key, keyWriteBody(draft)), K.saved)}
             >
               {t("common", K.save)}
             </Button>
@@ -222,6 +261,25 @@ export function UserPermissions({ id, userId, canAct, onChange }: { id: string; 
                 ]}
               />
             </Field>
+            {draft.effect === "give" && (
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-end gap-2">
+                  <DatePicker withTime label={t("common", K.starts)} value={draft.startsAt} onChange={(startsAt) => setDraft({ ...draft, startsAt })} />
+                  {draft.startsAt && (
+                    <Button variant="quiet" size="sm" onClick={() => setDraft({ ...draft, startsAt: null })}>
+                      {t("common", K.startNow)}
+                    </Button>
+                  )}
+                  <DatePicker withTime label={t("common", K.ends)} value={draft.endsAt} onChange={(endsAt) => setDraft({ ...draft, endsAt })} />
+                  {draft.endsAt && (
+                    <Button variant="quiet" size="sm" onClick={() => setDraft({ ...draft, endsAt: null })}>
+                      {t("common", K.noEnd)}
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-text-secondary">{t("common", K.windowHint)}</p>
+              </div>
+            )}
             <Field label={t("common", K.reason)} hint={t("common", K.reasonHint)}>
               <Textarea value={draft.reason} maxLength={KEY_REASON_MAX} rows={3} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} />
             </Field>

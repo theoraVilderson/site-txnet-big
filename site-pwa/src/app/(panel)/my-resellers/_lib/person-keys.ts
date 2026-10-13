@@ -1,11 +1,12 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { PermissionArea, PermissionEntry, PersonKeys } from "@/lib/auth-api";
+import type { KeyOverride, KeyWriteBody, PermissionArea, PermissionEntry, PersonKeys } from "@/lib/auth-api";
 import { ALL_PERMISSIONS, holdsPermission } from "@/lib/permissions";
+import { instantOf, type WallTime } from "../../_lib/datetime";
 
 const K = FrontendI18nKeys.common.personKeys;
 
-/** Where one held key comes from (AC-1-n). A temporary window (F-030) adds its own kind when it ships. */
-export type KeySource = { kind: "role" } | { kind: "group"; name: string } | { kind: "given"; reason: string };
+/** Where one held key comes from (AC-1-n); a key given for a window carries its end (F-030-c). */
+export type KeySource = { kind: "role" } | { kind: "group"; name: string } | { kind: "given"; reason: string; endsAt: string | null };
 
 export type HeldKey = { key: string; sources: KeySource[] };
 
@@ -24,9 +25,37 @@ export function heldKeys(view: PersonKeys): HeldKey[] {
     if (holdsPermission(view.role.keys, key)) sources.push({ kind: "role" });
     for (const g of view.groups) if (holdsPermission(g.keys, key)) sources.push({ kind: "group", name: g.name });
     const given = view.given.find((o) => o.key === key);
-    if (given) sources.push({ kind: "given", reason: given.reason });
+    if (given) sources.push({ kind: "given", reason: given.reason, endsAt: given.endsAt });
     return { key, sources };
   });
+}
+
+/**
+ * Keys given for a window whose start is still ahead (F-030-c): not in the
+ * answer yet, so {@link heldKeys} cannot show them — listed apart, to be seen
+ * and lifted before they open.
+ */
+export function waitingKeys(view: PersonKeys): KeyOverride[] {
+  return view.given.filter((o) => o.startsAt !== null && !view.keys.includes(o.key));
+}
+
+/** A give's window as `DatePicker withTime` holds it, each end optional. */
+export type KeyWindowDraft = { startsAt: WallTime | null; endsAt: WallTime | null };
+
+/** The end, if any, lies ahead of now and of the start — what the route refuses otherwise (`window_past`, `window_inverted`). */
+export function windowOk(w: KeyWindowDraft, now: number = Date.now()): boolean {
+  if (!w.endsAt) return true;
+  const end = new Date(instantOf(w.endsAt)).getTime();
+  return end > now && (!w.startsAt || end > new Date(instantOf(w.startsAt)).getTime());
+}
+
+/** The `PUT …/keys/:key` body: the reason trimmed; a window only on a give (a take has none, `window_on_take`). */
+export function keyWriteBody(d: KeyWindowDraft & { effect: "give" | "take"; reason: string }): KeyWriteBody {
+  const body: KeyWriteBody = { effect: d.effect, reason: d.reason.trim() };
+  if (d.effect !== "give") return body;
+  if (d.startsAt) body.startsAt = instantOf(d.startsAt);
+  if (d.endsAt) body.endsAt = instantOf(d.endsAt);
+  return body;
 }
 
 /**

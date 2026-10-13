@@ -6052,7 +6052,8 @@
     "source": {
       "role": "role {{name}}",
       "group": "group {{name}}",
-      "given": "given: {{reason}}"
+      "given": "given: {{reason}}",
+      "until": "until {{date}}"
     },
     "taken": "Taken away",
     "takenHint": "Taken from them even though their role or a group gives it.",
@@ -6079,7 +6080,21 @@
       "key_not_held": "You may only give or take a permission you may give yourself.",
       "key_on_wildcard": "They hold every permission; there is nothing to give or take.",
       "key_not_found": "That exception is already gone — refresh.",
-      "no_authority": "You cannot change this person's permissions: they hold as much as you, or own the reseller."
+      "no_authority": "You cannot change this person's permissions: they hold as much as you, or own the reseller.",
+      "window_on_take": "Only a give can hold for a time; a take lasts until lifted.",
+      "window_past": "The end has already passed — pick a later one.",
+      "window_inverted": "The end must come after the start."
+    },
+    "starts": "Starts",
+    "ends": "Ends",
+    "windowHint": "Optional, for a give: leave both empty to give it until lifted.",
+    "noEnd": "No end",
+    "startNow": "Start now",
+    "waiting": "Starts later",
+    "waitingHint": "Given for a window that has not started yet.",
+    "window": {
+      "from": "from {{start}}",
+      "fromUntil": "from {{start}} until {{end}}"
     }
   },
   "accessHistory": {

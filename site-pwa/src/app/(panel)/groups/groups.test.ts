@@ -30,10 +30,10 @@ import {
   draftSize,
   draftToggleRemove,
   emptyMembersDraft,
-  wallTimeOf,
   updateGroupBody,
   validateGroupForm,
 } from "./_lib/user-groups";
+import { wallTimeOf } from "../_lib/datetime";
 
 /**
  * The admin's user groups (F-114-m), over auth-service's `/auth/user-groups`

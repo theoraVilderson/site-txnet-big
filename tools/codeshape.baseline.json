@@ -121,6 +121,7 @@
   "txnet-backend/auth-service/src/app/auth/otp/senders/bale.sender.ts": 5,
   "txnet-backend/auth-service/src/app/auth/otp/senders/telegram.sender.ts": 5,
   "txnet-backend/auth-service/src/app/auth/roles/tenant-roles.controller.ts": 5,
+  "txnet-backend/auth-service/src/app/auth/roles/user-keys.view.ts": 1,
   "txnet-backend/auth-service/src/app/auth/users/reseller-users.controller.ts": 3,
   "txnet-backend/auth-service/src/app/automation/broker.publisher.ts": 11,
   "txnet-backend/auth-service/src/app/automation/reseller-bot.controller.ts": 1,
