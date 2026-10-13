@@ -32,7 +32,6 @@ import {
   quotaFromInput,
   quotaToInput,
   suggestSku,
-  tehranToday,
   validatePriceForm,
   pricedIn,
   validateVariantForm,
@@ -48,6 +47,7 @@ import { ProductAudienceSection, ownsAudience } from "./ProductAudienceSection";
 import { CopyId, Field, Sheet, useMessage } from "./catalog-ui";
 import { Alert, Button, Input } from "../../_components/kit";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { platformToday } from "../../_lib/datetime";
 
 /**
  * One product: what it unlocks (editable with the picker), and each variant
@@ -300,7 +300,7 @@ function VariantCard({
   };
 
   const newPrice = async () => {
-    const today = tehranToday();
+    const today = platformToday();
     const found = validatePriceForm(form, today);
     setErrors(found);
     if (Object.keys(found).length) return;

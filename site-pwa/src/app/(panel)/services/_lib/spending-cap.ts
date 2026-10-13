@@ -1,5 +1,6 @@
 import type { GrantStatus, SpendingCap } from "@/lib/billing-api";
 import { isNonZero } from "../../_lib/money";
+import { toEnglishDigits } from "@/util/helper";
 
 /** Billing's bound on a cap's label (`spending-cap.schema.ts`): 1..40 characters. */
 export const CAP_LABEL_MAX = 40;
@@ -20,9 +21,7 @@ export function capOffered(status: GrantStatus): boolean {
  * checks the same thing and its sentence is what a refusal shows.
  */
 export function capAmount(raw: string): string | null {
-  const latin = raw
-    .trim()
-    .replace(/[۰-۹٠-٩]/g, (d) => String((d.charCodeAt(0) & 0xf) % 10))
+  const latin = toEnglishDigits(raw.trim())
     .replace(/٫/g, ".")
     .replace(/[,٬\s]/g, "");
   const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(latin);

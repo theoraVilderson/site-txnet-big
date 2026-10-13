@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { SUPPORT_FILE_TYPES, type ConversationStatus, type ScanStatus, type SupportCounts, type SupportMessage, type SupportRating } from "@/lib/support-api";
+import { dayIn } from "../../_lib/datetime";
 
 /** The page's strings as generated constants (C-06). */
 export const SUPPORT_KEYS = FrontendI18nKeys.common.support;
@@ -189,17 +190,6 @@ export function acceptSupportFiles(files: readonly File[]): { accepted: File[]; 
 /** One sender's messages this close together share one label (T4). */
 export const GROUP_WINDOW_MS = 5 * 60_000;
 
-/** `YYYY-MM-DD` of an instant on the wall clock of `zone` — the viewer's resolved zone (TZ-1-e), else this browser's. */
-export function dayKey(iso: string, zone?: string | null): string {
-  const date = new Date(iso);
-  const parts = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
-  try {
-    return new Intl.DateTimeFormat("en-CA", zone ? { ...parts, timeZone: zone } : parts).format(date);
-  } catch {
-    return new Intl.DateTimeFormat("en-CA", parts).format(date);
-  }
-}
-
 export type ThreadItem<M extends SupportMessage> = { kind: "day"; day: string; at: string } | { kind: "message"; message: M; first: boolean };
 
 /**
@@ -212,7 +202,7 @@ export function threadItems<M extends SupportMessage>(messages: readonly M[], se
   let prev: M | null = null;
   let prevDay = "";
   for (const m of messages) {
-    const day = dayKey(m.createdAt, zone);
+    const day = dayIn(m.createdAt, zone);
     const newDay = day !== prevDay;
     if (newDay) items.push({ kind: "day", day, at: m.createdAt });
     const gap = prev ? Date.parse(m.createdAt) - Date.parse(prev.createdAt) : Infinity;

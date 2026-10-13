@@ -1,6 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { Me } from "@/lib/auth-api";
-import { PLATFORM_DEFAULT_TIMEZONE } from "@/lib/time-zone";
+import { platformDayStart } from "../../_lib/datetime";
 import type {
   BillingMode,
   CatalogPrice,
@@ -26,6 +26,7 @@ import type {
   Visibility,
 } from "@/lib/catalog-api";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { toEnglishDigits } from "@/util/helper";
 
 export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RATE_CARD_MODES, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
@@ -113,16 +114,11 @@ const LATIN: Record<string, string> = {
   ر: "r", ز: "z", ژ: "zh", س: "s", ش: "sh", ص: "s", ض: "z", ط: "t", ظ: "z", ع: "a", غ: "gh", ف: "f", ق: "gh",
   ک: "k", ك: "k", گ: "g", ل: "l", م: "m", ن: "n", و: "v", ه: "h", ة: "h", ی: "i", ي: "i", ئ: "i", ء: "", ؤ: "o",
 };
-const DIGITS = "۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩";
 
 /** A key in billing's shape (`^[a-z][a-z0-9_]{1,63}$`) from a name, or `""` when the name gives too little. */
 export function slugKey(text: string): string {
-  const latin = [...text.normalize("NFKD").toLowerCase()]
-    .map((c) => {
-      const d = DIGITS.indexOf(c);
-      if (d >= 0) return String(d % 10);
-      return LATIN[c] ?? c;
-    })
+  const latin = [...toEnglishDigits(text).normalize("NFKD").toLowerCase()]
+    .map((c) => LATIN[c] ?? c)
     .join("");
   let key = latin.replace(/[^a-z0-9]+/g, "_").replace(/^[_0-9]+|_+$/g, "");
   if (!key) {
@@ -712,13 +708,6 @@ export interface PriceForm {
   day: string;
 }
 
-/** Tehran has kept +03:30 all year since 2022 — the clock billing's weekday gates read too. */
-const TEHRAN_OFFSET = "+03:30";
-
-/** Today in Tehran, `YYYY-MM-DD`. */
-export const tehranToday = (now: Date = new Date()) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: PLATFORM_DEFAULT_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-
 /** A day already past would reprice an invoice issued under the old price: billing refuses it, so this does first. */
 export function validatePriceForm(f: PriceForm, today: string): Errors<PriceForm> {
   const errors: Errors<PriceForm> = {};
@@ -733,7 +722,7 @@ export function validatePriceForm(f: PriceForm, today: string): Errors<PriceForm
  */
 export function priceBody(f: PriceForm, today: string): SetPriceBody {
   const amount = f.amount.trim();
-  return blank(f.day) || f.day <= today ? { amount } : { amount, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
+  return blank(f.day) || f.day <= today ? { amount } : { amount, effectiveFrom: platformDayStart(f.day) };
 }
 
 /** Billing's `priceAt`: the newest active price already in effect at `now`, or none. */
@@ -783,7 +772,7 @@ export function validateRateCardForm(f: RateCardForm, today: string): Errors<Rat
 /** A new card, from now or a later day's first Tehran instant, as {@link priceBody}. */
 export function rateCardBody(f: RateCardForm, today: string): SetRateCardBody {
   const card = perGbCard(f.mode, f.unitPrice);
-  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
+  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: platformDayStart(f.day) };
 }
 
 /** Billing's `rateCardAt` for one meter (`vpn.traffic` unless named): the newest active card already in effect at `now`, or none. */
@@ -838,7 +827,7 @@ export function regenerateCardBody(f: RegenerateCardForm, today: string): SetRat
     includedQuantity: f.included.trim() || "0",
     afterIncluded: f.after,
   };
-  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: `${f.day}T00:00:00${TEHRAN_OFFSET}` };
+  return blank(f.day) || f.day <= today ? card : { ...card, effectiveFrom: platformDayStart(f.day) };
 }
 
 /** A metered variant with no card in effect is refused at sale (`metered_rate_missing`). */

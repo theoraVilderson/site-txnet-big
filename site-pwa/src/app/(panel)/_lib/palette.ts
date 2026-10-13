@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { toEnglishDigits } from "@/util/helper";
 
 /**
  * The command palette's matching (UX-1-n, `contract.ux.md` N6). Pure, so the
@@ -14,11 +15,9 @@ const LETTERS: Record<string, string> = { "ي": "ی", "ى": "ی", "ك": "ک" };
  * non-joiner dropped (so "جستوجو" finds "جست‌وجو"), runs of space as one.
  */
 export function foldForSearch(text: string): string {
-  return text
+  return toEnglishDigits(text)
     .toLowerCase()
     .replace(/[يىك]/g, (c) => LETTERS[c])
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
     .replace(/‌/g, "")
     .replace(/\s+/g, " ")
     .trim();

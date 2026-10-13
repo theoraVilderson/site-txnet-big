@@ -1,6 +1,7 @@
 import type { GrantRow } from "@/lib/billing-api";
 import { holdsPermission } from "@/lib/permissions";
 import { USER_KEYS, type OfferedAction } from "./users";
+import { toEnglishDigits } from "@/util/helper";
 
 /** The strings of a Grant's actions (C-06). */
 export const GRANT_KEYS = USER_KEYS.grant;
@@ -57,7 +58,7 @@ const GIB = 1024 ** 3;
 
 /** A Persian or Arabic-Indic digit typed on a phone reads as its Latin one. */
 function latin(raw: string): string {
-  return raw.trim().replace(/[۰-۹٠-٩]/g, (d) => String((d.charCodeAt(0) & 0xf) % 10));
+  return toEnglishDigits(raw.trim());
 }
 
 /** A number typed, or `null` for anything that is not one. Empty is `null` too. */

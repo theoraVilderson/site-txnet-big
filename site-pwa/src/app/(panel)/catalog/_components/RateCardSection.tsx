@@ -20,7 +20,6 @@ import {
   rateCardBody,
   rateDecimals,
   regenerateCardBody,
-  tehranToday,
   validateRateCardForm,
   validateRegenerateCardForm,
   pricedIn,
@@ -30,6 +29,7 @@ import {
 } from "../_lib/catalog-form";
 import { Field } from "./catalog-ui";
 import { Button, Input } from "../../_components/kit";
+import { platformToday } from "../../_lib/datetime";
 
 /**
  * A metered variant's rate per GB of traffic (F-118-m, ADR-0105 decision 10):
@@ -56,7 +56,7 @@ export function RateCardSection({ variant: v, act }: { variant: CatalogVariant; 
     });
 
   const newRate = async () => {
-    const today = tehranToday();
+    const today = platformToday();
     const found = validateRateCardForm(form, today);
     setErrors(found);
     if (Object.keys(found).length) return;
@@ -152,7 +152,7 @@ export function RegenerateCardSection({ variant: v, act }: { variant: CatalogVar
       : t("common", K.regenerateCard.shownStop, { included: c.includedQuantity });
 
   const save = async () => {
-    const today = tehranToday();
+    const today = platformToday();
     const found = validateRegenerateCardForm(form, today);
     setErrors(found);
     if (Object.keys(found).length) return;

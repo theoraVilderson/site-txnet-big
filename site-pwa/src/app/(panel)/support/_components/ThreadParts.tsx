@@ -10,7 +10,8 @@ import { displayZone } from "@/lib/time-zone";
 import type { SupportAttachment, SupportMessage } from "@/lib/support-api";
 import { formatInstant } from "../../_lib/datetime";
 import { Button, Dialog, Tooltip, cn } from "../../_components/kit";
-import { SCAN_KEYS, SUPPORT_KEYS as K, awayFromBottom, dayKey, fileSize, threadItems } from "../_lib/support";
+import { SCAN_KEYS, SUPPORT_KEYS as K, awayFromBottom, fileSize, threadItems } from "../_lib/support";
+import { dayIn } from "../../_lib/datetime";
 
 /**
  * What the user's thread and the agent's share (UX-1-x, `contract.ux.md` T4):
@@ -40,8 +41,8 @@ export function ThreadMessages<M extends SupportMessage>({
   const zone = displayZone();
   // "Today" as of when the thread was opened: a page left open past midnight says the date instead, which is still true.
   const [now] = useState(() => Date.now());
-  const today = dayKey(new Date(now).toISOString(), zone);
-  const yesterday = dayKey(new Date(now - 86_400_000).toISOString(), zone);
+  const today = dayIn(now, zone);
+  const yesterday = dayIn(now - 86_400_000, zone);
   const items = threadItems(messages, senderOf, zone);
   return (
     <ol className="space-y-1">

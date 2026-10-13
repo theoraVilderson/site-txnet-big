@@ -1,5 +1,6 @@
 import type { CreateDiscountRuleBody, DiscountRule, DiscountRuleRejection, DiscountRuleStatus, UpdateDiscountRuleBody } from "@/lib/billing-api";
 import { COUPON_KEYS, dayToInstant, instantToDay } from "./coupon-form";
+import { platformToday } from "../../_lib/datetime";
 
 /**
  * Tab 3 of the coupons page — discounts with no code (F-114-k, ADR-0087).
@@ -63,9 +64,6 @@ export interface RuleForm {
 
 export type RuleFormErrors = Partial<Record<keyof RuleForm, string>>;
 
-/** Today in Tehran — a new rule starts now unless a day is picked. */
-export const tehranToday = (now = Date.now()) => instantToDay(new Date(now).toISOString(), "start");
-
 export function emptyRuleForm(now = Date.now()): RuleForm {
   return {
     name: "",
@@ -77,7 +75,7 @@ export function emptyRuleForm(now = Date.now()): RuleForm {
     audience: "everyone",
     userIds: "",
     groupId: "",
-    startsAt: tehranToday(now),
+    startsAt: platformToday(now),
     endsAt: "",
     isActive: true,
   };

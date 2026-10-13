@@ -12,7 +12,6 @@ import {
   emptyRuleForm,
   formFromRule,
   ruleRefusalKey,
-  tehranToday,
   updateRuleBody,
   validateRuleForm,
   type RuleForm,
@@ -147,7 +146,7 @@ describe("createRuleBody", () => {
 
   it("starts today in Tehran, not in UTC", () => {
     // 22:00 UTC on the 25th is already the 26th in Tehran.
-    expect(tehranToday(Date.parse("2026-09-25T22:00:00Z"))).toBe("2026-09-26");
+    expect(emptyRuleForm(Date.parse("2026-09-25T22:00:00Z")).startsAt).toBe("2026-09-26");
   });
 
   it("counts the last day picked: billing reads the end as exclusive", () => {

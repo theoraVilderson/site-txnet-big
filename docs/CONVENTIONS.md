@@ -900,8 +900,8 @@ is needed it is moved to its home and both callers import it — not pasted.
 | a header / cookie / permission name | `@/generated/wire` (C-04) | `shared-core/src/lib/http` (C-04) |
 | a translated string | `@/generated/i18n-keys` (C-06) | `BackendI18nKeys` / `BotKeys` (C-07) |
 | money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02) |
-| a date or time | `_lib/datetime.ts`, `lib/time-zone.ts` | `shared-core/src/lib/time` |
-| digits, numbers and lists | `_lib/digits.ts` (`numberLocale`, `formatList`) | — |
+| a date or time | `_lib/datetime.ts` (`formatInstant`, `dayIn`, `platformToday`, `platformDayStart`), `lib/time-zone.ts` | `shared-core/src/lib/time` |
+| digits, numbers and lists | `_lib/digits.ts` (`numberLocale`, `formatList`); typed digits read by `toEnglishDigits` (`util/helper.ts`) | — |
 | a control, a dialog, a table | `(panel)/_components/kit` (C-13) | — |
 | live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
 | browser storage | `lib/storage.ts` (FE-1-l) | — |

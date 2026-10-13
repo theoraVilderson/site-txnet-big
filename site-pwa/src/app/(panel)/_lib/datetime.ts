@@ -16,7 +16,7 @@
  * holds it; until the session has read it, the browser's own.
  */
 
-import { displayZone } from "@/lib/time-zone";
+import { PLATFORM_DEFAULT_TIMEZONE, displayZone } from "@/lib/time-zone";
 import { numberLocale } from "./digits";
 
 type Parts = Intl.DateTimeFormatOptions;
@@ -87,3 +87,25 @@ export function formatRelative(instant: string | null | undefined, lang: string,
   }
   return formatInstant(instant, lang, { withTime: false });
 }
+
+/** The locale whose short date is `YYYY-MM-DD` — a sortable day key, never shown to a person (C-17). */
+const DAY_KEY_LOCALE = "en-CA";
+
+/** `YYYY-MM-DD` of an instant on `zone`'s wall clock; this browser's when no zone is given or `Intl` refuses it. */
+export function dayIn(instant: string | number | Date, zone?: string | null): string {
+  const at = new Date(instant);
+  try {
+    return new Intl.DateTimeFormat(DAY_KEY_LOCALE, zone ? { ...DATE_ONLY, timeZone: zone } : DATE_ONLY).format(at);
+  } catch {
+    return new Intl.DateTimeFormat(DAY_KEY_LOCALE, DATE_ONLY).format(at);
+  }
+}
+
+/** Today on the platform's clock — the day a price, a rate card or a coupon is picked in (FE-1-c). */
+export const platformToday = (now: number | Date = Date.now()): string => dayIn(now, PLATFORM_DEFAULT_TIMEZONE);
+
+/** Tehran has kept +03:30 all year since 2022 — the clock billing's weekday and hour gates read too. */
+export const PLATFORM_UTC_OFFSET = "+03:30";
+
+/** A picked platform day's first instant, as billing stores it. */
+export const platformDayStart = (day: string): string => `${day}T00:00:00${PLATFORM_UTC_OFFSET}`;

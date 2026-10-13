@@ -11,6 +11,7 @@ import {
 } from "@/lib/billing-api";
 import { numberLocale } from "../../_lib/digits";
 import { lineLabel } from "./config-lines";
+import { toEnglishDigits } from "@/util/helper";
 
 const C = FrontendI18nKeys.common.myServices.configs;
 
@@ -137,12 +138,10 @@ export function configName(row: Pick<UserConfigRow, "lines" | "protocol" | "regi
  * an Arabic keyboard types "علي", and "۲" is "2" to whoever typed it.
  */
 function fold(text: string): string {
-  return text
+  return toEnglishDigits(text)
     .toLowerCase()
     .replace(/[يى]/g, "ی")
     .replace(/ك/g, "ک")
-    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
-    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
     .replace(/\s+/g, " ")
     .trim();
 }

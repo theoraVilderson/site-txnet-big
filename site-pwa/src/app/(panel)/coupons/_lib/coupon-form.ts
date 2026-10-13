@@ -1,6 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { Me } from "@/lib/auth-api";
 import { PLATFORM_DEFAULT_TIMEZONE } from "@/lib/time-zone";
+import { PLATFORM_UTC_OFFSET, dayIn, platformDayStart } from "../../_lib/datetime";
 import type {
   AdminCoupon,
   CouponChannel,
@@ -159,19 +160,16 @@ export function emptyCouponForm(): CouponForm {
  */
 export const isFrozen = (c: Pick<AdminCoupon, "frozen">) => c.frozen;
 
-/** Tehran has kept +03:30 all year since 2022; the coupon's weekday and hour gates read the same clock. */
-const TEHRAN_OFFSET = "+03:30";
-
 /**
  * A picked day as the instant billing stores. `start`: that day's first
  * instant in Tehran (`validFrom`). `end`: the next day's first instant, so the
  * coupon works through the whole day picked (`expiresAt`).
  */
 export function dayToInstant(day: string, edge: "start" | "end"): string {
-  if (edge === "start") return `${day}T00:00:00${TEHRAN_OFFSET}`;
+  if (edge === "start") return platformDayStart(day);
   const next = new Date(`${day}T00:00:00Z`);
   next.setUTCDate(next.getUTCDate() + 1);
-  return `${next.toISOString().slice(0, 10)}T00:00:00${TEHRAN_OFFSET}`;
+  return platformDayStart(next.toISOString().slice(0, 10));
 }
 
 /** The usage report's status filter offers billing's redemption statuses (F-502-i). */
@@ -197,7 +195,7 @@ export function usageQuery(f: UsageFilter, page: number): UsageQuery {
   return {
     ...(f.status ? { status: f.status } : {}),
     ...(f.from ? { from: dayToInstant(f.from, "start") } : {}),
-    ...(f.to ? { to: `${f.to}T23:59:59.999${TEHRAN_OFFSET}` } : {}),
+    ...(f.to ? { to: `${f.to}T23:59:59.999${PLATFORM_UTC_OFFSET}` } : {}),
     page,
     pageSize: USAGE_PAGE_SIZE,
   };
@@ -211,8 +209,7 @@ export function validateUsageFilter(f: UsageFilter): string | null {
 /** The day a stored instant shows as — the reverse of {@link dayToInstant}. */
 export function instantToDay(instant: string | null, edge: "start" | "end"): string {
   if (!instant) return "";
-  const at = new Date(instant).getTime() - (edge === "end" ? 1 : 0);
-  return new Intl.DateTimeFormat("en-CA", { timeZone: PLATFORM_DEFAULT_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+  return dayIn(new Date(instant).getTime() - (edge === "end" ? 1 : 0), PLATFORM_DEFAULT_TIMEZONE);
 }
 
 export function formFromCoupon(c: AdminCoupon): CouponForm {
