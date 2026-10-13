@@ -167,6 +167,7 @@ describe('billing rate limits', () => {
       DATABASE_CROSS_TENANT_URL: 'x',
       REDIS_URL: 'x',
       RABBITMQ_URL: 'x',
+      APP_NAME: 'x',
     }) as Record<string, unknown>;
 
     for (const { name, options } of await routes()) {

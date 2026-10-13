@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import {
   I18nExceptionFilter,
+  JsonLogger,
   ResponseInterceptor,
   trustProxySetting,
 } from '@txnet-backend/shared-core';
@@ -30,7 +31,9 @@ import { LocaleService } from './app/locale/locale.service';
 async function bootstrap() {
   // `rawBody`: a webhook's signature is over the bytes sent (F-104-b, ADR-0051).
   // JSON is still parsed for every route; the raw copy rides beside it.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // `bufferLogs`: boot lines wait for `JsonLogger`, so none is written in another shape (H12).
+  const app = await NestFactory.create(AppModule, { rawBody: true, bufferLogs: true });
+  app.useLogger(app.get(JsonLogger));
   app.enableShutdownHooks();
 
   // The `shared-core` envelope, the same pair `auth-service` installs (F-094):

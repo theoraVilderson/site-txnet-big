@@ -4,10 +4,10 @@ layer: platform
 status: draft
 version: 1
 keywords: [hosting, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, swarm, docker stack, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
-source: [dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**]
+source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**]
 owns_tables: []
 depends_on: [automation, i18n]
-updated: 2026-10-07
+updated: 2026-10-13
 ---
 
 # hosting
@@ -30,7 +30,8 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 ## Status
 
 `draft`. Opened 2026-10-06 by ADR-0126 (D-62); the OPS-1 rows are `todo`.
-EDGE-1-g, -h, -j, -k and -m (`contract.origin.md`) are built. The unit
+EDGE-1-g, -h, -j, -k and -m (`contract.origin.md`) are built; so is
+OPS-1-k (H12/H13 in `shared-core/src/lib/logging`, billing-service only). The unit
 claims `dev-docker/postgres/**`, `dev-docker/pgbouncer/**`, `swarm/**`,
 `dev-docker/monitoring/config-dev/database.rules.yml` and `loki.yaml` in
 `source:` as each row lands.

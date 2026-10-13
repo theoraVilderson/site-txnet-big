@@ -16,6 +16,8 @@ const DB = {
   REDIS_URL: 'redis://redis:6379',
   // Required since F-027-cl: the hot loop's queue.
   RABBITMQ_URL: 'amqp://rabbitmq:5672',
+  // Required since OPS-1-k: the service name on every log line; the image sets it.
+  APP_NAME: 'billing-service',
 };
 
 describe('envSchema', () => {

@@ -92,6 +92,8 @@ export const RequestHeaders = {
   botTenantId: 'x-bot-tenant-id',
   /** The domain check's nonce, sent as a header so two requests share one URL (ADR-0129 (8), EDGE-1-e). */
   domainProbe: 'x-domain-probe',
+  /** One request's id across services, logs and outbox messages (H13, `platform/hosting/contract.md`). */
+  requestId: 'x-request-id',
 } as const;
 
 /**

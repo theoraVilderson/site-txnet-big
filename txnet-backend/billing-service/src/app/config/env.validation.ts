@@ -1,5 +1,6 @@
 import {
   AUTOMATION_EXCHANGE_DEFAULT,
+  loggingEnvShape,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
 } from '@txnet-backend/shared-core';
@@ -25,12 +26,9 @@ const rateLimit = (fallback: number) =>
  * also the only deployable that could start with a typo'd variable and report
  * itself healthy.
  *
- * Doing it now is cheap and doing it later is not. F-039 fills this service in;
- * at that point there are call sites reading `process.env` directly and the
- * change becomes a migration instead of a file. The schema is deliberately
- * small — what exists today plus the shape the next variable slots into — and
- * not a guess at what billing will need. Adding a field nobody asked for is how
- * a config schema becomes a list of things that are never set.
+ * Doing it later would have been a migration of `process.env` call sites. A
+ * field is added when something reads it — never as a guess at what billing
+ * will need, which is how a schema becomes a list of things never set.
  *
  * Modelled on `gateway-service/src/app/config/env.validation.ts`.
  */
@@ -449,6 +447,7 @@ export const envSchema = z.object({
    * that one address. One hop is this platform's deployment.
    */
   TRUST_PROXY: z.string().default(''),
+  ...loggingEnvShape, // APP_NAME, LOG_FORMAT for the JSON log lines (H12)
 }).refine((env) => !(env.NODE_ENV === 'production' && env.PAYMENT_GATEWAY_SANDBOX), {
   message: 'PAYMENT_GATEWAY_SANDBOX=true is refused when NODE_ENV=production',
   path: ['PAYMENT_GATEWAY_SANDBOX'],

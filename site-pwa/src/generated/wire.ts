@@ -28,6 +28,7 @@ export const RequestHeaders = {
   "botPlatform": "x-bot-platform",
   "botTenantId": "x-bot-tenant-id",
   "domainProbe": "x-domain-probe",
+  "requestId": "x-request-id",
 } as const;
 
 /** `contracts/http/wire.json` -> `proxyHeaders`. */
