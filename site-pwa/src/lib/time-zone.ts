@@ -1,3 +1,5 @@
+import { StorageKeys, readStored, writeStored } from "./storage";
+
 /**
  * The panel's half of one clock rule (TZ-1-e, ADR-0108;
  * `domains/identity/contract.time-zone.md`). Every instant on the wire is
@@ -43,28 +45,17 @@ export function zoneChoices(saved: string | null): string[] {
 }
 
 /** The zone dates are drawn in — the session's resolved zone, remembered so the next load draws in it from its first frame. */
-const REMEMBERED = "txnet.displayZone";
 let display: string | null | undefined;
 
 /** The resolved zone, or null for this browser's own until the session has read it. */
 export function displayZone(): string | null {
-  if (display === undefined) {
-    try {
-      display = typeof localStorage === "undefined" ? null : localStorage.getItem(REMEMBERED);
-    } catch {
-      display = null;
-    }
-  }
+  if (display === undefined) display = readStored(StorageKeys.displayZone);
   return display;
 }
 
 /** Set by the panel session once `GET /auth/me/timezone` answers; null forgets it. */
 export function setDisplayZone(zone: string | null): void {
   display = zone;
-  try {
-    if (zone) localStorage.setItem(REMEMBERED, zone);
-    else localStorage.removeItem(REMEMBERED);
-  } catch {
-    // Storage blocked: the zone still holds for this page load.
-  }
+  // Storage blocked: the zone still holds for this page load.
+  writeStored(StorageKeys.displayZone, zone || null);
 }

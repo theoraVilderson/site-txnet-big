@@ -1,7 +1,7 @@
 import { AUTH_LOGIN, PANEL_HOME } from "@/lib/routes";
+import { StorageKeys } from "@/lib/storage";
 
 import {
-  RETURN_TO_KEY,
   clearReturnTo,
   consumeReturnTo,
   isSafeReturnPath,
@@ -72,16 +72,16 @@ describe("remember / consume", () => {
   it("stores nothing a validator would refuse", () => {
     rememberReturnTo("https://evil.example/x");
 
-    expect(window.sessionStorage.getItem(RETURN_TO_KEY)).toBeNull();
+    expect(window.sessionStorage.getItem(StorageKeys.returnTo.key)).toBeNull();
     expect(consumeReturnTo()).toBe(PANEL_HOME);
   });
 
   it("refuses on the way out as well as on the way in", () => {
     // Whatever put this there, it is not going to `router.replace`.
-    window.sessionStorage.setItem(RETURN_TO_KEY, "//evil.example");
+    window.sessionStorage.setItem(StorageKeys.returnTo.key, "//evil.example");
 
     expect(consumeReturnTo()).toBe(PANEL_HOME);
-    expect(window.sessionStorage.getItem(RETURN_TO_KEY)).toBeNull();
+    expect(window.sessionStorage.getItem(StorageKeys.returnTo.key)).toBeNull();
   });
 
   it("is cleared by a deliberate sign-out", () => {

@@ -228,8 +228,9 @@ SMELLS = {
     "raw-env": (r"process\.env\b", lambda r: r.endswith(SOURCE_EXT) and not re.search(
         r"(/env(\.validation)?\.ts$|/config/|\.config\.m?ts$)", r),
                 "C-26", "read config from the app's validated env module"),
-    "raw-storage": (r"\b(localStorage|sessionStorage)\.", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT),
-                    "C-27", "go through the panel's storage helper, which survives a blocked storage"),
+    "raw-storage": (r"\b(localStorage|sessionStorage)\.", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT)
+                    and not r.endswith("lib/storage.ts"),
+                    "C-27", "go through lib/storage.ts (StorageKeys + readStored/writeStored), which survives a blocked storage"),
     "raw-fetch": (r"(?<![.\w])fetch\(", lambda r: r.startswith("site-pwa/") and r.endswith(SOURCE_EXT)
                   and not r.endswith("lib/api-request.ts"),
                   "C-27", "call the API through lib/api-request.ts"),

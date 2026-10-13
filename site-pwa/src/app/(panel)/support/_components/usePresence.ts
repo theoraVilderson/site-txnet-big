@@ -1,26 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 import { supportAgentApi } from "@/lib/support-api";
 import { PRESENCE_EVERY_MS } from "../_lib/support-agent";
 
 /** Per browser, a convenience only: support's own record is the heartbeat. */
-const STORAGE_KEY = "txnet.support.presence";
-
 function stored(): boolean {
-  try {
-    return window.localStorage.getItem(STORAGE_KEY) !== "away";
-  } catch {
-    return true;
-  }
+  return readStored(StorageKeys.supportPresence) !== "away";
 }
 
 function remember(online: boolean): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, online ? "online" : "away");
-  } catch {
-    // Private mode: the choice lasts this page only.
-  }
+  // Refused (private mode): `overridden` keeps the choice for this page only.
+  writeStored(StorageKeys.supportPresence, online ? "online" : "away");
   overridden = online;
   for (const l of listeners) l();
 }

@@ -1,5 +1,6 @@
 import { ApiError } from "@/lib/api-error";
 import type { ShopOffer } from "@/lib/billing-api";
+import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 
 /**
  * The shop's rules that are not layout (F-111-e, F-114-d, `panel-web/contract.shop.md`).
@@ -146,30 +147,17 @@ export function forInvoiceOf(invoiceId: string | null, missing: string | null, c
  * to know where the user was going. Session storage, not local: a second tab
  * is a second trip. Only an id — never a code, never a figure.
  */
-const RETURN_KEY = "txnet.shop.returnInvoice";
-
 export function rememberReturnInvoice(invoiceId: string): void {
-  try {
-    sessionStorage.setItem(RETURN_KEY, invoiceId);
-  } catch {
-    // No storage (a private window, a blocked origin): the top-up page's own link still goes back.
-  }
+  // Refused (a private window, a blocked origin): the top-up page's own link still goes back.
+  writeStored(StorageKeys.shopReturnInvoice, invoiceId);
 }
 
 export function returnInvoice(): string | null {
-  try {
-    return sessionStorage.getItem(RETURN_KEY);
-  } catch {
-    return null;
-  }
+  return readStored(StorageKeys.shopReturnInvoice);
 }
 
 export function forgetReturnInvoice(): void {
-  try {
-    sessionStorage.removeItem(RETURN_KEY);
-  } catch {
-    // Nothing was kept.
-  }
+  writeStored(StorageKeys.shopReturnInvoice, null);
 }
 
 /** The shop's steps (contract.ux.md U1), in the order they are walked. */

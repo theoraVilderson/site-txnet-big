@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { DEFAULT_UI_PREFERENCES, useUiPreferences } from "@/stores/ui-preferences-store";
 import { MAX_PINS } from "../_lib/pins";
-import { RECENT_PAGES_KEY, readRecentPages, recordRecentPage } from "../_lib/recent-pages";
+import { StorageKeys } from "@/lib/storage";
+import { readRecentPages, recordRecentPage } from "../_lib/recent-pages";
 import { usePanelUiStore } from "../_stores/panel-ui-store";
 import { PanelSidebar } from "./PanelSidebar";
 
@@ -176,8 +177,8 @@ describe("recent pages (N5)", () => {
 
   it("lives on this device only, and survives storage that refuses", () => {
     recordRecentPage({ href: "/wheel", id: "wheel" });
-    expect(JSON.parse(localStorage.getItem(RECENT_PAGES_KEY) ?? "[]")[0].href).toBe("/wheel");
-    localStorage.setItem(RECENT_PAGES_KEY, "{not json");
+    expect(JSON.parse(localStorage.getItem(StorageKeys.recentPages.key) ?? "[]")[0].href).toBe("/wheel");
+    localStorage.setItem(StorageKeys.recentPages.key, "{not json");
     expect(readRecentPages()).toEqual([]);
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("quota");

@@ -1,4 +1,5 @@
 import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
+import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 
 /**
  * The destination a sign-in redirect bounced from (F-093-i, ADR-0042).
@@ -28,9 +29,6 @@ import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
  * router carries no `my-auth`, and the real gate is on the API — so nothing
  * here decides what anybody may see.
  */
-
-/** One tab, one intent. Namespaced because `sessionStorage` is shared per origin. */
-export const RETURN_TO_KEY = "txnet.returnTo";
 
 /** Paths that would bounce the user straight back out of the panel. */
 const NEVER_RETURN_TO = [AUTH_LOGIN, AUTH_REGISTER, "/auth/"];
@@ -98,27 +96,15 @@ export function consumeReturnTo(): string {
 
 /** A deliberate sign-out is not a bounce: there is no intent left to return to. */
 export function clearReturnTo(): void {
-  try {
-    window.sessionStorage.removeItem(RETURN_TO_KEY);
-  } catch {
-    // Private window, blocked site data, or no window at all. Nothing was
-    // stored, so nothing is lost.
-  }
+  writeStored(StorageKeys.returnTo, null);
 }
 
 function read(): string | null {
-  try {
-    return window.sessionStorage.getItem(RETURN_TO_KEY);
-  } catch {
-    return null;
-  }
+  return readStored(StorageKeys.returnTo);
 }
 
 function write(path: string): void {
-  try {
-    window.sessionStorage.setItem(RETURN_TO_KEY, path);
-  } catch {
-    // Storage is a convenience here: without it the user lands on the panel
-    // home, which is exactly the behaviour before this existed.
-  }
+  // Storage is a convenience here: refused, the user lands on the panel home,
+  // which is exactly the behaviour before this existed.
+  writeStored(StorageKeys.returnTo, path);
 }

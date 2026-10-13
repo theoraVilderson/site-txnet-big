@@ -5,6 +5,7 @@ import { BookOpen, Server } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelGroup, type SystemsPanel } from "@/lib/billing-api";
 import { useLiveReread } from "@/hooks/useLiveReread";
+import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
 import { HELD_KEYS, SYSTEMS_KEYS as K, PANEL_EVENTS, liveChannelOf } from "../_lib/systems";
@@ -19,26 +20,11 @@ import { SystemsGuide } from "./SystemsGuide";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Alert, Button, Tabs } from "../../_components/kit";
 
-const GUIDE_CLOSED = "txnet.systems.guideClosed";
 const TABS: SystemsTab[] = ["panels", "groups", "reports"];
 
 /** Per browser, and never trusted: storage may be blocked, and then the guide simply shows. */
-function readGuideClosed(): boolean {
-  try {
-    return localStorage.getItem(GUIDE_CLOSED) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeGuideClosed(closed: boolean) {
-  try {
-    if (closed) localStorage.setItem(GUIDE_CLOSED, "1");
-    else localStorage.removeItem(GUIDE_CLOSED);
-  } catch {
-    // The choice lasts for this visit only.
-  }
-}
+const readGuideClosed = () => readStored(StorageKeys.systemsGuideClosed) === "1";
+const writeGuideClosed = (closed: boolean) => writeStored(StorageKeys.systemsGuideClosed, closed ? "1" : null);
 
 /**
  * The systems page (F-027-ad, ADR-0080): register a panel, read what its

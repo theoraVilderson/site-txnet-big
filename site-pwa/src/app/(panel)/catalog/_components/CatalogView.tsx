@@ -21,24 +21,11 @@ import { Alert, Button, buttonClass, Tabs, useConfirm } from "../../_components/
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { formatList } from "../../_lib/digits";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 
-/** Whether this viewer closed the guide. Browser storage can be missing or throw: then the guide just shows. */
-const GUIDE_CLOSED = "txnet.catalog.guideClosed";
-const readGuideClosed = () => {
-  try {
-    return localStorage.getItem(GUIDE_CLOSED) === "1";
-  } catch {
-    return false;
-  }
-};
-const writeGuideClosed = (closed: boolean) => {
-  try {
-    if (closed) localStorage.setItem(GUIDE_CLOSED, "1");
-    else localStorage.removeItem(GUIDE_CLOSED);
-  } catch {
-    // a per-viewer convenience only
-  }
-};
+/** Whether this viewer closed the guide. Storage that is missing or blocked reads as open: the guide just shows. */
+const readGuideClosed = () => readStored(StorageKeys.catalogGuideClosed) === "1";
+const writeGuideClosed = (closed: boolean) => writeStored(StorageKeys.catalogGuideClosed, closed ? "1" : null);
 // Storage is read once per render and never announces a change, so there is nothing to subscribe to.
 const noSubscription = () => () => {};
 

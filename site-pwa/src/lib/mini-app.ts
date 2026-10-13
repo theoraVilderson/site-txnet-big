@@ -1,3 +1,5 @@
+import { StorageKeys, readStored, writeStored } from "./storage";
+
 /**
  * The panel, running inside a messenger's Mini App (`F-310`).
  *
@@ -59,9 +61,6 @@ export type MiniAppHost = {
   ready: () => void;
 };
 
-/** Where the marker is kept for the rest of the tab's life (F-104-o). */
-export const MARKER_STORAGE_KEY = "txnet.miniApp";
-
 /**
  * Which messenger opened this page, according to the URL the bot handed over.
  *
@@ -82,19 +81,12 @@ export function miniAppPlatform(): MiniAppPlatform | null {
     MINI_APP_PARAM,
   );
   if (isPlatform(marker)) {
-    try {
-      window.sessionStorage.setItem(MARKER_STORAGE_KEY, marker);
-    } catch {
-      // Blocked storage: this URL still carries the marker.
-    }
+    // Kept for the rest of the tab's life (F-104-o); blocked storage: this URL still carries it.
+    writeStored(StorageKeys.miniAppMarker, marker);
     return marker;
   }
-  try {
-    const kept = window.sessionStorage.getItem(MARKER_STORAGE_KEY);
-    return isPlatform(kept) ? kept : null;
-  } catch {
-    return null;
-  }
+  const kept = readStored(StorageKeys.miniAppMarker);
+  return isPlatform(kept) ? kept : null;
 }
 
 function isPlatform(value: string | null): value is MiniAppPlatform {

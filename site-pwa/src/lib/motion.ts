@@ -1,5 +1,6 @@
 import type { Variants } from "framer-motion";
-import { MARKER_STORAGE_KEY, MINI_APP_PARAM, MINI_APP_SDK } from "./mini-app";
+import { MINI_APP_PARAM, MINI_APP_SDK } from "./mini-app";
+import { StorageKeys, storageReadScript } from "./storage";
 
 /**
  * The panel's motion (UX-1-b, `panel-web/contract.ux.md` M1–M3): one set of
@@ -101,7 +102,7 @@ export const MOTION_SCRIPT = `
     var os = window.matchMedia && window.matchMedia('${REDUCED_MOTION_QUERY}').matches;
     var ps = ${JSON.stringify(Object.keys(MINI_APP_SDK))};
     var ma = ps.indexOf(new URLSearchParams(window.location.search).get('${MINI_APP_PARAM}')) >= 0;
-    if (!ma) { try { ma = ps.indexOf(window.sessionStorage.getItem('${MARKER_STORAGE_KEY}')) >= 0; } catch (e) {} }
+    if (!ma) ma = ps.indexOf(${storageReadScript(StorageKeys.miniAppMarker)}) >= 0;
     var n = window.navigator || {};
     var weak = (n.hardwareConcurrency !== undefined && n.hardwareConcurrency <= 4) ||
       (n.deviceMemory !== undefined && n.deviceMemory <= 2);
