@@ -70,9 +70,9 @@ function inEffect(included: number | null, row: Pick<ProductQuotaRow, 'mode' | '
 export async function productQuotaTermsOf(
   tx: Prisma.TransactionClient,
   tenantId: string,
-  product: { id: string; tenantId: string | null },
+  product: { id: string; tenantId: string },
 ): Promise<QuotaMeterTerms | null> {
-  if (product.tenantId !== null) return null;
+  if (product.tenantId === tenantId) return null;
   const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
   if (tenant?.tenantType !== TenantType.reseller) return null;
   const sub = await tx.tenantSubscription.findUnique({ where: { tenantId }, select: { packageId: true, currentPeriodEnd: true } });
@@ -151,7 +151,7 @@ export async function productQuotaStatementsOf(tx: Prisma.TransactionClient, ten
  */
 export async function consumeProductSale(
   tx: Prisma.TransactionClient,
-  input: { tenantId: string; product: { id: string; tenantId: string | null }; sourceRef: string; now?: Date },
+  input: { tenantId: string; product: { id: string; tenantId: string }; sourceRef: string; now?: Date },
 ): Promise<void> {
   const terms = await productQuotaTermsOf(tx, input.tenantId, input.product);
   if (!terms) return;
@@ -161,7 +161,7 @@ export async function consumeProductSale(
 /** Would one more sale be refused now? Throws what `consumeProductSale` would; writes nothing (an invoice). */
 export async function admitProductSale(
   tx: Prisma.TransactionClient,
-  input: { tenantId: string; product: { id: string; tenantId: string | null }; now?: Date },
+  input: { tenantId: string; product: { id: string; tenantId: string }; now?: Date },
 ): Promise<void> {
   const terms = await productQuotaTermsOf(tx, input.tenantId, input.product);
   if (!terms) return;

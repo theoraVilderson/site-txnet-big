@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma } from '@prisma/client';
-import { METER_KEYS, tenantTransaction } from '@txnet-backend/shared-core';
+import { METER_KEYS, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { AiReaderPrisma } from '../prisma/prisma.service';
 import type { MeterCounter } from './meter-readings';
@@ -98,9 +98,11 @@ export class ProfileReader {
           select: { variantId: true, tenantId: true, amount: true, currencyCode: true },
           orderBy: { effectiveFrom: 'desc' },
         });
+        // The scope's rows: its own and the platform's (ADR-0142).
+        const scope = TenantContext.current('prediction prices').id;
         for (const r of rows) {
           const seen = prices.get(r.variantId);
-          const own = r.tenantId !== null;
+          const own = r.tenantId === scope;
           if (!seen || (own && !seen.own)) prices.set(r.variantId, { amount: r.amount, currencyCode: r.currencyCode, own });
         }
       }

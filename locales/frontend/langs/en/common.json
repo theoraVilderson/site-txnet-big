@@ -1411,7 +1411,6 @@
     },
     "category": {
       "key": "Key",
-      "shared": "Shared with every tenant",
       "sourceLang": "Source language",
       "name": "Name",
       "parent": "Parent category",
@@ -1426,7 +1425,6 @@
       "category": "Category",
       "owner": "Whose product",
       "ownerOwn": "My own",
-      "ownerPlatform": "The platform's",
       "ownerTenant": "Another tenant's",
       "tenantId": "Tenant ID",
       "nameHint": "Written in the source language. A language with no text shows this one.",
@@ -1667,7 +1665,6 @@
       "newHint": "Give it a name; the internal key is made from it and never changes.",
       "name": "Capability name",
       "create": "Add and tick",
-      "shared": "The platform's: every tenant can offer it",
       "notOffered": "Not on this product's list",
       "listHint": "What a product can unlock. A product ticks these by name. The platform's are shared with every tenant; a tenant adds its own.",
       "removeOne": "Remove",

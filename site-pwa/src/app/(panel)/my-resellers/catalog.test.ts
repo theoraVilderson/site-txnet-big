@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { PANEL_CATALOG, PANEL_MY_RESELLERS, myResellerCatalogPath, myResellerCatalogTranslationsPath } from "@/lib/routes";
 import { catalogApiPrefix } from "@/lib/catalog-api";
-import { categoryBody, emptyCategoryForm, emptyProductForm, isPlatformOwner, productBody, surfaceActor } from "../catalog/_lib/catalog-form";
+import { categoryBody, emptyCategoryForm, emptyProductForm, productBody, surfaceActor } from "../catalog/_lib/catalog-form";
 import { CATALOG_REFUSAL_KEYS, catalogRefusalKey } from "./_lib/catalog";
 import { stepHref } from "./_lib/onboarding";
 
@@ -51,10 +51,8 @@ describe("what a write may carry", () => {
     expect(productBody(form, surfaceActor(owner, null))).toMatchObject({ tenantId: "t-other" });
     expect(productBody(form, surfaceActor(owner, "t-1"))).not.toHaveProperty("tenantId");
 
-    // A shared category is the platform's, so it is not offered here either.
-    const shared = { ...emptyCategoryForm("fa"), key: "vpn", name: "VPN", shared: true };
-    expect(categoryBody(shared, isPlatformOwner(surfaceActor(owner, null)))).toMatchObject({ tenantId: null });
-    expect(categoryBody(shared, isPlatformOwner(surfaceActor(owner, "t-1")))).not.toHaveProperty("tenantId");
+    // A category names no owner: billing files it under the surface's tenant (ADR-0142).
+    expect(categoryBody({ ...emptyCategoryForm("fa"), key: "vpn", name: "VPN" })).not.toHaveProperty("tenantId");
   });
 });
 

@@ -427,7 +427,7 @@ describe('PackageProductsService — the platform products a package sells (F-01
     const order: string[] = [];
     const tx = {
       tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === PKG ? { id: PKG } : null) },
-      product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: null }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
+      product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: OWNER_TENANT }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
       packageProduct: {
         findUnique: async ({ where }: { where: { packageId_productId: { productId: string } } }) => listed.get(where.packageId_productId.productId) ?? null,
         findMany: async () => [],

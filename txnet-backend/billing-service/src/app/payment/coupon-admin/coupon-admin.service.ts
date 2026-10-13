@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma, TenantType } from '@prisma/client';
 
-import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -611,6 +611,8 @@ export class CouponAdminService {
     }
 
     if (patch.serviceScopes !== undefined) {
+      // A catalog row is the platform's by its tenant id (ADR-0142); the coupon's own platform form is still null (PT-1-f).
+      const platform = serviceScopes.length > 0 ? await platformTenantIdOf(db) : null;
       for (const s of serviceScopes) {
         const product = s.productId ?? null;
         const variant = s.variantId ?? null;
@@ -618,7 +620,7 @@ export class CouponAdminService {
         const found = variant
           ? await db.productVariant.findUnique({ where: { id: variant }, select: { tenantId: true } })
           : await db.product.findUnique({ where: { id: product as string }, select: { tenantId: true } });
-        if (!found || (found.tenantId !== null && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', variant ?? product ?? '');
+        if (!found || (found.tenantId !== platform && found.tenantId !== tenantId)) throw new CouponAdminRefused('scope_not_found', variant ?? product ?? '');
       }
     }
 
@@ -640,7 +642,7 @@ export class CouponAdminService {
       select: { tenantId: true, isActive: true, product: { select: { isActive: true, ...productCategoriesInclude } } },
     });
     const live = v !== null && v.isActive && v.product.isActive && productCategoriesLive(v.product.categories);
-    if (!live || (v.tenantId !== null && v.tenantId !== tenantId)) throw new CouponAdminRefused('variant_not_found', variantId);
+    if (!live || (v.tenantId !== (await platformTenantIdOf(db)) && v.tenantId !== tenantId)) throw new CouponAdminRefused('variant_not_found', variantId);
   }
 
   /**

@@ -5,7 +5,7 @@ import {
   TenantDomainPurpose,
   TenantDomainType,
 } from '@prisma/client';
-import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, operatingCurrencyOf, platformProductsSoldBy, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
+import { TenantOnboardingPolicy, TENANT_CAPABILITIES, TenantCapabilityName, offeredToTenant, operatingCurrencyOf, platformProductsSoldBy, platformTenantIdOf, ResellerAccess, ResellerAccessRejection, ResellerActor } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 
@@ -114,8 +114,12 @@ export class TenantOnboardingService {
    * platform's only what its package lists (F-019-v5).
    */
   private async somethingToSell(tenantId: string) {
-    const [currencyCode, listed] = await Promise.all([operatingCurrencyOf(this.all, tenantId), platformProductsSoldBy(this.all, tenantId)]);
-    return this.all.productVariant.findFirst({ where: offeredToTenant(tenantId, new Date(), currencyCode, listed), select: { id: true } });
+    const [platformId, currencyCode, listed] = await Promise.all([
+      platformTenantIdOf(this.all),
+      operatingCurrencyOf(this.all, tenantId),
+      platformProductsSoldBy(this.all, tenantId),
+    ]);
+    return this.all.productVariant.findFirst({ where: offeredToTenant(tenantId, platformId, new Date(), currencyCode, listed), select: { id: true } });
   }
 
   private async hasDoor(tenantId: string): Promise<boolean> {

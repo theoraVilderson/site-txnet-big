@@ -288,9 +288,11 @@ describe("a free-service coupon", () => {
 });
 
 describe("the variant picker", () => {
+  // The platform's rows carry its id and the flag (ADR-0142).
   const variant = (patch: Partial<CatalogVariant>): CatalogVariant => ({
     id: "v",
-    tenantId: null,
+    tenantId: "t-plat",
+    platform: true,
     productId: "p",
     sku: "SKU",
     nameKey: null,
@@ -307,7 +309,8 @@ describe("the variant picker", () => {
   });
   const product = (patch: Partial<CatalogProductDetail>): CatalogProductDetail => ({
     id: "p",
-    tenantId: null,
+    tenantId: "t-plat",
+    platform: true,
     categoryIds: ["c"],
     key: "vpn",
     nameKey: "k",
@@ -325,8 +328,8 @@ describe("the variant picker", () => {
   it("offers the platform's and the owner's live variants, whatever their visibility", () => {
     const catalog = [
       product({ key: "vpn", variants: [variant({ id: "a", sku: "M1" }), variant({ id: "b", sku: "HIDDEN", visibility: "admin_only" }), variant({ id: "c", isActive: false })] }),
-      product({ id: "p2", key: "res", tenantId: "t-res", variants: [variant({ id: "d", tenantId: "t-res", sku: "R1", durationDays: null })] }),
-      product({ id: "p3", key: "other", tenantId: "t-x", variants: [variant({ id: "e", tenantId: "t-x" })] }),
+      product({ id: "p2", key: "res", tenantId: "t-res", platform: false, variants: [variant({ id: "d", tenantId: "t-res", platform: false, sku: "R1", durationDays: null })] }),
+      product({ id: "p3", key: "other", tenantId: "t-x", platform: false, variants: [variant({ id: "e", tenantId: "t-x", platform: false })] }),
       product({ id: "p4", key: "off", isActive: false, variants: [variant({ id: "f" })] }),
     ];
     expect(variantChoices(catalog, "t-res").map((c) => c.value)).toEqual(["a", "b", "d"]);

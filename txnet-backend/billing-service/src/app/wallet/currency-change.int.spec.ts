@@ -180,10 +180,10 @@ async function seed() {
             '${TENANT}', gen_random_uuid(), 1073741824, 0.15000000, 'USD')`);
 
   // The platform: a price of its own, a package, and the reseller's billing wallet.
-  await sql(`INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind") VALUES ('${PLATFORM_PRODUCT}', NULL, 'vpn_p', 'k', 'network_access')`);
+  await sql(`INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind") VALUES ('${PLATFORM_PRODUCT}', '${PLATFORM}', 'vpn_p', 'k', 'network_access')`);
   await sql(`INSERT INTO catalog.product_variant (id, "tenantId", "productId", sku, "billingMode", visibility, "durationDays")
-    VALUES ('${PLATFORM_VARIANT}', NULL, '${PLATFORM_PRODUCT}', 'P-30', 'prepaid', 'public', 30)`);
-  await sql(`INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "currencyCode", "effectiveFrom") VALUES ('${PLATFORM_PRICE}', NULL, '${PLATFORM_VARIANT}', 10.00, 'USD', '2026-01-01')`);
+    VALUES ('${PLATFORM_VARIANT}', '${PLATFORM}', '${PLATFORM_PRODUCT}', 'P-30', 'prepaid', 'public', 30)`);
+  await sql(`INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "currencyCode", "effectiveFrom") VALUES ('${PLATFORM_PRICE}', '${PLATFORM}', '${PLATFORM_VARIANT}', 10.00, 'USD', '2026-01-01')`);
   await sql(`INSERT INTO tenant.tenant_feature_package (id, name, "monthlyPrice", "includedFeatureKeys", "currencyCode") VALUES (gen_random_uuid(), 'Starter', 10.00, '[]', 'USD')`);
   await sql(`INSERT INTO tenant.tenant_billing_wallet (id, "tenantId", "cachedBalance", version, "currencyCode") VALUES (gen_random_uuid(), '${TENANT}', 50.00, 0, 'USD')`);
 }

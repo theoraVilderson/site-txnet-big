@@ -91,16 +91,16 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'catalog.category.vpn.name')
+    INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', '${PLATFORM}', 'vpn', 'catalog.category.vpn.name')
   `);
-  for (const [id, tenantId, key] of [[PLATFORM_PRODUCT, null, 'vpn_basic'], [B_PRODUCT, TENANT_B, 'vpn_beta']]) {
+  for (const [id, tenantId, key] of [[PLATFORM_PRODUCT, PLATFORM, 'vpn_basic'], [B_PRODUCT, TENANT_B, 'vpn_beta']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind")
       VALUES ('${id}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${key}', 'k', 'network_access')
     `);
     await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${id}'`);
   }
-  for (const [id, tenantId, productId] of [[PLATFORM_VARIANT, null, PLATFORM_PRODUCT], [B_VARIANT, TENANT_B, B_PRODUCT]]) {
+  for (const [id, tenantId, productId] of [[PLATFORM_VARIANT, PLATFORM, PLATFORM_PRODUCT], [B_VARIANT, TENANT_B, B_PRODUCT]]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO catalog.product_variant (id, "tenantId", "productId", sku, "billingMode", visibility)
       VALUES ('${id}', ${tenantId ? `'${tenantId}'` : 'NULL'}, '${productId}', 'VPN-30', 'prepaid', 'public')

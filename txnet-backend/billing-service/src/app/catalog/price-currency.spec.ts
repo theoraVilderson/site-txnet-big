@@ -62,8 +62,9 @@ describe('a price or a rate counts only in the currency asked for', () => {
   it('asks the database the same question', () => {
     expect(pricesInEffect(NOW, 'IRR')).toEqual({ isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR' });
     expect(rateCardsInEffect(NOW, 'IRR', METER_KEYS.vpnTraffic)).toEqual({ isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR', meterKey: 'vpn.traffic' });
-    expect(offeredToTenant(TENANT, NOW, 'IRR').prices).toEqual({
-      some: { isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR', OR: [{ tenantId: TENANT }, { tenantId: null }] },
+    const PLATFORM = '99999999-9999-4999-8999-999999999999';
+    expect(offeredToTenant(TENANT, PLATFORM, NOW, 'IRR').prices).toEqual({
+      some: { isActive: true, effectiveFrom: { lte: NOW }, currencyCode: 'IRR', OR: [{ tenantId: TENANT }, { tenantId: PLATFORM }] },
     });
   });
 });

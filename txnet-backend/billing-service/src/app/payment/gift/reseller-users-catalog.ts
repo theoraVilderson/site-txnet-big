@@ -11,11 +11,11 @@ export type UsersCatalogProduct = {
 /**
  * A tenant's own products with their variants, archived ones left out and
  * switched-off ones kept with `isActive` — a service sold before is still
- * filtered by. `tenantId` null is the platform's. **The tenant is in the
- * query** (C-15): catalog RLS is shared-read, so the scope alone would add the
- * platform's products to every reseller's list.
+ * filtered by. The platform's are its tenant id's, like anyone's (ADR-0142).
+ * **The tenant is in the query** (C-15): catalog RLS is shared-read, so the
+ * scope alone would add the platform's products to every reseller's list.
  */
-export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: string | null): Promise<UsersCatalogProduct[]> {
+export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: string): Promise<UsersCatalogProduct[]> {
   return tx.product.findMany({
     where: { tenantId, archivedAt: null },
     select: {

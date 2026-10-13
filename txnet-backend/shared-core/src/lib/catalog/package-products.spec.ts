@@ -19,6 +19,7 @@ import { offeredToTenant } from './offers';
 import { platformProductsSoldBy, sellsProduct } from './package-products';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
+const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const PACKAGE = '33333333-3333-4333-8333-333333333333';
 const LISTED = '44444444-4444-4444-8444-444444444444';
 const UNLISTED = '55555555-5555-4555-8555-555555555555';
@@ -68,14 +69,14 @@ describe('sellsProduct (F-019-v5)', () => {
   const listed = new Set([LISTED]);
 
   it('sells a platform product only when the package lists it', () => {
-    expect(sellsProduct(listed, { id: LISTED, tenantId: null })).toBe(true);
-    expect(sellsProduct(listed, { id: UNLISTED, tenantId: null })).toBe(false);
-    expect(sellsProduct(new Set(), { id: LISTED, tenantId: null })).toBe(false);
+    expect(sellsProduct(listed, { id: LISTED, tenantId: PLATFORM }, RESELLER)).toBe(true);
+    expect(sellsProduct(listed, { id: UNLISTED, tenantId: PLATFORM }, RESELLER)).toBe(false);
+    expect(sellsProduct(new Set(), { id: LISTED, tenantId: PLATFORM }, RESELLER)).toBe(false);
   });
 
   it("always sells the reseller's own product, and everything when nothing bounds the tenant", () => {
-    expect(sellsProduct(new Set(), { id: UNLISTED, tenantId: RESELLER })).toBe(true);
-    expect(sellsProduct(null, { id: UNLISTED, tenantId: null })).toBe(true);
+    expect(sellsProduct(new Set(), { id: UNLISTED, tenantId: RESELLER }, RESELLER)).toBe(true);
+    expect(sellsProduct(null, { id: UNLISTED, tenantId: PLATFORM }, RESELLER)).toBe(true);
   });
 });
 
@@ -83,11 +84,11 @@ describe('offeredToTenant (F-019-v5)', () => {
   const at = new Date('2026-10-01T12:00:00Z');
 
   it("narrows the platform's rows to the listed products, and leaves the tenant's own alone", () => {
-    const where = offeredToTenant(RESELLER, at, 'USD', new Set([LISTED]));
-    expect(where.OR).toEqual([{ tenantId: RESELLER }, { tenantId: null, productId: { in: [LISTED] } }]);
+    const where = offeredToTenant(RESELLER, PLATFORM, at, 'USD', new Set([LISTED]));
+    expect(where.OR).toEqual([{ tenantId: RESELLER }, { tenantId: PLATFORM, productId: { in: [LISTED] } }]);
   });
 
   it('is the shared-read rule unchanged when nothing bounds the tenant', () => {
-    expect(offeredToTenant(RESELLER, at, 'USD').OR).toEqual([{ tenantId: RESELLER }, { tenantId: null }]);
+    expect(offeredToTenant(RESELLER, PLATFORM, at, 'USD').OR).toEqual([{ tenantId: RESELLER }, { tenantId: PLATFORM }]);
   });
 });

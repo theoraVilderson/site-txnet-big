@@ -197,7 +197,7 @@ export function CatalogView() {
     return c ? nameOf(c) : k;
   };
   const listed = showArchived ? archived : (products ?? []);
-  const shown = listed.filter((p) => (!categoryId || p.categoryIds.includes(categoryId)) && (!platformOnly || p.tenantId === null));
+  const shown = listed.filter((p) => (!categoryId || p.categoryIds.includes(categoryId)) && (!platformOnly || p.platform));
   const allSelected = !showArchived && shown.length > 0 && shown.every((p) => selected.has(p.id));
   const toggle = (id: string) =>
     setSelected((before) => {
@@ -448,7 +448,7 @@ export function CatalogView() {
                     <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                     <p className="text-[11px] text-text-secondary">
                       {categoryNames(p.categoryIds)} · {t("common", K.removal.archivedBadge)}
-                      {p.tenantId === null && ` · ${t("common", K.platform)}`}
+                      {p.platform && ` · ${t("common", K.platform)}`}
                     </p>
                   </div>
                   <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateProduct(p.id, { archived: false }))} icon={<RotateCcw size={14} aria-hidden />}>
@@ -501,7 +501,7 @@ export function CatalogView() {
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
                   <p className="text-[11px] text-text-secondary">
                     {categoryNames(p.categoryIds)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
-                    {p.tenantId === null && ` · ${t("common", K.platform)}`}
+                    {p.platform && ` · ${t("common", K.platform)}`}
                     {!p.isActive && ` · ${t("common", K.inactive)}`}
                   </p>
                   {p.featureKeys.length > 0 && (
@@ -557,7 +557,7 @@ export function CatalogView() {
                     <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
                     <p className="text-[11px] text-text-secondary">
                       {t("common", K.categories.archivedProducts, { count: counts.get(c.id) ?? 0 })} · {t("common", K.removal.archivedBadge)}
-                      {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                      {c.platform && ` · ${t("common", K.platform)}`}
                     </p>
                   </div>
                   <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateCategory(c.id, RESTORE_CATEGORY))} icon={<RotateCcw size={14} aria-hidden />}>
@@ -623,7 +623,7 @@ export function CatalogView() {
                   <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
                   <p className="text-[11px] text-text-secondary">
                     {t("common", K.categories.products, { count: counts.get(c.id) ?? 0 })}
-                    {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                    {c.platform && ` · ${t("common", K.platform)}`}
                     {!c.isActive && ` · ${t("common", K.inactive)}`}
                   </p>
                 </button>
@@ -651,7 +651,6 @@ export function CatalogView() {
 
       {creating === "category" && (
         <CategorySheet
-          owner={owner}
           takenKeys={categories.map((c) => c.key)}
           categories={categories}
           label={nameOf}
@@ -660,7 +659,7 @@ export function CatalogView() {
         />
       )}
       {creating === "capability" && (
-        <CapabilitySheet owner={owner} takenKeys={capabilities.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
+        <CapabilitySheet takenKeys={capabilities.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
       )}
       {creating === "product" && (
         <ProductWizard

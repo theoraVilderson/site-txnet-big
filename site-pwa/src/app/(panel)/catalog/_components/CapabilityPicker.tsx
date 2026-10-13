@@ -18,27 +18,25 @@ import {
 } from "../_lib/catalog-form";
 import { Field, KeyField, LanguageSelect, Sheet, useDirOf, useMessage } from "./catalog-ui";
 import { TranslateAllBox } from "./CategoryPickers";
-import { Alert, Button, Checkbox, Input } from "../../_components/kit";
+import { Alert, Button, Input } from "../../_components/kit";
 
 const C = K.capabilities;
 
 /**
  * A capability's fields: its name in a source language and the key made from
- * it (F-114-f-b). `owner` adds "the platform's" — the capabilities tab only; a
- * product's picker files a new one where that product can carry it.
+ * it (F-114-f-b). The tab files a new one as the caller's own — the platform's,
+ * for its staff (ADR-0142); a product's picker where that product can carry it.
  */
 function CapabilityFields({
   form,
   onChange,
   errors,
   takenKeys,
-  owner,
 }: {
   form: CapabilityForm;
   onChange: (f: CapabilityForm) => void;
   errors: Errors<CapabilityForm>;
   takenKeys: readonly string[];
-  owner: boolean;
 }) {
   const { t } = useLocale();
   const dirOf = useDirOf();
@@ -67,16 +65,13 @@ function CapabilityFields({
           onChange({ ...form, key: v });
         }}
       />
-      {owner && (
-        <Checkbox checked={form.shared} onChange={(on) => onChange({ ...form, shared: on })} label={t("common", C.shared)} />
-      )}
       <TranslateAllBox checked={form.translateAll} onChange={(v) => onChange({ ...form, translateAll: v })} />
     </div>
   );
 }
 
 /** Saves a new capability; `tenant` is whose it becomes (`capabilityBody`). The key is refused `key_taken` on the key field. */
-function useCreateCapability(tenant: (f: CapabilityForm) => string | null | undefined) {
+function useCreateCapability(tenant: () => string | undefined) {
   const message = useMessage();
   const { api } = useCatalogSurface();
   const [errors, setErrors] = useState<Errors<CapabilityForm>>({});
@@ -89,7 +84,7 @@ function useCreateCapability(tenant: (f: CapabilityForm) => string | null | unde
     setBusy(true);
     setError(null);
     try {
-      return await api.createCapability(capabilityBody(form, tenant(form)));
+      return await api.createCapability(capabilityBody(form, tenant()));
     } catch (e) {
       if ((e as { reason?: unknown } | null)?.reason === "key_taken") setErrors({ key: K.refusals.key_taken });
       setError(message(e));
@@ -101,27 +96,25 @@ function useCreateCapability(tenant: (f: CapabilityForm) => string | null | unde
   return { errors, busy, error, create };
 }
 
-/** "New capability" on the capabilities tab: the caller's own, or — the platform owner ticking it — the platform's. */
+/** "New capability" on the capabilities tab: the caller's own — the platform's, for its staff (ADR-0142). */
 export function CapabilitySheet({
-  owner,
   takenKeys,
   onClose,
   onSaved,
 }: {
-  owner: boolean;
   takenKeys: readonly string[];
   onClose: () => void;
   onSaved: () => Promise<void>;
 }) {
   const { t } = useLocale();
   const [form, setForm] = useState<CapabilityForm>(() => emptyCapabilityForm(DEFAULT_LOCALE));
-  const { errors, busy, error, create } = useCreateCapability((f) => (owner && f.shared ? null : undefined));
+  const { errors, busy, error, create } = useCreateCapability(() => undefined);
   const save = async () => {
     if (await create(form)) await onSaved();
   };
   return (
     <Sheet title={t("common", C.new)} onClose={onClose}>
-      <CapabilityFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} />
+      <CapabilityFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} />
       {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
         <Button variant="quiet" size="sm" onClick={onClose}>
@@ -161,7 +154,7 @@ export function CapabilityPicker({
   label: (c: CatalogCapability) => string;
   /** Every key the caller sees, so a derived one is numbered past them. */
   takenKeys: readonly string[];
-  newTenant: string | null | undefined;
+  newTenant: string | undefined;
   onCreated: () => Promise<void>;
   error?: string;
 }) {
@@ -255,7 +248,7 @@ export function CapabilityPicker({
       {stray.length > 0 && <p className="text-[11px] text-error">{t("common", C.notOffered)}</p>}
       {adding && (
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-primary p-3">
-          <CapabilityFields form={adding} onChange={setAdding} errors={creating.errors} takenKeys={takenKeys} owner={false} />
+          <CapabilityFields form={adding} onChange={setAdding} errors={creating.errors} takenKeys={takenKeys} />
           {creating.error && <Alert tone="error">{creating.error}</Alert>}
           <div className="flex justify-end gap-2">
             <Button variant="quiet" size="sm" onClick={() => setAdding(null)}>

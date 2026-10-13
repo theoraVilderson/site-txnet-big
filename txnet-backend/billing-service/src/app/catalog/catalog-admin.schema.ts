@@ -89,7 +89,7 @@ const categoryIds = z
   .refine((ids) => new Set(ids).size === ids.length, 'categoryIds must be distinct');
 
 export const createCategorySchema = z
-  .object({ tenantId: uuid('tenantId').nullable().optional(), parentId, key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX), translateAll })
+  .object({ tenantId: uuid('tenantId').optional(), parentId, key: z.string().regex(KEY), sourceLang: lang.optional(), name: texts(NAME_MAX), translateAll })
   .strict();
 
 export const updateCategorySchema = z
@@ -117,7 +117,7 @@ export const listProductsSchema = z.object({
 
 export const createProductSchema = z
   .object({
-    tenantId: uuid('tenantId').nullable().optional(),
+    tenantId: uuid('tenantId').optional(),
     categoryIds,
     key: z.string().regex(KEY),
     sourceLang: lang.optional(),
@@ -152,7 +152,7 @@ export const updateProductSchema = z
  */
 export const createCapabilitySchema = z
   .object({
-    tenantId: uuid('tenantId').nullable().optional(),
+    tenantId: uuid('tenantId').optional(),
     key: featureKey,
     sourceLang: lang.optional(),
     name: texts(NAME_MAX),
@@ -249,8 +249,8 @@ const seasonWhen = {
   durationMinutes: z.number().int().min(1).max(44640),
 };
 export const createSeasonSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('dated'), name: z.string().trim().min(1).max(80), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31), ...seasonWhen, tenantId: z.string().uuid().nullable().optional() }).strict(),
-  z.object({ kind: z.literal('weekly'), name: z.string().trim().min(1).max(80), weekday: z.number().int().min(0).max(6), ...seasonWhen, tenantId: z.string().uuid().nullable().optional() }).strict(),
+  z.object({ kind: z.literal('dated'), name: z.string().trim().min(1).max(80), month: z.number().int().min(1).max(12), day: z.number().int().min(1).max(31), ...seasonWhen, tenantId: z.string().uuid().optional() }).strict(),
+  z.object({ kind: z.literal('weekly'), name: z.string().trim().min(1).max(80), weekday: z.number().int().min(0).max(6), ...seasonWhen, tenantId: z.string().uuid().optional() }).strict(),
 ]);
 export const updateSeasonSchema = z
   .object({

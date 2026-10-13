@@ -78,11 +78,11 @@ export const isSellableBySku = (v: OfferFacts) => live(v) && v.visibility !== Va
 
 /**
  * A SKU is unique inside a tenant, so a tenant and the platform may both sell
- * `VPN-30`. The caller's own row wins, then the platform's; another tenant's
- * row is never an answer, even if one were passed in.
+ * `VPN-30`. The caller's own row wins, then the platform's (`platformId`,
+ * ADR-0142); another tenant's row is never an answer, even if one were passed in.
  */
-export function pickBySku<T extends { tenantId: string | null }>(rows: readonly T[], tenantId: string): T | null {
-  return rows.find((r) => r.tenantId === tenantId) ?? rows.find((r) => r.tenantId === null) ?? null;
+export function pickBySku<T extends { tenantId: string }>(rows: readonly T[], tenantId: string, platformId: string): T | null {
+  return rows.find((r) => r.tenantId === tenantId) ?? rows.find((r) => r.tenantId === platformId) ?? null;
 }
 
 /** {@link isListed}, asked of the database. */
@@ -96,11 +96,14 @@ export const listedVariantWhere = {
 export const pricesInEffect = (at: Date, currencyCode: string) =>
   ({ isActive: true, effectiveFrom: { lte: at }, currencyCode }) satisfies Prisma.PriceWhereInput;
 
-/** The rows a tenant reads: its own and the platform's (`tenantId IS NULL`). */
-const ownOrPlatform = (tenantId: string) => [{ tenantId }, { tenantId: null }];
+/** The rows a tenant reads: its own and the platform's (ADR-0142). */
+const ownOrPlatform = (tenantId: string, platformId: string) => [{ tenantId }, { tenantId: platformId }];
 
 /** Its own rows, and of the platform's only the listed products' (F-019-v5). */
-const ownOrListed = (tenantId: string, listed: ReadonlySet<string>): Prisma.ProductVariantWhereInput[] => [{ tenantId }, { tenantId: null, productId: { in: [...listed] } }];
+const ownOrListed = (tenantId: string, platformId: string, listed: ReadonlySet<string>): Prisma.ProductVariantWhereInput[] => [
+  { tenantId },
+  { tenantId: platformId, productId: { in: [...listed] } },
+];
 
 /**
  * A variant `listOffers` would return to `tenantId` at `at`: listed, with a
@@ -112,9 +115,9 @@ const ownOrListed = (tenantId: string, listed: ReadonlySet<string>): Prisma.Prod
  * F-019-v5): a platform variant counts only under one of them; `null` (the
  * default) narrows nothing.
  */
-export const offeredToTenant = (tenantId: string, at: Date, currencyCode: string, listed: ReadonlySet<string> | null = null) =>
+export const offeredToTenant = (tenantId: string, platformId: string, at: Date, currencyCode: string, listed: ReadonlySet<string> | null = null) =>
   ({
     ...listedVariantWhere,
-    OR: listed === null ? ownOrPlatform(tenantId) : ownOrListed(tenantId, listed),
-    prices: { some: { ...pricesInEffect(at, currencyCode), OR: ownOrPlatform(tenantId) } },
+    OR: listed === null ? ownOrPlatform(tenantId, platformId) : ownOrListed(tenantId, platformId, listed),
+    prices: { some: { ...pricesInEffect(at, currencyCode), OR: ownOrPlatform(tenantId, platformId) } },
   }) satisfies Prisma.ProductVariantWhereInput;

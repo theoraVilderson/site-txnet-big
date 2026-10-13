@@ -21,6 +21,7 @@ import {
   productCategoriesLive,
   operatingCurrencyOf,
   platformProductsSoldBy,
+  platformTenantIdOf,
   sellsProduct,
   tenantSellsProduct,
 } from '@txnet-backend/shared-core';
@@ -50,8 +51,8 @@ export { isListed, isSellableBySku, pickBySku, priceAt, rateCardAt, vpnTrafficRa
 export type CatalogOffer = {
   variantId: string;
   sku: string;
-  /** `null` = the platform's. */
-  tenantId: string | null;
+  /** The variant's tenant: the caller's own, or the platform's (ADR-0142). */
+  tenantId: string;
   /** The variant's own i18n key, else its product's (§4.3). */
   nameKey: string;
   productId: string;
@@ -210,7 +211,7 @@ export async function listOffersIn(tx: Prisma.TransactionClient, at: Date): Prom
     include: withPrices(at, currencyCode),
     orderBy: [{ sku: 'asc' }],
   });
-  return rows.flatMap((v) => (sellsProduct(listed, v.product) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
+  return rows.flatMap((v) => (sellsProduct(listed, v.product, TenantContext.current('catalog offer').id) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
 }
 
 @Injectable()
@@ -226,9 +227,9 @@ export class CatalogReadService {
   offerBySku(sku: string, at: Date = new Date()): Promise<CatalogOffer | null> {
     const tenant = TenantContext.current('catalog offer by sku');
     return tenantTransaction(this.prisma, async (tx) => {
-      const currencyCode = await operatingCurrencyOf(tx, tenant.id);
+      const [currencyCode, platformId] = await Promise.all([operatingCurrencyOf(tx, tenant.id), platformTenantIdOf(tx)]);
       const rows = await tx.productVariant.findMany({ where: { sku }, include: withPrices(at, currencyCode) });
-      const row = pickBySku(rows, tenant.id);
+      const row = pickBySku(rows, tenant.id, platformId);
       if (!row || !(await tenantSellsProduct(tx, tenant.id, row.product))) return null;
       return toOffer(row, at, currencyCode, isSellableBySku);
     });

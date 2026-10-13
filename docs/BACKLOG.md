@@ -1436,6 +1436,18 @@ ingested rows reuse the catalog id verbatim as their row id.
 | BAN-1-f | Panel: the agent's conversation sidebar restricts, bans and lifts, with a reason, by the caller's keys | panel-web | done | BAN-1-d | — | site-pwa/src/app/(panel)/support/_components/UserStatusControl.tsx, AgentThreadView.tsx, support/user-status.test.tsx | ADR-0133 decision 6. |
 | BAN-1-g | Bot: a restricted person sees the reason and the support entry only; a banned one is told so with the reason | bot-app | done | BAN-1-b | — | txnet-backend/bot-service/src/app/conversation/restricted.ts, router.ts, flows/views.ts, conversation/restricted-menu.spec.ts | ADR-0133 decision 1. |
 | BAN-1-h | Panel: the users page restricts and lifts with a reason (the reseller block, relabelled), and bans / lifts a ban for a holder of `user.ban` on its own tenant; the list shows each person's reason; bot copy says restricted | panel-web | done | BAN-1-d BAN-1-e | — | site-pwa/src/app/(panel)/my-resellers/[id]/users/_components/ResellerUsersView.tsx, my-resellers/_lib/users.ts, users.test.ts, txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts | User, 2026-10-08: the users page said only "blocked". ADR-0133 decision 1. |
+| PT-1 | The platform is one tenant: every row it owns carries the `platform_owner` id, never null (umbrella) | catalog | todo | PT-1-a PT-1-b PT-1-c PT-1-d PT-1-e PT-1-f PT-1-g PT-1-h PT-1-i PT-1-j PT-1-k | — |  | Umbrella. Opened 2026-10-13 (user, ADR-0142). |
+| PT-1-a | Catalog: the platform's rows carry its tenant id — `public.platform_tenant_id()`, backfill, `NOT NULL`, shared-read RLS on it, plain `(tenantId, key)` uniques; one owner in the wizard; the users page's issue list shows the platform's products | catalog | done | — | — | txnet-backend/prisma/domains/migrations/20261013000200_the_platform_is_a_tenant_in_the_catalog/migration.sql, txnet-backend/billing-service/src/app/catalog/catalog-schema.int.spec.ts, …/payment/gift/reseller-users-catalog.spec.ts, txnet-backend/shared-core/src/lib/tenant/platform-tenant.ts | ADR-0142 (1, 2, 3, 5). Built 2026-10-13: 10 catalog tables NOT NULL on the platform id; views carry `platform`; one owner in the wizard. catalog contract.md v10, invariant 4. |
+| PT-1-b | Product audience: every user (default) or the user groups chosen on the product; shop, bot, direct link and issue honour it; a Grant sold is kept when its owner leaves the group | catalog | todo | PT-1-a | — |  | ADR-0142 (4), user 2026-10-13. |
+| PT-1-c | Network: panels, panel groups and inbounds the platform owns carry its id | network | todo | PT-1-a | — |  | ADR-0142 (5). |
+| PT-1-d | Support: SLA policies, categories and canned replies the platform owns carry its id | support | todo | PT-1-a | — |  | ADR-0142 (5). |
+| PT-1-e | Guide: the platform's guides, translations, drafts and placements carry its id | guide | todo | PT-1-a | — |  | ADR-0142 (5); amends ADR-0117. |
+| PT-1-f | Billing: platform coupons and coupon batches carry its id | billing | todo | PT-1-a | — |  | ADR-0142 (5); amends ADR-0048, ADR-0099. |
+| PT-1-g | Billing: wallet and payment transactions with no tenant — find what null means there, then move or keep | billing | todo | PT-1-a | — |  | ADR-0142 (5, 6): read the rows first; ask if null is not the platform. |
+| PT-1-h | Currency: the platform's exchange rates carry its id | currency | todo | PT-1-a | — |  | ADR-0142 (5). |
+| PT-1-i | Notification: the platform's campaigns carry its id | notification | todo | PT-1-a | — |  | ADR-0142 (5). |
+| PT-1-j | Audit: entries with no tenant — find what null means there, then move or keep | audit | todo | PT-1-a | — |  | ADR-0142 (6): ask before changing. |
+| PT-1-k | Identity: role templates with no tenant (ADR-0062) — platform's or no one's; ask, then move or keep | identity | todo | PT-1-a | — |  | ADR-0142 (6): ask before changing. |
 
 ## Order of work — the F-027 network metering series
 
@@ -1872,6 +1884,10 @@ GR-1-f after a, c, d, e; GR-1-g last, after asking.
 
 User, 2026-10-08 (ADR-0133). BAN-1-a → BAN-1-b → BAN-1-c → BAN-1-e; BAN-1-a → BAN-1-d → BAN-1-f;
 BAN-1-g after BAN-1-b.
+
+## Order of work — the PT-1 platform-tenant series
+
+User, 2026-10-13 (ADR-0142). PT-1-a first; PT-1-b after it; PT-1-c … PT-1-k in any order after PT-1-a, one domain per row.
 
 ## Rules
 

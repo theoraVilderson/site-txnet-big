@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode, TenantType } from '@prisma/client';
-import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -60,7 +60,7 @@ export class PackageProductsService {
     await this.all.$transaction(async (tx) => {
       await this.packageExists(tx, packageId);
       const product = await tx.product.findUnique({ where: { id: productId }, select: { tenantId: true } });
-      if (!product || product.tenantId !== null) throw new ResellerLimitsRefused('product_not_found', productId);
+      if (!product || product.tenantId !== (await platformTenantIdOf(tx))) throw new ResellerLimitsRefused('product_not_found', productId);
       const terms = await this.termsOf(tx, input);
       const where = { packageId_productId: { packageId, productId } };
       const before = await tx.packageProduct.findUnique({ where, select: QUOTA_SELECT });

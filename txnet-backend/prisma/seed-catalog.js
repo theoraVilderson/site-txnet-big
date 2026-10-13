@@ -1,7 +1,8 @@
 // A starter catalog for the platform (F-026-a, ADR-0049): the categories,
 // products, variants and first prices a fresh install can sell and a reseller
-// can see before writing its own. Every row is the platform's (`tenantId`
-// null), so every tenant reads it (catalog invariant 4).
+// can see before writing its own. Every row is the platform's — it carries the
+// platform_owner tenant's id (ADR-0142) — so every tenant reads it (catalog
+// invariant 4). The platform tenant must exist first (`seed.js`).
 //
 // Separate from `seed.js` on purpose: that file bootstraps what the app cannot
 // run without; this is sample merchandise an operator may not want, and it is
@@ -203,16 +204,18 @@ const SOURCE_LANG = ['fa', 'en'].includes(process.env.DEFAULT_LANGUAGE) ? proces
 const nameKeyOf = (kind, key) => `catalog.${kind}.${key}.name`;
 /** fa/en name per full key, published at the end. */
 const names = new Map();
+/** The platform_owner tenant's id: every row here is its (set in `main`). */
+let PLATFORM;
 
 /** The platform's row for a capability key, or null when a tenant named its own and it was left alone. */
 async function ensureCapability({ key, name }) {
   const nameKey = nameKeyOf('capability', key);
-  const found = await prisma.productCapability.findFirst({ where: { tenantId: null, key } });
+  const found = await prisma.productCapability.findFirst({ where: { tenantId: PLATFORM, key } });
   if (found) {
     names.set(nameKey, name);
     return found;
   }
-  const held = await prisma.productCapability.findMany({ where: { key, tenantId: { not: null } } });
+  const held = await prisma.productCapability.findMany({ where: { key, tenantId: { not: PLATFORM } } });
   if (held.some((c) => c.sourceLang !== null)) {
     console.warn(`[seed-catalog] capability ${key} is a tenant's own, named by it: not seeded, and no seeded product carries it.`);
     return null;
@@ -221,8 +224,8 @@ async function ensureCapability({ key, name }) {
   counts.capabilities++;
   // The migration's unnamed tenant rows give way to the platform's, in one transaction: the tenant sees it either way.
   const [, created] = await prisma.$transaction([
-    prisma.productCapability.deleteMany({ where: { key, tenantId: { not: null }, sourceLang: null } }),
-    prisma.productCapability.create({ data: { tenantId: null, key, nameKey, sourceLang: SOURCE_LANG } }),
+    prisma.productCapability.deleteMany({ where: { key, tenantId: { not: PLATFORM }, sourceLang: null } }),
+    prisma.productCapability.create({ data: { tenantId: PLATFORM, key, nameKey, sourceLang: SOURCE_LANG } }),
   ]);
   return created;
 }
@@ -230,20 +233,20 @@ async function ensureCapability({ key, name }) {
 async function ensureCategory({ key, name }) {
   const nameKey = nameKeyOf('category', key);
   names.set(nameKey, name);
-  const found = await prisma.productCategory.findFirst({ where: { tenantId: null, key } });
+  const found = await prisma.productCategory.findFirst({ where: { tenantId: PLATFORM, key } });
   if (found) return found;
   counts.categories++;
-  return prisma.productCategory.create({ data: { tenantId: null, key, nameKey, sourceLang: SOURCE_LANG } });
+  return prisma.productCategory.create({ data: { tenantId: PLATFORM, key, nameKey, sourceLang: SOURCE_LANG } });
 }
 
 async function ensureProduct(categoryId, p, capabilities) {
   names.set(nameKeyOf('product', p.key), p.name);
-  const found = await prisma.product.findFirst({ where: { tenantId: null, key: p.key } });
+  const found = await prisma.product.findFirst({ where: { tenantId: PLATFORM, key: p.key } });
   if (found) return found;
   counts.products++;
   return prisma.product.create({
     data: {
-      tenantId: null,
+      tenantId: PLATFORM,
       key: p.key,
       nameKey: nameKeyOf('product', p.key),
       // No description text is seeded, so no key that would show as one.
@@ -253,30 +256,33 @@ async function ensureProduct(categoryId, p, capabilities) {
       featureKeys: p.featureKeys.filter((k) => capabilities.has(k)),
       defaultQuotas: p.defaultQuotas,
       // Filed in its category, first (F-026-q: a product's categories are links).
-      categories: { create: { categoryId, tenantId: null, position: 0 } },
+      categories: { create: { categoryId, tenantId: PLATFORM, position: 0 } },
     },
   });
 }
 
 async function ensureVariant(productId, v, at) {
-  const found = await prisma.productVariant.findFirst({ where: { tenantId: null, sku: v.sku } });
+  const found = await prisma.productVariant.findFirst({ where: { tenantId: PLATFORM, sku: v.sku } });
   if (found) return;
   counts.variants++;
   const { price, ...fields } = v;
   // Written with its first price, as the admin API does (F-026-d).
   await prisma.productVariant.create({
     data: {
-      tenantId: null,
+      tenantId: PLATFORM,
       productId,
       ...fields,
       // Every row records its currency (F-116-d, ADR-0098). These amounts are
       // dollars: on a platform in another currency they are simply not offered.
-      prices: { create: { tenantId: null, amount: price, currencyCode: SEED_CURRENCY, effectiveFrom: at } },
+      prices: { create: { tenantId: PLATFORM, amount: price, currencyCode: SEED_CURRENCY, effectiveFrom: at } },
     },
   });
 }
 
 async function main() {
+  const platform = await prisma.tenant.findFirst({ where: { tenantType: 'platform_owner' }, select: { id: true } });
+  if (!platform) throw new Error('[seed-catalog] no platform_owner tenant: run seed.js first');
+  PLATFORM = platform.id;
   const at = new Date();
   const capabilities = new Set();
   for (const c of CAPABILITIES) if (await ensureCapability(c)) capabilities.add(c.key);

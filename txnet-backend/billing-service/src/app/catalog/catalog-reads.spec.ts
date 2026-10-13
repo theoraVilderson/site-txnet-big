@@ -96,21 +96,22 @@ describe('what is offered', () => {
 
 describe('pickBySku', () => {
   const TENANT = '11111111-1111-4111-8111-111111111111';
-  const platform = { id: 'platform', tenantId: null };
+  const PLATFORM = '33333333-3333-4333-8333-333333333333';
+  const platform = { id: 'platform', tenantId: PLATFORM };
   const own = { id: 'own', tenantId: TENANT };
 
   it("takes the caller's own row over the platform's", () => {
-    expect(pickBySku([platform, own], TENANT)?.id).toBe('own');
-    expect(pickBySku([own, platform], TENANT)?.id).toBe('own');
+    expect(pickBySku([platform, own], TENANT, PLATFORM)?.id).toBe('own');
+    expect(pickBySku([own, platform], TENANT, PLATFORM)?.id).toBe('own');
   });
 
   it("falls back to the platform's, and to nothing", () => {
-    expect(pickBySku([platform], TENANT)?.id).toBe('platform');
-    expect(pickBySku([], TENANT)).toBeNull();
+    expect(pickBySku([platform], TENANT, PLATFORM)?.id).toBe('platform');
+    expect(pickBySku([], TENANT, PLATFORM)).toBeNull();
   });
 
   it("never answers another tenant's row, even if a caller passed one in", () => {
-    expect(pickBySku([{ id: 'other', tenantId: '22222222-2222-4222-8222-222222222222' }], TENANT)).toBeNull();
+    expect(pickBySku([{ id: 'other', tenantId: '22222222-2222-4222-8222-222222222222' }], TENANT, PLATFORM)).toBeNull();
   });
 });
 

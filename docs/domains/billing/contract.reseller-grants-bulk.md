@@ -107,7 +107,7 @@ an admin issues.
 | Rule | Why |
 |---|---|
 | **The users-admin door, `read`** (`runIncludingPlatform`), no `catalog.manage` | managing users is not editing prices (D-57); a support admin must issue without that right |
-| **The tenant is in the query** (C-15): the path's id, or `tenantId` null when the door answers `platform: true` (tenant [contract.entitlements.md](../tenant/contract.entitlements.md)) | catalog RLS is shared-read, so the scope alone adds the platform's products to a reseller's list; the platform's own rows are null, not its id |
+| **The tenant is in the query** (C-15): the path's id — the platform's own id when the door answers `platform: true` (ADR-0142) (tenant [contract.entitlements.md](../tenant/contract.entitlements.md)) | catalog RLS is shared-read, so the scope alone adds the platform's products to a reseller's list; the platform's own rows are null, not its id |
 | Archived products left out; switched-off products and variants kept, with `isActive` — the issue form offers active ones only, the filter all | a service sold before a switch-off is still filtered by |
 | No price, no fulfilment detail | the forms name a plan; billing refuses what it cannot place (`variant_not_deliverable`) |
 | The users reads' bucket (`RESELLER_USER_GRANTS_READ`) | one read per opened form, as the page's other reads |

@@ -34,16 +34,18 @@ function bagOf(quotas: Prisma.JsonValue): bigint | null {
 }
 
 /**
- * The price in force per variant from rows newest first: the tenant's own
+ * The price in force per variant from rows newest first: `tenantId`'s own
  * before the platform's (as F-038-d reads it; the margin report too, F-1528).
+ * The rows are the scope's, so any other is the platform's (ADR-0142).
  */
 export function pricesInForce(
-  rows: ReadonlyArray<{ variantId: string; tenantId: string | null; amount: Prisma.Decimal; currencyCode: string }>,
+  rows: ReadonlyArray<{ variantId: string; tenantId: string; amount: Prisma.Decimal; currencyCode: string }>,
+  tenantId: string,
 ): Map<string, { amount: Prisma.Decimal; currencyCode: string }> {
   const price = new Map<string, { amount: Prisma.Decimal; currencyCode: string; own: boolean }>();
   for (const r of rows) {
     const seen = price.get(r.variantId);
-    const own = r.tenantId !== null;
+    const own = r.tenantId === tenantId;
     if (!seen || (own && !seen.own)) price.set(r.variantId, { amount: r.amount, currencyCode: r.currencyCode, own });
   }
   return new Map([...price].map(([id, { amount, currencyCode }]) => [id, { amount, currencyCode }]));
@@ -243,7 +245,7 @@ export class DecisionReader {
         )
       : [];
 
-    const price = pricesInForce(theirs.prices);
+    const price = pricesInForce(theirs.prices, tenantId);
     const plans = new Map<string, PlanOption>(
       theirs.variants.map((v) => {
         const p = price.get(v.id);

@@ -43,16 +43,20 @@ export async function platformProductsSoldBy(tx: PackageProductReader, tenantId:
   })]);
 }
 
-/** The rule on a product in hand: its own tenant's always, the platform's only when listed; `null` sells everything. */
-export function sellsProduct(listed: ReadonlySet<string> | null, product: { id: string; tenantId: string | null }): boolean {
-  return listed === null || product.tenantId !== null || listed.has(product.id);
+/**
+ * The rule on a product in hand: the seller's own always, the platform's only
+ * when listed; `null` sells everything. A tenant reads only its own products
+ * and the platform's (RLS), so "not its own" is the platform's (ADR-0142).
+ */
+export function sellsProduct(listed: ReadonlySet<string> | null, product: { id: string; tenantId: string }, sellerId: string): boolean {
+  return listed === null || product.tenantId === sellerId || listed.has(product.id);
 }
 
 /**
  * One product in hand, for one sale: the tenant's own without reading
  * anything, a platform product against its package's list.
  */
-export async function tenantSellsProduct(tx: PackageProductReader, tenantId: string, product: { id: string; tenantId: string | null }): Promise<boolean> {
-  if (product.tenantId !== null) return true;
-  return sellsProduct(await platformProductsSoldBy(tx, tenantId), product);
+export async function tenantSellsProduct(tx: PackageProductReader, tenantId: string, product: { id: string; tenantId: string }): Promise<boolean> {
+  if (product.tenantId === tenantId) return true;
+  return sellsProduct(await platformProductsSoldBy(tx, tenantId), product, tenantId);
 }

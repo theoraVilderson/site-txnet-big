@@ -43,9 +43,10 @@ type VariantOver = {
   quotas?: Record<string, unknown>;
 };
 
+// The tenant's own variant: the package's list (F-019-v5) is not what these cases are about.
 const variantRow = (over: VariantOver = {}) => ({
   id: VARIANT,
-  tenantId: null,
+  tenantId: TENANT,
   isActive: true,
   visibility: over.visibility ?? VariantVisibility.public,
   panelGroupId: over.panelGroupId === undefined ? GROUP : over.panelGroupId,
@@ -54,6 +55,7 @@ const variantRow = (over: VariantOver = {}) => ({
   durationDays: 30,
   rateCards: [],
   product: {
+    tenantId: TENANT,
     isActive: true,
     fulfilmentKind: over.kind ?? FulfilmentKind.network_access,
     featureKeys: ['vpn.access'],

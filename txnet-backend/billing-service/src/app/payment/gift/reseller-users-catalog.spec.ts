@@ -8,7 +8,7 @@
  *    the platform's included for its staff; no `catalog.manage`;
  *  - **the tenant's own rows, named in the query** (C-15): catalog RLS is
  *    shared-read, so a reseller's scope also sees the platform's products; and
- *    the platform's own are `tenantId` null, not its tenant id;
+ *    the platform's own carry its tenant id, like any tenant's (ADR-0142);
  *  - archived products are left out; switched-off ones and their variants are
  *    listed with `isActive`, because a service sold before is still filtered by;
  *  - a refusal reads nothing.
@@ -27,9 +27,9 @@ const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as strin
 const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'] };
 const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as string[] };
 
-type Product = { id: string; tenantId: string | null; nameKey: string; isActive: boolean; archivedAt: Date | null; key: string };
+type Product = { id: string; tenantId: string; nameKey: string; isActive: boolean; archivedAt: Date | null; key: string };
 const PRODUCTS: Product[] = [
-  { id: 'p-plat', tenantId: null, nameKey: 'catalog.plat', isActive: true, archivedAt: null, key: 'a' },
+  { id: 'p-plat', tenantId: PLATFORM, nameKey: 'catalog.plat', isActive: true, archivedAt: null, key: 'a' },
   { id: 'p-res', tenantId: RESELLER, nameKey: 'catalog.res', isActive: true, archivedAt: null, key: 'b' },
   { id: 'p-res-off', tenantId: RESELLER, nameKey: 'catalog.off', isActive: false, archivedAt: null, key: 'c' },
   { id: 'p-res-gone', tenantId: RESELLER, nameKey: 'catalog.gone', isActive: true, archivedAt: new Date('2026-09-01'), key: 'd' },
@@ -58,10 +58,10 @@ function build() {
   const tx = {
     $executeRaw: async () => 1,
     product: {
-      findMany: async ({ where }: { where: { tenantId: string | null; archivedAt: null } }) => {
+      findMany: async ({ where }: { where: { tenantId: string; archivedAt: null } }) => {
         const scope = TenantContext.currentOrNull()?.id;
         reads.push({ where, scope });
-        return PRODUCTS.filter((p) => (p.tenantId === null || p.tenantId === scope) && p.tenantId === where.tenantId && p.archivedAt === null)
+        return PRODUCTS.filter((p) => (p.tenantId === PLATFORM || p.tenantId === scope) && p.tenantId === where.tenantId && p.archivedAt === null)
           // Only what `select` names, as Prisma answers.
           .map((p) => ({
             id: p.id,
@@ -88,11 +88,12 @@ describe('the users pages catalog (F-311-ab1)', () => {
     expect(reads).toEqual([{ where: expect.objectContaining({ tenantId: RESELLER, archivedAt: null }), scope: RESELLER }]);
   });
 
-  it("lists the platform's own products to its staff, as `tenantId` null", async () => {
-    const { service } = build();
+  it("lists the platform's own products to its staff, by the platform's tenant id (ADR-0142)", async () => {
+    const { service, reads } = build();
     const products = await service.catalog(staff, PLATFORM);
     expect(products.map((p) => p.id)).toEqual(['p-plat']);
     expect(products[0].variants.map((v) => v.id)).toEqual(['v-plat']);
+    expect(reads).toEqual([{ where: expect.objectContaining({ tenantId: PLATFORM, archivedAt: null }), scope: PLATFORM }]);
   });
 
   it('refuses anyone the door refuses, and reads nothing', async () => {

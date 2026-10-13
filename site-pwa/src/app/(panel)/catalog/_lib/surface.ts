@@ -66,7 +66,7 @@ export const useCatalogSurface = () => useContext(CatalogSurfaceContext);
  * until it answers, or when it refuses; a label then names no currency.
  */
 export function usePricingCurrency(
-  owner: string | null | undefined,
+  owner: string | undefined,
 ): string | null {
   const { api } = useCatalogSurface();
   const query = pricingCurrencyQuery(owner);

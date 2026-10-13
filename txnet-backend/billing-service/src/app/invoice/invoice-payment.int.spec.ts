@@ -38,6 +38,8 @@ import { InvoicePaid, InvoicePaymentService, InvoiceUnpayable } from './invoice-
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
+/** The platform: its catalog rows carry its tenant id (ADR-0142). */
+const PLATFORM = '10000000-0000-4000-8000-000000000001';
 const ROLE = '22222222-2222-4222-8222-222222222222';
 const USER = '33333333-3333-4333-8333-333333333331';
 const POOR_USER = '33333333-3333-4333-8333-333333333332';
@@ -65,7 +67,8 @@ beforeAll(async () => {
   await owner.$executeRawUnsafe(`INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE}', 'User', true)`);
   await owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
-    VALUES ('${TENANT}', 'reseller', '${TENANT}', 'alpha', 'active', 'pay_as_you_go_metered', now())
+    VALUES ('${TENANT}', 'reseller', '${TENANT}', 'alpha', 'active', 'pay_as_you_go_metered', now()),
+           ('${PLATFORM}', 'platform_owner', '${PLATFORM}', 'home', 'active', 'pay_as_you_go_metered', now())
   `);
   for (const id of [USER, POOR_USER, FREE_USER]) {
     await owner.$executeRawUnsafe(`
@@ -79,20 +82,20 @@ beforeAll(async () => {
       (gen_random_uuid(), '${POOR_USER}', 5.00, 0, 'USD')
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'catalog.category.vpn.name')
+    INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', '${PLATFORM}', 'vpn', 'catalog.category.vpn.name')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind")
-    VALUES ('${PRODUCT}', NULL, 'vpn_basic', 'k', 'network_access')
+    VALUES ('${PRODUCT}', '${PLATFORM}', 'vpn_basic', 'k', 'network_access')
   `);
   await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${PRODUCT}'`);
   for (const [variant, price, sku] of [[VARIANT, PRICE, 'VPN-30'], [RETIRED_VARIANT, RETIRED_PRICE, 'VPN-90']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO catalog.product_variant (id, "tenantId", "productId", sku, "billingMode", visibility, "durationDays")
-      VALUES ('${variant}', NULL, '${PRODUCT}', '${sku}', 'prepaid', 'public', 30)
+      VALUES ('${variant}', '${PLATFORM}', '${PRODUCT}', '${sku}', 'prepaid', 'public', 30)
     `);
     await owner.$executeRawUnsafe(`
-      INSERT INTO catalog.price (id, "variantId", amount, "currencyCode", "effectiveFrom") VALUES ('${price}', '${variant}', 12.50, 'USD', '2026-01-01')
+      INSERT INTO catalog.price (id, "tenantId", "variantId", amount, "currencyCode", "effectiveFrom") VALUES ('${price}', '${PLATFORM}', '${variant}', 12.50, 'USD', '2026-01-01')
     `);
   }
   await owner.$executeRawUnsafe(`

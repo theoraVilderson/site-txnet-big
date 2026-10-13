@@ -94,7 +94,8 @@ export interface TranslationDraft {
 }
 
 export interface CreateCategoryBody {
-  tenantId?: string | null;
+  /** Absent = the caller's tenant (the platform's, for its staff); another id = the platform owner's alone. */
+  tenantId?: string;
   /** The category it sits under (F-026-r); absent or `null` = top level. */
   parentId?: string | null;
   key: string;
@@ -107,8 +108,9 @@ export interface CreateCategoryBody {
 
 export interface CatalogCategory {
   id: string;
-  /** `null` = the platform's, shared with every tenant. */
-  tenantId: string | null;
+  tenantId: string;
+  /** The platform's (ADR-0142): seen by every tenant, managed by the platform owner alone. */
+  platform: boolean;
   /** The category it sits under, or `null` at the top (F-026-q). */
   parentId: string | null;
   key: string;
@@ -122,7 +124,9 @@ export interface CatalogCategory {
 
 export interface CatalogProduct {
   id: string;
-  tenantId: string | null;
+  tenantId: string;
+  /** The platform's (ADR-0142): seen by every tenant, managed by the platform owner alone. */
+  platform: boolean;
   /** Every category it sits in, first shown first (F-026-q). */
   categoryIds: string[];
   key: string;
@@ -138,13 +142,15 @@ export interface CatalogProduct {
 }
 
 /**
- * What a product may unlock (F-114-f-a, ADR-0086): the platform's (`tenantId:
- * null`) and a tenant's own. A product's `featureKeys` names these by `key`,
+ * What a product may unlock (F-114-f-a, ADR-0086): the platform's (`platform`)
+ * and a tenant's own. A product's `featureKeys` names these by `key`,
  * which never changes; the name is catalog text like a product's.
  */
 export interface CatalogCapability {
   id: string;
-  tenantId: string | null;
+  tenantId: string;
+  /** The platform's (ADR-0142): seen by every tenant, managed by the platform owner alone. */
+  platform: boolean;
   key: string;
   nameKey: string;
   descriptionKey: string | null;
@@ -152,8 +158,8 @@ export interface CatalogCapability {
 }
 
 export interface CreateCapabilityBody {
-  /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
-  tenantId?: string | null;
+  /** Absent = the caller's tenant (the platform's, for its staff); another id = the platform owner's alone. */
+  tenantId?: string;
   /** The feature-key shape, `vpn.access`. */
   key: string;
   sourceLang?: string;
@@ -222,7 +228,9 @@ export type SetRateCardBody = RateCardTerms & { effectiveFrom?: string };
 
 export interface CatalogVariant {
   id: string;
-  tenantId: string | null;
+  tenantId: string;
+  /** The platform's (ADR-0142): seen by every tenant, managed by the platform owner alone. */
+  platform: boolean;
   productId: string;
   sku: string;
   nameKey: string | null;
@@ -261,8 +269,8 @@ export interface PanelGroupOption {
 }
 
 export interface CreateProductBody {
-  /** Absent = the caller's tenant; `null` = platform; another id = the platform owner's alone. */
-  tenantId?: string | null;
+  /** Absent = the caller's tenant (the platform's, for its staff); another id = the platform owner's alone. */
+  tenantId?: string;
   /** One or more, distinct; the first is shown first (F-026-r). */
   categoryIds: string[];
   key: string;

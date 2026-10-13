@@ -46,7 +46,7 @@ export function CapabilitiesTab({
                     <span dir="ltr" className="font-mono">
                       {c.key}
                     </span>
-                    {c.tenantId === null && ` · ${t("common", K.platform)}`}
+                    {c.platform && ` · ${t("common", K.platform)}`}
                   </p>
                 </div>
                 {editable ? (

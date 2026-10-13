@@ -88,15 +88,15 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', NULL, 'vpn', 'catalog.category.vpn.name')
+    INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', '${PLATFORM}', 'vpn', 'catalog.category.vpn.name')
   `);
-  await insertProduct(PLATFORM_PRODUCT, null, 'vpn_basic');
+  await insertProduct(PLATFORM_PRODUCT, PLATFORM, 'vpn_basic');
   await insertProduct(A_PRODUCT, RESELLER_A, 'vpn_alpha');
   await insertProduct(B_PRODUCT, RESELLER_B, 'vpn_beta');
-  await insertVariant(PLATFORM_VARIANT, null, PLATFORM_PRODUCT, 'VPN-30');
+  await insertVariant(PLATFORM_VARIANT, PLATFORM, PLATFORM_PRODUCT, 'VPN-30');
   await insertVariant(A_VARIANT, RESELLER_A, A_PRODUCT, 'VPN-30');
   await insertVariant(B_VARIANT, RESELLER_B, B_PRODUCT, 'VPN-30');
-  await insertPrice(PLATFORM_PRICE, null, PLATFORM_VARIANT, '5.00');
+  await insertPrice(PLATFORM_PRICE, PLATFORM, PLATFORM_VARIANT, '5.00');
   await insertPrice('44444444-4444-4444-8444-4444444444d2', RESELLER_A, A_VARIANT, '6.00');
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "createdByAdminId", "currencyCode")
@@ -132,7 +132,7 @@ describe("whose catalog a tenant reads", () => {
     await expect(
       asTenant(RESELLER_A, (tx) =>
         tx.product.create({
-          data: { tenantId: null, key: 'sneaky', nameKey: 'k', fulfilmentKind: 'network_access' },
+          data: { tenantId: PLATFORM, key: 'sneaky', nameKey: 'k', fulfilmentKind: 'network_access' },
         }),
       ),
     ).rejects.toThrow(/row-level security|42501/);
@@ -214,6 +214,27 @@ describe('a category goes only when no product sits in it (F-026-j)', () => {
   });
 });
 
+describe('the platform is a tenant, and its rows carry its id (ADR-0142, PT-1-a)', () => {
+  it("answers the platform_owner's id from public.platform_tenant_id(), for every service role", async () => {
+    const [row] = await asTenant(RESELLER_A, (tx) => tx.$queryRaw<{ id: string }[]>`SELECT public.platform_tenant_id()::text AS id`);
+    expect(row?.id).toBe(PLATFORM);
+  });
+
+  it('refuses a catalog row with no tenant', async () => {
+    await expect(insertProduct('44444444-4444-4444-8444-4444444444bf', null, 'vpn_nobody')).rejects.toThrow(/23502|null value/);
+    await expect(
+      owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES (gen_random_uuid(), NULL, 'orphan', 'n')`),
+    ).rejects.toThrow(/23502|null value/);
+  });
+
+  it("files a tenant's product in the platform's category, and never in another tenant's", async () => {
+    const theirs = '44444444-4444-4444-8444-4444444444a2';
+    await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${theirs}', '${RESELLER_B}', 'beta_cat', 'n')`);
+    await expect(insertProduct('44444444-4444-4444-8444-4444444444be', RESELLER_A, 'vpn_filed')).resolves.toBeUndefined();
+    await expect(insertProduct('44444444-4444-4444-8444-4444444444bd', RESELLER_A, 'vpn_misfiled', theirs)).rejects.toThrow(/catalog_tenant_mismatch/);
+  });
+});
+
 describe("a variant and its prices are their product's tenant's", () => {
   it("refuses a tenant's variant under the platform's product", async () => {
     await expect(insertVariant('44444444-4444-4444-8444-4444444444c9', RESELLER_A, PLATFORM_PRODUCT, 'STOLEN')).rejects.toThrow(
@@ -234,7 +255,7 @@ describe('a SKU is unique inside a tenant', () => {
     await expect(insertVariant('44444444-4444-4444-8444-4444444444ca', RESELLER_A, A_PRODUCT, 'VPN-30')).rejects.toThrow(
       /Unique constraint|23505/,
     );
-    await expect(insertVariant('44444444-4444-4444-8444-4444444444cb', null, PLATFORM_PRODUCT, 'VPN-30')).rejects.toThrow(
+    await expect(insertVariant('44444444-4444-4444-8444-4444444444cb', PLATFORM, PLATFORM_PRODUCT, 'VPN-30')).rejects.toThrow(
       /Unique constraint|23505/,
     );
   });
@@ -260,7 +281,7 @@ describe('capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
     owner.$executeRawUnsafe(`INSERT INTO catalog.product_capability (id, "tenantId", key, "nameKey") VALUES (gen_random_uuid(), ${q(tenantId)}, '${key}', 'n')`);
 
   beforeAll(async () => {
-    await capability(null, 'vpn.access');
+    await capability(PLATFORM, 'vpn.access');
     await capability(RESELLER_A, 'alpha.extra');
     await capability(RESELLER_B, 'beta.only');
   });
@@ -268,12 +289,12 @@ describe('capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
   it("are read shared: a tenant sees the platform's and its own, and writes no platform row", async () => {
     const keys = await asTenant(RESELLER_A, async (tx) => (await tx.productCapability.findMany({ select: { key: true } })).map((c) => c.key).sort());
     expect(keys).toEqual(['alpha.extra', 'vpn.access']);
-    await expect(asTenant(RESELLER_A, (tx) => tx.productCapability.create({ data: { tenantId: null, key: 'vpn.new', nameKey: 'n' } }))).rejects.toThrow();
+    await expect(asTenant(RESELLER_A, (tx) => tx.productCapability.create({ data: { tenantId: PLATFORM, key: 'vpn.new', nameKey: 'n' } }))).rejects.toThrow();
   });
 
   it("refuses a tenant key the platform holds, and a platform key a tenant holds — one tenant would see it twice", async () => {
     await expect(capability(RESELLER_A, 'vpn.access')).rejects.toThrow(/capability_key_taken/);
-    await expect(capability(null, 'beta.only')).rejects.toThrow(/capability_key_taken/);
+    await expect(capability(PLATFORM, 'beta.only')).rejects.toThrow(/capability_key_taken/);
     await expect(capability(RESELLER_B, 'alpha.extra')).resolves.toBe(1);
   });
 
@@ -324,7 +345,7 @@ describe('meters are platform catalog rows (F-118-c, ADR-0105 decision 2)', () =
 describe('a rate card prices a meter on a variant (F-118-d, ADR-0105 decision 3)', () => {
   const card = (tenantId: string | null, variantId: string, over: Record<string, string> = {}) => {
     const c = { meterKey: `'vpn.traffic'`, unitPrice: '0.40000000', includedQuantity: '0', afterIncluded: `'metered'`, ...over };
-    return (tenantId === null ? cross : owner).$executeRawUnsafe(`
+    return (tenantId === PLATFORM ? cross : owner).$executeRawUnsafe(`
       INSERT INTO catalog.rate_card (id, "tenantId", "variantId", "meterKey", "unitSize", "unitPrice", "currencyCode", mode, "includedQuantity", "afterIncluded", "effectiveFrom")
       VALUES (gen_random_uuid(), ${q(tenantId)}, '${variantId}', ${c.meterKey}, 1073741824, ${c.unitPrice}, 'USD', 'prepaid', ${c.includedQuantity}, ${c.afterIncluded}, now())
     `);
@@ -347,7 +368,7 @@ describe('a rate card prices a meter on a variant (F-118-d, ADR-0105 decision 3)
     );
 
   beforeAll(async () => {
-    await card(null, PLATFORM_VARIANT);
+    await card(PLATFORM, PLATFORM_VARIANT);
   });
 
   it("is written by a tenant on its own variant only — never the platform's or another tenant's", async () => {
@@ -366,11 +387,11 @@ describe('a rate card prices a meter on a variant (F-118-d, ADR-0105 decision 3)
   });
 
   it('refuses a meter nobody reports, a metered unit at zero, and a stop with nothing included', async () => {
-    await expect(card(null, PLATFORM_VARIANT, { meterKey: `'sms.sent'` })).rejects.toThrow(/rate_card_meterKey_fkey|23503|Foreign key/);
-    await expect(card(null, PLATFORM_VARIANT, { unitPrice: '0' })).rejects.toThrow(/rate_card_metered_price_positive/);
-    await expect(card(null, PLATFORM_VARIANT, { afterIncluded: `'stop'` })).rejects.toThrow(/rate_card_stop_includes_some/);
+    await expect(card(PLATFORM, PLATFORM_VARIANT, { meterKey: `'sms.sent'` })).rejects.toThrow(/rate_card_meterKey_fkey|23503|Foreign key/);
+    await expect(card(PLATFORM, PLATFORM_VARIANT, { unitPrice: '0' })).rejects.toThrow(/rate_card_metered_price_positive/);
+    await expect(card(PLATFORM, PLATFORM_VARIANT, { afterIncluded: `'stop'` })).rejects.toThrow(/rate_card_stop_includes_some/);
     // 50 GiB with the plan, then nothing more: free past nothing, so a zero price is fine.
-    await expect(card(null, PLATFORM_VARIANT, { afterIncluded: `'stop'`, includedQuantity: '53687091200', unitPrice: '0' })).resolves.toBe(1);
+    await expect(card(PLATFORM, PLATFORM_VARIANT, { afterIncluded: `'stop'`, includedQuantity: '53687091200', unitPrice: '0' })).resolves.toBe(1);
   });
 
   it('drops metered_rate (F-118-l): its rows are rate cards, and nothing writes one', async () => {

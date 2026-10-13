@@ -22,7 +22,7 @@ import {
 } from "../_lib/catalog-form";
 import { Field, KeyField, LanguageSelect, Sheet, useDirOf, useMessage } from "./catalog-ui";
 import { ParentSelect, TranslateAllBox } from "./CategoryPickers";
-import { Alert, Button, Checkbox, Input, Textarea } from "../../_components/kit";
+import { Alert, Button, Input, Textarea } from "../../_components/kit";
 
 /**
  * A category's fields: the name in its source language, the key made from it,
@@ -34,7 +34,6 @@ export function CategoryFields({
   onChange,
   errors,
   takenKeys,
-  owner,
   categories,
   label,
 }: {
@@ -42,7 +41,6 @@ export function CategoryFields({
   onChange: (f: CategoryForm) => void;
   errors: Errors<CategoryForm>;
   takenKeys: readonly string[];
-  owner: boolean;
   categories: readonly CatalogCategory[];
   label: (c: CatalogCategory) => string;
 }) {
@@ -79,23 +77,18 @@ export function CategoryFields({
           <ParentSelect categories={categories} self={null} label={label} value={form.parentId} onChange={(v) => onChange({ ...form, parentId: v })} />
         </Field>
       )}
-      {owner && (
-        <Checkbox checked={form.shared} onChange={(on) => onChange({ ...form, shared: on })} label={t("common", K.category.shared)} />
-      )}
       <TranslateAllBox checked={form.translateAll} onChange={(v) => onChange({ ...form, translateAll: v })} />
     </div>
   );
 }
 
 export function CategorySheet({
-  owner,
   takenKeys,
   categories,
   label,
   onClose,
   onSaved,
 }: {
-  owner: boolean;
   takenKeys: readonly string[];
   categories: readonly CatalogCategory[];
   label: (c: CatalogCategory) => string;
@@ -117,7 +110,7 @@ export function CategorySheet({
     setBusy(true);
     setError(null);
     try {
-      await api.createCategory(categoryBody(form, owner));
+      await api.createCategory(categoryBody(form));
       await onSaved();
     } catch (e) {
       setError(message(e));
@@ -129,7 +122,7 @@ export function CategorySheet({
   return (
     <Sheet title={t("common", K.newCategory)} onClose={onClose}>
       <p className="text-[11px] text-text-secondary">{t("common", K.guide.category.body)}</p>
-      <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} owner={owner} categories={categories} label={label} />
+      <CategoryFields form={form} onChange={setForm} errors={errors} takenKeys={takenKeys} categories={categories} label={label} />
       {error && <Alert tone="error">{error}</Alert>}
       <div className="flex justify-end gap-2">
         <Button variant="quiet" size="sm" onClick={onClose}>

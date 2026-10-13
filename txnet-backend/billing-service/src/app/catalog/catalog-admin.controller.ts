@@ -160,7 +160,8 @@ export class CatalogAdminController {
   @Get('pricing-currency')
   @RateLimit(READ)
   async pricingCurrency(@Query(new ZodValidationPipe(pricingCurrencySchema)) query: PricingCurrencyQuery, @Req() req: Request, @Ip() ip: string) {
-    const owner = query.tenantId === 'platform' ? null : query.tenantId;
+    // `platform` is the platform owner's own tenant (ADR-0142): the caller's, for the only caller who may ask.
+    const owner = query.tenantId === 'platform' ? undefined : query.tenantId;
     return this.refusing(() => this.catalog.pricingCurrency(this.actor(req, ip), owner));
   }
 

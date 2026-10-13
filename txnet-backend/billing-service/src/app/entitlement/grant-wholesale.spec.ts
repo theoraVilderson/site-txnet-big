@@ -78,7 +78,7 @@ const variantRow = (billingMode: VariantBillingMode) => ({
   quotas: billingMode === VariantBillingMode.prepaid ? { traffic_bytes: { limit: 50 * 1073741824 } } : {},
   durationDays: 30,
   rateCards: [card],
-  product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
+  product: { tenantId: TENANT, isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
 });
 
 function fakeTx(opts: {

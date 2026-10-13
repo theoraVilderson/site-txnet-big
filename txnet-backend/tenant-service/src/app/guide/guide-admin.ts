@@ -11,6 +11,7 @@ import {
   guideFileRoles,
   guideSlotRefusal,
   parseObjectKey,
+  platformTenantIdOf,
   runWithTenant,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
@@ -488,10 +489,10 @@ export class GuideAdmin {
       const refusal = guideSlotRefusal(p);
       if (refusal) throw new GuideRefused('guide_slot', `${p.targetKind}:${p.targetRef} ${refusal}`);
       if (p.targetKind === GuideTargetKind.product) {
-        // RLS shows a reseller the platform's products and its own; the platform only its own.
+        // RLS shows a reseller the platform's products and its own; the platform only its own (its tenant id, ADR-0142).
         const seen =
           UUID.test(p.targetRef) &&
-          (await tx.product.findFirst({ where: { id: p.targetRef, ...(owner === null ? { tenantId: null } : {}) }, select: { id: true } }));
+          (await tx.product.findFirst({ where: { id: p.targetRef, ...(owner === null ? { tenantId: await platformTenantIdOf(tx) } : {}) }, select: { id: true } }));
         if (!seen) throw new GuideRefused('guide_product_unknown', p.targetRef);
       }
     }

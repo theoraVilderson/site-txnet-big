@@ -107,6 +107,7 @@ describe('TenantStatusListener — the computed column', () => {
 
 describe('TenantOnboardingService', () => {
   const RESELLER = '44444444-4444-4444-4444-444444444444';
+  const PLATFORM = '10000000-0000-4000-8000-000000000001';
   const actor = { userId: 'u1', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
 
   const build = (rows: { domain?: boolean; gateway?: boolean; bot?: boolean; price?: boolean }) => {
@@ -117,7 +118,7 @@ describe('TenantOnboardingService', () => {
       tenantGatewayConfig: { findFirst: first(rows.gateway) },
       botIntegration: { findFirst: first(rows.bot) },
       productVariant: { findFirst: first(rows.price) },
-      tenant: { findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'IRR' })) },
+      tenant: { findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'IRR' })), findFirst: vi.fn(async () => ({ id: PLATFORM })) },
     };
     const access = { for() { return this; }, admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
     return { service: new TenantOnboardingService(access as never, all as never), all, access };
@@ -174,14 +175,15 @@ describe('TenantOnboardingService', () => {
     };
 
     it('asks the catalog\'s predicate, not a copy of it', async () => {
-      expect(await pricingWhere()).toEqual(offeredToTenant(RESELLER, now, 'IRR'));
+      expect(await pricingWhere()).toEqual(offeredToTenant(RESELLER, PLATFORM, now, 'IRR'));
     });
 
     it('counts the platform\'s offers the reseller inherits as well as its own', async () => {
       const where = await pricingWhere();
-      expect(where.OR).toEqual([{ tenantId: RESELLER }, { tenantId: null }]);
+      // The platform's rows carry its tenant id (ADR-0142).
+      expect(where.OR).toEqual([{ tenantId: RESELLER }, { tenantId: PLATFORM }]);
       // A platform variant priced by the platform is on sale to this reseller too.
-      expect((where.prices as { some: { OR: unknown } }).some.OR).toEqual([{ tenantId: RESELLER }, { tenantId: null }]);
+      expect((where.prices as { some: { OR: unknown } }).some.OR).toEqual([{ tenantId: RESELLER }, { tenantId: PLATFORM }]);
     });
 
     it('counts only what listOffers would list: public, live, priced now', async () => {

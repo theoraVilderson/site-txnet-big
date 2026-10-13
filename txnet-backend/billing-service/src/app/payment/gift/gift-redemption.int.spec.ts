@@ -99,15 +99,15 @@ beforeAll(async () => {
   `);
 
   // F-502-l-b: a free-service code of the platform's 30-day VPN variant, once per user.
-  await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'k.c')`);
+  await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', '${TENANT_A}', 'vpn', 'k.c')`);
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product (id, key, "nameKey", "fulfilmentKind", "featureKeys")
-    VALUES ('${PRODUCT}', 'vpn_basic', 'k.p', 'network_access', ARRAY['vpn.access'])
+    INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind", "featureKeys")
+    VALUES ('${PRODUCT}', '${TENANT_A}', 'vpn_basic', 'k.p', 'network_access', ARRAY['vpn.access'])
   `);
   await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${PRODUCT}'`);
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_variant (id, "productId", sku, "billingMode", visibility, "durationDays", quotas)
-    VALUES ('${VARIANT}', '${PRODUCT}', 'VPN-30', 'prepaid', 'public', 30, '{"traffic_bytes": {"limit": 53687091200, "resetPolicy": "none"}}')
+    INSERT INTO catalog.product_variant (id, "tenantId", "productId", sku, "billingMode", visibility, "durationDays", quotas)
+    VALUES ('${VARIANT}', '${TENANT_A}', '${PRODUCT}', 'VPN-30', 'prepaid', 'public', 30, '{"traffic_bytes": {"limit": 53687091200, "resetPolicy": "none"}}')
   `);
   await owner.$executeRawUnsafe(`
     INSERT INTO billing.coupon (id, "tenantId", code, "discountType", "discountValue", "perUserUsageLimit", "createdByAdminId", "grantVariantId", "currencyCode")

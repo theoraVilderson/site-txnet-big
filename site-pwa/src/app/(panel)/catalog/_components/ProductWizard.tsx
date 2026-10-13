@@ -233,7 +233,6 @@ export function ProductWizard({
                 onChange={(c) => setW((x) => ({ ...x, newCategory: c }))}
                 errors={errors}
                 takenKeys={takenCategoryKeys}
-                owner={owner}
                 categories={categories}
                 label={categoryLabel}
               />
@@ -290,7 +289,6 @@ export function ProductWizard({
                   onChange={(v) => setProduct({ owner: v as ProductForm["owner"] })}
                   options={[
                     { value: "own", label: t("common", K.product.ownerOwn) },
-                    { value: "platform", label: t("common", K.product.ownerPlatform) },
                     { value: "tenant", label: t("common", K.product.ownerTenant) },
                   ]}
                 />

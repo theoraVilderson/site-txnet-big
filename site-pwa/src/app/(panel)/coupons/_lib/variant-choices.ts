@@ -30,12 +30,13 @@ export function variantOwnerTenant(owner: CouponOwnerChoice, tenantId: string, m
  * picker from offering a sure refusal.
  */
 export function variantChoices(catalog: readonly CatalogProductDetail[], ownerTenant: string | null): VariantChoice[] {
-  const mine = (tenantId: string | null) => tenantId === null || tenantId === ownerTenant;
+  // A catalog row is the platform's by its flag (ADR-0142); a coupon's own platform form is still `null`.
+  const mine = (r: { tenantId: string; platform: boolean }) => r.platform || r.tenantId === ownerTenant;
   return catalog
-    .filter((p) => p.isActive && mine(p.tenantId))
+    .filter((p) => p.isActive && mine(p))
     .flatMap((p) =>
       p.variants
-        .filter((v) => v.isActive && mine(v.tenantId))
+        .filter((v) => v.isActive && mine(v))
         .map((v) => ({ value: v.id, product: p.key, sku: v.sku, durationDays: v.durationDays })),
     );
 }

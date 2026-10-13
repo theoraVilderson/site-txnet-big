@@ -80,9 +80,9 @@ beforeEach(() => {
     { id: "r-2", slug: "zeta" },
   ] as never);
   vi.mocked(catalogApi.products).mockResolvedValue([
-    { id: "prod-vpn", tenantId: null, key: "vpn", nameKey: "catalog.product.vpn", isActive: true },
-    { id: "prod-mail", tenantId: null, key: "mail", nameKey: "catalog.product.mail", isActive: true },
-    { id: "prod-own", tenantId: "r-1", key: "own" },
+    { id: "prod-vpn", tenantId: "t-plat", platform: true, key: "vpn", nameKey: "catalog.product.vpn", isActive: true },
+    { id: "prod-mail", tenantId: "t-plat", platform: true, key: "mail", nameKey: "catalog.product.mail", isActive: true },
+    { id: "prod-own", tenantId: "r-1", platform: false, key: "own" },
   ] as never);
   vi.mocked(catalogApi.texts).mockResolvedValue({ product: { vpn: "VPN" } } as never);
 });

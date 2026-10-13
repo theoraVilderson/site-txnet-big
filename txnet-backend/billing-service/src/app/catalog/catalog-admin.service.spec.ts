@@ -178,10 +178,11 @@ function build() {
   /** `product_category_link`: where each product is filed (F-026-q). */
   const links: Row[] = [];
   /** A product row, filed in `categoryId` as its first category. */
-  const product = (id: string, tenantId: string | null, key: string, categoryId = PLATFORM_CATEGORY): Row => {
+  const product = (id: string, tenantId: string, key: string, categoryId = PLATFORM_CATEGORY): Row => {
     links.push({ productId: id, categoryId, tenantId, position: 0 });
     return {
-      id, tenantId, key, nameKey: `catalog.product.${key}.name`, descriptionKey: null,
+      // The key a write would store: unprefixed for the platform's (ADR-0142).
+      id, tenantId, key, nameKey: catalogTextKey(tenantId === OWNER ? null : tenantId, 'product', key, 'name'), descriptionKey: null,
       fulfilmentKind: FulfilmentKind.network_access, featureKeys: ['vpn.access'], defaultQuotas: {}, isActive: true,
     };
   };
@@ -192,14 +193,14 @@ function build() {
     categoryIds.forEach((categoryId, position) => links.push({ productId, categoryId, tenantId, position }));
   };
   const products = [
-    product(PLATFORM_PRODUCT, null, 'vpn_basic'),
+    product(PLATFORM_PRODUCT, OWNER, 'vpn_basic'),
     product(RESELLER_PRODUCT, RESELLER, 'vpn_alpha'),
     product(OTHER_PRODUCT, OTHER, 'followers_1k', OTHER_CATEGORY),
     product(SOLD_PRODUCT, RESELLER, 'vpn_sold'),
   ];
   const categories: Row[] = [
-    { id: PLATFORM_CATEGORY, tenantId: null, parentId: null, key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true },
-    { id: OTHER_CATEGORY, tenantId: OTHER, parentId: null, key: 'followers', nameKey: 'catalog.category.followers.name', isActive: true },
+    { id: PLATFORM_CATEGORY, tenantId: OWNER, parentId: null, key: 'vpn', nameKey: 'catalog.category.vpn.name', isActive: true },
+    { id: OTHER_CATEGORY, tenantId: OTHER, parentId: null, key: 'followers', nameKey: catalogTextKey(OTHER, 'category', 'followers', 'name'), isActive: true },
   ];
   const db = {
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
@@ -238,7 +239,7 @@ function build() {
           qualityTier: 'standard', isActive: true,
         },
         {
-          id: PLATFORM_METERED, tenantId: null, productId: PLATFORM_PRODUCT, sku: 'VPN-GB', nameKey: null, quotas: {},
+          id: PLATFORM_METERED, tenantId: OWNER, productId: PLATFORM_PRODUCT, sku: 'VPN-GB', nameKey: null, quotas: {},
           durationDays: 30, billingMode: VariantBillingMode.metered, visibility: VariantVisibility.public, panelGroupId: null,
           qualityTier: 'standard', isActive: true,
         },
@@ -273,12 +274,12 @@ function build() {
     ),
     productCapability: table(
       [
-        { id: PLATFORM_CAPABILITY, tenantId: null, key: 'vpn.access', nameKey: 'catalog.capability.vpn.access.name', descriptionKey: null, sourceLang: null },
+        { id: PLATFORM_CAPABILITY, tenantId: OWNER, key: 'vpn.access', nameKey: 'catalog.capability.vpn.access.name', descriptionKey: null, sourceLang: null },
         // Held by no product — only by another tenant's Grant.
-        { id: PREMIUM_CAPABILITY, tenantId: null, key: 'vpn.premium', nameKey: 'catalog.capability.vpn.premium.name', descriptionKey: null, sourceLang: 'fa' },
-        { id: RESELLER_CAPABILITY, tenantId: RESELLER, key: 'alpha.extra', nameKey: 'catalog.t_x.capability.alpha.extra.name', descriptionKey: null, sourceLang: 'fa' },
-        { id: OTHER_CAPABILITY, tenantId: OTHER, key: 'other.only', nameKey: 'catalog.t_y.capability.other.only.name', descriptionKey: null, sourceLang: 'fa' },
-        { id: UNUSED_CAPABILITY, tenantId: RESELLER, key: 'alpha.unused', nameKey: 'catalog.t_x.capability.alpha.unused.name', descriptionKey: 'catalog.t_x.capability.alpha.unused.description', sourceLang: 'fa' },
+        { id: PREMIUM_CAPABILITY, tenantId: OWNER, key: 'vpn.premium', nameKey: 'catalog.capability.vpn.premium.name', descriptionKey: null, sourceLang: 'fa' },
+        { id: RESELLER_CAPABILITY, tenantId: RESELLER, key: 'alpha.extra', nameKey: catalogTextKey(RESELLER, 'capability', 'alpha.extra', 'name'), descriptionKey: null, sourceLang: 'fa' },
+        { id: OTHER_CAPABILITY, tenantId: OTHER, key: 'other.only', nameKey: catalogTextKey(OTHER, 'capability', 'other.only', 'name'), descriptionKey: null, sourceLang: 'fa' },
+        { id: UNUSED_CAPABILITY, tenantId: RESELLER, key: 'alpha.unused', nameKey: catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'name'), descriptionKey: catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'description'), sourceLang: 'fa' },
       ],
       'productCapability',
       writes,
@@ -293,7 +294,7 @@ function build() {
     meter: table([{ id: '60000000-0000-4000-8000-000000000001', key: 'vpn.traffic', unit: 'bytes', nameKey: 'catalog.meter.vpn.traffic.name' }], 'meter', writes),
     rateCard: table(
       [
-        { ...GIB_CARD, id: PLATFORM_CARD, tenantId: null, variantId: PLATFORM_METERED, unitSize: BigInt(GIB), unitPrice: new Prisma.Decimal('0.5'), includedQuantity: BigInt(0), currencyCode: 'USD', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true },
+        { ...GIB_CARD, id: PLATFORM_CARD, tenantId: OWNER, variantId: PLATFORM_METERED, unitSize: BigInt(GIB), unitPrice: new Prisma.Decimal('0.5'), includedQuantity: BigInt(0), currencyCode: 'USD', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true },
         { ...GIB_CARD, id: RESELLER_CARD, tenantId: RESELLER, variantId: RESELLER_METERED, unitSize: BigInt(GIB), unitPrice: new Prisma.Decimal('0.8'), includedQuantity: BigInt(0), currencyCode: 'IRR', effectiveFrom: new Date('2026-01-01T00:00:00Z'), isActive: true },
       ],
       'rateCard',
@@ -383,7 +384,7 @@ describe('createProductSchema — a retired kind is never created (F-111-g, F-11
 describe('CatalogAdminService — who manages which item', () => {
   it("refuses a platform product, or another tenant's, to a reseller", async () => {
     const { service, audit } = build();
-    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, tenantId: null }))).reason).toBe('not_platform_owner');
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, tenantId: OWNER }))).reason).toBe('not_platform_owner');
     expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, tenantId: OTHER }))).reason).toBe('not_platform_owner');
     expect(audit).toHaveLength(0);
   });
@@ -543,7 +544,7 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
   it("names a tenant's product under its own prefix and the platform's without one", async () => {
     const { service, texts } = build();
     const mine = await service.createProduct(actor(RESELLER), NEW_PRODUCT);
-    const platform = await service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null });
+    const platform = await service.createProduct(actor(OWNER), NEW_PRODUCT);
 
     expect(mine.nameKey).toBe(catalogTextKey(RESELLER, 'product', 'vpn_pro', 'name'));
     expect(platform.nameKey).toBe('catalog.product.vpn_pro.name');
@@ -650,10 +651,10 @@ describe('CatalogAdminService — the pool follows the caller (ADR-0053)', () =>
 
   it('serves the platform owner on the cross-tenant pool, where a platform item can be written', async () => {
     const { service, calls } = build();
-    await service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null });
+    await service.createProduct(actor(OWNER), NEW_PRODUCT);
     await service.getProduct(actor(OWNER), OTHER_PRODUCT);
-    // Only "who is asking" is read on the app pool.
-    expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique']));
+    // Only "who is asking", and whose the platform is (ADR-0142), are read on the app pool.
+    expect(new Set(calls.filter((c) => c.startsWith('app:')))).toEqual(new Set(['app:tenant.findUnique', 'app:tenant.findFirst']));
     expect(calls).toContain('all:product.create');
   });
 });
@@ -972,7 +973,7 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
     const all = await service.listCapabilities(actor(OWNER));
     expect(all.find((c) => c.key === 'other.only')).toMatchObject({ tenantId: OTHER });
     // A row the migration wrote from a key in use has no source language of its own.
-    expect(all.find((c) => c.key === 'vpn.access')).toMatchObject({ tenantId: null, sourceLang: 'fa' });
+    expect(all.find((c) => c.key === 'vpn.access')).toMatchObject({ tenantId: OWNER, platform: true, sourceLang: 'fa' });
   });
 
   it("lets a product carry the platform's capabilities and its own tenant's, and refuses any other key before writing", async () => {
@@ -990,7 +991,7 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
 
   it("judges a product the owner writes for a tenant by that tenant's capabilities, not the owner's view of all", async () => {
     const { service } = build();
-    expect((await refusal(() => service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: null, featureKeys: ['alpha.extra'] }))).reason).toBe('capability_unknown');
+    expect((await refusal(() => service.createProduct(actor(OWNER), { ...NEW_PRODUCT, featureKeys: ['alpha.extra'] }))).reason).toBe('capability_unknown');
     await expect(service.createProduct(actor(OWNER), { ...NEW_PRODUCT, tenantId: OTHER, featureKeys: ['other.only'] })).resolves.toMatchObject({ tenantId: OTHER });
   });
 
@@ -1003,13 +1004,14 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
     expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_create', targetEntityType: 'product_capability', targetEntityId: created.id })]);
     expect((await refusal(() => service.createCapability(actor(RESELLER), { key: 'vpn.access', name: { fa: 'x' } }))).reason).toBe('key_taken');
     expect((await refusal(() => service.createCapability(actor(RESELLER), { key: 'alpha.extra', name: { fa: 'x' } }))).reason).toBe('key_taken');
-    expect((await refusal(() => service.createCapability(actor(RESELLER), { tenantId: null, key: 'vpn.new', name: { fa: 'x' } }))).reason).toBe('not_platform_owner');
+    expect((await refusal(() => service.createCapability(actor(RESELLER), { tenantId: OWNER, key: 'vpn.new', name: { fa: 'x' } }))).reason).toBe('not_platform_owner');
   });
 
   it("refuses the owner a platform key a tenant already holds — that tenant would see it twice", async () => {
     const { service } = build();
-    expect((await refusal(() => service.createCapability(actor(OWNER), { tenantId: null, key: 'other.only', name: { fa: 'x' } }))).reason).toBe('key_taken');
-    await expect(service.createCapability(actor(OWNER), { tenantId: null, key: 'vpn.new', name: { fa: 'x' } })).resolves.toMatchObject({ tenantId: null });
+    // The owner's own capability is the platform's (ADR-0142).
+    expect((await refusal(() => service.createCapability(actor(OWNER), { key: 'other.only', name: { fa: 'x' } }))).reason).toBe('key_taken');
+    await expect(service.createCapability(actor(OWNER), { key: 'vpn.new', name: { fa: 'x' } })).resolves.toMatchObject({ tenantId: OWNER, platform: true });
   });
 
   it("renames a capability and never changes its key; another tenant's and the platform's are not found to a reseller", async () => {
@@ -1028,7 +1030,7 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
     expect(db.productCapability.rows.some((r) => r['id'] === UNUSED_CAPABILITY)).toBe(false);
     expect(locks(calls, 'FOR UPDATE')).toHaveLength(1);
     expect(audit).toEqual([expect.objectContaining({ action: 'catalog_capability_delete', targetEntityId: UNUSED_CAPABILITY })]);
-    expect(texts).toEqual(['clear catalog.t_x.capability.alpha.unused.name', 'clear catalog.t_x.capability.alpha.unused.description']);
+    expect(texts).toEqual([`clear ${catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'name')}`, `clear ${catalogTextKey(RESELLER, 'capability', 'alpha.unused', 'description')}`]);
   });
 
   it('keeps a capability a product holds, and a platform one only another tenant’s Grant holds — capability_in_use', async () => {
@@ -1146,7 +1148,6 @@ describe('CatalogAdminService — the currency a form names beside a price (F-11
     inCurrency(db);
     await expect(service.pricingCurrency(actor(RESELLER), undefined)).resolves.toEqual({ code: 'IRR' });
     await expect(service.pricingCurrency(actor(OWNER), undefined)).resolves.toEqual({ code: 'USD' });
-    await expect(service.pricingCurrency(actor(OWNER), null)).resolves.toEqual({ code: 'USD' });
     await expect(service.pricingCurrency(actor(OWNER), OTHER)).resolves.toEqual({ code: 'EUR' });
     expect(writes).toEqual([]);
   });
@@ -1154,7 +1155,7 @@ describe('CatalogAdminService — the currency a form names beside a price (F-11
   it('refuses a reseller what it may not price, as a write would: a platform row or another tenant\'s', async () => {
     const { service, db } = build();
     inCurrency(db);
-    expect((await refusal(() => service.pricingCurrency(actor(RESELLER), null))).reason).toBe('not_platform_owner');
+    expect((await refusal(() => service.pricingCurrency(actor(RESELLER), OWNER))).reason).toBe('not_platform_owner');
     expect((await refusal(() => service.pricingCurrency(actor(RESELLER), OTHER))).reason).toBe('not_platform_owner');
   });
 });

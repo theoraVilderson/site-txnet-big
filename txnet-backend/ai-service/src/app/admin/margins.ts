@@ -172,7 +172,7 @@ export class Margins {
       ),
     );
 
-    const price = pricesInForce(read.prices);
+    const price = pricesInForce(read.prices, tenantId);
     const plans: MarginPlan[] = read.variants.map((v) => ({
       variantId: v.id,
       productId: v.productId,

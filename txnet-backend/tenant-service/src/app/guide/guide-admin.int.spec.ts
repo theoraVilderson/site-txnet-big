@@ -84,7 +84,7 @@ beforeAll(async () => {
   }
   await owner.$executeRawUnsafe(`
     INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind", "updatedAt")
-    VALUES ('${PRODUCT}', NULL, 'vpn_basic', 'catalog.product.vpn_basic', 'network_access', now())
+    VALUES ('${PRODUCT}', '${PLATFORM}', 'vpn_basic', 'catalog.product.vpn_basic', 'network_access', now())
   `);
   // No Redis: generations fail, the reader serves uncached — every read is the database's.
   const noRedis = {

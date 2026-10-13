@@ -109,7 +109,7 @@ export class ResellerReader {
   async productNameKeys(platformTenantId: string, productIds: string[]): Promise<Map<string, string>> {
     if (productIds.length === 0) return new Map();
     const rows = await runWithTenant({ id: platformTenantId }, () =>
-      tenantTransaction(this.reader, (tx) => tx.product.findMany({ where: { id: { in: productIds }, tenantId: null }, select: { id: true, nameKey: true } })),
+      tenantTransaction(this.reader, (tx) => tx.product.findMany({ where: { id: { in: productIds }, tenantId: platformTenantId }, select: { id: true, nameKey: true } })),
     );
     return new Map(rows.map((r) => [r.id, r.nameKey]));
   }

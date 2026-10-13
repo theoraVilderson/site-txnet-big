@@ -33,6 +33,7 @@ export * from './lib/tenant-context/with-tenant';
 export * from './lib/tenant/host';
 export * from './lib/tenant/host-tenant';
 export * from './lib/tenant/door';
+export * from './lib/tenant/platform-tenant';
 export * from './lib/tenant/host-surface';
 export * from './lib/tenant/public-route';
 export * from './lib/tenant/package-meter-rate';

@@ -100,7 +100,9 @@ function world(opts: { row?: ProductQuotaRow | null; locks?: Array<Record<string
   return { tx: tx as unknown as Prisma.TransactionClient, usage, ledger, wallet, locksWritten };
 }
 
-const platformProduct = { id: PRODUCT, tenantId: null };
+const PLATFORM = '11111111-1111-4111-8111-111111111111';
+// The platform's product carries its tenant id (ADR-0142).
+const platformProduct = { id: PRODUCT, tenantId: PLATFORM };
 const sell = (w: ReturnType<typeof world>, ref: string, now: Date) => consumeProductSale(w.tx, { tenantId: RESELLER, product: platformProduct, sourceRef: ref, now });
 
 describe('a sale of a product past several windows (F-019-v6)', () => {

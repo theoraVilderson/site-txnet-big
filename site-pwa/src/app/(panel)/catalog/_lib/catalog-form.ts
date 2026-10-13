@@ -260,8 +260,6 @@ export interface CategoryForm {
   /** The language the name is written in; drafts come from it, readers fall back to it. */
   sourceLang: string;
   name: string;
-  /** The platform owner only: a category every tenant files products in. */
-  shared: boolean;
   /** The category it sits under; blank = top level (F-026-r). */
   parentId: string;
   /** Draft every other language for review (F-1533-i). */
@@ -273,7 +271,6 @@ export const emptyCategoryForm = (defaultLang: string): CategoryForm => ({
   key: "",
   sourceLang: defaultLang,
   name: "",
-  shared: false,
   parentId: "",
   translateAll: false,
 });
@@ -286,13 +283,13 @@ export function validateCategoryForm(f: CategoryForm): Errors<CategoryForm> {
   return errors;
 }
 
-export function categoryBody(f: CategoryForm, owner: boolean): CreateCategoryBody {
+/** The caller's own — the platform's, for its staff (ADR-0142). */
+export function categoryBody(f: CategoryForm): CreateCategoryBody {
   const sourceLang = f.sourceLang.trim();
   return {
     key: f.key.trim(),
     sourceLang,
     name: { [sourceLang]: f.name.trim() },
-    ...(owner && f.shared ? { tenantId: null } : {}),
     ...(blank(f.parentId) ? {} : { parentId: f.parentId.trim() }),
     ...translateAllOf(f),
   };
@@ -309,12 +306,10 @@ export interface CapabilityForm {
   key: string;
   sourceLang: string;
   name: string;
-  /** The platform owner only, on the capabilities tab: a capability every tenant sees. */
-  shared: boolean;
   translateAll: boolean;
 }
 
-export const emptyCapabilityForm = (defaultLang: string): CapabilityForm => ({ key: "", sourceLang: defaultLang, name: "", shared: false, translateAll: false });
+export const emptyCapabilityForm = (defaultLang: string): CapabilityForm => ({ key: "", sourceLang: defaultLang, name: "", translateAll: false });
 
 const CAPABILITY_PREFIX = "feature.";
 
@@ -332,8 +327,8 @@ export function validateCapabilityForm(f: CapabilityForm): Errors<CapabilityForm
   return errors;
 }
 
-/** `tenant`: whose it is — `null` the platform's, an id that tenant's, `undefined` the caller's (billing decides). */
-export function capabilityBody(f: CapabilityForm, tenant: string | null | undefined): CreateCapabilityBody {
+/** `tenant`: whose it is — an id that tenant's, `undefined` the caller's (billing decides; the platform's for its staff). */
+export function capabilityBody(f: CapabilityForm, tenant: string | undefined): CreateCapabilityBody {
   const sourceLang = f.sourceLang.trim();
   return {
     ...(tenant === undefined ? {} : { tenantId: tenant }),
@@ -349,11 +344,11 @@ export function capabilityBody(f: CapabilityForm, tenant: string | null | undefi
  * billing's `knownCapabilities`, judged by the product's tenant. `undefined` =
  * billing already narrowed the list (not the platform owner).
  */
-export const capabilitiesFor = <T extends { tenantId: string | null }>(caps: readonly T[], tenant: string | null | undefined): T[] =>
-  caps.filter((c) => tenant === undefined || c.tenantId === null || c.tenantId === tenant);
+export const capabilitiesFor = <T extends { tenantId: string; platform: boolean }>(caps: readonly T[], tenant: string | undefined): T[] =>
+  caps.filter((c) => tenant === undefined || c.platform || c.tenantId === tenant);
 
 /** The platform owner edits every capability; a tenant its own, never the platform's (ADR-0086 §3). */
-export const canEditCapability = (c: { tenantId: string | null }, owner: boolean) => owner || c.tenantId !== null;
+export const canEditCapability = (c: { platform: boolean }, owner: boolean) => owner || !c.platform;
 
 // ------------------------------------------------------------------- tree
 
@@ -425,7 +420,8 @@ export const moveBody = (parentId: string): { parentId: string | null } => ({ pa
 
 // ------------------------------------------------------------------- product
 
-export type CatalogOwnerChoice = "own" | "platform" | "tenant";
+/** The platform owner's choice: its own — the platform's (ADR-0142) — or a reseller's by id. */
+export type CatalogOwnerChoice = "own" | "tenant";
 
 /** The form as typed: every box a string. */
 export interface ProductForm {
@@ -482,7 +478,6 @@ export function productBody(f: ProductForm, me: Me | null): CreateProductBody {
   };
   if (!blank(f.description)) body.description = { [f.sourceLang.trim()]: f.description.trim() };
   if (f.translateAll) body.translateAll = true;
-  if (isPlatformOwner(me) && f.owner === "platform") body.tenantId = null;
   if (isPlatformOwner(me) && f.owner === "tenant") body.tenantId = f.tenantId.trim();
   return body;
 }
@@ -586,19 +581,18 @@ export const takesPanelGroup = (kind: FulfilmentKind) => kind === "network_acces
  * list (a tenant's own, or a reseller's screen); only the platform owner is
  * sent every group.
  */
-export function groupsForVariant(groups: readonly PanelGroupOption[], tenantId: string | null | undefined): PanelGroupOption[] {
+export function groupsForVariant(groups: readonly PanelGroupOption[], tenantId: string | undefined): PanelGroupOption[] {
   return tenantId === undefined ? [...groups] : groups.filter((g) => g.tenantId === null || g.tenantId === tenantId);
 }
 
 /**
  * Billing's `?tenantId=` for the currency a price field names (F-116-h10,
- * catalog `GET /pricing-currency`): none for the surface's own rows,
- * `platform` for a platform row, a tenant the owner chose. `null` while a
- * typed tenant is no uuid yet — nothing to ask, rather than a 400 to show.
+ * catalog `GET /pricing-currency`): none for the surface's own rows, a
+ * tenant the owner chose. `null` while a typed tenant is no uuid yet — nothing
+ * to ask, rather than a 400 to show.
  */
-export function pricingCurrencyQuery(owner: string | null | undefined): string | null {
+export function pricingCurrencyQuery(owner: string | undefined): string | null {
   if (owner === undefined) return "";
-  if (owner === null) return "?tenantId=platform";
   return UUID.test(owner.trim()) ? `?tenantId=${owner.trim()}` : null;
 }
 
@@ -606,9 +600,8 @@ export function pricingCurrencyQuery(owner: string | null | undefined): string |
 export const pricedIn = (label: string, code: string | null) => (code ? `${label} (${code})` : label);
 
 /** Whose the wizard's variant will be, when the platform owner chose it; anyone else's is billing's to narrow. */
-export function wizardVariantTenant(f: ProductForm, me: Me | null): string | null | undefined {
+export function wizardVariantTenant(f: ProductForm, me: Me | null): string | undefined {
   if (!isPlatformOwner(me)) return undefined;
-  if (f.owner === "platform") return null;
   return f.owner === "tenant" ? f.tenantId.trim() : me!.tenant.id;
 }
 
@@ -663,17 +656,16 @@ const pick = <T extends object>(errors: T, keys: readonly (keyof T)[]) =>
  * tenant's — billing's `usableCategories`. `undefined` = billing decides (not the
  * platform owner): a tenant only ever sees its own and the platform's.
  */
-const fitsOwner = (c: { tenantId: string | null }, tenant: string | null | undefined) =>
-  tenant === undefined || c.tenantId === null || c.tenantId === tenant;
+const fitsOwner = (c: { tenantId: string; platform: boolean }, tenant: string | undefined) =>
+  tenant === undefined || c.platform || c.tenantId === tenant;
 
 /**
- * The wizard's new category, filed where its product can use it: a platform
- * product's under the platform, another tenant's product's under that tenant.
- * Left to the "shared" box it would be the owner's own, and billing would then
- * refuse the product as `category_not_found`.
+ * The wizard's new category, filed where its product can use it: the owner's
+ * own — the platform's — for its own product, another tenant's product's under
+ * that tenant, else billing would refuse the product as `category_not_found`.
  */
 export function wizardCategoryBody(w: ProductWizard, me: Me | null): CreateCategoryBody {
-  const body = categoryBody(w.newCategory, isPlatformOwner(me));
+  const body = categoryBody(w.newCategory);
   const tenant = wizardVariantTenant(w.product, me);
   if (tenant === undefined || w.product.owner === "own") return body;
   return { ...body, tenantId: tenant };
@@ -687,7 +679,7 @@ export function wizardStepErrors(
   step: WizardStep,
   w: ProductWizard,
   me: Me | null,
-  categories: readonly { id: string; tenantId: string | null }[] = [],
+  categories: readonly { id: string; tenantId: string; platform: boolean }[] = [],
 ): Record<string, string> {
   switch (step) {
     case "category": {
@@ -708,7 +700,7 @@ export function wizardStepErrors(
   }
 }
 
-export function firstInvalidStep(w: ProductWizard, me: Me | null, categories: readonly { id: string; tenantId: string | null }[] = []): WizardStep | null {
+export function firstInvalidStep(w: ProductWizard, me: Me | null, categories: readonly { id: string; tenantId: string; platform: boolean }[] = []): WizardStep | null {
   return WIZARD_STEPS.find((s) => Object.keys(wizardStepErrors(s, w, me, categories)).length > 0) ?? null;
 }
 

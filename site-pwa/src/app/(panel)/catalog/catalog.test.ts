@@ -189,7 +189,6 @@ describe("the product form", () => {
 
   it("sends a reseller's product with no tenant, and names the owner's choice", () => {
     expect(productBody(valid(), RESELLER)).not.toHaveProperty("tenantId");
-    expect(productBody({ ...valid(), owner: "platform" }, OWNER)).toMatchObject({ tenantId: null });
     expect(productBody({ ...valid(), owner: "tenant", tenantId: UUID }, OWNER)).toMatchObject({ tenantId: UUID });
     expect(productBody({ ...valid(), owner: "own" }, OWNER)).not.toHaveProperty("tenantId");
   });
@@ -246,19 +245,21 @@ describe("nothing to remember: keys and capabilities are suggested", () => {
 });
 
 describe("capabilities are picked from billing's list, by name (F-114-f-b, ADR-0086)", () => {
-  const cap = (key: string, tenantId: string | null): CatalogCapability => ({
+  // "t-owner" is the platform (ADR-0142): its rows carry its id and the flag.
+  const cap = (key: string, tenantId: string): CatalogCapability => ({
     id: `id-${key}`,
     tenantId,
+    platform: tenantId === "t-owner",
     key,
     nameKey: `catalog.capability.${key}.name`,
     descriptionKey: null,
     sourceLang: "fa",
   });
-  const list = [cap("vpn.access", null), cap("feature.gold", "t-res"), cap("feature.other", "t-x")];
+  const list = [cap("vpn.access", "t-owner"), cap("feature.gold", "t-res"), cap("feature.other", "t-x")];
 
   it("offers a product the platform's capabilities and its own tenant's, never another tenant's", () => {
     expect(capabilitiesFor(list, "t-res").map((c) => c.key)).toEqual(["vpn.access", "feature.gold"]);
-    expect(capabilitiesFor(list, null).map((c) => c.key)).toEqual(["vpn.access"]);
+    expect(capabilitiesFor(list, "t-owner").map((c) => c.key)).toEqual(["vpn.access"]);
     // Not the platform owner: billing already narrowed the list.
     expect(capabilitiesFor(list, undefined)).toHaveLength(3);
   });
@@ -282,14 +283,13 @@ describe("capabilities are picked from billing's list, by name (F-114-f-b, ADR-0
 
   it("files a new capability under the tenant named, and leaves it to billing when none is", () => {
     const valid = { ...emptyCapabilityForm("fa"), key: "feature.gold", name: "طلایی" };
-    expect(capabilityBody(valid, null)).toMatchObject({ tenantId: null });
     expect(capabilityBody(valid, UUID)).toMatchObject({ tenantId: UUID });
     expect(capabilityBody(valid, undefined)).not.toHaveProperty("tenantId");
   });
 
   it("lets the platform owner edit every capability, and a tenant only its own", () => {
-    expect(canEditCapability(cap("vpn.access", null), true)).toBe(true);
-    expect(canEditCapability(cap("vpn.access", null), false)).toBe(false);
+    expect(canEditCapability(cap("vpn.access", "t-owner"), true)).toBe(true);
+    expect(canEditCapability(cap("vpn.access", "t-owner"), false)).toBe(false);
     expect(canEditCapability(cap("feature.gold", "t-res"), false)).toBe(true);
   });
 });
@@ -327,36 +327,38 @@ describe("the new product wizard", () => {
     expect(wizardStepErrors("category", w, RESELLER)).toEqual({});
   });
 
-  it("files a new category under the product's owner, whatever the shared box says", () => {
+  it("files a new category under the product's owner", () => {
     const w = ready();
     w.categoryMode = "new";
     w.newCategory = { ...w.newCategory, key: "vpn", name: "وی‌پی‌ان" };
-    // The platform owner's platform product: the category must be the platform's too.
-    w.product.owner = "platform";
-    expect(wizardCategoryBody(w, OWNER)).toMatchObject({ tenantId: null });
     w.product = { ...w.product, owner: "tenant", tenantId: UUID };
     expect(wizardCategoryBody(w, OWNER)).toMatchObject({ tenantId: UUID });
+    // The owner's own product is the platform's (ADR-0142): its category is the caller's own, which billing decides.
     w.product.owner = "own";
     expect(wizardCategoryBody(w, OWNER)).not.toHaveProperty("tenantId");
-    expect(wizardCategoryBody({ ...w, newCategory: { ...w.newCategory, shared: true } }, OWNER)).toMatchObject({ tenantId: null });
     // Nobody else chooses: billing files a reseller's category under the reseller.
-    expect(wizardCategoryBody({ ...w, product: { ...w.product, owner: "platform" } }, RESELLER)).not.toHaveProperty("tenantId");
+    expect(wizardCategoryBody({ ...w, product: { ...w.product, owner: "tenant", tenantId: UUID } }, RESELLER)).not.toHaveProperty("tenantId");
   });
 
   it("refuses an existing category the product's owner cannot file in, before anything is sent", () => {
     const w = ready();
+    const RES = "44444444-4444-4444-8444-444444444444";
     const cats = [
-      { id: UUID, tenantId: "t-owner" },
-      { id: "shared", tenantId: null },
+      { id: UUID, tenantId: RES, platform: false },
+      { id: "shared", tenantId: "t-owner", platform: true },
+      { id: "other", tenantId: "t-x", platform: false },
     ];
-    w.product.owner = "platform";
+    // A reseller's product, picked by the owner: its own categories and the platform's, never a third tenant's.
+    w.product = { ...w.product, owner: "tenant", tenantId: RES };
+    w.categoryIds = ["other"];
     expect(wizardStepErrors("category", w, OWNER, cats)).toHaveProperty("categoryIds", CATALOG_KEYS.wizard.categoryNotForOwner);
+    w.categoryIds = ["shared", UUID];
+    expect(wizardStepErrors("category", w, OWNER, cats)).toEqual({});
+    // The owner's own product is the platform's: only the platform's categories fit.
+    w.product.owner = "own";
     w.categoryIds = ["shared"];
     expect(wizardStepErrors("category", w, OWNER, cats)).toEqual({});
-    w.categoryIds = [UUID];
-    w.product.owner = "own";
-    expect(wizardStepErrors("category", w, OWNER, cats)).toEqual({});
-    expect(firstInvalidStep({ ...w, product: { ...w.product, owner: "platform" } }, OWNER, cats)).toBe("category");
+    expect(firstInvalidStep({ ...w, categoryIds: [UUID] }, OWNER, cats)).toBe("category");
   });
 
   it("lets the first variant be skipped, and checks it only when it is not", () => {
@@ -374,20 +376,19 @@ describe("the new product wizard", () => {
 });
 
 describe("the category form and renaming", () => {
-  it("needs a key and a name in its source language, and shares only the owner's category when asked", () => {
+  it("needs a key and a name in its source language, and sends no owner: the caller's own (the platform's, for its staff)", () => {
     const valid = { ...emptyCategoryForm("fa"), key: "games", name: "بازی" };
     expect(validateCategoryForm(valid)).toEqual({});
     expect(validateCategoryForm({ ...valid, name: " " })).toHaveProperty("name");
     expect(validateCategoryForm({ ...valid, key: "Games" })).toHaveProperty("key");
-    expect(categoryBody({ ...valid, shared: true }, true)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" }, tenantId: null });
-    expect(categoryBody({ ...valid, shared: true }, false)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" } });
+    expect(categoryBody(valid)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" } });
   });
 
   it("files a new category under the parent picked, and asks for translations only when ticked (F-026-s)", () => {
     const valid = { ...emptyCategoryForm("fa"), key: "games", name: "بازی" };
     expect(emptyCategoryForm("fa")).toMatchObject({ parentId: "", translateAll: false });
-    expect(categoryBody({ ...valid, parentId: UUID }, false)).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" }, parentId: UUID });
-    expect(categoryBody({ ...valid, translateAll: true }, false)).toMatchObject({ translateAll: true });
+    expect(categoryBody({ ...valid, parentId: UUID })).toEqual({ key: "games", sourceLang: "fa", name: { fa: "بازی" }, parentId: UUID });
+    expect(categoryBody({ ...valid, translateAll: true })).toMatchObject({ translateAll: true });
   });
 
   it("renames in the source language picked, and clears a description left blank", () => {
@@ -492,17 +493,17 @@ describe("a variant's panel group (F-026-o)", () => {
 
   it("offers a variant the platform's groups and its own tenant's, as billing's usableGroup admits", () => {
     expect(groupsForVariant(groups, "t-res").map((g) => g.id)).toEqual(["platform-eu", "res-a"]);
-    expect(groupsForVariant(groups, null).map((g) => g.id)).toEqual(["platform-eu"]);
+    // The platform's product carries its id (ADR-0142): the platform's groups and the owner's own.
+    expect(groupsForVariant(groups, "t-owner").map((g) => g.id)).toEqual(["platform-eu", "owner-own"]);
     // A tenant's own list, or a reseller's screen: billing already narrowed it.
     expect(groupsForVariant(groups, undefined)).toEqual(groups);
   });
 
   it("knows the wizard's variant tenant from the owner's choice; anyone else's is billing's to narrow", () => {
     const p = emptyProductForm("en");
-    expect(wizardVariantTenant({ ...p, owner: "platform" }, OWNER)).toBeNull();
     expect(wizardVariantTenant({ ...p, owner: "own" }, OWNER)).toBe("t-owner");
     expect(wizardVariantTenant({ ...p, owner: "tenant", tenantId: " t-res " }, OWNER)).toBe("t-res");
-    expect(wizardVariantTenant({ ...p, owner: "platform" }, RESELLER)).toBeUndefined();
+    expect(wizardVariantTenant({ ...p, owner: "tenant", tenantId: "t-res" }, RESELLER)).toBeUndefined();
     expect(wizardVariantTenant(p, null)).toBeUndefined();
   });
 
@@ -843,9 +844,8 @@ describe("a meter is shown by its name, never its key (F-118-s, D-59 (a))", () =
 });
 
 describe("a price field names the currency billing writes it in, never a fixed USD (F-116-h10)", () => {
-  it("asks billing whose rows are priced: the surface's own, the platform's, or a tenant the owner typed", () => {
+  it("asks billing whose rows are priced: the surface's own, or a tenant the owner typed", () => {
     expect(pricingCurrencyQuery(undefined)).toBe("");
-    expect(pricingCurrencyQuery(null)).toBe("?tenantId=platform");
     expect(pricingCurrencyQuery("22222222-2222-4222-8222-222222222222")).toBe("?tenantId=22222222-2222-4222-8222-222222222222");
     // Half-typed: no question yet, rather than a 400 shown as a failure.
     expect(pricingCurrencyQuery("2222")).toBeNull();

@@ -35,7 +35,7 @@ export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
   useEffect(() => {
     let alive = true;
     catalogApi.products().then(
-      (list) => alive && setProducts(list.filter((p) => p.tenantId === null)),
+      (list) => alive && setProducts(list.filter((p) => p.platform)),
       (e) => alive && setError(e),
     );
     catalogApi

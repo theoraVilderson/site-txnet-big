@@ -62,11 +62,11 @@ beforeAll(async () => {
     `);
   }
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product_category (id, key, "nameKey") VALUES ('${CATEGORY}', 'vpn', 'catalog.category.vpn.name')
+    INSERT INTO catalog.product_category (id, "tenantId", key, "nameKey") VALUES ('${CATEGORY}', '${TENANT_A}', 'vpn', 'catalog.category.vpn.name')
   `);
   await owner.$executeRawUnsafe(`
-    INSERT INTO catalog.product (id, key, "nameKey", "fulfilmentKind")
-    VALUES ('${PRODUCT}', 'vpn_basic', 'catalog.product.vpn_basic.name', 'network_access')
+    INSERT INTO catalog.product (id, "tenantId", key, "nameKey", "fulfilmentKind")
+    VALUES ('${PRODUCT}', '${TENANT_A}', 'vpn_basic', 'catalog.product.vpn_basic.name', 'network_access')
   `);
   await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${PRODUCT}'`);
 

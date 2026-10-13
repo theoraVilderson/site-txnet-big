@@ -101,8 +101,8 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    the order picked is the order sent, and at least one is required. Lists and
    the filter name a category by its path (`categoryPath`); the filter matches
    a product in any of its categories. The wizard files a new category under
-   the product's owner (`wizardCategoryBody`: platform product → platform
-   category) and refuses an existing pick that owner cannot use before any call
+   the product's owner (`wizardCategoryBody`: the owner's own product is the
+   platform's, ADR-0142 — no owner sent; a reseller's → that reseller) and refuses an existing pick that owner cannot use before any call
    (`categoryNotForOwner`) — billing's `category_not_found` otherwise. A removal answers `has_children` and
    `unlinked` lines too (`categoryRemovalReport`).
 10a. **A retired kind is never offered** (F-111-g): the wizard lists
@@ -167,7 +167,7 @@ typed as a key. `_components/CapabilityPicker.tsx`, `CapabilitiesTab.tsx`.
 | The wizard and the product sheet offer a product only the platform's capabilities and its own tenant's — the wizard judges by the owner picked, the sheet by `product.tenantId`; a ticked key off that list is shown red, to be taken off, and billing's `capability_unknown` returns the wizard to its access step | `capabilitiesFor` |
 | A chip shows the capability's name (viewer's language, then its source, then the key), the key only as a tooltip; the product list and the wizard's review do the same | `nameOf` over the `catalog` texts |
 | "New capability" asks a name; the key is `feature.<slugKey>`, numbered past every key the caller sees, editable behind "change key". From a picker it is filed under the product's tenant (the owner only; a reseller's screen sends no `tenantId`) and ticked after the list is re-read | `suggestCapabilityKey`, `capabilityBody` |
-| The capabilities tab: the platform owner renames and removes every row and may make a new one the platform's; a tenant, or a reseller's screen, its own — the platform's are read-only. A removal billing refuses (`capability_in_use`) is its sentence, nothing else | `canEditCapability` |
+| The capabilities tab: the platform owner renames and removes every row, and a new one is its own — the platform's (ADR-0142); a tenant, or a reseller's screen, its own — the platform's are read-only. A removal billing refuses (`capability_in_use`) is its sentence, nothing else | `canEditCapability` |
 
 ## The same page for a reseller a route names (F-066-w8, ADR-0064 (4))
 
