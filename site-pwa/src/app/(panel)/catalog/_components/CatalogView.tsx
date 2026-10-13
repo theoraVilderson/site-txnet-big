@@ -1,37 +1,26 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { Archive, BookOpen, ChevronLeft, FolderTree, Languages, Loader2, Package, Pencil, Plus, Power, RotateCcw, RotateCw, Tags, Trash2 } from "lucide-react";
+import { Archive, BookOpen, Languages, Loader2, Package, Plus, RotateCw, Tags } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type CatalogAdminApi, type CatalogCapability, type CatalogCategory, type CatalogProduct } from "@/lib/catalog-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Select } from "../../_components/kit/Select";
-import { CATALOG_KEYS as K, afterWizard, catalogText, categoryPath, categoryTree, categoryRemovalReport, heldByProducts, mergeRemovals, flattenTexts, productCounts, removalReport, RESTORE_CATEGORY, stillSelected, surfaceActor, switchReport, switchTargets, type CatalogTexts } from "../_lib/catalog-form";
+import { CATALOG_KEYS as K, afterWizard, catalogText, categoryPath, categoryTree, categoryRemovalReport, heldByProducts, mergeRemovals, productCounts, removalReport, surfaceActor, switchReport, switchTargets } from "../_lib/catalog-form";
+import { useCatalogData, type CatalogData } from "../_hooks/useCatalogData";
+import { useIdSelection } from "../_hooks/useIdSelection";
 import { CapabilitiesTab } from "./CapabilitiesTab";
-import { CapabilitySheet } from "./CapabilityPicker";
 import { CatalogGuide } from "./CatalogGuide";
-import { CategorySheet, NamesSheet } from "./NameSheets";
-import { MoveCategorySheet } from "./CategoryPickers";
-import { ProductDetailSheet } from "./ProductDetailSheet";
-import { ProductWizard } from "./ProductWizard";
+import { CatalogSheets, type CatalogSheet } from "./CatalogSheets";
+import { CategoryList } from "./CategoryList";
+import { ProductList } from "./ProductList";
 import { useMessage } from "./catalog-ui";
 import { PageHeader } from "../../_components/kit/PageHeader";
-import { Alert, Button, buttonClass, Checkbox, Tabs, useConfirm } from "../../_components/kit";
+import { Alert, Button, buttonClass, Tabs, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { formatList } from "../../_lib/digits";
 import { isPlatformTenant } from "@/lib/tenant-type";
-
-/**
- * The published `catalog` namespace in every language locale-service has —
- * an item falls back to its own source language, which may be any of them
- * (F-1533-g). A failure costs the names, never the list: it shows keys.
- */
-async function loadTexts(api: CatalogAdminApi, langs: readonly string[]): Promise<CatalogTexts> {
-  const entries = await Promise.all(langs.map(async (l) => [l, flattenTexts(await api.texts(l).catch(() => ({})))] as const));
-  return Object.fromEntries(entries);
-}
 
 /** Whether this viewer closed the guide. Browser storage can be missing or throw: then the guide just shows. */
 const GUIDE_CLOSED = "txnet.catalog.guideClosed";
@@ -50,8 +39,14 @@ const writeGuideClosed = (closed: boolean) => {
     // a per-viewer convenience only
   }
 };
+// Storage is read once per render and never announces a change, so there is nothing to subscribe to.
+const noSubscription = () => () => {};
 
-type Renaming = { kind: "product" | "category" | "capability"; id: string; nameKey: string; descriptionKey: string | null; sourceLang: string };
+type Tab = "products" | "categories" | "capabilities";
+type Feedback = { notice: string | null; error: string | null; report: { key: string; count: number }[] };
+const NO_FEEDBACK: Feedback = { notice: null, error: null, report: [] };
+const NO_FILTERS = { categoryId: "", platformOnly: false, showArchived: false };
+const NO_DATA: CatalogData = { categories: [], archivedCategories: [], capabilities: [], products: [], archived: [], texts: {} };
 
 /**
  * The catalog page (F-026-f, D-34): products and categories on two tabs, a
@@ -66,11 +61,11 @@ type Renaming = { kind: "product" | "category" | "capability"; id: string; nameK
  * product never sold and archives a sold one — the page shows what it did, and
  * the archived behind their own toggle — and of categories (F-026-k), where an
  * empty one goes and one holding products stays. A price change is always a new row (F-0602).
+ * The lists live in `useCatalogData`, the sheets in `CatalogSheets` (FE-1-i-a).
  */
 export function CatalogView() {
   const { t, lang, availableLocales } = useLocale();
   const confirm = useConfirm();
-  const langCodes = availableLocales.map((l) => l.code).join(",");
   const message = useMessage();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const surface = useCatalogSurface();
@@ -78,92 +73,55 @@ export function CatalogView() {
   // Nobody is an owner on a reseller's screen: billing runs the work as the
   // reseller and refuses a platform item there, whoever is signed in (F-066-w8).
   const owner = isPlatformTenant(surfaceActor(me, surface.tenantId)?.tenant?.type);
-  const [tab, setTab] = useState<"products" | "categories" | "capabilities">("products");
-  const [categories, setCategories] = useState<CatalogCategory[]>([]);
-  // Categories archived with their sold products (F-026-l): out of the tab, still naming those products.
-  const [archivedCategories, setArchivedCategories] = useState<CatalogCategory[]>([]);
+  const langs = availableLocales.length ? availableLocales.map((l) => l.code) : [lang];
+  const { data, error, pending, reload } = useCatalogData(api, langs);
+  const { categories, archivedCategories, capabilities, products, archived, texts } = data ?? NO_DATA;
+  const [tab, setTab] = useState<Tab>("products");
+  const [filters, setFilters] = useState(NO_FILTERS);
   const [showArchivedCategories, setShowArchivedCategories] = useState(false);
-  // What a product may unlock (F-114-f-b): the platform's and the caller's own, every one for the owner.
-  const [capabilities, setCapabilities] = useState<CatalogCapability[]>([]);
-  // Every product the caller manages: the taken keys come from here, whatever the filters show.
-  const [products, setProducts] = useState<CatalogProduct[] | null>(null);
-  // Sold products a removal kept (F-026-h): out of the list, still holding their keys.
-  const [archived, setArchived] = useState<CatalogProduct[]>([]);
-  const [showArchived, setShowArchived] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [removing, setRemoving] = useState(false);
+  const productPicks = useIdSelection(products);
   // The categories tab has its own selection (F-026-k): a tab switch never carries one into the other.
-  const [pickedCategories, setPickedCategories] = useState<Set<string>>(new Set());
-  const [switching, setSwitching] = useState(false);
-  const [report, setReport] = useState<{ key: string; count: number }[]>([]);
-  const [categoryId, setCategoryId] = useState("");
-  const [platformOnly, setPlatformOnly] = useState(false);
-  const [pending, setPending] = useState<number | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [creating, setCreating] = useState<"product" | "category" | "capability" | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const categoryPicks = useIdSelection(categories);
+  const [busy, setBusy] = useState<"removing" | "switching" | null>(null);
+  const [feedback, setFeedback] = useState<Feedback>(NO_FEEDBACK);
+  const [sheet, setSheet] = useState<CatalogSheet | null>(null);
   // The product the wizard just made (F-114-g): marked in the list, offered from the notice.
   const [freshId, setFreshId] = useState<string | null>(null);
-  const [texts, setTexts] = useState<CatalogTexts>({});
-  const [renaming, setRenaming] = useState<Renaming | null>(null);
-  const [moving, setMoving] = useState<CatalogCategory | null>(null);
-  const [guide, setGuide] = useState(false);
-
-  useEffect(() => {
-    // Storage is only readable in the browser, after the first render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setGuide(!readGuideClosed());
-  }, []);
-
-  const load = useCallback(async () => {
-    try {
-      const [cats, keptCats, prods, kept, caps, names] = await Promise.all([
-        api.categories(),
-        api.categories({ archived: "true" }),
-        api.products(),
-        api.products({ archived: "true" }),
-        api.capabilities(),
-        loadTexts(api, langCodes ? langCodes.split(",") : [lang]),
-      ]);
-      setCategories(cats);
-      setArchivedCategories(keptCats);
-      setProducts(prods);
-      setArchived(kept);
-      setCapabilities(caps);
-      setSelected((before) => stillSelected(before, prods));
-      setPickedCategories((before) => stillSelected(before, cats));
-      setTexts(names);
-      setError(null);
-    } catch (e) {
-      setError(e);
-    }
-    // The review count is a hint beside a link: its failure is not the page's.
-    api.translations().then((d) => setPending(d.length), () => setPending(null));
-  }, [api, lang, langCodes]);
+  const guideClosed = useSyncExternalStore(noSubscription, readGuideClosed, () => true);
+  const [guideChoice, setGuideChoice] = useState<boolean | null>(null);
+  const guide = guideChoice ?? !guideClosed;
+  const showGuide = (open: boolean) => {
+    setGuideChoice(open);
+    writeGuideClosed(!open);
+  };
 
   // A change the host may care about (the setup wizard's checklist, UX-2-d).
   const changed = async () => {
-    await load();
+    await reload();
     surface.onChanged?.();
   };
 
-  useEffect(() => {
-    // Every setState in load runs after its first await, as in `CouponsView`.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void load();
-  }, [load]);
-
   const act = async (run: () => Promise<unknown>) => {
-    setActionError(null);
-    setReport([]);
+    setFeedback(NO_FEEDBACK);
     try {
       await run();
-      setNotice(t("common", K.saved));
+      setFeedback({ ...NO_FEEDBACK, notice: t("common", K.saved) });
       await changed();
     } catch (e) {
-      setActionError(message(e));
+      setFeedback({ ...NO_FEEDBACK, error: message(e) });
+    }
+  };
+  // A group action: busy while it runs, its outcome as a report, any failure as the page's error.
+  const runGroup = async (kind: "removing" | "switching", run: () => Promise<Feedback["report"]>) => {
+    setBusy(kind);
+    setFeedback(NO_FEEDBACK);
+    try {
+      setFeedback({ ...NO_FEEDBACK, report: await run() });
+      await changed();
+    } catch (e) {
+      setFeedback({ ...NO_FEEDBACK, error: message(e) });
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -179,49 +137,24 @@ export function CatalogView() {
     const c = capabilities.find((x) => x.key === k);
     return c ? nameOf(c) : k;
   };
-  const listed = showArchived ? archived : (products ?? []);
-  const shown = listed.filter((p) => (!categoryId || p.categoryIds.includes(categoryId)) && (!platformOnly || p.platform));
-  const allSelected = !showArchived && shown.length > 0 && shown.every((p) => selected.has(p.id));
-  const toggle = (id: string) =>
-    setSelected((before) => {
-      const next = new Set(before);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const removeSelected = async () => {
-    const ids = [...selected];
-    if (ids.length === 0 || !(await confirm({ title: t("common", K.removal.confirm, { count: ids.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
-    setRemoving(true);
-    setActionError(null);
-    setNotice(null);
-    try {
-      setReport(removalReport(await api.removeProducts(ids)));
-      setSelected(new Set());
-      await changed();
-    } catch (e) {
-      setActionError(message(e));
-    } finally {
-      setRemoving(false);
-    }
-  };
+  const listed = filters.showArchived ? archived : products;
+  const shown = listed.filter((p) => (!filters.categoryId || p.categoryIds.includes(filters.categoryId)) && (!filters.platformOnly || p.platform));
   // Archived products count: billing keeps a category any of them sits in (F-026-j).
-  const counts = useMemo(() => productCounts(products ?? [], archived), [products, archived]);
-  const allCategoriesPicked = categories.length > 0 && categories.every((c) => pickedCategories.has(c.id));
-  const pickCategory = (id: string) =>
-    setPickedCategories((before) => {
-      const next = new Set(before);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const counts = useMemo(() => productCounts(products, archived), [products, archived]);
+
+  const removeSelected = async () => {
+    const ids = [...productPicks.selected];
+    if (ids.length === 0 || !(await confirm({ title: t("common", K.removal.confirm, { count: ids.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
+    await runGroup("removing", async () => {
+      const report = removalReport(await api.removeProducts(ids));
+      productPicks.clear();
+      return report;
     });
+  };
   const removeCategories = async () => {
-    const ids = [...pickedCategories];
+    const ids = [...categoryPicks.selected];
     if (ids.length === 0 || !(await confirm({ title: t("common", K.categories.confirm, { count: ids.length }), confirmLabel: t("common", FrontendI18nKeys.common.kit.confirm.delete), tone: "danger" }))) return;
-    setRemoving(true);
-    setActionError(null);
-    setNotice(null);
-    try {
+    await runGroup("removing", async () => {
       // Billing keeps a category with products in it; only then, and only for those, the page asks again (F-026-m).
       let outcomes = await api.removeCategories(ids);
       const held = heldByProducts(outcomes);
@@ -233,54 +166,36 @@ export function CatalogView() {
       ) {
         outcomes = mergeRemovals(outcomes, await api.removeCategories(held, true));
       }
-      setReport(categoryRemovalReport(outcomes));
-      setPickedCategories(new Set());
-      await changed();
-    } catch (e) {
-      setActionError(message(e));
-    } finally {
-      setRemoving(false);
-    }
+      categoryPicks.clear();
+      return categoryRemovalReport(outcomes);
+    });
   };
   // One PATCH per category that changes, each on its own; the list is read once after all of them.
-  const switchCategories = async (on: boolean) => {
-    const ids = switchTargets(pickedCategories, categories, on);
-    setSwitching(true);
-    setActionError(null);
-    setNotice(null);
-    try {
-      setReport(switchReport(await Promise.allSettled(ids.map((id) => api.updateCategory(id, { isActive: on })))));
-      await changed();
-    } finally {
-      setSwitching(false);
-    }
-  };
-  const openProduct = products?.find((p) => p.id === openId) ?? null;
+  const switchCategories = (on: boolean) =>
+    runGroup("switching", async () =>
+      switchReport(await Promise.allSettled(switchTargets(categoryPicks.selected, categories, on).map((id) => api.updateCategory(id, { isActive: on })))),
+    );
 
-  const closeGuide = () => {
-    setGuide(false);
-    writeGuideClosed(true);
-  };
   const saved = async () => {
-    setCreating(null);
-    setRenaming(null);
-    setMoving(null);
-    setNotice(t("common", K.saved));
+    setSheet(null);
+    setFeedback({ ...NO_FEEDBACK, notice: t("common", K.saved) });
     await changed();
+  };
+  const productCreated = async (productId: string, variantFailed: boolean) => {
+    const next = afterWizard(productId, variantFailed);
+    setSheet(null);
+    setTab("products");
+    setFilters(NO_FILTERS);
+    await changed();
+    setFreshId(next.freshId);
+    if (next.openId) setSheet({ kind: "open", productId: next.openId });
+    setFeedback({ ...NO_FEEDBACK, notice: next.notice && t("common", next.notice), error: next.error && t("common", next.error) });
   };
 
   const actions = (
     <div className="flex flex-wrap items-center gap-2">
       {!guide && (
-        <Button
-          variant="quiet"
-          size="sm"
-          onClick={() => {
-            setGuide(true);
-            writeGuideClosed(false);
-          }}
-          icon={<BookOpen size={14} aria-hidden />}
-        >
+        <Button variant="quiet" size="sm" onClick={() => showGuide(true)} icon={<BookOpen size={14} aria-hidden />}>
           {t("common", K.guide.show)}
         </Button>
       )}
@@ -293,7 +208,7 @@ export function CatalogView() {
           </span>
         ) : null}
       </Link>
-      <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
+      <Button variant="primary" size="sm" onClick={() => setSheet({ kind: "create", what: "product" })} icon={<Plus size={14} aria-hidden />}>
         {t("common", K.newProduct)}
       </Button>
     </div>
@@ -308,16 +223,16 @@ export function CatalogView() {
       )}
       {surface.chrome}
 
-      {guide && <CatalogGuide onClose={closeGuide} />}
+      {guide && <CatalogGuide onClose={() => showGuide(false)} />}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Tabs<"products" | "categories" | "capabilities">
+        <Tabs<Tab>
           ariaLabel={t("common", K.title)}
           variant="pills"
           value={tab}
           onChange={setTab}
           tabs={[
-            { value: "products", label: t("common", K.tabs.products), badge: products ? String(products.length) : undefined },
+            { value: "products", label: t("common", K.tabs.products), badge: data ? String(products.length) : undefined },
             { value: "categories", label: t("common", K.tabs.categories), badge: String(categories.length) },
             { value: "capabilities", label: t("common", K.tabs.capabilities), badge: String(capabilities.length) },
           ]}
@@ -326,16 +241,16 @@ export function CatalogView() {
           <div className="flex flex-wrap gap-2">
             <Select
               ariaLabel={t("common", K.filters.category)}
-              value={categoryId}
-              onChange={setCategoryId}
+              value={filters.categoryId}
+              onChange={(categoryId) => setFilters({ ...filters, categoryId })}
               options={[{ value: "", label: t("common", K.filters.allCategories) }, ...tree.map(({ category: c }) => ({ value: c.id, label: categoryName(c.id) }))]}
               className="w-44"
             />
             {owner && (
               <Select
                 ariaLabel={t("common", K.filters.scope)}
-                value={platformOnly ? "platform" : ""}
-                onChange={(v) => setPlatformOnly(v === "platform")}
+                value={filters.platformOnly ? "platform" : ""}
+                onChange={(v) => setFilters({ ...filters, platformOnly: v === "platform" })}
                 options={[
                   { value: "", label: t("common", K.filters.scopeAll) },
                   { value: "platform", label: t("common", K.filters.scopePlatform) },
@@ -343,23 +258,23 @@ export function CatalogView() {
                 className="w-40"
               />
             )}
-            {(archived.length > 0 || showArchived) && (
+            {(archived.length > 0 || filters.showArchived) && (
               <Button
                 variant="quiet"
                 size="sm"
-                aria-pressed={showArchived}
+                aria-pressed={filters.showArchived}
                 onClick={() => {
-                  setShowArchived(!showArchived);
-                  setSelected(new Set());
+                  setFilters({ ...filters, showArchived: !filters.showArchived });
+                  productPicks.clear();
                 }}
                 icon={<Archive size={14} aria-hidden />}
               >
-                {showArchived ? t("common", K.removal.showActive) : t("common", K.removal.showArchived, { count: archived.length })}
+                {filters.showArchived ? t("common", K.removal.showActive) : t("common", K.removal.showArchived, { count: archived.length })}
               </Button>
             )}
           </div>
         ) : tab === "capabilities" ? (
-          <Button variant="quiet" size="sm" onClick={() => setCreating("capability")} icon={<Plus size={14} aria-hidden />}>
+          <Button variant="quiet" size="sm" onClick={() => setSheet({ kind: "create", what: "capability" })} icon={<Plus size={14} aria-hidden />}>
             {t("common", K.capabilities.new)}
           </Button>
         ) : (
@@ -371,7 +286,7 @@ export function CatalogView() {
                 aria-pressed={showArchivedCategories}
                 onClick={() => {
                   setShowArchivedCategories(!showArchivedCategories);
-                  setPickedCategories(new Set());
+                  categoryPicks.clear();
                 }}
                 icon={<Archive size={14} aria-hidden />}
               >
@@ -380,33 +295,33 @@ export function CatalogView() {
                   : t("common", K.categories.showArchived, { count: archivedCategories.length })}
               </Button>
             )}
-            <Button variant="quiet" size="sm" onClick={() => setCreating("category")} icon={<Tags size={14} aria-hidden />}>
+            <Button variant="quiet" size="sm" onClick={() => setSheet({ kind: "create", what: "category" })} icon={<Tags size={14} aria-hidden />}>
               {t("common", K.newCategory)}
             </Button>
           </div>
         )}
       </div>
 
-      {notice && (
+      {feedback.notice && (
         <p className="flex flex-wrap items-center gap-2 text-xs font-bold text-primary" role="status">
-          {notice}
-          {freshId && products?.some((p) => p.id === freshId) && (
-            <Button variant="quiet" size="sm" onClick={() => setOpenId(freshId)}>
+          {feedback.notice}
+          {freshId && products.some((p) => p.id === freshId) && (
+            <Button variant="quiet" size="sm" onClick={() => setSheet({ kind: "open", productId: freshId })}>
               {t("common", K.wizard.openNew)}
             </Button>
           )}
         </p>
       )}
-      {report.length > 0 && (
+      {feedback.report.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-xs font-bold text-primary" role="status">
-          {report.map((line) => (
+          {feedback.report.map((line) => (
             <li key={line.key}>{t("common", line.key, { count: line.count })}</li>
           ))}
         </ul>
       )}
-      {actionError && <Alert tone="error">{actionError}</Alert>}
+      {feedback.error && <Alert tone="error">{feedback.error}</Alert>}
 
-      {sessionLoading || (!products && !error) ? (
+      {sessionLoading || (!data && !error) ? (
         <p className="flex items-center gap-2 text-xs text-text-secondary">
           <Loader2 size={14} className="animate-spin" aria-hidden />
           {t("common", K.loading)}
@@ -414,286 +329,65 @@ export function CatalogView() {
       ) : error ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Alert tone="error">{message(error)}</Alert>
-          <Button variant="quiet" size="sm" onClick={() => void load()} icon={<RotateCw size={14} aria-hidden />}>
+          <Button variant="quiet" size="sm" onClick={() => void reload()} icon={<RotateCw size={14} aria-hidden />}>
             {t("common", K.retry)}
           </Button>
         </div>
-      ) : tab === "products" && showArchived ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-text-secondary">{t("common", K.removal.archivedHint)}</p>
-          {shown.length === 0 ? (
-            <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.removal.archivedEmpty)}</p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {shown.map((p) => (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
-                    <p className="text-[11px] text-text-secondary">
-                      {categoryNames(p.categoryIds)} · {t("common", K.removal.archivedBadge)}
-                      {p.platform && ` · ${t("common", K.platform)}`}
-                    </p>
-                  </div>
-                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateProduct(p.id, { archived: false }))} icon={<RotateCcw size={14} aria-hidden />}>
-                    {t("common", K.removal.restore)}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       ) : tab === "products" ? (
-        shown.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-8">
-            <p className="text-sm text-text-secondary">{t("common", K.empty)}</p>
-            <Button variant="primary" size="sm" onClick={() => setCreating("product")} icon={<Plus size={14} aria-hidden />}>
-              {t("common", K.newProduct)}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
-              <Checkbox
-                checked={allSelected}
-                onChange={() => setSelected(allSelected ? new Set() : new Set(shown.map((p) => p.id)))}
-                label={<span className="text-xs font-bold">{t("common", K.removal.selectAll)}</span>}
-              />
-              {selected.size > 0 && (
-                <>
-                  <span className="text-text-secondary">{t("common", K.removal.selected, { count: selected.size })}</span>
-                  <Button
-                    size="sm"
-                    disabled={removing}
-                    onClick={() => void removeSelected()}
-                    icon={removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
-                    className="text-error hover:text-error hover:bg-error-bg"
-                  >
-                    {t("common", removing ? K.removal.removing : K.removal.remove)}
-                  </Button>
-                </>
-              )}
-            </div>
-            <ul className="flex flex-col gap-2">
-              {shown.map((p) => (
-                <li
-                  key={p.id}
-                  className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card-bg p-3 shadow-sm ${p.id === freshId ? "border-primary ring-2 ring-primary/30" : "border-card-border"}`}
-                >
-                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={nameOf(p)} />
-                  <button type="button" className="min-w-0 flex-1 text-start" onClick={() => setOpenId(p.id)}>
-                  <p className="truncate text-sm font-bold text-text-primary">{nameOf(p)}</p>
-                  <p className="text-[11px] text-text-secondary">
-                    {categoryNames(p.categoryIds)} · {t("common", K.fulfilmentKind[p.fulfilmentKind])}
-                    {p.platform && ` · ${t("common", K.platform)}`}
-                    {!p.isActive && ` · ${t("common", K.inactive)}`}
-                    {(p.userGroupIds?.length ?? 0) > 0 && ` · ${t("common", K.audience.limited)}`}
-                  </p>
-                  {p.featureKeys.length > 0 && (
-                    <p className="mt-1 flex flex-wrap gap-1">
-                      {p.featureKeys.map((k) => (
-                        <span key={k} title={k} className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-[10px] font-bold text-primary">
-                          {capabilityName(k)}
-                        </span>
-                      ))}
-                    </p>
-                  )}
-                </button>
-                <div className="flex gap-1">
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    onClick={() => setRenaming({ kind: "product", id: p.id, nameKey: p.nameKey, descriptionKey: p.descriptionKey, sourceLang: p.sourceLang })}
-                    icon={<Pencil size={14} aria-hidden />}
-                  >
-                    {t("common", K.rename)}
-                  </Button>
-                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateProduct(p.id, { isActive: !p.isActive }))} icon={<Power size={14} aria-hidden />}>
-                    {t("common", p.isActive ? K.deactivate : K.activate)}
-                  </Button>
-                  <Button variant="quiet" size="sm" onClick={() => setOpenId(p.id)}>
-                    {t("common", K.open)}
-                    <ChevronLeft size={14} className="ltr:-scale-x-100" aria-hidden />
-                  </Button>
-                </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )
+        <ProductList
+          shown={shown}
+          archived={filters.showArchived}
+          selection={productPicks}
+          removing={busy === "removing"}
+          freshId={freshId}
+          nameOf={nameOf}
+          categoryNames={categoryNames}
+          capabilityName={capabilityName}
+          onSheet={setSheet}
+          onAct={(run) => void act(run)}
+          onRemove={() => void removeSelected()}
+          api={api}
+        />
       ) : tab === "capabilities" ? (
         <CapabilitiesTab
           capabilities={capabilities}
           owner={owner}
           label={nameOf}
-          onRename={(c) => setRenaming({ kind: "capability", id: c.id, nameKey: c.nameKey, descriptionKey: c.descriptionKey, sourceLang: c.sourceLang })}
+          onRename={(c) => setSheet({ kind: "rename", item: { kind: "capability", id: c.id, nameKey: c.nameKey, descriptionKey: c.descriptionKey, sourceLang: c.sourceLang } })}
           onRemove={(c) => void act(() => api.removeCapability(c.id))}
         />
-      ) : showArchivedCategories ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-xs text-text-secondary">{t("common", K.categories.archivedHint)}</p>
-          {archivedCategories.length === 0 ? (
-            <p className="py-8 text-center text-sm text-text-secondary">{t("common", K.categories.archivedEmpty)}</p>
-          ) : (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {archivedCategories.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 opacity-80 shadow-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
-                    <p className="text-[11px] text-text-secondary">
-                      {t("common", K.categories.archivedProducts, { count: counts.get(c.id) ?? 0 })} · {t("common", K.removal.archivedBadge)}
-                      {c.platform && ` · ${t("common", K.platform)}`}
-                    </p>
-                  </div>
-                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateCategory(c.id, RESTORE_CATEGORY))} icon={<RotateCcw size={14} aria-hidden />}>
-                    {t("common", K.removal.restore)}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : categories.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 py-8">
-          <p className="text-sm text-text-secondary">{t("common", K.categories.empty)}</p>
-          <Button variant="primary" size="sm" onClick={() => setCreating("category")} icon={<Tags size={14} aria-hidden />}>
-            {t("common", K.newCategory)}
-          </Button>
-        </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-3 px-1 text-xs">
-            <Checkbox
-              checked={allCategoriesPicked}
-              onChange={() => setPickedCategories(allCategoriesPicked ? new Set() : new Set(categories.map((c) => c.id)))}
-              label={<span className="text-xs font-bold">{t("common", K.removal.selectAll)}</span>}
-            />
-            {pickedCategories.size > 0 && (
-              <>
-                <span className="text-text-secondary">{t("common", K.categories.selected, { count: pickedCategories.size })}</span>
-                <Button variant="quiet" size="sm" disabled={switching || removing} onClick={() => void switchCategories(true)} icon={<Power size={14} aria-hidden />}>
-                  {t("common", K.categories.switchOn)}
-                </Button>
-                <Button variant="quiet" size="sm" disabled={switching || removing} onClick={() => void switchCategories(false)} icon={<Power size={14} aria-hidden />}>
-                  {t("common", K.categories.switchOff)}
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={switching || removing}
-                  onClick={() => void removeCategories()}
-                  icon={removing ? <Loader2 size={14} className="animate-spin" aria-hidden /> : <Trash2 size={14} aria-hidden />}
-                  className="text-error hover:text-error hover:bg-error-bg"
-                >
-                  {t("common", removing ? K.removal.removing : K.removal.remove)}
-                </Button>
-              </>
-            )}
-          </div>
-          <ul className="flex flex-col gap-2">
-            {tree.map(({ category: c, depth }) => (
-              <li
-                key={c.id}
-                style={{ marginInlineStart: `${depth * 1.5}rem` }}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-card-border bg-card-bg p-3 shadow-sm"
-              >
-                <input type="checkbox" checked={pickedCategories.has(c.id)} onChange={() => pickCategory(c.id)} aria-label={nameOf(c)} />
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-start"
-                  onClick={() => {
-                    setCategoryId(c.id);
-                    setTab("products");
-                  }}
-                >
-                  <p className="truncate text-sm font-bold text-text-primary">{nameOf(c)}</p>
-                  <p className="text-[11px] text-text-secondary">
-                    {t("common", K.categories.products, { count: counts.get(c.id) ?? 0 })}
-                    {c.platform && ` · ${t("common", K.platform)}`}
-                    {!c.isActive && ` · ${t("common", K.inactive)}`}
-                  </p>
-                </button>
-                <div className="flex gap-1">
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    onClick={() => setRenaming({ kind: "category", id: c.id, nameKey: c.nameKey, descriptionKey: null, sourceLang: c.sourceLang })}
-                    icon={<Pencil size={14} aria-hidden />}
-                  >
-                    {t("common", K.rename)}
-                  </Button>
-                  <Button variant="quiet" size="sm" onClick={() => setMoving(c)} icon={<FolderTree size={14} aria-hidden />}>
-                    {t("common", K.categories.move)}
-                  </Button>
-                  <Button variant="quiet" size="sm" onClick={() => void act(() => api.updateCategory(c.id, { isActive: !c.isActive }))} icon={<Power size={14} aria-hidden />}>
-                    {t("common", c.isActive ? K.deactivate : K.activate)}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <CategoryList
+          categories={categories}
+          tree={tree}
+          archivedCategories={archivedCategories}
+          showArchived={showArchivedCategories}
+          counts={counts}
+          selection={categoryPicks}
+          busy={busy}
+          nameOf={nameOf}
+          onSheet={setSheet}
+          onAct={(run) => void act(run)}
+          onSwitch={(on) => void switchCategories(on)}
+          onRemove={() => void removeCategories()}
+          onShowProducts={(categoryId) => {
+            setFilters({ ...filters, categoryId });
+            setTab("products");
+          }}
+          api={api}
+        />
       )}
 
-      {creating === "category" && (
-        <CategorySheet
-          takenKeys={categories.map((c) => c.key)}
-          categories={categories}
-          label={nameOf}
-          onClose={() => setCreating(null)}
+      {data && (
+        <CatalogSheets
+          sheet={sheet}
+          data={data}
+          nameOf={nameOf}
+          reload={reload}
+          onClose={() => setSheet(null)}
           onSaved={saved}
-        />
-      )}
-      {creating === "capability" && (
-        <CapabilitySheet takenKeys={capabilities.map((c) => c.key)} onClose={() => setCreating(null)} onSaved={saved} />
-      )}
-      {creating === "product" && (
-        <ProductWizard
-          categories={categories}
-          categoryLabel={nameOf}
-          takenProductKeys={[...(products ?? []), ...archived].map((p) => p.key)}
-          takenCategoryKeys={categories.map((c) => c.key)}
-          capabilities={capabilities}
-          capabilityLabel={nameOf}
-          onCapabilityCreated={load}
-          onClose={() => setCreating(null)}
-          onCreated={async (productId, variantFailed) => {
-            const next = afterWizard(productId, variantFailed);
-            setCreating(null);
-            setTab("products");
-            setCategoryId("");
-            setPlatformOnly(false);
-            setShowArchived(false);
-            await changed();
-            setFreshId(next.freshId);
-            setOpenId(next.openId);
-            setNotice(next.notice && t("common", next.notice));
-            setActionError(next.error && t("common", next.error));
-          }}
-        />
-      )}
-      {openProduct && (
-        <ProductDetailSheet
-          product={openProduct}
-          name={nameOf(openProduct)}
-          capabilities={capabilities}
-          capabilityLabel={nameOf}
-          onCapabilityCreated={load}
-          categories={categories}
-          categoryLabel={nameOf}
-          onClose={() => setOpenId(null)}
           onChanged={changed}
-        />
-      )}
-      {moving && <MoveCategorySheet category={moving} categories={categories} label={nameOf} onClose={() => setMoving(null)} onSaved={saved} />}
-      {renaming && (
-        <NamesSheet
-          kind={renaming.kind}
-          id={renaming.id}
-          nameKey={renaming.nameKey}
-          descriptionKey={renaming.descriptionKey}
-          texts={texts}
-          initialSource={renaming.sourceLang}
-          onClose={() => setRenaming(null)}
-          onSaved={saved}
+          onProductCreated={productCreated}
         />
       )}
     </div>

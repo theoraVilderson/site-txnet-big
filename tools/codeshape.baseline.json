@@ -395,7 +395,6 @@
   "site-pwa/src/app/(panel)/_components/PanelSidebar.tsx": 617,
   "site-pwa/src/app/(panel)/_lib/panel-menu.ts": 771,
   "site-pwa/src/app/(panel)/accounts/add/page.tsx": 430,
-  "site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx": 701,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx": 627,
   "site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx": 409,
   "site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts": 924,
@@ -515,7 +514,6 @@
   "site-pwa/src/app/(panel)/ai/_components/ResellersAtRisk.tsx [lint-off]": 1,
   "site-pwa/src/app/(panel)/ai/_components/UpliftReportView.tsx [lint-off]": 1,
   "site-pwa/src/app/(panel)/ai/_components/UsageForecastView.tsx [lint-off]": 1,
-  "site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx [lint-off]": 2,
   "site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx [raw-storage]": 3,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx [lint-off]": 3,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx [non-null]": 2,
@@ -630,7 +628,6 @@
  },
  "state": {
   "site-pwa/src/app/(panel)/_components/ManualRateCard.tsx": 12,
-  "site-pwa/src/app/(panel)/catalog/_components/CatalogView.tsx": 26,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx": 16,
   "site-pwa/src/app/(panel)/coupons/_components/GiftCodes.tsx": 13,
   "site-pwa/src/app/(panel)/financial/deposit/_components/DepositView.tsx": 11,

@@ -10,8 +10,9 @@ updated: 2026-09-29
 
 A topic file of [contract.md](contract.md) (§10). One page, `/catalog`
 (`PANEL_CATALOG`), under `(panel)/catalog/`: `page.tsx` is a server shell,
-`_components/CatalogView.tsx` the list and its sheets, `_lib/catalog-form.ts`
-the rules. The API is `lib/catalog-api.ts` over `/api/catalog`; the routes, the
+`_components/CatalogView.tsx` the page, `_hooks/useCatalogData.ts` its lists
+(only the newest read writes), `CatalogSheets.tsx` the one sheet open,
+`_lib/catalog-form.ts` the rules. The API is `lib/catalog-api.ts` over `/api/catalog`; the routes, the
 scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md)'s
 (F-026-d, ADR-0049).
 
