@@ -289,7 +289,8 @@ func TestAFewResetsOnAPanelAreOrdinaryResets(t *testing.T) {
 		configs, zero int
 	}{
 		{"exactly the share is not more than it", 10, 2},
-		{"a small panel under the floor", 4, 4},
+		{"a small panel under the floor, not every counter", 4, 3},
+		{"one counter alone is a reset, not a restore", 1, 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := newContainRig(t)
@@ -315,6 +316,38 @@ func TestAFewResetsOnAPanelAreOrdinaryResets(t *testing.T) {
 			}
 			if resets != tc.zero {
 				t.Fatalf("published %d post-reset deltas, want %d billed as ordinary resets", resets, tc.zero)
+			}
+		})
+	}
+}
+
+// F-027-fd (ADR-0130 decision 5): below the floor, every counter going backward
+// together is still a restore — a panel with few of our clients is exactly
+// where the floor alone let the restored figures be charged twice.
+func TestASmallPanelWhoseEveryCounterGoesBackwardHalts(t *testing.T) {
+	for _, configs := range []int{2, 4} {
+		t.Run(fmt.Sprintf("%d of %d", configs, configs), func(t *testing.T) {
+			r := newContainRig(t)
+			remote := r.many(t, configs)
+			for _, id := range remote {
+				r.panel.Serve(id, 0, 1*gb)
+			}
+			r.pass(t)
+			for _, id := range remote {
+				r.panel.ZeroCounter(id)
+				r.panel.Serve(id, 0, gb/2)
+			}
+			r.pass(t)
+
+			events := r.events.Events("panel-1")
+			if len(events) != 1 || events[0].Type != collect.MassReset ||
+				events[0].Affected != configs || events[0].Observed != configs {
+				t.Fatalf("events = %+v, want one mass_reset over %d of %d", events, configs, configs)
+			}
+			for _, d := range r.sink.last(t).Deltas {
+				if d.AfterReset {
+					t.Fatalf("published %+v: a restore is not billed", d)
+				}
 			}
 		})
 	}

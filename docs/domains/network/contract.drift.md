@@ -127,8 +127,10 @@ backup restore is every counter doing it at once, each individually
 plausible, and billing them charges the restored figures a second time. So
 `collect.Containment` judges each normalised pass **before it publishes**:
 more than 20% of the cumulative counters read (`DefaultMassResetPercent`)
-and at least five (`DefaultMassResetFloor`) going backward is `mass_reset`.
-Then:
+and at least five (`DefaultMassResetFloor`) going backward is `mass_reset`;
+so is every counter read going backward together, at least two
+(`MassResetAllMinimum`, F-027-fd) — the floor alone let a panel with few of
+our clients be charged its restore twice. Then:
 
 - the event is raised first (`panel_drift_event`, both counts, halting); if
   that write fails nothing is published and the next pass judges again;
@@ -189,7 +191,8 @@ regenerate keeps it and that a move gets a new one.
 repair; the third inside the window is held `contested` and the window
 running out starts the count again; a higher ceiling is rewritten on a
 contested config; a restore halts, charges nothing, restates the ceiling and
-resumes on acknowledgement; 20% exactly, and four of four, do not fire.
+resumes on acknowledgement; 20% exactly, three of four and one of one do
+not fire, while two of two and four of four do.
 `internal/converge/foreign_test.go`, through the loop: another panel's client
 by tag, and by uuid alone, stops the panel before the missing config is
 recreated, names both, and neither reads nor converges it until acknowledged;

@@ -44,9 +44,15 @@ func (t DriftEventType) Converges() bool { return t != ForeignClaim }
 // of them. The floor is what keeps a three-client panel with one reset from
 // halting; halting when unsure is the safe direction, because nothing is lost
 // by it — the bytes are parked and the ceilings are still enforced.
+//
+// Below the floor, every counter going backward together is still a restore
+// (F-027-fd, ADR-0130 decision 5): the floor alone let a panel with few of
+// our clients be charged its restored figures twice. One counter alone is a
+// reset, so it takes at least MassResetAllMinimum.
 const (
 	DefaultMassResetPercent = 20
 	DefaultMassResetFloor   = 5
+	MassResetAllMinimum     = 2
 )
 
 // OpHalted is the `Op` of a panel whose collection is halted, so a halted
@@ -122,7 +128,7 @@ func (c *Containment) Contain(ctx context.Context, res *Result) error {
 			affected++
 		}
 	}
-	if affected < c.floor() || affected*100 <= c.percent()*observed {
+	if !c.isMassReset(affected, observed) {
 		return nil
 	}
 
@@ -158,6 +164,15 @@ func (c *Containment) Contain(ctx context.Context, res *Result) error {
 	}
 	res.Deltas = kept
 	return nil
+}
+
+// isMassReset is the threshold: past the floor and the share, or every
+// counter read (at least MassResetAllMinimum) at once.
+func (c *Containment) isMassReset(affected, observed int) bool {
+	if affected >= MassResetAllMinimum && affected == observed {
+		return true
+	}
+	return affected >= c.floor() && affected*100 > c.percent()*observed
 }
 
 func (c *Containment) percent() int {
