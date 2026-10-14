@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 1
-updated: 2026-10-06
+updated: 2026-10-14
 ---
 
 # Panel health — a panel is blamed only for what it answered

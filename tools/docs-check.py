@@ -10,6 +10,8 @@ Checks:
   6. open-questions rows without a date
   7. every unit is reachable from MASTER_INDEX.md
   8. every path a doc *claims* points at real code actually exists
+  9. a unit's status agrees with MASTER_INDEX.md and with what it shipped
+     (`unit_status.py`)
 
 `--room [path ...]` prints how many lines each capped doc file has left instead
 of checking anything. Ask it *before* writing prose into a contract, not after:
@@ -23,7 +25,10 @@ import re
 import sys
 import glob as globlib
 from datetime import date, datetime
+from importlib import import_module
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -427,6 +432,7 @@ def main() -> int:
                 errors.append(f"unit '{uid}' is not listed in MASTER_INDEX.md")
 
     check_claimed_paths()
+    errors.extend(import_module("unit_status").check(units, master))
 
     print(f"units: {len(units)}")
     for uid in sorted(consumers):

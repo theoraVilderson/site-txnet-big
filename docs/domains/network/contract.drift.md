@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 14
-updated: 2026-09-26
+updated: 2026-10-14
 ---
 
 # Drift — which remote client is which config, and what the panel did to it

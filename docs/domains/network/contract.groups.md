@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 18
-updated: 2026-09-25
+updated: 2026-10-14
 ---
 
 # Panel groups: where a variant's Grants are provisioned (catalog §7.3)

@@ -1,9 +1,9 @@
 ---
 id: entitlement
 layer: domain
-status: draft
+status: active
 version: 30
-updated: 2026-09-30
+updated: 2026-10-14
 ---
 
 # Contract — entitlement: how many a user may hold (F-118-ao)

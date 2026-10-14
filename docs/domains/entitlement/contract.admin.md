@@ -1,9 +1,9 @@
 ---
 id: entitlement
 layer: domain
-status: draft
+status: active
 version: 20
-updated: 2026-09-28
+updated: 2026-10-14
 ---
 
 # Contract — entitlement: an admin's actions on a Grant

@@ -1,9 +1,9 @@
 ---
 id: catalog
 layer: domain
-status: draft
+status: active
 version: 11
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Contract — catalog

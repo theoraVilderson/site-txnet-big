@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 17
-updated: 2026-09-24
+updated: 2026-10-14
 ---
 
 # The x-ui forks: two families, not one value opened two ways

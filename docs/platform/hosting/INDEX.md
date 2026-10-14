@@ -1,7 +1,7 @@
 ---
 id: hosting
 layer: platform
-status: draft
+status: active
 version: 1
 keywords: [hosting, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, swarm, docker stack, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
 source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**]
@@ -29,7 +29,7 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 
 ## Status
 
-`draft`. Opened 2026-10-06 by ADR-0126 (D-62). Built: EDGE-1-g, -h, -j, -k,
+`active` since 2026-10-14 (OPS-1-ab). Opened 2026-10-06 by ADR-0126 (D-62). Built: EDGE-1-g, -h, -j, -k,
 -m (`contract.origin.md`); OPS-1-k, -l, -z (H12/H13, `shared-core/src/lib/logging`
 in every Nest service, the gate, the queue); OPS-1-a (H1/H2, WAL archived,
 `pgbackrest-repo.sh` → `conf.d/repo.conf`); -b (H3, `compose/pg-backup.yml`,
@@ -46,3 +46,4 @@ shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f
 | Date | Change |
 |---|---|
 | 2026-10-06 | Unit opened by ADR-0126 — no code yet |
+| 2026-10-14 | **draft -> active** (OPS-1-ab): status caught up with code already shipped (the OPS-1 and EDGE-1 rows listed under Status); no contract change |

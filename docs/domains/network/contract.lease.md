@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 7
-updated: 2026-09-30
+updated: 2026-10-14
 ---
 
 # The lease planner's state — what it learns, and where it keeps it

@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 17
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # The ceiling — one bag, split across the configs that draw on it

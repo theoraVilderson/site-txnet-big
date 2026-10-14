@@ -1,13 +1,13 @@
 ---
 id: ai
 layer: domain
-status: draft
+status: active
 version: 2
 keywords: [ai, ai admin, ai.manage, at-risk, recommendation, guardrail, suggestion, revenue engine, prediction, holdout, opt-out, provider, byo-ai, suggestion card, uplift, reseller forecast, quota run-out, churn risk]
 source: [txnet-backend/prisma/domains/ai.prisma, txnet-backend/ai-service/src/**, txnet-backend/shared-core/src/lib/ai/**]
 owns_tables: [account_profile, prediction, action, offer, guardrail, holdout, opt_out, provider, task_route, usage, setting]
 depends_on: [identity, billing, automation]
-updated: 2026-10-02
+updated: 2026-10-14
 ---
 
 # AI
@@ -32,5 +32,6 @@ updated: 2026-10-02
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
 | 2026-10-02 | v2 — schema rebuilt per tenant with RLS (F-038-a, ADR-0109); old tables dropped |
+| 2026-10-14 | **draft -> active** (OPS-1-ab): status caught up with code already shipped (ai-service); no contract change |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

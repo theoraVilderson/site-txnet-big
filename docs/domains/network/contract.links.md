@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 19
-updated: 2026-10-06
+updated: 2026-10-14
 ---
 
 # Link capture: what a panel gives one client (F-027-bi)

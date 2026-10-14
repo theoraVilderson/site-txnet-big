@@ -1,7 +1,7 @@
 ---
 id: hosting
 layer: platform
-status: draft
+status: active
 version: 1
 updated: 2026-10-14
 ---

@@ -1,9 +1,9 @@
 ---
 id: engagement
 layer: domain
-status: draft
+status: active
 version: 1
-updated: 2026-10-03
+updated: 2026-10-14
 ---
 
 # Contract — engagement

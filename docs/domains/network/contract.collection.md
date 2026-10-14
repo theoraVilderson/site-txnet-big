@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 15
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # Contract — network / the collection loop

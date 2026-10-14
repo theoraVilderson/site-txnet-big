@@ -1,9 +1,9 @@
 ---
 id: entitlement
 layer: domain
-status: draft
+status: active
 version: 27
-updated: 2026-09-30
+updated: 2026-10-14
 ---
 
 # Entitlement — a reseller's package plan, bought wholesale (F-118-p)

@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 12
-updated: 2026-09-29
+updated: 2026-10-14
 ---
 
 # Resilience — nobody is cut off because the collector is not running

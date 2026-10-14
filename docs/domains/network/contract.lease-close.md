@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 3
-updated: 2026-09-30
+updated: 2026-10-14
 ---
 
 # Close by disable — when the planner closes a Grant, and what reopens it

@@ -1,9 +1,9 @@
 ---
 id: entitlement
 layer: domain
-status: draft
+status: active
 version: 13
-updated: 2026-09-28
+updated: 2026-10-14
 ---
 
 # Contract — entitlement: retention notices

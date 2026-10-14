@@ -1,9 +1,9 @@
 ---
 id: ai
 layer: domain
-status: draft
+status: active
 version: 2
-updated: 2026-10-03
+updated: 2026-10-14
 ---
 
 # Contract — ai: candidates, the action types the engine proposes

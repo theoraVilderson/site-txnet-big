@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 18
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # The planned poll — a panel read when its plan says, and the block it asks for

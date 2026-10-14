@@ -1,13 +1,13 @@
 ---
 id: engagement
 layer: domain
-status: draft
+status: active
 version: 1
 keywords: [spin wheel, lucky wheel, lottery, raffle, draw, گردونه شانس, قرعه کشی, engagement, daily reward, eligibility, attention budget, proactive message cap]
 source: [txnet-backend/ai-service/src/app/attention/**, txnet-backend/billing-service/src/app/engagement/**, txnet-backend/shared-core/src/lib/engagement/**]
 owns_tables: [spin_wheel_config, spin_wheel_prize, spin_wheel_day, spin_wheel_prize_day, spin_wheel_attempt, lottery, lottery_prize, lottery_entrant, lottery_draw, lottery_winner, reward_issue, attention_budget]
 depends_on: [identity, billing, fraud]
-updated: 2026-10-03
+updated: 2026-10-14
 ---
 
 # Engagement
@@ -27,5 +27,6 @@ updated: 2026-10-03
 | Date | Change |
 |---|---|
 | 2026-09-04 | Documented from schema during onboarding — no service yet |
+| 2026-10-14 | **draft -> active** (OPS-1-ab): status caught up with code already shipped (billing-service `engagement/` and ai-service `attention/`); no contract change |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

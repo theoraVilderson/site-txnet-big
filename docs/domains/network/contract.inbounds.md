@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 19
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # Inbounds: which ones a buyer is placed on (F-114-b)

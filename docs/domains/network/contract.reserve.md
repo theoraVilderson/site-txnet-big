@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 4
-updated: 2026-09-29
+updated: 2026-10-14
 ---
 
 # The reserve — a metered Grant's configs keep headroom the wallet backs

@@ -264,20 +264,23 @@ domain, pricing, payment gateway and bot. See `docs/architecture/overview.md`.
 
 The repo is a polyglot monorepo:
 
-- `txnet-backend/` — Nx workspace, NestJS services (`auth-service` live,
-  `billing-service` scaffold) + the Prisma schema (`prisma/domains/*.prisma`,
-  Postgres `multiSchema`, one schema per business domain).
+- `txnet-backend/` — Nx workspace, the NestJS services (auth, tenant,
+  billing, currency, notification, support, ai, bot, gateway, worker,
+  metering) + the Prisma schema (`prisma/domains/*.prisma`, Postgres
+  `multiSchema`, one schema per business domain).
+- `network-service/`, `sub-service/` — Go: the VPN-panel collector and `/sub`.
 - `auth-handler/` — Go Traefik ForwardAuth gateway (JWT + Redis session + RBAC).
 - `i18n-platform/` — `locale-service` (Go gRPC, source of truth for every
   translation) + one shared Go client and one shared Node client.
 - `locales/` — the translation content `locale-service` serves.
 - `site-pwa/` — Next.js user panel. `coinsite/` — Next.js landing site (skeleton).
-- `dev-docker/`, `swarm/`, `scripts/` — Traefik + Postgres + Redis + RabbitMQ +
-  monitoring; `docker compose` for dev, Docker Swarm for prod.
+- `dev-docker/`, `swarm/`, `scripts/` — Traefik + Postgres + PgBouncer + Redis +
+  RabbitMQ + monitoring; `docker compose` today, Docker Swarm once OPS-1-o lands.
 
-Most Prisma domains are **schema only** — no service implements them yet. Those
-units are `status: draft` with `source: []`. Do not describe unbuilt behaviour as
-if it exists.
+`docs/architecture/overview.md` is the runtime picture. A unit's `status` is
+`MASTER_INDEX.md`'s column, and `docs-check.py` holds it to the INDEX and to
+the backlog (`tools/unit_status.py`). A `draft` unit is intent only — do not
+describe unbuilt behaviour as if it exists.
 
 ## Project-specific additions (safe to edit; the two fixed files are not)
 

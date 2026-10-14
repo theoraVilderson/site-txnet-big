@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 16
-updated: 2026-09-28
+updated: 2026-10-14
 ---
 
 # Provisioning — every action is desired state, and one pass carries it

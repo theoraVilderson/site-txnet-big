@@ -1,13 +1,13 @@
 ---
 id: catalog
 layer: domain
-status: draft
+status: active
 version: 11
 keywords: [catalog, product audience, who can buy a product, product for chosen groups, product sold to a group, محصول برای گروه, package lists product, what a reseller may sell, product not in package, rate card, rate cards, per-unit price, prepaid or postpaid, included quantity, hybrid plan, meter, meters, meter registry, usage meter, what is counted, vpn.traffic, vpn.config.regenerate, config regenerate meter, price currency, currency of a price, product, category, subcategory, category tree, product in several categories, variant, sku, price, price history, visibility, fulfilment kind, product model, delete product, archive product, capability, capabilities, feature key, what a product unlocks, traffic quota, unlimited traffic, unlimited duration, campaign, campaign price, time-boxed price, countdown, cancel a campaign, season, seasons, seasonal price, nowruz, yalda, thursday night, jalali calendar, قیمت فصلی, نوروز, یلدا, شب جمعه]
 source: [txnet-backend/prisma/domains/catalog.prisma, txnet-backend/prisma/domains/migrations/20260914001500_catalog_product_model/**, txnet-backend/prisma/domains/migrations/20260925000300_a_product_never_sold_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925000800_a_category_with_no_products_can_be_deleted/**, txnet-backend/prisma/domains/migrations/20260925001000_categories_nest_and_a_product_sits_in_several/**, txnet-backend/prisma/domains/migrations/20260925001400_a_capability_is_a_catalog_row/**, txnet-backend/prisma/domains/migrations/20260928002600_a_price_is_in_its_tenants_currency/**, txnet-backend/prisma/domains/migrations/20260929000200_a_meter_is_a_catalog_row/**, txnet-backend/prisma/domains/migrations/20260929000300_a_rate_card_prices_a_meter/**, txnet-backend/prisma/domains/migrations/20260929001300_a_config_regenerate_is_a_meter/**, txnet-backend/prisma/domains/migrations/20261002001900_a_campaign_is_two_price_rows/**, txnet-backend/prisma/domains/migrations/20261002002000_a_campaign_is_audited/**, txnet-backend/prisma/domains/migrations/20261002002100_a_season_writes_its_campaigns/**, txnet-backend/prisma/domains/migrations/20261013000200_the_platform_is_a_tenant_in_the_catalog/**, txnet-backend/prisma/domains/migrations/20261013000300_a_product_may_serve_chosen_groups/**, txnet-backend/billing-service/src/app/catalog/**, txnet-backend/shared-core/src/lib/catalog/**]
 owns_tables: [product_category, product_category_link, product_capability, meter, product, product_audience, product_variant, price, rate_card]
 depends_on: [tenant]
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Catalog
@@ -34,10 +34,10 @@ Runs as a module inside `billing-service` (ADR-0049). Spec:
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-14 | **draft -> active** (OPS-1-ab): status caught up with code already shipped (billing-service `catalog/`); no contract change |
 | 2026-10-13 | v11 (PT-1-b, ADR-0142 (4), additive): a product's audience — `product_audience`, `PUT …/products/:id/audience`; `listOffersIn` / `sellableOfferById` take the buyer. Consumers: billing (shop, invoice, users catalog), entitlement (issue: `not_in_audience`), panel-web |
 | 2026-10-13 | v10 (PT-1-a, ADR-0142): **contract break** — the platform's rows carry its tenant id, never null; views carry `platform`; a create no longer takes `tenantId: null`; `pickBySku`, `offeredToTenant` take the platform id, `sellsProduct` the seller. Consumers: billing (users catalog, coupons), tenant (packages, onboarding, guides), ai, panel-web |
 | 2026-10-01 | v9 (F-019-v5, ADR-0107 point 3, additive): a reseller is offered a platform product only if its package lists it (`platformProductsSoldBy`; `offeredToTenant` takes `listed`). Consumers: billing (shop, invoice), entitlement (issue), tenant (onboarding) |
 | 2026-09-29 | v8 (F-118-d, ADR-0105): **contract break** — `metered_rate` is retired into `rate_card` (per meter, mode, included); `meteredRateAt`/`meteredRatesInEffect` are `vpnTrafficRateAt`/`rateCardsInEffect`. Consumers: entitlement (issue), billing (currency change) |
-| 2026-09-28 | v7 (F-116-d, ADR-0098): **contract break** — `price`/`metered_rate` carry `currencyCode`; a tenant is offered only prices in its operating currency; `offeredToTenant` takes it. Consumers: billing, entitlement, tenant (onboarding) |
 
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -1,9 +1,9 @@
 ---
 id: catalog
 layer: domain
-status: draft
+status: active
 version: 9
-updated: 2026-10-02
+updated: 2026-10-14
 ---
 
 # Contract — catalog: campaigns, a time-boxed price

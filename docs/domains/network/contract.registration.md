@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 16
-updated: 2026-09-26
+updated: 2026-10-14
 ---
 
 # Registration: the connection test and its verdict

@@ -1,9 +1,9 @@
 ---
 id: network
 layer: domain
-status: draft
+status: active
 version: 1
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # The lease planner on the monitoring stack (F-027-dm, SPEC §10)

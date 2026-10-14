@@ -1,7 +1,7 @@
 ---
 id: master-index
 status: active
-updated: 2026-10-06
+updated: 2026-10-14
 ---
 
 # Master Index
@@ -19,18 +19,18 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | tenant | multi-tenant / reseller white-label: branding, domains, entitlements, tenant billing, BYO integrations | active | [->](domains/tenant/INDEX.md) |
 | billing | user wallet ledger, sub-accounts, transfers, coupons, payment gateways/transactions, affiliate | active | [->](domains/billing/INDEX.md) |
 | currency | multi-currency display layer: exchange rates, user preference, admin currency policy, and the FX worker that discovers the USD→IRR rate | active | [->](domains/currency/INDEX.md) |
-| catalog | what is for sale: categories, products, variants (SKU) and their USD price history | draft | [->](domains/catalog/INDEX.md) |
-| entitlement | Grants — the one answer to "may this user use X" — with their lifecycle and quota adjustments | draft | [->](domains/entitlement/INDEX.md) |
-| network | panels (VPN infra) + drivers, user configs (Xray/VPN), panel groups, subscription links, traffic logs + aggregates, IP access rules | draft | [->](domains/network/INDEX.md) |
-| governance | per-user settings, temporal access grants, user restrictions/caps | draft | [->](domains/governance/INDEX.md) |
+| catalog | what is for sale: categories, products, variants (SKU) and their USD price history | active | [->](domains/catalog/INDEX.md) |
+| entitlement | Grants — the one answer to "may this user use X" — with their lifecycle and quota adjustments | active | [->](domains/entitlement/INDEX.md) |
+| network | panels (VPN infra) + drivers, user configs (Xray/VPN), panel groups, subscription links, traffic logs + aggregates, IP access rules | active | [->](domains/network/INDEX.md) |
+| governance | per-user settings, temporal access grants, user restrictions/caps | active | [->](domains/governance/INDEX.md) |
 | automation | definition + scheduling + run logs of background workers | active | [->](domains/automation/INDEX.md) |
-| engagement | daily spin wheel with hard financial cap + strict eligibility | draft | [->](domains/engagement/INDEX.md) |
+| engagement | daily spin wheel with hard financial cap + strict eligibility | active | [->](domains/engagement/INDEX.md) |
 | support | one conversation per support thread (ticket and live chat are its modes), messages, read cursors, categories — `support-service` | active | [->](domains/support/INDEX.md) |
-| guide | help content: a guide per product, OS, app or panel/bot section, per language, placed; the platform's inherited by resellers (override/hide) — module of `tenant-service` | draft | [->](domains/guide/INDEX.md) |
+| guide | help content: a guide per product, OS, app or panel/bot section, per language, placed; the platform's inherited by resellers (override/hide) — module of `tenant-service` | active | [->](domains/guide/INDEX.md) |
 | notification | notification hub + campaigns + per-recipient delivery state | active | [->](domains/notification/INDEX.md) |
 | fraud | device fingerprints, central fraud flags + automatic actions | active | [->](domains/fraud/INDEX.md) |
-| audit | append-only admin audit log, impersonation sessions, account-switch groups | draft | [->](domains/audit/INDEX.md) |
-| ai | recommendation engine with financial guardrails | draft | [->](domains/ai/INDEX.md) |
+| audit | append-only admin audit log, impersonation sessions, account-switch groups | active | [->](domains/audit/INDEX.md) |
+| ai | recommendation engine with financial guardrails | active | [->](domains/ai/INDEX.md) |
 
 ## Interfaces — outside-world touchpoints
 | id | surface | status | doc |
@@ -51,7 +51,7 @@ no service yet. A unit that is `active` with an empty `source:` is a lie and
 | tenant-context | carries the tenant a request resolved to; every scoped query derives its `tenantId` from it (ADR-0024) | active | [->](platform/tenant-context/INDEX.md) |
 | realtime | one WebSocket per signed-in user, multiplexed into channels; the upgrade is authenticated by `forward-auth` (ADR-0030) | active | [->](platform/realtime/INDEX.md) |
 | object-storage | uploaded files behind one port by a tenant-prefixed key; local driver now, S3-compatible later (D-42) | active | [->](platform/object-storage/INDEX.md) |
-| hosting | how the services run and survive: Swarm/compose stacks, Postgres backup + tuning + connection pool, log bounds and format, healthchecks, operational-table housekeeping (ADR-0126) | draft | [->](platform/hosting/INDEX.md) |
+| hosting | how the services run and survive: Swarm/compose stacks, Postgres backup + tuning + connection pool, log bounds and format, healthchecks, operational-table housekeeping (ADR-0126) | active | [->](platform/hosting/INDEX.md) |
 
 ## Cross-cutting docs
 - [Surface map](SURFACES.md) — user-visible thing -> unit -> file, plus `## Flows` (cached walks). **Start here for any vague request.**

@@ -1,9 +1,9 @@
 ---
 id: entitlement
 layer: domain
-status: draft
+status: active
 version: 12
-updated: 2026-09-29
+updated: 2026-10-14
 ---
 
 # Contract — entitlement
