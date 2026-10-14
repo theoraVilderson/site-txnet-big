@@ -173,6 +173,7 @@ export const DRIFT_EVENT_KEYS: Record<SystemsDriftEvent["eventType"], string> = 
   mass_rename: K.drift.type.mass_rename,
   mass_limit_override: K.drift.type.mass_limit_override,
   foreign_claim: K.drift.type.foreign_claim,
+  identity_lost: K.drift.type.identity_lost,
 };
 
 /**
@@ -504,9 +505,8 @@ export function canResolveHold(hold: SystemsHold): boolean {
 }
 
 /**
- * The note on an acknowledge, a release or a write-off: 1–1000 trimmed.
- * A write-off requires it — bytes that are never charged say why (ADR-0080
- * decision 3); the other two send none when it is left blank.
+ * The note on an acknowledge, a release or a write-off: 1–1000 trimmed. A write-off requires it — bytes
+ * that are never charged say why (ADR-0080 decision 3); the other two send none when it is left blank.
  */
 export function validateNote(
   input: string,

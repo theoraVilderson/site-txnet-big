@@ -176,10 +176,28 @@ unattributed and recreate our own configs there as `missing`.
 - **Acknowledging resumes it**, the same route as a restore. An address left
   pointing at the other server raises it again on the next pass — which is
   the point; the admin puts the address right first.
-- **Not caught yet:** a server with no client of ours — unknown, reinstalled,
-  or a registered panel with no configs — is converged as if it were this
-  one. Decided, not built: ADR-0130 (an anchor per panel, a pinned address),
-  rows F-027-ew..fh.
+- **A server with no client of ours** is the anchor check's, below.
+
+### The anchor check, before anything is read (F-027-ex, ADR-0130 decision 2)
+
+Every turn of a pull panel that carries an anchor (`contract.registration.md`
+rules 11–13) lists its clients before it reads usage (`Loop.identify`,
+`collect/anchor.go`):
+
+- **Its own anchor, by tag or uuid:** the turn goes on; a re-keyed anchor's
+  new id is the one the turn drops.
+- **Another panel's anchor** (`Anchors.Holder`, archived panels included):
+  a halting `foreign_claim` naming that panel, even when it has no configs —
+  `affected` 1, `observed` every client listed.
+- **Neither:** a halting `identity_lost` (no `foreignPanelId`): an unknown or
+  reinstalled server, which only a person can tell apart.
+- **Then nothing is read, written or recreated.** Neither event converges
+  (`DriftEventType.Converges`), so the halted turn skips the convergence a
+  restore still gets. No event store fails closed (`Containment.Raise`); a
+  list that failed is the turn failing, as a failed read is. Acknowledging
+  with a choice — `rebuilt` or `address_fixed` — is F-027-fa; until then an
+  acknowledgement raises it again on the next pass. A panel with no anchor
+  yet is not checked: it is planted first (rule 13).
 
 ## Proof
 

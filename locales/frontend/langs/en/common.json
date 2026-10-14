@@ -3454,7 +3454,8 @@
         "mass_missing": "Many clients missing",
         "mass_rename": "Many clients renamed",
         "mass_limit_override": "Many limits changed on the panel",
-        "foreign_claim": "Answers with another panel's users"
+        "foreign_claim": "Answers with another panel's users",
+        "identity_lost": "Doesn't carry its identity marker"
       }
     },
     "holds": {

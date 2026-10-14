@@ -284,6 +284,8 @@ describe('network usage accounting: a byte is billed, held or quarantined', () =
       // F-027-cf: a panel answering with another panel's clients, named in
       // `foreignPanelId`. Its own migration, so the value is committed first.
       'foreign_claim',
+      // F-027-ex: neither its own anchor nor another panel's (ADR-0130).
+      'identity_lost',
     ]);
     expect(sql).toContain('panel_drift_event_counts_sane');
   });

@@ -276,6 +276,9 @@ enum PanelDriftEventType {
   /// A pass found another panel's clients on this one: its address was
   /// re-pointed after registration (F-027-cf, ADR-0090). Stops convergence too.
   foreign_claim
+  /// A pass found neither this panel's anchor nor another's: an unknown or
+  /// reinstalled server (F-027-ex, ADR-0130). Stops convergence too.
+  identity_lost
 
   @@schema("network")
 }

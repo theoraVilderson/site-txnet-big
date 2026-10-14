@@ -16,10 +16,16 @@ import (
 // anchor beside the first, and the anchor's bytes written down as usage.
 
 func anchorRig(t *testing.T) (*fake.Panel, *collect.Loop, *collect.MemoryAnchors, *recorder) {
+	p, loop, anchors, sink, _ := identityRig(t)
+	return p, loop, anchors, sink
+}
+
+func identityRig(t *testing.T) (*fake.Panel, *collect.Loop, *collect.MemoryAnchors, *recorder, *collect.MemoryDriftEvents) {
 	t.Helper()
 	p := fake.New(fake.Config{CounterSemantics: driver.CounterCumulative})
 	p.Given("c1")
 	anchors := collect.NewMemoryAnchors()
+	events := collect.NewMemoryDriftEvents()
 	sink := &recorder{}
 	loop := &collect.Loop{
 		Source: collect.PanelsFunc(func(context.Context) ([]collect.Panel, error) {
@@ -31,8 +37,9 @@ func anchorRig(t *testing.T) (*fake.Panel, *collect.Loop, *collect.MemoryAnchors
 			}}, nil
 		}),
 		Sink: sink, Cursors: collect.NewMemoryCursors(), Anchors: anchors,
+		Containment: &collect.Containment{Events: events},
 	}
-	return p, loop, anchors, sink
+	return p, loop, anchors, sink, events
 }
 
 func TestAPanelAcceptedBeforeAnchorsGetsOneOnItsFirstPass(t *testing.T) {
@@ -80,5 +87,77 @@ func TestABackfillThatLostTheRaceTakesItsAnchorBack(t *testing.T) {
 	clients, _ := p.ListClients(context.Background())
 	if len(clients) != 1 || anchors.Of("panel-1").Tag != "anchor-other" {
 		t.Fatalf("%d clients, anchor %+v; want ours deleted and the recorded one kept", len(clients), anchors.Of("panel-1"))
+	}
+}
+
+// Every pass looks for the anchor first (F-027-ex, ADR-0130 decision 2). What
+// would break silently: an address re-pointed to an empty or reinstalled
+// server read as ours and every config recreated there; one re-pointed to a
+// registered panel with no configs converged onto a server not its own.
+
+func TestAPanelWhoseAnchorIsGoneIsHaltedBeforeAnythingIsRead(t *testing.T) {
+	p, loop, anchors, sink, events := identityRig(t)
+	ctx := context.Background()
+	if _, err := loop.Pass(ctx); err != nil {
+		t.Fatal(err)
+	}
+	p.Remove(anchors.Of("panel-1").RemoteID) // reinstalled: our clients are gone
+	p.Remove("c1")
+	reads, creates := p.CallCount("GetUsage"), p.CallCount("CreateClient")
+
+	for range 2 {
+		if _, err := loop.Pass(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := events.Events("panel-1")
+	if len(got) != 1 || got[0].Type != collect.IdentityLost || !got[0].CollectionHalted || got[0].ForeignPanelID != "" {
+		t.Fatalf("events %+v, want one halting identity_lost naming no panel", got)
+	}
+	if p.CallCount("GetUsage") != reads || p.CallCount("CreateClient") != creates || len(sink.results) != 1 {
+		t.Fatal("a panel that lost its identity was read, written or published")
+	}
+	if collect.IdentityLost.Converges() {
+		t.Fatal("identity_lost converges: the missing configs would be recreated on a stranger")
+	}
+}
+
+func TestAnotherPanelsAnchorIsAForeignClaimNamingIt(t *testing.T) {
+	p, loop, anchors, _, events := identityRig(t)
+	ctx := context.Background()
+	if _, err := loop.Pass(ctx); err != nil {
+		t.Fatal(err)
+	}
+	ours := anchors.Of("panel-1")
+	p.Remove(ours.RemoteID)
+	theirs, err := anchor.Plant(ctx, p) // the server is panel-2's, which has no configs
+	if err != nil {
+		t.Fatal(err)
+	}
+	anchors.Put("panel-2", theirs)
+	reads := p.CallCount("GetUsage")
+
+	if _, err := loop.Pass(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got := events.Events("panel-1")
+	if len(got) != 1 || got[0].Type != collect.ForeignClaim || got[0].ForeignPanelID != "panel-2" || !got[0].CollectionHalted {
+		t.Fatalf("events %+v, want a halting foreign_claim naming panel-2", got)
+	}
+	if p.CallCount("GetUsage") != reads {
+		t.Fatal("the panel was read past another panel's anchor")
+	}
+}
+
+func TestOurOwnAnchorLetsThePassGoOn(t *testing.T) {
+	p, loop, _, sink, events := identityRig(t)
+	ctx := context.Background()
+	for range 2 {
+		if _, err := loop.Pass(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(events.Events("panel-1")) != 0 || len(sink.results) != 2 || p.CallCount("GetUsage") != 2 {
+		t.Fatalf("events %+v, %d published; want none raised and both passes read", events.Events("panel-1"), len(sink.results))
 	}
 }

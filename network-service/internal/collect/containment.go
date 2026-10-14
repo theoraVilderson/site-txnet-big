@@ -23,7 +23,8 @@ const ReasonPanelDriftEvent QuarantineReason = "panel_drift_event"
 
 // DriftEventType is `network.PanelDriftEventType`. MassReset is raised here;
 // ForeignClaim by the convergence pass, the one that reads the panel's
-// clients. The other mass_* values are schema only.
+// clients, and by the anchor check, as IdentityLost is. The other mass_*
+// values are schema only.
 type DriftEventType string
 
 const (
@@ -31,14 +32,18 @@ const (
 	// ForeignClaim is a panel answering with another panel's clients (F-027-cf,
 	// ADR-0090 decision 1): its address was re-pointed after registration.
 	ForeignClaim DriftEventType = "foreign_claim"
+	// IdentityLost is a panel answering with neither its own anchor nor
+	// another panel's (F-027-ex, ADR-0130 decision 2): re-pointed to a server
+	// we do not know, or the same one reinstalled. Only a person can say which.
+	IdentityLost DriftEventType = "identity_lost"
 )
 
 // Converges says whether a panel halted by this event is still converged. A
 // restore's counters are not believed, but the server is ours, so a
 // suspension or a delete still has to reach it. A foreign claim is the
 // opposite: the server is not the one our configs are on, and converging it
-// would recreate them there.
-func (t DriftEventType) Converges() bool { return t != ForeignClaim }
+// would recreate them there. A lost identity is not known to be ours.
+func (t DriftEventType) Converges() bool { return t != ForeignClaim && t != IdentityLost }
 
 // The defaults the stop fires at (user, 2026-09-23): **more than** 20% of the
 // panel's cumulative counters going backward in one pass, and at least five
@@ -80,7 +85,7 @@ type DriftEvent struct {
 
 // DriftEvents is where the events go and whether one still halts a panel.
 // Halted answers the type of the open event that halts it, "" for none; of
-// several, ForeignClaim, because it is the one that stops convergence too.
+// several, one that stops convergence too (ForeignClaim, IdentityLost).
 type DriftEvents interface {
 	Halted(ctx context.Context, panelID string) (DriftEventType, error)
 	Raise(ctx context.Context, event DriftEvent) error
@@ -102,6 +107,15 @@ func (c *Containment) Halted(ctx context.Context, panelID string) (DriftEventTyp
 		return "", nil
 	}
 	return c.Events.Halted(ctx, panelID)
+}
+
+// Raise writes an event raised outside Contain — the anchor check's. No store
+// fails closed: an event that cannot be written must not let the turn read on.
+func (c *Containment) Raise(ctx context.Context, event DriftEvent) error {
+	if c == nil || c.Events == nil {
+		return fmt.Errorf("panel %s: no drift event store to raise %s in", event.PanelID, event.Type)
+	}
+	return c.Events.Raise(ctx, event)
 }
 
 // Contain judges one normalised pass before it is published. Past the
@@ -213,7 +227,7 @@ func (m *MemoryDriftEvents) Halted(_ context.Context, panelID string) (DriftEven
 	defer m.mu.Unlock()
 	var halt DriftEventType
 	for _, e := range m.byPanel[panelID] {
-		if e.CollectionHalted && e.AcknowledgedAt.IsZero() && (halt == "" || e.Type == ForeignClaim) {
+		if e.CollectionHalted && e.AcknowledgedAt.IsZero() && (halt == "" || !e.Type.Converges()) {
 			halt = e.Type
 		}
 	}
@@ -247,12 +261,12 @@ type PostgresDriftEvents struct {
 
 var _ DriftEvents = PostgresDriftEvents{}
 
-// haltedSQL is the type of the open event that halts the panel, a foreign
-// claim first: it is the one that stops convergence too.
+// haltedSQL is the type of the open event that halts the panel, one that
+// stops convergence too first (DriftEventType.Converges).
 const haltedSQL = `
 SELECT "eventType"::text FROM network.panel_drift_event
  WHERE "panelId" = $1::uuid AND "collectionHalted" AND "acknowledgedAt" IS NULL
- ORDER BY ("eventType" = 'foreign_claim') DESC
+ ORDER BY ("eventType" IN ('foreign_claim', 'identity_lost')) DESC
  LIMIT 1`
 
 func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftEventType, error) {
