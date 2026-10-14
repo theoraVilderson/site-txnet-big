@@ -77,8 +77,7 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   // chat (ADR-0015), so a user who also uses the website keeps whatever they
   // built there, and saying "removed" without saying where invites them to
   // think otherwise.
-  [BotKeys.accounts.removePick]:
-    'Which account should leave this chat? It is removed here only.',
+  [BotKeys.accounts.removePick]: 'Which account should leave this chat? It is removed here only.',
   [BotKeys.accounts.removeSelf]: '{{name}} (the one you are using)',
   [BotKeys.accounts.removeConfirm]:
     "Remove {{name}} from this chat's accounts?\nYou can add it back whenever you like.",
@@ -97,6 +96,7 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.common.backGone]: 'There is nothing before this. You can start from here:',
   [BotKeys.common.pickOne]: 'Please pick one of the options above.',
   [BotKeys.common.tryAgain]: 'Something went wrong on our side. Please try again.',
+  [BotKeys.common.staleUpdate]: 'The bot was briefly unavailable, so that was not carried out. Please try again.',
   [BotKeys.common.signedIn]: 'You are signed in ✅',
   [BotKeys.common.signedOut]: 'You are signed out.',
   // ADR-0035: signing out of one account lands on the next one this place

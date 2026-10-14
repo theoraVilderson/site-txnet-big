@@ -104,6 +104,7 @@ request**, which was the failure.
 | answer | means | the consumer |
 |---|---|---|
 | `200 {dispatched: true}` | the flow ran | acks |
+| `200 {dispatched: true, stale: true}` | the update waited past `BOT_UPDATE_STALE_MS` (`receivedAt`, set by the webhook): the flow did not run, the chat was told once (`StaleUpdateNotice`, hosting H19); a payment is never stale | acks |
 | `200 {dispatched: false}` | the webhook path no longer resolves — the bot was deleted or disabled after the update was queued | acks; no user is waiting and a redelivery resolves to nothing again |
 | `400` | a body this service published and cannot read back | dead-letters (F-067-d); it is a bug in the pair, not a retryable failure |
 | `404` | an unrecognised caller — normally a rotated `SERVICE_AUTH_TOKEN` | dead-letters |

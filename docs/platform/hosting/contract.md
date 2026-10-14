@@ -212,14 +212,13 @@ throws, set `this.since = since` before returning, so the next tick asks for
 the whole span. A publish failure for one worker is unchanged.
 
 **H19 — Stale bot updates.** `bot-service` adds `receivedAt` (ISO) to every
-`BotUpdateMessage` it publishes. Its dispatch route, before the flow: if
-`now − receivedAt > BOT_UPDATE_STALE_MS` (default 600000), the flow does not
-run; a callback query is answered with the text of key `bot.common.stale_update`;
-a message gets that text as a reply only if Redis key
-`RedisKeys…bot:stale-notice:<botId>:<chatId>` (`SET NX EX 600`) was absent.
-The route answers `{dispatched: true, stale: true}`. A message with no
-`receivedAt` (published before the deploy) is fresh. Keys fa/en added to
-`locales/`.
+`BotUpdateMessage`. Its dispatch route, before the flow: past
+`BOT_UPDATE_STALE_MS` (default 600000) the flow does not run and the route
+answers `{dispatched: true, stale: true}` (`StaleUpdateNotice`). A tap is
+answered with key `bot.common.staleUpdate`; a message — or a tap the platform
+already expired — gets it as a reply only if `RedisKeys.botStaleNotice`
+(`SET NX EX 600`) was absent. No `receivedAt` (published before the deploy) is
+fresh; a `payment` is never stale — money is relayed whatever its age.
 
 **H20 — Reconnect.** gateway-service closes every socket on shutdown with
 `1012` ("service restart") instead of `GoingAway`. The panel client: on `1012`

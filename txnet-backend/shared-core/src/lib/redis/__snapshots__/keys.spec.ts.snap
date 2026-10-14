@@ -5,6 +5,7 @@ exports[`the key catalogue > builds every bot family 1`] = `
   "botLang": "bot:lang:telegram:integration-1:5501",
   "botNav": "bot:nav:telegram:integration-1:5501",
   "botSession": "bot:session:telegram:integration-1:5501",
+  "botStaleNotice": "bot:stale-notice:telegram:integration-1:5501",
 }
 `;
 
@@ -70,6 +71,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "botLinkToken",
   "botNav",
   "botSession",
+  "botStaleNotice",
   "captchaChallenge",
   "captchaVerified",
   "fxRate",

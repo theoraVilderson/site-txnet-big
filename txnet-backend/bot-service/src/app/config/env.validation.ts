@@ -160,6 +160,11 @@ export const envSchema = z.object({
    */
   BOT_UPDATE_QUEUES: z.coerce.number().int().positive().default(4),
   /**
+   * A queued update older than this is not run (hosting H19): after an outage
+   * the backlog is taps the user gave up on. The chat is told once instead.
+   */
+  BOT_UPDATE_STALE_MS: z.coerce.number().int().positive().default(10 * 60_000),
+  /**
    * How long a publish waits for the broker's confirm before the update is
    * treated as lost and the route answers 5xx (F-067-f, D-18). Same default and
    * same reasoning as `worker-service`'s: long against a healthy round trip,

@@ -72,6 +72,7 @@
     "unknown": "I did not catch that. Here is what I can do:",
     "pickOne": "Please pick one of the options above.",
     "tryAgain": "Something went wrong on our side. Please try again.",
+    "staleUpdate": "The bot was briefly unavailable, so that was not carried out. Please try again.",
     "signedIn": "You are signed in ✅",
     "signedOut": "You are signed out.",
     "notSignedIn": "You are not signed in yet.",

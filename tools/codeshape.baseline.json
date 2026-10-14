@@ -360,7 +360,7 @@
   "txnet-backend/notification-service/src/app/campaigns/campaign-admin.service.ts": 435,
   "txnet-backend/shared-core/src/lib/billing/currency-change.ts": 513,
   "txnet-backend/shared-core/src/lib/billing/reseller-quota.ts": 506,
-  "txnet-backend/shared-core/src/lib/redis/keys.ts": 527,
+  "txnet-backend/shared-core/src/lib/redis/keys.ts": 464,
   "txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts": 634,
   "txnet-backend/shared-core/src/lib/tenant/vault/credential-vault.service.ts": 536,
   "txnet-backend/support-service/src/app/agent/agent.service.ts": 403,

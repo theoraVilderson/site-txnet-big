@@ -83,12 +83,11 @@ built from a phone number, and on `botlink:chat:*`, whose chat id has the same
 problem for the opposite reason (F-066-l): a phone number identifies a person
 **within** a tenant and not across the platform (ADR-0023), while a chat id is
 issued by the messenger and is therefore identical in every reseller's bot.
-Without the segment two
-resellers selling to the same person share one OTP slot, and identity
-invariant #10 — one active code per (phone, purpose) — enforces itself across
-the tenancy boundary, evicting one reseller's code when the other issues
-theirs. It is the tenant **id**, never the slug, so renaming a reseller does
-not lose the code it just issued.
+Without the segment two resellers selling to the same person share one OTP
+slot, and identity invariant #10 — one active code per (phone, purpose) —
+enforces itself across the tenancy boundary, evicting one reseller's code when
+the other issues theirs. It is the tenant **id**, never the slug, so renaming a
+reseller does not lose the code it just issued.
 
 The builders read it from the ambient scope rather than taking it as an
 argument (ADR-0024), so a call site written later cannot forget to scope one.
@@ -132,6 +131,7 @@ event that never comes.
 | `bot:session:<platform>:<integrationId>:<chatId>` | string (JSON `{refreshToken,signedInAt}`) | `BOT_SESSION_TTL_SEC` (30d, idle — pushed out on every read) | bot-service `BotSessionStore.save` | bot-service (menu, `/logout`) |
 | `bot:lang:<platform>:<integrationId>:<chatId>` | string (a language code) | `BOT_LANG_TTL_SEC` (180d, idle) | bot-service `ChatLanguage.choose` | bot-service `ChatLanguage.resolve` |
 | `bot:guidefile:<platform>:<integrationId>:<objectKey>` | string (the platform's `file_id` for a guide file this bot sent) | `RedisTtl.botGuideFile` (90d) | bot-service `GuideMediaSender` | the same (F-414-f) |
+| `bot:stale-notice:<platform>:<integrationId>:<chatId>` | string (`1`) | `RedisTtl.botStaleNotice` (600s) | bot-service `StaleUpdateNotice.tell` (`SET NX`) | the same — a chat's stale backlog is told once (hosting H19) |
 | `guide:seen:<tenantId>:<guideId>:<day>:<surface>:<viewerHash>` | string (`1`) | `RedisTtl.guideViewSeen` (48h) | tenant-service `GuideStats.view` (`SET NX`) | the same (F-414-l) |
 | `botlink:token:<token>` | string (JSON pending link: platform, phone, purpose, lang, state, otpSent) | `BOT_LINK_TOKEN_TTL_SEC` (900s) | auth-service `BotLinkStore.save/update` | the bot webhook + the client's status poll |
 | `botlink:phone:<tenantId>:<platform>:<phone>` | string (the live token) | = above | `BotLinkStore.save` | `BotLinkStore.byPhone` — makes a repeated link request idempotent |

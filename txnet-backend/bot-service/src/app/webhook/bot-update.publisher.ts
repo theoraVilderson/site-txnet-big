@@ -43,6 +43,12 @@ export interface BotUpdateMessage {
   messageId?: number;
   /** A payment event (F-104-m) — the platform's own numbers, relayed to billing. */
   payment?: ChatContext['payment'];
+  /**
+   * When the webhook took it (ISO): the dispatch route skips an update older
+   * than `BOT_UPDATE_STALE_MS` (hosting H19). Optional — a message published
+   * before the field existed is fresh.
+   */
+  receivedAt?: string;
 }
 
 /**

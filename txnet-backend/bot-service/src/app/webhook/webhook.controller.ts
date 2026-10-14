@@ -96,7 +96,7 @@ export class WebhookController {
     const ctx = this.normalizer.normalize(platform, integration, update);
     if (ctx) {
       const { integration: _resolved, ...message } = ctx;
-      await this.updates.publish({ ...message, webhookPath });
+      await this.updates.publish({ ...message, webhookPath, receivedAt: new Date().toISOString() });
     }
 
     return { ok: true };

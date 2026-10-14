@@ -20,6 +20,7 @@ import {
 import { ServiceOnlyGuard } from '../common/service-only.guard';
 import { BotDispatcher } from '../conversation/bot.dispatcher';
 import { ChatContext } from '../conversation/nav.types';
+import { StaleUpdateNotice } from './stale-update';
 
 /** `messenger`'s `PaymentEvent`, as it rode the broker (F-104-m). */
 const paymentSchema = z.discriminatedUnion('kind', [
@@ -65,6 +66,7 @@ const dispatchSchema = z.object({
   callbackQueryId: z.string().optional(),
   messageId: z.number().optional(),
   payment: paymentSchema.optional(),
+  receivedAt: z.string().optional(),
 });
 
 /**
@@ -97,6 +99,7 @@ export class BotDispatchController {
   constructor(
     private readonly bots: BotClientRegistry,
     private readonly dispatcher: BotDispatcher,
+    private readonly stale: StaleUpdateNotice,
   ) {}
 
   /**
@@ -107,10 +110,14 @@ export class BotDispatchController {
    * That is an ack, not a failure: redelivering it would resolve to nothing
    * again for ever, and there is no user left to answer. Anything else throws,
    * which the consumer turns into a dead-letter row (F-067-d).
+   *
+   * `stale:true` is an update that waited too long to be worth running
+   * (hosting H19): the chat is told, the flow is not run. A payment is never
+   * stale — money is relayed whatever its age.
    */
   @Post('dispatch')
   @HttpCode(HttpStatus.OK)
-  async dispatch(@Body() body: unknown): Promise<{ dispatched: boolean }> {
+  async dispatch(@Body() body: unknown): Promise<{ dispatched: boolean; stale?: true }> {
     const parsed = dispatchSchema.safeParse(body);
     if (!parsed.success) {
       // A body this service published itself and cannot now read is a bug in
@@ -127,6 +134,16 @@ export class BotDispatchController {
         `dropping a queued ${platform} update: its webhook path no longer resolves`,
       );
       return { dispatched: false };
+    }
+
+    if (!parsed.data.payment && this.stale.isStale(parsed.data.receivedAt)) {
+      await this.stale.tell({
+        integration,
+        chatId: parsed.data.chatId,
+        lang: parsed.data.lang,
+        callbackQueryId: parsed.data.callbackQueryId,
+      });
+      return { dispatched: true, stale: true };
     }
 
     // Built field by field rather than spread from `parsed.data`, the same way

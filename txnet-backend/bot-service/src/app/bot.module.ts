@@ -37,6 +37,7 @@ import { ChatAccess } from './session/chat-access';
 import { BotIntegrationModule } from './webhook/bot-integration.module';
 import { BotWebhookRegistrar } from './webhook/bot-webhook.registrar';
 import { BotDispatchController } from './webhook/bot-dispatch.controller';
+import { StaleUpdateNotice } from './webhook/stale-update';
 import { InvoiceLinkController } from './webhook/invoice-link.controller';
 import { BotUpdatePublisher } from './webhook/bot-update.publisher';
 import { UpdateNormalizer } from './webhook/update.normalizer';
@@ -65,6 +66,7 @@ import { WebhookController } from './webhook/webhook.controller';
     UpdateNormalizer,
     BotUpdatePublisher,
     BotDispatcher,
+    StaleUpdateNotice,
     ConversationRouter,
     ConversationStore,
     BotSessionStore,

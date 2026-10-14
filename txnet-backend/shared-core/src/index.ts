@@ -30,6 +30,7 @@ export * from './lib/logging/request-scope';
 export * from './lib/health/health';
 export * from './lib/redis/keyspace';
 export * from './lib/redis/keys';
+export * from './lib/redis/bot-keys';
 export * from './lib/redis/ttl';
 export * from './lib/redis/rate-limit-buckets';
 export * from './lib/i18n/keys.backend.generated';

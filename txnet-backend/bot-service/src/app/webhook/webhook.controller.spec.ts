@@ -106,6 +106,8 @@ describe('WebhookController', () => {
       chatId: '5501',
       lang: 'fa',
       text: '/start',
+      // When it was taken: the dispatch route skips it past BOT_UPDATE_STALE_MS (H19).
+      receivedAt: expect.any(String),
     });
   });
 

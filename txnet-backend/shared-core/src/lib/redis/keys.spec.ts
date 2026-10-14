@@ -1,11 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  BotRedisKeys,
-  UnscopedRedisKeys,
-  createScopedRedisKeys,
-} from './keys';
+import { BotRedisKeys } from './bot-keys';
+import { UnscopedRedisKeys, createScopedRedisKeys } from './keys';
 import type { RedisKeyScope } from './keys';
 
 /**
@@ -106,6 +103,7 @@ describe('the key catalogue', () => {
       botNav: BotRedisKeys.botNav(integration, '5501'),
       botSession: BotRedisKeys.botSession(integration, '5501'),
       botLang: BotRedisKeys.botLang(integration, '5501'),
+      botStaleNotice: BotRedisKeys.botStaleNotice(integration, '5501'),
     }).toMatchSnapshot();
   });
 

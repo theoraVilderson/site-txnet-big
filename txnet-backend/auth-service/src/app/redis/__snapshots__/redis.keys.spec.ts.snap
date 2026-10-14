@@ -76,6 +76,7 @@ exports[`RedisKeys — key catalogue > keeps the canonical TTLs stable 1`] = `
   "botLink": 900,
   "botNav": 1800,
   "botSession": 2592000,
+  "botStaleNotice": 600,
   "captchaChallenge": 60,
   "captchaVerified": 120,
   "grantLinesLatest": 86400,

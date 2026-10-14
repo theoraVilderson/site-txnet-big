@@ -63,6 +63,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     else await this.client.set(key, value, 'EX', ttlSec);
   }
 
+  /** SET NX EX: `true` only for the caller that created the key — a once-per-window claim. */
+  async setIfAbsent(key: string, value: string, ttlSec: number): Promise<boolean> {
+    return (await this.client.set(key, value, 'EX', ttlSec, 'NX')) === 'OK';
+  }
+
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
