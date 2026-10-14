@@ -56,6 +56,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
+  // Set by a password step that asks a code: step 2 then finishes that sign-in, not a code-only one.
+  const [otpToken, setOtpToken] = useState<string | null>(null);
 
   const isPhoneMethod = loginMethod === "phone";
 
@@ -71,6 +73,7 @@ export default function LoginPage() {
         // The pass is single-use on the server (F-0201): whatever happens
         // next, step 1 needs a fresh slide before it can be sent again.
         if (isPhoneMethod) {
+          setOtpToken(null);
           let result;
           try {
             result = await authApi.requestLoginOtp(phone, captcha.token, channels.selected);
@@ -94,11 +97,11 @@ export default function LoginPage() {
           } finally {
             captcha.spend();
           }
-          if ("requiresOtp" in result) { delivery.start(result); setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
+          if ("requiresOtp" in result) { setOtpToken(result.otpToken); delivery.start(result); setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
           else { setIsSuccess(true); router.replace(consumeReturnTo()); }
         }
       } else if (step === 2) {
-        await authApi.verifyLoginOtp(phone, otp);
+        await (otpToken ? authApi.verifySecondFactor(otpToken, otp) : authApi.verifyLoginOtp(phone, otp));
         setIsSuccess(true);
         router.replace(consumeReturnTo());
       }
@@ -291,7 +294,7 @@ export default function LoginPage() {
                 timerSeconds={otpTimer.seconds}
                 timerFormatted={otpTimer.formatted}
                 onResend={() => otpTimer.start(120)}
-                onEditPhone={() => { delivery.reset(); setStep(1); }}
+                onEditPhone={() => { delivery.reset(); setOtpToken(null); setStep(1); }}
                 delivery={delivery.delivery}
               />
             )}

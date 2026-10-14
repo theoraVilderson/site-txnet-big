@@ -225,6 +225,19 @@ describe('the access token', () => {
     expect(lastCall().headers.get('authorization')).toBe('Bearer at_1');
   });
 
+  // The second step of a password sign-in is the code **with the token the
+  // password step gave**: sent by number instead, it is a code-only sign-in,
+  // which a holder of `*` is refused (ADR-0145, 2026-10-14).
+  it('sends the password step\'s token, not a number, with the second factor', async () => {
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { accessToken: 'at_3', expiresIn: 900 } }));
+
+    await authApi.verifySecondFactor('otp_tok', '123456');
+
+    expect(lastCall().url).toContain('/auth/login/otp/verify');
+    expect(JSON.parse(String(lastCall().init.body))).toEqual({ otpToken: 'otp_tok', otpCode: '123456' });
+    expect(authApi.getAccessToken()).toBe('at_3');
+  });
+
   it('is remembered after a password login that returns one', async () => {
     fetchMock.mockResolvedValue(
       envelope({ ok: true, data: { accessToken: 'at_2', expiresIn: 900 } }),

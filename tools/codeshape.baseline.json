@@ -20,7 +20,7 @@
   "site-pwa/src/app/(auth)/auth/_components/LangDropdown.tsx": 4,
   "site-pwa/src/app/(auth)/auth/_components/ThemeDropdown.tsx": 4,
   "site-pwa/src/app/(auth)/auth/forgot-password/page.tsx": 20,
-  "site-pwa/src/app/(auth)/auth/login/page.tsx": 34,
+  "site-pwa/src/app/(auth)/auth/login/page.tsx": 26,
   "site-pwa/src/app/(auth)/auth/register/page.tsx": 37,
   "site-pwa/src/app/(panel)/_components/ManualRateCard.tsx": 3,
   "site-pwa/src/app/(panel)/_components/OperatingCurrencyCard.tsx": 3,
