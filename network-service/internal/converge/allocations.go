@@ -93,6 +93,7 @@ type MemoryDesired struct {
 	byPanel   map[string][]string
 	rows      map[string]DesiredConfig
 	confirmed []string
+	restarted []string
 }
 
 func NewMemoryDesired() *MemoryDesired {
@@ -138,6 +139,9 @@ func (m *MemoryDesired) Record(_ context.Context, outcomes []Outcome) error {
 		if o.Confirmed {
 			m.confirmed = append(m.confirmed, o.ConfigID)
 		}
+		if o.Recreated {
+			m.restarted = append(m.restarted, o.ConfigID)
+		}
 		if o.Links != nil {
 			row.Links = *o.Links
 		}
@@ -152,6 +156,14 @@ func (m *MemoryDesired) Confirmed() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]string(nil), m.confirmed...)
+}
+
+// Restarted is the configs whose cursor a recreate restarted, in order
+// (F-027-fc) — what `PostgresDesired` zeroes in `config_counter_state`.
+func (m *MemoryDesired) Restarted() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]string(nil), m.restarted...)
 }
 
 func (m *MemoryDesired) RecordDrift(_ context.Context, verdicts []Verdict) error {

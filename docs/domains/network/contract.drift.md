@@ -42,7 +42,7 @@ renamed away from us still holds a seat, and the delete follows it.
 | `synced` | by `remoteId`, or a row with no `remoteId` adopting its lost create | carries desired state as `contract.provisioning.md` says |
 | `renamed` | by tag, under another id | re-keys `remoteId` to it; nothing written to the panel |
 | `rebuilt` | by `uuid` only, under another id | re-keys, and writes the tag and a create's first block back (`restored`) |
-| `missing` | by no key, row present with a `remoteId` | recreated under the same tag and credential, ceiling first — a **repair** |
+| `missing` | by no key, row present with a `remoteId` | recreated under the same tag and credential, ceiling first — a **repair**; its raw cursor restarts at zero in the statement recording it, so the next pass reads no reset (F-027-fc) |
 | `reset` | the ceiling pass saw the counter go backward this pass | the ceiling is already rewritten (`contract.ceiling.md`) |
 | `limit_overridden` | the panel's ceiling is neither ours nor the one it last confirmed | the ceiling is already rewritten |
 | `orphan` | a client no config claims by any key | nothing: reported in `ProvisionReport.Orphans` |
@@ -194,6 +194,8 @@ running out starts the count again; a higher ceiling is rewritten on a
 contested config; a restore halts, charges nothing, restates the ceiling and
 resumes on acknowledgement; 20% exactly, three of four and one of one do
 not fire, while two of two and four of four do.
+`provision_test.go`/`postgres_test.go`: a recreate, and only a recreate, restarts its
+cursor, keeping lifetime and reset count.
 `internal/converge/foreign_test.go`, through the loop: another panel's client
 by tag, and by uuid alone, stops the panel before the missing config is
 recreated, names both, and neither reads nor converges it until acknowledged;

@@ -277,7 +277,7 @@
   "network-service/internal/collect/normalise.go": 514,
   "network-service/internal/collect/postgres.go": 672,
   "network-service/internal/converge/ceiling.go": 505,
-  "network-service/internal/converge/provision.go": 747,
+  "network-service/internal/converge/provision.go": 703,
   "network-service/internal/driver/conformance/conformance.go": 803,
   "network-service/internal/driver/fake/fake.go": 784,
   "network-service/internal/driver/hiddify/hiddify.go": 669,

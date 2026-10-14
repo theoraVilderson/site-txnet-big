@@ -390,6 +390,24 @@ func TestAPresentConfigWhoseClientVanishedIsRecreatedWithItsCeiling(t *testing.T
 	}
 }
 
+// A recreated client counts from zero on the panel, so its config's cursor is
+// restarted with it: left at the old client's figure, the next pass reads every
+// recreated counter backward and a rebuilt panel raises `mass_reset` for a
+// restore that never happened (F-027-fc, ADR-0130 decision 5).
+func TestARecreatedClientsCursorStartsAtZero(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	row := wanted("c1")
+	row.RemoteID = "remote-gone"
+	r.desired.Put("panel-1", row)
+	r.desired.Put("panel-1", wanted("c2"))
+
+	r.pass(t)
+
+	if got := r.desired.Restarted(); len(got) != 1 || got[0] != "c1" {
+		t.Fatalf("cursors restarted = %v, want only the recreated c1: a first create has no cursor yet", got)
+	}
+}
+
 // ---- the pass ---------------------------------------------------------------
 
 func TestOneReadOfTheClientsServesProvisioningAndCeilings(t *testing.T) {

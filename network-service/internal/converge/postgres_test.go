@@ -524,3 +524,27 @@ func TestALinesCapturedEventSaysWhetherThePanelChangedThem(t *testing.T) {
 		t.Errorf("recordSQL does not name the cause of a capture:\n%s", want)
 	}
 }
+
+// F-027-fc: a recreate restarts the config's raw cursor in the statement that
+// records it, keeping the lifetime totals and the reset count — it is not a reset.
+func TestARecreateRestartsTheCursorInItsRecordStatement(t *testing.T) {
+	f := &pgDB{}
+	at := time.Date(2026, 10, 14, 10, 0, 0, 0, time.UTC)
+	err := PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-new", State: StatePartial, At: at, UUID: "uuid-1", Enabled: true, Present: true, Recreated: true},
+		{ConfigID: "88888888-8888-4888-8888-888888888888", RemoteID: "r-2", State: StateComplete, At: at, UUID: "uuid-2", Present: true},
+	})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	if !strings.Contains(f.sql[0], `UPDATE network.config_counter_state`) ||
+		!strings.Contains(f.sql[0], `"lastUpBytes" = 0, "lastDownBytes" = 0`) {
+		t.Fatal("the record statement does not restart the cursor")
+	}
+	if strings.Contains(f.sql[0], `"lifetimeUpBytes" = 0`) || strings.Contains(f.sql[0], `"resetCount" =`) {
+		t.Error("a restart touched the lifetime or the reset count: a recreate is not a reset")
+	}
+	if f.args[0][18] != true || f.args[1][18] != false {
+		t.Errorf("restart flags = %v, %v; want only the recreate's set", f.args[0][18], f.args[1][18])
+	}
+}

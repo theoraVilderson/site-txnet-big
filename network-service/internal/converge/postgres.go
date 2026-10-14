@@ -158,8 +158,15 @@ const ConfirmedEvent = "network.config.confirmed"
 // `config_group_panel_once`, and one row's guess must not fail the batch.
 // A create's session baseline ($17, F-027-du) is written with it, and the
 // router's last total forgotten: the new client's is read afresh. Null keeps both.
+// A recreate ($19, F-027-fc) restarts the raw cursor at zero, as the panel's new
+// counter does, and keeps the lifetime and reset count: it is not a reset. It is
+// not held to the desired-state guard, because the client was made either way.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt", "linkLines", "linksUuid" FROM network.config WHERE id = $1::uuid),
+restarted AS (
+UPDATE network.config_counter_state
+   SET "lastUpBytes" = 0, "lastDownBytes" = 0, "updatedAt" = now()
+ WHERE "configId" = $1::uuid AND $19::boolean),
 recorded AS (
 UPDATE network.config
    SET "remoteId" = NULLIF($2, ''),
@@ -221,7 +228,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint, o.Recreated); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}
