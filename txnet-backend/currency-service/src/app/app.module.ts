@@ -1,13 +1,13 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { envConfigOptions } from './config/env.validation';
-import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { CurrencyPinsModule } from './pins/pins.module';
 import { CurrencyRatesModule } from './rates/rates.module';
 import { RedisModule } from './redis/redis.module';
@@ -18,8 +18,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
  * registers (C-11): a suspended tenant's routes are refused here as anywhere.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, PrismaModule, RedisModule, LocaleModule, CurrencyRatesModule, CurrencyPinsModule],
-  controllers: [HealthController],
+  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, PrismaModule, HealthModule.withPool(PrismaService), RedisModule, LocaleModule, CurrencyRatesModule, CurrencyPinsModule],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },

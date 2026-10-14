@@ -1,15 +1,15 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { envConfigOptions } from './config/env.validation';
-import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { QuotaModule } from './quota/quota.module';
 import { QuotaRefusalSink } from './quota/quota-refusal.sink';
 import { RedisModule } from './redis/redis.module';
@@ -22,6 +22,7 @@ const INTERNAL_ROUTES = 'internal/*path';
   imports: [
     ConfigModule.forRoot(envConfigOptions),
     PrismaModule,
+    HealthModule.withPool(PrismaService),
     RedisModule,
     LocaleModule,
     NotificationsModule,
@@ -29,7 +30,6 @@ const INTERNAL_ROUTES = 'internal/*path';
     CampaignsModule,
     QuotaModule,
   ],
-  controllers: [HealthController],
   // Per-user limits, opted into per route with `@RateLimit` (F-092-r).
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard },

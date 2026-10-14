@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { AdminModule } from './admin/admin.module';
 import { AttentionModule } from './attention/attention.module';
@@ -9,8 +9,8 @@ import { DecisionModule } from './decision/decision.module';
 import { BrokerModule } from './broker/broker.module';
 import { envConfigOptions } from './config/env.validation';
 import { FloorModule } from './floor/floor.module';
-import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { ProfileModule } from './profile/profile.module';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -28,8 +28,7 @@ import { TriggersModule } from './triggers/triggers.module';
  * reaches them.
  */
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, LocaleModule, PrismaModule, RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
-  controllers: [HealthController],
+  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, LocaleModule, PrismaModule, HealthModule.withPool(PrismaService), RedisModule, BrokerModule, TriggersModule, ProfileModule, AttentionModule, DecisionModule, FloorModule, AdminModule],
   providers: [
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: TenantStatusGuard },

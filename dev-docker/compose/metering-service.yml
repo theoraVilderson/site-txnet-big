@@ -14,7 +14,7 @@ services:
   # which is the point of a process holding that pool.
   # ===========================================================================
   metering-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: heartbeat-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

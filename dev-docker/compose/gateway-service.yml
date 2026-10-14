@@ -16,7 +16,7 @@ services:
   # on a timer so a revoked session does not keep a live socket.
   # ===========================================================================
   gateway-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile
@@ -34,6 +34,8 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - PORT=${REALTIME_PORT:-3000}
+      # No global prefix: the H15 check (compose/health.yml) asks /health.
+      - HEALTH_PATH=/health
       # Same namespace and version as auth-service, bot-service and
       # worker-service: one bump abandons every key this platform holds
       # (ADR-0005). This process only ever reads `session:<id>`.

@@ -24,6 +24,7 @@ import {
   type OutboxMessage,
   outboxRoutingKey,
   RequestHeaders,
+  startHeartbeat,
   topicBindingAll,
 } from '@txnet-backend/shared-core';
 
@@ -219,10 +220,8 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly botUpdatePrefix: string;
   private readonly botUpdateQueues: number;
   private readonly confirmMs: number;
-  /** One channel per bot-update queue — see {@link consumeBotUpdates}. */
   /** The bot-update and outbox consumers' own channels (F-067-b, F-067-p), closed on shutdown. */
   private readonly consumerChannels: amqp.Channel[] = [];
-
   /** Set when this service closes the connection itself, so its `close` is not read as the broker's. */
   private stopping = false;
 
@@ -477,6 +476,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     }
 
     await this.channel.prefetch(this.prefetch);
+    startHeartbeat(this.channel);
 
     // A dropped connection is fatal rather than retried here. The process is
     // restarted by its orchestrator, and a half-connected worker that logs an

@@ -14,7 +14,7 @@ services:
   # unrouted, for service callers on the private network.
   # ===========================================================================
   ai-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile
@@ -34,6 +34,8 @@ services:
       - /app/node_modules
     environment:
       - PORT=3000
+      # No global prefix: the H15 check (compose/health.yml) asks /health.
+      - HEALTH_PATH=/health
       - NODE_ENV=${NODE_ENV:-development}
       - APP_NAME=ai-service
       # The writer: `ai.*` and `engagement.attention_budget`, app role, NOBYPASSRLS.

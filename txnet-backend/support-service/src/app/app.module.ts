@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { SupportAgentModule } from './agent/agent.module';
 import { SupportCannedModule } from './canned/canned.module';
@@ -10,10 +10,10 @@ import { SupportLifecycleModule } from './lifecycle/lifecycle.module';
 import { SupportRetentionModule } from './retention/retention.module';
 import { envConfigOptions } from './config/env.validation';
 import { SupportConversationsModule } from './conversations/conversations.module';
-import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { RedisModule } from './redis/redis.module';
 import { IdentityMiddleware } from './request/identity.middleware';
 
@@ -25,8 +25,7 @@ import { IdentityMiddleware } from './request/identity.middleware';
 const INTERNAL_ROUTES = 'internal/*path';
 
 @Module({
-  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, PrismaModule, RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportCategoriesModule, SupportLifecycleModule, SupportRetentionModule],
-  controllers: [HealthController],
+  imports: [ConfigModule.forRoot(envConfigOptions), JsonLoggerModule, PrismaModule, HealthModule.withPool(PrismaService), RedisModule, LocaleModule, SupportConversationsModule, SupportAgentModule, SupportCannedModule, SupportCategoriesModule, SupportLifecycleModule, SupportRetentionModule],
   providers: [
     { provide: APP_GUARD, useClass: PublicRouteGuard },
     { provide: APP_GUARD, useClass: RateLimitGuard },

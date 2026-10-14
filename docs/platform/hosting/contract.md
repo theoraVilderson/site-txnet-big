@@ -173,14 +173,14 @@ Safe to run twice. `itemsProcessed` = rows deleted; a large first run is the sam
 
 ## Restart and deploy
 
-**H15 — Healthchecks.** Services with HTTP missing `/health` get the
-`health.controller.ts` that billing-service has (auth-service, bot-service).
-worker-service and metering-service (no HTTP, ADR-0027) write
-`/tmp/healthy` every 15s while their broker channel is open; their check is
+**H15 — Healthchecks.** Every Nest app with HTTP imports shared-core's
+`HealthModule` (`withPool(PrismaService)`; bot-service `processOnly()`; gateway-service
+keeps its own). worker-service and metering-service (no HTTP, ADR-0027) call
+`startHeartbeat(channel)`: `/tmp/healthy` every 15s until it closes; their check is
 `test $(( $(date +%s) - $(stat -c %Y /tmp/healthy) )) -lt 60`. HTTP check:
-`node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/'+(process.env.GLOBAL_PREFIX||'api')+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`.
-Interval 10s, timeout 3s, retries 3, `start_period` 60s. `/health` answers 200
-when the process is up and `SELECT 1` on its pool succeeds, else 503.
+`node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/'+(process.env.GLOBAL_PREFIX||'api')+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`
+(`HEALTH_PATH` for an app with no prefix); both in `compose/health.yml`, which a service `extends`.
+Interval 10s, timeout 3s, retries 3, `start_period` 60s; `/health` is 200 while `SELECT 1` on its pool succeeds, else 503.
 
 **H16 — Swarm stack.** `swarm/docker-stack.yml` is complete on its own (no
 second file): every service of `docker-compose.main.yml`, `image:` tags from

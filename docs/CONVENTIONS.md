@@ -914,6 +914,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | Arabic-script folds, transliteration, stop words | `util/helper.ts` | `shared-core/src/lib/i18n/arabic-script.ts` (C-19) |
 | a control, a dialog, a table | `(panel)/_components/kit` (C-13) | — |
 | live updates | `hooks/useLiveReread.ts` (C-14) | the outbox, `shared-core/src/lib/automation` (C-08) |
+| a container health check | — | `HealthModule` / `startHeartbeat`, `shared-core/src/lib/health` (H15) |
 | browser storage | `lib/storage.ts` (FE-1-l): a key in `StorageKeys`, `readStored`/`writeStored`, `readStoredJson` with a zod schema | — |
 | copy to clipboard | `_lib/clipboard.ts` (`copyText`, `COPY_FEEDBACK_MS`) | — |
 | keys and moves for an editable list | `_hooks/useRowKeys.ts`, `_lib/rows.ts` (C-30) | — |

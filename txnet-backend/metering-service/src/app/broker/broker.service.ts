@@ -11,6 +11,7 @@ import {
   NETWORK_USAGE_ROUTING_PREFIX,
   OutboxEventType,
   outboxRoutingKey,
+  startHeartbeat,
   topicBindingAll,
   type UsageDeltaMessage,
   usageDeltaMessageSchema,
@@ -99,6 +100,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     await this.channel.bindQueue(this.queue, this.exchange, USAGE_RELEASE_KEY);
     await this.channel.bindQueue(this.queue, this.exchange, USAGE_EVENT_KEY);
     await this.channel.prefetch(this.prefetch);
+    startHeartbeat(this.channel);
 
     // A dropped connection is fatal rather than retried, for the reason
     // worker-service's class gives: a half-connected consumer that logs an

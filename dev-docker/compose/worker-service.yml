@@ -12,7 +12,7 @@ services:
   # inside a request-serving replica, so two replicas run every job twice and a
   # slow job degrades logins.
   worker-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: heartbeat-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

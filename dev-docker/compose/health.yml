@@ -1,0 +1,28 @@
+# Container healthchecks for every Node service of the main stack (OPS-1-n, H15).
+# Not an `include:` entry: a service pulls one in with
+#   extends: { file: compose/health.yml, service: http-health }      (or heartbeat-health)
+# and each template extends the log rotation, because a service has one
+# `extends` and both must apply. That inner path is from this folder, not
+# dev-docker/: compose resolves a nested extends from the file holding it.
+services:
+  # `/health` answers 200 only while `SELECT 1` on the pool succeeds
+  # (shared-core HealthModule). HEALTH_PATH is for an app with no global prefix.
+  http-health:
+    extends: { file: logging.yml, service: rotated-logs }
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+(process.env.HEALTH_PATH||'/'+(process.env.GLOBAL_PREFIX||'api')+'/health')).then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+
+  # worker-service and metering-service serve no HTTP (ADR-0027): the broker
+  # service touches /tmp/healthy every 15s until its channel closes.
+  heartbeat-health:
+    extends: { file: logging.yml, service: rotated-logs }
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/healthy) )) -lt 60"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 60s

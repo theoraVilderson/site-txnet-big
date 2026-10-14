@@ -2,13 +2,12 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { SupportContextModule } from './support-context/support-context.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { CatalogModule } from './catalog/catalog.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
 import { envConfigOptions } from './config/env.validation';
-import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { CouponModule } from './payment/coupon/coupon.module';
@@ -17,6 +16,7 @@ import { GatewayModule } from './payment/gateway/gateway.module';
 import { GiftModule } from './payment/gift/gift.module';
 import { InvoiceModule } from './invoice/invoice.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { QuotaRefusalSink } from './quota/quota-refusal.sink';
 import { RedisModule } from './redis/redis.module';
 import { RevenueModule } from './revenue/revenue.module';
@@ -56,6 +56,7 @@ const INTERNAL_ROUTES = 'internal/*path';
   imports: [
     ConfigModule.forRoot(envConfigOptions),
     PrismaModule,
+    HealthModule.withPool(PrismaService),
     RedisModule,
     LocaleModule,
     WalletModule,
@@ -78,7 +79,6 @@ const INTERNAL_ROUTES = 'internal/*path';
     SystemsModule,
     EngagementModule,
   ],
-  controllers: [HealthController],
   providers: [
     // Every billing route is rate-limited per user (F-092-r): a route opts in
     // with `@RateLimit`, and `request/rate-limit-coverage.spec.ts` fails on one

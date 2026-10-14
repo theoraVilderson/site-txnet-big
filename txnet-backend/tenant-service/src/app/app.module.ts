@@ -1,7 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard } from '@txnet-backend/shared-core';
+import { PUBLIC_PREFIX, PublicRouteGuard, RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } from '@txnet-backend/shared-core';
 
 import { AccessModule } from './access/access.module';
 import { BrandingModule } from './branding/branding.module';
@@ -13,7 +13,6 @@ import { LEGACY_FILES_PATH } from './files/files.controller';
 import { FilesModule } from './files/files.module';
 import { GuideModule } from './guide/guide.module';
 import { LEGACY_PROBE_PATH } from './domains/domain-check';
-import { HealthController } from './health.controller';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { OnboardingModule } from './onboarding/onboarding.module';
@@ -22,6 +21,7 @@ import { PublicHostMiddleware } from './public/public-host.middleware';
 import { LimitsModule } from './limits/limits.module';
 import { PackagesModule } from './packages/packages.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
 import { PurchaseModule } from './purchase/purchase.module';
 import { RedisModule } from './redis/redis.module';
 import { ResellersModule } from './resellers/resellers.module';
@@ -60,6 +60,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     ConfigModule.forRoot(envConfigOptions),
     JsonLoggerModule,
     PrismaModule,
+    HealthModule.withPool(PrismaService),
     RedisModule,
     LocaleModule,
     PackagesModule,
@@ -79,7 +80,6 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     VaultModule,
     GuideModule,
   ],
-  controllers: [HealthController],
   providers: [
     // The public prefix's Host lookup, read through `tenant:host:<host>`
     // (F-018-al). A provider of the app module because its only consumer is

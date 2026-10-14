@@ -7,7 +7,7 @@ services:
   # NestJS Billing Service (Nx Monorepo) — Protected by ForwardAuth
   # ===========================================================================
   billing-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

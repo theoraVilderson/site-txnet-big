@@ -4,7 +4,7 @@ import { envConfigOptions } from './config/env.validation';
 import { RedisModule } from './redis/redis.module';
 import { LocaleModule } from './locale/locale.module';
 import { BotModule } from './bot.module';
-import { JsonLoggerModule } from '@txnet-backend/shared-core';
+import { HealthModule, JsonLoggerModule } from '@txnet-backend/shared-core';
 
 @Module({
   imports: [
@@ -13,6 +13,8 @@ import { JsonLoggerModule } from '@txnet-backend/shared-core';
     RedisModule,
     LocaleModule,
     BotModule,
+    // No database of its own: up is healthy (hosting H15).
+    HealthModule.processOnly(),
   ],
 })
 export class AppModule {}

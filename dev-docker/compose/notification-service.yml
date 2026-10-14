@@ -6,7 +6,7 @@ services:
   # A user's in-app notifications (F-035-a, ADR-0052): its own deployable, the
   # way billing is. Same gate, same preflight exemption, same CORS origin.
   notification-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

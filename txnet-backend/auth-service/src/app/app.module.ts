@@ -2,6 +2,8 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
+import { PrismaService } from './prisma/prisma.service';
+import { TenantAgnostic } from './tenant/tenant-agnostic.decorator';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { AccountSwitchModule } from './account-switch/account-switch.module';
@@ -21,13 +23,15 @@ import { ServiceCallerMiddleware } from './common/security/service-caller';
 import { SwitchScopeMiddleware } from './common/security/switch-scope.middleware';
 import { TenantMiddleware } from './common/middlewares/tenant.middleware';
 import { TenantContextMiddleware } from './tenant-context/tenant-context.middleware';
-import { JsonLoggerModule } from '@txnet-backend/shared-core';
+import { JsonLoggerModule, HealthModule } from '@txnet-backend/shared-core';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     JsonLoggerModule,
     PrismaModule,
+    // The container check (hosting H15) has no tenant host to resolve.
+    HealthModule.withPool(PrismaService, TenantAgnostic()),
     RedisModule,
     AuthModule,
     AccountSwitchModule,
@@ -63,6 +67,8 @@ export class AppModule implements NestModule {
         TenantContextMiddleware,
         LanguageMiddleware,
       )
+      // The container check (hosting H15) asks from inside, with no tenant host.
+      .exclude('health')
       .forRoutes('{*path}');
   }
 }

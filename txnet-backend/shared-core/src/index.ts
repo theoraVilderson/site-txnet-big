@@ -27,6 +27,7 @@ export * from './lib/logging/request-id.middleware';
 export * from './lib/logging/json-logger.module';
 export * from './lib/logging/message-scope';
 export * from './lib/logging/request-scope';
+export * from './lib/health/health';
 export * from './lib/redis/keyspace';
 export * from './lib/redis/keys';
 export * from './lib/redis/ttl';

@@ -7,7 +7,7 @@ services:
   # NestJS Auth Service (Nx Monorepo)
   # ===========================================================================
   auth-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

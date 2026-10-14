@@ -12,7 +12,7 @@ services:
   # bot — and the conversation state in Redis.
   # ===========================================================================
   bot-service:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: http-health }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile
