@@ -7,7 +7,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "files": ["dist", "client.ts", "proto.ts", "index.ts"],
+  "files": ["dist", "client.ts", "disk-cache.ts", "proto.ts", "index.ts"],
   "scripts": { "build": "tsc -p .", "test": "node --test client.test.mjs" },
   "peerDependencies": {
     "@grpc/grpc-js": ">=1.10",

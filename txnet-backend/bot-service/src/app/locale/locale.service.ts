@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createLocaleClient, type LocaleClient } from '@txnet/locale-client';
+import { localeClientOptions } from '@txnet-backend/shared-core';
 
 /**
  * Thin adapter over the shared gRPC locale client. `locale-service` is the
@@ -20,17 +21,7 @@ export class LocaleService implements OnModuleInit, OnModuleDestroy {
 
   constructor(config: ConfigService) {
     this.defaultLanguage = config.get<string>('DEFAULT_LANGUAGE', 'fa');
-    this.client = createLocaleClient({
-      addr: config.get<string>('LOCALE_SERVICE_ADDR', 'localhost:50051'),
-      scope: config.get<string>('LOCALE_SCOPE', 'backend'),
-      defaultLang: this.defaultLanguage,
-      bootTimeoutMs: 60_000,
-      logger: {
-        log: (m) => this.logger.log(m),
-        warn: (m) => this.logger.warn(m),
-        error: (m) => this.logger.error(m),
-      },
-    });
+    this.client = createLocaleClient(localeClientOptions(config, this.logger, this.defaultLanguage));
   }
 
   async onModuleInit() {

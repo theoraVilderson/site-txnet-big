@@ -22,6 +22,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
       # The Credential Vault's KEK (ADR-0026). Mounted as a file, read-only,
       # because it must never be an environment variable — an env var is
       # readable from `docker inspect` and from every child process. In Swarm

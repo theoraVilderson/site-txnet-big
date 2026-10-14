@@ -25,13 +25,17 @@
  *   "resync refetches every preload
  *    language"
  *
+ *   "every snapshot is saved"         The disk cache (hosting H17) reaches
+ *   "boots from the saved snapshots"  the Go client with OPS-1-x, which adds
+ *   "no saved snapshot: boot throws"  these three to client_test.go.
+ *
  * The Go file lists its own three in the same shape. Anything else that lands
  * in one file belongs in both — add it to the twin in the same change, or add
  * a line here saying why it cannot exist there.
  */
 import test, { after, before, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as grpc from "@grpc/grpc-js";
@@ -291,6 +295,61 @@ test("a failed boot is not cached — the next ready() tries again", async () =>
   assert.equal(client.translate("en", "errors", "auth.unauthorized"), "Unauthorized");
   client.close();
   await svc.stop();
+});
+
+// --- the disk cache (hosting H17) ----------------------------------------
+
+/** An address nothing listens on: the TCP connect is refused at once. */
+const UNREACHABLE = "127.0.0.1:1";
+
+describe("disk cache", () => {
+  test("every snapshot is saved, whole and atomically", async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), "locale-cache-"));
+    const svc = await startFakeService(twoLanguages());
+    const client = createLocaleClient({ addr: svc.addr, scope: "backend", preloadLangs: ["en", "fa"], cacheDir, logger: quiet });
+    await client.ready();
+
+    await waitFor("both files", () => existsSync(join(cacheDir, "backend.fa.json")) && existsSync(join(cacheDir, "backend.en.json")));
+    const saved = JSON.parse(readFileSync(join(cacheDir, "backend.en.json"), "utf8"));
+    assert.equal(saved.namespaces.errors.entries["auth.unauthorized"], "Unauthorized");
+    assert.deepEqual(readdirSync(cacheDir).filter((f) => f.endsWith(".tmp")), []);
+
+    client.close();
+    await svc.stop();
+  });
+
+  test("boots from the saved snapshots when locale-service is unreachable", async () => {
+    const cacheDir = mkdtempSync(join(tmpdir(), "locale-cache-"));
+    writeFileSync(join(cacheDir, "backend.en.json"), JSON.stringify(twoLanguages().snapshots.en));
+    const warnings = [];
+    const client = createLocaleClient({
+      addr: UNREACHABLE,
+      scope: "backend",
+      preloadLangs: ["en"],
+      bootTimeoutMs: 800,
+      cacheDir,
+      logger: { ...quiet, warn: (m) => warnings.push(m) },
+    });
+
+    await client.ready();
+    assert.equal(client.translate("en", "errors", "auth.unauthorized"), "Unauthorized");
+    assert.equal(client.defaultLang(), "en");
+    assert.ok(warnings.some((w) => w.includes("booted from cache")), warnings.join("\n"));
+    client.close();
+  });
+
+  test("with no saved snapshot an unreachable locale-service still fails the boot", async () => {
+    const client = createLocaleClient({
+      addr: UNREACHABLE,
+      scope: "backend",
+      preloadLangs: ["en"],
+      bootTimeoutMs: 800,
+      cacheDir: mkdtempSync(join(tmpdir(), "locale-cache-")),
+      logger: quiet,
+    });
+    await assert.rejects(() => client.ready(), /boot failed/);
+    client.close();
+  });
 });
 
 // --- lookup and fallback -------------------------------------------------

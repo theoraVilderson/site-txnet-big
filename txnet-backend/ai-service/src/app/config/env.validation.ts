@@ -2,6 +2,7 @@ import {
   AUTOMATION_EXCHANGE_DEFAULT,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
+  localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -53,8 +54,7 @@ export const envSchema = z.object({
   SERVICE_AUTH_TOKEN: z.string().optional(),
 
   /** The shared envelope's translator (F-038-j0): `locale-service`, as every Nest service reads it. */
-  LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
-  LOCALE_SCOPE: z.string().min(1).default('backend'),
+  ...localeEnv,
   DEFAULT_LANGUAGE: z.string().min(1).default('fa'),
 
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),

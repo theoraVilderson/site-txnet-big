@@ -21,6 +21,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
       # The vault KEK, read-only, as auth-service mounts it (ADR-0026): the
       # campaign SMS line is read from the platform owner's vault (F-018-a).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro

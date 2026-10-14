@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { EnvelopeTranslator } from '@txnet-backend/shared-core';
 import { createLocaleClient, type LocaleClient } from '@txnet/locale-client';
+import { localeClientOptions } from '@txnet-backend/shared-core';
 
 import type { CatalogTextStore } from '../catalog/catalog-texts';
 
@@ -32,17 +33,7 @@ export class LocaleService
 
   constructor(config: ConfigService<EnvConfig, true>) {
     this.defaultLanguage = config.get('DEFAULT_LANGUAGE', { infer: true });
-    this.client = createLocaleClient({
-      addr: config.get('LOCALE_SERVICE_ADDR', { infer: true }),
-      scope: config.get('LOCALE_SCOPE', { infer: true }),
-      defaultLang: this.defaultLanguage,
-      bootTimeoutMs: 60_000,
-      logger: {
-        log: (m) => this.logger.log(m),
-        warn: (m) => this.logger.warn(m),
-        error: (m) => this.logger.error(m),
-      },
-    });
+    this.client = createLocaleClient(localeClientOptions(config, this.logger, this.defaultLanguage));
   }
 
   async onModuleInit() {

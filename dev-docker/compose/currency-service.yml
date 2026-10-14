@@ -27,6 +27,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
     environment:
       - PORT=3000
       - NODE_ENV=${NODE_ENV:-development}

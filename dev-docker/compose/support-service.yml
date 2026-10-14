@@ -26,6 +26,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
       # Attachments' bytes (F-033-f): the volume tenant-service serves them
       # from. The `local` driver needs this to be one shared volume.
       - object_storage:/data/objects

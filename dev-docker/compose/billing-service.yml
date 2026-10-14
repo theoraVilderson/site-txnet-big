@@ -27,6 +27,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
       # The same vault KEK auth-service mounts, read-only: this service decrypts
       # a gateway's merchant id itself (ADR-0039).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro

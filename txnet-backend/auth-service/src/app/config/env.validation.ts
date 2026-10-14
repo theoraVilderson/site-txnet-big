@@ -3,6 +3,7 @@ import {
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
   normalizeRedisNamespace,
+  localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -302,8 +303,7 @@ export const envSchema = z.object({
   SUPPORTED_PHONE_COUNTRIES: z.string().optional(),
 
   // locale-service (gRPC source of truth)
-  LOCALE_SERVICE_ADDR: z.string().default('localhost:50051'),
-  LOCALE_SCOPE: z.string().default('backend'),
+  ...localeEnv,
 
   // The automation exchange, for the one message this process publishes: an
   // `admin_manual` tick (F-031-b, ADR-0027). `RABBITMQ_URL` is **optional

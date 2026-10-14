@@ -1,6 +1,7 @@
 import {
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
+  localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -24,8 +25,7 @@ export const envSchema = z.object({
 
   FRONTEND_ORIGIN: z.string().default(''),
 
-  LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
-  LOCALE_SCOPE: z.string().min(1).default('backend'),
+  ...localeEnv,
   DEFAULT_LANGUAGE: z.string().min(1).default('fa'),
 
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),

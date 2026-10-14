@@ -55,6 +55,11 @@ export interface LocaleClientConfig {
     bootTimeoutMs?: number;
     /** Caps the Watch reconnect backoff. Default 30_000. */
     maxBackoffMs?: number;
+    /**
+     * Where every snapshot is saved and a failed boot falls back to (hosting
+     * H17; services pass LOCALE_CACHE_DIR). Unset: no disk cache, boot fails as before.
+     */
+    cacheDir?: string;
     /** Extra channel credentials; defaults to insecure. */
     credentials?: grpc.ChannelCredentials;
     /** Optional structured logger. */

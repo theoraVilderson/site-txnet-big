@@ -13,5 +13,5 @@
     "importHelpers": false,
     "skipLibCheck": true
   },
-  "include": ["client.ts", "proto.ts", "index.ts"]
+  "include": ["client.ts", "disk-cache.ts", "proto.ts", "index.ts"]
 }

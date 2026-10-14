@@ -1,6 +1,7 @@
 import {
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
+  localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -94,8 +95,7 @@ export const envSchema = z.object({
   MAIL_FROM: z.string().default(''),
 
   /** The envelope's translator (`locale/locale.service.ts`). */
-  LOCALE_SERVICE_ADDR: z.string().min(1).default('localhost:50051'),
-  LOCALE_SCOPE: z.string().min(1).default('backend'),
+  ...localeEnv,
   DEFAULT_LANGUAGE: z.string().min(1).default('fa'),
 
   /** The rate limiter's counters (F-092-r, D-24): required, for billing's reason. */

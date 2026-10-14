@@ -48,6 +48,7 @@ services:
       - APP_NAME=auth-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
       # The vault's KEK (ADR-0039): without it auth-service refuses to boot.
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
 
@@ -58,6 +59,7 @@ services:
       - APP_NAME=bot-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
 
   worker-service:
     <<: *host-node
@@ -84,6 +86,7 @@ services:
       - APP_NAME=ai-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
 
   gateway-service:
     <<: *host-node
@@ -100,6 +103,7 @@ services:
       - APP_NAME=notification-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
       # Repeated for billing's reason: the campaign SMS line is read from the
       # vault (F-018-a), and `!override` drops main.yml's KEK mount.
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
@@ -111,6 +115,7 @@ services:
       - APP_NAME=tenant-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
       # `!override` replaces main.yml's list, so the object-storage volume it
       # mounts must be repeated here, or uploads land in the container (F-018-m).
       - object_storage:/data/objects
@@ -124,6 +129,7 @@ services:
       - APP_NAME=currency-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
 
   support-service:
     <<: *host-node
@@ -132,6 +138,7 @@ services:
       - APP_NAME=support-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
       # `!override` drops main.yml's list: attachments' volume, repeated (F-033-f).
       - object_storage:/data/objects
 
@@ -142,6 +149,7 @@ services:
       - APP_NAME=billing-service
     volumes: !override
       - ../txnet-backend:/app:delegated
+      - locale_cache:/var/cache/txnet-locale  # H17, as main.yml mounts it
       # `!override` replaces main.yml's list, so the vault KEK it mounts must be
       # repeated here — without it the service refuses to boot (ADR-0039).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro

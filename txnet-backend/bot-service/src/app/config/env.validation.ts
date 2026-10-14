@@ -4,6 +4,7 @@ import {
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
   normalizeRedisNamespace,
+  localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -183,8 +184,7 @@ export const envSchema = z.object({
   BALE_DEEP_LINK_BASE: z.string().url().default('https://ble.ir'),
   BALE_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
 
-  LOCALE_SERVICE_ADDR: z.string().default('localhost:50051'),
-  LOCALE_SCOPE: z.string().default('backend'),
+  ...localeEnv,
   DEFAULT_LANGUAGE: z.string().default('fa'),
   /**
    * The language this bot speaks before a user says otherwise. Optional because

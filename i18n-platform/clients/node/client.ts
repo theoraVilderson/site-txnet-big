@@ -12,6 +12,8 @@
  *     reconnects with exponential backoff and re-fetches a fresh snapshot.
  *   - A missing key falls back to en, then fa (FALLBACK_LANGS), then returns
  *     the key itself; translation never throws.
+ *   - With cacheDir set, every snapshot is saved, and a boot that reaches its
+ *     deadline serves the saved ones until locale-service answers (hosting H17).
  *
  * Requires: @grpc/grpc-js, @grpc/proto-loader  (server-side only).
  */
@@ -20,6 +22,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as grpc from "@grpc/grpc-js";
 import { loadSync } from "@grpc/proto-loader";
+import { snapshotDisk } from "./disk-cache";
 import { LOCALE_PROTO } from "./proto";
 
 export interface NamespaceData {
@@ -80,6 +83,11 @@ export interface LocaleClientConfig {
   bootTimeoutMs?: number;
   /** Caps the Watch reconnect backoff. Default 30_000. */
   maxBackoffMs?: number;
+  /**
+   * Where every snapshot is saved and a failed boot falls back to (hosting
+   * H17; services pass LOCALE_CACHE_DIR). Unset: no disk cache, boot fails as before.
+   */
+  cacheDir?: string;
   /** Extra channel credentials; defaults to insecure. */
   credentials?: grpc.ChannelCredentials;
   /** Optional structured logger. */
@@ -163,8 +171,12 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
   let readyPromise: Promise<void> | null = null;
   let activeStream: grpc.ClientReadableStream<UpdateEvent> | null = null;
 
+  const disk = config.cacheDir ? snapshotDisk(config.cacheDir, config.scope, log) : null;
+
   const replace = (snap: SnapshotResponse) => {
-    if (snap && snap.lang) cache.set(snap.lang, snap);
+    if (!snap || !snap.lang) return;
+    cache.set(snap.lang, snap);
+    disk?.save(snap);
   };
 
   const fetchSnapshot = (lang: string): Promise<SnapshotResponse> =>
@@ -194,7 +206,8 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
     return (await fetchLocaleMetas()).map((m) => m.code).filter(Boolean);
   }
 
-  async function boot(): Promise<void> {
+  /** Resolves `true` when locale-service answered, `false` when the boot came from disk. */
+  async function boot(): Promise<boolean> {
     const deadline = Date.now() + bootTimeoutMs;
     let attempt = 0;
     let lastErr: unknown;
@@ -204,14 +217,39 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
         if (langs.length === 0) throw new Error("locale-service advertised no languages");
         for (const lang of langs) replace(await fetchSnapshot(lang));
         if (!defaultLang) defaultLang = langs[0];
-        return;
+        return true;
       } catch (err) {
         lastErr = err;
         attempt++;
         await new Promise((r) => setTimeout(r, Math.min(1000 * attempt, 3000)));
       }
     }
-    throw new Error(`[locale] boot failed, locale-service unavailable: ${String(lastErr)}`);
+    const saved = disk?.load();
+    if (!saved) throw new Error(`[locale] boot failed, locale-service unavailable: ${String(lastErr)}`);
+    for (const snap of saved.snapshots) cache.set(snap.lang, snap);
+    if (!defaultLang) defaultLang = saved.snapshots[0].lang;
+    log.warn(`[locale] locale-service unreachable, booted from cache (${saved.ageMin} min old)`);
+    return false;
+  }
+
+  /**
+   * After a boot from disk: asks until locale-service answers once, so the
+   * saved text is replaced as soon as it can be — Watch alone refetches only
+   * after a stream it had open breaks.
+   */
+  async function refreshUntilAnswered(): Promise<void> {
+    let backoffMs = 1000;
+    while (!closed) {
+      try {
+        for (const lang of await targetLangs()) replace(await fetchSnapshot(lang));
+        log.log("[locale] locale-service answered; the cached snapshots are replaced");
+        return;
+      } catch {
+        // Still down: the cached text keeps serving, and the next try is later.
+        await new Promise((r) => setTimeout(r, backoffMs).unref());
+        backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
+      }
+    }
   }
 
   function startWatch(): void {
@@ -257,7 +295,10 @@ export function createLocaleClient(config: LocaleClientConfig): LocaleClient {
     ready() {
       if (!readyPromise) {
         readyPromise = boot()
-          .then(startWatch)
+          .then((answered) => {
+            startWatch();
+            if (!answered) void refreshUntilAnswered();
+          })
           .catch((err) => {
             readyPromise = null; // a failed boot must not be cached forever — let the next call retry
             throw err;

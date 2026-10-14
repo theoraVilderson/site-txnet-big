@@ -46,6 +46,18 @@ what `resolveLanguage` answers when nothing matches.
 Cache is replaced atomically per language, never merged. Reconnect uses
 exponential backoff and re-fetches on recovery.
 
+**From disk when locale-service is down (hosting H17).** With `cacheDir`, the
+Node client saves every snapshot as `<scope>.<lang>.json` (`all` for scope
+`""`), temp file then rename (`disk-cache.ts`). A boot that reaches its
+deadline loads every saved file of its scope instead of throwing, logs `WARN
+locale-service unreachable, booted from cache (<n> min old)`, starts Watch and
+asks with backoff until locale-service answers once, which replaces the saved
+text. Nothing saved: the boot fails as before. A cache that cannot be written
+or read is a warning, never a stop. Every Nest service passes it through
+shared-core's `localeClientOptions` (`localeEnv`: `LOCALE_SERVICE_ADDR`,
+`LOCALE_SCOPE`, `LOCALE_CACHE_DIR` = `/var/cache/txnet-locale`, the
+`locale_cache` volume). The Go client gets the same with OPS-1-x.
+
 ## Request language (Nest services, CS-1-a)
 
 Each service's `LanguageMiddleware` runs on every route and records

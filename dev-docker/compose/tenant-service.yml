@@ -19,6 +19,8 @@ services:
     volumes:
       - ../txnet-backend:/app:delegated
       - /app/node_modules
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
       # The object-storage `local` driver's root (F-018-m). One node or one
       # shared volume: a replica on another disk would hold other files.
       - object_storage:/data/objects

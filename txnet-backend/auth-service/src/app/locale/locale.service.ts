@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createLocaleClient, type LocaleClient } from '@txnet/locale-client';
+import { localeClientOptions } from '@txnet-backend/shared-core';
 
 type Namespace = Record<string, any>;
 type LocaleData = Record<string, Record<string, Namespace>>;
@@ -13,7 +14,8 @@ type LocaleData = Record<string, Record<string, Namespace>>;
 /**
  * LocaleService is a thin adapter over the vendored gRPC locale client.
  * locale-service (Go) is the source of truth; this process keeps a live
- * in-memory cache of the "backend" scope and never touches the filesystem.
+ * in-memory cache of the "backend" scope, saved to LOCALE_CACHE_DIR for a
+ * boot while locale-service is down (hosting H17).
  *
  * The public method set is unchanged so callers (filters, interceptors, OTP
  * senders, i18n controller) keep working. Keys coming back from gRPC are
@@ -27,26 +29,11 @@ export class LocaleService implements OnModuleInit, OnModuleDestroy {
   private readonly defaultLanguage: string;
 
   constructor(private readonly configService: ConfigService) {
-    const addr = this.configService.get<string>(
-      'LOCALE_SERVICE_ADDR',
-      'localhost:50051',
-    );
-    const scope = this.configService.get<string>('LOCALE_SCOPE', 'backend');
     // env.validation.ts holds the default (C-17): no second one here.
     this.defaultLanguage = this.configService.getOrThrow<string>('DEFAULT_LANGUAGE');
 
     // preloadLangs omitted → load every language locale-service advertises.
-    this.client = createLocaleClient({
-      addr,
-      scope,
-      defaultLang: this.defaultLanguage,
-      bootTimeoutMs: 60_000, // survive locale-service still starting up
-      logger: {
-        log: (m) => this.logger.log(m),
-        warn: (m) => this.logger.warn(m),
-        error: (m) => this.logger.error(m),
-      },
-    });
+    this.client = createLocaleClient(localeClientOptions(this.configService, this.logger, this.defaultLanguage));
   }
 
   async onModuleInit() {
