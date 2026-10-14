@@ -18,7 +18,11 @@
  *    never the first enabled inbound — on a panel with no pick;
  *  - **under `hrw`, K of the picks by the Grant's rendezvous hash** (F-027-di):
  *    a lost inbound moves nobody until its config is gone, and then only that
- *    buyer, to its next-ranked inbound.
+ *    buyer, to its next-ranked inbound;
+ *  - **a halted panel takes no buyer** (F-027-fe, ADR-0130 decision 5): an
+ *    open halting drift event means network neither reads it nor, under a
+ *    foreign claim, writes to it, so a config placed there is never made and
+ *    one already there is not counted towards `minHealthyPanels`.
  */
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
@@ -34,7 +38,7 @@ const [A, B, C, D, E] = ['a', 'b', 'c', 'd', 'e'].map((x) => `${x.repeat(8)}-${x
 
 type Row = Record<string, unknown> & { id: string };
 type Inbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
-type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | null; inboundsPerBuyer?: number | null; inbounds?: Inbound[] };
+type PanelOpts = { inboundPlacement?: InboundPlacement; maxClients?: number | null; inboundsPerBuyer?: number | null; inbounds?: Inbound[]; halted?: boolean };
 type Member = {
   panelId: string;
   role: PanelGroupMemberRole;
@@ -43,7 +47,7 @@ type Member = {
   inboundsPerBuyer?: number | null;
   /** Assigned inbounds (F-027-ch); none = the panel's pool, `panel.inbounds`. */
   inbounds: { inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
-  panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inboundsPerBuyer: number | null; inbounds: Inbound[] };
+  panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inboundsPerBuyer: number | null; inbounds: Inbound[]; driftEvents: { id: string }[] };
 };
 
 const inbound = (remoteId: string, protocol: ConfigProtocol = ConfigProtocol.vless, maxClients: number | null = null): Inbound => ({ remoteId, protocol, maxClients });
@@ -59,7 +63,7 @@ const member = (
   panelId,
   role,
   inbounds: [],
-  panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inboundsPerBuyer: panel.inboundsPerBuyer ?? null, inbounds: panel.inbounds ?? [inbound('1')] },
+  panel: { reviewState, panelState, inboundPlacement: panel.inboundPlacement ?? InboundPlacement.all, maxClients: panel.maxClients ?? null, inboundsPerBuyer: panel.inboundsPerBuyer ?? null, inbounds: panel.inbounds ?? [inbound('1')], driftEvents: panel.halted ? [{ id: 'event-1' }] : [] },
 });
 const on = (panelId: string, panel: PanelOpts) => member(panelId, PanelState.healthy, PanelGroupMemberRole.primary, PanelReviewState.accepted, panel);
 
@@ -374,6 +378,30 @@ describe('placement on the picked inbounds (F-114-b)', () => {
     const { service, tx, locked } = build({ members: [member(B), member(C, PanelState.down), member(A)] });
     await service.fulfil(tx, GRANT);
     expect(locked).toEqual([`panel_inbound:${A}`, `panel_inbound:${B}`]);
+  });
+});
+
+describe('a halted panel (F-027-fe)', () => {
+  it('takes no new config and no lock, and waits; the other members are placed', async () => {
+    const { service, tx, configs, locked } = build({ members: [member(A), on(B, { halted: true })] });
+    const done = await service.fulfil(tx, GRANT);
+    expect(configs.map((c) => c.panelId)).toEqual([A]);
+    expect(done.waiting).toEqual([B]);
+    expect(locked.some((k) => k.includes(B))).toBe(false);
+  });
+
+  it('does not count towards minHealthyPanels, however complete its config', () => {
+    const confirmed = (panelId: string) => ({
+      panelId, inboundRemoteId: '1', status: ConfigStatus.active, desiredRemote: DesiredRemote.present,
+      enforcementState: EnforcementState.complete, credentialGroupId: 'cg', drainedAt: null,
+    });
+    const plan = planFulfilment({
+      grantId: GRANT,
+      grantStatus: GrantStatus.pending,
+      group: { strategy: PanelGroupStrategy.mirror, minHealthyPanels: 2, members: [member(A), on(B, { halted: true })].map(withLoad) },
+      configs: [confirmed(A), confirmed(B)],
+    });
+    expect(plan.activate).toBe(false);
   });
 });
 

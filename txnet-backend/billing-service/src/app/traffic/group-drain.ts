@@ -9,6 +9,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from './config-actions';
 import { RemainderCreditService } from './remainder-credit';
+import { PANEL_P_NOT_HALTED } from './panel-placeable';
 
 /** Who retired a drained member's configs in `config_action_log`: the drain sweep. */
 export const GROUP_DRAIN_ACTOR: ConfigActor = { actorType: ActorType.system, actorId: '00000000-0000-4000-8000-0000000f027c' };
@@ -250,7 +251,8 @@ export class GroupDrainService {
 
   /**
    * Paused Grants (`awaitingPanel`) whose group has a member fulfilment can
-   * place on — not `drain`, not retired, accepted, healthy — are unfrozen: the
+   * place on — not `drain`, not retired, accepted, healthy, not halted
+   * (F-027-fe) — are unfrozen: the
    * clock runs again from now, `endsAt` moved by the pause, and fulfil-due
    * places their configs on its next pass. Health is asked here, unlike
    * `deliverableGroupIds`: the clock must not restart on a panel that is down.
@@ -266,7 +268,8 @@ export class GroupDrainService {
                        JOIN "network"."panel" p ON p."id" = m."panelId"
                       WHERE m."groupId" = v."panelGroupId" AND m."role" <> 'drain'
                         AND p."retiredAt" IS NULL AND p."reviewState" IN ('accepted', 'accepted_low_trust')
-                        AND p."panelState" = 'healthy')
+                        AND p."panelState" = 'healthy'
+                        AND ${PANEL_P_NOT_HALTED})
        ORDER BY g."suspendedAt" ASC
        LIMIT ${RESUME_BATCH_SIZE}`;
     let resumed = 0;

@@ -261,11 +261,13 @@ function build() {
         {
           id: PLATFORM_GROUP, tenantId: null, name: 'Europe', strategy: 'mirror',
           members: [
-            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [{ protocol: 'vless' }, { protocol: 'trojan' }] } },
-            { role: 'replica', inbounds: [], panel: { reviewState: 'accepted_low_trust', panelState: 'healthy', inbounds: [{ protocol: 'vless' }] } },
-            { role: 'drain', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', inbounds: [] } },
-            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'degraded', inbounds: [] } },
-            { role: 'primary', inbounds: [], panel: { reviewState: 'pending_review', panelState: 'healthy', inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', driftEvents: [], inbounds: [{ protocol: 'vless' }, { protocol: 'trojan' }] } },
+            { role: 'replica', inbounds: [], panel: { reviewState: 'accepted_low_trust', panelState: 'healthy', driftEvents: [], inbounds: [{ protocol: 'vless' }] } },
+            { role: 'drain', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', driftEvents: [], inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'degraded', driftEvents: [], inbounds: [] } },
+            { role: 'primary', inbounds: [], panel: { reviewState: 'pending_review', panelState: 'healthy', driftEvents: [], inbounds: [] } },
+            // Halted by an open drift event (F-027-fe): accepted and healthy, and still not placed on.
+            { role: 'primary', inbounds: [], panel: { reviewState: 'accepted', panelState: 'healthy', driftEvents: [{ id: 'event-1' }], inbounds: [] } },
           ],
         },
         { id: RESELLER_GROUP, tenantId: RESELLER, name: 'Alpha own', strategy: 'mirror', members: [] },

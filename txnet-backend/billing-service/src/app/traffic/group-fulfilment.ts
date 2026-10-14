@@ -23,6 +23,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor, InboundPlacementTarget } from './config-actions';
 import { hrwPick } from './hrw';
+import { HALTING_DRIFT_EVENT, PANEL_P_NOT_HALTED, PLACEABLE_PANEL_FIELDS, PLACEABLE_REVIEW_STATES, PlaceablePanel, placeableMember, servingPanel } from './panel-placeable';
 import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingInbounds } from './selling-settings';
 
 /**
@@ -30,20 +31,6 @@ import { effectiveSellingSettings, PLATFORM_SELLING_DEFAULTS, sellingInbounds } 
  * the user whose Grant it is. One fixed id, so the log reads as one actor.
  */
 export const GROUP_FULFILMENT_ACTOR: ConfigActor = { actorType: ActorType.system, actorId: '00000000-0000-4000-8000-0000000f027b' };
-
-/** A new client is written only to a panel that answered us cleanly (network `contract.budget.md`). */
-const PLACEABLE_PANEL_STATES: readonly PanelState[] = [PanelState.healthy];
-
-/**
- * A panel still serving its users — sub-api's `servingPanelStates` (sub-api
- * contract "What is served"). A config confirmed there counts towards
- * `minHealthyPanels`; `throttled_or_blocked` refuses our admin calls and still
- * serves. A state added later counts only once it is named here and there.
- */
-const SERVING_PANEL_STATES: readonly PanelState[] = [PanelState.healthy, PanelState.degraded, PanelState.throttled_or_blocked];
-
-/** Only an accepted panel is collected (network `contract.registration.md`), so only one is placed on. */
-const PLACEABLE_REVIEW_STATES: readonly PanelReviewState[] = [PanelReviewState.accepted, PanelReviewState.accepted_low_trust];
 
 /** Declared once (C-09): why a Grant's group was not fulfilled. */
 export const GROUP_FULFILMENT_REJECTIONS = ['grant_not_found', 'grant_not_fulfillable', 'no_panel_group', 'strategy_not_built'] as const;
@@ -71,8 +58,7 @@ const POOL_INBOUND = { sold: true, ...PLACEABLE_INBOUND, assignment: { is: null 
  * unpicked, disabled, gone and group-assigned ones are never loaded.
  */
 const MEMBER_PANEL_FIELDS = {
-  reviewState: true,
-  panelState: true,
+  ...PLACEABLE_PANEL_FIELDS,
   inboundPlacement: true,
   maxClients: true,
   inboundsPerBuyer: true,
@@ -102,6 +88,7 @@ export type InboundFacts = { remoteId: string; protocol: ConfigProtocol; maxClie
 type PanelFacts = {
   reviewState: PanelReviewState;
   panelState: PanelState;
+  driftEvents: PlaceablePanel['driftEvents'];
   inboundPlacement: InboundPlacement;
   maxClients: number | null;
   /** K under `hrw` (F-027-di). */
@@ -131,19 +118,13 @@ export function placementSettings(m: {
 }
 
 /**
- * A member a new config may be placed on now: not `drain`, its panel accepted
- * and healthy. What catalog's group list counts as healthy (F-026-p), so the
- * figure an admin picks by is the one fulfilment acts on.
- */
-export const placeableMember = (m: { role: PanelGroupMemberRole; panel: Pick<PanelFacts, 'reviewState' | 'panelState'> }): boolean =>
-  m.role !== PanelGroupMemberRole.drain && PLACEABLE_REVIEW_STATES.includes(m.panel.reviewState) && PLACEABLE_PANEL_STATES.includes(m.panel.panelState);
-/**
  * The groups among `groupIds` that can deliver a new sale (F-111-i): at least
  * `minHealthyPanels` members that could ever place one — not `drain`, not
  * retired, accepted, selling one inbound: an assigned one, or with none
- * assigned one of the pool (F-027-ch). Health is left out on purpose: a
- * panel down for a minute is waited for by delivery's clock, and must not take
- * the variant out of the shop and put it back each minute.
+ * assigned one of the pool (F-027-ch), not halted (F-027-fe). Health is left
+ * out on purpose: a panel down for a minute is waited for by delivery's clock,
+ * and must not take the variant out of the shop and put it back each minute.
+ * A halt is not a minute: it lasts until an admin acknowledges it.
  */
 export async function deliverableGroupIds(tx: Prisma.TransactionClient, groupIds: readonly string[]): Promise<Set<string>> {
   if (groupIds.length === 0) return new Set();
@@ -155,7 +136,7 @@ export async function deliverableGroupIds(tx: Prisma.TransactionClient, groupIds
       members: {
         where: {
           role: { not: PanelGroupMemberRole.drain },
-          panel: { retiredAt: null, reviewState: { in: [...PLACEABLE_REVIEW_STATES] } },
+          panel: { retiredAt: null, reviewState: { in: [...PLACEABLE_REVIEW_STATES] }, driftEvents: { none: HALTING_DRIFT_EVENT } },
           OR: [
             { inbounds: { some: { inbound: PLACEABLE_INBOUND } } },
             { inbounds: { none: {} }, panel: { inbounds: { some: POOL_INBOUND } } },
@@ -270,7 +251,7 @@ export function planFulfilment(facts: FulfilmentFacts): FulfilmentPlan {
     for (const i of targets) place.push({ panelId: m.panelId, inboundRemoteId: i.remoteId, protocol: i.protocol });
   }
 
-  const serving = new Set(members.filter((m) => SERVING_PANEL_STATES.includes(m.panel.panelState)).map((m) => m.panelId));
+  const serving = new Set(members.filter((m) => servingPanel(m.panel)).map((m) => m.panelId));
   const confirmed = new Set(
     facts.configs
       .filter(
@@ -456,6 +437,7 @@ export class GroupFulfilmentService {
                     AND m."role" <> 'drain'
                     AND p."reviewState" IN ('accepted', 'accepted_low_trust')
                     AND p."panelState" = 'healthy'
+                    AND ${PANEL_P_NOT_HALTED}
                     -- not already where this inbound would put the Grant
                     AND NOT EXISTS (SELECT 1 FROM "network"."config" c
                                     WHERE c."grantId" = g."id" AND c."panelId" = m."panelId" AND c."drainedAt" IS NULL
@@ -485,7 +467,8 @@ export class GroupFulfilmentService {
                    JOIN "network"."panel_group_member" m ON m."groupId" = pg."id" AND m."panelId" = c."panelId"
                   WHERE c."grantId" = g."id"
                     AND c."status" = 'active' AND c."desiredRemote" = 'present' AND c."enforcementState" = 'complete'
-                    AND p."panelState" IN ('healthy', 'degraded', 'throttled_or_blocked')))
+                    AND p."panelState" IN ('healthy', 'degraded', 'throttled_or_blocked')
+                    AND ${PANEL_P_NOT_HALTED}))
          )
        ORDER BY g."createdAt" ASC
        LIMIT ${FULFIL_BATCH_SIZE}`;

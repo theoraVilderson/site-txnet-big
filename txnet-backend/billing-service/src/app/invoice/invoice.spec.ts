@@ -276,7 +276,7 @@ describe('InvoiceService.create', () => {
     expect(calls.reserved).toEqual([]);
   });
 
-  it('counts a member only if it could ever place: not drain, not retired, accepted, selling one inbound — never its health (F-111-i)', async () => {
+  it('counts a member only if it could ever place: not drain, not retired, accepted, not halted (F-027-fe), selling one inbound — never its health (F-111-i)', async () => {
     const { service, calls } = buildCreate();
     await asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: [] }));
 
@@ -288,7 +288,7 @@ describe('InvoiceService.create', () => {
     const placeable = { enabled: true, goneAt: null, protocol: { not: null } };
     expect(members).toEqual({
       role: { not: 'drain' },
-      panel: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] } },
+      panel: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] }, driftEvents: { none: { collectionHalted: true, acknowledgedAt: null } } },
       OR: [
         { inbounds: { some: { inbound: placeable } } },
         { inbounds: { none: {} }, panel: { inbounds: { some: { sold: true, ...placeable, assignment: { is: null } } } } },

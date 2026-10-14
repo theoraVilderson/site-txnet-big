@@ -142,7 +142,8 @@ our clients be charged its restore twice. Then:
 
 While an unacknowledged event halts the panel, both loops skip its read and
 report it `OpHalted` (it is never stamped, so the watchdog ages it into an
-alert). The bulk pass **still converges it**: a suspension or a delete must
+alert). Billing places no buyer on it and does not count it towards
+`minHealthyPanels` (F-027-fe, `contract.groups.md` rules 8 and 10). The bulk pass **still converges it**: a suspension or a delete must
 reach the panel whatever its counters say — except under a `foreign_claim`,
 below (`DriftEventType.Converges`; `Halted` answers that type first). Acknowledging is `billing-service`'s
 `POST /systems/drift-events/:id/acknowledge` (F-027-as,

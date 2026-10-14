@@ -71,7 +71,10 @@ rows are written through `ConfigActionsService.provisionForGroup`
 (`contract.provisioning.md`), and the convergence pass creates the clients.
 
 8. **`mirror` places configs on every member that is not `drain`, whose
-   panel is `accepted`/`accepted_low_trust` and `healthy`** — on the inbounds
+   panel is `accepted`/`accepted_low_trust`, `healthy` and not halted** — a
+   panel with an open halting drift event (`contract.drift.md`) is neither
+   read nor always converged, so a config placed there is never made; it takes
+   no buyer until acknowledged (F-027-fe, ADR-0130; `traffic/panel-placeable.ts`) — on the inbounds
    its panel picked, as its placement and caps say (`contract.inbounds.md`
    rules 3-5), each with its inbound's protocol. Every config of the placement carries one `credentialGroupId`
    (the first one's, else a new uuid), and the Grant is rebalanced once for the
@@ -90,7 +93,8 @@ rows are written through `ConfigActionsService.provisionForGroup`
 10. **A `pending` Grant is provisioned, and activates on the panels' word.** It
     moves to `active` once `minHealthyPanels` distinct panels hold a config of
     it that is `active`, `present`, `complete` on a member whose panel still serves — sub-api's
-    `servingPanelStates` (`healthy`, `degraded`, `throttled_or_blocked`).
+    `servingPanelStates` (`healthy`, `degraded`, `throttled_or_blocked`) —
+    and is not halted: nothing reads whether a halted panel's config stands.
     `complete` is a read (invariant 36), so a Grant is never activated on our
     own write. The move is entitlement's `markDelivered` — conditional on
     `pending`, so a cancel or a delivery refund meanwhile stands, and it writes
@@ -171,7 +175,7 @@ the count in front of them.
     delete with the remainder (actor `evictedBy`, reason `panel_removed`). A
     failed one keeps its lines and the member, and is retried whole. Each
     sweep first unfreezes the `awaitingPanel` Grants whose group has a member
-    not `drain`, not retired, accepted and `healthy` — the clock restarts and
+    not `drain`, not retired, accepted, `healthy` and not halted — the clock restarts and
     `endsAt` moves by the pause — and fulfilment places them. A trigger
     clears `awaitingPanel` whenever the Grant leaves `admin_frozen`.
     Draining the group's last non-`drain` member is refused upstream

@@ -16,7 +16,7 @@ import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATF
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { placeableMember } from '../traffic/group-fulfilment';
+import { PLACEABLE_PANEL_FIELDS, placeableMember } from '../traffic/panel-placeable';
 import { sellingInbounds } from '../traffic/selling-settings';
 import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
@@ -649,8 +649,7 @@ export class CatalogAdminService {
               inbounds: { select: { inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
               panel: {
                 select: {
-                  reviewState: true,
-                  panelState: true,
+                  ...PLACEABLE_PANEL_FIELDS,
                   inbounds: {
                     where: { sold: true, enabled: true, goneAt: null, protocol: { not: null }, assignment: { is: null } },
                     select: { remoteId: true, protocol: true, maxClients: true },
