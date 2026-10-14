@@ -44,6 +44,9 @@ configs:
     file: ./config-dev/postgres-queries.yaml
   promtail_config:
     file: ./config-dev/promtail.yaml
+  # Retention and the ingestion cap (OPS-1-j, H11).
+  loki_config:
+    file: ./config-dev/loki.yaml
   alertmanager_config:
     file: ./config-dev/alertmanager.yml
 
@@ -120,9 +123,15 @@ services:
     image: ${DOCKER_REGISTRY}/grafana/loki:3.1.0
     container_name: txnet-loki
     restart: unless-stopped
+    # Loopback only (H11): Loki has no auth, so a public port let anyone read
+    # every service's logs or push fake ones. Grafana and promtail reach it
+    # over private_backend_network; the host reaches it on 127.0.0.1.
     ports:
-      - "${LOKI_PORT}:3100"
-    command: -config.file=/etc/loki/local-config.yaml
+      - "127.0.0.1:${LOKI_PORT:-3100}:3100"
+    command: -config.file=/etc/loki/loki.yaml
+    configs:
+      - source: loki_config
+        target: /etc/loki/loki.yaml
     volumes:
       - loki_data:/loki
     networks:

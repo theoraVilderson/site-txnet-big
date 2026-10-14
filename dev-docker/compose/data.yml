@@ -7,6 +7,7 @@ services:
   # Redis — Session Store & Cache
   # ===========================================================================
   memory-data:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/redis:8.8-alpine
     container_name: ${STACK_NAME:-txnet}-redis
     restart: unless-stopped
@@ -20,11 +21,6 @@ services:
       - redis_vol_internal:/data
     networks:
       - private_backend_network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     healthcheck:
       test:
         [
@@ -46,6 +42,7 @@ services:
   # hosting/contract.md H1/H2). The repository is chosen by PG_BACKUP_REPO_TYPE;
   # dev keeps it in a host dir, which guards a dropped table, not a lost disk.
   main-db:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ./postgres
       args:
@@ -109,6 +106,7 @@ services:
   # inbox is at mail.${DOMAIN_NAME}. Not a relay: nothing leaves the machine.
   # ===========================================================================
   mailpit:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/axllent/mailpit:v1.27
     container_name: ${STACK_NAME:-txnet}-mailpit
     restart: unless-stopped
@@ -125,6 +123,7 @@ services:
   # RabbitMQ — Message Broker
   # ===========================================================================
   rabbitmq:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/rabbitmq:4.2-management-alpine
     container_name: ${STACK_NAME:-txnet}-rabbitmq
     restart: unless-stopped

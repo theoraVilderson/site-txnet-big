@@ -7,6 +7,7 @@ services:
   # Next.js PWA — Main Frontend Application
   # ===========================================================================
   site-pwa:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${ENVIRONMENT}_site-pwa_${WEB_APP_VERSION:-latest}
     build:
       target: ${ENVIRONMENT}
@@ -80,11 +81,6 @@ services:
         condition: service_healthy
     networks:
       - private_backend_network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
     # (no custom `dns:` — it would break resolution of compose service names;
     #  set upstream DNS in /etc/docker/daemon.json if you need it)
     labels:
@@ -130,6 +126,7 @@ services:
   # Coinsite — Secondary Next.js Frontend
   # ===========================================================================
   coinsite:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${ENVIRONMENT}_coinsite_${WEB_APP_VERSION:-latest}
     build:
       target: ${ENVIRONMENT}

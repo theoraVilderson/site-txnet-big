@@ -1,0 +1,14 @@
+# Rotated logs for every service of the main stack (OPS-1-j, H11).
+# Not an `include:` entry: each service pulls this in with
+#   extends: { file: compose/logging.yml, service: rotated-logs }
+# (the path is from dev-docker/, the `project_directory` every include sets)
+# because a YAML anchor cannot cross the `include:` files, and this is the
+# one place the size is set. Without it, a container that logs in a loop fills
+# the disk the database and the live site share (dev hit it 2026-10-06).
+services:
+  rotated-logs:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

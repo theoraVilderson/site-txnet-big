@@ -16,6 +16,7 @@ services:
   # on a timer so a revoked session does not keep a live socket.
   # ===========================================================================
   gateway-service:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

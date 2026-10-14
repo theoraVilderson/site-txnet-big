@@ -26,17 +26,12 @@
 #     below: a YAML merge key (`<<:`) drops compose's `!reset` tag, and the
 #     service then silently builds its image — `npm ci` included — again.
 
-#   - Every dev container has a memory ceiling and rotated logs (2026-10-06).
+#   - Every dev container has a memory ceiling (2026-10-06); its rotated logs
+#     come from main.yml (compose/logging.yml, H11).
 #     With none, one runaway container (a `next dev` cache, or the flood tool
 #     planted through coinsite's RCE on 2026-09-25) filled all 16 GB and took
 #     the host down every ~2 days — the live site and bot on it included. A
 #     container that hits its ceiling is OOM-killed and restarted alone.
-
-x-dev-logs: &dev-logs
-  driver: "json-file"
-  options:
-    max-size: "10m"
-    max-file: "3"
 
 x-host-node: &host-node
   image: ${DOCKER_REGISTRY}/node:24-bookworm
@@ -44,7 +39,6 @@ x-host-node: &host-node
   working_dir: /app
   command: ["node", "scripts/dev-serve.js"]
   mem_limit: ${DEV_NEST_MEM_LIMIT:-1g}
-  logging: *dev-logs
 
 services:
   auth-service:
@@ -164,49 +158,33 @@ services:
       # Caps the JS heap below the container, so V8 collects harder and exits
       # cleanly when it cannot; Turbopack's native memory is outside it.
       - NODE_OPTIONS=--max-old-space-size=1536
-    logging: *dev-logs
   coinsite:
     mem_limit: ${DEV_COINSITE_MEM_LIMIT:-1536m}
-    logging: *dev-logs
   main-db:
     mem_limit: 2g
-    logging: *dev-logs
   memory-data:
     mem_limit: 1g
-    logging: *dev-logs
   rabbitmq:
     mem_limit: 1g
-    logging: *dev-logs
   mailpit:
     mem_limit: 256m
-    logging: *dev-logs
   translator:
     mem_limit: 1536m
-    logging: *dev-logs
   translator-llm:
     mem_limit: ${DEV_TRANSLATOR_LLM_MEM_LIMIT:-3g} # ollama; its model is ~2 GB
-    logging: *dev-logs
   locale-service:
     mem_limit: 256m
-    logging: *dev-logs
   gateway-handler:
     mem_limit: 512m
-    logging: *dev-logs
   authorization-handler:
     mem_limit: 512m
-    logging: *dev-logs
   network-service:
     mem_limit: 512m
-    logging: *dev-logs
   sub-service:
     mem_limit: 512m
-    logging: *dev-logs
   guide-media:
     mem_limit: 256m
-    logging: *dev-logs
   object-backup:
     mem_limit: 512m
-    logging: *dev-logs
   pg-backup:
     mem_limit: 512m
-    logging: *dev-logs

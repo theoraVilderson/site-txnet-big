@@ -19,6 +19,7 @@ services:
   # panel's host router, which would otherwise hand `/sub/` to Next.js.
   # ===========================================================================
   sub-service:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ../sub-service
       dockerfile: Dockerfile

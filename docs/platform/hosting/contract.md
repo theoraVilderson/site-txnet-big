@@ -125,11 +125,11 @@ Postgres; written in `operations/environments.md`.
 
 ## Logs
 
-**H11 — Rotation and retention.** `docker-compose.main.yml`'s services all use
-one anchor `x-logging: {driver: json-file, options: {max-size: "10m", max-file: "3"}}`
-(dev already does). Loki gets `dev-docker/monitoring/config-dev/loki.yaml`:
-`compactor.retention_enabled: true`, `limits_config.retention_period: 720h`,
-`limits_config.ingestion_rate_mb: 8`. Its port binds `127.0.0.1:${LOKI_PORT}`.
+**H11 — Rotation and retention.** Every main-stack service `extends` one base,
+`compose/logging.yml` `rotated-logs` (json-file, 10m × 3) — an anchor cannot
+cross `include:` files; the dev overlay sets none. Loki runs `loki.yaml`:
+`compactor.retention_enabled: true`, `retention_period: 720h`, `ingestion_rate_mb:
+8`, data in the `/loki` volume. Its port binds `127.0.0.1:${LOKI_PORT:-3100}`.
 
 **H12 — JSON lines from Node.** `shared-core` `JsonLogger implements LoggerService`:
 one line per call, keys `time` (ISO), `level` (`INFO`/`WARN`/`ERROR`/`DEBUG`,

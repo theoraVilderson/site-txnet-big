@@ -8,6 +8,7 @@ services:
   # service preloads a scope from here on boot and keeps it live via Watch.
   # ===========================================================================
   locale-service:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ../i18n-platform/services/locale-service
       dockerfile: Dockerfile
@@ -41,6 +42,7 @@ services:
   # language's code there when the language is added to locales/.
   # ===========================================================================
   translator:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/libretranslate/libretranslate:v1.6.2
     container_name: ${STACK_NAME:-txnet}-translator
     restart: unless-stopped
@@ -71,6 +73,7 @@ services:
   # internet): download the GGUF anywhere and run scripts/translator-llm-import.sh.
   # ===========================================================================
   translator-llm:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/ollama/ollama:0.6.8
     container_name: ${STACK_NAME:-txnet}-translator-llm
     restart: unless-stopped

@@ -11,6 +11,7 @@
 
 services:
   object-backup:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ./backup
       args:

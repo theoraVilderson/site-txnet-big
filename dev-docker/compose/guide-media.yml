@@ -13,6 +13,7 @@
 
 services:
   guide-media:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/nginx:1.27-alpine
     container_name: ${STACK_NAME:-txnet}-guide-media
     restart: unless-stopped

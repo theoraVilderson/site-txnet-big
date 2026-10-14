@@ -10,6 +10,7 @@
 
 services:
   pg-backup:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-pg-backup
     restart: unless-stopped

@@ -11,6 +11,7 @@ services:
   # its messages, read cursors and categories.
   # ===========================================================================
   support-service:
+    extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ../txnet-backend
       dockerfile: Dockerfile

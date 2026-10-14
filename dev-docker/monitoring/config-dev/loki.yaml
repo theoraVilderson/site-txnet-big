@@ -1,0 +1,51 @@
+# Loki 3.1, single process, filesystem storage (OPS-1-j, H11).
+# Replaces the image's built-in local-config.yaml, which kept every line
+# forever and wrote under /tmp — outside the `loki_data` volume, so a
+# recreated container lost the logs and a long-lived one filled the disk.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        # Retention deletes whole index periods, so it needs 24h ones.
+        period: 24h
+
+# Retention is enforced by the compactor; without `retention_enabled` the
+# period below is only a number.
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+
+limits_config:
+  # 30 days: long enough to trace a payment complaint back through
+  # `requestId` (H13), short enough that the disk is not the log store.
+  retention_period: 720h
+  # One service logging in a loop is throttled at Loki instead of
+  # crowding out every other service's lines.
+  ingestion_rate_mb: 8
+  ingestion_burst_size_mb: 16
+
+analytics:
+  reporting_enabled: false
