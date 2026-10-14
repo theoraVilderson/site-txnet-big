@@ -1,0 +1,34 @@
+# db-pool (OPS-1-h, ADR-0126, hosting/contract.md H7): PgBouncer in
+# transaction mode, the one way a service's pooled connections reach main-db
+# (H8). Included by ../docker-compose.main.yml with `project_directory: .`.
+#
+# Never published on the host: only private_backend_network reaches it. The
+# config holds the three role passwords, so it lives on a tmpfs, mode 600.
+
+services:
+  db-pool:
+    build:
+      context: ./pgbouncer
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: txnet/db-pool:1.25
+    container_name: ${STACK_NAME:-txnet}-db-pool
+    restart: unless-stopped
+    depends_on:
+      main-db:
+        condition: service_healthy
+    environment:
+      - MAIN_DB_NAME=${MAIN_DB_NAME}
+      - DB_APP_PASSWORD=${DB_APP_PASSWORD}
+      - DB_CROSS_TENANT_PASSWORD=${DB_CROSS_TENANT_PASSWORD}
+      - DB_AI_READER_PASSWORD=${DB_AI_READER_PASSWORD}
+    tmpfs:
+      - /run/pgbouncer:mode=0700
+    networks:
+      - private_backend_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
