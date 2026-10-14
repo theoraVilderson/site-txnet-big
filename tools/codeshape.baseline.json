@@ -316,7 +316,7 @@
   "site-pwa/src/app/(panel)/systems/_components/RegisterWizard.tsx": 727,
   "site-pwa/src/app/(panel)/systems/_lib/systems.ts": 519,
   "site-pwa/src/lib/catalog-api.ts": 492,
-  "site-pwa/src/lib/realtime.ts": 434,
+  "site-pwa/src/lib/realtime.ts": 433,
   "site-pwa/src/lib/tenant-api.ts": 630,
   "sub-service/internal/sub/formats.go": 415,
   "txnet-backend/ai-service/src/app/decision/candidates.ts": 512,

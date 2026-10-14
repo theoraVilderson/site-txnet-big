@@ -221,8 +221,8 @@ already expired — gets it as a reply only if `RedisKeys.botStaleNotice`
 fresh; a `payment` is never stale — money is relayed whatever its age.
 
 **H20 — Reconnect.** gateway-service closes every socket on shutdown with
-`1012` ("service restart") instead of `GoingAway`. The panel client: on `1012`
-or `1006`, the first attempt waits `random(0, 10000)` ms; every later attempt
+`1012` ("service restart") instead of `4503`. The panel client: on `1012` or
+`1006` from a welcomed socket, the first attempt waits `random(0, 10000)` ms; every later attempt
 waits `random(0, min(30000, 500 × 2^attempt))` (full jitter). `4401`, `4403`
 and the too-many code keep their meaning.
 

@@ -105,6 +105,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("opening the connection", () => {
@@ -339,6 +340,36 @@ describe("reconnecting", () => {
     vi.advanceTimersByTime(600_000);
 
     expect(FakeSocket.live).toHaveLength(1);
+  });
+
+  // ADR-0126 point 12, hosting H20: a gateway restart drops every panel at once.
+  it.each([1012, 1006])("spreads the first reconnect after %i over 0–10s", (code) => {
+    vi.spyOn(Math, "random").mockReturnValue(0.95);
+    const { socket } = connected();
+
+    socket.drop(code);
+    vi.advanceTimersByTime(9_400);
+    expect(FakeSocket.live).toHaveLength(1);
+    vi.advanceTimersByTime(200);
+    expect(FakeSocket.live).toHaveLength(2);
+  });
+
+  it("backs off with full jitter after the first attempt: 0 up to min(30s, 500ms × 2^attempt)", () => {
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const { socket } = connected();
+    socket.drop(1012);
+    vi.advanceTimersByTime(0);
+    expect(FakeSocket.live).toHaveLength(2);
+
+    random.mockReturnValue(1);
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      const cap = Math.min(30_000, 500 * 2 ** attempt);
+      FakeSocket.live.at(-1)!.drop(1006);
+      vi.advanceTimersByTime(cap - 1);
+      expect(FakeSocket.live).toHaveLength(attempt + 1);
+      vi.advanceTimersByTime(1);
+      expect(FakeSocket.live).toHaveLength(attempt + 2);
+    }
   });
 
   it("drops a socket that has gone quiet past two heartbeats", () => {

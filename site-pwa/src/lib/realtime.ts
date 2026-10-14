@@ -48,6 +48,9 @@ const RESUME_MAX_CHANNELS = 64;
 
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 30_000;
+/** H20: a live socket closed by a restart (1012) or a drop (1006) spreads its first reconnect over 10s. */
+const RESTART_SPREAD_MS = 10_000;
+const RESTART_CLOSES = new Set([1012, 1006]);
 /** A `4429` means this user already holds every socket they may — start high. */
 const BACKOFF_ATTEMPTS_AT_CAPACITY = 5;
 
@@ -359,12 +362,15 @@ export class RealtimeClient {
       this.attempt = Math.max(this.attempt, BACKOFF_ATTEMPTS_AT_CAPACITY);
     }
 
-    this.scheduleReconnect();
+    // A restart drops every panel at once; the 500ms curve would bring them all back together.
+    this.scheduleReconnect(wasWelcomed && this.attempt === 0 && RESTART_CLOSES.has(code));
   }
 
-  private scheduleReconnect(): void {
+  /** Full jitter, `random(0, cap)`, the cap exponential to 30s (ADR-0126 point 12). */
+  private scheduleReconnect(restarted = false): void {
     if (this.reconnectTimer) return;
-    const delay = this.backoffMs();
+    const cap = restarted ? RESTART_SPREAD_MS : Math.min(BACKOFF_BASE_MS * 2 ** this.attempt, BACKOFF_MAX_MS);
+    const delay = Math.round(Math.random() * cap);
     this.attempt += 1;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -372,8 +378,6 @@ export class RealtimeClient {
     }, delay);
   }
 
-  /** Exponential, capped, and jittered so a restarted gateway is not hit by
-   * every panel in the same 50ms. */
   private recoverOrSignOut(dead: string | null): void {
     const lost = () => this.options.onSessionLost?.();
     if (!this.options.recoverSession) return lost();
@@ -385,11 +389,6 @@ export class RealtimeClient {
       },
       lost,
     );
-  }
-
-  private backoffMs(): number {
-    const base = Math.min(BACKOFF_BASE_MS * 2 ** this.attempt, BACKOFF_MAX_MS);
-    return Math.round(base * (0.8 + Math.random() * 0.4));
   }
 
   /**

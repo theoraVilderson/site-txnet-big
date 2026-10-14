@@ -91,9 +91,11 @@ plain HTTP `401` before any socket exists, and the browser reports that as a
 close with no status — identical to a network drop. So a socket that closes
 *before* it was welcomed while a credential was offered calls
 `onCredentialRejected` once, which is where the page refreshes its access
-token, and then retries with backoff. Reconnects are exponential to 30s with
-±20% jitter, and a `4429` starts high because the user already holds every
-socket they may.
+token, and then retries with backoff. A live socket dropped with `1012` (the
+gateway restarting) or `1006` waits `random(0, 10s)` before its first reconnect,
+so a restart is not met by every panel at once; every other wait is full jitter,
+`random(0, min(30s, 500ms × 2^attempt))` (H20, ADR-0126). A `4429` starts high
+because the user already holds every socket they may.
 
 ## The first consumer: what became of the code (F-070-b)
 
