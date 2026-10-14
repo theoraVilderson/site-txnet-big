@@ -1694,3 +1694,61 @@ describe('AuthService sign-in — a blocked account (ADR-0133)', () => {
     expect(await h.service.proveAccountByPassword('behnam', 'pw')).toBeNull();
   });
 });
+
+describe('AuthService — the holder of * signs in with two factors (ADR-0145, SA-1-b)', () => {
+  let h: Harness;
+  const owner = (over: Record<string, unknown> = {}) => activeUser({ role: { name: 'SuperAdmin', rolePermissions: [{ permission: { key: '*' } }] }, ...over });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h = harness();
+    argon2.verify.mockResolvedValue(true);
+    argon2.hash.mockResolvedValue('new-argon2-hash');
+  });
+
+  it('asks the code after the password even with twoFactorEnabled off', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(owner());
+    const res = await login(h);
+    expect(res).toMatchObject({ ok: true, data: { requiresOtp: true, otpToken: 'otp-token' } });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses, never fails, when there is no number to send the code to', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(owner({ phoneNumber: null }));
+    const res = await login(h);
+    expect(res).toMatchObject({ ok: false, msg: 'auth.secondFactorUnavailable' });
+    expect(h.otp.issueOtp).not.toHaveBeenCalled();
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('opens the session once the code follows the password', async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-1', purpose: 'otp_login' });
+    h.prisma.user.findUnique.mockResolvedValue(owner());
+    const res = await h.service.verifyLoginOtp({ otpToken: 'otp-token', otpCode: '123456' } as never, '1.2.3.4', 'jest-ua');
+    expect(res).toMatchObject({ ok: true, msg: 'auth.loginSuccess' });
+  });
+
+  it('refuses a code alone, after checking it, and opens nothing', async () => {
+    h.prisma.user.findFirst.mockResolvedValue(owner());
+    const res = await h.service.verifyLoginOtp({ phoneNumber: '09123456789', otpCode: '123456' } as never, '1.2.3.4', 'jest-ua');
+    expect(h.otp.verifyOtp).toHaveBeenCalled();
+    expect(res).toMatchObject({ ok: false, msg: 'auth.ownerNeedsBothFactors' });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('ends a password reset signed out', async () => {
+    h.tokens.verify.mockReturnValue({ sub: 'user-1', purpose: 'password_reset' });
+    h.prisma.user.findUnique.mockResolvedValue(owner());
+    const res = await h.service.resetPassword({ resetToken: 'reset-token', newPassword: 'Fresh!Passw0rd' } as never, '1.2.3.4', 'jest-ua');
+    expect(h.sessions.dropAllForUser).toHaveBeenCalledWith('user-1');
+    expect(res).toMatchObject({ ok: true, data: { success: true, signedOut: true } });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a one-factor door (a handoff, the messenger, a switch) for them, and nobody else', async () => {
+    await expect(h.service.createSessionForUser(owner(), null, null)).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
+    await expect(h.service.switchSession('s-1', 'u-0', owner(), '1.2.3.4', 'jest-ua')).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+    await expect(h.service.createSessionForUser(activeUser(), null, null)).resolves.toMatchObject({ accessToken: 'access-token' });
+  });
+});

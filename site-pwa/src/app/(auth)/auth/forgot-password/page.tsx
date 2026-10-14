@@ -27,6 +27,7 @@ import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { authApi } from "@/lib/auth-api";
 import { consumeReturnTo } from "@/lib/return-to";
+import { AUTH_LOGIN } from "@/lib/routes";
 import { OTP_LENGTH } from "@/lib/otp";
 
 /** 1 phone + method · "link" connect the messenger · 2 code · 3 new password */
@@ -93,10 +94,10 @@ export default function ForgotPasswordPage() {
       else if (step === 3) {
         // The reset revoked every session this account had and issued a new
         // one for this device — so land in the panel, not back on the login
-        // form.
-        await authApi.reset(resetToken, newPassword);
+        // form. The platform's owner gets none: back to sign in with both factors (ADR-0145).
+        const result = await authApi.reset(resetToken, newPassword);
         setIsSuccess(true);
-        router.replace(consumeReturnTo());
+        router.replace(result.accessToken ? consumeReturnTo() : AUTH_LOGIN);
       }
     } catch (error) {
       submitError.capture(error);

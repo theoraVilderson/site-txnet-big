@@ -59,6 +59,7 @@ import {
   RefreshInput,
   ResetPasswordInput,
 } from './auth.schema';
+import { OWNER_NEEDS_BOTH_FACTORS, OwnerNeedsBothFactors, SECOND_FACTOR_UNAVAILABLE, needsBothFactors, roleGivesEverything } from './owner-factors';
 
 /** What `LOGIN_FAILURE_LOCK_THRESHOLD` is when a deployment sets nothing. */
 const LOGIN_FAILURE_LOCK_DEFAULT = 10;
@@ -253,7 +254,8 @@ export class AuthService {
       return err('auth.phoneVerificationRequired');
     }
 
-    if (user.twoFactorEnabled) {
+    if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) {
+      if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
       const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
       const delivery = await this.deliveries.mintHandles();
       await this.otp.issueOtp(
@@ -436,6 +438,7 @@ export class AuthService {
     }
     await this.otp.verifyOtp(phoneNumber, OtpPurpose.login, otpCode);
     if (user.status === 'banned') return bannedAnswer(user);
+    if (needsBothFactors(await this.access.ofLoaded(user))) return err(OWNER_NEEDS_BOTH_FACTORS);
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
     return ok(sessionData, 'auth.loginSuccess');
   }
@@ -642,9 +645,8 @@ export class AuthService {
           'auth.logoutSwitched',
         );
       } catch (error) {
-        // The revoke already happened, so the one thing this must not become
-        // is a 500. "You are logged out" is true and complete on its own;
-        // coming back up as someone else is the part that failed.
+        // The revoke already happened, so this must not become a 500: "you are
+        // logged out" is true on its own; coming back as someone else failed.
         this.logger.error(
           `logout: signed ${session.userId} out of ${session.scopeKey}, but the fallback onto ${fallback.user.id} failed: ${
             (error as Error)?.message ?? error
@@ -733,11 +735,9 @@ export class AuthService {
    *
    * **The oldest remaining member**, so the answer never depends on row order
    * or on which account was most recently touched: a group of three signs out
-   * into the same account every time, and in a bot chat that is normally the
-   * account the chat was linked with.
-   *
-   * `null` — no group here, nobody else in it, or nobody left who could hold a
-   * session — is not an error. It is an ordinary full logout.
+   * into the same account every time — in a bot chat, normally the linked one.
+   * `null` (no group, nobody else, nobody who could hold a session, or only a
+   * holder of `*`, ADR-0145) is not an error: an ordinary full logout.
    */
   private async fallbackMember(scopeKey: string, outgoingUserId: string) {
     const membership = await this.prisma.linkedAccountMember.findUnique({
@@ -760,7 +760,7 @@ export class AuthService {
       // is skipped rather than refused — the next one may be fine, and if none
       // is, the place is simply signed out.
       const user = await this.findUserForSession(candidate.userId);
-      if (!mayHoldSession(user)) continue;
+      if (!mayHoldSession(user) || roleGivesEverything(user)) continue; // ADR-0145 (2)
       return { user, groupId: membership.groupId };
     }
     return null;
@@ -924,12 +924,10 @@ export class AuthService {
     // effect on all devices immediately.
     await this.sessions.dropAllForUser(user.id);
 
-    // Every session is gone, including any the person resetting was holding
-    // — so this device is signed back in here, on a session minted after the
-    // revocation. The net effect is the requested "everything except the
-    // one in front of me", without weakening identity/invariants.md #3: the
-    // revocation is still total, and no pre-reset session survives it.
+    // Every session is gone; this device signs back in on a new one (invariant #3
+    // stays total) — but a holder of `*` signs in again with both factors (ADR-0145 (3)).
     const full = await this.findUserForSession(user.id);
+    if (needsBothFactors(await this.access.ofLoaded(full))) return ok({ success: true, signedOut: true }, 'auth.passwordResetSignIn');
     const sessionData = await this.issueSession(full, ip, userAgent, scopeKey);
 
     return ok(
@@ -1137,6 +1135,7 @@ export class AuthService {
     scopeKey?: string | null,
     deviceLabel?: string | null,
   ) {
+    if (needsBothFactors(await this.access.ofLoaded(user))) throw new OwnerNeedsBothFactors();
     return this.issueSession(user, ip, userAgent, scopeKey, deviceLabel);
   }
 
@@ -1170,6 +1169,7 @@ export class AuthService {
     userAgent: string,
     scopeKey?: string | null,
   ) {
+    if (needsBothFactors(await this.access.ofLoaded(toUser))) throw new OwnerNeedsBothFactors();
     const issued = await this.prisma.$transaction(async (tx) => {
       const outgoing = await tx.session.update({
         where: { id: fromSessionId },

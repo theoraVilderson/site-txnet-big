@@ -90,7 +90,7 @@ export const signInCalls = {
    * for this device, so the user lands signed in here and signed out
    * everywhere else.
    */
-  async reset(resetToken: string, newPassword: string) { const result = await request<{ success: boolean } & AuthResult>("/auth/password/reset", { method: "POST", body: JSON.stringify({ resetToken, newPassword }) }); if (result.accessToken) setAccessToken(result.accessToken); return result; },
+  async reset(resetToken: string, newPassword: string) { const result = await request<{ success: boolean; signedOut?: true } & Partial<AuthResult>>("/auth/password/reset", { method: "POST", body: JSON.stringify({ resetToken, newPassword }) }); if (result.accessToken) setAccessToken(result.accessToken); return result; },
   /**
    * What became of one queued code (`auth-api` v13, D-15).
    *

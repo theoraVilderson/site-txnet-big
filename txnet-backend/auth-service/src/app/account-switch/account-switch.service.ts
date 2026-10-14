@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SessionRevokedReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, mayHoldSession } from '../auth/auth.service';
+import { roleGivesEverything } from '../auth/owner-factors';
 import { SessionService } from '../auth/session/session.service';
 import { OtpChannel } from '../auth/otp/otp.interface';
 import { err, ok, safeExecute } from '../common/response/response.util';
@@ -483,10 +484,9 @@ export class AccountSwitchService {
   }
 
   /**
-   * The member a leaving caller's place falls to — ADR-0035's rule for a
-   * logout, so both ways out land on the same account: the oldest remaining
-   * member, skipping one that could not hold a session or that this door does
-   * not admit (C-22, as `switchTo` refuses it), and none when nobody is left.
+   * The member a leaving caller's place falls to — ADR-0035's rule for a logout,
+   * so both ways out land alike: the oldest remaining member that could hold a
+   * session, this door admits (C-22) and is not a holder of `*`; else none.
    */
   private async fallbackFor(callerUserId: string, groupId: string) {
     const others = await this.prisma.linkedAccountMember.findMany({
@@ -501,7 +501,7 @@ export class AccountSwitchService {
           include: { rolePermissions: { include: { permission: true } } },
         },
       });
-      if (mayHoldSession(user)) return { user, groupStands: others.length >= 2 };
+      if (mayHoldSession(user) && !roleGivesEverything(user)) return { user, groupStands: others.length >= 2 }; // ADR-0145 (2)
     }
     return null;
   }
