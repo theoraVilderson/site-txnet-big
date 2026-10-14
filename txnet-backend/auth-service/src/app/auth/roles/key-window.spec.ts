@@ -119,7 +119,7 @@ function harness(initial: Row[] = []) {
     ),
   };
   const answers = new AccessReader(prisma as never);
-  const service = new TenantRolesService(prisma as never, door as never, new RolesService(prisma as never), answers);
+  const service = new TenantRolesService(prisma as never, door as never, new RolesService(prisma as never), answers, { get: () => '2' } as never);
   const sweep = new KeyWindowSweep(prisma as never, prisma as never, answers);
   const actor = { userId: LEAD, tenantId: TENANT, permissions: ['role.manage'] };
   const give = (key: string, window: { startsAt?: Date; endsAt?: Date } = {}, effect: 'give' | 'take' = 'give') =>

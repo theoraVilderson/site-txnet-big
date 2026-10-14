@@ -103,7 +103,7 @@ describe('TenantRolesService', () => {
         );
       }),
     };
-    const service = new TenantRolesService(prisma as never, access as never, new RolesService(prisma as never), new AccessReader(prisma as never));
+    const service = new TenantRolesService(prisma as never, access as never, new RolesService(prisma as never), new AccessReader(prisma as never), { get: () => '2' } as never);
     return { service, order, user, role, adminAuditLog, written, access };
   };
 

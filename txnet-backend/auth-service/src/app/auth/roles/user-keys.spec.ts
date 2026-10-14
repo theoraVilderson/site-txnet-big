@@ -76,7 +76,7 @@ describe('TenantRolesService — a key given or taken (AC-1-l)', () => {
         runWithTenant({ id: reseller }, () => work({ id: reseller, slug: 'alpha', as: options.as ?? 'member' })),
       ),
     };
-    const service = new TenantRolesService(prisma as never, door as never, new RolesService(prisma as never), new AccessReader(prisma as never));
+    const service = new TenantRolesService(prisma as never, door as never, new RolesService(prisma as never), new AccessReader(prisma as never), { get: () => '2' } as never);
     return { service, rows, written, tx };
   };
 

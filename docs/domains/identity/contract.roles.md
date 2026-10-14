@@ -62,7 +62,7 @@ writes to `RolesService`, so the rules above live once.
 |---|---|
 | **What may be granted** | the platform's tenant: the caller's keys, `*` included. A reseller: the **tenant ceiling** — every registry key not `platformOnly` (AC-1-e; it was the keys the templates hold, which made a key grantable only by granting it to every template holder) — whole for its owner, and the part they hold for anyone else |
 | **list** | adds `members` (how many of *this* tenant's people hold each role, templates included) and `grantable` (the keys above) |
-| **assign** | the role is this tenant's or a template, else `role_not_found`. The writer holds every key of it, else `role_not_held`. `authorityOver` allows the act on this person (ADR-0103), else `no_authority`. Writes `user.roleId` with a `role_change` audit row in the tenant's trail; the same role again writes nothing. The trigger moves the token (F-101-b) |
+| **assign** | the role is this tenant's or a template, else `role_not_found`. The writer holds every key of it, else `role_not_held`. `authorityOver` allows the act on this person (ADR-0103), else `no_authority`. A role holding `*` goes to one more person only while fewer than `SUPERADMIN_MAX` (default 2) others hold it, under a lock, else `superadmin_limit`; auth-service warns at boot naming every holder past it (SA-1-a, `superadmin-cap.ts`). Writes `user.roleId` with a `role_change` audit row in the tenant's trail; the same role again writes nothing. The trigger moves the token (F-101-b) |
 
 ## The permission registry (AC-1-f, catalog §3.4)
 

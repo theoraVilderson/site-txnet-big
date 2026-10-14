@@ -53,6 +53,7 @@ const STATUS: Record<TenantRolesRejection, 400 | 403 | 404 | 409> = {
   key_not_grantable: 403,
   key_not_held: 403,
   key_on_wildcard: 409,
+  superadmin_limit: 409,
   key_not_found: 404,
   window_on_take: 400,
   window_past: 400,

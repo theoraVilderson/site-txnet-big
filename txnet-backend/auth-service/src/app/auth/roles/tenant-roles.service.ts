@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AdminAction, AuditTargetType, type Prisma } from '@prisma/client';
 import {
   AdmittedReseller,
@@ -24,6 +25,7 @@ import { authorityOver, permissionsOf } from '../users/authority';
 import { auditPersonAct } from '../users/person-act-audit';
 import type { CreateRoleInput, UpdateRoleInput } from './role.schema';
 import { RoleScope, RoleView, RolesService } from './roles.service';
+import { wildcardRefusal } from './superadmin-cap';
 import { type KeyPerson, type KeyWindowRejection, type KeyWrite, type PersonKeys, PERSON, keyWindowRefusal, personKeysOf, storedWindow } from './user-keys.view';
 
 export type { KeyEffect, KeyOverride, PersonKeys } from './user-keys.view';
@@ -41,6 +43,7 @@ export type TenantRolesRejection =
   | 'key_not_held'
   | 'key_on_wildcard'
   | 'key_not_found'
+  | 'superadmin_limit'
   | KeyWindowRejection;
 
 export class TenantRolesRefused extends Error {
@@ -96,6 +99,7 @@ export class TenantRolesService {
     private readonly roles: RolesService,
     /** A person's whole answer (ADR-0138): what the authority rule weighs, and what a key write moves. */
     private readonly answers: AccessReader,
+    private readonly config: ConfigService,
   ) {}
 
   list(actor: ResellerActor, tenantId: string): Promise<TenantRolesList> {
@@ -161,6 +165,8 @@ export class TenantRolesService {
         if (!permissionsOf({ role }).every((key) => holdsPermission(scope.permissions, key))) {
           throw new TenantRolesRefused('role_not_held', roleId);
         }
+        const max = Number(this.config.get('SUPERADMIN_MAX'));
+        if (await wildcardRefusal(tx, { roleKeys: permissionsOf({ role }), tenantId: admitted.id, userId, max })) throw new TenantRolesRefused('superadmin_limit', String(max));
         // In the tenant's scope: someone of another tenant is simply not found.
         const user = await tx.user.findFirst({
           where: { id: userId, deletedAt: null },

@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 16
+version: 17
 keywords: [access history endpoint, access log endpoint, ui preferences endpoint, display preferences endpoint, active sessions endpoint, terminate session endpoint, auth api, time zone endpoint, timezone endpoint, messenger endpoint, notice messenger endpoint, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
@@ -57,9 +57,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-14 | Contract v16 -> **v17** (additive, SA-1-a): `PUT …/users/:userId/role` refuses 409 `superadmin_limit` past `SUPERADMIN_MAX` holders of `*`. [contract.roles.md](contract.roles.md). Consumers: none (the panel has no role picker since GR-1-u) |
 | 2026-10-14 | Contract v54 -> **v55** (additive, GR-1-x): each audience group carries `userCount`, its live user members, for the panel's picker. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x, same change) |
 | 2026-10-14 | Contract v53 -> **v54** (additive, GR-1-w): the audience picker's list — `GET /auth/audience-groups` and by a reseller's path. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x) |
 | 2026-10-14 | Contract v52 -> **v53** (additive, GR-1-u): one person's groups — `GET …/user-groups/people/:userId`, ambient and by a reseller's path; `mayChange` says whether the caller holds every key a group gives. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-u, same change) |
 | 2026-10-13 | Contract v51 -> **v52** (additive, F-030-d): a person's restrictions — `GET`/`PUT`/`DELETE …/users/:userId/restrictions[/:key]` behind `restriction.assign`. [contract.reseller-users.md](contract.reseller-users.md). Consumers: panel-web (F-030-f) |
-| 2026-10-13 | Contract v50 -> **v51** (additive, F-030-a): a key given for a window — `PUT …/keys/:key` takes `startsAt`/`endsAt`, three new refusals, the view carries them; `POST /internal/user-keys/windows`. [contract.roles.md](contract.roles.md). Consumers: panel-web (F-030-c), worker (`key_window`) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

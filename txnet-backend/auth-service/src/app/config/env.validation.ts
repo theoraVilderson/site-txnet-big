@@ -149,6 +149,8 @@ export const envSchema = z.object({
   OTP_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(300),
   RESET_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(300),
   IMPERSONATION_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(1800),
+  // SA-1-a: how many people may hold `*` (the platform owner's SuperAdmin) at once.
+  SUPERADMIN_MAX: z.coerce.number().int().positive().default(2),
 
   // --- Abuse limits ---
   // Deployment config, not compile-time constants: a white-label deployment

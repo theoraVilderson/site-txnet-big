@@ -51,6 +51,7 @@ import { TenantRolesController } from './roles/tenant-roles.controller';
 import { PermissionRegistryController } from './permissions/permission-registry.controller';
 import { PermissionRegistryService } from './permissions/permission-registry.service';
 import { TenantRolesService } from './roles/tenant-roles.service';
+import { WildcardHoldersWatch } from './roles/superadmin-cap';
 import { RolesService } from './roles/roles.service';
 import { UserSearchController } from './users/user-search.controller';
 import { ResellerUsersController } from './users/reseller-users.controller';
@@ -121,6 +122,7 @@ import { ConfigService } from '@nestjs/config';
     HandoffService,
     RolesService,
     TenantRolesService,
+    WildcardHoldersWatch,
     PermissionRegistryService,
     UserSearchService,
     ResellerUsersService,
