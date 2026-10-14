@@ -375,6 +375,18 @@ describe('TokenService', () => {
       expect(claims.impersonatedBy).toBe('admin-9');
       expect(claims.exp - claims.iat).toBe(TTL.IMPERSONATION_TOKEN_TTL_SEC);
     });
+
+    // ADR-0139 (4): the gate admits a personal `platform.` key only on a token
+    // marked as the platform's own tenant. Dropped here, every request of an
+    // impersonated platform-tenant user with such a key was refused 403 and the
+    // panel bounced straight back out (2026-10-14).
+    it("keeps the platform-tenant mark of the target's answer", () => {
+      const access = { keys: ['user.read', 'platform.support'], personal: true, platformTenant: true as const };
+      const claims = tokens.verify(tokens.signImpersonatedToken(user, 'session-1', 'admin-9', access));
+
+      expect(claims.personal).toBe(true);
+      expect(claims.platformTenant).toBe(true);
+    });
   });
 
   describe('refresh tokens', () => {

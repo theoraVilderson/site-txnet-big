@@ -167,7 +167,7 @@ export class TokenService {
     adminId: string,
     access?: UserAccess,
   ): string {
-    const { keys: permissions, personal } = access ?? roleAccessOf(targetUser);
+    const { keys: permissions, personal, platformTenant } = access ?? roleAccessOf(targetUser);
     return this.sign(
       {
         sub: targetUser.id,
@@ -178,6 +178,8 @@ export class TokenService {
         permissions,
         permHash: permissionFingerprint(permissions),
         ...(personal ? { personal: true } : {}),
+        // Or the gate refuses a personal `platform.` key (ADR-0139 (4)).
+        ...(platformTenant ? { platformTenant: true } : {}),
         sessionId,
         isImpersonated: true,
         impersonatedBy: adminId,
