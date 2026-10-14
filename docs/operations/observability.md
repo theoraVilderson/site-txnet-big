@@ -1,7 +1,7 @@
 ---
 id: ops-observability
 status: active
-updated: 2026-09-27
+updated: 2026-10-14
 ---
 
 # Observability
@@ -69,6 +69,13 @@ container with no port reports a fact. "Never recorded" fires too
 (`absent()`): a backup that is not running says so. Rules and restore:
 `platform/object-storage/contract.md` "Backup and disk".
 
+`config-dev/database.rules.yml` (OPS-1-d, hosting `contract.md` H5) — the
+Postgres backup failed or stale (36 h), the restore drill stale (8 d), WAL
+archiving stuck (15 m) and the data volume's filesystem over 80%. `pg-backup`
+writes the backup, drill and disk figures as textfiles; the archive state is
+`hosting_wal_archive` in `postgres-queries.yaml` (`pg_stat_archiver`). It is
+the one rule file with unit tests, `database.rules.test.yml` (below).
+
 **RabbitMQ is scraped by two jobs, not one.** The `rabbitmq_prometheus` plugin
 is enabled in the `4.2-management-alpine` image already, and it serves two
 different things on 15692. `/metrics` is aggregated — `rabbitmq_queue_messages_ready`
@@ -101,15 +108,17 @@ the owner: a monitoring container able to read every row of every table in
 order to count one is a credential in the wrong place. Same network, no
 published port, for the same reason as RabbitMQ.
 
-Validate any change to either file before mounting it:
+Validate any change to a rule file or `prometheus.yml` before mounting it,
+and run the rule tests:
 
 ```bash
 cd dev-docker/monitoring
-docker run --rm --entrypoint promtool \
+M=""; for f in config-dev/*.rules.yml; do M="$M -v $PWD/$f:/etc/prometheus/$(basename $f):ro"; done
+docker run --rm --entrypoint promtool $M \
   -v "$PWD/config-dev/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
-  -v "$PWD/config-dev/automation.rules.yml:/etc/prometheus/automation.rules.yml:ro" \
-  -v "$PWD/config-dev/currency.rules.yml:/etc/prometheus/currency.rules.yml:ro" \
   ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0 check config /etc/prometheus/prometheus.yml
+docker run --rm --entrypoint promtool -v "$PWD/config-dev:/r:ro" -w /r \
+  ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0 test rules database.rules.test.yml
 ```
 
 ## Error tracking

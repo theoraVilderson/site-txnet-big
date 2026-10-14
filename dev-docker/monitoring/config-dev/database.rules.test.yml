@@ -1,0 +1,126 @@
+# Unit tests for database.rules.yml (OPS-1-d, hosting/contract.md H5). Run:
+#   cd dev-docker/monitoring/config-dev && docker run --rm --entrypoint promtool \
+#     -v "$PWD:/r:ro" -w /r ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0 \
+#     test rules database.rules.test.yml
+#
+# Each case reads the ALERTS series rather than alert_rule_test, so a reworded
+# annotation does not fail a test about when an alert fires.
+
+rule_files:
+  - database.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # The last run failed: pending for 5m, then firing; a later success clears it.
+  - interval: 1m
+    input_series:
+      - series: txnet_pg_backup_last_run_success
+        values: "1 1 0x10 1x5"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgBackupFailed",alertstate="firing"}
+        eval_time: 5m
+        exp_samples: []
+      - expr: ALERTS{alertname="PgBackupFailed",alertstate="firing"}
+        eval_time: 8m
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgBackupFailed",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+      - expr: ALERTS{alertname="PgBackupFailed",alertstate="firing"}
+        eval_time: 15m
+        exp_samples: []
+
+  # The last success is at epoch 0: stale after 36h, firing after 1h more.
+  - interval: 1h
+    input_series:
+      - series: txnet_pg_backup_last_success_timestamp_seconds
+        values: "0x40"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgBackupStale",alertstate="firing"}
+        eval_time: 36h
+        exp_samples: []
+      - expr: ALERTS{alertname="PgBackupStale",alertstate="firing"}
+        eval_time: 38h
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgBackupStale",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+
+  # Never recorded is the loudest case: no pg-backup, no node-exporter file.
+  - interval: 1h
+    input_series:
+      - series: up{job="node-exporter"}
+        values: "1x5"
+    promql_expr_test:
+      - expr: ALERTS{alertstate="firing",unit="hosting"}
+        eval_time: 2h
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgBackupStale",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+          - labels: 'ALERTS{alertname="PgRestoreDrillStale",alertstate="firing",severity="warning",unit="hosting"}'
+            value: 1
+
+  # The drill passed at epoch 0: stale after 8 days.
+  - interval: 1h
+    input_series:
+      - series: txnet_pg_restore_drill_last_success_timestamp_seconds
+        values: "0x200"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgRestoreDrillStale",alertstate="firing"}
+        eval_time: 192h
+        exp_samples: []
+      - expr: ALERTS{alertname="PgRestoreDrillStale",alertstate="firing"}
+        eval_time: 194h
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgRestoreDrillStale",alertstate="firing",severity="warning",unit="hosting"}'
+            value: 1
+
+  # Every attempt fails (Postgres retries each minute) and nothing archives:
+  # firing after 15m of it.
+  - interval: 1m
+    input_series:
+      - series: hosting_wal_archive_failed_count
+        values: "0+1x40"
+      - series: hosting_wal_archive_last_failed_seconds
+        values: "0+60x40"
+      - series: hosting_wal_archive_last_archived_seconds
+        values: "0x40"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgArchiveFailing",alertstate="firing"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="PgArchiveFailing",alertstate="firing"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgArchiveFailing",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+
+  # A failure that a later segment archived past is not an archive failing.
+  - interval: 1m
+    input_series:
+      - series: hosting_wal_archive_failed_count
+        values: "0+1x40"
+      - series: hosting_wal_archive_last_failed_seconds
+        values: "0+60x40"
+      - series: hosting_wal_archive_last_archived_seconds
+        values: "30+60x40"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgArchiveFailing"}
+        eval_time: 20m
+        exp_samples: []
+
+  # The data volume's filesystem: 85% used fires, 70% does not.
+  - interval: 1m
+    input_series:
+      - series: txnet_pg_data_fs_size_bytes
+        values: "100x30"
+      - series: txnet_pg_data_fs_avail_bytes
+        values: "30x10 15x20"
+    promql_expr_test:
+      - expr: ALERTS{alertname="PgWalDiskHigh",alertstate="firing"}
+        eval_time: 10m
+        exp_samples: []
+      - expr: ALERTS{alertname="PgWalDiskHigh",alertstate="firing"}
+        eval_time: 25m
+        exp_samples:
+          - labels: 'ALERTS{alertname="PgWalDiskHigh",alertstate="firing",severity="warning",unit="hosting"}'
+            value: 1

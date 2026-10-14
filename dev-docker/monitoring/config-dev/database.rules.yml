@@ -1,0 +1,104 @@
+# =============================================================================
+# TXNet — alert rules for Postgres's backup and its disk (OPS-1-d, ADR-0126,
+# hosting/contract.md H5). Tests: database.rules.test.yml (`promtool test rules`).
+# =============================================================================
+# The backup and the drill write their outcome to node-exporter's textfile
+# directory (`dev-docker/postgres/pg-backup.sh`): pg_backup.prom after every
+# backup, pg_restore_drill.prom after every drill, pg_data_fs.prom — the data
+# volume's filesystem, measured from inside pg-backup so the right disk is
+# found on any host without naming its mountpoint here. WAL archiving is
+# Postgres's own `pg_stat_archiver`, read by postgres-exporter
+# (`hosting_wal_archive` in postgres-queries.yaml).
+#
+# A backup that is not running writes nothing, so "never recorded" fires too.
+# The restore runbook is docs/operations/runbook-restore-database.md.
+# =============================================================================
+
+groups:
+  - name: hosting.postgres-backup
+    rules:
+      - alert: PgBackupFailed
+        expr: txnet_pg_backup_last_run_success == 0
+        for: 5m
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "The last Postgres backup failed"
+          description: >-
+            pg-backup's last pgBackRest run did not finish. Earlier backups and
+            the archived WAL are still in the repository. See
+            `docker logs txnet-pg-backup`; a wrong passphrase reads as
+            "backup.info cannot be opened" (it cannot be decrypted), an
+            unreachable repository as a connect error.
+            Run it again with
+            `docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh diff`.
+
+      # 36h: one missed night plus the time a run takes, as ObjectBackupStale.
+      - alert: PgBackupStale
+        expr: |
+          (time() - txnet_pg_backup_last_success_timestamp_seconds) > 36 * 3600
+            or absent(txnet_pg_backup_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "No Postgres backup has succeeded in 36 hours"
+          description: >-
+            No successful pgBackRest backup since
+            {{ with query "txnet_pg_backup_last_success_timestamp_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ else }}ever{{ end }}.
+            If txnet-pg-backup is not running, nothing is recorded at all; start
+            it. Point-in-time restore reaches back only to the oldest backup kept.
+
+      # 8 days: the drill runs every Sunday, so one missed Sunday plus a day.
+      - alert: PgRestoreDrillStale
+        expr: |
+          (time() - txnet_pg_restore_drill_last_success_timestamp_seconds) > 8 * 86400
+            or absent(txnet_pg_restore_drill_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "No Postgres restore drill has passed in 8 days"
+          description: >-
+            A backup nobody has restored is not yet known to restore. Last pass:
+            {{ with query "txnet_pg_restore_drill_last_success_timestamp_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ else }}never{{ end }}.
+            Run it by hand with
+            `docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh drill`
+            and read its log lines.
+
+      # Postgres retries a failed segment every minute: the count rising while
+      # the newest failure is later than the newest success is a stuck archive,
+      # and every segment it holds back is lost to point-in-time restore — and
+      # stays in pg_wal, filling the disk PgWalDiskHigh watches.
+      - alert: PgArchiveFailing
+        expr: |
+          increase(hosting_wal_archive_failed_count[5m]) > 0
+            and hosting_wal_archive_last_failed_seconds > hosting_wal_archive_last_archived_seconds
+        for: 15m
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "Postgres cannot archive WAL"
+          description: >-
+            archive_command has been failing for 15 minutes. Point-in-time
+            restore stops at the last archived segment, and pg_wal grows until
+            the disk is full. See `docker logs txnet-postgres` for the
+            pgbackrest archive-push error.
+
+      - alert: PgWalDiskHigh
+        expr: 1 - txnet_pg_data_fs_avail_bytes / txnet_pg_data_fs_size_bytes > 0.80
+        for: 10m
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "Postgres's disk is {{ $value | humanizePercentage }} full"
+          description: >-
+            The filesystem under main-db's data volume is over 80% used.
+            Postgres stops writing when it is full. Check pg_wal first (a stuck
+            archive keeps every segment, PgArchiveFailing), then
+            `docker system df -v`.

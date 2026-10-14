@@ -18,6 +18,10 @@
 # restore the latest backup to /drill, start a throwaway Postgres on it, read
 # the ledger and the users, delete it. Its metric has a file of its own so a
 # backup run does not overwrite it.
+#
+# Every pass of the loop also writes the size and free space of the filesystem
+# under the data volume to pg_data_fs.prom (OPS-1-d, H5): measured here, where
+# the volume is mounted, PgWalDiskHigh finds Postgres's disk on any host.
 set -u
 
 AT="${PG_BACKUP_AT:-01:00}"
@@ -31,6 +35,8 @@ DRILL_PORT=55432
 DRILL_SOCKET=/tmp/drill-socket
 DRILL_READY_TIMEOUT_S=600
 LIVE_SOCKET=/var/run/postgresql
+DATA_DIR=/var/lib/postgresql
+DATA_FS_METRICS="$TEXTFILE_DIR/pg_data_fs.prom"
 
 # The last success survives a restart: it is read back from the file this writes.
 LAST_OK=$(sed -n 's/^txnet_pg_backup_last_success_timestamp_seconds //p' "$METRICS" 2>/dev/null || true)
@@ -102,6 +108,20 @@ record_drill() {
       echo "txnet_pg_restore_drill_last_success_timestamp_seconds $last_ok"
     fi
   } > "$tmp" && mv "$tmp" "$DRILL_METRICS" || log "could not write $DRILL_METRICS"
+}
+
+# df's 1K blocks, printed whole: awk's default print turns a large number
+# into 1.2e+11, which the textfile collector rejects.
+record_data_fs() {
+  tmp="$TEXTFILE_DIR/.pg_data_fs.prom.$$"
+  df -Pk "$DATA_DIR" | awk 'NR == 2 {
+    print "# HELP txnet_pg_data_fs_size_bytes Size of the filesystem under the Postgres data volume."
+    print "# TYPE txnet_pg_data_fs_size_bytes gauge"
+    printf "txnet_pg_data_fs_size_bytes %.0f\n", $2 * 1024
+    print "# HELP txnet_pg_data_fs_avail_bytes Space Postgres can still write on that filesystem."
+    print "# TYPE txnet_pg_data_fs_avail_bytes gauge"
+    printf "txnet_pg_data_fs_avail_bytes %.0f\n", $4 * 1024
+  }' > "$tmp" && [ -s "$tmp" ] && mv "$tmp" "$DATA_FS_METRICS" || { rm -f "$tmp"; log "could not write $DATA_FS_METRICS"; }
 }
 
 drill_sql() {
@@ -188,6 +208,7 @@ has_backup || run full
 last_day=""
 last_drill_day=""
 while true; do
+  record_data_fs
   if [ "$(date -u +%H:%M)" = "$AT" ] && [ "$(date -u +%F)" != "$last_day" ]; then
     last_day=$(date -u +%F)
     run "$(todays_type)"

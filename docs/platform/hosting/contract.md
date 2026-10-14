@@ -68,7 +68,7 @@ like `storage.rules.yml`): `PgBackupFailed` last run 0 for 5m; `PgBackupStale`
 no success for 36h; `PgRestoreDrillStale` no drill success for 8d;
 `PgArchiveFailing` from a postgres-exporter query on `pg_stat_archiver`:
 `failed_count` rose and `last_failed_time > last_archived_time` for 15m;
-`PgWalDiskHigh` the Postgres volume's filesystem over 80% (node-exporter).
+`PgWalDiskHigh` the Postgres volume's filesystem over 80% (`pg_data_fs.prom`, from `pg-backup`).
 Each routes to the existing Alertmanager receiver.
 
 **H6 — Runbook** `docs/operations/runbook-restore-database.md`: full restore,

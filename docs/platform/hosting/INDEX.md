@@ -4,7 +4,7 @@ layer: platform
 status: draft
 version: 1
 keywords: [hosting, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, swarm, docker stack, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
-source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**]
+source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**]
 owns_tables: []
 depends_on: [automation, i18n]
 updated: 2026-10-14
@@ -37,9 +37,9 @@ repo settings to `conf.d/repo.conf`) and OPS-1-b (H3: `compose/pg-backup.yml`,
 the shared-socket layout works, no `pgbackrest server` fallback) and OPS-1-c
 (H4: `pg-backup.sh drill`, metric in its own `pg_restore_drill.prom`) and
 OPS-1-f (H10: tuning on `main-db`'s `command:`, sizing rule in
-`operations/environments.md`). The unit
-claims `dev-docker/pgbouncer/**`, `swarm/**`,
-`dev-docker/monitoring/config-dev/database.rules.yml` and `loki.yaml` in
+`operations/environments.md`) and OPS-1-d (H5: `database.rules.yml` with
+`promtool` tests; disk from `pg_data_fs.prom`, archive from `hosting_wal_archive`).
+The unit claims `dev-docker/pgbouncer/**`, `swarm/**` and `loki.yaml` in
 `source:` as each row lands.
 
 ## Changelog

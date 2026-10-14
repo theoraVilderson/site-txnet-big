@@ -34,6 +34,9 @@ configs:
   # Disk space and the object-storage backup (F-414-m, ADR-0120).
   storage_rules:
     file: ./config-dev/storage.rules.yml
+  # Postgres's backup, restore drill, WAL archive and disk (OPS-1-d, H5).
+  database_rules:
+    file: ./config-dev/database.rules.yml
   # The one Postgres-side number the automation alerts need (F-067-c): the age
   # of the oldest unpublished outbox row. A query file rather than an HTTP
   # surface on worker-service, which ADR-0027 says serves no requests.
@@ -80,6 +83,8 @@ services:
         target: /etc/prometheus/network.rules.yml
       - source: storage_rules
         target: /etc/prometheus/storage.rules.yml
+      - source: database_rules
+        target: /etc/prometheus/database.rules.yml
     volumes:
       - prometheus_data:/prometheus
     networks:

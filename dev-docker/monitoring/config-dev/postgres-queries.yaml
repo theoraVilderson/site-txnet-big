@@ -255,3 +255,32 @@ network_planner_overshoot:
     - overshoot_ratio_max:
         usage: "GAUGE"
         description: "Largest overshoot ratio in the window."
+
+# =============================================================================
+# hosting — WAL archiving (OPS-1-d, hosting/contract.md H5)
+# =============================================================================
+# Postgres retries a segment archive_command could not push every minute, and
+# says so only in its own log and here. `pg_stat_archiver` is readable by any
+# role, this one included. The two times are epoch seconds, 0 when it never
+# happened, so `PgArchiveFailing` in database.rules.yml compares numbers.
+# Metrics: `hosting_wal_archive_failed_count`, `..._last_failed_seconds`,
+# `..._last_archived_seconds`.
+hosting_wal_archive:
+  master: true
+  cache_seconds: 30
+  query: >-
+    SELECT
+      failed_count::bigint AS failed_count,
+      COALESCE(EXTRACT(EPOCH FROM last_failed_time), 0)::float8 AS last_failed_seconds,
+      COALESCE(EXTRACT(EPOCH FROM last_archived_time), 0)::float8 AS last_archived_seconds
+    FROM pg_stat_archiver
+  metrics:
+    - failed_count:
+        usage: "COUNTER"
+        description: "WAL segments archive_command failed to push since the statistics were last reset."
+    - last_failed_seconds:
+        usage: "GAUGE"
+        description: "When archive_command last failed, epoch seconds. 0 when it never has."
+    - last_archived_seconds:
+        usage: "GAUGE"
+        description: "When a WAL segment was last archived, epoch seconds. 0 when none has been."
