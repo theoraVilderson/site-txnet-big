@@ -42,7 +42,7 @@ pgBackRest connects over the local socket as `${MAIN_DB_USERNAME}`.
 (`dev-docker/postgres/pg-backup.sh`, the shape of `object-backup.sh`). Mounts:
 `postgres_data` read-only, a shared named volume `pg_socket` at
 `/var/run/postgresql` (also mounted by `main-db`), the repo dir, the passphrase
-secret, `${NODE_TEXTFILE_DIR}` at `/textfile`. Runs as uid 70 (`postgres`).
+secret, `${NODE_TEXTFILE_DIR}` at `/textfile`. pgBackRest runs as uid 70 (`gosu`); the loop, root (shared textfile dir).
 First start: `stanza-create` if missing, then a full backup at once.
 Schedule (UTC): `full` Sunday 01:00, `diff` other days 01:00. After each run
 it writes `txnet_pg_backup_last_run_success`, `…_last_success_timestamp_seconds`,

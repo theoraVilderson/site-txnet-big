@@ -44,6 +44,8 @@ include:
     project_directory: .
   - path: compose/object-backup.yml
     project_directory: .
+  - path: compose/pg-backup.yml
+    project_directory: .
   - path: compose/currency-service.yml
     project_directory: .
   - path: compose/support-service.yml

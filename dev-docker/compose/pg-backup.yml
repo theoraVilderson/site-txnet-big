@@ -1,0 +1,39 @@
+# The Postgres backup (OPS-1-b, ADR-0126, hosting/contract.md H3): main-db's
+# own image running pg-backup.sh — a full on Sunday, a differential the other
+# nights, 2 fulls kept. Included by ../docker-compose.main.yml with
+# `project_directory: .`, so relative paths resolve from dev-docker/.
+#
+# The repository is the one main-db archives WAL into, chosen the same way
+# (PG_BACKUP_REPO_TYPE, see .env.example). Dev keeps it on this host, which
+# guards against a dropped table and not against a lost disk.
+
+services:
+  pg-backup:
+    image: txnet/postgres:18
+    container_name: ${STACK_NAME:-txnet}-pg-backup
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/usr/local/bin/pg-backup.sh"]
+    command: []
+    depends_on:
+      main-db:
+        condition: service_healthy
+    environment:
+      - POSTGRES_USER=${MAIN_DB_USERNAME}
+      - PG_BACKUP_AT=${PG_BACKUP_AT:-01:00}
+      - PG_BACKUP_REPO_TYPE=${PG_BACKUP_REPO_TYPE:-posix}
+      - PG_BACKUP_S3_ENDPOINT=${PG_BACKUP_S3_ENDPOINT:-}
+      - PG_BACKUP_S3_BUCKET=${PG_BACKUP_S3_BUCKET:-}
+      - PG_BACKUP_S3_REGION=${PG_BACKUP_S3_REGION:-}
+      - PG_BACKUP_S3_KEY=${PG_BACKUP_S3_KEY:-}
+      - PG_BACKUP_S3_SECRET=${PG_BACKUP_S3_SECRET:-}
+      - PG_BACKUP_SFTP_HOST=${PG_BACKUP_SFTP_HOST:-}
+      - PG_BACKUP_SFTP_USER=${PG_BACKUP_SFTP_USER:-}
+      - PG_BACKUP_SFTP_PATH=${PG_BACKUP_SFTP_PATH:-}
+    volumes:
+      - postgres_data:/var/lib/postgresql:ro
+      - pg_socket:/var/run/postgresql
+      - ${PG_BACKUP_LOCAL_DIR:-/var/backups/txnet/pg}:/repo
+      - ${NODE_TEXTFILE_DIR:-/var/lib/txnet/node-textfile}:/textfile
+      - ./secrets/pg-backup-passphrase:/run/secrets/pg-backup-passphrase:ro
+    networks:
+      - private_backend_network

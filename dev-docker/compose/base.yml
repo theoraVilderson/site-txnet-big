@@ -16,6 +16,8 @@ networks:
 volumes:
   redis_vol_internal:
   postgres_data:
+  # main-db's socket, shared with pg-backup so pgBackRest connects locally (H3).
+  pg_socket:
   rabbitmq_data:
   translator_models:
   translator_llm_models:

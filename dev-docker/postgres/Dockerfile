@@ -7,6 +7,7 @@ RUN apk add --no-cache pgbackrest
 COPY pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
 COPY pgbackrest-repo.sh /usr/local/bin/pgbackrest-repo.sh
 COPY entrypoint.sh /usr/local/bin/txnet-postgres-entrypoint.sh
+COPY pg-backup.sh /usr/local/bin/pg-backup.sh
 ENTRYPOINT ["/bin/sh", "/usr/local/bin/txnet-postgres-entrypoint.sh"]
 # Setting ENTRYPOINT clears the base image's CMD, so it is restated.
 CMD ["postgres"]

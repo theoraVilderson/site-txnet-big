@@ -74,6 +74,7 @@ services:
       - PG_BACKUP_SFTP_PATH=${PG_BACKUP_SFTP_PATH:-}
     volumes:
       - postgres_data:/var/lib/postgresql
+      - pg_socket:/var/run/postgresql
       - ${PG_BACKUP_LOCAL_DIR:-/var/backups/txnet/pg}:/repo
       - ./secrets/pg-backup-passphrase:/run/secrets/pg-backup-passphrase:ro
     networks:

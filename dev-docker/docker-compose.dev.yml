@@ -207,3 +207,6 @@ services:
   object-backup:
     mem_limit: 512m
     logging: *dev-logs
+  pg-backup:
+    mem_limit: 512m
+    logging: *dev-logs
