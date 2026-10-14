@@ -33,29 +33,23 @@ type Harness = ReturnType<typeof harness>;
 
 function harness() {
   const txClient = {
+    // `tenantTransaction` binds `app.tenant_id` with this before the body runs.
+    $executeRaw: vi.fn().mockResolvedValue(1),
     impersonationSession: {
       create: vi.fn().mockResolvedValue({ id: 'imp-1' }),
+      update: vi.fn().mockResolvedValue({ id: 'imp-1' }),
     },
-    session: { create: vi.fn().mockResolvedValue({ id: 'session-imp' }) },
+    session: {
+      create: vi.fn().mockResolvedValue({ id: 'session-imp' }),
+      update: vi.fn().mockResolvedValue({ id: 'session-imp' }),
+    },
     adminAuditLog: { create: vi.fn().mockResolvedValue({ id: 'audit-1' }) },
   };
   const prisma = {
     user: { findUnique: vi.fn() },
     // The admin's tenant: who owns it (ADR-0103 rules 2-3). Nobody here, unless a test says so.
     tenant: { findUnique: vi.fn().mockResolvedValue({ ownerUserId: 'owner-0', tenantType: 'reseller' }) },
-    session: {
-      findUnique: vi.fn(),
-      update: vi.fn((args: unknown) => ({ __op: 'session.update', args })),
-    },
-    impersonationSession: {
-      update: vi.fn((args: unknown) => ({
-        __op: 'impersonationSession.update',
-        args,
-      })),
-    },
-    adminAuditLog: {
-      create: vi.fn((args: unknown) => ({ __op: 'adminAuditLog.create', args })),
-    },
+    session: { findUnique: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
       typeof arg === 'function'
         ? (arg as (tx: unknown) => unknown)(txClient)
@@ -275,6 +269,7 @@ describe('ImpersonationService.startImpersonation — transaction and audit', ()
       adminIpAddress: '1.2.3.4',
     });
     expect(h.txClient.adminAuditLog.create.mock.calls[0][0].data).toEqual({
+      tenantId: 'tenant-1',
       adminId: 'admin-1',
       action: 'user_impersonate_start',
       targetEntityType: 'user',
@@ -282,6 +277,19 @@ describe('ImpersonationService.startImpersonation — transaction and audit', ()
       newValue: { reasonNote: REASON, sessionId: 'session-imp' },
       adminIpAddress: '1.2.3.4',
     });
+  });
+
+  // `admin_audit_log` is under RLS: an insert's RETURNING row must pass
+  // `"tenantId" = current_tenant_id()`, so an unbound or unattributed row is
+  // refused (42501) and the whole start fails — the 2026-10-14 report.
+  it("binds the admin's tenant before the audit row is written", async () => {
+    await start(h);
+
+    const bind = h.txClient.$executeRaw.mock.calls[0];
+    expect(bind.slice(1)).toEqual(['tenant-1', true]);
+    expect(h.txClient.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      h.txClient.adminAuditLog.create.mock.invocationCallOrder[0],
+    );
   });
 
   it('audits after the session exists, so the log names a real session id', async () => {
@@ -374,6 +382,7 @@ describe('ImpersonationService.endImpersonation', () => {
     switchedFromUserId: 'admin-1',
     impersonationSessionId: 'imp-1',
     impersonationSession: { id: 'imp-1' },
+    user: { tenantId: 'tenant-1' },
     ...over,
   });
 
@@ -411,20 +420,15 @@ describe('ImpersonationService.endImpersonation', () => {
 
     await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4');
 
-    const ops = h.prisma.$transaction.mock.calls[0][0] as {
-      __op: string;
-      args: { data: Record<string, unknown> };
-    }[];
-    expect(ops.map((o) => o.__op)).toEqual([
-      'session.update',
-      'impersonationSession.update',
-      'adminAuditLog.create',
-    ]);
-    expect(ops[0].args.data).toMatchObject({
+    const tx = h.txClient;
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw.mock.calls[0].slice(1)).toEqual(['tenant-1', true]);
+    expect(tx.session.update.mock.calls[0][0].data).toMatchObject({
       revokedReason: 'impersonation_ended',
     });
-    expect(ops[1].args.data.endedAt).toBeInstanceOf(Date);
-    expect(ops[2].args.data).toMatchObject({
+    expect(tx.impersonationSession.update.mock.calls[0][0].data.endedAt).toBeInstanceOf(Date);
+    expect(tx.adminAuditLog.create.mock.calls[0][0].data).toMatchObject({
+      tenantId: 'tenant-1',
       adminId: 'admin-1',
       action: 'user_impersonate_end',
       targetEntityId: 'target-1',
@@ -446,6 +450,6 @@ describe('ImpersonationService.endImpersonation', () => {
 
     await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4');
 
-    expect(h.prisma.session.update).toHaveBeenCalledTimes(1);
+    expect(h.txClient.session.update).toHaveBeenCalledTimes(1);
   });
 });

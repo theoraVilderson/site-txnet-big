@@ -6,6 +6,7 @@ import {
   ResellerActor,
   SupportConsentRefused,
   tenantTransaction,
+  runWithTenant,
   isPlatformTenant,
 } from '@txnet-backend/shared-core';
 import type { Prisma } from '@prisma/client';
@@ -108,11 +109,23 @@ export class ImpersonationService {
     const admin = await this.prisma.user.findUnique({ where: { id: adminId }, include: WITH_KEYS });
     const target = await this.prisma.user.findUnique({ where: { id: targetUserId }, include: WITH_KEYS });
 
+    const tenantId = admin?.tenantId ?? null;
     return this.begin(adminId, targetUserId, admin, target, reasonNote, ip, userAgent, {
       expiresInSec: IMPERSONATION_TTL_SEC,
-      authority: { as: 'member', tenantId: admin?.tenantId ?? null },
-      transact: (fn) => this.prisma.$transaction(fn),
+      authority: { as: 'member', tenantId },
+      ...(tenantId ? { tenantId } : {}),
+      transact: (fn) => this.inTenant(tenantId, fn),
     });
+  }
+
+  /**
+   * `admin_audit_log` is under RLS and Prisma inserts with RETURNING, which
+   * must pass `"tenantId" = current_tenant_id()`: the row is attributed and the
+   * tenant bound explicitly, not left to whatever host the request came in on.
+   */
+  private inTenant<R>(tenantId: string | null, fn: (tx: Prisma.TransactionClient) => Promise<R>): Promise<R> {
+    if (!tenantId) return this.prisma.$transaction(fn);
+    return runWithTenant({ id: tenantId }, () => tenantTransaction(this.prisma, fn));
   }
 
   private async begin(
@@ -229,7 +242,7 @@ export class ImpersonationService {
   async endImpersonation(sessionId: string, adminId: string, ip: string) {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
-      include: { impersonationSession: true },
+      include: { impersonationSession: true, user: { select: { tenantId: true } } },
     });
     if (!session || !session.isImpersonated) {
       throw new BadRequestException('Not an impersonation session');
@@ -238,17 +251,20 @@ export class ImpersonationService {
       throw new ForbiddenException('You are not allowed to end this session');
     }
 
-    await this.prisma.$transaction([
-      this.prisma.session.update({
+    // In the target's tenant: the same log the start was written to.
+    const tenantId = session.user.tenantId;
+    await this.inTenant(tenantId, async (tx) => {
+      await tx.session.update({
         where: { id: sessionId },
         data: { revokedAt: new Date(), revokedReason: 'impersonation_ended' },
-      }),
-      this.prisma.impersonationSession.update({
+      });
+      await tx.impersonationSession.update({
         where: { id: session.impersonationSessionId! },
         data: { endedAt: new Date() },
-      }),
-      this.prisma.adminAuditLog.create({
+      });
+      await tx.adminAuditLog.create({
         data: {
+          ...(tenantId ? { tenantId } : {}),
           adminId,
           action: 'user_impersonate_end',
           targetEntityType: 'user',
@@ -256,8 +272,8 @@ export class ImpersonationService {
           newValue: { sessionId },
           adminIpAddress: ip,
         },
-      }),
-    ]);
+      });
+    });
 
     // The revocation is already committed above, in the same transaction as
     // the audit row. All that is left is the Redis marker — going back through
