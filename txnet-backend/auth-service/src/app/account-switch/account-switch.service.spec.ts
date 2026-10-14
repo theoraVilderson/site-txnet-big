@@ -442,6 +442,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
         '',
         'ua',
         BROWSER,
+        false, // the one-click switch never proves both factors (ADR-0145)
       );
     });
 
@@ -625,6 +626,7 @@ describe('AccountSwitchService.list / switchTo / remove', () => {
       '1.1.1.1',
       'jest',
       BROWSER,
+      false,
     );
   });
 

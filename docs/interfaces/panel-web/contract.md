@@ -184,6 +184,7 @@ honest way to change who the tab is. `src/proxy.ts` needed no change for any of
 this: a switch never visits an auth screen, so it was never an F-0101
 collision.
 
+A member marked `needsBothFactors` (a holder of `*`, ADR-0145) opens `TwoFactorSwitchDialog` instead of switching: their password, then a code, then the same full navigation.
 Phone numbers arrive already masked from `GET /auth/accounts`; this app never
 receives the full number of a group member and must not try to render one.
 

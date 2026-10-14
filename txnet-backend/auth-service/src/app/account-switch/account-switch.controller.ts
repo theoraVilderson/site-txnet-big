@@ -25,7 +25,10 @@ import {
   addByPasswordSchema,
   removeAccountSchema,
   switchAccountSchema,
+  twoFactorSwitchCodeSchema,
+  twoFactorSwitchPasswordSchema,
 } from './account-switch.schema';
+import { TwoFactorSwitchService } from './two-factor-switch.service';
 import { withRefreshCookie } from '../common/http/refresh-cookie';
 import { botScopeOf, resolveSwitchScope } from '../common/security/switch-scope';
 import { AllowRestricted } from '../auth/decorators/allow-restricted.decorator';
@@ -64,6 +67,7 @@ export class AccountSwitchController {
   constructor(
     private readonly accounts: AccountSwitchService,
     private readonly locale: LocaleService,
+    private readonly twoFactor: TwoFactorSwitchService,
   ) {}
 
 
@@ -188,6 +192,47 @@ export class AccountSwitchController {
       ip,
       this.ua(req),
     );
+    return withRefreshCookie(res, result);
+  }
+
+  /**
+   * The two-factor switch, step 1 (ADR-0145): a holder of `*` is not reached
+   * by the one-click switch, so their own password is asked here and a code
+   * sent to their number. Captcha and the add-by-password budget, because this
+   * is one more place to guess a password.
+   */
+  @TenantCapability('signIn')
+  @Post('switch/password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @UsePipes(new ZodValidationPipe(twoFactorSwitchPasswordSchema))
+  @RequireCaptcha()
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_PASSWORD, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',
+    windowSec: 900,
+  })
+  switchByPassword(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+    return this.twoFactor.begin(resolveSwitchScope(req), this.callerId(req), body, ip, requestLanguage(req, this.locale));
+  }
+
+  /** Step 2: the code; then the same switch, token pair and cookie as `switch`. */
+  @Post('switch/code')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @UsePipes(new ZodValidationPipe(twoFactorSwitchCodeSchema))
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_OTP_VERIFY, req?.user?.sub ?? req?.ip),
+    configKey: 'ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async switchByCode(
+    @Body() body: any,
+    @Ip() ip: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.twoFactor.finish(resolveSwitchScope(req), this.callerId(req), this.callerSessionId(req), body, ip, this.ua(req));
     return withRefreshCookie(res, result);
   }
 

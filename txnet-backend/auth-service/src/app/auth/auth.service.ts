@@ -254,27 +254,19 @@ export class AuthService {
       return err('auth.phoneVerificationRequired');
     }
 
-    if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) {
-      if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
-      const channel = await this.resolveOtpChannel(user.phoneNumber!, user);
-      const delivery = await this.deliveries.mintHandles();
-      await this.otp.issueOtp(
-        user.phoneNumber!,
-        OtpPurpose.login,
-        channel,
-        ip,
-        lang,
-        delivery,
-      );
-      const otpToken = this.tokens.signOtpToken(user.id);
-      return ok(
-        { requiresOtp: true, otpToken, ...deliveryHandles(delivery) },
-        'auth.otpSent',
-      );
-    }
+    if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) return this.askSecondFactor(user, ip, lang);
 
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
     return ok(sessionData, 'auth.loginSuccess');
+  }
+
+  /** The code step after a proven password (ADR-0145): to the person's number, answered with an `otp_login` token. */
+  async askSecondFactor(user: any, ip: string, lang: string) {
+    if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
+    const channel = await this.resolveOtpChannel(user.phoneNumber, user);
+    const delivery = await this.deliveries.mintHandles();
+    await this.otp.issueOtp(user.phoneNumber, OtpPurpose.login, channel, ip, lang, delivery);
+    return ok({ requiresOtp: true, otpToken: this.tokens.signOtpToken(user.id), ...deliveryHandles(delivery) }, 'auth.otpSent');
   }
 
   async requestLoginOtp(
@@ -1167,9 +1159,9 @@ export class AuthService {
     toUser: any,
     ip: string,
     userAgent: string,
-    scopeKey?: string | null,
+    scopeKey?: string | null, /** Both factors were proven for this switch (`TwoFactorSwitchService`), ADR-0145. */ bothFactors = false,
   ) {
-    if (needsBothFactors(await this.access.ofLoaded(toUser))) throw new OwnerNeedsBothFactors();
+    if (!bothFactors && needsBothFactors(await this.access.ofLoaded(toUser))) throw new OwnerNeedsBothFactors();
     const issued = await this.prisma.$transaction(async (tx) => {
       const outgoing = await tx.session.update({
         where: { id: fromSessionId },

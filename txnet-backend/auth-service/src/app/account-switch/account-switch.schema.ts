@@ -43,5 +43,17 @@ export const removeAccountSchema = z.object({
   userId: z.string().uuid(),
 });
 
+/** Step 1 of the two-factor switch (ADR-0145): a member of the group, and their own password. */
+export const twoFactorSwitchPasswordSchema = z.object({
+  userId: z.string().uuid(),
+  password: z.string().min(1),
+});
+
+/** Step 2: the code, with the token step 1 answered. */
+export const twoFactorSwitchCodeSchema = z.object({
+  otpToken: z.string().min(1),
+  otpCode: z.string().length(6).regex(/^\d+$/),
+});
+
 export type AddByOtpVerifyInput = z.infer<typeof addByOtpVerifySchema>;
 export type AddByPasswordInput = z.infer<typeof addByPasswordSchema>;

@@ -34,7 +34,9 @@ refuses every role but `user` (`BOT_SESSION_ROLES`).
    `auth.ownerNeedsBothFactors` after the code is checked (so the answer tells
    nothing to someone without it); a handoff and an explicit switch into such
    an account answer the same; a logout or a leave never falls back onto one.
-   The messenger keeps its own, wider refusal.
+   The messenger keeps its own, wider refusal. A browser holding other
+   accounts reaches them by the **two-factor switch** (2026-10-14, SA-1-c):
+   their password, then a code, at the moment of the switch — never a click.
 3. **A password reset ends signed out** for them: every session is revoked as
    for anyone, and no new one is opened; the panel goes to the sign-in page.
 4. **One question, asked where a session is minted.** "Does this person hold

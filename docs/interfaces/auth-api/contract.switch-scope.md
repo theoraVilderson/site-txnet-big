@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 21
-updated: 2026-09-18
+version: 22
+updated: 2026-10-14
 ---
 
 # auth-api — switch scope
@@ -33,3 +33,17 @@ lacks it), or `bot-service`'s `x-service-token` plus
 `x-bot-chat-id` **and** `x-bot-platform` — a chat id with no platform gets no
 scope and is refused (`accountSwitch.noScope` on the adds, `notAMember`
 elsewhere). Consequence: a Mini App session's scope is the **chat's**.
+
+## The two-factor switch (ADR-0145, SA-1-c)
+
+`POST /auth/accounts/switch` refuses a holder of `*` (`auth.ownerNeedsBothFactors`);
+`GET /auth/accounts` marks such a member `needsBothFactors: true`. They are
+reached by two calls that prove both factors at the moment of the switch:
+
+| Route | Body | Answer | Limit | Captcha |
+|---|---|---|---|---|
+| POST `/auth/accounts/switch/password` | userId, password | 200 `{requiresOtp, otpToken}` + delivery handles; a code goes to that member's number. `accountSwitch.notAMember` for anyone outside the caller's group (nothing proven, nothing sent), `accountSwitch.proofFailed` on a wrong password, `auth.secondFactorUnavailable` with no number | `ACCOUNTS_ADD_PASSWORD`, and the password's own `login-failures` bucket | required |
+| POST `/auth/accounts/switch/code` | otpToken, otpCode(6) | as `switch`: tokens + `refresh_token` cookie, the whole place moves (ADR-0034). `auth.invalidOtpToken` for a token not minted for the code step | `ACCOUNTS_ADD_OTP_VERIFY` | — |
+
+The browser's other accounts stay signed in; nothing here joins a group.
+

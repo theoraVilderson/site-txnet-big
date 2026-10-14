@@ -14,6 +14,8 @@ export type SwitchAccount = {
   userId: string;
   fullName: string;
   phoneMasked: string | null;
+  /** A holder of `*`: reached by the two-factor switch, never the one-click one (ADR-0145). */
+  needsBothFactors?: boolean;
 };
 
 export type SwitchGroup = {
@@ -153,6 +155,10 @@ export const accountCalls = {
    * server-side by this call, so the returned token replaces it here — there is
    * no moment where the old one is still usable.
    */
+  /** Two-factor switch, step 1 (ADR-0145): the member's own password; a code goes to their number. */
+  async switchByPassword(userId: string, password: string, captchaToken: string) { return request<{ requiresOtp: true; otpToken: string }>("/auth/accounts/switch/password", { method: "POST", body: JSON.stringify({ userId, password }) }, captchaToken); },
+  /** Step 2: the code; the session this tab holds is replaced, as by `switchAccount`. */
+  async switchByCode(otpToken: string, otpCode: string) { const result = await request<AuthResult>("/auth/accounts/switch/code", { method: "POST", body: JSON.stringify({ otpToken, otpCode }) }); setAccessToken(result.accessToken); return result; },
   async switchAccount(userId: string) { const result = await request<AuthResult & { userId: string; fullName: string }>("/auth/accounts/switch", { method: "POST", body: JSON.stringify({ userId }) }); setAccessToken(result.accessToken); return result; },
   /**
    * Remove a member from the group (F-0208).

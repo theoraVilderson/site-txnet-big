@@ -691,6 +691,13 @@
   },
   "accounts": {
     "signedInAs": "Signed in as",
+    "twoFactor": {
+      "title": "Sign in to {{name}}",
+      "body": "This account runs the whole platform: it opens only with its own password and then a code.",
+      "codeSent": "A code went to this account's own number.",
+      "codePlaceholder": "6-digit code",
+      "badge": "Password and code"
+    },
     "groupTitle": "Your other accounts",
     "groupEmpty": "You have not added another account yet.",
     "switchTo": "Switch to",

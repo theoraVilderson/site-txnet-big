@@ -3,6 +3,7 @@ import { AuthModule } from '../auth/auth.module';
 import { LocaleModule } from '../locale/locale.module';
 import { AccountSwitchController } from './account-switch.controller';
 import { AccountSwitchService } from './account-switch.service';
+import { TwoFactorSwitchService } from './two-factor-switch.service';
 
 /**
  * `audit`'s account-switch group. Imports `AuthModule` for `AuthGuard` and for
@@ -13,7 +14,7 @@ import { AccountSwitchService } from './account-switch.service';
 @Module({
   imports: [AuthModule, LocaleModule],
   controllers: [AccountSwitchController],
-  providers: [AccountSwitchService],
+  providers: [AccountSwitchService, TwoFactorSwitchService],
   exports: [AccountSwitchService],
 })
 export class AccountSwitchModule {}

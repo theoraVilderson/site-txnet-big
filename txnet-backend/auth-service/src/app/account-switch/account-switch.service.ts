@@ -24,7 +24,7 @@ import {
 export type SwitchGroupMember = {
   userId: string;
   fullName: string;
-  phoneMasked: string | null;
+  phoneMasked: string | null; /** A holder of `*`: reached by the two-factor switch only (ADR-0145). */ needsBothFactors?: boolean;
 };
 
 /**
@@ -209,7 +209,7 @@ export class AccountSwitchService {
 
       const users = await this.surfaceOwners.admissibleUsers(
         rows.map((row) => row.userId),
-        { id: true, fullName: true, phoneNumber: true },
+        { id: true, fullName: true, phoneNumber: true, role: { select: { rolePermissions: { select: { permission: { select: { key: true } } } } } } },
       );
 
       // Ordered by when each account joined, which is the order the user built
@@ -221,7 +221,7 @@ export class AccountSwitchService {
         .map((user) => ({
           userId: user.id,
           fullName: user.fullName,
-          phoneMasked: maskPhone(user.phoneNumber),
+          phoneMasked: maskPhone(user.phoneNumber), needsBothFactors: roleGivesEverything(user), // ADR-0145: the panel offers password and code
         }));
 
       return ok({ groupId: membership.groupId, current, members }, 'accountSwitch.listed');
@@ -246,7 +246,7 @@ export class AccountSwitchService {
     callerSessionId: string,
     targetUserId: string,
     ip: string,
-    userAgent: string,
+    userAgent: string, /** Both factors were just proven (`TwoFactorSwitchService`, ADR-0145). */ bothFactors = false,
   ) {
     return safeExecute(async () => {
       // No scope is not a member either — same key, for the same reason as
@@ -300,7 +300,7 @@ export class AccountSwitchService {
         userAgent,
         // The incoming session belongs to the surface the switch was made on,
         // which is the surface whose group allowed it (ADR-0015).
-        scopeKey,
+        scopeKey, bothFactors,
       );
 
       // ADR-0034: the switch moves the **place**, not the one session that

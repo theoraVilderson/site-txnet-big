@@ -51,6 +51,8 @@ const MUST_BE_GATED = [
   'POST auth/password/forgot',
   'POST auth/accounts/add/otp/request',
   'POST auth/accounts/add/password',
+  // ADR-0145's two-factor switch: one more place a password is tried.
+  'POST auth/accounts/switch/password',
 ];
 
 type Route = { name: string; gated: boolean };
