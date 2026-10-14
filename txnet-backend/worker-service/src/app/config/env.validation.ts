@@ -5,6 +5,7 @@ import {
   normalizeRedisNamespace,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
+import { housekeepingEnv } from './housekeeping.env';
 
 /**
  * `worker-service` runs background work and serves no requests (ADR-0027).
@@ -381,10 +382,8 @@ export const envSchema = z.object({
    * (F-027-o, `TrafficRollupJob`).
    *
    * More than one on purpose: the rollup upserts a day's totals rather than
-   * adding to them, so re-rolling a day already rolled is the same answer, and
-   * a night the job did not run is then repaired by the next one instead of by
-   * an operator. Three covers a weekend outage; the cost is one grouped scan
-   * of the newest partition per run.
+   * adding to them, so re-rolling a day is the same answer and a missed night
+   * is repaired by the next run. Three covers a weekend outage.
    */
   TRAFFIC_ROLLUP_LOOKBACK_DAYS: z.coerce.number().int().positive().default(3),
   /**
@@ -397,6 +396,7 @@ export const envSchema = z.object({
    * loses is the per-pass detail a dispute would be settled from.
    */
   TRAFFIC_RAW_RETENTION_MONTHS: z.coerce.number().int().positive().default(3),
+  ...housekeepingEnv,
 
   /**
    * Which USDT/IRT order books the FX worker polls (F-0603), by `FxSource.key`

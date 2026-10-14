@@ -167,9 +167,9 @@ only `level` (and `service`); `tenantId`, `requestId` are queried with `| json`.
 2. `outbox_event`: `publishedAt IS NOT NULL AND publishedAt < now − OUTBOX_KEEP_DAYS`
    (default 7), via the `(publishedAt, occurredAt)` index; never an unpublished row;
 3. each delete in batches of 5,000 (`DELETE … WHERE id IN (SELECT id … LIMIT 5000)`)
-   until a batch removes fewer; stops at 10 minutes and reports what is left.
-Safe to run twice. `itemsProcessed` = rows deleted. The first run on a large
-table is the same loop — no special migration.
+   until a batch removes fewer; stops a minute before `AUTOMATION_RUN_TIMEOUT_MS`
+   (the stale-run sweep would close it `failed`) and reports what is left.
+Safe to run twice. `itemsProcessed` = rows deleted; a large first run is the same loop.
 
 ## Restart and deploy
 
