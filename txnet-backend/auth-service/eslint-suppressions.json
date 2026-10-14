@@ -9,11 +9,6 @@
       "count": 1
     }
   },
-  "src/app/account-switch/account-switch.controller.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 7
-    }
-  },
   "src/app/account-switch/account-switch.service.spec.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 65
@@ -40,11 +35,8 @@
     }
   },
   "src/app/auth/auth.service.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 13
-    },
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 4
+      "count": 2
     }
   },
   "src/app/auth/bot-link/bot-link.controller.ts": {

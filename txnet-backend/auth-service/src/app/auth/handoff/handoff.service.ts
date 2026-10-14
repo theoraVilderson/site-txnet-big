@@ -16,14 +16,11 @@ import { runWithTenant } from '../../tenant-context/tenant-context';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 import { AuthService } from '../auth.service';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
+import { WITH_KEYS } from '../permissions/user-with-keys';
 import type { AuthClaims } from '../token.service';
 
 /** What a handoff code stands for: this account, on this tenant's panel. */
 type HandoffGrant = { userId: string; tenantId: string };
-
-const ROLE_INCLUDE = {
-  role: { include: { rolePermissions: { include: { permission: true } } } },
-};
 
 /**
  * From the platform panel to a reseller's own domain without signing in again
@@ -144,9 +141,8 @@ export class HandoffService {
       }
       if ((await this.redis.client.del(key)) !== 1) return err('auth.handoffInvalid');
 
-      const owner = await this.surfaceOwners.ownerById(grant.userId, ROLE_INCLUDE);
-      const user = owner?.user as { status?: string; deletedAt?: Date | null } | undefined;
-      if (!owner || user?.status !== 'active' || user.deletedAt) return err('auth.handoffInvalid');
+      const owner = await this.surfaceOwners.ownerById(grant.userId, WITH_KEYS);
+      if (!owner || owner.user.status !== 'active' || owner.user.deletedAt) return err('auth.handoffInvalid');
 
       // Already signed in here as the same account (F-061-o, user 2026-10-08):
       // keep that session — the code is spent, nothing new is opened and no

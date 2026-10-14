@@ -1746,9 +1746,9 @@ describe('AuthService — the holder of * signs in with two factors (ADR-0145, S
   });
 
   it('refuses a one-factor door (a handoff, the messenger, a switch) for them, and nobody else', async () => {
-    await expect(h.service.createSessionForUser(owner(), null, null)).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
-    await expect(h.service.switchSession('s-1', 'u-0', owner(), '1.2.3.4', 'jest-ua')).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
+    await expect(h.service.createSessionForUser(owner() as never, null, null)).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
+    await expect(h.service.switchSession('s-1', 'u-0', owner() as never, '1.2.3.4', 'jest-ua')).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
     expect(h.sessionService.createSession).not.toHaveBeenCalled();
-    await expect(h.service.createSessionForUser(activeUser(), null, null)).resolves.toMatchObject({ accessToken: 'access-token' });
+    await expect(h.service.createSessionForUser(activeUser() as never, null, null)).resolves.toMatchObject({ accessToken: 'access-token' });
   });
 });

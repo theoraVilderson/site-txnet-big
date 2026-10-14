@@ -1,3 +1,4 @@
+import { WITH_KEYS, type UserWithKeys } from '../auth/permissions/user-with-keys';
 import {
   holdsPermission,
   RedisTtl,
@@ -32,8 +33,6 @@ import { AccessReader } from '../auth/permissions/access.reader';
 const IMPERSONATION_TTL_SEC = RedisTtl.impersonation;
 
 /** A user read with their role's keys — both sides of the authority rule. */
-const WITH_KEYS = { role: { include: { rolePermissions: { include: { permission: true } } } } } as const;
-type UserWithKeys = Prisma.UserGetPayload<{ include: typeof WITH_KEYS }>;
 
 @Injectable()
 export class ImpersonationService {

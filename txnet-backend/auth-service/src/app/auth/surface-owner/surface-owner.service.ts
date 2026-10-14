@@ -27,10 +27,10 @@ export class SurfaceOwnerService {
    * the surface. `null` when there is no panel or bot door, no owner, or the
    * identifier is someone else's.
    */
-  async ownerMatching(
+  async ownerMatching<I extends Prisma.UserInclude>(
     where: Prisma.UserWhereInput,
-    include: Prisma.UserInclude,
-  ): Promise<{ user: { id: string; tenantId: string }; scope: ResolvedTenant } | null> {
+    include: I,
+  ): Promise<{ user: Prisma.UserGetPayload<{ include: I }>; scope: ResolvedTenant } | null> {
     const surface = TenantContext.currentOrNull();
     // Only before anyone has signed in: the door's own host or bot claim
     // answered, not a session (which would already be in its own tenant).
@@ -39,18 +39,14 @@ export class SurfaceOwnerService {
     const ownerUserId = await this.ownerOf(surface);
     if (!ownerUserId) return null;
 
-    const user = await this.all.user.findFirst({
-      where: { ...where, id: ownerUserId, tenantId: { not: surface.id } },
-      include: { ...include, tenant: { select: { slug: true } } },
-    });
-    if (!user) return null;
+    const found = await this.ownerRow({ ...where, id: ownerUserId, tenantId: { not: surface.id } }, include);
+    if (!found) return null;
 
-    const { slug } = (user as unknown as { tenant: { slug: string } }).tenant;
     return {
-      user,
+      user: found,
       scope: {
-        id: user.tenantId,
-        slug,
+        id: found.tenantId,
+        slug: found.tenant.slug,
         via: 'session',
         ...(surface.surfacePurpose && { surfacePurpose: surface.surfacePurpose }),
         brand: { id: surface.id, slug: surface.slug },
@@ -65,31 +61,39 @@ export class SurfaceOwnerService {
    * because a browser that already holds a session on this domain is still
    * standing on this door. `null` off a panel, or once ownership has moved.
    */
-  async ownerById(
+  async ownerById<I extends Prisma.UserInclude>(
     userId: string,
-    include: Prisma.UserInclude,
-  ): Promise<{ user: { id: string; tenantId: string }; scope: ResolvedTenant } | null> {
+    include: I,
+  ): Promise<{ user: Prisma.UserGetPayload<{ include: I }>; scope: ResolvedTenant } | null> {
     const door = this.surface();
     if (!door || !answersAsPanel(door.surfacePurpose)) return null;
     if ((await this.ownerOf(door)) !== userId) return null;
 
-    const user = await this.all.user.findFirst({
-      where: { id: userId, tenantId: { not: door.id } },
-      include: { ...include, tenant: { select: { slug: true } } },
-    });
-    if (!user) return null;
+    const found = await this.ownerRow({ id: userId, tenantId: { not: door.id } }, include);
+    if (!found) return null;
 
-    const { slug } = (user as unknown as { tenant: { slug: string } }).tenant;
     return {
-      user,
+      user: found,
       scope: {
-        id: user.tenantId,
-        slug,
+        id: found.tenantId,
+        slug: found.tenant.slug,
         via: 'session',
         surfacePurpose: 'panel',
         brand: { id: door.id, slug: door.slug },
       },
     };
+  }
+
+  /**
+   * The owner's row as the caller asked for it, plus its tenant's slug for the
+   * scope. Prisma cannot resolve a generic include inside a generic body, so
+   * the row is typed once, here.
+   */
+  private async ownerRow<I extends Prisma.UserInclude>(where: Prisma.UserWhereInput, include: I) {
+    const withTenant: Prisma.UserInclude = { ...include, tenant: { select: { slug: true } } };
+    return (await this.all.user.findFirst({ where, include: withTenant })) as
+      | (Prisma.UserGetPayload<{ include: I }> & { tenant: { slug: string } })
+      | null;
   }
 
   /**

@@ -1,3 +1,5 @@
+import { WITH_KEYS } from '../auth/permissions/user-with-keys';
+import type { TwoFactorSwitchCodeInput, TwoFactorSwitchPasswordInput } from './account-switch.schema';
 import { Inject, Injectable } from '@nestjs/common';
 import { OtpPurpose } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +12,6 @@ import { SwitchScope } from '../common/security/switch-scope';
 import { AccountSwitchService } from './account-switch.service';
 
 /** What the role's keys are read from, so the code step can ask the person's whole answer. */
-const WITH_KEYS = { role: { include: { rolePermissions: { include: { permission: true } } } } } as const;
 
 /**
  * A switch that proves both factors at the moment it is made (ADR-0145): the
@@ -33,7 +34,7 @@ export class TwoFactorSwitchService {
   async begin(
     scopeKey: SwitchScope | null,
     callerUserId: string,
-    input: { userId: string; password: string },
+    input: TwoFactorSwitchPasswordInput,
     ip: string,
     lang: string,
   ) {
@@ -56,7 +57,7 @@ export class TwoFactorSwitchService {
     scopeKey: SwitchScope | null,
     callerUserId: string,
     callerSessionId: string,
-    input: { otpToken: string; otpCode: string },
+    input: TwoFactorSwitchCodeInput,
     ip: string,
     userAgent: string,
   ) {

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
-import { SessionRevokedReason } from '@prisma/client';
+import { SessionRevokedReason, type User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import {
@@ -38,6 +38,7 @@ import {
 import { BotPlatform } from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link/bot-link.service';
 import { AccessReader } from './permissions/access.reader';
+import { WITH_KEYS, type UserWithKeys } from './permissions/user-with-keys';
 import { TokenService } from './token.service';
 import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
@@ -96,7 +97,7 @@ export function deliveryHandles(delivery: OtpDeliveryHandles) {
  * in — its token is restricted and the gates keep it to support; a banned one
  * never does.
  */
-export function mayHoldSession(user: any): boolean {
+export function mayHoldSession(user: Pick<User, 'deletedAt' | 'status'> | null | undefined): boolean {
   return !!user && !user.deletedAt && (user.status === 'active' || user.status === 'suspended');
 }
 
@@ -184,11 +185,7 @@ export class AuthService {
       const where =
         type === 'phone' ? { phoneNumber: identity } : { username: identity };
 
-      const include = {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      };
+      const include = WITH_KEYS;
       const user = await this.prisma.user.findFirst({ where, include });
 
       // ADR-0059 (3): on a reseller's domain, an identifier none of its own
@@ -209,7 +206,7 @@ export class AuthService {
 
   /** Everything a password sign-in does once the account is found (or not). */
   private async completePasswordLogin(
-    user: any,
+    user: UserWithKeys | null,
     identity: string,
     password: string,
     ip: string,
@@ -261,7 +258,7 @@ export class AuthService {
   }
 
   /** The code step after a proven password (ADR-0145): to the person's number, answered with an `otp_login` token. */
-  async askSecondFactor(user: any, ip: string, lang: string) {
+  async askSecondFactor(user: Pick<User, 'id' | 'phoneNumber' | 'preferredOtpChannel'>, ip: string, lang: string) {
     if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
     const channel = await this.resolveOtpChannel(user.phoneNumber, user);
     const delivery = await this.deliveries.mintHandles();
@@ -305,7 +302,7 @@ export class AuthService {
 
   /** Everything a login-code request does once the account is found (or not). */
   private async sendLoginOtp(
-    user: any,
+    user: Pick<User, 'id' | 'status' | 'phoneVerifiedAt' | 'preferredOtpChannel'> | null,
     phoneNumber: string,
     channel: OtpChannel | undefined,
     ip: string,
@@ -352,11 +349,7 @@ export class AuthService {
     scopeKey?: string | null,
   ) {
     return safeExecute(async () => {
-      const include = {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      };
+      const include = WITH_KEYS;
 
       if (input.otpToken) {
         const claims = this.tokens.verify(input.otpToken);
@@ -399,7 +392,7 @@ export class AuthService {
 
   /** The second step of a password sign-in, once the token's account is found (or not). */
   private async completeTwoFactorLogin(
-    user: any,
+    user: UserWithKeys | null,
     otpCode: string,
     ip: string,
     userAgent: string,
@@ -418,7 +411,7 @@ export class AuthService {
 
   /** A code-only sign-in, once the number's account is found (or not). */
   private async completeOtpLogin(
-    user: any,
+    user: UserWithKeys | null,
     phoneNumber: string,
     otpCode: string,
     ip: string,
@@ -781,7 +774,7 @@ export class AuthService {
 
   /** Everything a reset-code request does once the account is found (or not). */
   private async sendResetOtp(
-    user: any,
+    user: Pick<User, 'id' | 'status' | 'preferredOtpChannel'> | null,
     input: ForgotPasswordInput,
     ip: string,
     lang: string,
@@ -871,7 +864,7 @@ export class AuthService {
         const owner = await this.surfaceOwners.ownerMatching({}, {});
         if (owner?.user.id === claims.sub) {
           return runWithTenant(owner.scope, () =>
-            this.completeReset(owner.user as any, input.newPassword, ip, userAgent, scopeKey),
+            this.completeReset(owner.user, input.newPassword, ip, userAgent, scopeKey),
           );
         }
         return err('auth.invalidResetToken');
@@ -985,7 +978,7 @@ export class AuthService {
   }
 
   /** The rest of `proveAccountByPassword`, in the found account's tenant. */
-  private async checkAccountPassword(user: any, identity: string, password: string) {
+  private async checkAccountPassword(user: User | null, identity: string, password: string) {
     if (!mayHoldSession(user)) return null;
 
     // The same bucket login uses, on purpose: this route is another way to
@@ -1047,7 +1040,7 @@ export class AuthService {
 
   /** The rest of `issueAccountProofOtp`, in the found account's tenant. */
   private async sendAccountProofOtp(
-    user: any,
+    user: Pick<User, 'status' | 'phoneVerifiedAt' | 'preferredOtpChannel'> | null,
     phoneNumber: string,
     channel: OtpChannel | undefined,
     ip: string,
@@ -1105,7 +1098,7 @@ export class AuthService {
   }
 
   /** The rest of `proveAccountByOtp`, in the found account's tenant. */
-  private async checkAccountProofOtp(user: any, phoneNumber: string, otpCode: string) {
+  private async checkAccountProofOtp(user: User | null, phoneNumber: string, otpCode: string) {
     if (!mayHoldSession(user)) return null;
     if (!user.phoneVerifiedAt) return null;
     if (
@@ -1121,7 +1114,7 @@ export class AuthService {
   }
 
   async createSessionForUser(
-    user: any,
+    user: UserWithKeys,
     ip: string | null,
     userAgent: string | null,
     scopeKey?: string | null,
@@ -1156,7 +1149,7 @@ export class AuthService {
   async switchSession(
     fromSessionId: string,
     fromUserId: string,
-    toUser: any,
+    toUser: UserWithKeys,
     ip: string,
     userAgent: string,
     scopeKey?: string | null, /** Both factors were proven for this switch (`TwoFactorSwitchService`), ADR-0145. */ bothFactors = false,
@@ -1208,7 +1201,7 @@ export class AuthService {
    * no switch group, which is a legitimate state, not an error.
    */
   private async issueSession(
-    user: any,
+    user: UserWithKeys,
     ip: string | null,
     userAgent: string | null,
     scopeKey?: string | null,

@@ -57,3 +57,5 @@ export const twoFactorSwitchCodeSchema = z.object({
 
 export type AddByOtpVerifyInput = z.infer<typeof addByOtpVerifySchema>;
 export type AddByPasswordInput = z.infer<typeof addByPasswordSchema>;
+export type TwoFactorSwitchPasswordInput = z.infer<typeof twoFactorSwitchPasswordSchema>;
+export type TwoFactorSwitchCodeInput = z.infer<typeof twoFactorSwitchCodeSchema>;

@@ -18,7 +18,9 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../auth/decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../auth/decorators/require-captcha.decorator';
 import { AccountSwitchService } from './account-switch.service';
+import type { AuthClaims } from '../auth/token.service';
 import { LocaleService } from '../locale/locale.service';
+import type { z } from 'zod';
 import {
   addByOtpRequestSchema,
   addByOtpVerifySchema,
@@ -27,6 +29,8 @@ import {
   switchAccountSchema,
   twoFactorSwitchCodeSchema,
   twoFactorSwitchPasswordSchema,
+  type TwoFactorSwitchCodeInput,
+  type TwoFactorSwitchPasswordInput,
 } from './account-switch.schema';
 import { TwoFactorSwitchService } from './two-factor-switch.service';
 import { withRefreshCookie } from '../common/http/refresh-cookie';
@@ -71,13 +75,14 @@ export class AccountSwitchController {
   ) {}
 
 
+  // AuthGuard on every route here sets the claims (auth.guard.ts).
   private callerId(req: Request): string {
-    return (req as any).user.sub;
+    return (req as Request & { user: AuthClaims }).user.sub;
   }
 
   /** The session this request arrived on — the one a switch revokes. */
   private callerSessionId(req: Request): string {
-    return (req as any).user.sessionId;
+    return (req as Request & { user: AuthClaims }).user.sessionId;
   }
 
   private ua(req: Request): string {
@@ -95,7 +100,7 @@ export class AccountSwitchController {
     configKey: 'ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT',
     windowSec: 900,
   })
-  requestAddOtp(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+  requestAddOtp(@Body() body: z.infer<typeof addByOtpRequestSchema>, @Ip() ip: string, @Req() req: Request) {
     return this.accounts.requestAddOtp(
       this.callerId(req),
       body.phoneNumber,
@@ -115,7 +120,7 @@ export class AccountSwitchController {
     configKey: 'ACCOUNTS_ADD_OTP_VERIFY_RATE_LIMIT',
     windowSec: 900,
   })
-  addByOtp(@Body() body: any, @Req() req: Request) {
+  addByOtp(@Body() body: z.infer<typeof addByOtpVerifySchema>, @Req() req: Request) {
     return this.accounts.addByOtp(
       resolveSwitchScope(req),
       this.callerId(req),
@@ -134,7 +139,7 @@ export class AccountSwitchController {
     configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',
     windowSec: 900,
   })
-  addByPassword(@Body() body: any, @Req() req: Request) {
+  addByPassword(@Body() body: z.infer<typeof addByPasswordSchema>, @Req() req: Request) {
     return this.accounts.addByPassword(
       resolveSwitchScope(req),
       this.callerId(req),
@@ -179,7 +184,7 @@ export class AccountSwitchController {
     windowSec: 900,
   })
   async switchTo(
-    @Body() body: any,
+    @Body() body: z.infer<typeof switchAccountSchema>,
     @Ip() ip: string,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -212,7 +217,7 @@ export class AccountSwitchController {
     configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',
     windowSec: 900,
   })
-  switchByPassword(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+  switchByPassword(@Body() body: TwoFactorSwitchPasswordInput, @Ip() ip: string, @Req() req: Request) {
     return this.twoFactor.begin(resolveSwitchScope(req), this.callerId(req), body, ip, requestLanguage(req, this.locale));
   }
 
@@ -227,7 +232,7 @@ export class AccountSwitchController {
     windowSec: 900,
   })
   async switchByCode(
-    @Body() body: any,
+    @Body() body: TwoFactorSwitchCodeInput,
     @Ip() ip: string,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -259,7 +264,7 @@ export class AccountSwitchController {
     windowSec: 900,
   })
   async remove(
-    @Body() body: any,
+    @Body() body: z.infer<typeof removeAccountSchema>,
     @Ip() ip: string,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
