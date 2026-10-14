@@ -1,7 +1,7 @@
 ---
 id: ops-environments
 status: active
-updated: 2026-09-18
+updated: 2026-10-14
 ---
 
 # Environments
@@ -146,6 +146,20 @@ Reachability is two separate problems, and dev has both:
   out` in `getWebhookInfo`). `TELEGRAM_WEBHOOK_PUBLIC_BASE` sends its updates
   back in through the same proxy; Bale reaches `api.<DOMAIN_NAME>` directly and
   needs no override.
+
+## Postgres sizing (production)
+
+`main-db` reads its memory settings from env (hosting `contract.md` H10;
+defaults in `.env.example`, sized for dev's 2 GB). On a production host set,
+in `.env.prod`, from the memory given to Postgres (its container limit):
+
+| env | rule | e.g. 8 GB |
+|---|---|---|
+| `PG_SHARED_BUFFERS` | 25% | `2GB` |
+| `PG_EFFECTIVE_CACHE_SIZE` | 75% | `6GB` |
+| `PG_WORK_MEM`, `PG_MAINTENANCE_WORK_MEM` | leave the defaults until slow-query logs (`PG_SLOW_MS`, 500 ms) show sorts spilling | — |
+
+`max_connections` stays 100 whatever the size: H8's budget is counted against it.
 
 ## Secret ownership
 

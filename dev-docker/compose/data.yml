@@ -53,12 +53,29 @@ services:
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-postgres
     restart: unless-stopped
+    # Tuning (OPS-1-f, H10): the memory settings come from env so production
+    # sizes them to its host — shared_buffers 25%, effective_cache_size 75% of
+    # Postgres's memory (operations/environments.md); the defaults fit dev's 2 GB.
+    # max_connections is the budget H8 counts against.
     command: >
       postgres
       -c wal_level=replica
       -c archive_mode=on
       -c archive_timeout=60
       -c "archive_command=pgbackrest --stanza=txnet archive-push %p"
+      -c shared_buffers=${PG_SHARED_BUFFERS:-512MB}
+      -c effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1536MB}
+      -c work_mem=${PG_WORK_MEM:-16MB}
+      -c maintenance_work_mem=${PG_MAINTENANCE_WORK_MEM:-128MB}
+      -c max_wal_size=2GB
+      -c checkpoint_completion_target=0.9
+      -c random_page_cost=1.1
+      -c log_min_duration_statement=${PG_SLOW_MS:-500}
+      -c max_connections=100
+    # Docker's 64 MB /dev/shm fails parallel queries; the default 10s stop
+    # kills Postgres mid-checkpoint, and the next start replays WAL instead.
+    shm_size: 256mb
+    stop_grace_period: 60s
     environment:
       - POSTGRES_USER=${MAIN_DB_USERNAME}
       - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}

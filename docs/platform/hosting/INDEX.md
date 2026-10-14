@@ -35,7 +35,9 @@ OPS-1-k, -l and -z (H12/H13: `shared-core/src/lib/logging`, every Nest service, 
 and OPS-1-a (H1/H2: `main-db` archives WAL; `pgbackrest-repo.sh` writes the
 repo settings to `conf.d/repo.conf`) and OPS-1-b (H3: `compose/pg-backup.yml`,
 the shared-socket layout works, no `pgbackrest server` fallback) and OPS-1-c
-(H4: `pg-backup.sh drill`, metric in its own `pg_restore_drill.prom`). The unit
+(H4: `pg-backup.sh drill`, metric in its own `pg_restore_drill.prom`) and
+OPS-1-f (H10: tuning on `main-db`'s `command:`, sizing rule in
+`operations/environments.md`). The unit
 claims `dev-docker/pgbouncer/**`, `swarm/**`,
 `dev-docker/monitoring/config-dev/database.rules.yml` and `loki.yaml` in
 `source:` as each row lands.
