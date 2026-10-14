@@ -111,8 +111,8 @@ Who may subscribe to what, and why each family is shaped the way it is, is in
 
 ## Close codes
 
-4000+ is the application range. Each means something a client acts on
-differently.
+4000+ is the application range; a restart uses the standard `1012`. Each
+means something a client acts on differently.
 
 | Code | Meaning | What a client should do |
 |---|---|---|
@@ -120,7 +120,7 @@ differently.
 | `4403` | the tenant's status no longer allows `read` (terminated, F-018-r) | stop. A reconnect is refused `403` |
 | `4408` | the heartbeat went unanswered | reconnect |
 | `4429` | too many sockets for this user | back off |
-| `4503` | the server is shutting down | reconnect after a backoff |
+| `1012` | the service is restarting (H20, ADR-0126) | first reconnect after `random(0, 10s)`, then full-jitter backoff |
 
 ## Staying connected
 

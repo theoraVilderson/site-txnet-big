@@ -436,7 +436,7 @@ export class RealtimeGateway implements OnApplicationShutdown {
     clearInterval(this.heartbeatTimer);
     clearInterval(this.recheckTimer);
     for (const connection of [...this.registry.all()]) {
-      connection.socket.close(CloseCode.GoingAway, 'shutting down');
+      connection.socket.close(CloseCode.ServiceRestart, 'service restart');
     }
     this.wss.close();
   }

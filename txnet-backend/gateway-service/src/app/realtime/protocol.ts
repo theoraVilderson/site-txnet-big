@@ -104,7 +104,8 @@ export type RefusalCode =
 /**
  * The close codes this server uses. 4000+ is the range reserved for the
  * application, and each of these means something the client should act on
- * differently: re-authenticate, back off, or stop.
+ * differently: re-authenticate, back off, or stop. A restart uses the standard
+ * 1012 instead, so any client reads it without knowing this table.
  */
 export const CloseCode = {
   /** The session behind this connection is gone — sign in again. */
@@ -115,8 +116,12 @@ export const CloseCode = {
   HeartbeatTimeout: 4408,
   /** Too many sockets for one user. Do not immediately retry. */
   TooManyConnections: 4429,
-  /** The server is shutting down. Reconnect after a backoff. */
-  GoingAway: 4503,
+  /**
+   * The server is restarting (RFC 6455 1012). The panel spreads its first
+   * reconnect over 0–10s so a restart is not met by every panel at once
+   * (ADR-0126 point 12, hosting H20).
+   */
+  ServiceRestart: 1012,
 } as const;
 
 /**
