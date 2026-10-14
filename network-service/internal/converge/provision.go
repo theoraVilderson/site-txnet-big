@@ -172,14 +172,6 @@ const (
 	ActionRefused Action = "write_refused"
 )
 
-// ProvisionFinding is one config the pass did something about, or could not.
-type ProvisionFinding struct {
-	ConfigID string
-	RemoteID string
-	Action   Action
-	Err      error
-}
-
 // ProvisionReport is one panel's provisioning. Removed names the clients this
 // pass deleted, so the ceiling pass after it does not write to them. Drift is
 // every row's identity verdict, which the `Converger` completes with the
@@ -641,6 +633,7 @@ func (c *Converger) Pass(ctx context.Context, p collect.Panel, res collect.Resul
 	if err != nil {
 		return report, err
 	}
+	clients = p.Anchor.Without(clients) // never an orphan, a seat or converged (F-027-ew)
 	if c.Provisioning != nil {
 		// A foreign claim returns ErrForeignClaim: no ceiling is written and
 		// no verdict recorded over another server's clients (F-027-cf).

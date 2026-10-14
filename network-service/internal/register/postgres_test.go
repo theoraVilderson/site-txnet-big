@@ -184,8 +184,8 @@ func TestEveryTestResultIsAnnouncedInItsOwnStatement(t *testing.T) {
 		if !strings.Contains(sql, "'ownerUserId'") || !strings.Contains(sql, "'panelName'") {
 			t.Errorf("the %s event does not name the tenant's owner and the panel", write)
 		}
-		if f.args[i][len(f.args[i])-1] != PanelTestedEvent {
-			t.Errorf("the %s event is typed %v, want %q", write, f.args[i][len(f.args[i])-1], PanelTestedEvent)
+		if f.args[i][6] != PanelTestedEvent { // $7 in every write
+			t.Errorf("the %s event is typed %v, want %q", write, f.args[i][6], PanelTestedEvent)
 		}
 	}
 }

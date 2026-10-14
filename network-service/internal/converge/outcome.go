@@ -53,3 +53,11 @@ type Desired interface {
 	Record(ctx context.Context, rows []Outcome) error
 	RecordDrift(ctx context.Context, rows []Verdict) error
 }
+
+// ProvisionFinding is one config the pass did something about, or could not.
+type ProvisionFinding struct {
+	ConfigID string
+	RemoteID string
+	Action   Action
+	Err      error
+}

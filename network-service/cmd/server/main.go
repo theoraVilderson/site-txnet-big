@@ -104,7 +104,7 @@ func main() {
 		Platform: egress.Client(egress.Guard{Allow: cfg.PanelEgressAllow}),
 	}
 	registrar := &register.Registrar{
-		Store:  register.PostgresStore{DB: pool},
+		Store:  register.PostgresStore{DB: pool, Locks: pool},
 		Opener: panelOpener,
 		Log:    log,
 	}
@@ -165,6 +165,7 @@ func main() {
 		// A push panel's turn plans on what the RADIUS receiver accounted
 		// (F-027-du): it is in this loop for its plan and its convergence.
 		Sessions: cursors,
+		Anchors:  collect.PostgresAnchors{DB: pool},
 		Log:      log,
 	}
 

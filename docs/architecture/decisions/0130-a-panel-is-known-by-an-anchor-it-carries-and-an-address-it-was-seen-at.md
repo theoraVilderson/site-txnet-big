@@ -6,7 +6,7 @@ updated: 2026-10-07
 
 # ADR 0130 — a panel is known by an anchor it carries and the address it was seen at
 
-- **Status:** accepted (nothing built yet — rows F-027-ew..F-027-fh)
+- **Status:** accepted (being built — rows F-027-ew..F-027-fh; `BACKLOG.md` has which are done)
 - **Date:** 2026-10-07
 - **Affects units:** network (connection test, collector, convergence, RADIUS allowlist), billing (systems routes, placement), panel-web (systems page)
 - **Decision row:** D-67 (the agent's recommendations, accepted by the user)

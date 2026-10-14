@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"network-service/internal/anchor"
 	"network-service/internal/collect"
 	"network-service/internal/converge"
 	"network-service/internal/driver"
@@ -26,6 +27,8 @@ type provRig struct {
 	rateLimitable bool
 	// ipLimitable is its `per_client_ip_limit` answer (F-311-q).
 	ipLimitable bool
+	// anchor is the panel's (F-027-ew); zero for none.
+	anchor anchor.Anchor
 }
 
 func newProvRig(t *testing.T, cfg fake.Config) *provRig {
@@ -53,7 +56,7 @@ func (r *provRig) pass(t *testing.T) converge.ProvisionReport {
 	p := collect.Panel{
 		ID: "panel-1", CounterSemantics: driver.CounterCumulative,
 		Transport: driver.TransportPull, MaxLineRateBps: gigabit, Driver: r.panel,
-		RateLimitable: r.rateLimitable, IPLimitable: r.ipLimitable,
+		RateLimitable: r.rateLimitable, IPLimitable: r.ipLimitable, Anchor: r.anchor,
 	}
 	report, err := r.conv.Pass(context.Background(), p, collect.Result{ObservedAt: r.at})
 	if err != nil {
@@ -387,6 +390,27 @@ func TestAPresentConfigWhoseClientVanishedIsRecreatedWithItsCeiling(t *testing.T
 	client, ok := r.client(t, finding.RemoteID)
 	if !ok || client.Label != "tag-c1" || client.DataLimitBytes != 10*gb {
 		t.Fatalf("recreated %+v, want our tag and the 10 GB share: a recreate is a create, ceiling first", client)
+	}
+}
+
+// The anchor is the panel's, not a user's (F-027-ew): never an orphan, never
+// matched to a config, never written to.
+func TestTheAnchorIsNeverAnOrphanOrConverged(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	a, err := anchor.Plant(context.Background(), r.panel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.anchor = a
+	r.desired.Put("panel-1", wanted("c1"))
+	creates := r.panel.CallCount("CreateClient")
+
+	report := r.pass(t)
+	if len(report.Orphans) != 0 || r.panel.CallCount("CreateClient") != creates+1 {
+		t.Fatalf("orphans %v, creates %d; want no orphan and only c1 created", report.Orphans, r.panel.CallCount("CreateClient")-creates)
+	}
+	if c, ok := r.client(t, a.RemoteID); !ok || c.Enabled || c.DataLimitBytes != 1 {
+		t.Fatalf("the anchor was written to: %+v", c)
 	}
 }
 

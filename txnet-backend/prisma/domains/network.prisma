@@ -432,6 +432,15 @@ model Panel {
   /// canary created through it, seen here. Set only with `refused`
   /// (CHECK `panel_duplicate_is_refused`); cleared when it is re-tested.
   duplicateOfPanelId         String?            @db.Uuid
+  /// The anchor (F-027-ew, ADR-0130): a disabled client with a 1-byte limit
+  /// and no expiry, planted by the connection test or the first pass, by
+  /// which every pass knows the server is this panel. Its tag, uuid and the
+  /// panel's id for it, set together and on a pull panel only (CHECKs
+  /// `panel_anchor_is_whole`, `panel_anchor_is_pull_only`). Never an orphan,
+  /// a seat, billed or converged.
+  anchorTag                  String?            @unique
+  anchorUuid                 String?            @unique
+  anchorRemoteId             String?
   /// The lease planner's clock for this panel (ADR-0093, F-027-cx): the
   /// counter-refresh period `J` it learned, and the feasible phase bins as a
   /// 32-bit mask (`quota.TickClock`). Null = not learned yet; the planner then

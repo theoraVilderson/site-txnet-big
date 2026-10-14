@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -85,4 +86,29 @@ func AssertReady(ctx context.Context, q Querier) error {
 		return err
 	}
 	return AssertColumns(ctx, q)
+}
+
+// TxBeginner is a pool that opens transactions: Pool satisfies it.
+type TxBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// InXactLock runs fn while a transaction holds the advisory lock called name,
+// so two processes never run fn at once. The lock is the transaction's
+// (`pg_advisory_xact_lock`, C-41): it cannot outlive fn on a pooled
+// connection. fn's own statements may use any connection — what they commit
+// is committed before the lock is let go.
+func InXactLock(ctx context.Context, b TxBeginner, name string, fn func(context.Context) error) error {
+	tx, err := b.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("lock %s: %w", name, err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }() // a no-op after Commit
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, name); err != nil {
+		return fmt.Errorf("lock %s: %w", name, err)
+	}
+	if err := fn(ctx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }

@@ -109,6 +109,27 @@ refused one is not taken anyway, and a push panel is never called
    carrying another panel's config stops the panel and raises a halting
    `foreign_claim` naming both — `contract.drift.md` "the collector guard".
 
+## The anchor (F-027-ew, ADR-0130 decisions 1, 3)
+
+11. **A pull panel the test would take carries an anchor.** After the
+   duplicate check, a disabled client (1-byte limit, no expiry, tag
+   `anchor-<random>`, fresh uuid) is created on it through `anchor.Create`,
+   the canary's create path — on the first enabled inbound the family does
+   not answer `unsupported` (a socks inbound on x-ui) — and `panel.anchorTag`/`anchorUuid`/
+   `anchorRemoteId` are written with the verdict (unique; CHECKs
+   `panel_anchor_is_whole`, `_is_pull_only`). One that cannot be planted is
+   rule 9: `pending`, the detail saying `anchor`. A re-test keeps an anchor
+   already on the server; an answer that lands `Stale` deletes the one it
+   planted, as the canary is deleted.
+12. **One lock over the check, the planting and the verdict.**
+   `Store.Serialised` holds `pg_advisory_xact_lock` (`db.InXactLock`) across
+   all three, so two pending registrations of one server cannot both pass.
+13. **A panel accepted before has it planted on its first pass**
+   (`collect.Loop.backfill`, written over none only; a lost race deletes its
+   own). It is not a user: its reading is dropped before the normaliser and
+   the planner, and `Converger.Pass` reads the clients without it — never an
+   orphan, a seat, billed or converged (invariant 56).
+
 ## Every result is announced, in the statement that writes it (F-027-bs)
 
 Both writes are one statement: a `tested` CTE (the `UPDATE`, `RETURNING` the

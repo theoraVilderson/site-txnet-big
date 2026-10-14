@@ -2,13 +2,12 @@ package register
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net"
 	"net/url"
 	"time"
 
+	"network-service/internal/anchor"
 	"network-service/internal/driver"
 )
 
@@ -124,19 +123,15 @@ func (r *Registrar) canary(ctx context.Context, reg Registered, d driver.Driver)
 	if err != nil {
 		return false, err
 	}
-	inbound, err := canaryInbound(ctx, reg, rd)
+	inbounds, err := canaryInbounds(ctx, reg, rd)
 	if err != nil {
 		return false, err
 	}
-	tag, uuid := "canary-"+randomHex(8), randomUUID()
-	created, err := rd.CreateClient(ctx, driver.CreateClientRequest{
-		ClaimTag: tag, UUID: uuid, InboundRemoteID: inbound.RemoteID, Protocol: inbound.Protocol,
-		// One byte, not zero: a family may read 0 as no limit. It is disabled anyway.
-		DataLimitBytes: 1, ExpiresAt: r.now().Add(time.Hour), Enabled: false,
-	})
+	created, err := anchor.Create(ctx, rd, inbounds, "canary-", r.now().Add(time.Hour))
 	if err != nil {
 		return false, err
 	}
+	tag, uuid := created.Tag, created.UUID
 	defer func() {
 		delCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), canaryDeleteTimeout)
 		defer cancel()
@@ -158,24 +153,19 @@ func (r *Registrar) canary(ctx context.Context, reg Registered, d driver.Driver)
 	return false, nil
 }
 
-// canaryInbound is the registered panel's first recorded inbound with a
-// protocol we sell, else the first enabled one it lists now.
-func canaryInbound(ctx context.Context, reg Registered, rd driver.Driver) (InboundKey, error) {
+// canaryInbounds is the registered panel's recorded inbounds with a protocol
+// we sell, else the enabled ones it lists now.
+func canaryInbounds(ctx context.Context, reg Registered, rd driver.Driver) ([]anchor.Inbound, error) {
+	var sold []anchor.Inbound
 	for _, in := range reg.Inbounds {
 		if in.Protocol != "" {
-			return in, nil
+			sold = append(sold, anchor.Inbound{RemoteID: in.RemoteID, Protocol: in.Protocol})
 		}
 	}
-	listed, err := rd.ListInbounds(ctx)
-	if err != nil {
-		return InboundKey{}, err
+	if len(sold) > 0 {
+		return sold, nil
 	}
-	for _, in := range listed {
-		if in.Enabled {
-			return InboundKey{RemoteID: in.RemoteID, Port: in.Port, Protocol: in.Protocol}, nil
-		}
-	}
-	return InboundKey{}, nil // a family with no inbounds (Hiddify) scopes nothing
+	return anchor.Inbounds(ctx, rd)
 }
 
 // sameInbounds is the recorded set equal to the listed one, by remote id and
@@ -239,19 +229,4 @@ func canonicalIP(s string) string {
 		return ip.String()
 	}
 	return s
-}
-
-func randomHex(n int) string {
-	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-func randomUUID() string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	b[6] = b[6]&0x0f | 0x40
-	b[8] = b[8]&0x3f | 0x80
-	h := hex.EncodeToString(b)
-	return h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }

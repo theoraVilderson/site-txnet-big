@@ -58,6 +58,8 @@ var RequiredColumns = map[string][]string{
 		"duplicateOfPanelId",
 		// What the duplicate check compares and names a suspect by (F-027-ce).
 		"name", "ipAddress",
+		// The client a pull panel is known by (F-027-ew, ADR-0130).
+		"anchorTag", "anchorUuid", "anchorRemoteId",
 		"panelState", "blockedSince", "maxRequestsPerMinute",
 		// Why it is not healthy, since when, and when it was last judged (ADR-0122).
 		"panelStateCause", "panelStateSince", "panelCheckedAt",

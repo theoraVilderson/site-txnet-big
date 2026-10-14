@@ -31,6 +31,11 @@ type MemoryStore struct {
 	rows map[string]*Record
 	// claims is each panel's configs, as claim tag and uuid pairs.
 	claims map[string][][2]string
+	// serialised counts Serialised's runs.
+	serialised int
+	// BeforeAnswer runs as Answer begins, outside the lock: a test's way to
+	// change the row while the answer is on its way.
+	BeforeAnswer func()
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -116,11 +121,17 @@ func (m *MemoryStore) tested(p Pending) *Record {
 }
 
 func (m *MemoryStore) Answer(_ context.Context, p Pending, caps driver.Capabilities, state driver.ReviewState, at time.Time) (bool, error) {
+	if m.BeforeAnswer != nil {
+		m.BeforeAnswer()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	r := m.tested(p)
 	if r == nil {
 		return false, nil
+	}
+	if p.Anchor.Planted() {
+		r.Anchor = p.Anchor
 	}
 	r.Capabilities = &caps
 	r.ReviewState = state
@@ -199,4 +210,20 @@ func (m *MemoryStore) Duplicate(_ context.Context, p Pending, caps driver.Capabi
 	r.ReviewState, r.DuplicateOf = driver.ReviewRefused, holder.PanelID
 	r.TestedAt, r.Fault, r.Detail = at, "", ""
 	return true, nil
+}
+
+// Serialised runs fn; one process has nothing to serialise against, so it
+// only counts the runs.
+func (m *MemoryStore) Serialised(ctx context.Context, fn func(context.Context) error) error {
+	m.mu.Lock()
+	m.serialised++
+	m.mu.Unlock()
+	return fn(ctx)
+}
+
+// LockRuns is how many times Serialised ran.
+func (m *MemoryStore) LockRuns() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.serialised
 }

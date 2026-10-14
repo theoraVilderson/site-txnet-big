@@ -29,6 +29,7 @@ import (
 	"log/slog"
 	"time"
 
+	"network-service/internal/anchor"
 	"network-service/internal/driver"
 	"network-service/internal/panelstate"
 )
@@ -80,6 +81,9 @@ type Pending struct {
 	// (invariant 9), the only kind PANEL_EGRESS_ALLOW_CIDRS is dialed for
 	// (ADR-0095).
 	TenantID string
+	// Anchor is the one the panel already carries (F-027-ew), zero for none;
+	// a test that plants one sets it before the answer records it.
+	Anchor anchor.Anchor
 }
 
 // Candidate is a pending panel and its last test, if it had one.
@@ -106,6 +110,11 @@ type Store interface {
 	Fail(ctx context.Context, p Pending, fault FaultKind, detail string, at time.Time) (bool, error)
 	// DuplicateStore is the registered-once check (F-027-ce).
 	DuplicateStore
+	// Serialised runs fn while no other registration's does, in any process:
+	// the duplicate check, the anchor's planting and the verdict that records
+	// it, so two pending registrations of one server cannot both pass
+	// (F-027-ew, ADR-0130 decision 3).
+	Serialised(ctx context.Context, fn func(context.Context) error) error
 }
 
 // Opener builds the driver for one panel.
@@ -246,44 +255,31 @@ func (r *Registrar) test(ctx context.Context, p Pending, report *Report) error {
 
 	verdict := caps.Verdict(p.Transport, p.CounterSemantics)
 	// Registered once (F-027-ce): a pull panel that would be taken is first
-	// asked whether it is one already registered. A refused one is not taken
-	// either way, and a push panel is never called.
+	// asked whether it is one already registered, and then carries an anchor
+	// (F-027-ew). A refused one is not taken either way, and a push panel is
+	// never called.
 	if p.Transport == driver.TransportPull && verdict.ReviewState != driver.ReviewRefused {
-		dupCtx, cancel := context.WithTimeout(ctx, orDefault(r.Timeout, DefaultTimeout))
-		holder, found, err := r.duplicateOf(dupCtx, d, p)
-		cancel()
-		if err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			return fail(faultOf(err, FaultKind(driver.FaultProtocol)), err.Error())
-		}
-		if found {
-			written, err := r.Store.Duplicate(ctx, p, caps, holder, at)
-			if err != nil {
-				return err
-			}
-			if !written {
-				report.Stale++
-				return nil
-			}
-			report.Answered++
-			r.log().Warn("panel refused: it is one already registered", "panel", p.PanelID, "duplicateOf", holder.PanelID, "name", holder.Name)
-			return nil
-		}
+		return r.Store.Serialised(ctx, func(ctx context.Context) error {
+			return r.take(ctx, d, p, caps, verdict, at, report, fail)
+		})
 	}
+	_, err = r.answer(ctx, p, caps, verdict, at, report)
+	return err
+}
+
+// answer writes the verdict, and says whether it landed.
+func (r *Registrar) answer(ctx context.Context, p Pending, caps driver.Capabilities, verdict driver.Verdict, at time.Time, report *Report) (bool, error) {
 	written, err := r.Store.Answer(ctx, p, caps, verdict.ReviewState, at)
-	if err != nil {
-		return err
-	}
-	if !written {
-		report.Stale++
-		return nil
+	if err != nil || !written {
+		if err == nil {
+			report.Stale++
+		}
+		return false, err
 	}
 	report.Answered++
 	r.log().Info("panel registered", "panel", p.PanelID, "reviewState", verdict.ReviewState,
 		"meteredSaleAllowed", verdict.MeteredSaleAllowed, "unmet", verdict.Unmet)
-	return nil
+	return true, nil
 }
 
 // faultOf reads the kind off a driver Fault. A context deadline that a driver

@@ -3,6 +3,7 @@ package register
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 	"unicode/utf8"
@@ -30,6 +31,9 @@ type DB interface {
 // before it.
 type PostgresStore struct {
 	DB DB
+	// Locks opens the transaction Serialised holds its lock in. Nil refuses
+	// every take: unserialised, two registrations of one server both pass.
+	Locks db.TxBeginner
 }
 
 var _ Store = PostgresStore{}
@@ -41,7 +45,8 @@ const maxDetail = 1000
 const pendingSQL = `
 SELECT id::text, "driverType"::text, transport::text, "counterSemantics"::text,
        coalesce("apiBaseUrl", ''), coalesce("clientBaseUrl", ''), "panelApiCredentials",
-       "connectionTestedAt", coalesce("connectionTestFault"::text, ''), coalesce("tenantId"::text, '')
+       "connectionTestedAt", coalesce("connectionTestFault"::text, ''), coalesce("tenantId"::text, ''),
+       coalesce("anchorTag", ''), coalesce("anchorUuid", ''), coalesce("anchorRemoteId", '')
   FROM network.panel
  WHERE "reviewState" = 'pending'
    AND "retiredAt" IS NULL
@@ -59,7 +64,8 @@ func (s PostgresStore) Pending(ctx context.Context) ([]Candidate, error) {
 		var family, transport, semantics, fault string
 		var testedAt *time.Time
 		if err := rows.Scan(&c.PanelID, &family, &transport, &semantics,
-			&c.APIBaseURL, &c.ClientBaseURL, &c.Credentials, &testedAt, &fault, &c.TenantID); err != nil {
+			&c.APIBaseURL, &c.ClientBaseURL, &c.Credentials, &testedAt, &fault, &c.TenantID,
+			&c.Anchor.Tag, &c.Anchor.UUID, &c.Anchor.RemoteID); err != nil {
 			return nil, fmt.Errorf("reading pending panels: %w", err)
 		}
 		c.DriverType = driver.DriverType(family)
@@ -119,7 +125,10 @@ UPDATE network.panel
        "reviewState" = $3::network."PanelReviewState",
        "connectionTestedAt" = $4,
        "connectionTestFault" = NULL,
-       "connectionTestDetail" = NULL
+       "connectionTestDetail" = NULL,
+       "anchorTag" = CASE WHEN $8 <> '' THEN $8 ELSE "anchorTag" END,
+       "anchorUuid" = CASE WHEN $8 <> '' THEN $9 ELSE "anchorUuid" END,
+       "anchorRemoteId" = CASE WHEN $8 <> '' THEN $10 ELSE "anchorRemoteId" END
  WHERE id = $1::uuid AND "reviewState" = 'pending'` + testedAddressSQL + `
 RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 7)
 
@@ -133,7 +142,7 @@ func (s PostgresStore) Answer(ctx context.Context, p Pending, caps driver.Capabi
 		return false, fmt.Errorf("encoding capabilities: %w", err)
 	}
 	tag, err := s.DB.Exec(ctx, answerSQL, p.PanelID, doc, string(state), at,
-		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent)
+		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent, p.Anchor.Tag, p.Anchor.UUID, p.Anchor.RemoteID)
 	if err != nil {
 		return false, fmt.Errorf("writing panel %s verdict: %w", p.PanelID, err)
 	}
@@ -159,6 +168,14 @@ func (s PostgresStore) Fail(ctx context.Context, p Pending, fault FaultKind, det
 		return false, fmt.Errorf("writing panel %s fault: %w", p.PanelID, err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// Serialised holds `registrationLock` across fn (F-027-ew).
+func (s PostgresStore) Serialised(ctx context.Context, fn func(context.Context) error) error {
+	if s.Locks == nil {
+		return errors.New("registration is not serialised: no transaction to hold its lock in")
+	}
+	return db.InXactLock(ctx, s.Locks, registrationLock, fn)
 }
 
 func truncate(s string, max int) string {

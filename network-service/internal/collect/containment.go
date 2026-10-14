@@ -3,6 +3,7 @@ package collect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -236,4 +237,54 @@ func (m *MemoryDriftEvents) Events(panelID string) []DriftEvent {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]DriftEvent(nil), m.byPanel[panelID]...)
+}
+
+// PostgresDriftEvents is DriftEvents over `network.panel_drift_event`. An
+// event halts until an admin acknowledges it, and nothing here acknowledges.
+type PostgresDriftEvents struct {
+	DB DB
+}
+
+var _ DriftEvents = PostgresDriftEvents{}
+
+// haltedSQL is the type of the open event that halts the panel, a foreign
+// claim first: it is the one that stops convergence too.
+const haltedSQL = `
+SELECT "eventType"::text FROM network.panel_drift_event
+ WHERE "panelId" = $1::uuid AND "collectionHalted" AND "acknowledgedAt" IS NULL
+ ORDER BY ("eventType" = 'foreign_claim') DESC
+ LIMIT 1`
+
+func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftEventType, error) {
+	rows, err := s.DB.Query(ctx, haltedSQL, panelID)
+	if err != nil {
+		return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+	}
+	defer rows.Close()
+	var halt string
+	if rows.Next() {
+		if err := rows.Scan(&halt); err != nil {
+			return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return "", fmt.Errorf("reading panel %s drift events: %w", panelID, err)
+	}
+	return DriftEventType(halt), nil
+}
+
+const raiseSQL = `
+INSERT INTO network.panel_drift_event
+       (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted")
+VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7)`
+
+func (s PostgresDriftEvents) Raise(ctx context.Context, e DriftEvent) error {
+	var foreign *string
+	if e.ForeignPanelID != "" {
+		foreign = &e.ForeignPanelID
+	}
+	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), foreign, e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted); err != nil {
+		return fmt.Errorf("raising panel %s drift event: %w", e.PanelID, err)
+	}
+	return nil
 }
