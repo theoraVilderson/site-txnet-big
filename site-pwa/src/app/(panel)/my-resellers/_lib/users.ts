@@ -2,7 +2,7 @@ import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { PersonGroup, ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
-import { myResellerUserPath, panelUserPath, resellerWorkspaceRoot } from "@/lib/routes";
+import { PANEL_GROUPS, myResellerGroupsPath, myResellerUserPath, panelUserPath, resellerWorkspaceRoot } from "@/lib/routes";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
 import { isPlatformTenant, type TenantType } from "@/lib/tenant-type";
 
@@ -63,6 +63,15 @@ export function profileChanges(
  */
 export function personGroupLists(groups: readonly PersonGroup[]): { member: PersonGroup[]; joinable: PersonGroup[] } {
   return { member: groups.filter((g) => g.member), joinable: groups.filter((g) => !g.member && g.mayChange) };
+}
+
+/**
+ * The Groups page that holds this person's groups — the session's own (`tenantId`
+ * null) or the path's tenant's — where the Profile tab sends a caller with no
+ * group left to add them to (user, 2026-10-14).
+ */
+export function groupsPagePath(tenantId: string | null, self: boolean): string {
+  return tenantId === null ? PANEL_GROUPS : myResellerGroupsPath(tenantId, self);
 }
 
 /** `GET /auth/tenants/:id/users` takes `q` of 3-64 characters (F-311-a). */

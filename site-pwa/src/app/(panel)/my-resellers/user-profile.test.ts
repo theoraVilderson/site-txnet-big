@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { resellerUserPath } from "@/lib/auth-api";
 import type { PersonGroup } from "@/lib/auth-api";
-import { USER_REFUSAL_KEYS, personGroupLists, profileChanges } from "./_lib/users";
+import { USER_REFUSAL_KEYS, groupsPagePath, personGroupLists, profileChanges } from "./_lib/users";
 
 /**
  * The Profile tab on one user's page (AC-1-b) over auth's
@@ -61,5 +61,15 @@ describe("personGroupLists", () => {
     const out = personGroupLists([g("vip", true, true), g("admin", false, false), g("support", false, true), g("finance", true, false)]);
     expect(out.member.map((x) => x.id)).toEqual(["vip", "finance"]);
     expect(out.joinable.map((x) => x.id)).toEqual(["support"]);
+  });
+});
+
+describe("groupsPagePath", () => {
+  // With nothing left to offer, the Profile tab links to the Groups page that
+  // creates one (user, 2026-10-14) — the tenant's own, never another's.
+  it("is the session's own Groups page on /users, and the path's tenant's otherwise", () => {
+    expect(groupsPagePath(null, false)).toBe("/groups");
+    expect(groupsPagePath("t-1", false)).toBe("/my-resellers/t-1/groups");
+    expect(groupsPagePath("t-1", true)).toBe("/reseller/groups");
   });
 });

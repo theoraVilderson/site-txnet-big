@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Trash2, Users } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
 import { groupsApi, type PersonGroup } from "@/lib/auth-api";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
-import { Alert, Badge, Button, Field, NativeSelect, notify, useConfirm } from "../../../../../_components/kit";
+import { Alert, Badge, Button, buttonClass, Field, NativeSelect, notify, useConfirm } from "../../../../../_components/kit";
 import { formatInstant, instantOf, type WallTime } from "../../../../../_lib/datetime";
 import { refusalKey } from "../../../../../groups/_lib/user-groups";
-import { USER_KEYS, personGroupLists } from "../../../../_lib/users";
+import { USER_KEYS, groupsPagePath, personGroupLists } from "../../../../_lib/users";
+import { useWorkspaceSelf } from "../../../../_lib/workspace";
 import { useUserMessage } from "./useUserMessage";
 
 const K = USER_KEYS.profile.groups;
@@ -48,6 +50,7 @@ export function UserGroups({
     return key ? t("common", key) : userMessage(e);
   };
   const api = groupsApi(tenantId);
+  const self = useWorkspaceSelf(tenantId ?? "");
 
   const [groups, setGroups] = useState<PersonGroup[] | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
@@ -160,6 +163,16 @@ export function UserGroups({
           <Button variant="primary" size="sm" disabled={busy || !pick} onClick={add}>
             {t("common", K.add)}
           </Button>
+        </div>
+      )}
+      {/* With every group taken the add row used to vanish silently; say why and where to make one (user, 2026-10-14). */}
+      {canAct && joinable.length === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-card-border pt-4">
+          <p className="text-sm text-text-secondary">{t("common", K.noneLeft)}</p>
+          <Link href={groupsPagePath(tenantId, self)} className={buttonClass({ variant: "quiet", size: "sm" })}>
+            {t("common", K.openGroups)}
+            <ArrowLeft size={12} className="ltr:rotate-180" aria-hidden />
+          </Link>
         </div>
       )}
     </section>

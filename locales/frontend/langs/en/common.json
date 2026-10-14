@@ -4493,6 +4493,8 @@
         "hint": "Access is given by groups. Put them in a group to give what the group gives; take them out to take it back.",
         "none": "This tenant has no groups yet.",
         "notInAny": "Not in any group.",
+        "noneLeft": "No other group to add them to. Create one on the Groups page and it shows up here.",
+        "openGroups": "Open the Groups page",
         "until": "until {{date}}",
         "noEnd": "no end",
         "addTo": "Add to a group",
