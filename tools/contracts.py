@@ -432,6 +432,26 @@ def check_permission_registry() -> None:
     errors.extend(f"permissions.json {p}" for p in gen.missing_texts())
 
 
+REGISTRY_TS = ROOT / "txnet-backend" / "shared-core" / "src" / "lib" / "http" / "permission-registry.generated.ts"
+MIGRATIONS = ROOT / "txnet-backend" / "prisma" / "domains" / "migrations"
+
+
+def check_permission_rows() -> None:
+    """Every key the policy names has its `identity.permission` row made by a migration.
+
+    The group editor offers every registry key, and a group given a key with no
+    row is refused `key_unknown` — `settlement.manage` was, 2026-10-14. The seed
+    is not the home: seven keys lived only in a SuperAdmin list it dropped
+    (9bfbd609), so a fresh database lacked them. A key counts as made when some
+    migration quotes it.
+    """
+    keys = re.findall(r'permission: "([^"]+)"', REGISTRY_TS.read_text(encoding="utf-8"))
+    sql = "\n".join(f.read_text(encoding="utf-8") for f in MIGRATIONS.glob("*/migration.sql"))
+    errors.extend(f"permission {k} is in permissions.yaml but no migration inserts its "
+                  f"identity.permission row — a group given it is refused key_unknown"
+                  for k in keys if f"'{k}'" not in sql)
+
+
 IMPERSONATION = ROOT / "contracts" / "http" / "impersonation.json"
 _ROUTE = re.compile(r"@(Get|Post|Put|Patch|Delete)\(\s*(?:['`]([^'`]*)['`])?")
 
@@ -525,6 +545,7 @@ def main() -> int:
     check_default_role()
     check_generated_wire()
     check_permission_registry()
+    check_permission_rows()
     check_impersonation()
 
     for e in errors:
