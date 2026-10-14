@@ -74,8 +74,8 @@ function adminService(callerType: TenantType, campaignTenantStatus?: TenantStatu
   return { prisma, all, service: new CampaignAdminService(prisma as never, all as never, {} as never) };
 }
 
-const owner = { adminId: ADMIN, tenantId: OWNER_TENANT };
-const reseller = { adminId: ADMIN, tenantId: TENANT };
+const owner = { adminId: ADMIN, tenantId: OWNER_TENANT, permissions: ['*'] };
+const reseller = { adminId: ADMIN, tenantId: TENANT, permissions: ['*'] };
 
 describe('CampaignAdminService.resume', () => {
   it('moves a stopped campaign back to sending, audited, and settles one with nothing left queued', async () => {

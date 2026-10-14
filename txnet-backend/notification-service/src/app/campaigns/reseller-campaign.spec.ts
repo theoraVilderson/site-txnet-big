@@ -29,7 +29,7 @@
  *    and its pool the reseller's.
  */
 import { CampaignStatus, NotificationChannel } from '@prisma/client';
-import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
+import { ResellerAccess, TENANT_CEILING, TenantContext } from '@txnet-backend/shared-core';
 
 import { audienceWhere } from './campaign-fan-out.service';
 import { ResellerCampaignRefused, ResellerCampaignService } from './reseller-campaign.service';
@@ -71,6 +71,8 @@ function build(options: { status?: string; userCount?: number } = {}) {
 
   const prisma = {
     user: { count: record('user.count', options.userCount ?? 0) },
+    // The count runs in the reseller's transaction (GR-1-y): RLS binds there.
+    $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ ...prisma, $executeRaw: async () => 0 }),
   };
 
   /** The admin service, as this surface uses it: one call, one delegated actor. */
@@ -107,7 +109,7 @@ describe('a reseller acts on its own campaigns (F-313-d)', () => {
     const call = seen.find((s) => s.what === 'admin.create');
     expect(call?.scope).toBe(RESELLER);
     // The delegated actor: the reseller, not `owner.tenantId` (the platform's).
-    expect(call?.args[0]).toEqual({ adminId: OWNER_USER, tenantId: RESELLER });
+    expect(call?.args[0]).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, permissions: TENANT_CEILING });
     expect(owner.tenantId).toBe(PLATFORM);
     // The scope is fixed by the path, so no body ever names it.
     expect(call?.args[1].tenantId).toBeUndefined();
@@ -123,7 +125,7 @@ describe('a reseller acts on its own campaigns (F-313-d)', () => {
     expect(call?.scope).toBe(RESELLER);
     // The same function the fan-out writes rows with (F-035-d), so the number
     // the reseller confirms is the number that will be sent to.
-    expect(call?.args[0].where).toEqual(audienceWhere({ tenantId: RESELLER, sendStartedAt: at }, AUDIENCE as never));
+    expect(call?.args[0].where).toEqual(audienceWhere({ tenantId: RESELLER, sendStartedAt: at }, AUDIENCE as never, null));
   });
 
   it('lists and sends through the admin door, each in the reseller\'s scope', async () => {
@@ -134,7 +136,7 @@ describe('a reseller acts on its own campaigns (F-313-d)', () => {
     for (const what of ['admin.list', 'admin.send']) {
       const call = seen.find((s) => s.what === what);
       expect(call?.scope).toBe(RESELLER);
-      expect(call?.args[0]).toEqual({ adminId: OWNER_USER, tenantId: RESELLER });
+      expect(call?.args[0]).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, permissions: TENANT_CEILING });
     }
   });
 

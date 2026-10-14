@@ -363,7 +363,7 @@
   "txnet-backend/gateway-service/src/app/realtime/realtime.gateway.ts": 457,
   "txnet-backend/messenger/src/lib/telegram-like-bot.client.ts": 619,
   "txnet-backend/metering-service/src/app/metering/metering.service.ts": 584,
-  "txnet-backend/notification-service/src/app/campaigns/campaign-admin.service.ts": 451,
+  "txnet-backend/notification-service/src/app/campaigns/campaign-admin.service.ts": 435,
   "txnet-backend/shared-core/src/lib/billing/currency-change.ts": 513,
   "txnet-backend/shared-core/src/lib/billing/reseller-quota.ts": 506,
   "txnet-backend/shared-core/src/lib/redis/keys.ts": 527,

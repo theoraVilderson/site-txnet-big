@@ -43,6 +43,8 @@ export const audienceFilterSchema = z
     /** `wallet.cachedBalance`, both inclusive. A user with no wallet has a balance of 0. */
     minBalance: money.optional(),
     maxBalance: money.optional(),
+    /** One of the campaign tenant's groups: only its members (GR-1-y, ADR-0143). */
+    groupId: z.string({ message: invalid }).uuid({ message: invalid }).optional(),
   })
   .strict(invalid)
   .refine((f) => !f.registeredFrom || !f.registeredTo || Date.parse(f.registeredFrom) < Date.parse(f.registeredTo), {

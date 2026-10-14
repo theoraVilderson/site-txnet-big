@@ -3,6 +3,7 @@ import { CampaignStatus, DeliveryStatus, Prisma, UserStatus } from '@prisma/clie
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { AudienceFilter, audienceFilterSchema } from './campaign-admin.schema';
+import { groupMemberIds } from './campaign-group';
 
 /** Users read per batch; one batch is one transaction. */
 export const FAN_OUT_BATCH = 500;
@@ -93,7 +94,8 @@ export class CampaignFanOutService {
         continue;
       }
       result.campaigns++;
-      const where = audienceWhere({ tenantId: campaign.tenantId, sendStartedAt: campaign.sendStartedAt }, filter.data);
+      const members = filter.data.groupId ? await groupMemberIds(this.db, filter.data.groupId, campaign.sendStartedAt) : null;
+      const where = audienceWhere({ tenantId: campaign.tenantId, sendStartedAt: campaign.sendStartedAt }, filter.data, members);
       let cursor = campaign.fanOutCursor;
 
       while (budget > 0) {
@@ -179,11 +181,13 @@ export async function completeIfSettled(tx: Tx, campaignId: string): Promise<voi
 /**
  * The stored audience as a user query — exactly `audienceFilterSchema`'s keys
  * and nothing else (`contract.md` "Campaigns"). A new key lands here and in the
- * schema in one change.
+ * schema in one change. `members`: a group campaign's people, read by
+ * `groupMemberIds`; unread, a group campaign reaches nobody, never everybody.
  */
 export function audienceWhere(
   campaign: { tenantId: string | null; sendStartedAt: Date },
   filter: AudienceFilter,
+  members: readonly string[] | null,
 ): { AND: Prisma.UserWhereInput[] } {
   const and: Prisma.UserWhereInput[] = [];
   // Invariant 1. `null` is platform-wide: every tenant's users, by definition.
@@ -194,6 +198,7 @@ export function audienceWhere(
   if (filter.languages) and.push({ languagePreference: { in: filter.languages } });
   if (filter.registeredFrom) and.push({ createdAt: { gte: new Date(filter.registeredFrom) } });
   if (filter.registeredTo) and.push({ createdAt: { lt: new Date(filter.registeredTo) } });
+  if (filter.groupId) and.push({ id: { in: [...(members ?? [])] } });
 
   // A user with no wallet has a balance of 0 (C-02: compared as Decimal, never a float).
   const noWallet: Prisma.UserWhereInput = { wallet: { is: null } };

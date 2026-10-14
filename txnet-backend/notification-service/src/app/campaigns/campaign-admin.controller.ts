@@ -56,6 +56,8 @@ export const CAMPAIGN_REFUSAL_STATUS: Record<CampaignAdminRejection, 400 | 403 |
   text_not_found: 404,
   campaign_not_stopped: 409,
   tenant_not_open: 409,
+  group_not_found: 404,
+  audience_not_allowed: 403,
 };
 
 const READ = {
@@ -86,8 +88,8 @@ export class CampaignAdminController {
   ) {}
 
   private actor(req: Request): CampaignActor {
-    const { userId, tenantId } = identityOf(req);
-    return { adminId: userId, tenantId };
+    const { userId, tenantId, permissions } = identityOf(req);
+    return { adminId: userId, tenantId, permissions };
   }
 
   @Get()

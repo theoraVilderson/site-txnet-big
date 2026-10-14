@@ -86,7 +86,7 @@ function fakes({ callerType = TenantType.reseller as TenantType, texts = [] as u
 }
 
 const as = <T>(tenantId: string, run: () => Promise<T>) => runWithTenant({ id: tenantId }, run);
-const tenantAdmin = { adminId: ADMIN, tenantId: TENANT };
+const tenantAdmin = { adminId: ADMIN, tenantId: TENANT, permissions: ['*'] };
 
 describe('textFor', () => {
   const campaign = { messageBody: 'سلام', subject: 'تخفیف', sourceLang: Language.fa };

@@ -67,15 +67,15 @@ function fakes(users: string[], campaigns = [campaign()]) {
 
 describe('audienceWhere', () => {
   it('confines a tenant campaign to its tenant, and a platform-wide one to no tenant (invariant 1)', () => {
-    const scoped = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, {});
+    const scoped = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, {}, null);
     expect(scoped.AND).toContainEqual({ tenantId: TENANT });
 
-    const platform = audienceWhere({ tenantId: null, sendStartedAt: STARTED }, {});
+    const platform = audienceWhere({ tenantId: null, sendStartedAt: STARTED }, {}, null);
     expect(JSON.stringify(platform)).not.toContain('tenantId');
   });
 
   it('means active, undeleted users registered before the send when the filter is empty', () => {
-    const where = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, {});
+    const where = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, {}, null);
     expect(where.AND).toEqual(
       expect.arrayContaining([
         { status: { in: [UserStatus.active] } },
@@ -96,6 +96,7 @@ describe('audienceWhere', () => {
         minBalance: '0',
         maxBalance: '100.50',
       },
+      null,
     );
     expect(where.AND).toEqual(
       expect.arrayContaining([
@@ -109,7 +110,7 @@ describe('audienceWhere', () => {
     );
 
     // Above zero, a user with no wallet is below the minimum.
-    const rich = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, { minBalance: '10' });
+    const rich = audienceWhere({ tenantId: TENANT, sendStartedAt: STARTED }, { minBalance: '10' }, null);
     expect(rich.AND).toContainEqual({ wallet: { is: { cachedBalance: { gte: new Prisma.Decimal('10') } } } });
   });
 });

@@ -1,18 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { AdminAction, AuditTargetType, CampaignStatus, DeliveryStatus, Language, NotificationChannel, Prisma, TenantStatus } from '@prisma/client';
-import { ResellerQuota, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { type AudienceGroupReader, ResellerQuota, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import type { AudienceFilter } from './campaign-admin.schema';
+import { type AudienceFilter, audienceFilterSchema } from './campaign-admin.schema';
 import { completeIfSettled } from './campaign-fan-out.service';
+import { campaignGroupRefusal } from './campaign-group';
+import { CampaignRow, toView } from './campaign-view';
 import { SmsLineSource } from './sms-line';
 
 export const DEFAULT_PAGE = 1;
 export const DEFAULT_PAGE_SIZE = 20;
 
 /** From the gate: who is asking, and for which tenant. */
-export type CampaignActor = { adminId: string; tenantId: string };
+/** `permissions`: the caller's keys where it acts, deciding the groups it may aim at (ADR-0143). */
+export type CampaignActor = { adminId: string; tenantId: string; permissions: readonly string[] };
 
 export type CreateCampaignInput = {
   channel: NotificationChannel;
@@ -78,7 +81,9 @@ export type CampaignAdminRejection =
   | 'text_is_source'
   | 'text_not_found'
   | 'campaign_not_stopped'
-  | 'tenant_not_open';
+  | 'tenant_not_open'
+  | 'group_not_found'
+  | 'audience_not_allowed';
 
 export class CampaignAdminRefused extends Error {
   constructor(readonly reason: CampaignAdminRejection, detail: string) {
@@ -88,21 +93,6 @@ export class CampaignAdminRefused extends Error {
 
 /** Either pool, as far as campaign rows and their texts go. */
 export type CampaignDb = Pick<PrismaService, 'notificationCampaign' | 'notificationCampaignText'>;
-
-type CampaignRow = {
-  id: string;
-  tenantId: string | null;
-  createdByAdminId: string;
-  channel: NotificationChannel;
-  filterCriteria: Prisma.JsonValue;
-  messageBody: string;
-  subject: string | null;
-  sourceLang: Language | null;
-  status: CampaignStatus;
-  sentCount: number;
-  failedCount: number;
-  createdAt: Date;
-};
 
 /**
  * Drafting broadcast campaigns (F-035-c): create, list, read and edit
@@ -142,6 +132,7 @@ export class CampaignAdminService {
     const { owner, db } = await this.access(actor);
     const tenantId = await this.ownerOfNew(actor, owner, input.tenantId);
     await this.assertLine(input.channel, actor, owner, tenantId);
+    await this.assertGroup(actor, owner, input.audience, { kept: null, tenantId: tenantId ?? actor.tenantId });
     const row = await db.notificationCampaign.create({
       data: {
         tenantId,
@@ -199,6 +190,10 @@ export class CampaignAdminService {
     const { owner, db } = await this.access(actor);
     const current = await this.loadManaged(actor, owner, db, id);
     if (patch.channel !== undefined) await this.assertLine(patch.channel, actor, owner, current.tenantId);
+    if (patch.audience !== undefined) {
+      const kept = audienceFilterSchema.safeParse(current.filterCriteria).data?.groupId ?? null;
+      await this.assertGroup(actor, owner, patch.audience, { kept, tenantId: current.tenantId ?? actor.tenantId });
+    }
 
     const data: Prisma.NotificationCampaignUpdateManyMutationInput = {};
     if (patch.channel !== undefined) data.channel = patch.channel;
@@ -391,6 +386,13 @@ export class CampaignAdminService {
     return { owner, db: owner ? this.all : this.prisma };
   }
 
+  /** ADR-0143 (GR-1-y): the audience's group, read on the caller's pool — a tenant's in its transaction, so RLS binds. */
+  private async assertGroup(actor: CampaignActor, owner: boolean, audience: AudienceFilter, opts: { kept: string | null; tenantId: string }): Promise<void> {
+    const ask = (db: AudienceGroupReader) => campaignGroupRefusal(db, actor.permissions, audience, opts);
+    const refused = !audience.groupId ? null : owner ? await ask(this.all) : await tenantTransaction(this.prisma, ask);
+    if (refused) throw new CampaignAdminRefused(refused.reason, refused.groupId);
+  }
+
   private async ownerOfNew(actor: CampaignActor, owner: boolean, requested: string | null | undefined): Promise<string | null> {
     const tenantId = requested === undefined ? actor.tenantId : requested;
     if (tenantId === actor.tenantId) return tenantId;
@@ -430,22 +432,4 @@ export class CampaignAdminService {
     }
     return row;
   }
-}
-
-function toView(row: CampaignRow): CampaignView {
-  return {
-    id: row.id,
-    tenantId: row.tenantId,
-    createdByAdminId: row.createdByAdminId,
-    channel: row.channel,
-    // Written only through `audienceFilterSchema`; F-035-d parses it again before it trusts it.
-    audience: row.filterCriteria as AudienceFilter,
-    messageBody: row.messageBody,
-    subject: row.subject,
-    sourceLang: row.sourceLang,
-    status: row.status,
-    sentCount: row.sentCount,
-    failedCount: row.failedCount,
-    createdAt: row.createdAt.toISOString(),
-  };
 }

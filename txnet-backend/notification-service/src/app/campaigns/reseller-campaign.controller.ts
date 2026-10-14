@@ -22,6 +22,7 @@ import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import type { AudienceFilter } from './campaign-admin.schema';
+import { CAMPAIGN_REFUSAL_STATUS } from './campaign-admin.controller';
 import { CreateCampaignInput } from './campaign-admin.service';
 import {
   ResellerListCampaignsQuery,
@@ -49,17 +50,8 @@ export const RESELLER_CAMPAIGN_STATUS: Record<ResellerCampaignRejection, 400 | 4
   reseller_not_found: 404,
   reseller_suspended: 403,
   reseller_terminated: 409,
-  // The campaign rules behind it (F-035-c/d).
-  campaign_not_found: 404,
-  campaign_not_draft: 409,
-  sms_not_available: 409,
-  email_not_available: 409,
-  tenant_not_found: 404,
-  not_platform_owner: 403,
-  text_is_source: 400,
-  text_not_found: 404,
-  campaign_not_stopped: 409,
-  tenant_not_open: 409,
+  // The campaign rules behind it (F-035-c/d), as the ambient surface answers them.
+  ...CAMPAIGN_REFUSAL_STATUS,
 };
 
 const READ = {

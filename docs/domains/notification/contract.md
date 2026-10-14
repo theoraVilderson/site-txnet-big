@@ -86,15 +86,15 @@ a reseller's owner's session names the platform's tenant, never the reseller's
   is the platform owner's alone, and fixed at creation. A tenant admin lists and
   reads only their own tenant's rows — not the platform's, although RLS would
   show them — and another tenant's id is 404, never 403 (invariant 7).
-- **`audience` is a closed shape** (`campaign-admin.schema.ts`, closes the
-  `filterCriteria` question). Strict: an unknown key is 400. Keys AND together,
-  a list is any of its values, `{}` is everyone in scope:
-  `statuses` (`UserStatus`, absent = `active` only), `languages` (`Language`),
-  `registeredFrom`/`registeredTo` (ISO, `from` < `to`, on `user.createdAt`),
-  `minBalance`/`maxBalance` (decimal text ≤2 places, C-02, inclusive, on
-  `wallet.cachedBalance`; no wallet = 0). Lists are non-empty and distinct.
-  The fan-out (F-035-d) translates exactly these keys; a new key lands in both
-  in one change.
+- **`audience` is a closed shape** (`campaign-admin.schema.ts`); unknown key 400.
+  Keys AND, a list is any of its values, `{}` is everyone in scope: `statuses`
+  (`UserStatus`, absent = `active`), `languages`, `registeredFrom`/`To` (ISO,
+  `from` < `to`, `user.createdAt`), `minBalance`/`maxBalance` (decimal ≤2 places,
+  C-02, inclusive, `wallet.cachedBalance`; no wallet = 0), `groupId` (GR-1-y: a
+  group of the campaign's tenant, its members live at the send's start; a new
+  one the caller may not pick is 403 `audience_not_allowed`, ADR-0143; absent 404
+  `group_not_found`). Lists non-empty and distinct. The fan-out (F-035-d)
+  translates exactly these keys; a new key lands in both in one change.
 - **Only a draft is edited**, checked in the write's own `where` (invariant 8).
 - Limits, per admin, 15 min: `NOTIFICATION_CAMPAIGN_READ` (300), `…_WRITE` (60).
 - **The pool follows the caller (ADR-0053).** A tenant admin runs on the app

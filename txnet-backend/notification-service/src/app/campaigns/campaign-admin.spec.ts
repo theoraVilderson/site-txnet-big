@@ -92,8 +92,8 @@ function expectPoolUntouched(pool: { notificationCampaign: ReturnType<typeof cam
   for (const fn of Object.values(pool.notificationCampaign)) expect(fn).not.toHaveBeenCalled();
 }
 
-const tenantAdmin = { adminId: ADMIN, tenantId: TENANT };
-const owner = { adminId: ADMIN, tenantId: OWNER_TENANT };
+const tenantAdmin = { adminId: ADMIN, tenantId: TENANT, permissions: ['*'] };
+const owner = { adminId: ADMIN, tenantId: OWNER_TENANT, permissions: ['*'] };
 
 describe('audienceFilterSchema', () => {
   it('accepts the fixed keys and an empty filter', () => {

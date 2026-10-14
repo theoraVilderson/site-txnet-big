@@ -6,11 +6,14 @@ import {
   ResellerAccessRejection,
   ResellerActor,
   TenantCapabilityName,
+  keysActingIn,
+  tenantTransaction,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import type { AudienceFilter } from './campaign-admin.schema';
 import {
+  CampaignActor,
   CampaignAdminRefused,
   CampaignAdminRejection,
   CampaignAdminService,
@@ -18,6 +21,7 @@ import {
   CreateCampaignInput,
 } from './campaign-admin.service';
 import { audienceWhere } from './campaign-fan-out.service';
+import { groupMemberIds } from './campaign-group';
 import type { ResellerListCampaignsQuery } from './reseller-campaign.schema';
 
 /** Two doors close here: the reseller's, and the campaign rules behind it. */
@@ -103,8 +107,9 @@ export class ResellerCampaignService {
     now = new Date(),
   ): Promise<AudienceCount> {
     return this.run(actor, tenantId, 'read', async (as) => ({
-      count: await this.prisma.user.count({
-        where: audienceWhere({ tenantId: as.tenantId, sendStartedAt: now }, audience) as Prisma.UserWhereInput,
+      count: await tenantTransaction(this.prisma, async (tx) => {
+        const members = audience.groupId ? await groupMemberIds(tx, audience.groupId, now) : null;
+        return tx.user.count({ where: audienceWhere({ tenantId: as.tenantId, sendStartedAt: now }, audience, members) as Prisma.UserWhereInput });
       }),
     }));
   }
@@ -133,11 +138,11 @@ export class ResellerCampaignService {
     actor: ResellerActor,
     tenantId: string,
     capability: TenantCapabilityName,
-    work: (as: { adminId: string; tenantId: string }) => Promise<T>,
+    work: (as: CampaignActor) => Promise<T>,
   ): Promise<T> {
     try {
       return await this.access.for('campaign.manage').run(actor, tenantId, capability, (reseller) =>
-        work({ adminId: actor.userId, tenantId: reseller.id }),
+        work({ adminId: actor.userId, tenantId: reseller.id, permissions: keysActingIn(reseller.as, actor.permissions) }),
       );
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerCampaignRefused(e.reason, tenantId);
