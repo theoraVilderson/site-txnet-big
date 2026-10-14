@@ -57,8 +57,9 @@ latest set to `/drill` (tmpfs-free scratch dir in the container), start
 `postgres -D /drill -p 55432 -c archive_mode=off` as uid 70, wait ready, run
 as `${MAIN_DB_USERNAME}` (the superuser — RLS does not hide rows from it)
 `SELECT max("createdAt") FROM billing.wallet_transaction` (the ledger) and
-`SELECT count(*) FROM identity."user"`; pass when both return and the
-ledger's max is within 26h of the backup's stop time or the table is empty.
+`SELECT count(*) FROM identity."user"`; pass when both return and the restored
+ledger's max is at least live `main-db`'s max at or before the backup's stop time
+(exact, so a quiet week passes; user 2026-10-14).
 Stop, delete `/drill`. Write `txnet_pg_restore_drill_last_success_timestamp_seconds`.
 Manual: `docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh drill`.
 

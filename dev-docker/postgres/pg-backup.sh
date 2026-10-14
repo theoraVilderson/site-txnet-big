@@ -30,9 +30,7 @@ DRILL_DIR=/drill
 DRILL_PORT=55432
 DRILL_SOCKET=/tmp/drill-socket
 DRILL_READY_TIMEOUT_S=600
-# H4: a restore whose newest ledger row is older than this, measured from the
-# backup's stop time, restored something stale.
-LEDGER_MAX_LAG_S=$((26 * 3600))
+LIVE_SOCKET=/var/run/postgresql
 
 # The last success survives a restart: it is read back from the file this writes.
 LAST_OK=$(sed -n 's/^txnet_pg_backup_last_success_timestamp_seconds //p' "$METRICS" 2>/dev/null || true)
@@ -110,6 +108,16 @@ drill_sql() {
   gosu postgres psql -h "$DRILL_SOCKET" -p "$DRILL_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "$1"
 }
 
+live_sql() {
+  gosu postgres psql -h "$LIVE_SOCKET" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "$1"
+}
+
+# The newest ledger row's epoch, -1 when there is none; "createdAt" is UTC
+# without a zone, so the bound is converted rather than the column (index).
+ledger_max_sql() {
+  echo "SELECT coalesce(extract(epoch FROM max(\"createdAt\"))::bigint, -1) FROM billing.wallet_transaction $1"
+}
+
 drill_cleanup() {
   gosu postgres pg_ctl -D "$DRILL_DIR" -m immediate stop >/dev/null 2>&1 || true
   rm -rf "$DRILL_DIR" "$DRILL_SOCKET"
@@ -124,13 +132,15 @@ drill_check() {
   pgbr --pg1-path="$DRILL_DIR" restore || return 1
   gosu postgres pg_ctl -D "$DRILL_DIR" -l "$DRILL_DIR/drill.log" -t "$DRILL_READY_TIMEOUT_S" -w start \
     -o "-p $DRILL_PORT -k $DRILL_SOCKET -c listen_addresses='' -c archive_mode=off" || { tail -20 "$DRILL_DIR/drill.log"; return 1; }
+  # The restore must hold every ledger row live main-db had when the backup
+  # stopped — exact, so a quiet week is not a failed drill (H4, user 2026-10-14).
+  expected=$(live_sql "$(ledger_max_sql "WHERE \"createdAt\" <= to_timestamp($stop) AT TIME ZONE 'UTC'")") || return 1
   # Recovery ends with a promotion; until then the server answers read-only and
   # that is enough for the two reads.
-  ledger=$(drill_sql 'SELECT coalesce(extract(epoch FROM max("createdAt"))::bigint, -1) FROM billing.wallet_transaction') || return 1
+  ledger=$(drill_sql "$(ledger_max_sql '')") || return 1
   users=$(drill_sql 'SELECT count(*) FROM identity."user"') || return 1
-  log "drill: backup stopped $stop, newest ledger row $ledger, users $users"
-  [ "$ledger" = -1 ] && return 0
-  [ $((stop - ledger)) -le "$LEDGER_MAX_LAG_S" ] || { log "drill: ledger is older than 26h at the backup"; return 1; }
+  log "drill: backup stopped $stop, ledger restored $ledger, live at the backup $expected, users $users"
+  [ "$ledger" -ge "$expected" ] || { log "drill: the restore is missing ledger rows the backup should hold"; return 1; }
 }
 
 drill() {
