@@ -42,16 +42,40 @@ services:
   # ===========================================================================
   # PostgreSQL — Primary Relational Database
   # ===========================================================================
+  # Our image adds pgBackRest and archives every WAL segment (OPS-1-a,
+  # hosting/contract.md H1/H2). The repository is chosen by PG_BACKUP_REPO_TYPE;
+  # dev keeps it in a host dir, which guards a dropped table, not a lost disk.
   main-db:
-    image: ${DOCKER_REGISTRY}/postgres:18-alpine
+    build:
+      context: ./postgres
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-postgres
     restart: unless-stopped
+    command: >
+      postgres
+      -c wal_level=replica
+      -c archive_mode=on
+      -c archive_timeout=60
+      -c "archive_command=pgbackrest --stanza=txnet archive-push %p"
     environment:
       - POSTGRES_USER=${MAIN_DB_USERNAME}
       - POSTGRES_PASSWORD=${MAIN_DB_PASSWORD}
       - POSTGRES_DB=${MAIN_DB_NAME}
+      - PG_BACKUP_REPO_TYPE=${PG_BACKUP_REPO_TYPE:-posix}
+      - PG_BACKUP_S3_ENDPOINT=${PG_BACKUP_S3_ENDPOINT:-}
+      - PG_BACKUP_S3_BUCKET=${PG_BACKUP_S3_BUCKET:-}
+      - PG_BACKUP_S3_REGION=${PG_BACKUP_S3_REGION:-}
+      - PG_BACKUP_S3_KEY=${PG_BACKUP_S3_KEY:-}
+      - PG_BACKUP_S3_SECRET=${PG_BACKUP_S3_SECRET:-}
+      - PG_BACKUP_SFTP_HOST=${PG_BACKUP_SFTP_HOST:-}
+      - PG_BACKUP_SFTP_USER=${PG_BACKUP_SFTP_USER:-}
+      - PG_BACKUP_SFTP_PATH=${PG_BACKUP_SFTP_PATH:-}
     volumes:
       - postgres_data:/var/lib/postgresql
+      - ${PG_BACKUP_LOCAL_DIR:-/var/backups/txnet/pg}:/repo
+      - ./secrets/pg-backup-passphrase:/run/secrets/pg-backup-passphrase:ro
     networks:
       - private_backend_network
     healthcheck:

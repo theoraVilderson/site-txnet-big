@@ -15,6 +15,7 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 |---|---|---|
 | `vault-kek` | `auth-service` (`VAULT_KEK_FILE`) | the Credential Vault's key-encryption key — 32 bytes, base64 or hex |
 | `object-backup-password` | `object-backup` (`RESTIC_PASSWORD_FILE`, F-414-m) | the restic repository's password: `openssl rand -base64 32 > dev-docker/secrets/object-backup-password` |
+| `pg-backup-passphrase` | `main-db`, `pg-backup` (OPS-1-a, hosting H2) | pgBackRest's repository cipher passphrase: `openssl rand -base64 48 > dev-docker/secrets/pg-backup-passphrase` |
 | `origin-pull/` | nothing at runtime — `scripts/edge/origin-pull.sh` (EDGE-1-g) | our origin-pull CA's key and the client pair Cloudflare holds; `ca.pem` sits in `traefik/origin-pull/`. Lost: run `issue` with `FORCE=1`, then `upload` |
 
 In production these are real `secrets:` entries in `swarm/docker-stack.yml`,
@@ -27,3 +28,6 @@ nice-to-have.
 
 **Losing `object-backup-password` makes every object-storage snapshot
 unreadable** (ADR-0120): keep it wherever `vault-kek` is kept.
+
+**Losing `pg-backup-passphrase` makes every database backup and archived WAL
+segment unreadable** (ADR-0126): the same rule.
