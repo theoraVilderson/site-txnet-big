@@ -286,6 +286,37 @@ describe("reconnecting", () => {
     expect(FakeSocket.live).toHaveLength(1);
   });
 
+  // The gateway answers a rotated token's old session with 4401 too — an access
+  // change rotates it (AC-1-r) — and treating that as a sign-out stopped the
+  // socket, so the notice it carried never arrived (2026-10-14).
+  it("on 4401, reconnects with the credential that replaced it when the session was rotated", async () => {
+    let token = "old";
+    const sessionLost = vi.fn();
+    const recoverSession = vi.fn(async (dead: string | null) => {
+      expect(dead).toBe("old");
+      token = "new";
+      return token;
+    });
+    const { socket } = connected({ credential: () => token, onSessionLost: sessionLost, recoverSession });
+
+    socket.drop(4401);
+    await vi.waitFor(() => expect(FakeSocket.live).toHaveLength(2));
+
+    expect(FakeSocket.live[1].protocols).toContain("new");
+    expect(sessionLost).not.toHaveBeenCalled();
+  });
+
+  it("on 4401, still signs out when nothing replaced the session", async () => {
+    const sessionLost = vi.fn();
+    const { socket } = connected({ credential: () => "old", onSessionLost: sessionLost, recoverSession: async () => "old" });
+
+    socket.drop(4401);
+    await vi.waitFor(() => expect(sessionLost).toHaveBeenCalledTimes(1));
+    vi.advanceTimersByTime(600_000);
+
+    expect(FakeSocket.live).toHaveLength(1);
+  });
+
   it("treats 4403 as a closed tenant: stops for good and says so, without signing out (F-018-ac)", () => {
     const sessionLost = vi.fn();
     const tenantClosed = vi.fn();

@@ -97,6 +97,18 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
         rememberReturnTo(currentReturnPath());
         routerRef.current.replace(AUTH_LOGIN);
       },
+      recoverSession: async (dead) => {
+        // An access change rotates the token (AC-1-r) and the gateway retires
+        // the old session with 4401: the shared refresh adopts the token that
+        // replaced it, and fails only when the session really ended.
+        try {
+          await authApi.refreshCredential(dead);
+        } catch (e) {
+          // AC-1-i: an impersonation that ended came back to the admin's own token.
+          if (!(e instanceof ImpersonationEnded)) return null;
+        }
+        return authApi.getAccessToken();
+      },
       onTenantClosed: () => {
         if (alive) setTenantClosed(true);
       },

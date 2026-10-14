@@ -4,6 +4,8 @@
 // docs/platform/realtime/contract.md. This module is the transport and nothing
 // else: it knows no screen, no payload shape and no route.
 import { realtimeUrl } from "./api-origin";
+import type { RealtimeErrorCode, RealtimeSocket, SocketFactory, ChannelListener, SubscribeOptions, RealtimeConnection, RealtimeClientOptions } from "./realtime-types";
+export type { RealtimeErrorCode, RealtimeSocket, SocketFactory, ChannelListener, SubscribeOptions, RealtimeConnection, RealtimeClientOptions } from "./realtime-types";
 
 /**
  * The token rides in `Sec-WebSocket-Protocol` because it is the only header a
@@ -56,12 +58,6 @@ export const CLOSE_TENANT_CLOSED = 4403;
 export const CLOSE_HEARTBEAT = 4408;
 export const CLOSE_TOO_MANY = 4429;
 
-/** Refusal codes a subscriber can be told about. Machine keys, never text. */
-export type RealtimeErrorCode =
-  | "realtime.channelUnknown"
-  | "realtime.channelForbidden"
-  | "realtime.subscriptionLimit"
-  | "realtime.badFrame";
 
 /** A refusal that ends a subscription rather than merely reporting on it. */
 const FATAL_FOR_CHANNEL: readonly string[] = [
@@ -70,73 +66,6 @@ const FATAL_FOR_CHANNEL: readonly string[] = [
   "realtime.subscriptionLimit",
 ];
 
-/**
- * The slice of `WebSocket` this client uses. Narrow on purpose: it is what
- * lets the spec drive the whole lifecycle without a server, and it documents
- * exactly which parts of the browser API are load-bearing here.
- */
-export interface RealtimeSocket {
-  readyState: number;
-  send(data: string): void;
-  close(code?: number, reason?: string): void;
-  onopen: ((ev: unknown) => void) | null;
-  onclose: ((ev: { code: number }) => void) | null;
-  onmessage: ((ev: { data: unknown }) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-}
-
-export type SocketFactory = (url: string, protocols: string[]) => RealtimeSocket;
-
-export type ChannelListener = {
-  onMessage: (payload: unknown) => void;
-  /** A refusal for this channel. The code is a key, not a sentence. */
-  onError?: (code: RealtimeErrorCode) => void;
-  /**
-   * The channel is back after a dropped socket, and anything published while
-   * it was down went to nobody — nothing is queued for a closed socket. A
-   * listener that shows a record re-reads it here. Called once the server has
-   * accepted the channel again, and never on the first connection.
-   */
-  onMissed?: () => void;
-};
-
-export type SubscribeOptions = ChannelListener & {
-  /**
-   * Required by, and only by, a channel no identity covers — today `otp:`.
-   * Kept here for the life of the subscription because a reconnect has to
-   * present it again: `resume` carries no proofs.
-   */
-  proof?: string;
-};
-
-export type RealtimeConnection = {
-  connectionId: string;
-  /** `null` on an anonymous connection — present-and-null, never missing. */
-  userId: string | null;
-};
-
-export type RealtimeClientOptions = {
-  /** Defaults to the deployment's socket URL (`env.ts`). */
-  url?: string;
-  /** Read on every connect, so a rotated access token is picked up. */
-  credential?: () => string | null | undefined;
-  /** The gateway closed with `4401`: the session is gone. Sign out. */
-  onSessionLost?: () => void;
-  /**
-   * The gateway closed with `4403`: this tenant is terminated (F-018-ac). The
-   * client has stopped for good — a reconnect is refused `403` — and the page
-   * says the service is closed. Not a sign-out: the session may still be live.
-   */
-  onTenantClosed?: () => void;
-  /**
-   * The socket closed before it was welcomed while a credential was offered.
-   * A browser cannot see the `401` the gate answered — it sees a close with no
-   * status — so this is the one hook that can refresh the token and let the
-   * next attempt carry a live one. Called at most once per connect cycle.
-   */
-  onCredentialRejected?: () => void;
-  socketFactory?: SocketFactory;
-};
 
 type ChannelEntry = {
   proof?: string;
@@ -168,6 +97,9 @@ export class RealtimeClient {
   private heartbeatMs = DEFAULT_HEARTBEAT_MS;
   private credentialOffered = false;
   private credentialRetried = false;
+  /** The credential the current socket was opened with — what a `4401` retired. */
+  private connectedWith: string | null = null;
+  private closedByCaller = false;
 
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
@@ -189,12 +121,14 @@ export class RealtimeClient {
 
   connect(): void {
     this.stopped = false;
+    this.closedByCaller = false;
     if (this.socket) return;
 
     const url = this.options.url ?? realtimeUrl();
     if (!url) return; // No socket configured for this deployment.
 
     const credential = this.options.credential?.() ?? null;
+    this.connectedWith = credential;
     this.credentialOffered = Boolean(credential);
     const protocols = credential ? [SUBPROTOCOL, credential] : [SUBPROTOCOL];
 
@@ -247,6 +181,7 @@ export class RealtimeClient {
   /** Close for good. No reconnect follows, on any code. */
   close(): void {
     this.stopped = true;
+    this.closedByCaller = true;
     this.clearTimers();
     const socket = this.socket;
     this.socket = null;
@@ -396,9 +331,10 @@ export class RealtimeClient {
 
     if (code === CLOSE_SESSION_GONE) {
       // The session marker is gone. Reconnecting with the same credential
-      // asks the same question and gets the same answer, forever.
+      // asks the same question and gets the same answer, forever — so only a
+      // different one, from a rotation, ever reconnects.
       this.stopped = true;
-      this.options.onSessionLost?.();
+      this.recoverOrSignOut(this.connectedWith);
       return;
     }
 
@@ -438,6 +374,19 @@ export class RealtimeClient {
 
   /** Exponential, capped, and jittered so a restarted gateway is not hit by
    * every panel in the same 50ms. */
+  private recoverOrSignOut(dead: string | null): void {
+    const lost = () => this.options.onSessionLost?.();
+    if (!this.options.recoverSession) return lost();
+    this.options.recoverSession(dead).then(
+      (live) => {
+        if (this.closedByCaller) return;
+        if (live && live !== dead) this.connect();
+        else lost();
+      },
+      lost,
+    );
+  }
+
   private backoffMs(): number {
     const base = Math.min(BACKOFF_BASE_MS * 2 ** this.attempt, BACKOFF_MAX_MS);
     return Math.round(base * (0.8 + Math.random() * 0.4));

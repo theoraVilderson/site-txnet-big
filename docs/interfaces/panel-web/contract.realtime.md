@@ -73,7 +73,10 @@ result simply stops arriving, on a screen showing no error.
 marker every 60s and closes with `4401` when it is gone. The client stops for
 good and calls `onSessionLost`, which is the page's own no-session redirect.
 Reconnecting instead asks the same question forever and turns one revocation
-into a loop. **`4403` stops it too** — the tenant was terminated (F-018-r) — and
+into a loop. **Except a rotation:** an access change rotates the token (AC-1-r)
+and retires the old session, so `recoverSession` is asked first with the dead
+credential; only a *different* live one back reconnects (2026-10-14, a lost
+access notice). **`4403` stops it too** — the tenant was terminated (F-018-r) — and
 calls `onTenantClosed`, not `onSessionLost`: a reconnect would be refused `403`,
 which a browser sees as a drop, so backoff would run for as long as the tab.
 
@@ -180,7 +183,9 @@ here rather than asking again forever.
 `session:<id>` on its interval and closes with `4401` when the marker is gone,
 which is a sign-out that happened somewhere else — another tab, another device,
 an admin. The client stops for good on that code and this provider routes it to
-the login screen, the same answer `PanelSessionContext` gives a missing cookie.
+the login screen, the same answer `PanelSessionContext` gives a missing cookie —
+after `recoverSession` (`authApi.refreshCredential(dead)`) found no token that
+replaced it; one that did reconnects, and `onMissed` re-reads the bell.
 
 **`4403` is a closed service, not a sign-out (F-018-ac).** The provider sets
 `tenantClosed` (`usePanelTenantClosed()`), and `_components/TenantClosedBanner.tsx`
