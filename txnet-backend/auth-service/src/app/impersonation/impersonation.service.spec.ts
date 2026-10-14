@@ -402,7 +402,6 @@ describe('ImpersonationService.endImpersonation', () => {
     switchedFromUserId: 'admin-1',
     impersonationSessionId: 'imp-1',
     impersonationSession: { id: 'imp-1' },
-    user: { tenantId: 'tenant-1' },
     ...over,
   });
 
@@ -420,7 +419,7 @@ describe('ImpersonationService.endImpersonation', () => {
     );
 
     await expect(
-      h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4'),
+      h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4', 'tenant-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
@@ -429,7 +428,7 @@ describe('ImpersonationService.endImpersonation', () => {
     h.prisma.session.findUnique.mockResolvedValue(impersonated());
 
     await expect(
-      h.service.endImpersonation('session-imp', 'other-admin', '1.2.3.4'),
+      h.service.endImpersonation('session-imp', 'other-admin', '1.2.3.4', 'tenant-1'),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
     expect(h.sessions.drop).not.toHaveBeenCalled();
@@ -438,7 +437,7 @@ describe('ImpersonationService.endImpersonation', () => {
   it('revokes, closes and audits in one transaction, then drops the cache', async () => {
     h.prisma.session.findUnique.mockResolvedValue(impersonated());
 
-    await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4');
+    await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4', 'tenant-1');
 
     const tx = h.txClient;
     expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
@@ -465,10 +464,21 @@ describe('ImpersonationService.endImpersonation', () => {
     );
   });
 
+  // `user` is under RLS and the request is bound to the host's tenant, not
+  // the user's: an include read it as null and Prisma threw (500, 2026-10-14).
+  // The tenant comes from the impersonated token instead.
+  it('reads no user through the session, only the session', async () => {
+    h.prisma.session.findUnique.mockResolvedValue(impersonated());
+
+    await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4', 'tenant-1');
+
+    expect(h.prisma.session.findUnique.mock.calls[0][0].include).not.toHaveProperty('user');
+  });
+
   it('updates the session row exactly once', async () => {
     h.prisma.session.findUnique.mockResolvedValue(impersonated());
 
-    await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4');
+    await h.service.endImpersonation('session-imp', 'admin-1', '1.2.3.4', 'tenant-1');
 
     expect(h.txClient.session.update).toHaveBeenCalledTimes(1);
   });

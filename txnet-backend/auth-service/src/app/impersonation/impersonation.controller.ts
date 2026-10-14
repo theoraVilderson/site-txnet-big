@@ -69,6 +69,6 @@ export class ImpersonationController {
     const sessionId = req.user.sessionId;
     const adminId = req.user.impersonatedBy;
     if (!adminId) throw new ForbiddenException('Not impersonated');
-    return this.impersonationService.endImpersonation(sessionId, adminId, ip);
+    return this.impersonationService.endImpersonation(sessionId, adminId, ip, req.user.tenantId ?? null);
   }
 }

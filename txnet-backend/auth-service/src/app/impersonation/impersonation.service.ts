@@ -240,10 +240,11 @@ export class ImpersonationService {
     };
   }
 
-  async endImpersonation(sessionId: string, adminId: string, ip: string) {
+  /** `tenantId` is the impersonated token's: `user` is under RLS and the request is bound to the host's tenant. */
+  async endImpersonation(sessionId: string, adminId: string, ip: string, tenantId: string | null) {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
-      include: { impersonationSession: true, user: { select: { tenantId: true } } },
+      include: { impersonationSession: true },
     });
     if (!session || !session.isImpersonated) {
       throw new BadRequestException('Not an impersonation session');
@@ -253,7 +254,6 @@ export class ImpersonationService {
     }
 
     // In the target's tenant: the same log the start was written to.
-    const tenantId = session.user.tenantId;
     await this.inTenant(tenantId, async (tx) => {
       await tx.session.update({
         where: { id: sessionId },
