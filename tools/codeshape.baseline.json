@@ -383,7 +383,7 @@
   "site-pwa/src/app/(auth)/auth/_components/OrganicField.tsx [physical-side]": 1,
   "site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx [index-key]": 1,
   "site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx [lint-off]": 1,
-  "site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx [physical-side]": 11,
+  "site-pwa/src/app/(auth)/auth/_components/PasswordField.tsx [physical-side]": 7,
   "site-pwa/src/app/(auth)/auth/_components/PhoneField.tsx [physical-side]": 1,
   "site-pwa/src/app/(auth)/auth/_hooks/useCaptcha.ts [lint-off]": 1,
   "site-pwa/src/app/(panel)/_components/CommandPalette.tsx [lint-off]": 2,
