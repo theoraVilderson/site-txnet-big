@@ -40,7 +40,10 @@ describe("impersonating a reseller's user", () => {
     const prisma = {
       user: { findUnique: vi.fn(async ({ where }: { where: { id: string } }) => users[where.id] ?? null) },
       // The reseller, whose owner is someone else unless a test says so (ADR-0137).
-      tenant: { findUnique: vi.fn(async () => ({ ownerUserId: owner, tenantType: 'reseller' })) },
+      tenant: {
+        findUnique: vi.fn(async () => ({ ownerUserId: owner, tenantType: 'reseller' })),
+        findFirst: vi.fn(async ({ where }: { where: { ownerUserId: string } }) => (where.ownerUserId === owner ? { id: 'r-1' } : null)),
+      },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
     const sessionService = {

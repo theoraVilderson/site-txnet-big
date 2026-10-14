@@ -18,7 +18,7 @@ import { maskPhone } from '../../common/validation/phone.schema';
 import { SessionService } from '../session/session.service';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { AccessReader } from '../permissions/access.reader';
-import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, permissionsOf } from './authority';
+import { AuthorityTenant, TARGET_PERMISSIONS_SELECT, authorityOver, ownsATenant, permissionsOf } from './authority';
 import { matchers } from './user-search.service';
 
 /** Who is asking, as `AuthGuard` left them on the request. */
@@ -70,7 +70,7 @@ export type ResellerUserView = {
  * have an email — masked, because staff may remove an address but never need
  * to read one, and the list's "never an email" holds here too.
  */
-export type ResellerUserProfile = ResellerUserView & { emailMasked: string | null };
+export type ResellerUserProfile = ResellerUserView & { emailMasked: string | null; /** Never impersonated (ADR-0137). */ ownsTenant: boolean };
 
 /** What `PATCH …/users/:userId` may change; `email` only ever to `null` (identity invariant 15). */
 export type ResellerUserProfileEdit = { fullName?: string; username?: string; email?: null };
@@ -261,7 +261,7 @@ export class ResellerUsersService {
       const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null }, select: PROFILE_SELECT });
       if (!user) throw new ResellerUsersRefused('user_not_found', userId);
       await this.weigh(ctx, [user]);
-      return profileView(user, ctx);
+      return profileView(user, ctx, await ownsATenant(this.prisma, user.id));
     });
   }
 
@@ -346,7 +346,7 @@ export class ResellerUsersService {
         return updated;
       });
 
-      return profileView(row, ctx);
+      return profileView(row, ctx, await ownsATenant(this.prisma, row.id));
     });
   }
 
@@ -406,8 +406,8 @@ function view(row: UserRow, ctx: ViewContext): ResellerUserView {
   };
 }
 
-function profileView(row: ProfileRow, ctx: ViewContext): ResellerUserProfile {
-  return { ...view(row, ctx), emailMasked: row.email ? maskEmail(row.email) : null };
+function profileView(row: ProfileRow, ctx: ViewContext, ownsTenant: boolean): ResellerUserProfile {
+  return { ...view(row, ctx), emailMasked: row.email ? maskEmail(row.email) : null, ownsTenant };
 }
 
 /** `ali.rezaei@example.com` -> `a***@example.com`: enough to recognise, not to write to. */

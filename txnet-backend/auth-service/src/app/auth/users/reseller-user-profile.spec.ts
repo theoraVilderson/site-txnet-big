@@ -36,7 +36,7 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
     ...over,
   });
 
-  const build = (options: { user?: unknown; ownerHolds?: boolean; updateThrows?: unknown; as?: 'owner' | 'member' | 'staff' } = {}) => {
+  const build = (options: { user?: unknown; ownerHolds?: boolean; updateThrows?: unknown; as?: 'owner' | 'member' | 'staff'; ownsTenant?: boolean } = {}) => {
     const order: string[] = [];
     const written: { data?: Record<string, unknown>; audit?: Record<string, unknown> } = {};
     const user = {
@@ -61,7 +61,10 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
     const tx = { user, adminAuditLog, $executeRaw: vi.fn(async () => undefined) };
     const prisma = {
       ...tx,
-      tenant: { findUnique: vi.fn(async () => ({ ownerUserId: 'u-owner', tenantType: 'reseller' })) },
+      tenant: {
+        findUnique: vi.fn(async () => ({ ownerUserId: 'u-owner', tenantType: 'reseller' })),
+        findFirst: vi.fn(async () => (options.ownsTenant ? { id: 'their-reseller' } : null)),
+      },
       $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)),
     };
     const access = {
@@ -94,6 +97,13 @@ describe('ResellerUsersService — a user\'s profile (AC-1-a)', () => {
     expect(profile.emailMasked).toBe('a***@example.com');
     expect(JSON.stringify(profile)).not.toContain('ali.rezaei');
     expect(JSON.stringify(profile)).not.toContain('9121234567');
+  });
+
+  // ADR-0137: the owner of any tenant — a reseller's owner sits in the
+  // platform's tenant — is never impersonated, so the page is told.
+  it('says whether the person owns a tenant of their own', async () => {
+    expect((await build().service.profile(actor, reseller, 'u-1')).ownsTenant).toBe(false);
+    expect((await build({ ownsTenant: true }).service.profile(actor, reseller, 'u-1')).ownsTenant).toBe(true);
   });
 
   it('writes the changed fields under `staffWrite` and audits them before and after, to the reseller', async () => {

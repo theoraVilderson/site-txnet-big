@@ -62,6 +62,8 @@ describe("the button", () => {
     expect(mayImpersonate({ canAct: true, status: "active" }, me(["user.impersonate"]), true)).toBe(false);
     expect(mayImpersonate({ canAct: true, status: "suspended" }, me(["*"]), false)).toBe(false);
     expect(mayImpersonate({ canAct: true, status: "active" }, null, false)).toBe(false);
+    // ADR-0137: a reseller's owner sits in the platform's tenant, so `canAct` alone lets them through.
+    expect(mayImpersonate({ canAct: true, status: "active", ownsTenant: true }, me(["*"]), false)).toBe(false);
   });
 
   it("says what it does before it is pressed: a titled strip, its hint, one button", () => {

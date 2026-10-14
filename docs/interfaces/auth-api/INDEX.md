@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 19
+version: 20
 keywords: [access history endpoint, access log endpoint, ui preferences endpoint, display preferences endpoint, active sessions endpoint, terminate session endpoint, auth api, time zone endpoint, timezone endpoint, messenger endpoint, notice messenger endpoint, user groups endpoint, roles endpoint, role management endpoint, user search endpoint, handoff endpoint, reseller panel handoff, login endpoint, register endpoint, auth-service, captcha, bot check, human verification, otp channels endpoint, bot webhook, telegram webhook, bale webhook, forgot password endpoint, mini app session, webapp session, initdata]
 source:
   - txnet-backend/auth-service/src/main.ts
@@ -57,9 +57,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-14 | Contract v19 -> **v20** (additive, ADR-0137): the reseller user profile carries `ownsTenant`; impersonating the owner of any tenant is refused 403. [contract.reseller-users.md](contract.reseller-users.md). Consumers: panel-web (same change) |
 | 2026-10-14 | Contract v18 -> **v19** (additive, SA-1-c, ADR-0145): the two-factor switch, `POST /auth/accounts/switch/password` then `/switch/code`, and `needsBothFactors` on each `GET /auth/accounts` member. [contract.switch-scope.md](contract.switch-scope.md). Consumers: panel-web (same change) |
 | 2026-10-14 | Contract v17 -> **v18** (behaviour change, SA-1-b, ADR-0145): for the holder of `*` the password login always asks the code; a code alone and a handoff refuse `auth.ownerNeedsBothFactors`; a reset answers `signedOut:true` with no session. [contract.md](contract.md). Consumers: panel-web (reset goes to sign-in, same change), bot-app (already refused) |
 | 2026-10-14 | Contract v16 -> **v17** (additive, SA-1-a): `PUT …/users/:userId/role` refuses 409 `superadmin_limit` past `SUPERADMIN_MAX` holders of `*`. [contract.roles.md](contract.roles.md). Consumers: none (the panel has no role picker since GR-1-u) |
 | 2026-10-14 | Contract v54 -> **v55** (additive, GR-1-x): each audience group carries `userCount`, its live user members, for the panel's picker. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x, same change) |
-| 2026-10-14 | Contract v53 -> **v54** (additive, GR-1-w): the audience picker's list — `GET /auth/audience-groups` and by a reseller's path. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { holdsPermission } from '@txnet-backend/shared-core';
 
 /** Why the rule said no. `self` is rule 1, `owner` rule 2, `not_above` rule 4. */
@@ -50,6 +51,16 @@ function strictlyAbove(actor: readonly string[], target: readonly string[]): boo
   return (
     target.every((key) => holdsPermission(actor, key)) && actor.some((key) => !holdsPermission(target, key))
   );
+}
+
+/**
+ * Whether the person owns any live tenant (ADR-0137): the impersonation rule,
+ * not rule 2 above. A reseller's owner is a user of the platform's tenant, so
+ * `tenant.ownerUserId` of the tenant they sit in names someone else.
+ */
+export async function ownsATenant(db: Pick<Prisma.TransactionClient, 'tenant'>, userId: string): Promise<boolean> {
+  const owned = await db.tenant.findFirst({ where: { ownerUserId: userId, deletedAt: null }, select: { id: true } });
+  return owned !== null;
 }
 
 /** The Prisma `select` fragment that reads a user's keys from their role — the target's half of the rule. */

@@ -20,7 +20,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TokenService } from '../auth/token.service';
 import { SessionService } from '../auth/session/session.service';
 import { SessionStore } from '../auth/session/session.store';
-import { authorityOver } from '../auth/users/authority';
+import { authorityOver, ownsATenant } from '../auth/users/authority';
 import { AccessReader } from '../auth/permissions/access.reader';
 
 /**
@@ -165,6 +165,7 @@ export class ImpersonationService {
     const targetKeys = targetAccess.keys.filter((k) => !k.startsWith('self.'));
     if (
       holdsPermission(targetKeys, '*') ||
+      (await ownsATenant(this.prisma, target.id)) ||
       authorityOver(
         { userId: admin.id, permissions: adminAccess.keys, as: opts.authority.as },
         { userId: target.id, permissions: targetKeys },

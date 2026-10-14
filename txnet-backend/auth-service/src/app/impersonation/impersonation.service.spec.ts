@@ -48,7 +48,11 @@ function harness() {
   const prisma = {
     user: { findUnique: vi.fn() },
     // The admin's tenant: who owns it (ADR-0103 rules 2-3). Nobody here, unless a test says so.
-    tenant: { findUnique: vi.fn().mockResolvedValue({ ownerUserId: 'owner-0', tenantType: 'reseller' }) },
+    tenant: {
+      findUnique: vi.fn().mockResolvedValue({ ownerUserId: 'owner-0', tenantType: 'reseller' }),
+      // A tenant the target owns elsewhere (ADR-0137); none unless a test says so.
+      findFirst: vi.fn().mockResolvedValue(null),
+    },
     session: { findUnique: vi.fn() },
     $transaction: vi.fn(async (arg: unknown) =>
       typeof arg === 'function'
@@ -195,6 +199,22 @@ describe('ImpersonationService.startImpersonation — authority (AC-1-h)', () =>
     h.prisma.tenant.findUnique.mockResolvedValue({ ownerUserId: 'admin-1', tenantType: 'reseller' });
     actors(h, ROLES.superAdmin, ROLES.superAdmin);
     await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('ImpersonationService.startImpersonation — the owner of any tenant (ADR-0137)', () => {
+  // A reseller's owner is a user of the platform's tenant, so the owner of the
+  // tenant they sit in is someone else; owning `txnet` must refuse on its own.
+  it('refuses a target who owns a tenant elsewhere, and writes nothing', async () => {
+    const h = harness();
+    actors(h, ROLES.admin, ROLES.user);
+    h.prisma.tenant.findFirst.mockResolvedValue({ id: 'their-reseller' });
+
+    await expect(start(h)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(h.prisma.tenant.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { ownerUserId: 'target-1', deletedAt: null } }),
+    );
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 });
 

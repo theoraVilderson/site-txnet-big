@@ -22,14 +22,16 @@ const MIN_REASON = 10;
  * owner (ADR-0137), for yourself and for a peer holding as much. On top, the
  * key the route asks — `user.impersonate` on the caller's own tenant,
  * `platform.impersonate` on a reseller's user, whose consent the server checks
- * — and an active person, the only one a session can be started for.
+ * — and an active person, the only one a session can be started for. Never
+ * the owner of any tenant (ADR-0137): a reseller's owner sits in the
+ * platform's tenant, where `canAct` cannot see it.
  */
 export function mayImpersonate(
-  person: { canAct: boolean; status: string },
+  person: { canAct: boolean; status: string; ownsTenant?: boolean },
   me: Pick<Me, "permissions"> | null,
   reseller: boolean,
 ): boolean {
-  if (!me || !person.canAct || person.status !== "active") return false;
+  if (!me || !person.canAct || person.ownsTenant || person.status !== "active") return false;
   return holdsPermission(me.permissions, reseller ? "platform.impersonate" : "user.impersonate");
 }
 

@@ -61,7 +61,13 @@ export const resellerUsersApiPath = (tenantId: string) => `/auth/tenants/${encod
  * `staffWrite`: a suspended reseller is refused them.
  */
 /** One user as the admin's user page reads them (AC-1-a): the list's row, and whether they have an email — masked. */
-export type ResellerUserProfile = ResellerUser & { emailMasked: string | null; canAct: boolean; staff: boolean };
+export type ResellerUserProfile = ResellerUser & {
+  emailMasked: string | null;
+  canAct: boolean;
+  staff: boolean;
+  /** Owns a tenant of their own: never impersonated (ADR-0137). */
+  ownsTenant: boolean;
+};
 
 /** What the Profile tab may change (AC-1-a): name, username, and the email only removed — never written by staff. */
 export type ResellerUserProfileEdit = { fullName?: string; username?: string; email?: null };
