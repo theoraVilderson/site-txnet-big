@@ -1,7 +1,8 @@
 # The Postgres backup (OPS-1-b, ADR-0126, hosting/contract.md H3): main-db's
 # own image running pg-backup.sh — a full on Sunday, a differential the other
-# nights, 2 fulls kept. Included by ../docker-compose.main.yml with
-# `project_directory: .`, so relative paths resolve from dev-docker/.
+# nights, 2 fulls kept, and a restore drill every Sunday (OPS-1-c, H4).
+# Included by ../docker-compose.main.yml with `project_directory: .`, so
+# relative paths resolve from dev-docker/.
 #
 # The repository is the one main-db archives WAL into, chosen the same way
 # (PG_BACKUP_REPO_TYPE, see .env.example). Dev keeps it on this host, which
@@ -19,7 +20,9 @@ services:
         condition: service_healthy
     environment:
       - POSTGRES_USER=${MAIN_DB_USERNAME}
+      - POSTGRES_DB=${MAIN_DB_NAME}
       - PG_BACKUP_AT=${PG_BACKUP_AT:-01:00}
+      - PG_RESTORE_DRILL_AT=${PG_RESTORE_DRILL_AT:-06:00}
       - PG_BACKUP_REPO_TYPE=${PG_BACKUP_REPO_TYPE:-posix}
       - PG_BACKUP_S3_ENDPOINT=${PG_BACKUP_S3_ENDPOINT:-}
       - PG_BACKUP_S3_BUCKET=${PG_BACKUP_S3_BUCKET:-}
