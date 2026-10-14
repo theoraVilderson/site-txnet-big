@@ -4,7 +4,7 @@ import { ConfigStatus, DriverType, EvictOrphans, PanelGroupMemberRole, PanelRevi
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { drainConfigs, soleLineGrants } from '../traffic/group-drain';
 import { PrismaService } from '../prisma/prisma.service';
-import { claimingAddress } from './panel-address';
+import { claimingAddress, claimingPushAddress } from './panel-address';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -59,7 +59,7 @@ export class PanelLifecycleService {
     const where = { id: panelId, ...scope };
     const panel = await this.prisma.panel.findFirst({
       where,
-      select: { transport: true, driverType: true, reviewState: true, apiBaseUrl: true, clientBaseUrl: true, retiredAt: true },
+      select: { transport: true, driverType: true, reviewState: true, apiBaseUrl: true, clientBaseUrl: true, ipAddress: true, retiredAt: true },
     });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.retiredAt !== null) throw new SystemsRefused('panel_retired');
@@ -88,8 +88,10 @@ export class PanelLifecycleService {
     };
     // A new API address is one no other panel holds (F-027-cd); its own, re-spelled, is not a duplicate.
     const apiBaseUrl = input.apiBaseUrl !== undefined && input.apiBaseUrl !== panel.apiBaseUrl ? input.apiBaseUrl : undefined;
+    // So is a push panel's new IP (F-027-ff); a pull panel's IP feeds no allowlist.
+    const pushAddress = panel.transport === PanelTransport.push && input.ipAddress !== panel.ipAddress ? input.ipAddress : undefined;
     const { count } = await claimingAddress(this.all, scope, apiBaseUrl, panelId, () =>
-      this.all.panel.updateMany({ where: { ...where, retiredAt: null }, data }),
+      claimingPushAddress(this.all, scope, pushAddress, panelId, () => this.all.panel.updateMany({ where: { ...where, retiredAt: null }, data })),
     );
     if (count === 0) throw new SystemsRefused('panel_retired');
 
@@ -156,21 +158,26 @@ export class PanelLifecycleService {
   async restore(actor: SystemsActor, panelId: string) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: panelId, ...scope };
-    const { count } = await this.all.panel.updateMany({
-      where: { ...where, retiredAt: { not: null } },
-      data: {
-        retiredAt: null,
-        reviewState: PanelReviewState.pending,
-        connectionTestedAt: null,
-        connectionTestFault: null,
-        connectionTestDetail: null,
-        duplicateOfPanelId: null,
-      },
-    });
-    if (count === 0) {
-      const panel = await this.prisma.panel.findFirst({ where, select: { retiredAt: true } });
-      throw new SystemsRefused(panel ? 'panel_not_retired' : 'not_found');
-    }
+    const panel = await this.prisma.panel.findFirst({ where, select: { transport: true, ipAddress: true, retiredAt: true } });
+    if (!panel) throw new SystemsRefused('not_found');
+    if (panel.retiredAt === null) throw new SystemsRefused('panel_not_retired');
+    // An archived push panel holds no IP (F-027-ff): coming back, it claims it again.
+    const pushAddress = panel.transport === PanelTransport.push ? panel.ipAddress : null;
+    const { count } = await claimingPushAddress(this.all, scope, pushAddress, panelId, () =>
+      this.all.panel.updateMany({
+        where: { ...where, retiredAt: { not: null } },
+        data: {
+          retiredAt: null,
+          reviewState: PanelReviewState.pending,
+          connectionTestedAt: null,
+          connectionTestFault: null,
+          connectionTestDetail: null,
+          duplicateOfPanelId: null,
+        },
+      }),
+    );
+    // Restored by another request between the read and the write.
+    if (count === 0) throw new SystemsRefused('panel_not_retired');
     this.logger.log(`panel ${panelId} restored by ${actor.adminId}; re-tested on the next tick`);
     return { id: panelId, reviewState: PanelReviewState.pending };
   }

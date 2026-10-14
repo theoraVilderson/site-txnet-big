@@ -82,6 +82,12 @@ both re-submits, the panel edit, delete and restore, acknowledge, release, write
    `panel_api_address_key` over it settles a race and billing's look-up uses
    the same function (`systems/panel-address.ts`). Several panels on one host
    differ by port or path and stay allowed. `panel-address.spec.ts` pins it.
+4b. **A push panel's IP is registered once (F-027-ff, ADR-0130 decision 5).**
+   No two live push panels, of any owner, share an `ipAddress` — normalised
+   by `network.panel_push_address` as the RADIUS allowlist parses it (an
+   IPv4-mapped IPv6 address is its IPv4), held by `panel_push_address_key`.
+   Archived and pull panels hold none. Registering, editing or restoring onto
+   a held IP is 409 `panel_already_registered`, named as in 4a.
 
 `panel-registration.spec.ts` pins rules 1–3, the owner refusal and rules 17–19.
 

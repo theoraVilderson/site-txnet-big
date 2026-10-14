@@ -175,7 +175,8 @@ for it by name (`secret: radius_secret`, audited as `network:RadiusDirectory`)
 and has no way to ask for the login. An allowlist holding the login would
 verify against a value no NAS has, and drop every packet as forged.
 `PanelDirectory` rebuilds the list every `RADIUS_ALLOWLIST_REFRESH` (1 min)
-and keeps the old one if a refresh fails. An address two panels claim, or a
+and keeps the old one if a refresh fails. Two live push panels cannot share
+an address (`panel_push_address_key`, F-027-ff); one left unparseable, or a
 secret the vault will not answer (none stored is one), keeps that panel off
 the list. It is logged, never guessed.
 

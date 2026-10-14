@@ -22,7 +22,7 @@ its next tick.
 | `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `facts.panelId` when in scope (rule 2a) |
 | `DELETE /api/billing/systems/panels/:id` | `?orphans=pause\|refund` (optional; rule 6a) | `200 {id, outcome: 'deleted' \| 'archived' \| 'removing', groups?}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `GET /api/billing/systems/panels/:id/remove-preview` | — | `{groups, liveConfigs, soleLineGrants}`, summed over its groups (rule 6a) | 400; 403; 404 `not_found` |
-| `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` |
+| `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` / `panel_already_registered` |
 
 `SYSTEMS_ADMIN_WRITE` (30 per user per 15 minutes), as every systems write.
 
@@ -45,7 +45,8 @@ its next tick.
 2a. **A new API address is one no other panel holds** (F-027-cd): 409
    `panel_already_registered` naming the holder if in scope, nothing written —
    contract.systems.md rule 4a. The panel's own address, re-spelled, is not
-   a duplicate: the look-up leaves the panel out.
+   a duplicate: the look-up leaves the panel out. A push panel's new IP is
+   held the same way (F-027-ff, rule 4b there).
 3. **Everything else leaves the verdict alone.** A name, region, budget or a
    push panel's IP (read by the allowlist within a minute) changes no answer
    the test gave.
@@ -98,6 +99,8 @@ Decided with the user 2026-09-25, the catalog's rule for products (F-026-i).
 9. **Archived is final until restored.** An edit is 409 `panel_retired`;
    so is a second delete. `restore` clears `retiredAt` and sends the panel
    back to `pending` with its last test cleared — it is tested before it is
-   collected again.
+   collected again. An archived push panel holds no IP, so restoring one
+   whose IP a live push panel now holds is 409 `panel_already_registered`
+   (F-027-ff).
 
 `panel-retire.spec.ts` pins rules 6–9 and the scope; `group-drain.spec.ts` the archive of 6a.

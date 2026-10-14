@@ -3508,7 +3508,7 @@
       "inbound_not_found": "That inbound is not on this panel any more. Read the inbounds again.",
       "inbound_not_sellable": "That inbound cannot be sold: it is gone from the panel, or serves a protocol we do not sell.",
       "not_for_transport": "A push panel takes no API or link address, and cannot lose its NAS IP.",
-      "panel_already_registered": "Another panel is already registered at this API address. Edit or restore that panel instead of registering it again.",
+      "panel_already_registered": "Another panel already holds this address (an API address, or a push panel's IP). Edit or restore that panel, or give this one another address.",
       "not_for_driver": "Only a MikroTik User Manager router takes an .ovpn file.",
       "panel_in_group": "It is still in a panel group. Remove it from the group first — or drain it, if users have configs on it.",
       "panel_has_configs": "Users still have configs on this panel. Drain it from its group first.",
@@ -3706,7 +3706,7 @@
       "platform": "the platform default"
     },
     "refusalsNamed": {
-      "panel_already_registered": "This API address is already registered as “{{panel}}”. Edit or restore that panel instead of registering it again.",
+      "panel_already_registered": "This address (an API address, or a push panel's IP) is already held by “{{panel}}”. Edit or restore that panel, or give this one another address.",
       "inbound_assigned_elsewhere": "Inbound #{{inbound}} is already sold only by group “{{group}}”. Take it off that group's member first.",
       "inbound_has_configs": "Buyers of another group still have {{configs}} configs on inbound #{{inbound}}. Drain that group's member on this panel first, so they are moved."
     },

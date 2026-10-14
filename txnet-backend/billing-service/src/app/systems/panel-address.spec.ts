@@ -13,8 +13,14 @@
  *    look-up; the database's `panel_api_address_key` refuses the second, and
  *    that must answer the same refusal, not a 500.
  *
- * The normaliser itself is SQL (`network.panel_api_address`), shared by the
- * index and the look-up, so this spec sees only what the look-up answers.
+ * A push panel's `ipAddress` is registered once too (F-027-ff, ADR-0130
+ * decision 5): two push panels at one IP drop each other off the RADIUS
+ * allowlist, across tenants. Register, edit and restore are refused the same
+ * way; an archived panel holds no IP, so restoring it is where a clash shows.
+ *
+ * The normalisers themselves are SQL (`network.panel_api_address`,
+ * `network.panel_push_address`), each shared by its index and its look-up, so
+ * this spec sees only what the look-up answers.
  */
 import {
   CounterSemantics,
@@ -52,6 +58,8 @@ function harness(
   opts: {
     holders?: Array<typeof HOLDER_ROW | { id: string; name: string; ownershipType: string; tenantId: string } | undefined>;
     write?: () => void;
+    /** What the edited or restored panel reads as; a pull panel by default. */
+    panel?: Record<string, unknown>;
   } = {},
 ) {
   const lookups: unknown[][] = [];
@@ -68,7 +76,9 @@ function harness(
         reviewState: PanelReviewState.accepted,
         apiBaseUrl: 'https://fra.example.com:2053/panel',
         clientBaseUrl: null,
+        ipAddress: null,
         retiredAt: null,
+        ...opts.panel,
       }),
     },
   };
@@ -157,18 +167,6 @@ describe('a panel address is registered once (F-027-cd)', () => {
     expect(writes).toHaveLength(1);
   });
 
-  it('a push panel has no address to hold and is not looked up', async () => {
-    const { registration, lookups } = harness({ holders: [HOLDER_ROW] });
-    await registration.register(actor, {
-      ...registerInput(''),
-      apiBaseUrl: null,
-      transport: PanelTransport.push,
-      ipAddress: '10.0.0.1',
-      radiusSecret: 's',
-    });
-    expect(lookups).toEqual([]);
-  });
-
   it('the concurrent second registration, refused by the index, answers the same refusal', async () => {
     const { registration } = harness({
       holders: [undefined, HOLDER_ROW],
@@ -234,5 +232,83 @@ describe('a panel address is registered once (F-027-cd)', () => {
     const { lifecycle, lookups } = harness({ holders: [HOLDER_ROW] });
     await lifecycle.update(actor, PANEL, { name: 'de-fra-main' });
     expect(lookups).toEqual([]);
+  });
+});
+
+const PUSH_IP = '203.0.113.7';
+const registerPush = (ipAddress: string) => ({
+  ...registerInput(''),
+  apiBaseUrl: null,
+  transport: PanelTransport.push,
+  ipAddress,
+  radiusSecret: 's',
+});
+const pushPanel = (over: Record<string, unknown> = {}) => ({
+  transport: PanelTransport.push,
+  driverType: DriverType.mikrotik_user_manager,
+  apiBaseUrl: null,
+  ipAddress: PUSH_IP,
+  ...over,
+});
+
+describe("a push panel's ipAddress is registered once (F-027-ff)", () => {
+  it('registering an IP another push panel holds is refused, naming it, and nothing is written', async () => {
+    const { registration, writes, lookups } = harness({ holders: [HOLDER_ROW] });
+    const e = await refusal(registration.register(actor, registerPush(PUSH_IP)));
+    expect(e.reason).toBe('panel_already_registered');
+    expect(e.panel).toEqual(HOLDER);
+    expect(writes).toEqual([]);
+    expect(lookups[0]).toContain(PUSH_IP);
+  });
+
+  it('a free IP registers', async () => {
+    const { registration, writes, lookups } = harness();
+    await registration.register(actor, registerPush('203.0.113.8'));
+    expect(lookups).toHaveLength(1);
+    expect(writes).toHaveLength(1);
+  });
+
+  it('the concurrent second registration, refused by the index, answers the same refusal', async () => {
+    const { registration } = harness({
+      holders: [undefined, HOLDER_ROW],
+      write: () => {
+        throw duplicateKey();
+      },
+    });
+    expect((await refusal(registration.register(actor, registerPush(PUSH_IP)))).panel).toEqual(HOLDER);
+  });
+
+  it("a holder outside the actor's scope still refuses, but is not named", async () => {
+    const { registration } = harness({
+      holders: [{ id: '77777777-7777-4777-8777-777777777777', name: 'their-own', ownershipType: 'tenant', tenantId: RESELLER }],
+    });
+    expect((await refusal(registration.register(actor, registerPush(PUSH_IP)))).panel).toBeNull();
+  });
+
+  it('editing the IP onto another push panel is refused, and the panel is untouched', async () => {
+    const { lifecycle, writes, lookups } = harness({ holders: [HOLDER_ROW], panel: pushPanel() });
+    const e = await refusal(lifecycle.update(actor, PANEL, { ipAddress: '203.0.113.9' }));
+    expect(e.panel).toEqual(HOLDER);
+    expect(writes).toEqual([]);
+    expect(lookups[0]).toEqual(expect.arrayContaining(['203.0.113.9', PANEL]));
+  });
+
+  it('an edit that keeps its own IP is not looked up', async () => {
+    const { lifecycle, lookups } = harness({ holders: [HOLDER_ROW], panel: pushPanel() });
+    await lifecycle.update(actor, PANEL, { ipAddress: PUSH_IP, name: 'mt-1' });
+    expect(lookups).toEqual([]);
+  });
+
+  it('restoring an archived push panel whose IP another one now holds is refused, and it stays archived', async () => {
+    const { lifecycle, writes } = harness({ holders: [HOLDER_ROW], panel: pushPanel({ retiredAt: new Date('2026-10-01T00:00:00Z') }) });
+    expect((await refusal(lifecycle.restore(actor, PANEL))).panel).toEqual(HOLDER);
+    expect(writes).toEqual([]);
+  });
+
+  it('restoring a pull panel looks up no IP', async () => {
+    const { lifecycle, lookups, writes } = harness({ holders: [HOLDER_ROW], panel: { retiredAt: new Date('2026-10-01T00:00:00Z') } });
+    await lifecycle.restore(actor, PANEL);
+    expect(lookups).toEqual([]);
+    expect(writes).toHaveLength(1);
   });
 });
