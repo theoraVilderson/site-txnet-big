@@ -26,6 +26,10 @@ entry() {
 # Values are hosting H7's; a change there is a change here. server_reset_query
 # is empty because transaction mode never hands a session over (C-41), and the
 # two ignored startup parameters are the ones pgx and Prisma send.
+# default_transaction_read_only is tracked, not ignored: sub-service opens
+# every connection read-only (ADR-0082 (1)) and PgBouncer would refuse the
+# startup parameter; tracked, it is restored on each server connection that
+# client is given and on no other client's.
 cat > "$DIR/pgbouncer.ini" <<INI
 [databases]
 ${MAIN_DB_NAME} = host=main-db port=5432 dbname=${MAIN_DB_NAME}
@@ -45,6 +49,7 @@ max_prepared_statements = 200
 server_reset_query =
 ignore_startup_parameters = extra_float_digits,options
 server_idle_timeout = 300
+track_extra_parameters = IntervalStyle, default_transaction_read_only
 INI
 
 chown -R pgbouncer:pgbouncer "$DIR"

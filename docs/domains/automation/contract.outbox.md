@@ -92,7 +92,7 @@ with no schedule never becomes due. `prisma/seed.js` creates it (2026-09-14).
 decision 1). Migration `20260925000200_the_outbox_wakes_its_relay` puts a
 `FOR EACH STATEMENT` `AFTER INSERT` trigger on `outbox_event` that notifies
 `outbox_ready`; `OutboxRelayListener` (`worker-service/src/app/jobs/`) holds
-the `LISTEN` on `DATABASE_APP_URL` and runs the same `run()` when woken — an
+the `LISTEN` on `DATABASE_LISTEN_URL` (direct, H8) and runs the same `run()` when woken — an
 event is out about a second after its commit (16 ms on dev), not up to one
 `AUTOMATION_TICK_INTERVAL_MS`. At most one woken pass runs and one waits
 behind it; a burst folds into that one. A pass runs on every (re)connect,

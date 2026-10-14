@@ -67,7 +67,7 @@ func main() {
 	// The cache is used only while the listener is being told what changed.
 	listenCtx, stopListening := context.WithCancel(ctx)
 	defer stopListening()
-	listener := invalidate.New(cfg.DatabaseURL, cfg.ConnectTimeout, redis, prefix, cfg.RenderTTL, log)
+	listener := invalidate.New(cfg.DatabaseListenURL, cfg.ConnectTimeout, redis, prefix, cfg.RenderTTL, log)
 	go listener.Run(listenCtx)
 
 	mux := http.NewServeMux()

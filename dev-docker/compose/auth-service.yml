@@ -35,16 +35,22 @@ services:
       # service does not use it — it owns every table, and Row-Level
       # Security does not apply to a table's owner (F-066-m-a).
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # Pooled connections go through db-pool (PgBouncer, hosting H7/H8): the
+      # URL's pgbouncer=true turns Prisma's prepared statements off, and
+      # connection_limit=5 is this service's share of the H8 budget.
       # What the service actually connects with: a login role that owns
       # nothing and carries NOBYPASSRLS, so the policies bind. Created by
       # `./scripts/db-login-roles.sh`, which is a manual step on an
       # existing database — the service refuses to boot without it.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       # The second pool (F-066-m-b). Same database, different role: its policy
       # is `USING (true)`, so it answers the reads that resolve a tenant and
       # therefore cannot run inside one. A policy, not a bypass — this role
       # carries NOBYPASSRLS too.
-      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The permissions listener (LISTEN) is the app role direct to main-db:
+      # a LISTEN does not survive transaction pooling (hosting H8).
+      - DATABASE_LISTEN_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}
@@ -185,6 +191,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       locale-service:
         condition: service_healthy

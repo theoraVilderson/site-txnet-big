@@ -373,7 +373,7 @@
   "txnet-backend/tenant-service/src/app/limits/reseller-limits.service.ts": 552,
   "txnet-backend/tenant-service/src/app/subscription/tenant-subscription.service.ts": 516,
   "txnet-backend/worker-service/src/app/broker/broker.service.ts": 869,
-  "txnet-backend/worker-service/src/app/config/env.validation.ts": 536,
+  "txnet-backend/worker-service/src/app/config/env.validation.ts": 535,
   "txnet-backend/worker-service/src/app/currency/fx-source.ts": 513,
   "txnet-backend/worker-service/src/app/jobs/ai-suggestion-delivery.job.ts": 402
  },

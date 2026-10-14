@@ -46,6 +46,7 @@ const gated = {
 const env = {
   DATABASE_APP_URL: 'postgresql://app',
   DATABASE_CROSS_TENANT_URL: 'postgresql://cross',
+  DATABASE_LISTEN_URL: 'postgresql://listen',
   REDIS_URL: 'redis://redis:6379',
   DOMAIN_NAME: 'txnet.app',
   OBJECT_STORAGE_SIGNING_SECRET: 'a-secret-long-enough-for-hmac-0123456789',
@@ -87,7 +88,7 @@ describe('envSchema', () => {
     expect(envSchema.safeParse(env).success).toBe(true);
   });
 
-  it.each(['DATABASE_APP_URL', 'DATABASE_CROSS_TENANT_URL', 'REDIS_URL', 'DOMAIN_NAME'])('refuses to boot without %s', (name) => {
+  it.each(['DATABASE_APP_URL', 'DATABASE_CROSS_TENANT_URL', 'DATABASE_LISTEN_URL', 'REDIS_URL', 'DOMAIN_NAME'])('refuses to boot without %s', (name) => {
     const { [name as keyof typeof env]: _missing, ...rest } = env;
     expect(envSchema.safeParse(rest).success).toBe(false);
   });

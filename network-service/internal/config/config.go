@@ -69,14 +69,21 @@ type Config struct {
 	EgressDNSProbe string
 	// CollectorInstance names this process's heartbeat row.
 	CollectorInstance string
+
+	// DatabaseListenURL is the same role direct to main-db, for the wake
+	// listener alone: LISTEN does not survive db-pool's transaction mode
+	// (hosting H8). DatabaseURL goes through db-pool.
+	DatabaseListenURL string
 }
 
 // Load reads configuration from the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		Port:                 getEnv("NETWORK_SERVICE_PORT", "8090"),
-		DatabaseURL:          os.Getenv("DATABASE_CROSS_TENANT_URL"),
-		PoolMaxConns:         getEnvInt("NETWORK_DB_POOL_MAX_CONNS", 10),
+		Port:              getEnv("NETWORK_SERVICE_PORT", "8090"),
+		DatabaseURL:       os.Getenv("DATABASE_CROSS_TENANT_URL"),
+		DatabaseListenURL: os.Getenv("DATABASE_LISTEN_URL"),
+		// hosting H8's per-service budget behind db-pool.
+		PoolMaxConns:         getEnvInt("NETWORK_DB_POOL_MAX_CONNS", 5),
 		PoolMinConns:         getEnvInt("NETWORK_DB_POOL_MIN_CONNS", 2),
 		PoolMaxConnLife:      getEnvDuration("NETWORK_DB_POOL_MAX_CONN_LIFETIME", time.Hour),
 		PoolMaxConnIdle:      getEnvDuration("NETWORK_DB_POOL_MAX_CONN_IDLE", 30*time.Minute),
@@ -117,6 +124,10 @@ func Load() (Config, error) {
 func (c Config) validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_CROSS_TENANT_URL is required")
+	}
+	// No fallback to DatabaseURL: new configs would wait for the bulk pass.
+	if c.DatabaseListenURL == "" {
+		return fmt.Errorf("DATABASE_LISTEN_URL is required: the wake listener hears nothing through db-pool")
 	}
 	// A collector that cannot publish cannot move a cursor, so it cannot
 	// collect: every pass it read would be re-read for ever. That is a

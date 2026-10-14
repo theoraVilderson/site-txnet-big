@@ -142,12 +142,13 @@ import { ConfigService } from '@nestjs/config';
     KeyWindowSweep,
     PermissionNotificationsListener,
     // One `pg` client per connection attempt, as the running service's own
-    // least-privileged login (`DATABASE_APP_URL`) — LISTEN needs no grant, and
-    // the owner connection is never used by a running process (F-066-m-a).
+    // least-privileged login — LISTEN needs no grant, and the owner connection
+    // is never used by a running process (F-066-m-a). `DATABASE_LISTEN_URL` is
+    // that login direct to main-db: LISTEN does not survive db-pool (H8).
     {
       provide: PERMISSIONS_LISTEN_CLIENT,
       useFactory: (config: ConfigService) => () =>
-        new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+        new Client({ connectionString: config.get<string>('DATABASE_LISTEN_URL') }),
       inject: [ConfigService],
     },
     NoActiveSessionGuard,

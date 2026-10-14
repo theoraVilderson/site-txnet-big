@@ -11,12 +11,14 @@ import (
 const (
 	someDSN    = "postgresql://txnet_cross_tenant_user:pw@main-db:5432/txnet"
 	someBroker = "amqp://admin:pw@rabbitmq:5672"
+	someListen = "postgresql://txnet_cross_tenant_user:pw@main-db:5432/txnet"
 )
 
 func TestLoadRefusesAMissingCrossTenantURL(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", "")
 	t.Setenv("RABBITMQ_URL", someBroker)
 	setVault(t)
+	setListen(t)
 
 	_, err := Load()
 
@@ -32,6 +34,7 @@ func TestLoadDefaultsAreUsableWithoutAnyTuning(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
 	setVault(t)
+	setListen(t)
 
 	cfg, err := Load()
 
@@ -58,6 +61,7 @@ func TestLoadRefusesAMissingBrokerURL(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", "")
 	setVault(t)
+	setListen(t)
 
 	_, err := Load()
 
@@ -73,6 +77,7 @@ func TestLoadReadsOverrides(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
 	setVault(t)
+	setListen(t)
 	t.Setenv("NETWORK_SERVICE_PORT", "9999")
 	t.Setenv("NETWORK_DB_POOL_MAX_CONNS", "40")
 	t.Setenv("NETWORK_DB_CONNECT_TIMEOUT", "3s")
@@ -91,6 +96,7 @@ func TestLoadRefusesAnInvertedPool(t *testing.T) {
 	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 	t.Setenv("RABBITMQ_URL", someBroker)
 	setVault(t)
+	setListen(t)
 	t.Setenv("NETWORK_DB_POOL_MAX_CONNS", "2")
 	t.Setenv("NETWORK_DB_POOL_MIN_CONNS", "8")
 
@@ -107,12 +113,57 @@ func setVault(t *testing.T) {
 	t.Setenv("SERVICE_AUTH_TOKEN", "svc-token")
 }
 
+// setListen sets the direct connection the wake listener needs (H8), which
+// every test but the one about it takes as given.
+func setListen(t *testing.T) {
+	t.Helper()
+	t.Setenv("DATABASE_LISTEN_URL", someListen)
+}
+
+// LISTEN through db-pool's transaction mode loses every notification without
+// an error (hosting H8), so the listener's direct URL has no fallback to the
+// pooled one: a missing value is a refusal to start.
+func TestLoadRefusesAMissingListenURL(t *testing.T) {
+	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
+	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
+	t.Setenv("DATABASE_LISTEN_URL", "")
+
+	_, err := Load()
+
+	if err == nil {
+		t.Fatal("Load() = nil error, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "DATABASE_LISTEN_URL") {
+		t.Errorf("refusal %q does not name the variable", err)
+	}
+}
+
+// The default pool is hosting H8's budget, so a deploy that sets nothing
+// still fits Postgres's max_connections behind db-pool.
+func TestLoadDefaultPoolFitsTheConnectionBudget(t *testing.T) {
+	t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
+	t.Setenv("RABBITMQ_URL", someBroker)
+	setVault(t)
+	setListen(t)
+
+	cfg, err := Load()
+
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.PoolMaxConns != 5 || cfg.DatabaseListenURL != someListen {
+		t.Errorf("PoolMaxConns = %d, DatabaseListenURL = %q; want 5 and the listen URL", cfg.PoolMaxConns, cfg.DatabaseListenURL)
+	}
+}
+
 func TestLoadRefusesAMissingVaultRoute(t *testing.T) {
 	for _, unset := range []string{"TENANT_API_BASE_URL", "SERVICE_AUTH_TOKEN"} {
 		t.Run(unset, func(t *testing.T) {
 			t.Setenv("DATABASE_CROSS_TENANT_URL", someDSN)
 			t.Setenv("RABBITMQ_URL", someBroker)
 			setVault(t)
+			setListen(t)
 			t.Setenv(unset, "")
 			if _, err := Load(); err == nil || !strings.Contains(err.Error(), unset) {
 				t.Fatalf("Load() with %s unset = %v, want a refusal naming it", unset, err)

@@ -42,6 +42,11 @@ export const envSchema = z.object({
    */
   DATABASE_CROSS_TENANT_URL: z.string().min(1, 'DATABASE_CROSS_TENANT_URL is required'),
 
+  // The LISTEN connection's own URL, direct to main-db (hosting H8): LISTEN
+  // through db-pool's transaction mode hears nothing, without an error, so
+  // this never falls back to the pooled DATABASE_APP_URL.
+  DATABASE_LISTEN_URL: z.string().min(1, 'DATABASE_LISTEN_URL is required'),
+
   /**
    * The platform's base domain: a new reseller's host is `<slug>.$DOMAIN_NAME`
    * (F-018-y). Required — an empty one would issue a host nobody can reach.

@@ -63,6 +63,10 @@ export const envSchema = z.object({
   DATABASE_CROSS_TENANT_URL: z
     .string()
     .min(1, 'DATABASE_CROSS_TENANT_URL is required'),
+  // The permissions listener's own connection, direct to main-db (hosting
+  // H8): LISTEN through db-pool's transaction mode loses every notification
+  // without an error, so this never falls back to the pooled DATABASE_APP_URL.
+  DATABASE_LISTEN_URL: z.string().min(1, 'DATABASE_LISTEN_URL is required'),
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
   // Every Redis key this service writes is prefixed with
   // `${REDIS_KEY_NAMESPACE}:${REDIS_KEYSPACE_VERSION}:`.

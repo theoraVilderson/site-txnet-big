@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: draft
 version: 1
-updated: 2026-10-06
+updated: 2026-10-14
 ---
 
 # Contract — hosting
@@ -82,14 +82,14 @@ where the passphrase lives, and "test it on dev first". Template in
 `FROM ${DOCKER_REGISTRY}/alpine:latest`, `apk add --no-cache pgbouncer`. An
 entrypoint writes `pgbouncer.ini` and `userlist.txt` (plaintext passwords from
 `DB_APP_PASSWORD`, `DB_CROSS_TENANT_PASSWORD`, `DB_AI_READER_PASSWORD`; file
-mode 600, on tmpfs) then `exec pgbouncer`. Settings: `listen_port=6432`,
+mode 600, on tmpfs), then `su-exec` to its own user. Settings: `listen_port=6432`,
 `pool_mode=transaction`, `auth_type=scram-sha-256`, `max_client_conn=2000`,
 `default_pool_size=20`, `reserve_pool_size=5`, `reserve_pool_timeout=3`,
 `max_prepared_statements=200`, `server_reset_query=` (empty),
-`ignore_startup_parameters=extra_float_digits,options`,
-`server_idle_timeout=300`. One `[databases]` entry: `${MAIN_DB_NAME}` →
-`main-db:5432`. Healthcheck: `pg_isready -h 127.0.0.1 -p 6432`. Never
-published on the host.
+`ignore_startup_parameters=extra_float_digits,options`, `server_idle_timeout=300`,
+`track_extra_parameters=IntervalStyle,default_transaction_read_only` (sub-service's
+read-only startup parameter, ADR-0082 (1); refused otherwise). One `[databases]`
+entry: `${MAIN_DB_NAME}` → `main-db:5432`. Healthcheck `pg_isready -h 127.0.0.1 -p 6432`; no host port.
 
 **H8 — Connection budget** (Postgres `max_connections=100`):
 
@@ -102,11 +102,11 @@ Server side: 3 roles × (20 + 5 reserve) = 75 at most.
 
 | direct to `main-db:5432` | count |
 |---|---|
-| `LISTEN`: auth-service `PERMISSIONS_LISTEN_CLIENT` (`auth.module.ts`), network-service `WakeListener`, sub-service `invalidate.Listener` — each reads new `DATABASE_LISTEN_URL` | 3 |
+| `LISTEN`, each on `DATABASE_LISTEN_URL`: auth-service `PermissionNotificationsListener`, worker-service `OutboxRelayListener`, tenant-service `TenantStatusListener`, network-service `WakeListener`, sub-service `invalidate.Listener` (C-41 refuses a `pg` `Client` on a pooled URL) | 5 |
 | migrations (`DATABASE_URL`, owner), postgres-exporter, `pg-backup` (2) | 4 |
 | operator `psql` | ≤ 5 |
 
-Total ≤ 87 of 100. A new pooled role adds 25 and must update this table.
+Total ≤ 89 of 100. A new pooled role adds 25, a new `LISTEN` 1; each updates this table.
 
 **H9 — Pool safety, checked by a test.** `tools/conventions.py` gains a check
 that fails on `SET ` (session), `set_config(…, false)` and `pg_advisory_lock(`

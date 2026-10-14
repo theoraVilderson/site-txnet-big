@@ -33,7 +33,7 @@ services:
       - PUBLIC_HOST=currency-service
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       # The app role, NOBYPASSRLS; the `currency` schema has no row policy.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
       # `fx:rate:{code}`, the rate limiter and the tenant status key.
@@ -83,6 +83,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       locale-service:
         condition: service_healthy

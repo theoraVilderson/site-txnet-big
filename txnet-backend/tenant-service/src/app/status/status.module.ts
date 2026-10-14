@@ -14,7 +14,8 @@ import { TenantStatusService } from './tenant-status.service';
  * tenant between statuses: one writes `tenant.tenant`, the other carries the
  * result to `tenant:status:<id>` after commit, and every other service only
  * reads that key. Its own `pg.Client` is not the request pool — a `LISTEN`
- * connection is held open for the life of the process.
+ * connection is held open for the life of the process, direct to main-db
+ * through `DATABASE_LISTEN_URL`: a LISTEN does not survive db-pool (H8, C-41).
  *
  * `PrismaModule` and `RedisModule` are `@Global`, so neither is imported here.
  */
@@ -25,7 +26,7 @@ import { TenantStatusService } from './tenant-status.service';
     TenantStatusListener,
     {
       provide: TENANT_STATUS_LISTEN_CLIENT,
-      useFactory: (config: ConfigService) => () => new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+      useFactory: (config: ConfigService) => () => new Client({ connectionString: config.get<string>('DATABASE_LISTEN_URL') }),
       inject: [ConfigService],
     },
   ],

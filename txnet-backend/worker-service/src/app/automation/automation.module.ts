@@ -90,11 +90,12 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     DepositVerifyRetryJob,
     OutboxRelayJob,
     // Wakes the relay on `outbox_ready` (F-067-n). Its own `pg.Client`, held
-    // open for the life of the process — never the request pool.
+    // open for the life of the process — never the request pool, and direct
+    // to main-db: a LISTEN does not survive db-pool (hosting H8, C-41).
     OutboxRelayListener,
     {
       provide: OUTBOX_READY_LISTEN_CLIENT,
-      useFactory: (config: ConfigService) => () => new Client({ connectionString: config.get<string>('DATABASE_APP_URL') }),
+      useFactory: (config: ConfigService) => () => new Client({ connectionString: config.get<string>('DATABASE_LISTEN_URL') }),
       inject: [ConfigService],
     },
     FxRatePoller,

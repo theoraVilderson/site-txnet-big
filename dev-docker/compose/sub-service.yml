@@ -32,7 +32,13 @@ services:
       - ../sub-service:/src
     environment:
       - SUB_SERVICE_PORT=${SUB_SERVICE_PORT:-8091}
-      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}
+      # Through db-pool, capped at H8's 5. pgx takes no pgbouncer=true: an
+      # unknown URL parameter would be sent as a startup parameter and refused.
+      - SUB_DB_POOL_MAX_CONNS=5
+      # the invalidation listener (LISTEN) goes direct to main-db as the same role: a LISTEN
+      # does not survive transaction pooling (hosting H8).
+      - DATABASE_LISTEN_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # The render cache (F-113-c, ADR-0083). SUB_RENDER_TTL is also the
       # Profile-Update-Interval client apps are told, so whole hours only.
       - REDIS_URL=${REDIS_URL}
@@ -42,6 +48,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:${SUB_SERVICE_PORT:-8091}/health >/dev/null || exit 1"]

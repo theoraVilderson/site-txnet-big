@@ -36,10 +36,10 @@ services:
       - NODE_ENV=${NODE_ENV:-development}
       - APP_NAME=ai-service
       # The writer: `ai.*` and `engagement.attention_budget`, app role, NOBYPASSRLS.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       # The reader (ADR-0109 point 6): SELECT on named tables only, under
       # tenant RLS (`20261002000300_ai_reader_role`, scripts/db-login-roles.sh).
-      - DATABASE_AI_READER_URL=postgresql://txnet_ai_reader_user:${DB_AI_READER_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_AI_READER_URL=postgresql://txnet_ai_reader_user:${DB_AI_READER_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
       - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}
       - AUTOMATION_DLX=${AUTOMATION_DLX:-txnet.automation.dlx}
@@ -81,6 +81,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       locale-service:
         condition: service_healthy

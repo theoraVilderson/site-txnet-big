@@ -36,7 +36,13 @@ services:
       # The only connection this service has. There is no owner URL and no
       # per-tenant URL here on purpose: it has no use for either, and the
       # absence is what keeps the collector out of a tenant's scope.
-      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}
+      # Through db-pool, capped at H8's 5. pgx takes no pgbouncer=true: an
+      # unknown URL parameter would be sent as a startup parameter and refused.
+      - NETWORK_DB_POOL_MAX_CONNS=5
+      # the wake listener (LISTEN) goes direct to main-db as the same role: a LISTEN
+      # does not survive transaction pooling (hosting H8).
+      - DATABASE_LISTEN_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
       # Where a collection pass goes (F-027-m). One broker and one exchange for
       # the whole platform: the routing key `network.usage.delta` is what
       # separates this traffic, not a topology of its own. A collector that
@@ -51,6 +57,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

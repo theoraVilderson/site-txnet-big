@@ -41,11 +41,10 @@ export const envSchema = z.object({
    */
   DATABASE_APP_URL: z.string().min(1, 'DATABASE_APP_URL is required'),
 
-  /**
-   * `txnet_cross_tenant_user` (F-067-q): the tenant a notice's person lives in,
-   * read before any tenant scope can exist. See `CrossTenantPrismaService`.
-   */
+  /** `txnet_cross_tenant_user` (F-067-q): a notice's tenant, read before any scope exists (`CrossTenantPrismaService`). */
   DATABASE_CROSS_TENANT_URL: z.string().min(1, 'DATABASE_CROSS_TENANT_URL is required'),
+  /** The outbox wake's LISTEN, direct to main-db: through db-pool it hears nothing (hosting H8, C-41). */
+  DATABASE_LISTEN_URL: z.string().min(1, 'DATABASE_LISTEN_URL is required'),
 
   /**
    * The shared store behind the per-tenant concurrency cap (F-067-e, D-17).

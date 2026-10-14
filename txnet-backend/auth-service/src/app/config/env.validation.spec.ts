@@ -1,4 +1,4 @@
-import { validateEnv } from './env.validation';
+import { envSchema, validateEnv } from './env.validation';
 
 /**
  * Docker compose passes an unset variable through as `FOO=`, so the service
@@ -12,6 +12,7 @@ describe('validateEnv — an empty var is an unset var', () => {
     DATABASE_URL: 'postgresql://u:p@db:5432/d',
     DATABASE_APP_URL: 'postgresql://a:p@db:5432/d',
     DATABASE_CROSS_TENANT_URL: 'postgresql://x:p@db:5432/d',
+    DATABASE_LISTEN_URL: 'postgresql://a:p@main-db:5432/d',
     JWT_ACCESS_SECRET: 'a'.repeat(24),
     JWT_REFRESH_HASH_SECRET: 'b'.repeat(24),
     JWT_SECRET_CAPTCHA: 'c'.repeat(24),
@@ -53,6 +54,19 @@ describe('validateEnv — an empty var is an unset var', () => {
       expect(() => validateEnv({ ...base, LOGIN_PWD_RATE_LIMIT: '0' })).toThrow();
       expect(() => validateEnv({ ...base, LOGIN_PWD_RATE_LIMIT: 'many' })).toThrow();
     });
+  });
+
+  /**
+   * hosting H8: LISTEN through db-pool's transaction mode loses every
+   * notification without an error, so the permissions listener's direct URL
+   * is required and never falls back to the pooled `DATABASE_APP_URL`.
+   */
+  it('refuses to boot without DATABASE_LISTEN_URL, set or empty', () => {
+    const { DATABASE_LISTEN_URL: _listen, ...withoutListen } = base;
+    const refused = (raw: Record<string, unknown>) =>
+      envSchema.safeParse(raw).error?.issues.map((issue) => issue.path.join('.'));
+    expect(refused(withoutListen)).toEqual(['DATABASE_LISTEN_URL']);
+    expect(refused({ ...base, DATABASE_LISTEN_URL: '' })).toEqual(['DATABASE_LISTEN_URL']);
   });
 
   it('accepts DEFAULT_PHONE_COUNTRY="" as not set', () => {

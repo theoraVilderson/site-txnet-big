@@ -162,6 +162,7 @@ describe('FX sources for many currencies (F-116-i2)', () => {
     const env = validateEnv({
       DATABASE_APP_URL: 'postgresql://x',
       DATABASE_CROSS_TENANT_URL: 'postgresql://y',
+      DATABASE_LISTEN_URL: 'postgresql://z',
       RABBITMQ_URL: 'amqp://x',
       REDIS_URL: 'redis://x',
       FX_SOURCES_GBP: 'tgju-gbp,ecb-gbp',

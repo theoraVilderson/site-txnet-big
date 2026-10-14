@@ -36,11 +36,11 @@ services:
       # The NOBYPASSRLS login role, with no fallback to the owner (F-066-m-a).
       # `traffic_raw_log` carries a policy since F-027-ak and the tenant is
       # bound per delta, inside the transaction that writes the row.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       # The second pool, one reader: a delta names a config, and a pass over a
       # platform-owned panel carries no tenant at all, so the read that
       # resolves one cannot itself be scoped (ADR-0024).
-      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
       - AUTOMATION_EXCHANGE=${AUTOMATION_EXCHANGE:-txnet.automation}  # the one exchange (F-079)
       # Rejected passes go to the platform's dead-letter exchange (F-067-d);
@@ -65,6 +65,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

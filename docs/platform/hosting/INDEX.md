@@ -36,7 +36,8 @@ in every Nest service, the gate, the queue); OPS-1-a (H1/H2, WAL archived,
 shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f
 (H10, `main-db` `command:`, sizing in `operations/environments.md`); -d (H5,
 `database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed);
--g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs).
+-g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs);
+-i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev).
 `swarm/**` and `loki.yaml` join `source:` as their rows land.
 
 ## Changelog

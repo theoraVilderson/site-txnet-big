@@ -178,7 +178,7 @@ func main() {
 	converger.Confirm = waker.Confirm
 	go func() { _ = collector.Run(runCtx) }()
 	wakes := &collect.WakeListener{
-		DatabaseURL:    cfg.DatabaseURL,
+		DatabaseURL:    cfg.DatabaseListenURL,
 		ConnectTimeout: cfg.ConnectTimeout,
 		Waker:          waker,
 		Log:            log,

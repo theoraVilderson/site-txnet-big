@@ -39,8 +39,11 @@ services:
       # The same NOBYPASSRLS login role auth-service uses, and no fallback to
       # the owner connection (F-066-m-a). automation's three worker tables
       # carry no tenantId and no policy; the grants cover every schema.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
-      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
+      # This service's LISTEN (OutboxRelayListener) is the app role direct to main-db: a
+      # LISTEN does not survive transaction pooling (hosting H8).
+      - DATABASE_LISTEN_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672
       # The shared store behind the per-tenant run cap (F-067-e). Same
       # namespace and version as auth-service and bot-service: one bump
@@ -135,6 +138,8 @@ services:
       - "txnet.logging=true"
     depends_on:
       main-db:
+        condition: service_healthy
+      db-pool:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy

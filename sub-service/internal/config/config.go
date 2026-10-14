@@ -41,6 +41,11 @@ type Config struct {
 	// from changes, and `Profile-Update-Interval` (in hours) — so a whole
 	// number of hours.
 	RenderTTL time.Duration
+
+	// DatabaseListenURL is the same role direct to main-db, for the
+	// invalidation listener alone: LISTEN does not survive db-pool's
+	// transaction mode (hosting H8). DatabaseURL goes through db-pool.
+	DatabaseListenURL string
 }
 
 // Load reads configuration from the environment and validates it.
@@ -48,7 +53,9 @@ func Load() (Config, error) {
 	cfg := Config{
 		Port:              getEnv("SUB_SERVICE_PORT", "8091"),
 		DatabaseURL:       os.Getenv("DATABASE_CROSS_TENANT_URL"),
-		PoolMaxConns:      getEnvInt("SUB_DB_POOL_MAX_CONNS", 20),
+		DatabaseListenURL: os.Getenv("DATABASE_LISTEN_URL"),
+		// hosting H8's per-service budget behind db-pool.
+		PoolMaxConns:      getEnvInt("SUB_DB_POOL_MAX_CONNS", 5),
 		PoolMinConns:      getEnvInt("SUB_DB_POOL_MIN_CONNS", 2),
 		PoolMaxConnLife:   getEnvDuration("SUB_DB_POOL_MAX_CONN_LIFETIME", time.Hour),
 		PoolMaxConnIdle:   getEnvDuration("SUB_DB_POOL_MAX_CONN_IDLE", 30*time.Minute),
@@ -76,6 +83,10 @@ func Load() (Config, error) {
 func (c Config) validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("DATABASE_CROSS_TENANT_URL is required")
+	}
+	// No fallback to DatabaseURL: /sub would serve a stale render for an hour.
+	if c.DatabaseListenURL == "" {
+		return fmt.Errorf("DATABASE_LISTEN_URL is required: the invalidation listener hears nothing through db-pool")
 	}
 	if c.Port == "" {
 		return fmt.Errorf("SUB_SERVICE_PORT must not be empty")
