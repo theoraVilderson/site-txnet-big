@@ -1,4 +1,5 @@
 import type { CreateDiscountRuleBody, DiscountRule, DiscountRuleRejection, DiscountRuleStatus, UpdateDiscountRuleBody } from "@/lib/billing-api";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { COUPON_KEYS, dayToInstant, instantToDay } from "./coupon-form";
 import { platformToday } from "../../_lib/datetime";
 
@@ -24,7 +25,7 @@ export const RULE_USERS_MAX = 1000;
  * a reason added there does not compile here; the spec reads the service's own
  * union to catch the case where both sides forgot.
  */
-export const RULE_REFUSAL_KEYS: Record<DiscountRuleRejection, string> = RULE_KEYS.refusals;
+export const RULE_REFUSAL_KEYS: Record<DiscountRuleRejection, string> = { ...RULE_KEYS.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 /** The refusal's own sentence key, when billing named one this tab knows. */
 export function ruleRefusalKey(e: unknown): string | null {

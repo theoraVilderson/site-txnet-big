@@ -25,7 +25,7 @@ vi.mock("../_context/PanelSessionContext", () => ({
 }));
 vi.mock("@/lib/auth-api", () => ({
   authApi: { ownedResellers: vi.fn(async () => ({ resellers: [] })) },
-  resellerUserGroupsApi: { list: vi.fn(async () => []) },
+  audienceGroups: vi.fn(async () => []),
   resellerBotsApi: { list: vi.fn(async () => []) },
 }));
 // The other steps' screens are UX-2-d's (`setup-steps.test.tsx`).

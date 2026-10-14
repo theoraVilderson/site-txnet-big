@@ -1,5 +1,6 @@
-import type { Prisma } from '@prisma/client';
+import { type Prisma, UserGroupMemberType } from '@prisma/client';
 
+import { liveMembership } from '../http/key-holders';
 import { holdsPermission } from '../http/permissions';
 import { PERMISSION_REGISTRY } from '../http/permission-registry.generated';
 import { RESELLER_KEYS, type ResellerKey } from '../tenant/reseller-keys';
@@ -105,19 +106,25 @@ export async function refusedAudienceGroup(
 /** The most groups the picker lists (C-28): far above any tenant's real count, a bound on a runaway one. */
 export const AUDIENCE_GROUPS_MAX = 500;
 
-/** A group the picker offers: whether it gives keys is shown, never which. */
-export type AudienceGroupOption = { id: string; name: string; givesKeys: boolean };
+/** A group the picker offers: how many it reaches now, and whether it gives keys — never which. */
+export type AudienceGroupOption = { id: string; name: string; givesKeys: boolean; userCount: number };
 
 /**
  * The picker's half of ADR-0143 (4): the scope's groups this caller may pick,
  * by name. "Every reseller" is no audience of a person (GR-1-n) and is left out.
  */
-export async function pickableAudienceGroups(db: AudienceGroupReader, acting: readonly string[]): Promise<AudienceGroupOption[]> {
-  const rows: GroupWithKeys[] = await db.userGroup.findMany({ where: { allTenants: false }, select: WITH_KEYS, orderBy: { name: 'asc' }, take: AUDIENCE_GROUPS_MAX });
+export async function pickableAudienceGroups(db: AudienceGroupReader, acting: readonly string[], now = new Date()): Promise<AudienceGroupOption[]> {
+  const counted = { _count: { select: { members: { where: { ...liveMembership(now), memberType: UserGroupMemberType.user } } } } } as const;
+  const rows: (GroupWithKeys & { _count: { members: number } })[] = await db.userGroup.findMany({
+    where: { allTenants: false },
+    select: { ...WITH_KEYS, ...counted },
+    orderBy: { name: 'asc' },
+    take: AUDIENCE_GROUPS_MAX,
+  });
   return rows
     .filter((g) => !g.allTenants)
     .map((g) => ({ g, keys: keysOf(g) }))
     .filter(({ keys }) => mayPickAudienceGroup(acting, keys))
-    .map(({ g, keys }) => ({ id: g.id, name: g.name, givesKeys: keys.length > 0 }))
+    .map(({ g, keys }) => ({ id: g.id, name: g.name, givesKeys: keys.length > 0, userCount: g._count.members }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

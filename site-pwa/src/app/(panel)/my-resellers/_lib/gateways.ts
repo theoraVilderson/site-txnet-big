@@ -28,9 +28,10 @@ export type ResellerGatewayRefusal =
   | "missing_field"
   | "invalid_presets"
   | "invalid_callback"
-  | "group_not_found";
+  | "group_not_found"
+  | "audience_not_allowed";
 
-export const GATEWAY_REFUSAL_KEYS: Record<ResellerGatewayRefusal, string> = K.refusals;
+export const GATEWAY_REFUSAL_KEYS: Record<ResellerGatewayRefusal, string> = { ...K.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 /** The refusal's own sentence key, when the service named one this screen knows. */
 export function gatewayRefusalKey(e: unknown): string | null {

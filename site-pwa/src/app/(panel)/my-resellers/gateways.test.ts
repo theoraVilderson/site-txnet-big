@@ -28,6 +28,7 @@ import { stepHref } from "./_lib/onboarding";
  */
 const REPO = join(__dirname, "../../../../..");
 const CONTROLLER = "txnet-backend/billing-service/src/app/payment/gateway-admin/reseller-gateway.controller.ts";
+const AMBIENT_CONTROLLER = "txnet-backend/billing-service/src/app/payment/gateway-admin/gateway-admin.controller.ts";
 
 describe("the route the screen calls", () => {
   it("names the reseller in the path, never the session's tenant", () => {
@@ -66,8 +67,10 @@ describe("what a write may carry", () => {
 describe("what the reseller's gateway routes can refuse", () => {
   it("has a sentence for every reason, both doors' included", () => {
     const map = /const STATUS: Record<ResellerGatewayRejection, [^>]*> = \{([\s\S]*?)\n\};/.exec(readFileSync(join(REPO, CONTROLLER), "utf8"));
-    if (!map) throw new Error("the controller no longer maps every reason to a status — this test is stale");
-    const reasons = [...map[1].matchAll(/^\s{2}([a-z_]+):/gm)].map((m) => m[1]);
+    // The door's own reasons, then the ambient controller's map it spreads (one home, GR-1-w).
+    const ambient = /GATEWAY_ADMIN_REFUSAL_STATUS: Record<GatewayAdminRejection, [^>]*> = \{([\s\S]*?)\n\};/.exec(readFileSync(join(REPO, AMBIENT_CONTROLLER), "utf8"));
+    if (!map || !ambient || !map[1].includes("...GATEWAY_ADMIN_REFUSAL_STATUS")) throw new Error("the controllers no longer map every reason to a status — this test is stale");
+    const reasons = [...`${map[1]}\n${ambient[1]}`.matchAll(/^\s{2}([a-z_]+):/gm)].map((m) => m[1]);
     expect(reasons.length).toBeGreaterThan(10);
     expect(Object.keys(GATEWAY_REFUSAL_KEYS).sort()).toEqual([...new Set(reasons)].sort());
   });

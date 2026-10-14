@@ -57,9 +57,9 @@ See [contract.md](contract.md) (HTTP API), [contract.roles.md](contract.roles.md
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-14 | Contract v54 -> **v55** (additive, GR-1-x): each audience group carries `userCount`, its live user members, for the panel's picker. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x, same change) |
 | 2026-10-14 | Contract v53 -> **v54** (additive, GR-1-w): the audience picker's list — `GET /auth/audience-groups` and by a reseller's path. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-x) |
 | 2026-10-14 | Contract v52 -> **v53** (additive, GR-1-u): one person's groups — `GET …/user-groups/people/:userId`, ambient and by a reseller's path; `mayChange` says whether the caller holds every key a group gives. [contract.user-groups.md](contract.user-groups.md). Consumers: panel-web (GR-1-u, same change) |
 | 2026-10-13 | Contract v51 -> **v52** (additive, F-030-d): a person's restrictions — `GET`/`PUT`/`DELETE …/users/:userId/restrictions[/:key]` behind `restriction.assign`. [contract.reseller-users.md](contract.reseller-users.md). Consumers: panel-web (F-030-f) |
 | 2026-10-13 | Contract v50 -> **v51** (additive, F-030-a): a key given for a window — `PUT …/keys/:key` takes `startsAt`/`endsAt`, three new refusals, the view carries them; `POST /internal/user-keys/windows`. [contract.roles.md](contract.roles.md). Consumers: panel-web (F-030-c), worker (`key_window`) |
-| 2026-10-09 | Contract v49 -> **v50** (additive, GR-1-e, ADR-0139 (4)): the platform's own group may hold a `platform.` key the writer holds; `key_not_grantable` now means `*`, or a platform key on any other group. [contract.user-groups.md](contract.user-groups.md) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->

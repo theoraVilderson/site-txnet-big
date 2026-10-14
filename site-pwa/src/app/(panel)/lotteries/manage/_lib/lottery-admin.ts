@@ -33,12 +33,13 @@ export type LotteryAdminRefusal =
   | "coupon_template_not_found"
   | "variant_not_found"
   | "group_not_found"
+  | "audience_not_allowed"
   | "lottery_not_found"
   | "not_a_draft"
   | "not_cancellable"
   | "not_drawn";
 
-export const REFUSAL_KEYS: Record<LotteryAdminRefusal, string> = K.refusals;
+export const REFUSAL_KEYS: Record<LotteryAdminRefusal, string> = { ...K.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 export function refusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;

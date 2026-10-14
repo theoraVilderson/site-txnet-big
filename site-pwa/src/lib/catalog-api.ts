@@ -43,7 +43,7 @@ export type ResetPolicy = (typeof RESET_POLICIES)[number];
 
 export type Quotas = Partial<Record<QuotaMetric, { limit: number; resetPolicy: ResetPolicy }>>;
 
-/** Every reason `/catalog` can refuse with (`catalog/contract.md` "HTTP surface"). */
+/** Every reason `/catalog` can refuse with (`catalog/contract.md` "HTTP surface"); a product's audience adds two (PT-1-b, ADR-0143). */
 export type CatalogRejection =
   | "not_platform_owner"
   | "tenant_not_found"
@@ -64,8 +64,8 @@ export type CatalogRejection =
   | "capability_not_found"
   | "capability_unknown"
   | "capability_in_use"
-  /** PT-1-b: a group for a product's audience that is not the product's tenant's. */
   | "group_not_found"
+  | "audience_not_allowed"
   | "traffic_quota_required"
   | "meter_not_found"
   | "rate_card_not_found"

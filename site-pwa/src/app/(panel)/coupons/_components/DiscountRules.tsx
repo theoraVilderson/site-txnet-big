@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BadgePercent, Pencil, Plus, Power, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { userGroupsApi, type Me } from "@/lib/auth-api";
+import type { Me } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { formatMoney } from "../../_lib/money";
@@ -15,6 +15,7 @@ import type { Choices } from "./ChoicePicker";
 import { DiscountRuleForm, type RuleChoices } from "./DiscountRuleForm";
 import { ListSkeleton } from "./ListSkeleton";
 import { Button } from "../../_components/kit";
+import { useAudienceGroups } from "../../_hooks/useAudienceGroups";
 
 const L = K.list;
 
@@ -22,7 +23,7 @@ const L = K.list;
 function useChoices(): RuleChoices {
   const [products, setProducts] = useState<Choices>(null);
   const [categories, setCategories] = useState<Choices>(null);
-  const [groups, setGroups] = useState<Choices>(null);
+  const groups = useAudienceGroups(null);
   useEffect(() => {
     let live = true;
     const load = (read: () => Promise<{ value: string; label: string }[]>, put: (c: Choices) => void) =>
@@ -32,7 +33,6 @@ function useChoices(): RuleChoices {
       );
     void load(async () => (await catalogApi.products()).filter((p) => p.isActive && !p.archivedAt).map((p) => ({ value: p.id, label: p.key })), setProducts);
     void load(async () => (await catalogApi.categories()).filter((c) => c.isActive && !c.archivedAt).map((c) => ({ value: c.id, label: c.key })), setCategories);
-    void load(async () => (await userGroupsApi.list()).map((g) => ({ value: g.id, label: g.name })), setGroups);
     return () => {
       live = false;
     };
@@ -91,6 +91,7 @@ export function DiscountRules({ me }: { me: Me | null }) {
   };
 
   const labelOf = (list: Choices, id: string) => (Array.isArray(list) ? list.find((c) => c.value === id)?.label : undefined) ?? id.slice(0, 8);
+  const groupName = (id: string) => (Array.isArray(choices.groups) ? choices.groups.find((g) => g.id === id)?.name : undefined) ?? id.slice(0, 8);
   const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
   const day = (instant: string) => formatInstant(instant, lang) ?? "";
 
@@ -98,7 +99,7 @@ export function DiscountRules({ me }: { me: Me | null }) {
   const where = (r: DiscountRule) =>
     r.productId ? t("common", L.product, { label: labelOf(choices.products, r.productId) }) : r.categoryId ? t("common", L.category, { label: labelOf(choices.categories, r.categoryId) }) : t("common", L.everything);
   const who = (r: DiscountRule) =>
-    r.forNamedUsers ? t("common", L.named, { count: String(r.userIds.length) }) : r.groupId ? t("common", L.group, { label: labelOf(choices.groups, r.groupId) }) : t("common", L.everyone);
+    r.forNamedUsers ? t("common", L.named, { count: String(r.userIds.length) }) : r.groupId ? t("common", L.group, { label: groupName(r.groupId) }) : t("common", L.everyone);
   const when = (r: DiscountRule) => (r.endsAt ? t("common", L.window, { from: day(r.startsAt), to: day(r.endsAt) }) : t("common", L.openEnded, { from: day(r.startsAt) }));
 
   return (

@@ -10,7 +10,6 @@ import { usePrizeSources } from "../../../_hooks/usePrizeSources";
 import { PrizeFields, PrizeRowHeader } from "../../../_components/prizes/PrizeFields";
 import { moveRow } from "../../../_lib/rows";
 import { formatMoney } from "../../../_lib/money";
-import { Select } from "../../../_components/kit/Select";
 import { formatDay, plainNumber } from "../../_lib/wheel";
 import {
   PRIZES_MAX,
@@ -28,6 +27,8 @@ import {
   type PrizeForm,
   type WheelForm,
 } from "../_lib/wheel-settings";
+import { AudiencePicker } from "../../../_components/AudiencePicker";
+import { useAudienceGroups } from "../../../_hooks/useAudienceGroups";
 import { Alert, Field, dayAfter, useMessage } from "./wheel-settings-ui";
 import { Button, Checkbox, Input } from "../../../_components/kit";
 
@@ -58,7 +59,8 @@ export function WheelEditor({
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const { templates, groups } = usePrizeSources();
+  const { templates } = usePrizeSources();
+  const groups = useAudienceGroups(null);
 
   const check = useMemo(() => validateWheelForm(form), [form]);
   const odds = oddsPercents(form.prizes.map((p) => p.weight));
@@ -130,22 +132,11 @@ export function WheelEditor({
             <Input dir="ltr" inputMode="decimal" value={form.minPaid} onChange={(e) => set("minPaid", e.target.value)} />
           </Field>
           {num("minOrders", t("common", K.fields.minOrders), t("common", K.fields.optional))}
-          <Field label={t("common", K.fields.userGroup)}>
-            {Array.isArray(groups) ? (
-              <Select
-                value={form.userGroupId}
-                onChange={(v) => set("userGroupId", v)}
-                options={[{ value: "", label: t("common", K.fields.everyone) }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-              />
-            ) : (
-              <Input
-                dir="ltr"
-                placeholder={t("common", K.fields.groupId)}
-                value={form.userGroupId}
-                onChange={(e) => set("userGroupId", e.target.value)}
-              />
-            )}
-          </Field>
+          <div className="md:col-span-3">
+            <Field label={t("common", K.fields.userGroup)}>
+              <AudiencePicker groups={groups} value={form.userGroupId ? [form.userGroupId] : []} onChange={(ids) => set("userGroupId", ids[0] ?? "")} />
+            </Field>
+          </div>
         </div>
         <div className="flex flex-wrap gap-4">
           {box("activeService", t("common", K.fields.activeService))}

@@ -22,14 +22,13 @@ import {
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
+import { ownsAudience, useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
 import { GatewayAudienceSection } from "./GatewayAudienceSection";
-import { ownsAudience } from "../_lib/audience";
 import { secretFields, takesStaticRate } from "../_lib/provider-fields";
 import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
 import { Toggle } from "../../_components/kit/Toggle";

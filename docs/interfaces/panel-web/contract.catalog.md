@@ -160,10 +160,10 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
 
 ## Who can buy a product (PT-1-b)
 
-The product sheet's "who can buy this product" section (`ProductAudienceSection.tsx`): every user, or chosen groups,
-with its own save (`PUT …/products/:id/audience`, catalog [contract.audience.md](../../domains/catalog/contract.audience.md)).
-Only on the surface's own tenant's products (`ownsAudience`); the groups are the surface's (`CatalogSurface.groups`).
-"Groups" with none ticked does not save — that is switching the product off. The list marks a limited product.
+The product sheet's "who can buy this product" section (`ProductAudienceSection.tsx`): the shared audience
+section and picker ([contract.gateway-audience.md](contract.gateway-audience.md), GR-1-x), saved on
+`PUT …/products/:id/audience` (catalog [contract.audience.md](../../domains/catalog/contract.audience.md)).
+Only on the surface's own tenant's products (`ownsAudience`). The list marks a limited product.
 
 ## Capabilities by name (F-114-f-b, ADR-0086)
 

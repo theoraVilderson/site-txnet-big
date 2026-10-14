@@ -442,14 +442,6 @@
     "audience": {
       "title": "Who sees this gateway",
       "subtitle": "You can show this gateway only to chosen groups of your users.",
-      "everyone": "All users",
-      "everyoneHint": "Every paying user sees this gateway.",
-      "groups": "Chosen groups only",
-      "groupsHint": "Only users in at least one of these groups see it.",
-      "noGroups": "You have no user groups yet. Create one on the User groups page first.",
-      "groupsFailed": "The groups could not be read. Open the page again.",
-      "members": "{{count}} users",
-      "pickOne": "Pick at least one group.",
       "save": "Save access",
       "saved": "Saved",
       "limited": "Groups only"
@@ -1756,14 +1748,6 @@
     "audience": {
       "title": "Who can buy this product",
       "subtitle": "You can sell this product only to chosen groups of your users. A service already sold stays with its owner if they leave the group.",
-      "everyone": "All users",
-      "everyoneHint": "Every user sees it in the shop and can buy it.",
-      "groups": "Chosen groups only",
-      "groupsHint": "Only users in at least one of these groups see it, buy it, or are given it by hand.",
-      "noGroups": "You have no user groups yet. Create one on the Groups page first.",
-      "groupsFailed": "The groups could not be read. Open the product again.",
-      "members": "{{count}} users",
-      "pickOne": "Pick at least one group.",
       "save": "Save access",
       "saved": "Saved",
       "limited": "Groups only"
@@ -4921,9 +4905,7 @@
       "optional": "Leave blank for none",
       "activeService": "Needs an active service",
       "phoneVerified": "Needs a verified phone number",
-      "userGroup": "Only this user group",
-      "everyone": "Every user",
-      "groupId": "User group ID"
+      "userGroup": "Only this user group"
     },
     "prizes": {
       "title": "Prizes, in the order they sit on the wheel",
@@ -5133,9 +5115,6 @@
     },
     "fields": {
       "group": "User group",
-      "groupId": "Group id",
-      "groupsLoading": "Loading groups…",
-      "pickGroup": "Choose a group",
       "title": "Title",
       "description": "Description",
       "optional": "Optional",
@@ -6133,5 +6112,17 @@
       "seat_joined": "Joined the team",
       "unknown": "Access changed"
     }
+  },
+  "audience": {
+    "label": "Who it is for",
+    "everyone": "Every user",
+    "everyoneHint": "Everyone, with no group.",
+    "members": "{{count}} users",
+    "givesAccess": "Gives access",
+    "kept": "A group outside your access",
+    "keptHint": "Already set. You may remove it, not pick it again.",
+    "none": "No group you may pick yet. Groups that give access need every key they give.",
+    "failed": "The groups could not be read. Open the page again.",
+    "notAllowed": "You may not aim at that group: it gives access you do not hold all of, or you may not see groups."
   }
 }

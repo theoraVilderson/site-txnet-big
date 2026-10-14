@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { authApi, resellerUserGroupsApi } from "@/lib/auth-api";
+import { authApi } from "@/lib/auth-api";
 import { gatewayAdminApi } from "@/lib/billing-api";
 import { GatewaysView } from "../../../../gateways/_components/GatewaysView";
 import type { GatewaySurface } from "../../../../gateways/_lib/surface";
@@ -47,7 +47,6 @@ export function ResellerGatewaysView({ id, embedded = false, onChanged }: { id: 
       api: gatewayAdminApi(id),
       refusalKey: gatewayRefusalKey,
       // Its own groups, by the path: the ambient list is the session tenant's (F-102-g-d).
-      groups: () => resellerUserGroupsApi.list(id),
       // Inside the setup wizard (UX-2-d) the step names whose it is.
       embedded,
       onChanged,

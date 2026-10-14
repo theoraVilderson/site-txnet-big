@@ -30,11 +30,12 @@ export type WheelSettingsRefusal =
   | "coupon_template_not_found"
   | "variant_not_found"
   | "group_not_found"
+  | "audience_not_allowed"
   | "version_not_found"
   | "version_taken"
   | "invalid_range";
 
-export const REFUSAL_KEYS: Record<WheelSettingsRefusal, string> = K.refusals;
+export const REFUSAL_KEYS: Record<WheelSettingsRefusal, string> = { ...K.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 export function refusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;

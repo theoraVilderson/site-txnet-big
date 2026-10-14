@@ -26,6 +26,8 @@ import {
   type LotteryPrizeForm,
 } from "../_lib/lottery-admin";
 import { useLotteryMessage } from "./lottery-admin-ui";
+import { AudiencePicker } from "../../../_components/AudiencePicker";
+import { useAudienceGroups } from "../../../_hooks/useAudienceGroups";
 import { Alert, Button, Checkbox, Input, Textarea } from "../../../_components/kit";
 
 /**
@@ -44,7 +46,8 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  const { templates, groups } = usePrizeSources();
+  const { templates } = usePrizeSources();
+  const groups = useAudienceGroups(null);
 
   const check = useMemo(() => validateLotteryForm(form, zone, new Date()), [form, zone]);
   const shown = (key: string | undefined) => (tried ? key : undefined);
@@ -79,19 +82,12 @@ export function LotteryEditor({ from, onCancel, onSaved }: { from: AdminLottery 
         <Field label={t("common", K.fields.title)} error={shown(check.fields.title)}>
           <Input dir="auto" value={form.title} onChange={(e) => set("title", e.target.value)} />
         </Field>
-        <Field label={t("common", K.fields.group)} error={shown(check.fields.userGroupId)}>
-          {groups === null ? (
-            <p className="py-2 text-xs text-text-secondary">{t("common", K.fields.groupsLoading)}</p>
-          ) : Array.isArray(groups) ? (
-            <Select
-              value={form.userGroupId}
-              onChange={(v) => set("userGroupId", v)}
-              options={[{ value: "", label: t("common", K.fields.pickGroup) }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-            />
-          ) : (
-            <Input dir="ltr" placeholder={t("common", K.fields.groupId)} value={form.userGroupId} onChange={(e) => set("userGroupId", e.target.value)} />
-          )}
-        </Field>
+        <div className="md:col-span-2">
+          {/* A lottery is always for one group: no "every user" (ADR-0143). */}
+          <Field label={t("common", K.fields.group)} error={shown(check.fields.userGroupId)}>
+            <AudiencePicker everyone={false} groups={groups} value={form.userGroupId ? [form.userGroupId] : []} onChange={(ids) => set("userGroupId", ids[0] ?? "")} />
+          </Field>
+        </div>
         <div className="md:col-span-2">
           <Field label={t("common", K.fields.description)} error={shown(check.fields.description)} hint={t("common", K.fields.optional)}>
             <Textarea className="min-h-20" dir="auto" value={form.description} onChange={(e) => set("description", e.target.value)} />

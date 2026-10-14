@@ -7,7 +7,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { userGroupsApi, type UserGroup } from "@/lib/auth-api";
 import { catalogApi, type CatalogAdminApi } from "@/lib/catalog-api";
 import { PANEL_CATALOG, PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
 import { pricingCurrencyQuery } from "./catalog-form";
@@ -44,8 +43,6 @@ export interface CatalogSurface {
   embedded?: boolean;
   /** After the catalog is re-read following a change: the wizard re-reads its checklist. */
   onChanged?: () => void;
-  /** The groups a product's audience is picked from (PT-1-b): this tenant's own. */
-  groups: () => Promise<UserGroup[]>;
 }
 
 /** The caller's own tenant, which is what the catalog page was before there was a second surface. */
@@ -54,7 +51,6 @@ export const AMBIENT_CATALOG: CatalogSurface = {
   api: catalogApi,
   catalogHref: PANEL_CATALOG,
   translationsHref: PANEL_CATALOG_TRANSLATIONS,
-  groups: () => userGroupsApi.list(),
 };
 
 const CatalogSurfaceContext = createContext<CatalogSurface>(AMBIENT_CATALOG);

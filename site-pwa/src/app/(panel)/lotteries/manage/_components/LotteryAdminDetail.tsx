@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { userGroupsApi } from "@/lib/auth-api";
 import { lotteryAdminApi, type AdminLottery, type LotteryEligibility, type LotteryWinners } from "@/lib/engagement-api";
 import { PANEL_LOTTERIES_MANAGE } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
@@ -14,6 +13,7 @@ import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Field } from "../../../catalog/_components/catalog-ui";
 import { passedOnKeyOf } from "../../_lib/lotteries";
 import { LOTTERY_ADMIN_KEYS as K, REASON_MAX, actionsFor, canManageLotteries, excludedCountKeyOf } from "../_lib/lottery-admin";
+import { useAudienceGroups } from "../../../_hooks/useAudienceGroups";
 import { LotteryEditor } from "./LotteryEditor";
 import { StatusPill, useLotteryMessage } from "./lottery-admin-ui";
 import { PageHeader } from "../../../_components/kit/PageHeader";
@@ -39,7 +39,6 @@ export function LotteryAdminDetail({ id }: { id: string }) {
   const [error, setError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
-  const [groupName, setGroupName] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState<Confirming>(null);
   const [reason, setReason] = useState("");
@@ -65,18 +64,9 @@ export function LotteryAdminDetail({ id }: { id: string }) {
     };
   }, [allowed, id, asked]);
 
-  // The group's name; without `user_group.manage` the id is shown.
-  useEffect(() => {
-    if (!lottery) return;
-    let alive = true;
-    userGroupsApi.list().then(
-      (groups) => alive && setGroupName(groups.find((g) => g.id === lottery.userGroupId)?.name ?? null),
-      () => undefined,
-    );
-    return () => {
-      alive = false;
-    };
-  }, [lottery]);
+  // The group's name, when it is one this caller may pick (ADR-0143); the id otherwise.
+  const groups = useAudienceGroups(null);
+  const groupName = (lottery && Array.isArray(groups) ? groups.find((g) => g.id === lottery.userGroupId)?.name : undefined) ?? null;
 
   if (sessionLoading) return null;
   if (!allowed) {

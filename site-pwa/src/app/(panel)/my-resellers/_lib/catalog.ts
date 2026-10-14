@@ -1,4 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import type { CatalogRejection } from "@/lib/catalog-api";
 
 /** The screen's own strings as generated constants (C-06); the page itself keeps `common.catalog`. */
 export const RESELLER_CATALOG_KEYS = FrontendI18nKeys.common.resellerCatalog;
@@ -12,48 +13,9 @@ const K = RESELLER_CATALOG_KEYS;
  * `STATUS` map, so a reason added there has no sentence here until it is
  * written.
  */
-export type ResellerCatalogRefusal =
-  | "not_allowed"
-  | "reseller_not_found"
-  | "reseller_suspended"
-  | "reseller_terminated"
-  | "not_platform_owner"
-  | "tenant_not_found"
-  | "category_not_found"
-  | "product_not_found"
-  | "variant_not_found"
-  | "price_not_found"
-  | "key_taken"
-  | "sku_taken"
-  | "price_in_the_past"
-  | "panel_group_not_found"
-  | "text_key_invalid"
-  | "texts_unavailable"
-  | "lang_unknown"
-  | "source_text_missing"
-  | "category_cycle"
-  | "category_too_deep"
-  | "capability_not_found"
-  | "capability_unknown"
-  | "capability_in_use"
-  /** PT-1-b: a group for a product's audience that is not the product's tenant's. */
-  | "group_not_found"
-  | "traffic_quota_required"
-  | "meter_not_found"
-  | "rate_card_not_found"
-  | "rate_card_not_served"
-  /** F-503-a campaigns, F-505-a seasons. */
-  | "campaign_not_found"
-  | "campaign_overlaps"
-  | "campaign_started"
-  | "campaign_pending"
-  | "no_price_to_restore"
-  | "price_scheduled_in_campaign"
-  | "price_in_campaign"
-  | "season_not_found"
-  | "season_date_invalid";
+export type ResellerCatalogRefusal = "not_allowed" | "reseller_not_found" | "reseller_suspended" | "reseller_terminated" | CatalogRejection;
 
-export const CATALOG_REFUSAL_KEYS: Record<ResellerCatalogRefusal, string> = K.refusals;
+export const CATALOG_REFUSAL_KEYS: Record<ResellerCatalogRefusal, string> = { ...K.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 /** The refusal's own sentence key, when the service named one this screen knows. */
 export function catalogRefusalKey(e: unknown): string | null {

@@ -53,6 +53,7 @@ function readerOf(rows: Row[]): AudienceGroupReader {
     allTenants: r.allTenants,
     role: null,
     permissions: r.keys.map((key) => ({ permission: { key } })),
+    _count: { members: 3 },
   });
   const userGroup = {
     findMany: async (args: { where?: { id?: { in: string[] } } }) => {
@@ -91,10 +92,10 @@ describe('refusedAudienceGroup', () => {
 describe('pickableAudienceGroups', () => {
   it("lists only what the caller may pick, by name, never 'every reseller'", async () => {
     const db = readerOf([SUPPORT, VIP, EVERY_RESELLER]);
-    expect(await pickableAudienceGroups(db, [USER_GROUP_READ_KEY])).toEqual([{ id: 'g-vip', name: 'VIP', givesKeys: false }]);
+    expect(await pickableAudienceGroups(db, [USER_GROUP_READ_KEY])).toEqual([{ id: 'g-vip', name: 'VIP', givesKeys: false, userCount: 3 }]);
     expect(await pickableAudienceGroups(db, ['*'])).toEqual([
-      { id: 'g-support', name: 'Support', givesKeys: true },
-      { id: 'g-vip', name: 'VIP', givesKeys: false },
+      { id: 'g-support', name: 'Support', givesKeys: true, userCount: 3 },
+      { id: 'g-vip', name: 'VIP', givesKeys: false, userCount: 3 },
     ]);
   });
 });

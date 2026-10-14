@@ -24,6 +24,8 @@ import {
   type RuleFormErrors,
   type RuleTarget,
 } from "../_lib/discount-rules";
+import { AudiencePicker } from "../../_components/AudiencePicker";
+import type { AudienceGroups } from "../../_hooks/useAudienceGroups";
 import { ChoicePicker, type Choices } from "./ChoicePicker";
 import { Alert, Button, Input, Textarea, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -33,7 +35,8 @@ const F = K.form;
 export interface RuleChoices {
   products: Choices;
   categories: Choices;
-  groups: Choices;
+  /** Only the groups this caller may aim at (ADR-0143). */
+  groups: AudienceGroups;
 }
 
 /**
@@ -202,7 +205,7 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
       )}
       {form.audience === "group" && (
         <Field label={t("common", F.group)} error={errors.groupId} hint={t("common", F.groupHint)}>
-          <ChoicePicker id="rule-group" value={form.groupId} onChange={(v) => set("groupId", v)} choices={choices.groups} invalid={!!errors.groupId} />
+          <AudiencePicker everyone={false} groups={choices.groups} value={form.groupId ? [form.groupId] : []} onChange={(ids) => set("groupId", ids[0] ?? "")} />
         </Field>
       )}
 

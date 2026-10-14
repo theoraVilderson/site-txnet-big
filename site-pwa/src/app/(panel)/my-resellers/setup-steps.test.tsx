@@ -27,7 +27,7 @@ vi.mock("../_context/PanelSessionContext", () => ({
 }));
 vi.mock("@/lib/auth-api", () => ({
   authApi: { ownedResellers: vi.fn(async () => ({ resellers: [] })) },
-  resellerUserGroupsApi: { list: vi.fn(async () => []) },
+  audienceGroups: vi.fn(async () => []),
   resellerBotsApi: { list: vi.fn(async () => []), connect: vi.fn(), retire: vi.fn() },
 }));
 vi.mock("@/lib/tenant-api", () => ({

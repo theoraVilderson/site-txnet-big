@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { authApi, resellerUserGroupsApi } from "@/lib/auth-api";
+import { authApi } from "@/lib/auth-api";
 import { catalogAdminApi } from "@/lib/catalog-api";
 import { myResellerCatalogPath, myResellerCatalogTranslationsPath } from "@/lib/routes";
 import { CatalogSurfaceProvider, type CatalogSurface } from "../../../../catalog/_lib/surface";
@@ -61,7 +61,6 @@ export function ResellerCatalogView({
       translationsHref: myResellerCatalogTranslationsPath(id, self),
       refusalKey: catalogRefusalKey,
       // A reseller's product is sold to the reseller's groups, read by the path (F-102-g-d).
-      groups: () => resellerUserGroupsApi.list(id),
       // Inside the setup wizard (UX-2-d) the step names whose it is.
       embedded,
       onChanged,

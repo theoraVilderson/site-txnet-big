@@ -30,7 +30,9 @@ export type DiscountRuleRejection =
   | "one_target"
   | "named_needs_users"
   | "one_audience"
-  | "group_not_found";
+  | "group_not_found"
+  /** ADR-0143: a new group this caller may not pick. */
+  | "audience_not_allowed";
 
 /** What an admin sees at a glance; billing decides it (`statusOfRule`). */
 export type DiscountRuleStatus = "off" | "ended" | "scheduled" | "running";

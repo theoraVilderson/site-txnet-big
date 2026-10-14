@@ -46,13 +46,18 @@ export type PersonGroup = { id: string; name: string; member: boolean; expiresAt
 export const groupsApiPath = (tenantId: string | null) =>
   tenantId === null ? "/auth/user-groups" : `/auth/tenants/${encodeURIComponent(tenantId)}/user-groups`;
 
+/** A group the audience picker offers (GR-1-w, ADR-0143): who it reaches now, and whether it gives access. */
+export type AudienceGroup = { id: string; name: string; givesKeys: boolean; userCount: number };
+
 /**
- * A reseller's groups by the path (F-102-g-d): what its workspace's gateway
- * editor picks an audience from. Invariant 21 decides; read only.
+ * The groups this caller may aim a discount, gateway, product, lottery, wheel
+ * or campaign at — the server's own rule, so what is listed is what a save
+ * accepts. `null` the session's tenant, or a reseller by its path.
  */
-export const resellerUserGroupsApi = {
-  async list(tenantId: string) { return request<UserGroup[]>(`/auth/tenants/${encodeURIComponent(tenantId)}/user-groups`, { method: "GET" }); },
-};
+export function audienceGroups(tenantId: string | null): Promise<AudienceGroup[]> {
+  const path = tenantId === null ? "/auth/audience-groups" : `/auth/tenants/${encodeURIComponent(tenantId)}/audience-groups`;
+  return request<AudienceGroup[]>(path, { method: "GET" });
+}
 
 /** The `POST …/members/changes` body (GR-1-i): one save of a group's members. */
 export type MemberChangesBody = {

@@ -42,41 +42,7 @@ export const CATALOG_MANAGE = "catalog.manage";
  * over the union, so a reason added there does not compile here;
  * `catalog.test.ts` reads the service's own union for when both sides forgot.
  */
-export const REFUSAL_KEYS: Record<CatalogRejection, string> = {
-  not_platform_owner: CATALOG_KEYS.refusals.not_platform_owner,
-  tenant_not_found: CATALOG_KEYS.refusals.tenant_not_found,
-  category_not_found: CATALOG_KEYS.refusals.category_not_found,
-  product_not_found: CATALOG_KEYS.refusals.product_not_found,
-  variant_not_found: CATALOG_KEYS.refusals.variant_not_found,
-  price_not_found: CATALOG_KEYS.refusals.price_not_found,
-  key_taken: CATALOG_KEYS.refusals.key_taken,
-  sku_taken: CATALOG_KEYS.refusals.sku_taken,
-  price_in_the_past: CATALOG_KEYS.refusals.price_in_the_past,
-  panel_group_not_found: CATALOG_KEYS.refusals.panel_group_not_found,
-  text_key_invalid: CATALOG_KEYS.refusals.text_key_invalid,
-  texts_unavailable: CATALOG_KEYS.refusals.texts_unavailable,
-  lang_unknown: CATALOG_KEYS.refusals.lang_unknown,
-  source_text_missing: CATALOG_KEYS.refusals.source_text_missing,
-  category_cycle: CATALOG_KEYS.refusals.category_cycle,
-  category_too_deep: CATALOG_KEYS.refusals.category_too_deep,
-  capability_not_found: CATALOG_KEYS.refusals.capability_not_found,
-  capability_unknown: CATALOG_KEYS.refusals.capability_unknown,
-  capability_in_use: CATALOG_KEYS.refusals.capability_in_use,
-  group_not_found: CATALOG_KEYS.refusals.group_not_found,
-  traffic_quota_required: CATALOG_KEYS.refusals.traffic_quota_required,
-  meter_not_found: CATALOG_KEYS.refusals.meter_not_found,
-  rate_card_not_found: CATALOG_KEYS.refusals.rate_card_not_found,
-  rate_card_not_served: CATALOG_KEYS.refusals.rate_card_not_served,
-  campaign_not_found: CATALOG_KEYS.refusals.campaign_not_found,
-  campaign_overlaps: CATALOG_KEYS.refusals.campaign_overlaps,
-  campaign_started: CATALOG_KEYS.refusals.campaign_started,
-  campaign_pending: CATALOG_KEYS.refusals.campaign_pending,
-  no_price_to_restore: CATALOG_KEYS.refusals.no_price_to_restore,
-  price_scheduled_in_campaign: CATALOG_KEYS.refusals.price_scheduled_in_campaign,
-  price_in_campaign: CATALOG_KEYS.refusals.price_in_campaign,
-  season_not_found: CATALOG_KEYS.refusals.season_not_found,
-  season_date_invalid: CATALOG_KEYS.refusals.season_date_invalid,
-};
+export const REFUSAL_KEYS: Record<CatalogRejection, string> = { ...CATALOG_KEYS.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 
 /** The refusal's own sentence key, when billing named one this page knows. */
 export function refusalKey(e: unknown): string | null {
