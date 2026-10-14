@@ -85,7 +85,7 @@ describe('WheelReportService.report', () => {
     return new WheelReportService(prisma as never, () => AT);
   }
   const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
-  const actor = { adminId: ADMIN_A, tenantId: TENANT, ip: '203.0.113.9' };
+  const actor = { adminId: ADMIN_A, tenantId: TENANT, ip: '203.0.113.9', permissions: ['*'] };
 
   it('per tenant day: spins, refusals by reason, prizes given and nothing, cost against the cap', async () => {
     const [r] = await asTenant(() => build().report(actor, {}));

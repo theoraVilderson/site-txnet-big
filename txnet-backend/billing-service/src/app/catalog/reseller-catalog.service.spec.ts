@@ -25,7 +25,7 @@
  *    for a tenant.
  */
 import { TenantType } from '@prisma/client';
-import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
+import { ResellerAccess, TENANT_CEILING, TenantContext } from '@txnet-backend/shared-core';
 
 import type { CatalogActor } from './catalog-admin.service';
 import { ResellerCatalogRefused, ResellerCatalogService } from './reseller-catalog.service';
@@ -110,7 +110,8 @@ describe('a named reseller’s catalog', () => {
     expect(seen).toHaveLength(14);
     for (const call of seen) {
       // The reseller is the tenant of the work, and the caller only its author.
-      expect(call.actor).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, ip: '10.0.0.9' });
+      // The owner acts with the whole tenant ceiling (ADR-0143, `keysActingIn`).
+      expect(call.actor).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, ip: '10.0.0.9', permissions: TENANT_CEILING });
       // …and the app pool's RLS is bound to it before the first query.
       expect(call.scope).toBe(RESELLER);
     }

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { LotteryEntryMode, LotteryStatus, Prisma, SpinPrizeType } from '@prisma/client';
-import { OutboxEventType, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, refusedAudienceGroup, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { LOTTERY_AGGREGATE } from './lottery-delivery.service';
@@ -33,6 +33,7 @@ export type LotteryAdminRejection =
   | 'coupon_template_not_found'
   | 'variant_not_found'
   | 'group_not_found'
+  | 'audience_not_allowed'
   | 'lottery_not_found'
   | 'not_a_draft'
   | 'not_cancellable'
@@ -49,7 +50,8 @@ export class LotteryAdminRefused extends Error {
   }
 }
 
-export type LotteryActor = { adminId: string; tenantId: string; ip: string };
+/** `permissions`: the caller's keys, which decide the groups it may aim at (ADR-0143). */
+export type LotteryActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
 
 export type LotteryPrizeInput = {
   label: string;
@@ -213,7 +215,7 @@ export class LotteryAdminService {
 
   create(actor: LotteryActor, input: LotteryDraftInput): Promise<LotteryView> {
     return tenantTransaction(this.prisma, async (tx) => {
-      const { fields, prizes } = await this.checked(tx, actor.tenantId, input);
+      const { fields, prizes } = await this.checked(tx, actor, input, null);
       const row = await tx.lottery.create({ data: { tenantId: actor.tenantId, ...fields, createdByAdminId: actor.adminId }, select: { id: true } });
       await this.writePrizes(tx, actor.tenantId, row.id, prizes);
       const view = await this.read(tx, actor.tenantId, row.id);
@@ -228,7 +230,7 @@ export class LotteryAdminService {
     return tenantTransaction(this.prisma, async (tx) => {
       const before = await this.read(tx, actor.tenantId, id);
       if (before.status !== LotteryStatus.draft) throw new LotteryAdminRefused('not_a_draft', before.status);
-      const { fields, prizes } = await this.checked(tx, actor.tenantId, input);
+      const { fields, prizes } = await this.checked(tx, actor, input, before.userGroupId);
       // Conditional on the status: a publish that won the race leaves this one nothing to write.
       const { count } = await tx.lottery.updateMany({ where: { id, tenantId: actor.tenantId, status: LotteryStatus.draft }, data: fields });
       if (count === 0) throw await this.why(tx, actor.tenantId, id, 'not_a_draft');
@@ -257,7 +259,7 @@ export class LotteryAdminService {
       if (before.status !== LotteryStatus.draft) throw new LotteryAdminRefused('not_a_draft', before.status);
       const now = this.now();
       this.checkCloseTime(before.closesAt, now);
-      await this.checkGroup(tx, before.userGroupId);
+      await this.checkGroup(tx, [], before.userGroupId, before.userGroupId); // weighed when the draft was written
       // The close-time bound rides in the write, so a draft edited after the read is judged as written.
       const { count } = await tx.lottery.updateMany({
         where: { id, tenantId: actor.tenantId, status: LotteryStatus.draft, closesAt: { gte: new Date(now.getTime() + LOTTERY_MIN_OPEN_MS) } },
@@ -320,13 +322,15 @@ export class LotteryAdminService {
     }
   }
 
-  private async checkGroup(tx: Prisma.TransactionClient, groupId: string): Promise<void> {
-    // RLS: another tenant's group is simply not found.
-    const g = await tx.userGroup.findUnique({ where: { id: groupId }, select: { id: true } });
-    if (!g) throw new LotteryAdminRefused('group_not_found', groupId);
+  /** The group is this tenant's (RLS: another's is not found) and, unless the draft had it, one the caller may pick (ADR-0143). */
+  private async checkGroup(tx: Prisma.TransactionClient, acting: readonly string[], groupId: string, kept: string | null): Promise<void> {
+    if (!(await tx.userGroup.findUnique({ where: { id: groupId }, select: { id: true } }))) throw new LotteryAdminRefused('group_not_found', groupId);
+    const refused = await refusedAudienceGroup(tx, acting, [groupId], { kept: kept ? [kept] : [] });
+    if (refused) throw new LotteryAdminRefused(refused.reason, refused.groupId);
   }
 
-  private async checked(tx: Prisma.TransactionClient, tenantId: string, input: LotteryDraftInput) {
+  private async checked(tx: Prisma.TransactionClient, actor: LotteryActor, input: LotteryDraftInput, keptGroup: string | null) {
+    const tenantId = actor.tenantId;
     const prizes = input.prizes.map((p) => {
       const value = decimal(p.prizeValue);
       // A lottery never draws "nothing": every place drawn is a prize.
@@ -339,7 +343,7 @@ export class LotteryAdminService {
     this.checkCloseTime(closesAt, this.now());
     const missing = await missingPrizeRelation(tx, tenantId, input.prizes);
     if (missing) throw new LotteryAdminRefused(missing.reason, missing.id);
-    await this.checkGroup(tx, input.userGroupId);
+    await this.checkGroup(tx, actor.permissions, input.userGroupId, keptGroup);
     return {
       fields: {
         userGroupId: input.userGroupId,

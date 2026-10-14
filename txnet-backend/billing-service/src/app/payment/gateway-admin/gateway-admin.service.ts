@@ -9,7 +9,7 @@ import {
   Prisma,
   RateRoundingMode,
 } from '@prisma/client';
-import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
+import { tenantTransaction, operatingCurrencyOf, platformCurrencyOf, isPlatformTenant, refusedAudienceGroup } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -38,7 +38,8 @@ export interface GatewaySecretWriter {
 export const GATEWAY_SECRET_WRITER = Symbol('GATEWAY_SECRET_WRITER');
 
 /** Who is acting, as the gate proved it. Never taken from a body. */
-export type GatewayActor = { adminId: string; tenantId: string; ip: string };
+/** `permissions`: the caller's keys in the tenant it acts in, which decide the groups it may aim at (ADR-0143). */
+export type GatewayActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
 export type GatewayRef = { source: GatewaySource; id: string };
 
 /** Every editable column, as it travels: decimals as strings (C-02), enums as their names. */
@@ -152,7 +153,8 @@ export type GatewayAdminRejection =
   | 'invalid_callback'
   | 'gateway_has_open_payments'
   /** F-102-g: a group named for a gateway's audience is not its owner's. */
-  | 'group_not_found';
+  | 'group_not_found'
+  | 'audience_not_allowed';
 
 /** A refusal. Its message names the rule and a row id, never a value. */
 export class GatewayAdminRefused extends Error {
@@ -464,9 +466,9 @@ export class GatewayAdminService {
    * replaced whole; `[]` = everyone again. The owner is the row's tenant — the
    * platform owner for a platform gateway — so the platform owner setting a
    * reseller's gateway picks that reseller's groups, never its own. A group
-   * that is not the owner's is `group_not_found` before anything is written;
-   * the composite key refuses it again in the database. One `gateway_update`
-   * audit row, in the owner's tenant.
+   * not the owner's is `group_not_found`, a new one the caller may not pick
+   * `audience_not_allowed` (ADR-0143), before anything is written; the composite
+   * key refuses a stranger's again. One `gateway_update` audit row, in the owner's tenant.
    */
   async setAudience(actor: GatewayActor, ref: GatewayRef, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
     const owner = await this.isOwner(actor);
@@ -474,12 +476,10 @@ export class GatewayAdminService {
     await this.within(owner, async (tx) => {
       const row = await this.load(tx, ref, actor, owner);
       const ownerTenantId = ref.source === 'platform' ? actor.tenantId : (row['tenantId'] as string);
-      if (ids.length > 0) {
-        const found = await tx.userGroup.findMany({ where: { tenantId: ownerTenantId, id: { in: ids } }, select: { id: true } });
-        if (found.length !== ids.length) throw new GatewayAdminRefused('group_not_found', ref.id);
-      }
-      const column = ref.source === 'platform' ? 'gatewayId' : 'tenantGatewayConfigId';
       const before = await this.audienceOf(tx, ref);
+      const refused = await refusedAudienceGroup(tx, actor.permissions, ids, { kept: before, tenantId: ownerTenantId });
+      if (refused) throw new GatewayAdminRefused(refused.reason, refused.groupId);
+      const column = ref.source === 'platform' ? 'gatewayId' : 'tenantGatewayConfigId';
       await tx.gatewayAudience.deleteMany({ where: { [column]: ref.id } });
       if (ids.length > 0) {
         await tx.gatewayAudience.createMany({ data: ids.map((groupId) => ({ tenantId: ownerTenantId, groupId, [column]: ref.id })) });

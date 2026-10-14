@@ -126,7 +126,7 @@ describe('bestDiscountRule', () => {
 
 describe('DiscountRuleAdminService', () => {
   const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
-  const actor = { adminId: ADMIN, tenantId: TENANT, ip: '203.0.113.9' };
+  const actor = { adminId: ADMIN, tenantId: TENANT, ip: '203.0.113.9', permissions: ['*'] };
 
   function build(o: { products?: string[]; categories?: string[]; users?: Array<{ id: string; tenantId: string }> } = {}) {
     const audits: Array<Record<string, unknown>> = [];
@@ -151,7 +151,12 @@ describe('DiscountRuleAdminService', () => {
         },
         findUnique: async () => ({ ...created[0], users: [] }),
       },
-      userGroup: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === GROUP ? { id: GROUP } : null) },
+      userGroup: {
+      findUnique: async ({ where }: { where: { id: string } }) => (where.id === GROUP ? { id: GROUP } : null),
+      // The audience rule's read (ADR-0143): GROUP gives no keys.
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.includes(GROUP) ? [{ id: GROUP, name: 'VIP', allTenants: false, role: null, permissions: [] }] : [],
+    },
       discountRuleUser: { createMany: async () => ({ count: 1 }), deleteMany: async () => ({ count: 0 }) },
       adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audits.push(data) },
     };

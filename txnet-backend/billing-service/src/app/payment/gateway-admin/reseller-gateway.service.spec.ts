@@ -21,7 +21,7 @@
  *    platform owner, so verification stays the platform owner's and a platform
  *    gateway is not found — the rules `gateway-admin.service.spec.ts` proves.
  */
-import { ResellerAccess, TenantContext } from '@txnet-backend/shared-core';
+import { ResellerAccess, TENANT_CEILING, TenantContext } from '@txnet-backend/shared-core';
 import { TenantType } from '@prisma/client';
 
 import type { GatewayActor } from './gateway-admin.service';
@@ -92,7 +92,8 @@ describe('a named reseller’s gateways', () => {
     expect(seen).toHaveLength(8);
     for (const call of seen) {
       // The reseller is the tenant of the work, and the caller only its author.
-      expect(call.actor).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, ip: '10.0.0.9' });
+      // The owner acts with the whole tenant ceiling (ADR-0143, `keysActingIn`).
+      expect(call.actor).toEqual({ adminId: OWNER_USER, tenantId: RESELLER, ip: '10.0.0.9', permissions: TENANT_CEILING });
       // …and the app pool's RLS is bound to it before the first query.
       expect(call.scope).toBe(RESELLER);
     }

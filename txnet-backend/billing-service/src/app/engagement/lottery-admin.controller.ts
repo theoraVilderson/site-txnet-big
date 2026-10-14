@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, Get, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -9,15 +9,17 @@ import { LotteryAdminReportService } from './lottery-admin-report.service';
 import { LotteryCancelBody, LotteryDraftBody, lotteryCancelSchema, lotteryDraftSchema } from './lottery-admin.schema';
 import { LotteryActor, LotteryAdminRefused, LotteryAdminRejection, LotteryAdminService, LotteryDraftInput } from './lottery-admin.service';
 import { ENGAGEMENT_ADMIN_READ, ENGAGEMENT_ADMIN_WRITE } from './wheel-admin.controller';
+import { refusalException } from '../request/refusal-exception';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const LOTTERY_ADMIN_REFUSAL_STATUS: Record<LotteryAdminRejection, 400 | 404 | 409> = {
+export const LOTTERY_ADMIN_REFUSAL_STATUS: Record<LotteryAdminRejection, 400 | 403 | 404 | 409> = {
   invalid_prize: 400,
   invalid_close_time: 400,
   cancel_reason_required: 400,
   coupon_template_not_found: 404,
   variant_not_found: 404,
   group_not_found: 404,
+  audience_not_allowed: 403,
   lottery_not_found: 404,
   not_a_draft: 409,
   not_cancellable: 409,
@@ -42,8 +44,8 @@ export class LotteryAdminController {
   ) {}
 
   private actor(req: Request, ip: string): LotteryActor {
-    const { userId, tenantId } = identityOf(req);
-    return { adminId: userId, tenantId, ip };
+    const { userId, tenantId, permissions } = identityOf(req);
+    return { adminId: userId, tenantId, ip, permissions };
   }
 
   @Get()
@@ -111,15 +113,7 @@ export class LotteryAdminController {
       return await run();
     } catch (e) {
       if (!(e instanceof LotteryAdminRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (LOTTERY_ADMIN_REFUSAL_STATUS[e.reason]) {
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        default:
-          throw new BadRequestException(payload);
-      }
+      throw refusalException(LOTTERY_ADMIN_REFUSAL_STATUS[e.reason], { reason: e.reason, message: e.message });
     }
   }
 }

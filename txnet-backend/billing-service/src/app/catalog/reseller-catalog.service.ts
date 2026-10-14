@@ -5,6 +5,7 @@ import {
   ResellerAccessRejection,
   ResellerActor,
   TenantCapabilityName,
+  keysActingIn,
 } from '@txnet-backend/shared-core';
 
 import {
@@ -289,7 +290,7 @@ export class ResellerCatalogService {
   ): Promise<T> {
     try {
       return await this.access.for('catalog.manage').run(actor, tenantId, capability, (reseller) =>
-        work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip }),
+        work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip, permissions: keysActingIn(reseller.as, actor.permissions) }),
       );
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerCatalogRefused(e.reason, tenantId);

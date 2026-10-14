@@ -24,13 +24,12 @@ import {
   ResellerAccessRejection,
   TenantCapabilityName,
   accessTraceOf,
-  holdsPermission,
+  keysActingIn,
 } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { AuthGuard } from '../../auth/auth.guard';
 import { RateLimit } from '../../auth/decorators/rate-limit.decorator';
-import { TENANT_CEILING } from '../../auth/roles/tenant-roles.service';
 import type { AuthClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { USER_GROUP_READ, USER_GROUP_WRITE, answeringRefusals } from './user-group.controller';
@@ -220,12 +219,7 @@ export class ResellerUserGroupsController {
    * gives the whole tenant ceiling, the platform's staff the part of it they hold.
    */
   private actorOf(user: AuthClaims, req: Request, admitted: AdmittedReseller): UserGroupActor {
-    const permissions =
-      admitted.as === 'member'
-        ? user.permissions
-        : admitted.as === 'owner'
-          ? TENANT_CEILING
-          : TENANT_CEILING.filter((key) => holdsPermission(user.permissions, key));
+    const permissions = keysActingIn(admitted.as, user.permissions);
     return { adminId: user.sub, tenantId: admitted.id, ip: req.ip ?? '0.0.0.0', permissions, as: admitted.as };
   }
 }

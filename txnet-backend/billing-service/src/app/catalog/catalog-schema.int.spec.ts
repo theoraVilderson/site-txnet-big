@@ -301,7 +301,7 @@ describe('capabilities are catalog rows (F-114-f-a, ADR-0086)', () => {
   it("lets a tenant's product carry the platform's and its own keys and refuses another tenant's, through the service's locking SQL", async () => {
     const texts = { defaultLanguage: () => 'fa', languages: () => ['fa'], publishSources: async () => undefined, clear: async () => undefined };
     const service = new CatalogAdminService(app, cross as unknown as never, texts as unknown as CatalogTextService);
-    const as = { adminId: ADMIN, tenantId: RESELLER_A, ip: '10.0.0.1' };
+    const as = { adminId: ADMIN, tenantId: RESELLER_A, ip: '10.0.0.1', permissions: ['*'] };
     const input = { categoryIds: [CATEGORY], name: { fa: 'x' }, fulfilmentKind: 'network_access' as const };
     const create = (key: string, featureKeys: string[]) => runWithTenant({ id: RESELLER_A }, () => service.createProduct(as, { ...input, key, featureKeys }));
 

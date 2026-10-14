@@ -48,7 +48,7 @@ const MERCHANT = 'zp-merchant-9f3c1e';
 const SECRET = 'sk_live_very_secret_value';
 const WEBHOOK = 'whsec_signing_secret_value';
 
-const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
+const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9', permissions: ['*'] });
 
 const FIELDS = {
   displayName: 'Zarinpal',
@@ -154,9 +154,9 @@ function build(seed: { payments?: Row[]; grants?: Row[]; blocked?: boolean; onDe
     // F-102-g: the groups each tenant has, and which gateway is offered to which.
     userGroup: {
       findMany: async ({ where }: { where: { tenantId: string; id: { in: string[] } } }) =>
-        [{ id: RESELLER_GROUP, tenantId: RESELLER }, { id: OTHER_GROUP, tenantId: OTHER }].filter(
-          (g) => g.tenantId === where.tenantId && where.id.in.includes(g.id),
-        ),
+        [{ id: RESELLER_GROUP, tenantId: RESELLER }, { id: OTHER_GROUP, tenantId: OTHER }]
+          .filter((g) => g.tenantId === where.tenantId && where.id.in.includes(g.id))
+          .map((g) => ({ ...g, name: g.id, allTenants: false, role: null, permissions: [] })),
     },
     gatewayAudience: (() => {
       const rows: Row[] = [];

@@ -100,6 +100,21 @@ their answer (identity `contract.access.md`). Set by
 | Seats and staff roles became groups, once (GR-1-g, ADR-0139 (6)): on a reseller, each role its live seats' holders held is a group with the role's keys, members with the seat's end; on the platform, each role but `user` and `*`, with platform keys; those people went back to `user`, each with the same keys. Left alone: `*`, unaccepted, ended or revoked seats, a role held with no seat. Seat rows kept | migration `20261009001000` (`roles-become-groups.int.spec.ts`) |
 | Tokens move after commit by trigger: `{kind:"group"}` on the role or keys, `{kind:"person"}` on a user member added or removed | migration `20261009000600` |
 
+## A group as an audience (GR-1-w, ADR-0143)
+
+A discount, gateway, product, lottery, wheel or campaign is aimed at every user
+or at one of its tenant's groups. Which group a caller may pick is one rule,
+`shared-core/.../governance/audience-groups.ts` (`audience-groups.spec.ts`):
+
+| Rule | Held by |
+|---|---|
+| "Every user" is no group: any manager of the feature picks it | each feature (its own key) |
+| A group that gives no keys needs `user_group.read`; one that gives keys needs every key it gives (`*` covers all) | `mayPickAudienceGroup` |
+| A reseller's owner acts with the whole tenant ceiling, the platform's staff with the part they hold, a member with their own keys | `keysActingIn` |
+| A write names a group not there (or "every reseller") `group_not_found`, one the caller may not pick 403 `audience_not_allowed`; a group the record already had is not weighed again | `refusedAudienceGroup`, in each feature's write |
+| The picker lists only what the caller may pick, by name, at most 500 | `pickableAudienceGroups`, `GET …/audience-groups` (auth-api) |
+| `user_group.read` came to every holder of `user_group.manage`, by the same source and window | migration `20261014000200` |
+
 ## Display preferences (UX-1-k)
 
 Code: `txnet-backend/auth-service/src/app/governance/ui-preferences/`. Wire

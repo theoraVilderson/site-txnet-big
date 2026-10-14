@@ -5,6 +5,7 @@ import {
   ResellerAccessRejection,
   ResellerActor,
   TenantCapabilityName,
+  keysActingIn,
 } from '@txnet-backend/shared-core';
 
 import type { GatewaySource } from '../gateway/gateway-merchant';
@@ -139,7 +140,7 @@ export class ResellerGatewayService {
   ): Promise<T> {
     try {
       return await this.access.for('gateway.manage').run(actor, tenantId, capability, (reseller) =>
-        work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip }),
+        work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip, permissions: keysActingIn(reseller.as, actor.permissions) }),
       );
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerGatewayRefused(e.reason, tenantId);

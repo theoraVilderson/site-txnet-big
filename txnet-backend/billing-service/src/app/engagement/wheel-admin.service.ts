@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, SpinPrizeType } from '@prisma/client';
-import { TenantContext, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, operatingCurrencyOf, refusedAudienceGroup, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { missingPrizeRelation, prizeShapeOk } from './prize-shape';
@@ -35,6 +35,7 @@ export type WheelAdminRejection =
   | 'coupon_template_not_found'
   | 'variant_not_found'
   | 'group_not_found'
+  | 'audience_not_allowed'
   | 'version_not_found'
   | 'version_taken';
 
@@ -48,7 +49,8 @@ export class WheelAdminRefused extends Error {
   }
 }
 
-export type WheelActor = { adminId: string; tenantId: string; ip: string };
+/** `permissions`: the caller's keys, which decide the groups it may aim at (ADR-0143). */
+export type WheelActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
 
 export type WheelPrizeInput = {
   label: string;
@@ -267,7 +269,7 @@ export class WheelAdminService {
       }
       const tooDear = prizes.find(({ cost }) => cost.gt(cap));
       if (tooDear) throw new WheelAdminRefused('prize_cost_over_cap', tooDear.p.label);
-      await this.checkRelations(tx, tenant.id, input);
+      await this.checkRelations(tx, tenant.id, input, actor.permissions);
 
       const today = tenantDayOf(this.now(), await tenantZoneOf(tx, tenant.id));
       const last = await tx.spinWheelConfig.findFirst({ where: { tenantId: tenant.id }, orderBy: { version: 'desc' }, select: { version: true } });
@@ -346,13 +348,18 @@ export class WheelAdminService {
     });
   }
 
-  /** A template, a variant and a group must be ones this tenant can see (RLS: another's is not found). */
-  private async checkRelations(tx: Tx, tenantId: string, input: WheelVersionInput): Promise<void> {
+  /**
+   * A template, a variant and a group must be ones this tenant can see (RLS:
+   * another's is not found); the group one the caller may pick (ADR-0143),
+   * unless the current version already aims at it.
+   */
+  private async checkRelations(tx: Tx, tenantId: string, input: WheelVersionInput, acting: readonly string[]): Promise<void> {
     const missing = await missingPrizeRelation(tx, tenantId, input.prizes);
     if (missing) throw new WheelAdminRefused(missing.reason, missing.id);
     if (input.userGroupId) {
-      const g = await tx.userGroup.findUnique({ where: { id: input.userGroupId }, select: { id: true } });
-      if (!g) throw new WheelAdminRefused('group_not_found', input.userGroupId);
+      const current = await tx.spinWheelConfig.findFirst({ where: { tenantId }, orderBy: { version: 'desc' }, select: { userGroupId: true } });
+      const refused = await refusedAudienceGroup(tx, acting, [input.userGroupId], { kept: current?.userGroupId ? [current.userGroupId] : [] });
+      if (refused) throw new WheelAdminRefused(refused.reason, refused.groupId);
     }
   }
 }

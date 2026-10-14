@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Ip,
+  ForbiddenException,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -32,7 +33,7 @@ import {
 import { CreateDiscountRuleBody, UpdateDiscountRuleBody, createDiscountRuleSchema, updateDiscountRuleSchema } from './discount-rule.schema';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const DISCOUNT_RULE_REFUSAL_STATUS: Record<DiscountRuleRejection, 400 | 404> = {
+export const DISCOUNT_RULE_REFUSAL_STATUS: Record<DiscountRuleRejection, 400 | 403 | 404> = {
   rule_not_found: 404,
   target_not_found: 404,
   user_out_of_scope: 400,
@@ -42,6 +43,7 @@ export const DISCOUNT_RULE_REFUSAL_STATUS: Record<DiscountRuleRejection, 400 | 4
   named_needs_users: 400,
   one_audience: 400,
   group_not_found: 404,
+  audience_not_allowed: 403,
 };
 
 // The coupon admin's budgets: the same admins, the same family of writes (ADR-0087).
@@ -68,8 +70,8 @@ export class DiscountRuleController {
   constructor(private readonly rules: DiscountRuleAdminService) {}
 
   private actor(req: Request, ip: string): DiscountRuleActor {
-    const { userId, tenantId } = identityOf(req);
-    return { adminId: userId, tenantId, ip };
+    const { userId, tenantId, permissions } = identityOf(req);
+    return { adminId: userId, tenantId, ip, permissions };
   }
 
   @Get()
@@ -105,6 +107,7 @@ export class DiscountRuleController {
     } catch (e) {
       if (!(e instanceof DiscountRuleRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
+      if (DISCOUNT_RULE_REFUSAL_STATUS[e.reason] === 403) throw new ForbiddenException(payload);
       if (DISCOUNT_RULE_REFUSAL_STATUS[e.reason] === 404) throw new NotFoundException(payload);
       throw new BadRequestException(payload);
     }

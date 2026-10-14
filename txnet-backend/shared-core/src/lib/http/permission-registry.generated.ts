@@ -49,6 +49,7 @@ export const PERMISSION_REGISTRY = [
   { permission: "user.read", area: "user", platformOnly: false },
   { permission: "user.write", area: "user", platformOnly: false },
   { permission: "user_group.manage", area: "user_group", platformOnly: false },
+  { permission: "user_group.read", area: "user_group", platformOnly: false },
   { permission: "wallet.manual_adjust", area: "wallet", platformOnly: false },
   { permission: "worker.manage", area: "worker", platformOnly: false },
 ] as const;

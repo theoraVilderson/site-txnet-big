@@ -12,7 +12,7 @@ import {
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, refusedAudienceGroup, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -78,7 +78,8 @@ import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
  * the newest card and make the variant unsellable (`grantMetersFromVariant`).
  */
 
-export type CatalogActor = { adminId: string; tenantId: string; ip: string };
+/** `permissions`: the caller's keys where it acts, deciding the groups it may aim at (ADR-0143); a job acts with none. */
+export type CatalogActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
 
 /** Why a catalog write or read was refused. Closed — the controller gives each a status. */
 export type CatalogAdminRejection =
@@ -103,6 +104,7 @@ export type CatalogAdminRejection =
   | 'capability_in_use'
   /** PT-1-b: a group named for a product's audience is not the product's tenant's. */
   | 'group_not_found'
+  | 'audience_not_allowed'
   /** A prepaid network variant with no `traffic_bytes` quota (F-111-p): 0 is unlimited, absent is refused. */
   | 'traffic_quota_required'
   /** F-118-m: a card names a meter the registry does not have. */
@@ -1094,7 +1096,8 @@ export class CatalogAdminService {
    * Who may buy a product (PT-1-b, ADR-0142 (4)): replaces the set of groups it
    * is sold to; `[]` = every user again. Each group must be the **product's**
    * tenant's — a group of anyone else is `group_not_found` before anything is
-   * written (the composite key refuses the same). Only new sales close: a Grant
+   * written (the composite key refuses the same) — and one the caller may pick,
+   * else `audience_not_allowed` (ADR-0143), unless the product already had it. Only new sales close: a Grant
    * already sold is untouched. Audited as `catalog_product_update`.
    */
   async setProductAudience(actor: CatalogActor, id: string, groupIds: string[]): Promise<{ userGroupIds: string[] }> {
@@ -1103,12 +1106,9 @@ export class CatalogAdminService {
     return this.within(owner, async (tx) => {
       const product = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
       const tenantId = product['tenantId'] as string;
-      if (ids.length > 0) {
-        const found = await tx.userGroup.findMany({ where: { id: { in: ids }, tenantId }, select: { id: true } });
-        const missing = ids.filter((g) => !found.some((f) => f.id === g));
-        if (missing.length > 0) throw new CatalogAdminRefused('group_not_found', missing.join(', '));
-      }
       const before = (await this.audienceOf(tx, [id])).get(id) ?? [];
+      const refused = await refusedAudienceGroup(tx, actor.permissions, ids, { kept: before, tenantId });
+      if (refused) throw new CatalogAdminRefused(refused.reason, refused.groupId);
       await tx.productAudience.deleteMany({ where: { productId: id } });
       if (ids.length > 0) await tx.productAudience.createMany({ data: ids.map((groupId) => ({ productId: id, tenantId, groupId })) });
       await this.audit(tx, actor, tenantId, 'catalog_product_update', 'product', id, { userGroupIds: before }, { userGroupIds: ids });
@@ -1543,7 +1543,7 @@ export class CatalogAdminService {
     let refused = 0;
     for (const c of due) {
       const season = seasons.find((s) => s.id === c.seasonId);
-      const actor: CatalogActor = { adminId: season?.createdByAdminId ?? '00000000-0000-0000-0000-000000000000', tenantId: c.tenantId, ip: '127.0.0.1' };
+      const actor: CatalogActor = { adminId: season?.createdByAdminId ?? '00000000-0000-0000-0000-000000000000', tenantId: c.tenantId, ip: '127.0.0.1', permissions: [] };
       try {
         await this.all.$transaction((tx) => this.writeCampaign(tx, actor, c));
         done += 1;

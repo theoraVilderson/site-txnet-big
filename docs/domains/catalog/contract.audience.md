@@ -22,7 +22,7 @@ F-102-g), `CatalogAdminService.setProductAudience`. Proof:
 
 | Route | Body | Answer | Refusals |
 |---|---|---|---|
-| `PUT /api/catalog/products/:id/audience`, and under `/tenants/:tenantId/` (ResellerAccess `staffWrite`) | `userGroupIds[]` (0-50 uuids), the set replaced whole; `[]` = every user | `{userGroupIds}` | `product_not_found` 404 (another tenant's, or the platform's to a reseller), `group_not_found` 400 (a group not the **product's** tenant's — nothing is written) |
+| `PUT /api/catalog/products/:id/audience`, and under `/tenants/:tenantId/` (ResellerAccess `staffWrite`) | `userGroupIds[]` (0-50 uuids), the set replaced whole; `[]` = every user | `{userGroupIds}` | `product_not_found` 404 (another tenant's, or the platform's to a reseller), `group_not_found` 400 (a group not the **product's** tenant's — nothing is written), `audience_not_allowed` 403 (a group added that the caller may not pick, governance "A group as an audience", ADR-0143) |
 
 `GET /products` and `GET /products/:id` answer `userGroupIds` beside each
 product. A write is audited `catalog_product_update`, `{userGroupIds}` old and

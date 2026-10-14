@@ -165,7 +165,7 @@ budgets. Bodies are `.strict()`; money is a decimal string (C-02).
 | Route | Answer | Refusals (`{reason, message}`) |
 |---|---|---|
 | `GET /` | every rule of the caller's tenant, newest first: `{id, name, kind, value, currencyCode, productId, categoryId, forNamedUsers, userIds, groupId, startsAt, endsAt, isActive, status, createdAt, updatedAt}`; `status` is `off` / `ended` / `scheduled` / `running` | — |
-| `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `groupId`, `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `one_audience` (named users and a group), `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived), `404 group_not_found` (not this tenant's group) |
+| `POST /` | `201` the rule. Body: `name` (≤ 80), `kind` (`percentage` / `fixed_amount`), `value`, `startsAt`; optional `productId`, `categoryId`, `forNamedUsers`, `userIds` (≤ 1000), `groupId`, `endsAt`, `isActive` | `400` `invalid_value`, `invalid_window`, `one_target`, `named_needs_users`, `one_audience` (named users and a group), `user_out_of_scope` (a user not of this tenant); `404 target_not_found` (a product or category this tenant cannot see, or archived), `404 group_not_found` (not this tenant's group), `403 audience_not_allowed` (a new group the caller may not pick, ADR-0143) |
 | `PATCH /:id` | the rule, any field of the body above; `userIds` replaces the list | the same, and `404 rule_not_found` |
 
 Every write leaves an `admin_audit_log` row: `discount_rule_create` /

@@ -105,8 +105,8 @@ export class CatalogAdminController {
   constructor(private readonly catalog: CatalogAdminService) {}
 
   private actor(req: Request, ip: string): CatalogActor {
-    const { userId, tenantId } = identityOf(req);
-    return { adminId: userId, tenantId, ip };
+    const { userId, tenantId, permissions } = identityOf(req);
+    return { adminId: userId, tenantId, ip, permissions };
   }
 
   /** F-026-p: the groups a variant may name — the platform's and the caller's own; every group, with its tenant, for the platform owner. */

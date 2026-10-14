@@ -350,6 +350,10 @@
       "manage": {
         "label": "Manage user groups",
         "description": "Create groups and move users between them."
+      },
+      "read": {
+        "label": "See user groups",
+        "description": "See the groups, to aim a discount, gateway, product, lottery, wheel or campaign at one. A group that gives access can be picked only by someone who holds all of it."
       }
     },
     "wallet": {

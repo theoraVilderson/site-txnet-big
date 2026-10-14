@@ -1,16 +1,10 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  HttpException,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { HttpException } from '@nestjs/common';
 
+import { type RefusalStatus, refusalException } from '../request/refusal-exception';
 import type { CatalogAdminRejection } from './catalog-admin.service';
 
 /** The statuses a catalog refusal answers with. */
-export type CatalogRefusalStatus = 400 | 403 | 404 | 409 | 503;
+export type CatalogRefusalStatus = RefusalStatus;
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
 export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, CatalogRefusalStatus> = {
@@ -34,6 +28,7 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, CatalogRefusa
   capability_unknown: 400,
   capability_in_use: 409,
   group_not_found: 400,
+  audience_not_allowed: 403,
   traffic_quota_required: 400,
   meter_not_found: 404,
   rate_card_not_found: 404,
@@ -51,17 +46,5 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, CatalogRefusa
 
 /** A catalog refusal as the exception its status answers with, on both doors (`CatalogAdminController`, `ResellerCatalogController`), so one client reads both. */
 export function catalogRefusal(status: CatalogRefusalStatus, reason: string, message: string): HttpException {
-  const payload = { reason, message };
-  switch (status) {
-    case 403:
-      return new ForbiddenException(payload);
-    case 404:
-      return new NotFoundException(payload);
-    case 409:
-      return new ConflictException(payload);
-    case 503:
-      return new ServiceUnavailableException(payload);
-    case 400:
-      return new BadRequestException(payload);
-  }
+  return refusalException(status, { reason, message });
 }

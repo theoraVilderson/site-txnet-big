@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { ResellerAccessRefused, ResellerLimitReached } from '@txnet-backend/shared-core';
 
-import { TENANT_CEILING } from '../../auth/roles/tenant-roles.service';
+import { TENANT_CEILING } from '@txnet-backend/shared-core';
 
 import { TenantContext, runWithTenant } from '../../tenant-context/tenant-context';
 

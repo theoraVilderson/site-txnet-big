@@ -68,7 +68,7 @@ const RESELLER_CAPABILITY = '90000000-0000-4000-8000-000000000003';
 const OTHER_CAPABILITY = '90000000-0000-4000-8000-000000000004';
 const UNUSED_CAPABILITY = '90000000-0000-4000-8000-000000000005';
 
-const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9' });
+const actor = (tenantId: string) => ({ adminId: ADMIN, tenantId, ip: '10.0.0.9', permissions: ['*'] });
 
 type Row = Record<string, unknown>;
 

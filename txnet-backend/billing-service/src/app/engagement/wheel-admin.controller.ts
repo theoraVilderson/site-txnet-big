@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Ip, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { EngagementPermissionGuard } from './engagement-permission.guard';
 import { WheelVersionBody, wheelVersionSchema } from './wheel-admin.schema';
 import { WheelActor, WheelAdminRefused, WheelAdminRejection, WheelAdminService, WheelVersionInput } from './wheel-admin.service';
 import { WheelReportRefused, WheelReportService } from './wheel-report';
+import { refusalException } from '../request/refusal-exception';
 
 const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'a day is YYYY-MM-DD' });
 /** Tenant days, inclusive; both default to today (F-707-e). */
@@ -17,7 +18,7 @@ export const wheelReportSchema = z.object({ from: DAY.optional(), to: DAY.option
 type WheelReportQuery = z.infer<typeof wheelReportSchema>;
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const WHEEL_ADMIN_REFUSAL_STATUS: Record<WheelAdminRejection, 400 | 404 | 409> = {
+export const WHEEL_ADMIN_REFUSAL_STATUS: Record<WheelAdminRejection, 400 | 403 | 404 | 409> = {
   invalid_prize: 400,
   invalid_amount: 400,
   expected_cost_over_cap: 400,
@@ -25,6 +26,7 @@ export const WHEEL_ADMIN_REFUSAL_STATUS: Record<WheelAdminRejection, 400 | 404 |
   coupon_template_not_found: 404,
   variant_not_found: 404,
   group_not_found: 404,
+  audience_not_allowed: 403,
   version_not_found: 404,
   version_taken: 409,
 };
@@ -55,8 +57,8 @@ export class WheelAdminController {
   ) {}
 
   private actor(req: Request, ip: string): WheelActor {
-    const { userId, tenantId } = identityOf(req);
-    return { adminId: userId, tenantId, ip };
+    const { userId, tenantId, permissions } = identityOf(req);
+    return { adminId: userId, tenantId, ip, permissions };
   }
 
   @Get()
@@ -97,15 +99,7 @@ export class WheelAdminController {
       return await run();
     } catch (e) {
       if (!(e instanceof WheelAdminRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (WHEEL_ADMIN_REFUSAL_STATUS[e.reason]) {
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        default:
-          throw new BadRequestException(payload);
-      }
+      throw refusalException(WHEEL_ADMIN_REFUSAL_STATUS[e.reason], { reason: e.reason, message: e.message });
     }
   }
 }

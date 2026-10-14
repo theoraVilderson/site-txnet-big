@@ -31,9 +31,11 @@ export const GROUP_PRESETS: readonly GroupPreset[] = [
   {
     id: 'finance',
     every: false,
-    keys: ['user.read', 'report.read', 'payment.confirm_manual', 'wallet.manual_adjust', 'settlement.manage', 'tenant_billing.topup', 'gateway.manage', 'export.request'],
+    // `user_group.read`: aim a gateway at a group of customers (ADR-0143).
+    keys: ['user.read', 'report.read', 'payment.confirm_manual', 'wallet.manual_adjust', 'settlement.manage', 'tenant_billing.topup', 'gateway.manage', 'export.request', 'user_group.read'],
   },
-  { id: 'sales', every: false, keys: ['catalog.manage', 'coupon.manage', 'campaign.manage', 'engagement.manage', 'grant.assign', 'report.read'] },
+  // `user_group.read`: aim a product, discount, lottery, wheel or campaign at a group of customers (ADR-0143).
+  { id: 'sales', every: false, keys: ['catalog.manage', 'coupon.manage', 'campaign.manage', 'engagement.manage', 'grant.assign', 'report.read', 'user_group.read'] },
   { id: 'look', every: false, keys: ['theme.manage', 'guide.manage', 'domain.manage', 'bot.manage'] },
   { id: 'admin', every: true, keys: [] },
 ];

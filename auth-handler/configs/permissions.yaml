@@ -73,6 +73,9 @@ grantable:
   # groups; only the platform owner's may hold resellers or another
   # tenant's users — the service and a trigger refuse it elsewhere.
   - user_group.manage
+  # See a tenant's groups to pick one as an audience (ADR-0143): a group
+  # that gives no keys; one that gives keys also needs every one of them.
+  - user_group.read
   # Manual billing-wallet adjustment (F-019-a, D-41). Only the platform
   # owner's staff get through: the service refuses every other tenant.
   - tenant_billing.adjust

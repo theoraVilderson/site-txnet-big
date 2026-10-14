@@ -1,11 +1,8 @@
 import {
   BadGatewayException,
-  BadRequestException,
   Body,
-  ConflictException,
   Controller,
   Delete,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpException,
@@ -45,7 +42,9 @@ import {
   ResellerGatewayRejection,
   ResellerGatewayService,
 } from './reseller-gateway.service';
+import { GATEWAY_ADMIN_REFUSAL_STATUS } from './gateway-admin.controller';
 import { GatewaySecretsRefused, GatewaySecretsUnavailable } from './vault-secret.client';
+import { refusalException } from '../../request/refusal-exception';
 
 /** Every refusal of either door gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
@@ -54,20 +53,9 @@ const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
   reseller_not_found: 404,
   reseller_suspended: 403,
   reseller_terminated: 409,
-  // GatewayAdminService: what may be done to a gateway. The same statuses the
-  // ambient surface answers, so one client reads both.
-  not_platform_owner: 403,
-  block_is_platform_owners: 403,
-  gateway_blocked: 409,
-  gateway_not_found: 404,
-  tenant_not_found: 404,
-  provider_already_configured: 409,
-  gateway_has_open_payments: 409,
-  group_not_found: 404,
-  invalid_range: 400,
-  missing_field: 400,
-  invalid_presets: 400,
-  invalid_callback: 400,
+  // GatewayAdminService: what may be done to a gateway — the ambient surface's
+  // statuses, so one client reads both.
+  ...GATEWAY_ADMIN_REFUSAL_STATUS,
 };
 
 /**
@@ -212,17 +200,7 @@ export class ResellerGatewayController {
       if (e instanceof GatewaySecretsRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
       if (e instanceof GatewaySecretsUnavailable) throw new BadGatewayException({ reason: 'secrets_unavailable', message: 'the credential vault could not be reached' });
       if (!(e instanceof ResellerGatewayRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      switch (STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        default:
-          throw new BadRequestException(payload);
-      }
+      throw refusalException(STATUS[e.reason], { reason: e.reason, message: e.message });
     }
   }
 }

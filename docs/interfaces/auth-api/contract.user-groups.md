@@ -2,7 +2,7 @@
 id: auth-api
 layer: interface
 status: active
-version: 53
+version: 54
 updated: 2026-10-14
 ---
 
@@ -34,6 +34,8 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | DELETE `/auth/user-groups/:id` | — | 200 `{id, deleted: true}`; its members go with it | write |
 | PUT `/auth/user-groups/:id/access` (v46, AC-1-m) | `{roleId: uuid \| null, keys: [key]}` (≤ 200) — the **whole** set | 200 `group` | write |
 | GET `/auth/user-groups/people/:userId` (v53, GR-1-u) | — | 200 `[{id, name, member, expiresAt, givesKeys, mayChange}]` by name — every group but "every reseller", for one person: `member` only while the membership is live; `mayChange` when the caller holds every key the group gives (else a member write refuses `key_not_held`). A person's page reads it | read |
+| GET `/auth/audience-groups` (v54, GR-1-w) | — | 200 `[{id, name, givesKeys}]` by name, ≤ 500 — the session tenant's groups this caller may pick as an audience (ADR-0143, governance `contract.md`): keyless ones with `user_group.read`, the rest only when the caller holds every key they give; never "every reseller". 403 `not_allowed` without one of `coupon.manage`, `gateway.manage`, `catalog.manage`, `engagement.manage`, `campaign.manage`. "Every user" is not listed | read |
+| GET `/auth/tenants/:tenantId/audience-groups` (v54, GR-1-w) | — | the same, for the path's reseller, behind `ResellerAccess.for(gateway.manage, catalog.manage, campaign.manage)` (`read`); the owner weighed with the whole ceiling, the platform's staff with the part they hold | read |
 | GET `/auth/user-groups/:id/members` | `page` >=1 (1), `pageSize` 1-100 (50) | 200 `{items:[{memberType, userId, tenantId, label, receivesAccess, addedAt, expiresAt}], total, page, pageSize}`, newest first; `expiresAt` (v49) the membership's end or null; `label` is a user's `fullName` or a reseller's `slug` — never a phone; `receivesAccess` (v47): a user of the group's own tenant, who holds what it gives | read |
 | POST `/auth/user-groups/:id/members` | `userIds?`, `tenantIds?` — ≤ 500 each, at least one id; `expiresAt?` (v49) date or null — the end of every membership this call adds | 200 `{added}` — only the new ones; one already in is not an error, and keeps its end | write |
 | POST `/auth/user-groups/:id/members/changes` (GR-1-i) | `{add?:[{userId \| tenantId, expiresAt?}], remove?:[{userId \| tenantId}], ends?:[{userId \| tenantId, expiresAt \| null}]}` (a reseller member's end too, GR-1-l) — ≤ 500 each, at least one change | 200 `{added, removed, endsMoved}`: every change in one transaction, or none; a refusal's `facts.detail` names the member (or keys) refused | write |

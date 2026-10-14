@@ -6,9 +6,9 @@ import {
   ResellerAccessRefused,
   ResellerAccessRejection,
   ResellerActor,
-  PERMISSION_REGISTRY,
   SupportConsentRefused,
   SupportConsentRejection,
+  TENANT_CEILING,
   TenantCapabilityName,
   holdsPermission,
   isPlatformKey,
@@ -62,9 +62,6 @@ export type TenantRolesList = { roles: TenantRoleView[]; grantable: string[] };
 export type RoleAssignment = { userId: string; role: { id: string; name: string } };
 
 type Tx = Prisma.TransactionClient;
-
-/** What a tenant-made role may claim: the registry less its platform-only keys (AC-1-e). A reseller's group gives from the same ceiling (GR-1-d). */
-export const TENANT_CEILING: string[] = PERMISSION_REGISTRY.filter((row) => !row.platformOnly).map((row) => row.permission);
 
 const KEYS = { rolePermissions: { select: { permission: { select: { key: true } } } } } as const;
 
@@ -335,7 +332,7 @@ export class TenantRolesService {
    * (F-018-n2), so the two can no longer disagree.
    */
   private tenantCeiling(): string[] {
-    return TENANT_CEILING;
+    return [...TENANT_CEILING];
   }
 
   /** Admit, run in the tenant's scope, and translate the door's refusal into this surface's one type. */

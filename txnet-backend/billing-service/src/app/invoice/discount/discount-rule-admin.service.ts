@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DiscountRuleKind, Prisma } from '@prisma/client';
-import { TenantContext, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { TenantContext, refusedAudienceGroup, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -30,7 +30,8 @@ export type DiscountRuleRejection =
   | 'one_target'
   | 'named_needs_users'
   | 'one_audience'
-  | 'group_not_found';
+  | 'group_not_found'
+  | 'audience_not_allowed';
 
 export class DiscountRuleRefused extends Error {
   constructor(
@@ -42,7 +43,8 @@ export class DiscountRuleRefused extends Error {
   }
 }
 
-export type DiscountRuleActor = { adminId: string; tenantId: string; ip: string };
+/** `permissions`: the caller's keys, which decide the groups they may aim at (ADR-0143). */
+export type DiscountRuleActor = { adminId: string; tenantId: string; ip: string; permissions: readonly string[] };
 
 export type DiscountRuleInput = {
   name: string;
@@ -187,7 +189,7 @@ export class DiscountRuleAdminService {
         isActive: input.isActive ?? true,
       };
       checkShape(m);
-      await this.checkRelations(tx, tenant.id, m, { target: true, users: true, group: true });
+      await this.checkRelations(tx, tenant.id, m, { target: true, users: true, group: true, acting: actor.permissions, keptGroup: null });
 
       const { userIds, ...columns } = m;
       const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, currencyCode: await operatingCurrencyOf(tx, tenant.id), createdByAdminId: actor.adminId } });
@@ -226,6 +228,8 @@ export class DiscountRuleAdminService {
         target: patch.productId !== undefined || patch.categoryId !== undefined,
         users: patch.userIds !== undefined,
         group: patch.groupId !== undefined,
+        acting: actor.permissions,
+        keptGroup: row.groupId,
       });
 
       const { userIds, ...columns } = m;
@@ -241,8 +245,17 @@ export class DiscountRuleAdminService {
     });
   }
 
-  /** The product or category is one this tenant can see and not archived; a named user and a group are this tenant's. */
-  private async checkRelations(tx: Tx, tenantId: string, m: Merged, check: { target: boolean; users: boolean; group: boolean }): Promise<void> {
+  /**
+   * The product or category is one this tenant can see and not archived; a
+   * named user is this tenant's; a group is this tenant's and one the caller
+   * may pick (ADR-0143) — unless the rule already had it (`keptGroup`).
+   */
+  private async checkRelations(
+    tx: Tx,
+    tenantId: string,
+    m: Merged,
+    check: { target: boolean; users: boolean; group: boolean; acting: readonly string[]; keptGroup: string | null },
+  ): Promise<void> {
     if (check.target && m.productId !== null) {
       const p = await tx.product.findFirst({ where: { id: m.productId, archivedAt: null }, select: { id: true } });
       if (!p) throw new DiscountRuleRefused('target_not_found', m.productId);
@@ -253,8 +266,8 @@ export class DiscountRuleAdminService {
     }
     if (check.group && m.groupId !== null) {
       // RLS: another tenant's group is not found, as one that never existed.
-      const g = await tx.userGroup.findUnique({ where: { id: m.groupId }, select: { id: true } });
-      if (!g) throw new DiscountRuleRefused('group_not_found', m.groupId);
+      const refused = await refusedAudienceGroup(tx, check.acting, [m.groupId], { kept: check.keptGroup ? [check.keptGroup] : [] });
+      if (refused) throw new DiscountRuleRefused(refused.reason, refused.groupId);
     }
     if (check.users && m.userIds.length > 0) {
       const users = await tx.user.findMany({ where: { id: { in: m.userIds } }, select: { id: true, tenantId: true } });
