@@ -424,7 +424,7 @@ func TestPlatformKeysAreRefusedToEveryTenantRole(t *testing.T) {
 		if _, ok := engine.CheckTenantRole([]string{key}); ok {
 			t.Errorf("a tenant-made role may claim %q", key)
 		}
-		for _, role := range []string{"Admin", "Support", "user"} {
+		for _, role := range []string{"user"} {
 			if _, ok := engine.Check(role, []string{key}); ok {
 				t.Errorf("%s may claim %q", role, key)
 			}
@@ -436,5 +436,63 @@ func TestPlatformKeysAreRefusedToEveryTenantRole(t *testing.T) {
 	// The reseller keys stay inside the ceiling (AC-1-e).
 	if _, ok := engine.CheckTenantRole([]string{"domain.manage", "staff.manage"}); !ok {
 		t.Errorf("a tenant-made role may not claim the reseller keys")
+	}
+}
+
+// ADR-0144 (2): what a group or tenant-made role may give is the file's own
+// `grantable:` list, not a role's entry. It widens the ceiling, it is no role
+// a token may name, and the shipped file keeps only the two base roles.
+func TestGrantableListIsTheCeilingAndNoRole(t *testing.T) {
+	engine, err := LoadFile(writePolicy(t, `grantable:
+  - support.agent
+  - user.read
+roles:
+  SuperAdmin:
+    permissions:
+      - *
+  user:
+    permissions:
+      - self.read
+`))
+	if err != nil {
+		t.Fatalf("LoadFile() error = %v", err)
+	}
+	if _, ok := engine.CheckTenantRole([]string{"support.agent", "user.read", "self.read"}); !ok {
+		t.Fatal("a key on the grantable list was refused to a tenant-made role")
+	}
+	if _, ok := engine.Check("grantable", []string{"user.read"}); ok {
+		t.Fatal("the grantable list was looked up as a role")
+	}
+	if _, ok := engine.Check("user", []string{"user.read"}); ok {
+		t.Fatal("a grantable key was admitted to the user role by its name")
+	}
+
+	shipped, err := LoadFile(filepath.Join("..", "..", "configs", "permissions.yaml"))
+	if err != nil {
+		t.Fatalf("LoadFile(shipped) error = %v", err)
+	}
+	var names []string
+	for name := range shipped.roles {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	if strings.Join(names, ",") != "SuperAdmin,user" {
+		t.Fatalf("shipped roles = %v, want only SuperAdmin and user (ADR-0144 (1))", names)
+	}
+	if _, ok := shipped.CheckTenantRole([]string{"user.read", "support.agent", "domain.manage"}); !ok {
+		t.Fatal("the shipped ceiling lost a staff key with the Admin and Support entries")
+	}
+}
+
+func TestLoadFileRejectsAMisplacedGrantableItem(t *testing.T) {
+	for name, content := range map[string]string{
+		"grantable item at role indent": "grantable:\n    - user.read\nroles:\n  user:\n    permissions:\n      - self.read\n",
+		"unknown top-level section":     "ceiling:\n  - user.read\nroles:\n  user:\n    permissions:\n      - self.read\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := LoadFile(writePolicy(t, content)); err == nil || !strings.Contains(err.Error(), "unexpected line") {
+				t.Fatalf("LoadFile() error = %v, want an unexpected line", err)
+			}
+		})
 	}
 }

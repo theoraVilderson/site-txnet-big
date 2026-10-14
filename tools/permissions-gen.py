@@ -9,8 +9,9 @@ second list is to generate it. One row per key the file names, `*` aside:
     permission   the key
     area         its first segment (`tenant_billing.adjust` -> `tenant_billing`),
                  which is how the role editor groups it
-    platformOnly held by no role but `SuperAdmin`, so no tenant-made role may
-                 claim it (the gate's tenant ceiling, F-018-n2)
+    platformOnly listed under `SuperAdmin` alone — not on `grantable:` nor under
+                 `user` — so no group or tenant-made role may claim it (the
+                 gate's tenant ceiling, F-018-n2, ADR-0144)
 
 Every key also needs a label and a description in English and Persian, in
 `locales/backend/langs/<lang>/permissions.json` under `keys.<key>`, and every
@@ -35,17 +36,21 @@ PLATFORM_ROLE = "SuperAdmin"
 
 
 def _parse_permissions():
-    """`contracts.py`'s parser — the one that reads the file exactly as the Go gate does."""
+    """`contracts.py`'s parser — the one that reads the file exactly as the Go gate does.
+
+    -> (role -> keys, the `grantable:` list, ADR-0144 (2)).
+    """
     spec = importlib.util.spec_from_file_location("contracts", Path(__file__).parent / "contracts.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.parse_permissions()
+    roles, _ = module.parse_permissions()
+    return roles, module.parse_grantable()
 
 
 def registry() -> list[dict]:
-    roles, _ = _parse_permissions()
-    held_below = set().union(*(keys for role, keys in roles.items() if role != PLATFORM_ROLE))
-    keys = sorted({key for held in roles.values() for key in held} - {ALL})
+    roles, grantable = _parse_permissions()
+    held_below = grantable.union(*(keys for role, keys in roles.items() if role != PLATFORM_ROLE))
+    keys = sorted((grantable.union(*roles.values())) - {ALL})
     return [{"key": k, "area": k.split(".", 1)[0], "platformOnly": k not in held_below} for k in keys]
 
 

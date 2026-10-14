@@ -13,18 +13,17 @@
 // detection runs before ts-node's require hook attaches) — not worth
 // fighting for a one-off bootstrap script.
 //
-// Role names match two independent hardcoded references so both stay
-// correct: `RegisterService.register` looks up `Role.name = 'user'`
-// (docs/domains/identity/rules.md #5), and
-// `ImpersonationService.isRoleHigher` ranks
-// SuperAdmin > Admin > Support > User (docs/domains/identity/open-questions.md).
+// Role names: `RegisterService.register` looks up `Role.name = 'user'`
+// (docs/domains/identity/rules.md #5), and the gate's policy file has an entry
+// for each name here (`tools/contracts.py`). Staff access is a group's, so the
+// two system roles are the base and the owner's `*` (ADR-0144).
 const { PrismaClient } = require('@prisma/client');
 const argon2 = require('argon2');
 const { randomBytes, randomUUID } = require('crypto');
 
 const prisma = new PrismaClient();
 
-const ROLE_NAMES = ['user', 'Support', 'Admin', 'SuperAdmin'];
+const ROLE_NAMES = ['user', 'SuperAdmin'];
 
 // The hosts `auth-service` is actually reached on, and `TenantResolverService`
 // matches `tenant_domain.domainValue` against exactly those. `panel.<domain>`
@@ -113,51 +112,16 @@ async function grantAllPermissionsToSuperAdmin() {
   });
 }
 
-// F-102-c (D-31): a tenant's Admin manages its own payment gateways. The same
-// grant as migration 20260913000300, for a fresh database whose roles are
-// created here after migrations ran.
-// F-092-z (ADR-0044 decision 6): the same Admin confirms a verifying payment
-// on those gateways by hand — migration 20260914000300's grant, for a fresh
-// database.
-// F-502-a (D-33): the same Admin manages its own tenant's coupons — migration
-// 20260914000900's grant, for a fresh database. `campaign.manage` (F-035-c) and
-// `tenant_billing.adjust` (F-019-a), `tenant_billing.topup` (F-019-b) and
-// `tenant_billing.read` (F-019-j) likewise, `user_group.manage` (F-114-j), `currency.pin` (F-0608-a), `ai.manage` (F-038-j1), `engagement.manage` (F-707-c), `support.agent` + `support.manage` (F-033-d), `guide.manage` (F-414-c) and `restriction.assign` + `user.ban` (BAN-1-a).
-async function grantGatewayManageToAdmin() {
-  const role = await systemRoleOrThrow('Admin');
-  for (const key of ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust', 'tenant_billing.topup', 'tenant_billing.read', 'user_group.manage', 'currency.pin', 'ai.manage', 'engagement.manage', 'support.agent', 'support.manage', 'guide.manage', 'restriction.assign', 'user.ban']) {
-    const permission = await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
-      update: {},
-      create: { roleId: role.id, permissionId: permission.id },
-    });
-  }
-  // F-117-d (20261004000300): tier C's permission exists and is granted to no role — given by hand.
-  await prisma.permission.upsert({ where: { key: 'tenant.emergency_access' }, update: {}, create: { key: 'tenant.emergency_access' } });
-  // The support staff's template holds the agent's day alone (F-033-d, 20261003001300).
-  const support = await systemRoleOrThrow('Support');
-  const agent = await prisma.permission.findUniqueOrThrow({ where: { key: 'support.agent' } });
-  await prisma.rolePermission.upsert({
-    where: { roleId_permissionId: { roleId: support.id, permissionId: agent.id } },
-    update: {},
-    create: { roleId: support.id, permissionId: agent.id },
-  });
-  // BAN-1-a (20261008000400): an agent restricts; only Admin bans (ADR-0133).
-  const restrict = await prisma.permission.findUniqueOrThrow({ where: { key: 'restriction.assign' } });
-  await prisma.rolePermission.upsert({
-    where: { roleId_permissionId: { roleId: support.id, permissionId: restrict.id } },
-    update: {},
-    create: { roleId: support.id, permissionId: restrict.id },
-  });
-  // RT-1-b (20261007000300): a tenant's operators hear its `tenant:` channel.
-  const live = await prisma.permission.upsert({ where: { key: 'realtime.tenant.read' }, update: {}, create: { key: 'realtime.tenant.read' } });
-  for (const operator of [role, support]) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: operator.id, permissionId: live.id } },
-      update: {},
-      create: { roleId: operator.id, permissionId: live.id },
-    });
+// The staff keys a group gives need their `identity.permission` rows (a key
+// with no row is refused). Their migrations made them, but granted them to the
+// `Admin` and `Support` templates, which ADR-0144 retired: on a fresh database
+// the rows are made here and given to no role. Groups (presets, GR-1-h) give
+// them. `tenant.emergency_access` (F-117-d) is given by hand.
+const STAFF_PERMISSION_KEYS = ['gateway.manage', 'payment.confirm_manual', 'coupon.manage', 'catalog.manage', 'campaign.manage', 'tenant_billing.adjust', 'tenant_billing.topup', 'tenant_billing.read', 'user_group.manage', 'currency.pin', 'ai.manage', 'engagement.manage', 'support.agent', 'support.manage', 'guide.manage', 'restriction.assign', 'user.ban', 'realtime.tenant.read', 'tenant.emergency_access'];
+
+async function seedStaffPermissionKeys() {
+  for (const key of STAFF_PERMISSION_KEYS) {
+    await prisma.permission.upsert({ where: { key }, update: {}, create: { key } });
   }
 }
 
@@ -219,7 +183,7 @@ async function main() {
     if (!(await systemRole(name))) await prisma.role.create({ data: { name, isSystemRole: true } });
   }
   await grantAllPermissionsToSuperAdmin();
-  await grantGatewayManageToAdmin();
+  await seedStaffPermissionKeys();
   await seedCurrencies();
 
   const existingTenant = await prisma.tenant.findUnique({

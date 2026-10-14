@@ -17,24 +17,125 @@
 # missing here is refused every gated request, and `tools/contracts.py` fails
 # when a seeded role has no entry.
 #
-# A role a **tenant** made (token `roleScope: tenant`) is never looked up here
-# by name: it may claim anything some role below without `*` lists — the union
-# of `Admin`, `Support` and `user` (F-018-n2). A line added to one of those
-# widens what a tenant may grant its own roles.
+# `grantable:` is the tenant ceiling (ADR-0144 (2)): every key a group or a
+# role a **tenant** made (token `roleScope: tenant`) may give. Such a role is
+# never looked up here by name: it may claim anything on that list or under a
+# role below without `*` (F-018-n2). A line added there widens what every
+# tenant may give its own people. It is no role, so no token can name it.
+#
+# Two roles remain, `user` and `SuperAdmin` (ADR-0144 (1)): staff access is a
+# group's, never a system role's — the old `Admin` and `Support` are gone.
 #
 # `*` allows every permission, including one no line here names yet (F-101-d,
 # ADR-0043 as amended). Only `SuperAdmin` may carry it — `tools/contracts.py`
 # fails otherwise — and only the bare `*`: `user.*` is an ordinary name.
+grantable:
+  # The staff keys, given only through groups (ADR-0139, ADR-0144). Each
+  # service still keeps a tenant to its own rows; a line here is the outer
+  # door, never the boundary.
+  - user.read
+  - user.write
+  - user.impersonate
+  # Platform-wide background workers: see what exists, schedule, switch
+  # off, run now. Not tenant-scoped by design — a worker is a platform
+  # process, not a reseller's — so the permission is what confines it.
+  - worker.manage
+  # Rotate a bot's webhook secret.
+  - bot.webhook_rotate
+  # The reseller-wide realtime feed. It carries events about *other
+  # people* in the tenant, so it is an operator's view and membership of
+  # the tenant is not enough on its own. `gateway-service` also requires
+  # an exact tenant match; this is the other half.
+  - realtime.tenant.read
+  # The platform's settlement surface (F-096-e). Not the boundary on its
+  # own: `SettlementService.assertOperator` also requires the platform
+  # owner's tenant, because a reseller administers its own roles.
+  - settlement.manage
+  # Payment gateway management (F-102-c, D-31). A tenant's staff manage
+  # its own gateways; `GatewayAdminService` keeps everyone else's, the
+  # platform's and verification for the platform owner.
+  - gateway.manage
+  # Confirming a verifying payment by hand (F-092-z, ADR-0044 decision 6),
+  # on those same gateways; `ManualConfirmService` confines a tenant to its
+  # own users' payments on its own gateway configs.
+  - payment.confirm_manual
+  # Coupon and gift-code management (F-502-a, D-33). A tenant's staff
+  # manage its own coupons; the service keeps platform coupons and other
+  # tenants' for the platform owner (F-502-c).
+  - coupon.manage
+  # Catalog management (F-026-d, D-34). A tenant's staff manage its own
+  # catalog; the service keeps platform items for the platform owner.
+  - catalog.manage
+  # Campaign drafts (F-035-c). A tenant's staff draft their own tenant's
+  # campaigns; the service keeps platform-wide ones for the platform owner.
+  - campaign.manage
+  # User groups (F-114-j). A tenant's staff manage its own tenant's
+  # groups; only the platform owner's may hold resellers or another
+  # tenant's users — the service and a trigger refuse it elsewhere.
+  - user_group.manage
+  # Manual billing-wallet adjustment (F-019-a, D-41). Only the platform
+  # owner's staff get through: the service refuses every other tenant.
+  - tenant_billing.adjust
+  # A reseller's billing top-up (F-019-b, ADR-0056). The service admits it
+  # only inside a reseller; its owner needs no permission.
+  - tenant_billing.topup
+  # A manual FX rate (F-0608-a, ADR-0101): pin one, end it early. Only the
+  # platform owner's staff get through today; a tenant's own pin is F-116-j.
+  - currency.pin
+  # The tenant's AI (F-038-j1, ADR-0109): settings, offers, at-risk lists
+  # and the uplift report; `ai-service` keeps each tenant to its own.
+  - ai.manage
+  # The tenant's wheel (F-707-c, ADR-0111): prizes, odds, the daily cap and
+  # eligibility; `billing-service` keeps each tenant to its own (RLS).
+  - engagement.manage
+  # Support (F-033-d): the agent's day — inbox, assign, reply, notes,
+  # resolve, close — and the settings (hours, SLA, categories).
+  - support.agent
+  - support.manage
+  # A blocked account (BAN-1-a, ADR-0133): restrict to support / lift it,
+  # and ban / lift a ban — the second is its own key.
+  - restriction.assign
+  - user.ban
+  # Guides (F-414-c): the tenant's own help content, or the platform's
+  # for the platform owner's staff — drafts, publish, override, hide.
+  - guide.manage
+  # A reseller's own staff (AC-1-e, catalog §3.2): `tenant.manage` split
+  # into one key per surface, so a reseller makes "domains only" or
+  # "finance only". Listed here to put them inside the tenant ceiling a
+  # group or tenant-made role may give (F-018-n2).
+  # `shared-core/.../tenant/reseller-keys.ts` names which door each opens.
+  - domain.manage
+  - theme.manage
+  - bot.manage
+  # A user's services, one key per kind of act (KS-1-a, ADR-0140): see,
+  # repair without moving value, and `grant.assign` for the rest.
+  - grant.read
+  - grant.repair
+  # Days or traffic up to the tenant's cap (KS-1-c).
+  - grant.compensate
+  - grant.assign
+  - staff.manage
+  - settings.manage
+  - report.read
+  # A tenant's roles (F-018-n): `/api/auth/roles` and, on a reseller's own
+  # path, its roles and who holds them (ADR-0134).
+  - role.manage
+  # Registered and grantable before their reseller route exists, so a role
+  # made today already carries them when it lands.
+  - wallet.manual_adjust
+  - credential.manage
+  - audit.read
+  - export.request
 roles:
-  # Above `Admin` in the impersonation rank. The seed makes the platform owner
-  # this role, and the database grants it the one permission `*`, so a feature
-  # that adds a permission needs no line here for SuperAdmin to hold it.
+  # The seed makes the platform owner this role, and the database grants it the
+  # one permission `*`, so a feature that adds a permission needs no line here
+  # for SuperAdmin to hold it.
   SuperAdmin:
     permissions:
       - *
       # Tier C, emergency entry into a reseller without its consent (F-117-d,
       # ADR-0104 (5)). Held by no named role, as the platform set below is: a
-      # line under `Admin` would let every tenant grant it to its own roles.
+      # line under `grantable:` would let every tenant grant it to its own roles.
       # Given by hand, one person at a time.
       - tenant.emergency_access
       # The platform's staff set (AC-1-c, catalog §3.3, ADR-0135): its own
@@ -53,110 +154,6 @@ roles:
       - platform.impersonate
       # ADR-0141: a reseller's people under its consent, by the act's own key.
       - platform.support
-  Admin:
-    permissions:
-      - user.read
-      - user.write
-      - user.impersonate
-      # Platform-wide background workers: see what exists, schedule, switch
-      # off, run now. Not tenant-scoped by design — a worker is a platform
-      # process, not a reseller's — so the permission is what confines it.
-      - worker.manage
-      # Rotate a bot's webhook secret.
-      - bot.webhook_rotate
-      # The reseller-wide realtime feed. It carries events about *other
-      # people* in the tenant, so it is an operator's view and membership of
-      # the tenant is not enough on its own. `gateway-service` also requires
-      # an exact tenant match; this is the other half.
-      - realtime.tenant.read
-      # The platform's settlement surface (F-096-e). Not the boundary on its
-      # own: `SettlementService.assertOperator` also requires the platform
-      # owner's tenant, because a reseller administers its own roles.
-      - settlement.manage
-      # Payment gateway management (F-102-c, D-31). A tenant's Admin manages
-      # its own gateways; `GatewayAdminService` keeps everyone else's, the
-      # platform's and verification for the platform owner.
-      - gateway.manage
-      # Confirming a verifying payment by hand (F-092-z, ADR-0044 decision 6),
-      # on those same gateways; `ManualConfirmService` confines a tenant to its
-      # own users' payments on its own gateway configs.
-      - payment.confirm_manual
-      # Coupon and gift-code management (F-502-a, D-33). A tenant's Admin
-      # manages its own coupons; the service keeps platform coupons and other
-      # tenants' for the platform owner (F-502-c).
-      - coupon.manage
-      # Catalog management (F-026-d, D-34). A tenant's Admin manages its own
-      # catalog; the service keeps platform items for the platform owner.
-      - catalog.manage
-      # Campaign drafts (F-035-c). A tenant's Admin drafts its own tenant's
-      # campaigns; the service keeps platform-wide ones for the platform owner.
-      - campaign.manage
-      # User groups (F-114-j). A tenant's Admin manages its own tenant's
-      # groups; only the platform owner's may hold resellers or another
-      # tenant's users — the service and a trigger refuse it elsewhere.
-      - user_group.manage
-      # Manual billing-wallet adjustment (F-019-a, D-41). Only the platform
-      # owner's Admin gets through: the service refuses every other tenant.
-      - tenant_billing.adjust
-      # A reseller's billing top-up (F-019-b, ADR-0056). The service admits it
-      # only inside a reseller; its owner needs no permission.
-      - tenant_billing.topup
-      # A manual FX rate (F-0608-a, ADR-0101): pin one, end it early. Only the
-      # platform owner's Admin gets through today; a tenant's own pin is F-116-j.
-      - currency.pin
-      # The tenant's AI (F-038-j1, ADR-0109): settings, offers, at-risk lists
-      # and the uplift report; `ai-service` keeps each tenant to its own.
-      - ai.manage
-      # The tenant's wheel (F-707-c, ADR-0111): prizes, odds, the daily cap and
-      # eligibility; `billing-service` keeps each tenant to its own (RLS).
-      - engagement.manage
-      # Support (F-033-d): the agent's day — inbox, assign, reply, notes,
-      # resolve, close — and the settings (hours, SLA, categories).
-      - support.agent
-      - support.manage
-      # A blocked account (BAN-1-a, ADR-0133): restrict to support / lift it,
-      # and ban / lift a ban — the second is Admin's alone.
-      - restriction.assign
-      - user.ban
-      # Guides (F-414-c): the tenant's own help content, or the platform's
-      # for the platform owner's Admin — drafts, publish, override, hide.
-      - guide.manage
-      # A reseller's own staff (AC-1-e, catalog §3.2): `tenant.manage` split
-      # into one key per surface, so a reseller makes "domains only" or
-      # "finance only". Listed here to put them inside the tenant ceiling a
-      # tenant-made role may claim (F-018-n2); the `Admin` template is granted
-      # none of them in the database, so nobody holds more than before.
-      # `shared-core/.../tenant/reseller-keys.ts` names which door each opens.
-      - domain.manage
-      - theme.manage
-      - bot.manage
-      # A user's services, one key per kind of act (KS-1-a, ADR-0140): see,
-      # repair without moving value, and `grant.assign` for the rest.
-      - grant.read
-      - grant.repair
-      # Days or traffic up to the tenant's cap (KS-1-c).
-      - grant.compensate
-      - grant.assign
-      - staff.manage
-      - settings.manage
-      - report.read
-      # A tenant's roles (F-018-n): `/api/auth/roles` and, on a reseller's own
-      # path, its roles and who holds them (ADR-0134).
-      - role.manage
-      # Registered and grantable before their reseller route exists, so a role
-      # made today already carries them when it lands.
-      - wallet.manual_adjust
-      - credential.manage
-      - audit.read
-      - export.request
-  Support:
-    permissions:
-      - user.read
-      - support.agent
-      - restriction.assign
-      # The tenant's page refreshes (RT-1-b): the inbox and the domains page
-      # re-read on `tenant:` events, which carry ids and never content.
-      - realtime.tenant.read
   user:
     permissions:
       - self.read

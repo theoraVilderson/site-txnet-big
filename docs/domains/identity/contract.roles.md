@@ -3,7 +3,7 @@ id: identity
 layer: domain
 status: active
 version: 30
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Contract — roles and permissions
@@ -22,7 +22,7 @@ Code: `auth-service/src/app/auth/roles/`. Schema:
 | | |
 |---|---|
 | **A tenant's role** | `role.tenantId` = that tenant. Its own name, its own grants; only that tenant reads it as its own, edits it or deletes it |
-| **A system template** | `role.tenantId IS NULL`. Every tenant reads it, none may edit it. The rows that existed before F-018-n (`user`, `Admin`, `SuperAdmin`, ...) are these |
+| **A system template** | `role.tenantId IS NULL`. Every tenant reads it, none may edit it. Two: `user` (every account's base) and `SuperAdmin` (the owner's `*`). `Admin` and `Support` retired into groups (GR-1-v, ADR-0144): staff access is a group's |
 | **A name** | unique per tenant, so two resellers may both have a `Support`. The templates share one namespace of their own (a partial unique index — `data-model.md`) |
 | **A permission key** | global, and never invented here. `identity.permission` is the whole vocabulary; a role is a subset of it |
 
@@ -69,8 +69,8 @@ writes to `RolesService`, so the rules above live once.
 What the role editor shows. The list is `auth-handler/configs/permissions.yaml`,
 the file the gate enforces: `tools/permissions-gen.py` generates
 `shared-core/.../permission-registry.generated.ts` from it. Each key gets its
-`area` (its first segment) and `platformOnly` (held by no role but
-`SuperAdmin`, so outside the tenant ceiling). Its texts are the `permissions`
+`area` (its first segment) and `platformOnly` (listed under `SuperAdmin`
+alone, not on `grantable:`, so outside the tenant ceiling). Its texts are the `permissions`
 namespace of the backend locale scope: `areas.<area>.label` and
 `keys.<key>.{label,description}`. `contracts.py` fails on a stale file or a key
 without English or Persian text. A missing text at runtime shows the key.
@@ -105,9 +105,8 @@ onboarding), `report.read` (revenue), and the existing `user.read`,
 reseller route yet; `audit.read` opens the access log (AC-1-p, audit `contract.md`). A subscription, limits and support
 consent name no key: they are the owner's contract with the platform.
 
-The keys sit under `Admin` in `permissions.yaml`, which is what puts them in
-the ceiling; **no template is granted one** in the database (migration
-`20261009000200`), so nobody holds more than before.
+The keys are on `grantable:` in `permissions.yaml`, which is what puts them in
+the ceiling (ADR-0144); no system role holds one — a group gives them.
 
 ## The platform keys (AC-1-c, ADR-0135)
 

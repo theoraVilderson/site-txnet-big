@@ -11,9 +11,9 @@ import (
 // Engine holds the loaded role -> permissions mapping.
 type Engine struct {
 	roles map[string]RolePolicy
-	// tenantCeiling is every permission some role without `*` may hold: the
-	// most a role a tenant made may claim (F-018-n2). Computed once at load,
-	// so a permission added to a system role widens it with no second list.
+	// tenantCeiling is the `grantable:` list plus every permission some role
+	// without `*` holds: the most a group or a role a tenant made may claim
+	// (F-018-n2, ADR-0144 (2)). Computed once at load.
 	tenantCeiling RolePolicy
 	// platformSet is every `platform.` key the file lists: what the platform's
 	// own group may give its own user (ADR-0139 (4)), outside the ceiling.
@@ -23,15 +23,24 @@ type Engine struct {
 // PlatformKeyPrefix starts every key of the platform's staff set (AC-1-c).
 const PlatformKeyPrefix = "platform."
 
+// The file's two top-level sections (ADR-0144 (2)).
+const (
+	sectionRoles     = "roles:"
+	sectionGrantable = "grantable:"
+)
+
 // LoadFile parses a permissions file with the following simple format:
-// roles:
 //
-//	admin:
-//	  permissions:
-//	    - user.read
-//	    - user.write
+//	grantable:
+//	  - user.read
+//	roles:
+//	  user:
+//	    permissions:
+//	      - self.read
 //
-// It returns an Engine or an error if the file is invalid or missing.
+// `grantable:` is what a group or tenant-made role may give (ADR-0144 (2)); it
+// is no role, so no token can name it. It returns an Engine or an error if
+// the file is invalid or missing.
 func LoadFile(path string) (*Engine, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -40,20 +49,29 @@ func LoadFile(path string) (*Engine, error) {
 	defer f.Close()
 
 	roles := make(map[string]RolePolicy)
+	grantable := RolePolicy{Permissions: make(map[string]struct{})}
 	var currentRole string
 	inPermissions := false
+	inGrantable := false
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		raw := scanner.Text()
 		trimmed := strings.TrimSpace(raw)
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") || trimmed == "roles:" {
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 
 		indent := len(raw) - len(strings.TrimLeft(raw, " "))
 
 		switch {
+		case indent == 0 && (trimmed == sectionRoles || trimmed == sectionGrantable):
+			inGrantable = trimmed == sectionGrantable
+			currentRole, inPermissions = "", false
+		case inGrantable && indent == 2 && strings.HasPrefix(trimmed, "- "):
+			grantable.Permissions[strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))] = struct{}{}
+		case inGrantable:
+			return nil, fmt.Errorf("policy: %s: unexpected line: %q", path, raw)
 		case indent == 2 && strings.HasSuffix(trimmed, ":"):
 			currentRole = strings.TrimSuffix(trimmed, ":")
 			roles[currentRole] = RolePolicy{Permissions: make(map[string]struct{})}
@@ -80,14 +98,17 @@ func LoadFile(path string) (*Engine, error) {
 		return nil, fmt.Errorf("policy: no roles defined in %s", path)
 	}
 
-	return &Engine{roles: roles, tenantCeiling: ceilingOf(roles), platformSet: platformSetOf(roles)}, nil
+	return &Engine{roles: roles, tenantCeiling: ceilingOf(grantable, roles), platformSet: platformSetOf(roles)}, nil
 }
 
-// ceilingOf is the union of every role that does not hold `*`. The wildcard
-// role is left out on purpose: no tenant may hold what only the platform
-// owner holds, and `*` itself is never in the union.
-func ceilingOf(roles map[string]RolePolicy) RolePolicy {
+// ceilingOf is the grantable list plus every role that does not hold `*`. The
+// wildcard role is left out on purpose: no tenant may hold what only the
+// platform owner holds, and `*` itself is never in the union.
+func ceilingOf(grantable RolePolicy, roles map[string]RolePolicy) RolePolicy {
 	ceiling := RolePolicy{Permissions: make(map[string]struct{})}
+	for p := range grantable.Permissions {
+		ceiling.Permissions[p] = struct{}{}
+	}
 	for _, role := range roles {
 		if _, all := role.Permissions[AllPermissions]; all {
 			continue

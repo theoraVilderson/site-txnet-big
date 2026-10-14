@@ -45,8 +45,8 @@ Who acted is the `admin_audit_log` row (`user_ban` / `user_unban`, `reason`).
 4. **Every status change revokes every session**, after the transaction
    commits — restricting, banning and lifting alike. The next sign-in is the
    restricted, the refused or the whole one; no token outlives the change.
-5. **Two keys.** `restriction.assign` (Admin, the `Support` template)
-   restricts and lifts a restriction; `user.ban` (Admin) is needed whenever
+5. **Two keys.** `restriction.assign` (the Support and Admin presets)
+   restricts and lifts a restriction; `user.ban` (the Admin preset) is needed whenever
    `banned` is on either side of the change.
 6. **Staff act in their own tenant, on someone below them.** The gate's tenant
    must be the caller's; ADR-0103's authority rule is asked over the target's

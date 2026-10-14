@@ -223,13 +223,19 @@ def parse_permissions() -> tuple[dict[str, set[str]], list[str]]:
     order: list[str] = []
     current = ""
     in_perms = False
+    in_grantable = False
 
     for raw in PERMISSIONS.read_text(encoding="utf-8").splitlines():
         trimmed = raw.strip()
-        if not trimmed or trimmed.startswith("#") or trimmed == "roles:":
+        if not trimmed or trimmed.startswith("#"):
             continue
         indent = len(raw) - len(raw.lstrip(" "))
-        if indent == 2 and trimmed.endswith(":"):
+        if indent == 0 and trimmed in ("roles:", "grantable:"):
+            in_grantable = trimmed == "grantable:"
+            current, in_perms = "", False
+        elif in_grantable:
+            continue
+        elif indent == 2 and trimmed.endswith(":"):
             current = trimmed[:-1]
             roles[current] = set()
             order.append(current)
@@ -239,6 +245,22 @@ def parse_permissions() -> tuple[dict[str, set[str]], list[str]]:
         elif indent >= 6 and trimmed.startswith("- ") and in_perms:
             roles[current].add(trimmed[2:].strip())
     return roles, order
+
+
+def parse_grantable() -> set[str]:
+    """-> the `grantable:` list: the tenant ceiling, which is no role (ADR-0144 (2))."""
+    if not PERMISSIONS.exists():
+        return set()
+    keys: set[str] = set()
+    in_grantable = False
+    for raw in PERMISSIONS.read_text(encoding="utf-8").splitlines():
+        trimmed = raw.strip()
+        indent = len(raw) - len(raw.lstrip(" "))
+        if indent == 0 and trimmed and not trimmed.startswith("#"):
+            in_grantable = trimmed == "grantable:"
+        elif in_grantable and indent == 2 and trimmed.startswith("- "):
+            keys.add(trimmed[2:].strip())
+    return keys
 
 
 def typescript_permissions() -> dict[str, list[str]]:
@@ -309,7 +331,7 @@ def check_permissions() -> None:
                 f"{role!r} — only {ALL_PERMISSIONS_ROLE} may hold every "
                 f"permission (ADR-0043)")
 
-    granted = set().union(*roles.values()) if roles else set()
+    granted = set().union(parse_grantable(), *roles.values())
     written = typescript_permissions()
     if not written:
         errors.append("no permission name found in any TypeScript source — "
@@ -320,7 +342,7 @@ def check_permissions() -> None:
         if name not in granted:
             errors.append(
                 f"permission {name!r} is enforced in TypeScript "
-                f"({', '.join(sorted(set(where)))}) but no role in "
+                f"({', '.join(sorted(set(where)))}) but neither a role nor `grantable:` in "
                 f"{PERMISSIONS.relative_to(ROOT)} grants it — auth-handler "
                 f"refuses any token claiming it, so the route is unreachable")
 
