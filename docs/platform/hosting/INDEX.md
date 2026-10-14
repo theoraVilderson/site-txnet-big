@@ -39,7 +39,8 @@ the shared-socket layout works, no `pgbackrest server` fallback) and OPS-1-c
 OPS-1-f (H10: tuning on `main-db`'s `command:`, sizing rule in
 `operations/environments.md`) and OPS-1-d (H5: `database.rules.yml` with
 `promtool` tests; disk from `pg_data_fs.prom`, archive from `hosting_wal_archive`)
-and OPS-1-e (H6: `operations/runbook-restore-database.md`, rehearsed on dev).
+and OPS-1-e (H6: `operations/runbook-restore-database.md`, rehearsed on dev)
+and OPS-1-g (H9: CONVENTIONS C-41's check refuses session state in `*.ts`/`*.go`).
 The unit claims `dev-docker/pgbouncer/**`, `swarm/**` and `loki.yaml` in
 `source:` as each row lands.
 

@@ -1,7 +1,7 @@
 ---
 id: conventions
 status: active
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # House style
@@ -56,6 +56,9 @@ it; the rest is review.
   order; tenant data goes through `tenantTransaction` — C-29.
 - Go: every goroutine can be stopped and is waited for, fan-out is bounded,
   shared state has one guard, `-race` runs on it — C-36.
+- A connection holds no session state: `SET LOCAL`, `set_config(…, true)`,
+  `pg_advisory_xact_lock` — never the session forms, which break behind the
+  transaction pool — C-41 **check**.
 - Config is read from the app's validated env module only — C-26 **check**.
 
 **Fast by default**
@@ -156,6 +159,7 @@ row that removes it; one that is permanent says why in the section.
 | C-38 | A log line says what happened, to which ids, at the right level, through the app's logger (Nest `Logger` with the class name; `console.info`/`warn`/`error` in Next server code). Never a token, password, OTP, card or full phone number. | review |
 | C-39 | A schema change ships in steps: add, move every reader and writer, then remove. A destructive statement (drop, rename, retype) carries `-- contract: <row id>` naming the row that moved the readers; an applied migration is never edited; a new tenant table gets its RLS policy in the same migration. | check |
 | C-40 | A screen works for every reader: controls are kit primitives or native `button`/`a` (never a clickable `div`), an icon-only control has an `aria-label`, an image has `alt` (`""` when decorative), state is never shown by colour alone, motion honours reduced motion. | check |
+| C-41 | A database connection carries no session state: behind PgBouncer in transaction mode (ADR-0126, hosting H7/H9) the next statement may run on another server connection. A session `SET` (only `SET LOCAL`/`SET TRANSACTION`/`SET CONSTRAINTS` are allowed), `set_config(…, false)` and a session advisory lock (`pg_advisory_lock(`, `pg_try_advisory_lock(`, `_shared`) are violations; `pg_advisory_xact_lock` and `set_config(…, true)` inside the transaction are the forms. `LISTEN` uses the direct `DATABASE_LISTEN_URL` (H8). | check |
 
 ---
 
@@ -1240,4 +1244,33 @@ forbid: ^(?!\s*(//|\*|/\*|\{/\*)).*(<(img|Image)\b(?![^>]*\balt=)[^>]*>|<(div|sp
 in: site-pwa/src/**/*.tsx, coinsite/src/**/*.tsx
 except: site-pwa/src/**/*.test.tsx
 message: use a kit primitive or a native button/a, and give an image its alt (C-40, contract.ux.md K3–K7)
+```
+
+## C-41 — a connection holds no session state
+
+**Rule.**
+- Every pooled connection goes through `db-pool` (PgBouncer, `pool_mode=
+  transaction`, hosting H7). Anything that outlives one transaction on a
+  server connection — a session `SET`, `set_config(name, value, false)`, a
+  session advisory lock, a session `PREPARE` — is a violation.
+- The forms that work: `SET LOCAL` / `SET TRANSACTION` / `SET CONSTRAINTS`,
+  `set_config(name, value, true)` and `pg_advisory_xact_lock(...)`, each as a
+  statement of the transaction that needs it (`tenantTransaction` already
+  binds `app.tenant_id` this way).
+- `LISTEN` and anything else that truly needs a session connects directly to
+  `main-db` through `DATABASE_LISTEN_URL`, and takes a row in the hosting H8
+  budget.
+
+**Why.** Behind transaction pooling these do not fail — they apply to
+whichever server connection the statement landed on, and then to another
+client's next transaction there. A session `app.tenant_id` would hand one
+tenant's RLS scope to another tenant's query; a session lock is released by
+nobody. No spec with a direct connection can see it, so the regex holds it
+(H9). Comment lines are skipped: Redis `SET NX` is written in prose there.
+
+```check C-41
+forbid: ^(?!\s*(//|\*|/\*)).*([`'"]\s*SET\s+(?!LOCAL\b|TRANSACTION\b|CONSTRAINTS\b)\w|\bset_config\s*\(.*,\s*(\$\{\s*)?false\b|\bpg_(try_)?advisory_lock(_shared)?\s*\()
+in: txnet-backend/**/*.ts, auth-handler/**/*.go, i18n-platform/**/*.go, network-service/**/*.go, sub-service/**/*.go
+except: txnet-backend/**/*.spec.ts, **/*_test.go, txnet-backend/.agents/**, txnet-backend/.claude/**, txnet-backend/.cursor/**, txnet-backend/.devin/**, txnet-backend/**/generated/**, **/*.pb.go
+message: keep the state inside the transaction — SET LOCAL, set_config(…, true), pg_advisory_xact_lock; LISTEN uses DATABASE_LISTEN_URL (C-41, hosting H9)
 ```
