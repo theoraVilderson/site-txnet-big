@@ -226,11 +226,11 @@ fresh; a `payment` is never stale — money is relayed whatever its age.
 waits `random(0, min(30000, 500 × 2^attempt))` (full jitter). `4401`, `4403`
 and the too-many code keep their meaning.
 
-**H21 — Broker and Redis watch.** RabbitMQ: enable `rabbitmq_prometheus`
-(`dev-docker/rabbitmq/enabled_plugins`), scrape `:15692`; alerts
+**H21 — Broker and Redis watch.** RabbitMQ: `rabbitmq_prometheus` (on in the
+`-management` image's own `enabled_plugins`), scrape `:15692`; alerts
 `RabbitAlarm` (`rabbitmq_alarms_memory_used_watermark` or
 `…_free_disk_space_watermark` = 1, 1m), `BotUpdateBacklog` (ready messages on
-`txnet.automation.bot.update.*` > 500 for 5m). Redis: `--maxmemory ${REDIS_MAXMEMORY:-768mb}`,
+`txnet.automation.bot.update.*` > 500 for 5m, per shard). Redis: `--maxmemory ${REDIS_MAXMEMORY:-768mb}`,
 `--maxmemory-policy noeviction` (explicit); `redis-exporter`
 (`${DOCKER_REGISTRY}/oliver006/redis_exporter:v1.62.0`, verified on the
 mirror); alert `RedisMemoryHigh` used/max > 0.8 for 10m. Rules in

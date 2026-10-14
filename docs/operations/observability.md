@@ -74,7 +74,12 @@ Postgres backup failed or stale (36 h), the restore drill stale (8 d), WAL
 archiving stuck (15 m) and the data volume's filesystem over 80%. `pg-backup`
 writes the backup, drill and disk figures as textfiles; the archive state is
 `hosting_wal_archive` in `postgres-queries.yaml` (`pg_stat_archiver`). It is
-the one rule file with unit tests, `database.rules.test.yml` (below).
+the one rule file with unit tests, `database.rules.test.yml` (below). Its
+`hosting.broker-redis` group (OPS-1-v, H21) watches the two stores a full
+memory stops silently: `RabbitAlarm` (memory or disk watermark, publishers
+blocked), `BotUpdateBacklog` (one `bot.update.*` shard over 500 ready for 5m)
+and `RedisMemoryHigh` (over 80% of `REDIS_MAXMEMORY`; `noeviction` refuses
+writes at 100%). Redis memory comes from `redis-exporter` (job `redis`).
 
 **RabbitMQ is scraped by two jobs, not one.** The `rabbitmq_prometheus` plugin
 is enabled in the `4.2-management-alpine` image already, and it serves two

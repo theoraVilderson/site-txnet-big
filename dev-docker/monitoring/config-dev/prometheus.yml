@@ -75,3 +75,9 @@ scrape_configs:
         - queue_consumer_count
     static_configs:
       - targets: ["rabbitmq:15692"]
+
+  # Redis's used and max memory (OPS-1-v, H21) for RedisMemoryHigh. Same
+  # network, no published port, as the two jobs above.
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]

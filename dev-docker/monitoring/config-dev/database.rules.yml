@@ -12,6 +12,10 @@
 #
 # A backup that is not running writes nothing, so "never recorded" fires too.
 # The restore runbook is docs/operations/runbook-restore-database.md.
+#
+# hosting.broker-redis (OPS-1-v, H21): the broker and Redis, the two stores a
+# full memory stops without a word — RabbitMQ blocks every publisher, Redis
+# (noeviction) refuses every write.
 # =============================================================================
 
 groups:
@@ -102,3 +106,57 @@ groups:
             Postgres stops writing when it is full. Check pg_wal first (a stuck
             archive keeps every segment, PgArchiveFailing), then
             `docker system df -v`.
+
+  - name: hosting.broker-redis
+    rules:
+      # An alarm blocks every publishing connection: outbox relays, bot
+      # webhooks and payments all stall until it clears.
+      - alert: RabbitAlarm
+        expr: |
+          rabbitmq_alarms_memory_used_watermark == 1
+            or rabbitmq_alarms_free_disk_space_watermark == 1
+        for: 1m
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "RabbitMQ has raised a resource alarm and blocks publishers"
+          description: >-
+            The broker is over its memory watermark or under its free-disk
+            limit, so every publisher is blocked. Find the queue holding the
+            messages with
+            `docker exec txnet-rabbitmq rabbitmqctl list_queues name messages`,
+            and free the disk (`df -h`, `docker system df -v`).
+
+      # Per shard: one shard whose consumer died backs up while the others
+      # drain, and a sum over all four would hide it for longer.
+      - alert: BotUpdateBacklog
+        expr: rabbitmq_detailed_queue_messages_ready{queue=~"txnet\\.automation\\.bot\\.update\\..+"} > 500
+        for: 5m
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "{{ $labels.queue }} has {{ $value }} bot updates waiting"
+          description: >-
+            Bot updates on this shard are not being consumed: the bots answer
+            nobody on the chats it holds. Check bot-service is running and
+            consuming (`rabbitmq_detailed_queue_consumers`) and its logs.
+            Updates older than BOT_UPDATE_STALE_MS are dropped on arrival (H19).
+
+      # noeviction: at maxmemory Redis refuses writes, and a refused write is a
+      # refused sign-in or session. The `> 0` guard: no maxmemory reads as 0.
+      - alert: RedisMemoryHigh
+        expr: |
+          redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+            and redis_memory_max_bytes > 0
+        for: 10m
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "Redis is at {{ $value | humanizePercentage }} of maxmemory"
+          description: >-
+            With noeviction, Redis refuses every write once it reaches
+            maxmemory (REDIS_MAXMEMORY). Look for a key family that grows
+            (`redis-cli --bigkeys`) before raising the limit.

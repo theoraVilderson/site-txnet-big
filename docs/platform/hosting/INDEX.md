@@ -38,7 +38,8 @@ shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f
 `database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed);
 -g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs);
 -i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev);
--j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback).
+-j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback);
+-v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`).
 `swarm/**` joins `source:` as its row lands.
 
 ## Changelog

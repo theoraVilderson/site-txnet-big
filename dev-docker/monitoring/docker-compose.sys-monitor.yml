@@ -237,6 +237,21 @@ services:
       - private_backend_network
 
   # ===========================================================================
+  # Redis Exporter — memory against maxmemory (OPS-1-v, H21)
+  # ===========================================================================
+  # `memory-data` lives in the main stack; reached over
+  # `private_backend_network` like `main-db` above. No published port.
+  redis-exporter:
+    image: ${DOCKER_REGISTRY}/oliver006/redis_exporter:v1.62.0
+    container_name: txnet-redis-exporter
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://memory-data:${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    networks:
+      - private_backend_network
+
+  # ===========================================================================
   # Alertmanager — Alert Routing (→ Bale Messenger)
   # ===========================================================================
   alertmanager:
