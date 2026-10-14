@@ -9,7 +9,7 @@ updated: 2026-10-14
 # Contract — hosting: the origin answers only Cloudflare
 
 ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
-Cloudflare can complete a handshake, and on the swarm host only Cloudflare's
+Cloudflare can complete a handshake, and on the production host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
 (firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
 responses, decision 8). Rules O1…O11.
@@ -131,7 +131,7 @@ marked, `/realtime` still `101`. Tests: `privatecache_test.go`.
 
 ## The firewall (EDGE-1-h)
 
-**O7 — Cloudflare's ranges only, swarm host.** `scripts/edge/cloudflare_firewall.py
+**O7 — Cloudflare's ranges only, production host.** `scripts/edge/cloudflare_firewall.py
 apply` reads `https://api.cloudflare.com/client/v4/ips` and writes chain
 `TXNET-EDGE` in one `iptables-restore --noflush` / `ip6tables-restore` commit:
 `RETURN` per range, then `DROP`. The chain is reached from `INPUT`

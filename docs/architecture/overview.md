@@ -118,8 +118,9 @@ are tabled in `dependency-graph.md`.
   run it. Monitoring is its own stack
   (`dev-docker/monitoring/docker-compose.sys-monitor.yml`: Prometheus,
   Alertmanager, Grafana, Loki, Promtail, exporters).
-- **Swarm is not yet the deploy path.** `swarm/docker-stack.yml` is a stub;
-  the complete stack with start-first rolling updates is OPS-1-o (H16).
+- **Kubernetes is not yet the deploy path.** Production moves to k3s,
+  rendered from these compose files (ADR-0147, OPS-1-o-a…g); until the
+  cutover (OPS-1-p) it is `scripts/prod.compose.sh`.
 - **Backup.** WAL is archived continuously by pgBackRest; `pg-backup` takes a
   weekly full and nightly differentials, and a restore drill runs every Sunday
   (H1–H6). Uploaded files: `object-backup` (restic, nightly, ADR-0120). A

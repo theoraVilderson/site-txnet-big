@@ -21,7 +21,7 @@ updated: 2026-09-04
 | Frontend | Next.js (App Router) + React 19 + Tailwind 4 | Next 15 | `site-pwa` panel, `coinsite` landing |
 | Reverse proxy | Traefik | v3.7 | TLS (Let's Encrypt), routing, ForwardAuth, rate limit |
 | Broker | RabbitMQ | 4.2 | declared in compose; no code publishes/consumes yet |
-| Orchestration | docker compose (dev) / Docker Swarm (prod) | — | `scripts/{dev,prod}.compose.sh` |
+| Orchestration | docker compose (dev) / Kubernetes, k3s (prod, ADR-0147) | — | `scripts/dev.compose.sh`; prod `scripts/prod.compose.sh` until OPS-1-p |
 | Observability | Prometheus, Grafana, Loki, Promtail, cAdvisor, Alertmanager, Glitchtip | — | `dev-docker/monitoring`, separate stack |
 
 ## Constraints

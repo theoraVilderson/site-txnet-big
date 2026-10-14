@@ -22,6 +22,8 @@ services:
         - APP_NAME=support-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-support-service
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["3000"]
     restart: unless-stopped
     volumes:
       - ../txnet-backend:/app:delegated

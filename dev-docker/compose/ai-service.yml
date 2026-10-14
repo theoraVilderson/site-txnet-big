@@ -25,6 +25,8 @@ services:
         - APP_NAME=ai-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-ai-service
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["3000"]
     restart: unless-stopped
     cpus: ${AI_SERVICE_CPUS:-1.0}
     mem_limit: ${AI_SERVICE_MEM_LIMIT:-512m}

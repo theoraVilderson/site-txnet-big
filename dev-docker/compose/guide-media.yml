@@ -16,6 +16,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/nginx:1.27-alpine
     container_name: ${STACK_NAME:-txnet}-guide-media
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["8081"]
     restart: unless-stopped
     volumes:
       - object_storage:/data/objects:ro

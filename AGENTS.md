@@ -275,7 +275,8 @@ The repo is a polyglot monorepo:
 - `locales/` — the translation content `locale-service` serves.
 - `site-pwa/` — Next.js user panel. `coinsite/` — Next.js landing site (skeleton).
 - `dev-docker/`, `swarm/`, `scripts/` — Traefik + Postgres + PgBouncer + Redis +
-  RabbitMQ + monitoring; `docker compose` today, Docker Swarm once OPS-1-o lands.
+  RabbitMQ + monitoring; `docker compose` today, Kubernetes (k3s) rendered from
+  the compose files once OPS-1-o lands (ADR-0147; `swarm/` is deleted then).
 
 `docs/architecture/overview.md` is the runtime picture. A unit's `status` is
 `MASTER_INDEX.md`'s column, and `docs-check.py` holds it to the INDEX and to
@@ -543,7 +544,7 @@ not exist in the current database") — the Panels page on 2026-09-26.
   TABLE`/`DROP COLUMN`/`DROP SCHEMA`, `DELETE`, `TRUNCATE`, a type change or
   constraint that rewrites or rejects existing rows, or any `migrate reset`.
   Name the tables and row counts at stake in the question.
-- **Dev only.** Never `docker/swarm` prod, never another database.
+- **Dev only.** Never the production host or cluster, never another database.
 
 ## If you cannot run shell commands
 

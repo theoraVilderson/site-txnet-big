@@ -7,7 +7,7 @@ updated: 2026-10-14
 # Observability
 
 Kept as **separate stacks** from the app so they can scale and restart
-independently (and, in Swarm, run global-mode agents on every node).
+independently (and, on Kubernetes, run Promtail as a DaemonSet on every node — K11).
 
 ## Monitoring stack (`dev-docker/monitoring/`)
 
@@ -24,8 +24,8 @@ independently (and, in Swarm, run global-mode agents on every node).
 
 Config lives in `dev-docker/monitoring/config-dev/` (`prometheus.yml`,
 `promtail.yaml`, `alertmanager.yml`, `automation.rules.yml`,
-`currency.rules.yml`), each mounted as a compose `config`. Swarm expects `config-${ENV_NAME}/prometheus.yml` + secret
-files present on the manager — see the gap on that below.
+`currency.rules.yml`), each mounted as a compose `config`. On Kubernetes the same stack is rendered into
+`txnet-monitoring` (hosting K11, OPS-1-o-e) — see the gap on that below.
 
 ## Alert rules
 
@@ -153,12 +153,9 @@ client. Compose caps json-file logs at 10m x 3.
 - No SLOs defined (`slo.md` not written).
 - No alert runbooks (`runbook-*.md` not written). The automation rules
   carry their reasoning in their own `description` instead.
-- **Prod has no monitoring stack of its own.** `swarm/docker-stack.yml` is 20
-  lines and its only content is a `promtail` override set to `deploy.mode:
-  global` — layered over `dev-docker/docker-compose.main.yml`, which does not
-  define a `promtail` service at all. Promtail lives in the monitoring compose
-  file, so that override is inert as written. `scripts/prod.compose.sh` never
-  references the monitoring stack either.
+- **Prod has no monitoring stack of its own.** `scripts/prod.compose.sh` never
+  references the monitoring compose file; on Kubernetes it is rendered into
+  `txnet-monitoring` by OPS-1-o-e (hosting K11).
 - **`config-${ENV_NAME}/` templating does not exist.** `README.INFRA.md` and the
   stack table above both describe it, but `docker-compose.sys-monitor.yml`
   hardcodes `./config-dev/…`.

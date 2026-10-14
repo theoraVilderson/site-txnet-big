@@ -10,6 +10,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/redis:8.8-alpine
     container_name: ${STACK_NAME:-txnet}-redis
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["6379"]
     restart: unless-stopped
     # An explicit ceiling and policy (OPS-1-v, H21): without one Redis grows
     # until the host kills it. noeviction because sessions, locks and rate
@@ -55,6 +57,8 @@ services:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-postgres
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["5432"]
     restart: unless-stopped
     # Tuning (OPS-1-f, H10): the memory settings come from env so production
     # sizes them to its host — shared_buffers 25%, effective_cache_size 75% of
@@ -115,6 +119,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/axllent/mailpit:v1.27
     container_name: ${STACK_NAME:-txnet}-mailpit
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["${SMTP_PORT:-1025}"]
     restart: unless-stopped
     networks:
       - private_backend_network
@@ -132,6 +138,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/rabbitmq:4.2-management-alpine
     container_name: ${STACK_NAME:-txnet}-rabbitmq
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["5672"]
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}

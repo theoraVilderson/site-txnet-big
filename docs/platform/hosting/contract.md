@@ -14,8 +14,8 @@ to use.
 
 ## TL;DR
 Postgres is backed up continuously and the restore is proven weekly; every
-pooled connection goes through PgBouncer; logs are bounded and JSON; Swarm
-deploys start the new task before stopping the old.
+pooled connection goes through PgBouncer; logs are bounded and JSON; a
+Kubernetes rollout starts the new pod before stopping the old (ADR-0147).
 
 ## Backup and recovery
 
@@ -182,19 +182,9 @@ keeps its own). worker-service and metering-service (no HTTP, ADR-0027) call
 (`HEALTH_PATH` for an app with no prefix); both in `compose/health.yml`, which a service `extends`.
 Interval 10s, timeout 3s, retries 3, `start_period` 60s; `/health` is 200 while `SELECT 1` on its pool succeeds, else 503.
 
-**H16 — Swarm stack.** `swarm/docker-stack.yml` is complete on its own (no
-second file): every service of `docker-compose.main.yml`, `image:` tags from
-`${IMAGE_TAG}` (no `build:` in Swarm), `deploy.replicas: 1`,
-`deploy.update_config: {parallelism: 1, order: start-first, failure_action: rollback, monitor: 30s}`
-(data stores — `main-db`, `memory-data`, `rabbitmq` — use `order: stop-first`:
-two writers on one volume corrupt it), `deploy.restart_policy: {condition: any, delay: 5s}`,
-`deploy.resources.limits.memory` = the dev ceilings, Traefik labels under
-`deploy.labels`, Traefik with `--providers.swarm` replacing `--providers.docker`,
-secrets (`vault-kek`, passphrases) as Swarm `secrets:`. Checked with
-`docker stack config -c swarm/docker-stack.yml` — never deployed by an agent on
-this host (it runs the user's live site; `docker swarm init` changes the host).
-`scripts/prod.stack.sh` deploys it; `scripts/prod.compose.sh` stays until the
-cutover (OPS-1-o) and is then removed.
+**H16 — Orchestration (ADR-0147).** Production is Kubernetes (k3s), rendered
+from the compose files; every value is in `contract.kubernetes.md` (K1…K12).
+`scripts/prod.compose.sh` stays until the cutover (OPS-1-p) and is then removed.
 
 **H17 — Translations from disk.** The Node locale client takes `cacheDir`
 (env `LOCALE_CACHE_DIR`, default `/var/cache/txnet-locale`). After every
@@ -238,9 +228,10 @@ mirror); alert `RedisMemoryHigh` used/max > 0.8 for 10m. Rules in
 
 ## Later
 
-**H22 — Standby (OPS-1-y).** A streaming replica on a second server, fed from
+**H22 — Standby (OPS-1-y).** A streaming replica on a second k3s node, fed from
 the same pgBackRest repository (`archive-get` + `primary_conninfo`), promoted
-by the runbook in H6. Blocked until the server exists.
+by the runbook in H6. Blocked until the server exists; ADR-0147 point 4 decides
+then whether an operator replaces it.
 
 ## Consumes
 | From unit | What | Failure behaviour if unavailable |

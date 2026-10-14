@@ -1,0 +1,145 @@
+---
+id: hosting
+layer: platform
+status: active
+version: 1
+updated: 2026-10-14
+---
+
+# Contract — hosting: Kubernetes
+
+The build spec for ADR-0147 (OPS-1-o-a … -g). Every value here is decided; a
+building session does not reopen one. H15's healthchecks and H3's shared socket
+are inputs; nothing here changes what a service does once it is up.
+
+## TL;DR
+Production is k3s. The compose files stay the only home of a service's
+definition; `tools/k8s_render.py` turns the production compose model into a
+Kustomize base at deploy time, and `k8s/overlays/` holds what differs per
+environment. A rollout starts the new pod and waits for its readiness probe
+before stopping the old one.
+
+## The cluster
+
+**K1 — Distribution.** k3s, version pinned once in `k8s/versions.env`
+(`K3S_IMAGE`, `TRAEFIK_CRD_VERSION`). Server flags: `--disable=traefik` (we run
+ours, K9). `servicelb` and `local-path` stay on. Namespace `txnet` for the
+platform, `txnet-monitoring` for K11. An agent never installs k3s on the dev
+host (ADR-0147 point 6); the production install is OPS-1-p, with the user.
+
+**K2 — The renderer.** `tools/k8s_render.py <out-dir>` reads
+`docker compose -p txnet --env-file .env --env-file .env.prod
+-f dev-docker/docker-compose.main.yml config --format json` with
+`ENVIRONMENT=prod` — compose does the interpolation, so `${VAR:-default}`,
+`${VAR:?}` and `$$` mean exactly what they mean today. It writes a Kustomize
+base (`kustomization.yaml` + one file per service) and never a committed file:
+the output is a build artifact like an image. A compose key it does not map is
+an error naming the service and key, never a silent drop. Its k8s-only facts
+(K3, K7) are tables at the top of the file; that is their one home.
+
+## Workloads
+
+**K3 — One workload per compose service.** `replicas: 1`, labels
+`app.kubernetes.io/name: <service>`, `app.kubernetes.io/part-of: txnet`.
+- The data stores `main-db`, `memory-data`, `rabbitmq` are StatefulSets: one
+  pod, its volume claim, a stop before the start (two writers on one volume
+  corrupt it).
+- Everything else is a Deployment with `strategy: RollingUpdate`,
+  `maxSurge: 1`, `maxUnavailable: 0`, `minReadySeconds: 10`,
+  `progressDeadlineSeconds: 300`, `revisionHistoryLimit: 3`.
+- `pg-backup` is not a workload of its own: it is a second container in the
+  `main-db` pod, and `pg_socket` an `emptyDir` both mount (H3). Its cron loop
+  is unchanged.
+- `restart: unless-stopped` is the pod default; `depends_on` is dropped — a
+  pod that starts before its dependency fails its probe and is retried, which
+  is what H15's DB ping is for.
+- `stop_grace_period` -> `terminationGracePeriodSeconds` (compose's 10s when
+  unset); `extra_hosts` -> `hostAliases`, Docker's `host-gateway` being the node's
+  address the deploy passes (`--host-gateway`); `working_dir`, `entrypoint`,
+  `command` -> `workingDir`, `command`, `args`; `container_name` is dropped.
+
+**K4 — Services and names.** A compose service that others call declares the
+ports in compose's own `expose:` list; the renderer makes a ClusterIP Service
+of the same name with those ports. Every `host:port` and `//host` naming a
+compose service in any rendered environment value must resolve to an
+`expose:`d port, or the render fails — a call that would have died at run time
+dies at render time instead.
+
+**K5 — Environment.** A service's whole rendered `environment` is one Secret,
+`<service>-env`, mounted with `envFrom` — exactly the variables its compose
+service lists, as today, and no value in a pod spec. Kubernetes expands `$(X)`
+in `env`, `command` and `args`; the renderer writes every literal `$(` as `$$(`
+so a shell `$(date)` survives. The Secret's name carries a hash of its data,
+as Kustomize's generators do, so a changed value rolls the pod.
+
+**K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
+an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`
+with compose's interval, timeout and retries; a `startupProbe` with
+`failureThreshold = ceil(start_period / interval)` holds both off for the start
+period. A service with no healthcheck (OPS-1-aa's list) gets none, and its
+rollout is not gated on health until that row lands.
+
+**K7 — Volumes.**
+- A named volume is one PersistentVolumeClaim of the same name
+  (`local-path`, `ReadWriteOnce`, size from the renderer's table, `1Gi` when
+  unlisted); services that share it mount the same claim, which one node
+  allows. A second node needs `ReadWriteMany` for `object_storage` and
+  `locale_cache` — OPS-1-y's question, not this one.
+- A host path (`PG_BACKUP_LOCAL_DIR`, `OBJECT_BACKUP_LOCAL_DIR`,
+  `NODE_TEXTFILE_DIR`) is a `hostPath` of type `DirectoryOrCreate`.
+- A bound file under `dev-docker/secrets/` is a Secret `secret-<file>` mounted
+  read-only at the same path with `subPath`; any other bound file is a
+  ConfigMap `cfg-<file>` the same way; both names hashed as in K5.
+- A bound directory is either listed in the renderer's dev-only table (source
+  trees, `node_modules`, `.next`, `/var/run/docker.sock`) and dropped, or
+  baked into the image (K8). Anything else fails the render.
+- `tmpfs` and `shm_size` are `emptyDir` with `medium: Memory`.
+
+**K8 — Images.** Every compose service with `build:` is built with its compose
+build section and `ENVIRONMENT=prod`, and tagged
+`${LOCAL_DOCKER_REGISTRY}/txnet/<service>:${IMAGE_TAG}`; a pulled image keeps
+its compose `image:`. Two directories are baked in instead of mounted:
+`locales/` into `locale-service` (36 MB, past a ConfigMap's 1 MiB), and
+Traefik's `dynamic/`, `plugins-local/` and `origin-pull/` into
+`dev-docker/traefik/Dockerfile`'s `txnet/edge` image. Migrations run as Job
+`db-migrate` (`prisma migrate deploy --schema prisma/domains`) from the
+backend Dockerfile's `dependencies` stage, before any Deployment is applied.
+
+**K9 — Traefik.** Our Traefik (`txnet/edge`, K8) runs as a Deployment behind a
+`LoadBalancer` Service on 80/443 (k3s `servicelb`). `--providers.docker*`
+becomes `--providers.kubernetescrd` with `--providers.file` kept for the
+baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
+`IngressRoute` `<r>` (`match` = rule, `priority`, `entryPoints`,
+`middlewares`, `tls.certResolver`, the service port from the
+`loadbalancer.server.port` label); each `traefik.http.middlewares.<m>.*` set is
+one `Middleware` `<m>`; `@file` references stay as they are. Traefik's CRDs and
+RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
+is claim `letsencrypt`. On a k3s host O7's chain is reached from `FORWARD`
+(`--ctorigdstport 80|443`) where Docker's host used `DOCKER-USER` (OPS-1-o-g).
+
+## Deploying
+
+**K10 — `scripts/prod.k8s.sh build|push|render|deploy`.** `deploy` renders,
+runs `db-migrate` to completion, applies the overlay
+(`kubectl apply -k k8s/overlays/<env> --prune -l app.kubernetes.io/part-of=txnet`),
+then waits on `kubectl rollout status --timeout=300s` for every workload; a
+workload that does not become ready is `kubectl rollout undo`ne and the script
+fails — Swarm's `failure_action: rollback`. Overlays: `prod`, `rehearsal`.
+
+**K11 — Monitoring.** `docker-compose.sys-monitor.yml` is rendered the same
+way into `txnet-monitoring`. Promtail runs as a DaemonSet reading
+`/var/log/pods` (the `txnet.logging=true` label becomes the pod label
+`txnet.io/logging: "true"`); Prometheus scrapes by Service DNS name.
+
+## The rehearsal
+
+**K12 — A throwaway cluster on the dev host.** `scripts/k8s-rehearse.sh
+up|deploy|check|down`: k3d cluster `txnet-rehearsal` from `K3S_IMAGE` through
+`${DOCKER_REGISTRY}`, load balancer on `127.0.0.1:18080` and `127.0.0.1:18443`
+only (never 80/443: the live site holds them), images by `k3d image import`
+instead of a push, overlay `rehearsal` (dev's env files, no ACME, the two
+translators at zero replicas: 7 GB free is not enough for them beside the rest).
+`check` proves the row: every workload ready, a rolling update of
+`billing-service` under a request loop with zero failed requests, a
+`main-db` pod deleted and back with its data. `down` deletes the cluster; it
+never outlives the session that made it.

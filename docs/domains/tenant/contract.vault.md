@@ -166,7 +166,7 @@ SMS sender line, a second bot) and defaults to the singular `''`.
 a credential's *value* from the environment; a path is not one, and the
 distinction is the reason the file exists at all — an environment variable is
 readable from `docker inspect`, from `/proc/<pid>/environ` and from every child
-process this service spawns. In Swarm the file is a mounted secret; the dev
+process this service spawns. On Kubernetes the file is a mounted Secret (ADR-0147, hosting K7); the dev
 stack bind-mounts `dev-docker/secrets/vault-kek` read-only to the same path.
 
 **A deployment with no KEK still boots.** Nothing writes a tenant credential

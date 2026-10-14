@@ -224,7 +224,7 @@ steps 2-6 since 2026-10-07, and `edge_zone.py plan` there finds nothing to do):
    the prod host, `issue` first unless dev's pair is copied there).
 5. `.env.prod`: `EDGE_ORIGIN_PULL=required`, `EDGE_LIFECYCLE_ENABLED=true`;
    restart the gateway and `tenant-service`.
-6. Swarm host: `cloudflare_firewall.py install` and `apply` (hosting O7).
+6. Production host: `cloudflare_firewall.py install` and `apply` (hosting O7).
 7. *User:* the new address from the host's provider (the old one is in public
    DNS history). `ENV_FILE=.env.prod scripts/edge/edge_zone.py repoint OLD NEW`
    moves every A record on it, then the old address is released.

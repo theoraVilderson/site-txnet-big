@@ -18,6 +18,8 @@ services:
         - APP_NAME=auth-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-auth-service
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["${AUTH_PORT}"]
     restart: unless-stopped
     volumes:
       - ../txnet-backend:/app:delegated

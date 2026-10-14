@@ -18,6 +18,8 @@ services:
         - APP_NAME=billing-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-billing-service
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["3000"]
     restart: unless-stopped
     # No `command:` — the image's CMD, as for auth-service. On the dev target
     # that is `scripts/dev-serve.js`: one webpack watch over the mounted
