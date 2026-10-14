@@ -1933,13 +1933,13 @@ BAN-1-g after BAN-1-b.
 
 User, 2026-10-13 (ADR-0142). PT-1-a first; PT-1-b after it; PT-1-c … PT-1-k in any order after PT-1-a, one domain per row.
 
-## Order of work — the FE-1 front-end cleanup series
+## Order of work — the FE-1 front-end cleanup series (upkeep)
 
 User, 2026-10-13. Bugs first, then shared values, then deletion before renames:
 FE-1-a → FE-1-b → FE-1-c → FE-1-e → FE-1-f (FE-1-d done 2026-10-13); FE-1-g, FE-1-h, FE-1-j, FE-1-k at any time;
 FE-1-i last, one view per session.
 
-## Order of work — the CS-1 code standard series
+## Order of work — the CS-1 code standard series (upkeep)
 
 User, 2026-10-13. Any order; each row empties one `except` list or baseline entry.
 CS-1-a before CS-1-b (both C-17); CS-1-g at any time.
@@ -1951,6 +1951,10 @@ CS-1-a before CS-1-b (both C-17); CS-1-g at any time.
 - `blocked` requires the blocker named in `note` and a matching entry in the
   unit's `open-questions.md`.
 - Ids are permanent. Never renumber.
+- A series that changes how code is written, not what it does (a cleanup, a
+  code standard), ends its `Order of work` heading with `(upkeep)`. Its `done`
+  rows do not make a unit `active`; every other `done` row does
+  (`tools/unit_status.py`, docs-check check 9b).
 
 ## Decisions needed from the user
 
