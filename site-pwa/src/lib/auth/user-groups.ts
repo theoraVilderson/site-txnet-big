@@ -34,6 +34,12 @@ export type UserGroupMember = {
 };
 
 /**
+ * One group on a person's page (GR-1-u): whether they are in it and until when,
+ * whether it gives keys, and whether this caller may change who is in it.
+ */
+export type PersonGroup = { id: string; name: string; member: boolean; expiresAt: string | null; givesKeys: boolean; mayChange: boolean };
+
+/**
  * Whose groups a call reaches: `null` the session's tenant (`/auth/user-groups`),
  * or a tenant by its path, behind `ResellerAccess` (GR-1-d, ADR-0139 (5)).
  */
@@ -64,6 +70,8 @@ export function groupsApi(tenantId: string | null) {
     async create(body: { name: string; allTenants?: boolean }) { return request<UserGroup>(base, { method: "POST", body: JSON.stringify(body) }); },
     async update(id: string, body: { name?: string; allTenants?: boolean }) { return request<UserGroup>(userGroupPath(id), { method: "PATCH", body: JSON.stringify(body) }); },
     async remove(id: string) { return request<{ id: string; deleted: true }>(userGroupPath(id), { method: "DELETE" }); },
+    /** Every group, weighed for one person (GR-1-u) — what their Profile tab shows. */
+    async personGroups(userId: string) { return request<PersonGroup[]>(`${base}/people/${encodeURIComponent(userId)}`, { method: "GET" }); },
     async members(id: string, page: number, pageSize: number) {
       return request<{ items: UserGroupMember[]; total: number; page: number; pageSize: number }>(`${userGroupPath(id)}/members?page=${page}&pageSize=${pageSize}`, { method: "GET" });
     },

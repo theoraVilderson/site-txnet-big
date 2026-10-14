@@ -40,7 +40,7 @@ function build(admit: boolean, as: 'owner' | 'member' | 'staff' = 'owner') {
     addMembers: scoped({ added: 1 }),
     setMemberEnd: scoped({ userId: 'u-1', expiresAt: null }),
   };
-  return { controller: new ResellerUserGroupsController(access as never, groups as never), access, groups, seenScope };
+  return { controller: new ResellerUserGroupsController(access as never, groups as never, {} as never), access, groups, seenScope };
 }
 
 describe('ResellerUserGroupsController', () => {

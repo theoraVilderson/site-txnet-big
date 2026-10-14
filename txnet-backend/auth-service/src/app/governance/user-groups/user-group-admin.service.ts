@@ -104,7 +104,7 @@ export type UserGroupMemberView = {
 export type UserGroupMemberPage = { items: UserGroupMemberView[]; total: number; page: number; pageSize: number };
 
 type Tx = Prisma.TransactionClient;
-type GroupRow = {
+export type GroupRow = {
   id: string;
   name: string;
   kind: UserGroupKind;
@@ -118,7 +118,7 @@ type GroupRow = {
 type Counts = { userCount: number; tenantCount: number };
 
 /** Read beside a group, so its view says what it gives. */
-const WITH_ACCESS = {
+export const WITH_ACCESS = {
   role: { select: { name: true, rolePermissions: { select: { permission: { select: { key: true } } } } } },
   permissions: { select: { permission: { select: { key: true } } } },
 } as const;
@@ -130,7 +130,7 @@ const accessOf = (g: GroupRow): UserGroupAccess => ({
 });
 
 /** Every key a group gives: its role's and its own. */
-const keysGiven = (g: GroupRow): string[] => [...(g.role?.rolePermissions.map((rp) => rp.permission.key) ?? []), ...accessOf(g).keys];
+export const keysGiven = (g: GroupRow): string[] => [...(g.role?.rolePermissions.map((rp) => rp.permission.key) ?? []), ...accessOf(g).keys];
 
 const RESELLER_KEY: ReadonlySet<string> = new Set(RESELLER_KEYS);
 

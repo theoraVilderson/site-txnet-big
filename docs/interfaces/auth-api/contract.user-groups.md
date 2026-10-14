@@ -2,8 +2,8 @@
 id: auth-api
 layer: interface
 status: active
-version: 50
-updated: 2026-10-09
+version: 53
+updated: 2026-10-14
 ---
 
 # Contract — auth-api / user groups
@@ -33,6 +33,7 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | PATCH `/auth/user-groups/:id` | `name?`, `allTenants?` — at least one | 200 `group` | write |
 | DELETE `/auth/user-groups/:id` | — | 200 `{id, deleted: true}`; its members go with it | write |
 | PUT `/auth/user-groups/:id/access` (v46, AC-1-m) | `{roleId: uuid \| null, keys: [key]}` (≤ 200) — the **whole** set | 200 `group` | write |
+| GET `/auth/user-groups/people/:userId` (v53, GR-1-u) | — | 200 `[{id, name, member, expiresAt, givesKeys, mayChange}]` by name — every group but "every reseller", for one person: `member` only while the membership is live; `mayChange` when the caller holds every key the group gives (else a member write refuses `key_not_held`). A person's page reads it | read |
 | GET `/auth/user-groups/:id/members` | `page` >=1 (1), `pageSize` 1-100 (50) | 200 `{items:[{memberType, userId, tenantId, label, receivesAccess, addedAt, expiresAt}], total, page, pageSize}`, newest first; `expiresAt` (v49) the membership's end or null; `label` is a user's `fullName` or a reseller's `slug` — never a phone; `receivesAccess` (v47): a user of the group's own tenant, who holds what it gives | read |
 | POST `/auth/user-groups/:id/members` | `userIds?`, `tenantIds?` — ≤ 500 each, at least one id; `expiresAt?` (v49) date or null — the end of every membership this call adds | 200 `{added}` — only the new ones; one already in is not an error, and keeps its end | write |
 | POST `/auth/user-groups/:id/members/changes` (GR-1-i) | `{add?:[{userId \| tenantId, expiresAt?}], remove?:[{userId \| tenantId}], ends?:[{userId \| tenantId, expiresAt \| null}]}` (a reseller member's end too, GR-1-l) — ≤ 500 each, at least one change | 200 `{added, removed, endsMoved}`: every change in one transaction, or none; a refusal's `facts.detail` names the member (or keys) refused | write |
@@ -40,7 +41,7 @@ SuperAdmin as `*`), and acts on the **session's tenant** — nothing takes a
 | DELETE `/auth/user-groups/:id/members/users/:userId` | — | 200 `{removed: true}` | write |
 | DELETE `/auth/user-groups/:id/members/tenants/:tenantId` | — | 200 `{removed: true}` | write |
 | GET `/auth/tenants/:tenantId/user-groups` | — | 200 `[group]` — the **path's** reseller's, behind `ResellerAccess` (invariant 21, `read`), not `user_group.manage`; read in its scope (F-102-g-d, ADR-0064 (1)). 403 `not_allowed` / `reseller_suspended`, 404 `reseller_not_found`, 409 `reseller_terminated` | read |
-| POST, PATCH `/:id`, DELETE `/:id`, GET `/:id/members`, PUT `/:id/access`, POST `/:id/members`, PATCH and DELETE `/:id/members/users/:userId`, POST `/:id/members/changes` — each under `/auth/tenants/:tenantId/user-groups` (v49, GR-1-d, ADR-0139 (5)) | as the ambient route | as the ambient route, on the path's reseller: behind `ResellerAccess.for('user_group.manage')` (`staffWrite` on a write), in its scope. What the caller may give is the tenant ceiling — whole for the owner, the part they hold for the platform's staff, their own keys for the reseller's member. The door's refusals as on GET, then the service's below | as the ambient route |
+| POST, PATCH `/:id`, DELETE `/:id`, GET `/people/:userId`, GET `/:id/members`, PUT `/:id/access`, POST `/:id/members`, PATCH and DELETE `/:id/members/users/:userId`, POST `/:id/members/changes` — each under `/auth/tenants/:tenantId/user-groups` (v49, GR-1-d, ADR-0139 (5)) | as the ambient route | as the ambient route, on the path's reseller: behind `ResellerAccess.for('user_group.manage')` (`staffWrite` on a write), in its scope. What the caller may give is the tenant ceiling — whole for the owner, the part they hold for the platform's staff, their own keys for the reseller's member. The door's refusals as on GET, then the service's below | as the ambient route |
 
 `POST /internal/user-groups/end-memberships` (GR-1-c): **service callers only** (404 otherwise), no tenant; 200 `{ended, told}` — worker `group_membership_end`'s seam, governance `contract.md`.
 

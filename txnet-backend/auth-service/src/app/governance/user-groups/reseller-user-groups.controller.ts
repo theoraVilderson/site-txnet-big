@@ -35,6 +35,7 @@ import type { AuthClaims } from '../../auth/token.service';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { USER_GROUP_READ, USER_GROUP_WRITE, answeringRefusals } from './user-group.controller';
 import { UserGroupActor, UserGroupAdminService, UserGroupInput, UserGroupView } from './user-group-admin.service';
+import { UserGroupPersonService } from './user-group-person.service';
 import {
   AddUserGroupMembersBody,
   ChangeUserGroupMembersBody,
@@ -82,6 +83,7 @@ export class ResellerUserGroupsController {
   constructor(
     private readonly access: ResellerAccess,
     private readonly groups: UserGroupAdminService,
+    private readonly person: UserGroupPersonService,
   ) {}
 
   @Get()
@@ -112,6 +114,13 @@ export class ResellerUserGroupsController {
   @RateLimit(USER_GROUP_WRITE)
   remove(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     return this.run(req, tenantId, 'staffWrite', (actor) => this.groups.remove(actor, id));
+  }
+
+  /** One of the reseller's people and its groups (GR-1-u), weighed by what this caller may give here. */
+  @Get('people/:userId')
+  @RateLimit(USER_GROUP_READ)
+  personGroups(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('userId', new ParseUUIDPipe()) userId: string, @Req() req: Request) {
+    return this.run(req, tenantId, 'read', (actor) => this.person.of(actor, userId));
   }
 
   @Get(':id/members')

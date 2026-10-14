@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { resellerUserPath } from "@/lib/auth-api";
-import { USER_REFUSAL_KEYS, profileChanges, roleEditable } from "./_lib/users";
+import type { PersonGroup } from "@/lib/auth-api";
+import { USER_REFUSAL_KEYS, personGroupLists, profileChanges } from "./_lib/users";
 
 /**
  * The Profile tab on one user's page (AC-1-b) over auth's
@@ -53,15 +54,12 @@ describe("profileChanges", () => {
   });
 });
 
-describe("roleEditable", () => {
-  it("on a reseller, only for someone on the team the caller has authority over", () => {
-    expect(roleEditable({ canAct: true, staff: true }, false)).toBe(true);
-    expect(roleEditable({ canAct: true, staff: false }, false)).toBe(false);
-    expect(roleEditable({ canAct: false, staff: true }, false)).toBe(false);
-  });
+describe("personGroupLists", () => {
+  const g = (id: string, member: boolean, mayChange: boolean): PersonGroup => ({ id, name: id, member, expiresAt: null, givesKeys: !mayChange, mayChange });
 
-  it("on the platform, for anyone the caller has authority over — it has no seats", () => {
-    expect(roleEditable({ canAct: true, staff: false }, true)).toBe(true);
-    expect(roleEditable({ canAct: false, staff: false }, true)).toBe(false);
+  it("lists the groups they are in, and offers to add only to groups this caller may change", () => {
+    const out = personGroupLists([g("vip", true, true), g("admin", false, false), g("support", false, true), g("finance", true, false)]);
+    expect(out.member.map((x) => x.id)).toEqual(["vip", "finance"]);
+    expect(out.joinable.map((x) => x.id)).toEqual(["support"]);
   });
 });

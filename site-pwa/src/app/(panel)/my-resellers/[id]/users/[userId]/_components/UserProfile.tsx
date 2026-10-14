@@ -1,23 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale } from "@/context/LocaleContext";
-import {
-  resellerUsersApi,
-  tenantRolesApi,
-  type ResellerUserProfile,
-  type TenantRole,
-} from "@/lib/auth-api";
-import { PANEL_GROUPS, myResellerGroupsPath } from "@/lib/routes";
+import { resellerUsersApi, type ResellerUserProfile } from "@/lib/auth-api";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import {
   Alert,
   Button,
   Field,
   Input,
-  NativeSelect,
   notify,
   useConfirm,
 } from "../../../../../_components/kit";
@@ -26,14 +18,9 @@ import { SignInAsUser, mayImpersonate } from "../../../../../_components/SignInA
 import { usePanelSession } from "../../../../../_context/PanelSessionContext";
 import { ConsentNeeded } from "../../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../../_lib/support-access";
-import { assignableRoles, teamRefusalKey } from "../../../../_lib/team";
-import {
-  USER_KEYS as K,
-  profileChanges,
-  roleEditable,
-} from "../../../../_lib/users";
-import { useWorkspaceSelf } from "../../../../_lib/workspace";
+import { USER_KEYS as K, profileChanges } from "../../../../_lib/users";
 import { AccessHistory } from "./AccessHistory";
+import { UserGroups } from "./UserGroups";
 import { UserPermissions } from "./UserPermissions";
 import { UserRestrictions } from "./UserRestrictions";
 import { useUserMessage } from "./useUserMessage";
@@ -42,25 +29,23 @@ const P = K.profile;
 
 /**
  * The Profile tab of one user's page (AC-1-b, `panel-web/contract.reseller-users.md`):
- * auth's `GET`/`PATCH …/users/:userId` (AC-1-a) and the role at
- * `PUT …/users/:userId/role` (F-1201-a), on the **path's** tenant.
+ * auth's `GET`/`PATCH …/users/:userId` (AC-1-a), on the **path's** tenant.
  *
  *  - **name and username are edited; the email is only removed.** A stored
  *    address is one its owner proved (identity invariant 15), so staff never
  *    type one; the phone is the person's sign-in and is shown masked;
  *  - **the server's `canAct` decides what is offered** (ADR-0103): without it
  *    the tab is read-only and says why;
- *  - **the role is changed only for someone on the team**, on a reseller
- *    (`roleEditable`): a role without a seat admits nothing there, and the
- *    seat is the Team page's;
+ *  - **access is given by groups, never a role** (ADR-0139 (1)): the groups
+ *    they are in, add and remove — `UserGroups` (GR-1-u);
  *  - **a save sends only what changed** (`profileChanges`), and the answer
  *    replaces what is shown;
  *  - **every key they hold and where it comes from**, give / take / lift one
- *    (AC-1-n): `UserPermissions`, below the role;
+ *    (AC-1-n): `UserPermissions`, below the groups;
  *  - **the caps and bars on them**, add / change / lift one (F-030-f):
  *    `UserRestrictions`, below the permissions;
  *  - **who changed their access, when and why** (AC-1-p): `AccessHistory`,
- *    below the permissions, re-read after a role or key written here;
+ *    below the permissions, re-read after a group or key written here;
  *  - **"sign in as this user"** (AC-1-i) on the caller's own tenant, or for
  *    platform staff on a reseller's user under its consent — `mayImpersonate`:
  *    `canAct` (never the owner, ADR-0137) and the route's key. A reseller's own
@@ -75,7 +60,7 @@ export function UserProfile({
 }: {
   id: string;
   userId: string;
-  /** On the session's own `/users`: the team link is `/team`. */
+  /** On the session's own `/users`: its groups are the session's own (`/auth/user-groups`). */
   own?: boolean;
   /** Each answer shown, so the page's title follows a renamed person. */
   onShown?: (p: ResellerUserProfile) => void;
@@ -83,30 +68,22 @@ export function UserProfile({
 }) {
   const { t, lang } = useLocale();
   const confirm = useConfirm();
-  const userMessage = useUserMessage();
-  const self = useWorkspaceSelf(id);
+  const message = useUserMessage();
   const { me } = usePanelSession();
   const here = usePathname();
-  const message = (e: unknown) => {
-    const key = teamRefusalKey(e);
-    return key ? t("common", key) : userMessage(e);
-  };
 
   const [person, setPerson] = useState<ResellerUserProfile | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
-  const [roles, setRoles] = useState<TenantRole[]>([]);
   const [form, setForm] = useState({ fullName: "", username: "" });
-  const [roleId, setRoleId] = useState("");
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<unknown>(null);
-  /** Bumped by a role or key written here, so the open access history re-reads (AC-1-p). */
+  /** Bumped by a group or key written here, so the open access history re-reads (AC-1-p). */
   const [accessMoved, setAccessMoved] = useState(0);
 
   const show = (p: ResellerUserProfile) => {
     setPerson(p);
     onShown?.(p);
     setForm({ fullName: p.fullName, username: p.username ?? "" });
-    setRoleId(p.role?.id ?? "");
   };
 
   useEffect(() => {
@@ -119,19 +96,6 @@ export function UserProfile({
       alive = false;
     };
   }, [id, userId]);
-
-  const canRole = person ? roleEditable(person, platform) : false;
-  useEffect(() => {
-    if (!canRole) return;
-    let alive = true;
-    tenantRolesApi
-      .list(id)
-      .then((r) => alive && setRoles(assignableRoles(r.roles, r.grantable)))
-      .catch(() => alive && setRoles([]));
-    return () => {
-      alive = false;
-    };
-  }, [id, canRole]);
 
   async function run(work: () => Promise<void>) {
     setBusy(true);
@@ -173,14 +137,6 @@ export function UserProfile({
       notify.success(t("common", P.emailRemoved));
     });
   }
-
-  const changeRole = () =>
-    run(async () => {
-      await tenantRolesApi.assign(id, userId, roleId);
-      setAccessMoved((n) => n + 1);
-      show(await resellerUsersApi.profile(id, userId));
-      notify.success(t("common", P.roleSaved));
-    });
 
   const editable = person.canAct;
   const impersonable = (own || platform) && mayImpersonate(person, me, !own);
@@ -271,52 +227,7 @@ export function UserProfile({
         </div>
       </dl>
 
-      <section className="space-y-3 rounded-2xl border border-card-border bg-card-bg p-4 md:p-6">
-        {canRole ? (
-          <div className="flex flex-wrap items-end gap-3">
-            <Field label={t("common", P.role)}>
-              <NativeSelect
-                value={roleId}
-                disabled={busy}
-                onChange={(e) => setRoleId(e.target.value)}
-              >
-                {/* The held role stays listed even when this caller may not give it. */}
-                {person.role &&
-                  !roles.some((r) => r.id === person.role?.id) && (
-                    <option value={person.role.id}>{person.role.name}</option>
-                  )}
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
-                ))}
-              </NativeSelect>
-            </Field>
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={busy || !roleId || roleId === person.role?.id}
-              onClick={changeRole}
-            >
-              {t("common", P.roleSave)}
-            </Button>
-          </div>
-        ) : (
-          <div className="text-sm">
-            <p className="text-text-secondary">{t("common", P.role)}</p>
-            <p>{person.role?.name ?? t("common", P.noRole)}</p>
-            {editable && !platform && (
-              <Link
-                href={own ? PANEL_GROUPS : myResellerGroupsPath(id, self)}
-                className="mt-2 inline-block text-xs font-bold text-primary hover:underline"
-              >
-                {t("common", P.roleOnTeam)}
-              </Link>
-            )}
-          </div>
-        )}
-      </section>
-
+      <UserGroups tenantId={own ? null : id} userId={userId} name={person.fullName} canAct={editable} onChange={() => setAccessMoved((n) => n + 1)} />
       <UserPermissions id={id} userId={userId} canAct={editable} onChange={() => setAccessMoved((n) => n + 1)} />
       <UserRestrictions id={id} userId={userId} canAct={editable} />
       <AccessHistory id={id} userId={userId} refresh={accessMoved} />

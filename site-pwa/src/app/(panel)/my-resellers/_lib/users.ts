@@ -1,6 +1,6 @@
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { ResellerUser } from "@/lib/auth-api";
+import type { PersonGroup, ResellerUser } from "@/lib/auth-api";
 import type { AdminConfigAction, AdminConfigActionBody, ConfigActionRefusal, UsersCatalogProduct } from "@/lib/billing-api";
 import { myResellerUserPath, panelUserPath, resellerWorkspaceRoot } from "@/lib/routes";
 import { REFUSAL_KEYS } from "../../services/_lib/service-configs";
@@ -57,13 +57,12 @@ export function profileChanges(
 }
 
 /**
- * Whether the Profile tab changes this person's role (AC-1-b): only where the
- * caller has authority over them, and on a reseller only for someone already
- * on the team. Access beyond that is given by a group (ADR-0139 (1),
- * `contract.user-groups.md`). The platform has no seats.
+ * The Profile tab's groups (GR-1-u, ADR-0139 (1)): the ones the person is in,
+ * and the ones this caller may add them to. A group whose keys the caller does
+ * not all hold is never offered — the server would refuse `key_not_held`.
  */
-export function roleEditable(person: { canAct: boolean; staff: boolean }, platform: boolean): boolean {
-  return person.canAct && (platform || person.staff);
+export function personGroupLists(groups: readonly PersonGroup[]): { member: PersonGroup[]; joinable: PersonGroup[] } {
+  return { member: groups.filter((g) => g.member), joinable: groups.filter((g) => !g.member && g.mayChange) };
 }
 
 /** `GET /auth/tenants/:id/users` takes `q` of 3-64 characters (F-311-a). */

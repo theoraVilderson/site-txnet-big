@@ -1,4 +1,5 @@
 import { UserGroupMemberType } from '@prisma/client';
+import { holdsPermission } from '@txnet-backend/shared-core';
 
 /**
  * User groups (F-114-j, governance): who is in one, and what one may hold.
@@ -80,4 +81,36 @@ export function memberRefusal(
   // Every reseller is already in it; naming one more would be a second answer to one question.
   if (group.allTenants) return 'all_tenants_conflict';
   return null;
+}
+
+/** A group as one person's page weighs it: what it gives, and whether it is every reseller. */
+export type GroupForPerson = { id: string; name: string; allTenants: boolean; keys: readonly string[] };
+
+/** One group on a person's page (GR-1-u): are they in it, until when, and may this caller change that. */
+export type PersonGroupView = { id: string; name: string; member: boolean; expiresAt: Date | null; givesKeys: boolean; mayChange: boolean };
+
+/**
+ * Every group a person could be in, by name: in it only while the membership
+ * is live, and changeable only by a caller who holds every key the group gives
+ * — the rule a member write already holds (`key_not_held`). "Every reseller"
+ * is not a group a person joins (GR-1-n), so it is left out.
+ */
+export function personGroupsOf(
+  groups: readonly GroupForPerson[],
+  memberships: readonly { groupId: string; expiresAt: Date | null }[],
+  held: readonly string[],
+  now: Date = new Date(),
+): PersonGroupView[] {
+  const live = new Map(memberships.filter((m) => m.expiresAt === null || m.expiresAt > now).map((m) => [m.groupId, m.expiresAt]));
+  return groups
+    .filter((g) => !g.allTenants)
+    .map((g) => ({
+      id: g.id,
+      name: g.name,
+      member: live.has(g.id),
+      expiresAt: live.get(g.id) ?? null,
+      givesKeys: g.keys.length > 0,
+      mayChange: g.keys.every((k) => holdsPermission(held, k)),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

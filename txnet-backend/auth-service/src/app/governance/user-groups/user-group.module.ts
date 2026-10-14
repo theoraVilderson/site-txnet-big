@@ -3,6 +3,7 @@ import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { AuthModule } from '../../auth/auth.module';
 import { UserGroupAdminService } from './user-group-admin.service';
+import { UserGroupPersonService } from './user-group-person.service';
 import { MembershipEndInternalController } from './membership-end-internal.controller';
 import { MembershipEndSweep } from './membership-end.sweep';
 import { ResellerUserGroupsController } from './reseller-user-groups.controller';
@@ -19,6 +20,6 @@ import { UserGroupController } from './user-group.controller';
 @Module({
   imports: [AuthModule],
   controllers: [UserGroupController, ResellerUserGroupsController, MembershipEndInternalController],
-  providers: [UserGroupAdminService, MembershipEndSweep, ResellerAccess],
+  providers: [UserGroupAdminService, UserGroupPersonService, MembershipEndSweep, ResellerAccess],
 })
 export class UserGroupModule {}

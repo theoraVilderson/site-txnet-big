@@ -33,6 +33,7 @@ import {
   UserGroupInput,
   UserGroupRefused,
 } from './user-group-admin.service';
+import { UserGroupPersonService } from './user-group-person.service';
 import {
   AddUserGroupMembersBody,
   ChangeUserGroupMembersBody,
@@ -98,7 +99,10 @@ export const USER_GROUP_WRITE = {
 @Controller('auth/user-groups')
 @UseGuards(AuthGuard, new PermissionsGuard([USER_GROUP_MANAGE]))
 export class UserGroupController {
-  constructor(private readonly groups: UserGroupAdminService) {}
+  constructor(
+    private readonly groups: UserGroupAdminService,
+    private readonly person: UserGroupPersonService,
+  ) {}
 
   @Get()
   @RateLimit(USER_GROUP_READ)
@@ -125,6 +129,13 @@ export class UserGroupController {
   @RateLimit(USER_GROUP_WRITE)
   remove(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     return this.refusing(() => this.groups.remove(this.actor(req), id));
+  }
+
+  /** One person's groups, for their page (GR-1-u): in it or not, until when, and whether this caller may change it. */
+  @Get('people/:userId')
+  @RateLimit(USER_GROUP_READ)
+  personGroups(@Param('userId', new ParseUUIDPipe()) userId: string, @Req() req: Request) {
+    return this.refusing(() => this.person.of(this.actor(req), userId));
   }
 
   @Get(':id/members')
