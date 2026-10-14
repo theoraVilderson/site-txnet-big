@@ -81,6 +81,11 @@ export class TickPublisher implements OnModuleInit, OnApplicationShutdown {
       this.logger.error(
         `could not read schedules: ${err instanceof Error ? err.message : String(err)}`,
       );
+      // Nothing was asked about this window, so the next tick asks for it too
+      // (hosting H18): a short database outage over 03:00 must not swallow the
+      // nightly job. Only while no later tick has moved `since` on — rewinding
+      // past one that succeeded would publish its window twice.
+      if (this.since === now) this.since = since;
       return;
     }
 

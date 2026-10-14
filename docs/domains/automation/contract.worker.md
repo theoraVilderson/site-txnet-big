@@ -39,7 +39,8 @@ Three moving parts, one direction of flow:
    is asked about: an occurrence that fell between two ticks is still found, so
    a late timer does not drop work. It is bounded on the other side too — the
    interval is reset on boot, so a process that was down for a week does not
-   fire a week of missed occurrences at once.
+   fire a week of missed occurrences at once. A tick whose schedule read
+   failed keeps its interval: the next tick asks about both (hosting H18).
 3. **The run.** A consumer dispatches on `key`, opens the `bot_execution_log`
    row, runs the handler, and closes the row in both paths (invariant #3).
    `status` is three-way on purpose: some items processed *and* some errors is
