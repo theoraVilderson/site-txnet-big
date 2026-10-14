@@ -118,10 +118,13 @@ export function PanelRealtimeProvider({ children }: { children: ReactNode }) {
         // a live token — the shared refresh, not `ensureSession()` (memoised per
         // page load, the same dead token) and not a second `refresh()` racing a
         // refused call with the same cookie, which would sign one of them out.
-        authApi.refreshCredential().catch((e: unknown) => {
-          // AC-1-i: an impersonation that ran out came back to the admin; the
-          // identity remount opens the admin's socket. Not a lost session.
-          if (e instanceof ImpersonationEnded) return;
+        //
+        // AC-1-i: not while signed in as someone. A drop before the welcome is a
+        // guess — a gateway that is down looks the same — and the refresh would
+        // end the impersonation silently, running the panel as the admin. A
+        // token that really ran out is refused by the next call, which ends it.
+        if (authApi.impersonation()) return;
+        authApi.refreshCredential().catch(() => {
           // No cookie either. Retrying would ask a question already answered.
           if (!alive) return;
           socket.close();

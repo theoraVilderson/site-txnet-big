@@ -1,7 +1,7 @@
 ---
 id: adr-0136
 status: active
-updated: 2026-10-09
+updated: 2026-10-14
 ---
 
 # ADR 0136 — an impersonated token reaches only a listed route
@@ -40,12 +40,13 @@ gate (its router has no `my-auth`); it checks tokens in its own `AuthGuard`.
    route (a renamed route the list closed by accident), falls under a `never`
    prefix, or holds a `neverWords` word (§3.6's forbidden categories).
 4. **What is on it: the user's own panel**, reading and writing — services,
-   wallet history, invoices and paying from the wallet, deposit, support
+   wallet history, invoices and paying from the wallet, support
    conversations, notifications, lotteries, wheel, AI suggestion — minus the
    forbidden categories. Not on it: every staff and reseller route, even when
    the person impersonated is staff; the account switcher, handoff and
    sessions (they mint or end sessions); config lines and subscription links
-   (credentials); buying a reseller package (plans).
+   (credentials); buying a reseller package (plans); a deposit (the
+   person's own payment, and a gateway leaves the tab — ADR-0146).
 
 ## Consequences
 

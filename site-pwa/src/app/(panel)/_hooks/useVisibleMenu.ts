@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { holdsAnyResellerKey } from "@/lib/permissions";
 import { resellerPurchaseApi, tenantAccessApi } from "@/lib/tenant-api";
-import { PANEL_MENU, impersonationMenu, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
+import { PANEL_MENU, ownTenantOf, visibleMenu, type VisibleMenuEntry } from "../_lib/panel-menu";
+import { impersonationMenu } from "../_lib/impersonation";
 import { withResellerMenu } from "../_lib/reseller-menu";
 import { useResellerWorkspace } from "../_context/ResellerWorkspaceContext";
 import { usePanelSession } from "../_context/PanelSessionContext";

@@ -133,7 +133,6 @@ export type PermissionGated = {
   hiddenFrom?: readonly ("tenantOwner" | "resellerOwner")[];
 };
 
-
 export interface PanelMenuLink extends PermissionGated {
   id: string;
   /** A `common` namespace key. */
@@ -147,6 +146,8 @@ export interface PanelMenuLink extends PermissionGated {
    * (F-311-ab), and is hidden while that id is unknown.
    */
   href: string | ((tenantId: string, self: boolean) => string) | null;
+  /** The person's own act — a top-up, buying a reseller — never shown while an admin is signed in as them (ADR-0146). */
+  ownActOnly?: true;
 }
 
 export interface PanelMenuGroup extends PermissionGated {
@@ -236,6 +237,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
         label: M.deposit,
         icon: CreditCard,
         href: PANEL_DEPOSIT,
+        ownActOnly: true,
       },
     ],
   },
@@ -277,6 +279,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     href: PANEL_RESELLER_PURCHASE,
     tenantTypes: [PLATFORM_TENANT_TYPE],
     hiddenFrom: ["tenantOwner", "resellerOwner"],
+    ownActOnly: true,
   },
   {
     section: "account",
@@ -751,21 +754,4 @@ export function menuTrail(
   // `/` is the dashboard's own href and prefixes every path: only the dashboard itself is in it.
   if (active === "/" && trimSlash(pathname) !== "/") return [];
   return trails.find((t) => trimSlash(t.href) === active)?.trail ?? [];
-}
-
-/**
- * The menu while an admin is signed in as someone (AC-1-i): the account
- * section and the footer's settings alone. Every other section is a staff or
- * reseller route, which an impersonated token never reaches (ADR-0136),
- * whatever the person holds.
- */
-export function impersonationMenu<T extends { section?: string }>(
-  entries: readonly T[],
-): T[] {
-  return entries.filter(
-    (e) =>
-      e.section === undefined ||
-      e.section === "account" ||
-      e.section === "footer",
-  );
 }

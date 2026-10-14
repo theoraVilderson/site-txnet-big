@@ -3,6 +3,8 @@
 import { Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { forInvoiceOf } from "../../shop/_lib/shop";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { OwnActOnly } from "../../_components/OwnActOnly";
 import { DepositView } from "./_components/DepositView";
 
 /**
@@ -13,12 +15,16 @@ import { DepositView } from "./_components/DepositView";
  * and links back to that invoice. An amount the user types, and every coupon
  * code, stay out of the URL — a code in it would sit in the browser history.
  * `useSearchParams` needs the `Suspense` boundary for Next to prerender it.
+ * Every link to it lands on one sentence while an admin is signed in as the
+ * person: a top-up is their own act (`OwnActOnly`, ADR-0146).
  */
 export default function DepositPage() {
   return (
-    <Suspense fallback={null}>
-      <DepositFromQuery />
-    </Suspense>
+    <OwnActOnly why={FrontendI18nKeys.common.impersonation.ownActDeposit}>
+      <Suspense fallback={null}>
+        <DepositFromQuery />
+      </Suspense>
+    </OwnActOnly>
   );
 }
 

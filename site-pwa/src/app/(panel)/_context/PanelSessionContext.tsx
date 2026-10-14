@@ -16,6 +16,7 @@ import { browserReport, browserZone, setDisplayZone, type ResolvedTimeZone } fro
 import { miniAppHost } from "@/lib/mini-app";
 import { AUTH_LOGIN } from "@/lib/routes";
 import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
+import { impersonatedGroup } from "../_lib/impersonation";
 
 type PanelSession = {
   /** null while the session is still being established. */
@@ -86,16 +87,18 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
   );
 
   // AC-1-i: "sign in as this user" changes who the caller is in this tab. `me`
-  // is read as the new person and only then is everything below remounted
-  // under the new identity — the socket, the bell, the wallet and the page all
-  // start again as that person, never a mix of the two.
+  // and the group are read as the new person and only then is everything below
+  // remounted under the new identity — the socket, the bell, the wallet and the
+  // page all start again as that person, never a mix of the two. The group too:
+  // half the panel is keyed on `group.current`, which was the admin's.
   const [identity, setIdentity] = useState<string>("own");
   useEffect(
     () =>
       authApi.onImpersonationChange(() => {
         const next = authApi.impersonation()?.userId ?? "own";
-        void readMe().then((who) => {
+        void Promise.all([readMe(), next === "own" ? readGroup() : null]).then(([who, own]) => {
           setMe(who);
+          setGroup(next === "own" ? own : who && impersonatedGroup(who));
           setIdentity(next);
         });
       }),
@@ -207,6 +210,15 @@ async function syncTimeZone(): Promise<ResolvedTimeZone | null> {
 async function readMe(): Promise<Me | null> {
   try {
     return await authApi.me();
+  } catch {
+    return null;
+  }
+}
+
+/** The caller's own account group, or null when it cannot be read. */
+async function readGroup(): Promise<SwitchGroup | null> {
+  try {
+    return await authApi.listAccounts();
   } catch {
     return null;
   }

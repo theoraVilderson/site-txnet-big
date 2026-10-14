@@ -5978,7 +5978,7 @@
     "hint": "Opens their own panel, as they see it, for up to 30 minutes; recorded under your name.",
     "open": "Sign in",
     "dialogTitle": "Sign in as {{name}}",
-    "dialogBody": "For up to 30 minutes you see and use {{name}}'s own panel. Staff pages, the password, sessions and connection links stay closed. It is recorded under your name, with the reason below.",
+    "dialogBody": "For up to 30 minutes you see and use {{name}}'s own panel. Staff pages, the password, sessions, connection links and wallet top-ups stay closed. It is recorded under your name, with the reason below.",
     "reason": "Reason",
     "reasonHint": "At least 10 characters, e.g. the ticket number and the problem.",
     "confirm": "Sign in as this user",
@@ -5988,7 +5988,10 @@
     "end": "End and go back",
     "ended": "You are back in your own account.",
     "expired": "The 30 minutes are over. You are back in your own account.",
-    "reloadEnds": "Reloading the page also ends it."
+    "reloadEnds": "Reloading the page also ends it.",
+    "ownActTitle": "Only the user does this",
+    "ownActDeposit": "Paying with a card or a gateway is the user's own act. Going to a gateway leaves this page and ends signing in as them.",
+    "ownActReseller": "Buying a reseller is the user's own decision and payment, and stays closed while you are signed in as them."
   },
   "personKeys": {
     "title": "Permissions",

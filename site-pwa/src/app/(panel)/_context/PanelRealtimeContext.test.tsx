@@ -32,7 +32,7 @@ import { AUTH_LOGIN } from "@/lib/routes";
 
 vi.mock("./PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
 vi.mock("@/lib/auth-api", () => ({
-  authApi: { getAccessToken: vi.fn(), refreshCredential: vi.fn() },
+  authApi: { getAccessToken: vi.fn(), refreshCredential: vi.fn(), impersonation: vi.fn(() => null) },
   ImpersonationEnded: class ImpersonationEnded extends Error {},
 }));
 vi.mock("@/lib/realtime", () => ({ createRealtimeClient: vi.fn() }));
@@ -163,17 +163,21 @@ describe("when the upgrade was refused before a socket existed", () => {
     expect(clients[0].close).toHaveBeenCalled();
   });
 
-  // AC-1-i: the refused token was an impersonation that ran out. The admin is
-  // back on their own token, and the identity remount opens their socket.
-  it("does not sign out when an impersonation ran out", async () => {
-    const { ImpersonationEnded } = await import("@/lib/auth-api");
-    refresh.mockRejectedValue(new ImpersonationEnded());
+  // AC-1-i: a drop before the welcome is a guess — a gateway that is down
+  // looks the same. Refreshing would end the impersonation silently and run
+  // the panel as the admin; a token that really ran out is refused by the next
+  // call, which ends it the sure way. The client keeps retrying meanwhile.
+  it("never ends an impersonation on a guess", async () => {
+    vi.mocked(authApi.impersonation).mockReturnValue({ userId: "u-9", name: "Sara", endsAt: 0, returnTo: "/" });
     renderHook(() => usePanelRealtime(), { wrapper });
 
     options.onCredentialRejected?.();
     await flush();
 
+    expect(refresh).not.toHaveBeenCalled();
+    expect(clients[0].close).not.toHaveBeenCalled();
     expect(replace).not.toHaveBeenCalled();
+    vi.mocked(authApi.impersonation).mockReturnValue(null);
   });
 });
 

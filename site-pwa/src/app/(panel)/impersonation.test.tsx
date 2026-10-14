@@ -39,7 +39,9 @@ import { authApi } from "@/lib/auth-api";
 import { ApiError } from "@/lib/api-error";
 import { ImpersonationBanner, impersonationTimeLeft } from "./_components/ImpersonationBanner";
 import { SignInAsUser, mayImpersonate } from "./_components/SignInAsUser";
-import { impersonationMenu } from "./_lib/panel-menu";
+import { OwnActOnly } from "./_components/OwnActOnly";
+import { impersonatedGroup, impersonationMenu } from "./_lib/impersonation";
+import { PANEL_MENU } from "./_lib/panel-menu";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -157,5 +159,47 @@ describe("the menu while signed in as someone", () => {
       { id: "settings", section: "footer" },
     ] as never[];
     expect(impersonationMenu(entries).map((e: { id: string }) => e.id)).toEqual(["home", "wallet", "settings"]);
+  });
+
+  it("drops the person's own acts, a group's children included (ADR-0146)", () => {
+    const entries = [
+      { id: "home" },
+      { id: "wallet", section: "account", children: [{ id: "history" }, { id: "deposit", ownActOnly: true }] },
+      { id: "top-up", section: "account", ownActOnly: true },
+    ] as never[];
+    const kept = impersonationMenu(entries) as unknown as { id: string; children?: { id: string }[] }[];
+    expect(kept.map((e) => e.id)).toEqual(["home", "wallet"]);
+    expect(kept[1].children?.map((c) => c.id)).toEqual(["history"]);
+  });
+
+  it.each(["deposit", "buy-reseller"])("marks %s as the person's own act", (id) => {
+    const entry = PANEL_MENU.flatMap((e) => ("children" in e ? e.children : [e])).find((e) => e.id === id);
+    expect(entry && "ownActOnly" in entry && entry.ownActOnly).toBe(true);
+  });
+});
+
+describe("whose panel this is while signed in as someone", () => {
+  it("is the person's, never the admin's group: their id and name, no number, nobody to switch to", () => {
+    const me = { userId: "u-9", fullName: "Sara", isImpersonated: true } as never;
+    expect(impersonatedGroup(me)).toEqual({
+      groupId: null,
+      current: { userId: "u-9", fullName: "Sara", phoneMasked: null },
+      members: [],
+    });
+  });
+});
+
+describe("an own-act page while signed in as someone (ADR-0146)", () => {
+  it("says the act is the person's own, and why on this page, instead of the page", () => {
+    state.current = { userId: "u-9", name: "Sara", endsAt: Date.now() + 60_000, returnTo: "/users/u-9" };
+    render(<OwnActOnly why={K.ownActDeposit}>{"the form"}</OwnActOnly>);
+    expect(screen.getByText(K.ownActTitle)).toBeTruthy();
+    expect(screen.getByText(K.ownActDeposit)).toBeTruthy();
+    expect(screen.queryByText("the form")).toBeNull();
+  });
+
+  it("is the page itself on the caller's own account", () => {
+    render(<OwnActOnly why={K.ownActDeposit}>{"the form"}</OwnActOnly>);
+    expect(screen.getByText("the form")).toBeTruthy();
   });
 });

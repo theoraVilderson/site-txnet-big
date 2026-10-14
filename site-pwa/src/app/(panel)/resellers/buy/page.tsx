@@ -1,3 +1,5 @@
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { OwnActOnly } from "../../_components/OwnActOnly";
 import { BuyResellerView } from "./_components/BuyResellerView";
 
 /**
@@ -8,7 +10,13 @@ import { BuyResellerView } from "./_components/BuyResellerView";
  * added under `(panel)/resellers/` that gates on `canAdministerResellers`** —
  * it would lock this page's visitors out of it (`contract.resellers.md`).
  * Nothing here reads `useSearchParams`, so there is no `Suspense` to wrap.
+ * Closed while an admin is signed in as the person: the purchase is theirs
+ * (`OwnActOnly`, ADR-0146).
  */
 export default function BuyResellerPage() {
-  return <BuyResellerView />;
+  return (
+    <OwnActOnly why={FrontendI18nKeys.common.impersonation.ownActReseller}>
+      <BuyResellerView />
+    </OwnActOnly>
+  );
 }

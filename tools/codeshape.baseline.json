@@ -295,7 +295,7 @@
   "network-service/internal/leaseplan/planner.go": 851,
   "site-pwa/src/app/(panel)/_components/GiftCodeModal.tsx": 516,
   "site-pwa/src/app/(panel)/_components/PanelSidebar.tsx": 617,
-  "site-pwa/src/app/(panel)/_lib/panel-menu.ts": 771,
+  "site-pwa/src/app/(panel)/_lib/panel-menu.ts": 757,
   "site-pwa/src/app/(panel)/accounts/add/page.tsx": 430,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx": 627,
   "site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx": 409,
