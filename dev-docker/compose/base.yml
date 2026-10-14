@@ -22,7 +22,7 @@ volumes:
   translator_models:
   translator_llm_models:
   locales_runtime:
-  # Every Node service's saved locale snapshots (H17): one volume, files named by scope and language.
+  # Every Node service's and auth-handler's saved locale snapshots (H17): one volume, files named by scope and language.
   locale_cache:
   # Uploaded files (F-018-m): the object-storage `local` driver's volume.
   object_storage:

@@ -103,6 +103,8 @@ services:
     volumes:
       - ../auth-handler:/src/auth-handler
       - ../i18n-platform/clients/go:/src/i18n-platform/clients/go:ro
+      # Translations saved for a boot while locale-service is down (hosting H17).
+      - locale_cache:/var/cache/txnet-locale
     environment:
       - GATEWAY_PORT=${GATEWAY_PORT}
       - JWT_SECRET=${JWT_ACCESS_SECRET}

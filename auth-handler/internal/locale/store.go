@@ -19,8 +19,13 @@ type Store struct {
 	scope       string
 	defaultLang string
 	bootTimeout time.Duration
+	cacheDir    string
 	logger      *slog.Logger
 }
+
+// DefaultCacheDir is where the snapshots are saved (hosting H17): the
+// `locale_cache` volume every Node service mounts at the same path.
+const DefaultCacheDir = "/var/cache/txnet-locale"
 
 // DefaultBootTimeout is how long Load waits for the first snapshots.
 //
@@ -59,6 +64,13 @@ func (s *Store) WithBootTimeout(d time.Duration) *Store {
 	return s
 }
 
+// WithCacheDir saves every snapshot under dir and boots from them when
+// locale-service is down (hosting H17). Empty keeps the boot failing as before.
+func (s *Store) WithCacheDir(dir string) *Store {
+	s.cacheDir = dir
+	return s
+}
+
 // NewStore configures (but does not yet connect) a locale store.
 //
 //	addr        locale-service gRPC address, e.g. "localhost:50051"
@@ -86,6 +98,7 @@ func (s *Store) Load() error {
 		Scope:       s.scope,
 		DefaultLang: s.defaultLang,
 		BootTimeout: s.bootTimeout,
+		CacheDir:    s.cacheDir,
 		Logger:      s.logger,
 	})
 	if err != nil {

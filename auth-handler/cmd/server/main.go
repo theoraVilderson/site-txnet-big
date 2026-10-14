@@ -48,7 +48,7 @@ func main() {
 	// Connect to locale-service (source of truth) and block until the initial
 	// snapshots are cached, then keep them live over the Watch stream.
 	localeStore := locale.NewStore(cfg.LocaleServiceAddr, cfg.LocaleScope, cfg.DefaultLanguage, log).
-		WithBootTimeout(cfg.LocaleBootTimeout)
+		WithBootTimeout(cfg.LocaleBootTimeout).WithCacheDir(cfg.LocaleCacheDir)
 	if err := localeStore.Load(); err != nil {
 		log.Error("initial locale load failed", "error", err, "addr", cfg.LocaleServiceAddr)
 		os.Exit(1)

@@ -25,10 +25,6 @@
  *   "resync refetches every preload
  *    language"
  *
- *   "every snapshot is saved"         The disk cache (hosting H17) reaches
- *   "boots from the saved snapshots"  the Go client with OPS-1-x, which adds
- *   "no saved snapshot: boot throws"  these three to client_test.go.
- *
  * The Go file lists its own three in the same shape. Anything else that lands
  * in one file belongs in both — add it to the twin in the same change, or add
  * a line here saying why it cannot exist there.

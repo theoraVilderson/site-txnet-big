@@ -272,7 +272,7 @@
  "exports": {},
  "size": {
   "auth-handler/internal/api/handlers/handler.go": 476,
-  "i18n-platform/clients/go/client.go": 474,
+  "i18n-platform/clients/go/client.go": 465,
   "network-service/internal/collect/loop.go": 557,
   "network-service/internal/collect/normalise.go": 514,
   "network-service/internal/collect/postgres.go": 672,

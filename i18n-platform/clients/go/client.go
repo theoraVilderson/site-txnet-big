@@ -13,6 +13,8 @@
 //     fresh snapshot for every preload language.
 //   - A missing key falls back to en, then fa (FallbackLangs), then returns the
 //     key itself; translation never panics.
+//   - With CacheDir set, every snapshot is saved, and a boot that reaches its
+//     deadline serves the saved ones until locale-service answers (hosting H17).
 package localeclient
 
 import (
@@ -51,6 +53,9 @@ type Config struct {
 	BootTimeout time.Duration
 	// MaxBackoff caps the Watch reconnect backoff. Default 30s.
 	MaxBackoff time.Duration
+	// CacheDir is where every snapshot is saved and a failed boot falls back
+	// to (hosting H17; services pass LOCALE_CACHE_DIR). Empty: no disk cache.
+	CacheDir string
 	// DialOptions are appended to the defaults (insecure credentials).
 	DialOptions []grpc.DialOption
 	// Logger is optional; a discard logger is used when nil.
@@ -63,6 +68,9 @@ type Client struct {
 	log  *slog.Logger
 	conn *grpc.ClientConn
 	rpc  localev1.LocaleServiceClient
+
+	disk     *snapshotDisk // nil without Config.CacheDir
+	fromDisk bool          // the boot served saved snapshots; StartWatch then refreshes
 
 	mu       sync.RWMutex
 	byLang   map[string]*localev1.SnapshotResponse
@@ -123,6 +131,9 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 		conn:   conn,
 		rpc:    localev1.NewLocaleServiceClient(conn),
 		byLang: map[string]*localev1.SnapshotResponse{},
+	}
+	if cfg.CacheDir != "" {
+		c.disk = newSnapshotDisk(cfg.CacheDir, cfg.Scope, cfg.Logger)
 	}
 
 	if err := c.boot(ctx); err != nil {
@@ -192,6 +203,9 @@ func (c *Client) boot(ctx context.Context) error {
 		case <-time.After(wait):
 		}
 	}
+	if c.fromDisk = c.bootFromDisk(); c.fromDisk {
+		return nil
+	}
 	return fmt.Errorf("localeclient: boot failed, locale-service unavailable: %w", lastErr)
 }
 
@@ -205,6 +219,24 @@ func (c *Client) replace(snap *localev1.SnapshotResponse) {
 	c.mu.Lock()
 	c.byLang[snap.GetLang()] = snap
 	c.mu.Unlock()
+	if c.disk != nil {
+		c.disk.save(snap)
+	}
+}
+
+// refetchAll replaces every target language from locale-service.
+func (c *Client) refetchAll(ctx context.Context) error {
+	langs, err := c.targetLangs(ctx)
+	for _, lang := range langs {
+		if err != nil {
+			break
+		}
+		var snap *localev1.SnapshotResponse
+		if snap, err = c.fetch(ctx, lang); err == nil {
+			c.replace(snap)
+		}
+	}
+	return err
 }
 
 // StartWatch launches the background Watch stream. It is idempotent.
@@ -224,6 +256,13 @@ func (c *Client) StartWatch() {
 		defer c.wg.Done()
 		c.watchLoop(ctx)
 	}()
+	if c.fromDisk {
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			c.refreshUntilAnswered(ctx)
+		}()
+	}
 }
 
 func (c *Client) watchLoop(ctx context.Context) {
@@ -253,13 +292,7 @@ func (c *Client) watchLoop(ctx context.Context) {
 			backoff = c.cfg.MaxBackoff
 		}
 		// Re-sync: a change may have happened during the outage.
-		if langs, lerr := c.targetLangs(ctx); lerr == nil {
-			for _, lang := range langs {
-				if snap, ferr := c.fetch(ctx, lang); ferr == nil {
-					c.replace(snap)
-				}
-			}
-		}
+		_ = c.refetchAll(ctx)
 	}
 }
 
@@ -407,48 +440,6 @@ func (c *Client) AvailableLocales(ctx context.Context) ([]*localev1.LocaleMeta, 
 // Snapshot fetches a fresh snapshot (uncached) — used by codegen.
 func (c *Client) Snapshot(ctx context.Context, lang string) (*localev1.SnapshotResponse, error) {
 	return c.fetch(ctx, lang)
-}
-
-// Runtime writes (F-1533-b, ADR-0050). These go straight to locale-service and
-// touch no cache: a published write comes back through Watch like any edit.
-// Scope here is the write target ("backend" | "frontend" | "shareds"), not
-// Config.Scope. An empty value deletes that key from that state.
-
-// SetEntries writes entries as published (served) or draft (held for review).
-func (c *Client) SetEntries(ctx context.Context, scope, lang, namespace string, entries map[string]string, draft bool) (int, error) {
-	state := localev1.EntryState_ENTRY_STATE_PUBLISHED
-	if draft {
-		state = localev1.EntryState_ENTRY_STATE_DRAFT
-	}
-	resp, err := c.rpc.SetEntries(ctx, &localev1.SetEntriesRequest{
-		Scope: scope, Lang: lang, Namespace: namespace, Entries: entries, State: state,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return int(resp.GetWritten()), nil
-}
-
-// ListDrafts returns drafts held for review; every empty filter matches all.
-func (c *Client) ListDrafts(ctx context.Context, scope, lang, namespace, keyPrefix string) ([]*localev1.DraftEntry, error) {
-	resp, err := c.rpc.ListDrafts(ctx, &localev1.ListDraftsRequest{
-		Scope: scope, Lang: lang, Namespace: namespace, KeyPrefix: keyPrefix,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return resp.GetDrafts(), nil
-}
-
-// PublishDrafts moves the named drafts to published, as they are.
-func (c *Client) PublishDrafts(ctx context.Context, scope, lang, namespace string, keys []string) (int, error) {
-	resp, err := c.rpc.PublishDrafts(ctx, &localev1.PublishDraftsRequest{
-		Scope: scope, Lang: lang, Namespace: namespace, Keys: keys,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return int(resp.GetPublished()), nil
 }
 
 func render(raw string, vars map[string]string) string {

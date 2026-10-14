@@ -56,7 +56,9 @@ text. Nothing saved: the boot fails as before. A cache that cannot be written
 or read is a warning, never a stop. Every Nest service passes it through
 shared-core's `localeClientOptions` (`localeEnv`: `LOCALE_SERVICE_ADDR`,
 `LOCALE_SCOPE`, `LOCALE_CACHE_DIR` = `/var/cache/txnet-locale`, the
-`locale_cache` volume). The Go client gets the same with OPS-1-x.
+`locale_cache` volume). The Go client does the same with `Config.CacheDir`
+(`disk_cache.go`, protojson, so either client boots from the other's files);
+`auth-handler` reads `LOCALE_CACHE_DIR` and mounts the volume.
 
 ## Request language (Nest services, CS-1-a)
 

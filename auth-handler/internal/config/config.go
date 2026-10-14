@@ -23,6 +23,7 @@ type Config struct {
 	LocaleServiceAddr string
 	LocaleScope       string
 	LocaleBootTimeout time.Duration
+	LocaleCacheDir    string
 	ReadTimeout       time.Duration
 	WriteTimeout      time.Duration
 	IdleTimeout       time.Duration
@@ -56,13 +57,16 @@ func Load() (Config, error) {
 		// Read like every other timeout in this struct rather than hardcoded
 		// in two packages at two different values (F-086).
 		LocaleBootTimeout: getEnvDuration("LOCALE_BOOT_TIMEOUT", locale.DefaultBootTimeout),
-		ReadTimeout:       getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second),
-		WriteTimeout:      getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
-		IdleTimeout:       getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
-		ShutdownTimeout:   getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
-		RedisDialTimeout:  getEnvDuration("REDIS_DIAL_TIMEOUT", 2*time.Second),
-		RedisReadTimeout:  getEnvDuration("REDIS_READ_TIMEOUT", 2*time.Second),
-		RedisPoolSize:     getEnvInt("REDIS_POOL_SIZE", 10),
+		// Saved snapshots for a boot while locale-service is down (hosting H17);
+		// the same env and default as the Node services' localeEnv.
+		LocaleCacheDir:   getEnv("LOCALE_CACHE_DIR", locale.DefaultCacheDir),
+		ReadTimeout:      getEnvDuration("HTTP_READ_TIMEOUT", 5*time.Second),
+		WriteTimeout:     getEnvDuration("HTTP_WRITE_TIMEOUT", 5*time.Second),
+		IdleTimeout:      getEnvDuration("HTTP_IDLE_TIMEOUT", 60*time.Second),
+		ShutdownTimeout:  getEnvDuration("HTTP_SHUTDOWN_TIMEOUT", 10*time.Second),
+		RedisDialTimeout: getEnvDuration("REDIS_DIAL_TIMEOUT", 2*time.Second),
+		RedisReadTimeout: getEnvDuration("REDIS_READ_TIMEOUT", 2*time.Second),
+		RedisPoolSize:    getEnvInt("REDIS_POOL_SIZE", 10),
 		// The panel calls gated services cross-origin; see handlers.WithCORSOrigins.
 		CORSAllowedOrigins: strings.Split(os.Getenv("CORS_ALLOWED_ORIGINS"), ","),
 	}
