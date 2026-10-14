@@ -1,7 +1,7 @@
 ---
 id: operations
 status: active
-updated: 2026-09-04
+updated: 2026-10-14
 ---
 
 # Operations
@@ -11,7 +11,8 @@ updated: 2026-09-04
 | [environments.md](environments.md) | env files, the dev/prod stacks, config keys, who owns each secret |
 | [migrations.md](migrations.md) | schema/data migration policy + the not-yet-applied "section 99" SQL |
 | [observability.md](observability.md) | the monitoring + bug-tracker + registry stacks |
-| runbook-<incident>.md | one per known failure mode (none written yet) |
+| [runbook-restore-database.md](runbook-restore-database.md) | restore Postgres whole, to a point in time, or onto a new server (OPS-1-e) |
+| runbook-<incident>.md | one per known failure mode |
 | slo.md | what "working" means numerically (not written yet) |
 
 ## Runbook template

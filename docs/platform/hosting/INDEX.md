@@ -38,7 +38,8 @@ the shared-socket layout works, no `pgbackrest server` fallback) and OPS-1-c
 (H4: `pg-backup.sh drill`, metric in its own `pg_restore_drill.prom`) and
 OPS-1-f (H10: tuning on `main-db`'s `command:`, sizing rule in
 `operations/environments.md`) and OPS-1-d (H5: `database.rules.yml` with
-`promtool` tests; disk from `pg_data_fs.prom`, archive from `hosting_wal_archive`).
+`promtool` tests; disk from `pg_data_fs.prom`, archive from `hosting_wal_archive`)
+and OPS-1-e (H6: `operations/runbook-restore-database.md`, rehearsed on dev).
 The unit claims `dev-docker/pgbouncer/**`, `swarm/**` and `loki.yaml` in
 `source:` as each row lands.
 
