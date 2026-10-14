@@ -144,9 +144,7 @@ export function UserProfile({
   return (
     <div className="space-y-6">
       {impersonable && (
-        <div className="flex justify-end">
-          <SignInAsUser userId={userId} name={person.fullName} tenantId={own ? null : id} returnTo={here ?? "/"} />
-        </div>
+        <SignInAsUser userId={userId} name={person.fullName} tenantId={own ? null : id} returnTo={here ?? "/"} />
       )}
       {!editable && <Alert tone="info">{t("common", P.readOnly)}</Alert>}
       {actionError !== null && (

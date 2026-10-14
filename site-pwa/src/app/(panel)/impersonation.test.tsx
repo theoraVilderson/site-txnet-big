@@ -64,9 +64,16 @@ describe("the button", () => {
     expect(mayImpersonate({ canAct: true, status: "active" }, null, false)).toBe(false);
   });
 
+  it("says what it does before it is pressed: a titled strip, its hint, one button", () => {
+    render(<SignInAsUser userId="u-9" name="Sara" tenantId={null} returnTo="/users/u-9" />);
+    expect(screen.getByText(K.start)).toBeTruthy();
+    expect(screen.getByText(K.hint)).toBeTruthy();
+    expect(screen.getByRole("button", { name: K.open })).toBeTruthy();
+  });
+
   it("asks a reason of at least 10 characters, then signs in and opens the home page", async () => {
     render(<SignInAsUser userId="u-9" name="Sara" tenantId={null} returnTo="/users/u-9" />);
-    fireEvent.click(screen.getByText(K.start));
+    fireEvent.click(screen.getByText(K.open));
     const dialog = await screen.findByRole("dialog");
     const go = within(dialog).getByText(K.confirm).closest("button")!;
 
@@ -91,7 +98,7 @@ describe("the button", () => {
   it("shows the server's sentence when it refuses, and stays", async () => {
     vi.mocked(authApi.impersonate).mockRejectedValueOnce(new ApiError("No consent", { status: 403, reason: "consent_required" }));
     render(<SignInAsUser userId="u-9" name="Sara" tenantId="r-1" returnTo="/my-resellers/r-1/users/u-9" />);
-    fireEvent.click(screen.getByText(K.start));
+    fireEvent.click(screen.getByText(K.open));
     const dialog = await screen.findByRole("dialog");
     fireEvent.change(within(dialog).getByLabelText(K.reason), { target: { value: "ticket 4417: top-up fails" } });
     fireEvent.click(within(dialog).getByText(K.confirm));

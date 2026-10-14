@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { UserRoundCog } from "lucide-react";
+import { LogIn, UserRoundCog } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -82,10 +82,19 @@ export function SignInAsUser({
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <UserRoundCog size={16} aria-hidden />
-        {t("common", K.start)}
-      </Button>
+      {/* A titled strip rather than a bare button: what it opens, for how long, and that it is recorded. */}
+      <section className="flex flex-col gap-3 rounded-2xl border border-card-border bg-card-bg p-4 sm:flex-row sm:items-center sm:p-5">
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-leaf-bg text-primary">
+          <UserRoundCog size={20} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-text-primary">{t("common", K.start)}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">{t("common", K.hint)}</p>
+        </div>
+        <Button variant="secondary" className="sm:shrink-0" icon={<LogIn size={16} aria-hidden />} onClick={() => setOpen(true)}>
+          {t("common", K.open)}
+        </Button>
+      </section>
       <Dialog
         open={open}
         onClose={close}
@@ -96,7 +105,7 @@ export function SignInAsUser({
             <Button variant="quiet" onClick={close} disabled={busy}>
               {t("common", K.cancel)}
             </Button>
-            <Button variant="primary" onClick={() => void start()} disabled={!ready}>
+            <Button variant="primary" loading={busy} onClick={() => void start()} disabled={!ready}>
               {t("common", K.confirm)}
             </Button>
           </>

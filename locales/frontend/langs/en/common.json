@@ -5966,6 +5966,8 @@
   },
   "impersonation": {
     "start": "Sign in as this user",
+    "hint": "Opens their own panel, as they see it, for up to 30 minutes; recorded under your name.",
+    "open": "Sign in",
     "dialogTitle": "Sign in as {{name}}",
     "dialogBody": "For up to 30 minutes you see and use {{name}}'s own panel. Staff pages, the password, sessions and connection links stay closed. It is recorded under your name, with the reason below.",
     "reason": "Reason",
