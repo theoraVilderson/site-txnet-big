@@ -18,7 +18,7 @@
  *    on the query rather than on the answer.
  */
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { ConfigStatus, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
+import { ConfigStatus, FreezeMode, GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 import { RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions, runWithTenant } from '@txnet-backend/shared-core';
 
 import { GrantService, hashSubscriptionToken } from '../../entitlement/grant';
@@ -46,6 +46,9 @@ function grantRow(overrides: Record<string, unknown> = {}) {
     trafficUnlimited: false,
     quotas: {},
     suspendedAt: null,
+    statusReason: null as string | null,
+    freezeMode: null as FreezeMode | null,
+    awaitingPanel: false,
     purgeAfterDays: null,
     usagePushedAt: null,
     ...overrides,
@@ -157,6 +160,8 @@ describe('GrantService.listForUser', () => {
           purgeAt: null,
           frozen: false,
           frozenUntil: null,
+          freezeMode: null,
+          userMayUnfreeze: false,
           lastTrafficAt: null,
         },
       ],
@@ -194,6 +199,31 @@ describe('GrantService.listForUser', () => {
     expect(rows.map((r) => r.purgeAt)).toEqual(['2026-09-27T00:00:00.000Z', '2026-09-22T00:00:00.000Z', null, null]);
     expect(rows[0].suspendedAt).toBe('2026-09-20T00:00:00.000Z');
     expect(rows[3].suspendedAt).toBeNull();
+  });
+
+  it('names who froze a Grant and whether its user may lift it — soft or self, never hard or one waiting for a panel (F-0401-c)', async () => {
+    const frozen = { status: GrantStatus.suspended, statusReason: 'admin_frozen', suspendedAt: new Date('2026-09-20T00:00:00Z') };
+    const { list } = build(
+      [
+        grantRow({ ...frozen, freezeMode: FreezeMode.self }),
+        grantRow({ ...frozen, id: 'g-soft', freezeMode: FreezeMode.soft }),
+        grantRow({ ...frozen, id: 'g-hard', freezeMode: FreezeMode.hard }),
+        grantRow({ ...frozen, id: 'g-evicted', freezeMode: FreezeMode.soft, awaitingPanel: true }),
+        // A mode left on a Grant that is not frozen names nothing.
+        grantRow({ id: 'g-live', freezeMode: FreezeMode.soft }),
+      ],
+      5,
+    );
+
+    const { rows } = await list();
+
+    expect(rows.map((r) => [r.freezeMode, r.userMayUnfreeze])).toEqual([
+      [FreezeMode.self, true],
+      [FreezeMode.soft, true],
+      [FreezeMode.hard, false],
+      [FreezeMode.soft, false],
+      [null, false],
+    ]);
   });
 
   it('says a Grant sold with unlimited traffic is unlimited, so its 0 bytes bought is not read as empty (F-111-s)', async () => {

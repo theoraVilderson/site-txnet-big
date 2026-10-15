@@ -328,7 +328,7 @@
   "txnet-backend/billing-service/src/app/catalog/reseller-catalog.controller.ts": 505,
   "txnet-backend/billing-service/src/app/config/env.validation.ts": 484,
   "txnet-backend/billing-service/src/app/engagement/wheel-spin.service.ts": 504,
-  "txnet-backend/billing-service/src/app/entitlement/grant.ts": 740,
+  "txnet-backend/billing-service/src/app/entitlement/grant.ts": 738,
   "txnet-backend/billing-service/src/app/payment/coupon-admin/coupon-admin.service.ts": 755,
   "txnet-backend/billing-service/src/app/payment/coupon/coupon-validation.ts": 461,
   "txnet-backend/billing-service/src/app/payment/deposit/deposit-pricing.ts": 485,

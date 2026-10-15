@@ -88,7 +88,7 @@ closed had no way back.
 
 | Route | Query | Answers `data` |
 |---|---|---|
-| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`), `q` (≤ 100, trimmed; blank is none) | `{total, page, pageSize, hidden, rows[{id, label, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt, lastTrafficAt}]}` |
+| `GET /api/billing/gift/grants` | `page`, `pageSize` (≤ 100), `scope` (`current` default, `all`), `q` (≤ 100, trimmed; blank is none) | `{total, page, pageSize, hidden, rows[{id, label, status, startsAt, endsAt, featureKeys, variant{id, sku, nameKey} \| null, billingMode, consumedBytes, purchasedBytes, trafficUnlimited, trafficCapBytes, suspendedAt, purgeAt, frozen, frozenUntil, freezeMode, userMayUnfreeze, lastTrafficAt}]}` |
 | `PUT /api/billing/gift/grants/:grantId/label` | body: `{label: string \| null}` — trimmed, ≤ 40; empty or `null` is the catalog's name | `{grantId, label}` — the buyer's name for the service as saved, in one spelling (F-307-o); another user's or a missing Grant **404** `grant.notFound`; a longer one **400** `serviceLabelInvalid`. Bucket `CONFIG_ACTION`, as a config's name (F-307-x) |
 | `POST /api/billing/gift/grants/by-lines` | body: `lines` (1–20, each trimmed, ≤ 4096), `page`, `pageSize`, `scope` as above | the same page, narrowed to the Grants holding a config any line is (F-307-p), or whose subscription link a line is (F-307-r) |
 
@@ -105,6 +105,7 @@ closed had no way back.
 | Its own bucket, `GRANT_LIST`, default **120** per 900s; the `subscriptionLink` capability, as above | it reads no secret and destroys nothing, so it is no security control — but sharing `GRANT_ROTATE_TOKEN`'s five calls would spend a user's recovery budget on looking at the list that offers the recovery |
 | Bytes are decimal strings. `purgeAt` is `suspendedAt` + `coalesce(grant.purgeAfterDays, tenant.purgeAfterDays)` days, and `null` when the Grant is not suspended or the window is `0` (F-027-ac) | a Grant's bytes pass 2^53; and it is the SQL `entitlement/purge.ts` runs, so the panel's countdown is the instant the hourly job acts after. The tenant is read only when a suspended row has no window of its own |
 | `trafficUnlimited` is the Grant's flag (F-111-s). `trafficCapBytes` is a capped prepaid Grant's `quotas.traffic_bytes.limit` plus its unexpired `traffic_bytes` adjustments, floored at 0, from one `groupBy` per page read only when a row has a cap; `null` for metered, unlimited or no quota (F-111-t) | the same sum `/sub` answers as `total` (sub-api `contract.md`), so the panel and the app never show two caps for one Grant |
+| `freezeMode` is who froze it — `hard`, `soft`, `self` — and `null` when not frozen; `userMayUnfreeze` is `userMayUnfreeze` (entitlement `contract.admin.md`): soft or self, and not waiting for a panel (F-0401-c) | the row offers the user's unfreeze only where the route below would take it, and names a hard freeze as support's |
 | `lastTrafficAt` is the Grant's `usagePushedAt`, or `null` (F-307-u) | metering writes it only for a charged, non-zero delta, at most every 30 s, so it is when traffic last moved to within one push; it is the panel's "in use" on first paint (panel-web `contract.service-pulse.md`) |
 
 **Not covered:** searching by product name, or any scope but these two; a pasted `/sub` link (a Grant's token, not a config line). Its consumer since
@@ -154,6 +155,28 @@ Its consumer is `panel-web/contract.my-services.md`.
 | Bucket `GRANT_USAGE` (**180**/900s, per user); capability `subscriptionLink` | read on every expand beside the config list; sharing `CONFIG_LIST` would halve it |
 
 **Not covered:** per-config breakdown and a window other than 30 days are nobody's row. Its consumer is F-307-c.
+
+## Freezing one's own service (built — F-0401-c)
+
+`OwnFreezeController` over `OwnFreezeService` and `entitlement/self-freeze.ts`
+(rules: entitlement `contract.admin.md` "A freeze has a mode", "Freeze settings").
+
+| Route | Answers `data` |
+|---|---|
+| `POST /api/billing/gift/grants/:grantId/freeze`, no body | `{grantId, freezeMode: "self", configsDisabled}` |
+| `POST /api/billing/gift/grants/:grantId/unfreeze`, no body | `{grantId, endsAt, configsRestored}` |
+
+| Rule | Why |
+|---|---|
+| A `self` freeze: configs off, the reserve released, never purged; whether its clock stops is the tenant's `selfFreezeStopsClock`, copied onto the Grant now | catalog F-0401; a later change of the setting never moves a frozen Grant |
+| **Only a `metered` Grant** — else **409** `grant.selfFreezeNotMetered`. The tenant's `selfFreezeEnabled` off: **403** `grant.selfFreezeOff` | a prepaid package frozen by its user would buy free days; an admin's soft freeze is how one is frozen with the user's say |
+| **At most 3 freezes per Grant in any 24 hours** (`SELF_FREEZES_PER_DAY`, sliding, as the link reset's): counted from the Grant's `grant_self_freeze` audit rows under its row lock (`lockOwnGrant`). The fourth: **429** `grant.selfFreezeLimited`, `facts {limit, nextAtMs}`, nothing written | no Redis key to drift from the record; two freezes at once cannot both see room. How long a freeze lasts is not bounded |
+| Unfreeze lifts `soft` or `self` only: hard, or waiting for a panel, **403** `grant.freezeNotUsers`. **Not gated on `selfFreezeEnabled`** | support's freeze is support's; a switch turned off after the freeze must not trap the Grant frozen |
+| Already frozen **409** `grant.notFreezable`; not frozen **409** `grant.notFrozen`; moved meanwhile **409** `grant.freezeMoved`; another user's or missing **404** `grant.notFound` | ownership is decided before anything is read or counted |
+| Each act is one `admin_audit_log` row, `grant_self_freeze` / `grant_self_unfreeze`, the **user** its actor, before and after (with `freezeMode`); **no notice** — only `entitlement.grant.freeze_changed` to `user:` (realtime `contract.live-events.md`), in the act's transaction | the history says who froze it; the user did it, so a message would tell them what they just pressed. The page re-reads on the event (C-14) |
+| Bucket `CONFIG_ACTION`, as naming a service; the `subscriptionLink` capability, as the list | one budget for the buyer's writes on their own service |
+
+**Not covered:** the panel's buttons (F-0401-e) and the bot's (F-0401-g).
 
 ## A metered Grant's billing period (built — F-118-ai)
 

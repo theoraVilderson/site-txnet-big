@@ -26,6 +26,7 @@ import { EntitlementRefused } from './entitlement-refusals';
 import { assertPurchaseRoom } from './purchase-limits';
 import { assertPlatformGrantRoom } from './reseller-room';
 import { assertBuyerRoom } from './user-restrictions';
+import { FreezeView, freezeViewOf } from './freeze';
 import { ADMIN_FROZEN } from './suspension';
 import { unusedClockOf } from './unused-clock';
 import { configIdentityOf, storedLineIdentity } from '../traffic/config-identity';
@@ -190,10 +191,6 @@ export type GrantView = {
   suspendedAt: string | null;
   /** When the purge releases its panel seats; `null` when nothing is due — not suspended, frozen (never purged), or a window of `0` (never). */
   purgeAt: string | null;
-  /** An admin froze it (F-311-h): `suspended`, kept, its clock stopped. */
-  frozen: boolean;
-  /** When a timed freeze ends by itself; `null` when not frozen or frozen until the admin unfreezes it. */
-  frozenUntil: string | null;
   /**
    * When traffic last moved, to within one usage push (F-307-u): metering's
    * `usagePushedAt`, which only a charged, non-zero delta writes, at most once
@@ -201,7 +198,7 @@ export type GrantView = {
    * reads on first paint, before the socket has pushed anything.
    */
   lastTrafficAt: string | null;
-};
+} & FreezeView;
 
 /** `hidden`: the user's Grants the scope left out — 0 on `all` (user, 2026-09-26). */
 export type GrantPage<Row = GrantView> = { total: number; page: number; pageSize: number; hidden: number; rows: Row[] };
@@ -245,6 +242,8 @@ const GRANT_VIEW_COLUMNS = {
   suspendedAt: true,
   statusReason: true,
   frozenUntil: true,
+  freezeMode: true,
+  awaitingPanel: true,
   purgeAfterDays: true,
   usagePushedAt: true,
 } satisfies Prisma.GrantSelect;
@@ -356,7 +355,7 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
   const limit = soldLimitOf(r);
   const cap = limit === null ? null : limit + adjustedBytes;
   const suspended = r.status === GrantStatus.suspended ? r.suspendedAt : null;
-  const frozen = r.status === GrantStatus.suspended && r.statusReason === ADMIN_FROZEN;
+  const freeze = freezeViewOf(r);
   return {
     id: r.id,
     label: r.userLabel,
@@ -371,9 +370,8 @@ function grantViewOf(r: GrantViewRow, tenantPurgeDays: number | null, adjustedBy
     trafficUnlimited: r.trafficUnlimited,
     trafficCapBytes: cap === null ? null : (cap > BigInt(0) ? cap : BigInt(0)).toString(),
     suspendedAt: suspended?.toISOString() ?? null,
-    purgeAt: frozen ? null : (purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null),
-    frozen,
-    frozenUntil: frozen ? (r.frozenUntil?.toISOString() ?? null) : null,
+    purgeAt: freeze.frozen ? null : (purgeAtOf(suspended, r.purgeAfterDays, tenantPurgeDays)?.toISOString() ?? null),
+    ...freeze,
     lastTrafficAt: r.usagePushedAt?.toISOString() ?? null,
   };
 }

@@ -41,13 +41,17 @@ export type EntitlementRejection =
   | 'grant_not_frozen'
   /** The user's unfreeze (F-0401-a): a hard freeze, or one an evict left waiting for a panel — only an admin or the sweep lifts it. */
   | 'freeze_not_users'
+  /** The user's own freeze (F-0401-c): their reseller turned it off (`selfFreezeEnabled`). */
+  | 'self_freeze_off'
+  /** The user's fourth freeze of a Grant in 24 hours (F-0401-c, `SelfFreezeLimited`): nothing frozen. */
+  | 'self_freeze_limit'
   /** Freeze: an unfreeze time that has already come. */
   | 'freeze_until_not_future'
   /** Days (F-311-i): expired, exhausted or cancelled — only a renewal brings it back (§4.4). */
   | 'grant_closed'
   /** Traffic (F-311-j): a metered Grant (its blocks buy its bytes) or an unlimited one has no bag an admin moves. */
   | 'traffic_not_adjustable'
-  /** Gift (F-311-l): only a metered, limited Grant takes gifted bytes — a prepaid bag is moved by Traffic. */
+  /** Gift (F-311-l): only a metered, limited Grant takes gifted bytes — a prepaid bag is moved by Traffic. A self-freeze (F-0401-c): only a metered Grant — a frozen prepaid package would buy free days. */
   | 'grant_not_metered'
   /** Traffic: a cut past zero — a Quota is never negative. */
   | 'quota_below_zero'

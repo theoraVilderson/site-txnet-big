@@ -37,6 +37,8 @@ export const RealtimeEventType = {
   WALLET_CHANGED: 'billing.wallet.changed',
   /** F-307-t: a Grant's committed `consumedBytes`, at most once per 30 s per Grant (`MeteringService.charge`). */
   GRANT_USAGE: 'entitlement.grant.usage',
+  /** F-0401-c: a Grant's freeze changed by its user — its owner's pages re-read it; nobody is told. */
+  GRANT_FREEZE_CHANGED: 'entitlement.grant.freeze_changed',
   /** RT-1-e / EDGE-1-e: a reseller domain's status or edge step changed (`TenantDomainService`). */
   TENANT_DOMAIN_CHANGED: 'tenant.domain.changed',
   /** F-019-c1: a reseller's renewal was paid — a new period, and a suspension for non-payment lifted (`TenantRenewalService`). */
@@ -202,6 +204,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_LINKS_CAPTURED]: 'worker-service',
   [OutboxEventType.WALLET_CHANGED]: 'worker-service',
   [OutboxEventType.GRANT_USAGE]: 'worker-service',
+  [OutboxEventType.GRANT_FREEZE_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',

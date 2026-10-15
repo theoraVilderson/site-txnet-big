@@ -238,7 +238,14 @@
       "noSubscriptionDomain": "This store has no subscription domain set up yet. Please contact support.",
       "linkNotKept": "This service’s subscription link was not kept. Press “Reset link” once to create a new one.",
       "linkResetLimited": "This service’s link was reset 3 times in the last 24 hours. The next reset is allowed a little later.",
-      "notMetered": "This service is not pay-as-you-go, so it has no billing period."
+      "notMetered": "This service is not pay-as-you-go, so it has no billing period.",
+      "selfFreezeNotMetered": "Only a pay-as-you-go service can be frozen by you. A package keeps running until it ends.",
+      "selfFreezeOff": "Freezing a service yourself is not available in this store.",
+      "selfFreezeLimited": "This service was frozen 3 times in the last 24 hours. The next freeze is allowed a little later.",
+      "notFreezable": "This service is not active, so it cannot be frozen now.",
+      "notFrozen": "This service is not frozen.",
+      "freezeNotUsers": "This service was frozen by support. Only support can unfreeze it.",
+      "freezeMoved": "This service changed a moment ago. Please try again."
     },
     "invoice": {
       "variantInvalid": "Choose a product to buy.",

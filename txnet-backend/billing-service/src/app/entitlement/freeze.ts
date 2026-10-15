@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfigStatus, DesiredRemote, EnforcementState, FreezeMode, GrantStatus, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { releaseVpnReserveOf, topVpnReserve } from '../traffic/vpn-reserve';
-import { EntitlementRefused } from './grant';
+import { GRANT_AGGREGATE } from './delivered';
+import { EntitlementRefused } from './entitlement-refusals';
 import { ADMIN_FROZEN } from './suspension';
 
 export { ADMIN_FROZEN };
@@ -29,6 +30,24 @@ export function freezeModeBeats(mode: FreezeMode, held: FreezeMode): boolean {
 /** Whether the user may lift this freeze (F-0401-a): soft or self, never one an evict left waiting for a panel. */
 export function userMayUnfreeze(grant: { freezeMode: FreezeMode | null; awaitingPanel: boolean }): boolean {
   return !grant.awaitingPanel && grant.freezeMode !== null && USER_LIFTED.includes(grant.freezeMode);
+}
+
+/** How a Grant's list names its freeze (F-311-h, F-0401-c). */
+export type FreezeView = {
+  /** An admin, the user or an evict froze it: `suspended`, kept, never purged. */
+  frozen: boolean;
+  /** When a timed freeze ends by itself; `null` when not frozen or frozen until lifted. */
+  frozenUntil: string | null;
+  /** Who froze it: `hard` support, `soft` support leaving it to the user, `self` the user; `null` when not frozen. */
+  freezeMode: FreezeMode | null;
+  /** Whether the user may lift it themselves (`userMayUnfreeze`). */
+  userMayUnfreeze: boolean;
+};
+
+/** The freeze of one listed Grant; a mode left on a Grant that is not frozen names nothing. */
+export function freezeViewOf(r: Pick<FrozenRead, 'status' | 'statusReason' | 'freezeMode' | 'awaitingPanel'> & { frozenUntil: Date | null }): FreezeView {
+  if (!isFrozen(r)) return { frozen: false, frozenUntil: null, freezeMode: null, userMayUnfreeze: false };
+  return { frozen: true, frozenUntil: r.frozenUntil?.toISOString() ?? null, freezeMode: r.freezeMode, userMayUnfreeze: userMayUnfreeze(r) };
 }
 
 export type FreezeInput = {
@@ -136,7 +155,6 @@ export function unfreezeGrant(tx: Prisma.TransactionClient, grantId: string, at:
  * The user's own unfreeze (F-0401-a): only a soft or self freeze, never a hard
  * or a system one (`freeze_not_users`). The write is conditional on the mode
  * read and on no evict, so an admin who hardened it in between wins.
- * codeshape: spec-only — its caller is the user's route, F-0401-c; drop this line there.
  */
 export function unfreezeOwnGrant(tx: Prisma.TransactionClient, grantId: string, at: Date): Promise<Unfreeze> {
   return lift(tx, grantId, at, (grant) => {
@@ -192,6 +210,18 @@ async function lift(
   // The reserve the freeze gave back, held again with the unfreeze (F-118-b).
   await topVpnReserve(tx, grantId);
   return { endsAt, configsRestored: restored.count };
+}
+
+/**
+ * The owner's open pages re-read the Grant (F-0401-c, C-14): a live-only
+ * outbox event in the act's transaction, pushed to `user:<userId>` and told
+ * to nobody's inbox — the user froze it themselves.
+ */
+export async function emitFreezeChanged(tx: Prisma.TransactionClient, of: { tenantId: string; userId: string; grantId: string }): Promise<void> {
+  await tx.outboxEvent.create({
+    data: { aggregate: GRANT_AGGREGATE, aggregateId: of.grantId, type: OutboxEventType.GRANT_FREEZE_CHANGED, payload: of },
+    select: { id: true },
+  });
 }
 
 export type UnfreezeDueResult = { scanned: number; unfrozen: number };

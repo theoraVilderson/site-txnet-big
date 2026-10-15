@@ -8,6 +8,8 @@ import { WalletModule } from '../../wallet/wallet.module';
 import { GiftController } from './gift.controller';
 import { GrantListController } from './grant-list.controller';
 import { GrantTokenController } from './grant-token.controller';
+import { OwnFreezeController } from './own-freeze.controller';
+import { OwnFreezeService } from './own-freeze.service';
 import { GiftRedemptionService } from './gift-redemption.service';
 import { GrantBulkJobDrainService, ResellerGrantBulkJobService } from './grant-bulk-job';
 import { ResellerGrantsBulkController } from './reseller-grants-bulk.controller';
@@ -26,7 +28,8 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * function and the money moves through `WalletLedgerService` — or, for a
  * free-service code, the Grant through `GrantService` (F-502-l-b) — which is
  * also what lists the Grants a user has (F-502-r) and, through
- * `SubscriptionLinkService`, answers and resets their `/sub` links (F-114-e-b).
+ * `SubscriptionLinkService`, answers and resets their `/sub` links (F-114-e-b),
+ * and lets them freeze their own metered one (F-0401-c).
  * The same reads, with a Grant's configs and usage from `TrafficModule`, are
  * answered to a reseller's admin for one of its users (F-311-f), and its
  * writes over many users' Grants at once (F-311-u) — by id in the request,
@@ -34,8 +37,8 @@ import { SubscriptionLinkService } from './subscription-link.service';
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule, UsageModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
-  providers: [GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
+  controllers: [GiftController, GrantTokenController, GrantListController, OwnFreezeController, ResellerUserGrantsController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
+  providers: [OwnFreezeService, GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
 export class GiftModule {}

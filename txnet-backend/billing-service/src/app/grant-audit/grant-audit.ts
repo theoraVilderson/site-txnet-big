@@ -39,8 +39,11 @@ export type GrantAuditAction = Extract<
 
 export type ConfigAuditAction = Extract<AdminAction, 'config_regenerate' | 'config_disable' | 'config_enable' | 'config_retire' | 'config_move'>;
 
-/** The Grant's columns an admin act can move — never its token hash or sealed token. */
-const GRANT_STATE = { status: true, statusReason: true, endsAt: true, purchasedBytes: true, quotas: true, tokenRotatedAt: true } as const;
+/**
+ * The Grant's columns an act can move — never its token hash or sealed token.
+ * `freezeMode` so the history says how it was frozen (F-0401-c).
+ */
+const GRANT_STATE = { status: true, statusReason: true, endsAt: true, freezeMode: true, purchasedBytes: true, quotas: true, tokenRotatedAt: true } as const;
 const CONFIG_STATE = { grantId: true, panelId: true, status: true, disabledReason: true, desiredEnabled: true, desiredRemote: true } as const;
 
 /** What each act may add from its result; absent, only the columns are written. */
@@ -92,6 +95,28 @@ export async function auditedConfigAct<T extends string | void>(
   if (!grantId) throw new Error(`config ${configId} was audited and is gone`);
   await emitAdminNotice(tx, tenantId, grantId, auditId, configNoticeOf(action));
   return movedTo;
+}
+
+export type OwnGrantAuditAction = Extract<AdminAction, 'grant_self_freeze' | 'grant_self_unfreeze'>;
+
+/**
+ * The user's own act on their Grant (F-0401-c), written down as an admin's
+ * is — the user its actor — in the act's transaction. Nobody is told: the
+ * user did it, and their page hears it by its own event.
+ */
+export async function auditedOwnGrantAct<T>(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  grantId: string,
+  action: OwnGrantAuditAction,
+  act: () => Promise<T>,
+): Promise<T> {
+  const before = await tx.grant.findUnique({ where: { id: grantId }, select: GRANT_STATE });
+  const result = await act();
+  const after = await tx.grant.findUnique({ where: { id: grantId }, select: GRANT_STATE });
+  await write(tx, actor, tenantId, action, AuditTargetType.grant, grantId, before, after, null);
+  return result;
 }
 
 export type BulkJobAuditAction = Extract<AdminAction, 'grant_bulk_start' | 'grant_bulk_cancel'>;
