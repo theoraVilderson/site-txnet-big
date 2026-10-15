@@ -7,7 +7,7 @@ import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
-import { readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-services";
+import { readFreezeChanged, readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-services";
 
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
@@ -182,6 +182,9 @@ export function useGrantsPage(
         if (settled && pendingIds.current.has(settled.grantId)) void quietRead();
         const captured = readLinksCaptured(payload);
         if (captured && shownIds.current.includes(captured.grantId)) askConfigs([captured.grantId]);
+        // A freeze moved on a row shown here: status, mode and who may lift it are billing's (F-0401-e).
+        const frozen = readFreezeChanged(payload);
+        if (frozen && shownIds.current.includes(frozen.grantId)) void quietRead();
         const usage = readGrantUsage(payload);
         if (usage) setRows((before) => withUsage(before, usage));
       },

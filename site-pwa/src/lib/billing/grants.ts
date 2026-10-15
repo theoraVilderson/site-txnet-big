@@ -52,7 +52,19 @@ export interface GrantRow {
   purgeAt: string | null;
   /** When traffic last moved, to within one usage push; `null` when it never has (F-307-u). */
   lastTrafficAt: string | null;
+  /** An admin, the user or an evict froze it (F-311-h): `suspended`, kept, never purged. */
+  frozen: boolean;
+  /** When a timed freeze ends by itself; `null` when not frozen or frozen until lifted. */
+  frozenUntil: string | null;
+  /** Who froze it (F-0401-a): `hard` support, `soft` support leaving it to the user, `self` the user; `null` when not frozen. */
+  freezeMode: FreezeMode | null;
+  /** Whether the user may lift it themselves — billing's `userMayUnfreeze`, never derived here. */
+  userMayUnfreeze: boolean;
 }
+
+/** Who may lift a freeze, as `entitlement.prisma` declares `FreezeMode` (C-09); hard beats soft beats self. */
+export const FREEZE_MODES = ["hard", "soft", "self"] as const;
+export type FreezeMode = (typeof FREEZE_MODES)[number];
 
 /**
  * Which Grants the list answers (user, 2026-09-26): `current` leaves out the
@@ -366,6 +378,19 @@ export const grantCalls = {
   /** Removes a service's cap: its usage is bounded by the wallet alone again. No cap is a 204 too. */
   async removeSpendingCap(grantId: string): Promise<void> {
     await call<void>(`/traffic/grants/${encodeURIComponent(grantId)}/cap`, { method: "DELETE" });
+  },
+
+  /**
+   * The user freezes their own pay-as-you-go service (F-0401-c). Refused 403 `self_freeze_off` (the
+   * reseller's switch) and 429 `self_freeze_limit`, `facts {limit, nextAtMs}` — 3 a day per service.
+   */
+  async freezeOwnGrant(grantId: string): Promise<{ grantId: string; freezeMode: FreezeMode; configsDisabled: number }> {
+    return call<{ grantId: string; freezeMode: FreezeMode; configsDisabled: number }>(`/gift/grants/${encodeURIComponent(grantId)}/freeze`, { method: "POST" });
+  },
+
+  /** Lifts a `soft` or `self` freeze (F-0401-c); a hard one is 403 `freeze_not_users`. */
+  async unfreezeOwnGrant(grantId: string): Promise<{ grantId: string; endsAt: string | null; configsRestored: number }> {
+    return call<{ grantId: string; endsAt: string | null; configsRestored: number }>(`/gift/grants/${encodeURIComponent(grantId)}/unfreeze`, { method: "POST" });
   },
 
   /** Whether the collector is reading the user's panels (F-027-w) — the service page's "not cut off" sentence. */

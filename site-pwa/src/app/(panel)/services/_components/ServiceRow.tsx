@@ -17,12 +17,15 @@ import { useSubscriptionLink } from "../_hooks/useSubscriptionLink";
 import { GRANT_TONES, type CapabilityName } from "../_lib/my-services";
 import { buildStage, runningOut } from "../_lib/pulse";
 import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
+import { ownFreezeOf } from "../_lib/own-freeze";
 import { capOffered } from "../_lib/spending-cap";
 import { ConfigLines } from "./ConfigLines";
 import { ConnectGuide } from "./ConnectGuide";
 import { GrantConfigs } from "./GrantConfigs";
 import { NoticeLevel } from "./NoticeLevel";
+import { FreezeOwn, FrozenNote } from "./OwnFreeze";
 import { QrDialog } from "./QrDialog";
+import { RefusalNote } from "./RefusalNote";
 import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
 import { ServiceName } from "./ServiceName";
 import { ServicePulse, useServicePulse } from "./ServicePulse";
@@ -235,6 +238,8 @@ export const ServiceRow = memo(function ServiceRow({
           </p>
         )}
 
+        {row.frozen && <FrozenNote row={row} />}
+
         {capabilities.length > 0 && (
           <ul aria-label={t("common", S.features)} className="flex flex-wrap gap-1.5">
             {capabilities.map(({ key, name: label }) =>
@@ -359,7 +364,7 @@ export const ServiceRow = memo(function ServiceRow({
               {sub.link}
             </code>
           )}
-          {sub.error && <LinkError error={sub.error} />}
+          {sub.error && <RefusalNote error={sub.error} className="mt-3" />}
         </section>
 
         <QrDialog
@@ -388,6 +393,7 @@ export const ServiceRow = memo(function ServiceRow({
           <UsageBars grantId={row.id} />
           <GrantConfigs configs={configs} shown={shown} />
           {noticeLevel !== undefined && onNoticeLevel && <NoticeLevel grantId={row.id} level={noticeLevel} onSaved={onNoticeLevel} />}
+          {ownFreezeOf(row) === "freeze" && <FreezeOwn row={row} />}
           {capOffered(row.status) && <SpendingCap grantId={row.id} walletCurrency={walletCurrency} onChanged={onCapChanged} />}
 
           <section aria-label={t("common", L.resetTitle)} className="rounded-2xl border border-card-border p-3">
@@ -456,20 +462,3 @@ export const ServiceRow = memo(function ServiceRow({
     </li>
   );
 });
-
-/** Billing's sentence for a refused read or reset, and its ref for support. */
-function LinkError({ error }: { error: { message: string; ref?: string } }) {
-  return (
-    <div role="alert" className="mt-3 flex items-start gap-2 rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
-      <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden />
-      <span className="min-w-0">
-        {error.message}
-        {error.ref && (
-          <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
-            {error.ref}
-          </span>
-        )}
-      </span>
-    </div>
-  );
-}

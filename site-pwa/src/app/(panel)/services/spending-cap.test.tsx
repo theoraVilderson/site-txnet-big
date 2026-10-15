@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -9,6 +11,9 @@ import { ServiceRow } from "./_components/ServiceRow";
 import { SpendingCap } from "./_components/SpendingCap";
 import { WalletFunds } from "./_components/WalletFunds";
 import { capAmount, capReached } from "./_lib/spending-cap";
+
+// The freeze asks through the kit's dialog (F-0401-e), which the panel layout mounts.
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 /**
  * The spending cap on one service, and held money shown apart (F-118-j,
@@ -73,6 +78,10 @@ const GRANT: GrantRow = {
   suspendedAt: null,
   purgeAt: null,
   lastTrafficAt: null,
+  frozen: false,
+  frozenUntil: null,
+  freezeMode: null,
+  userMayUnfreeze: false,
 };
 
 beforeEach(() => {

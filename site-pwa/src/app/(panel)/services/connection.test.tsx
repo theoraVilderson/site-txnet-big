@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow, type GrantUsage, type UserConfigRow } from "@/lib/billing-api";
@@ -8,6 +10,9 @@ import { ServiceRow } from "./_components/ServiceRow";
 import { lineLabel, wireguardConf } from "./_lib/config-lines";
 import { matchesConfig } from "./_lib/service-configs";
 import { dayBars, usedShare } from "./_lib/usage";
+
+// The freeze asks through the kit's dialog (F-0401-e), which the panel layout mounts.
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 /**
  * My services, redesigned (F-307-c, then user 2026-09-26): "connect" is the
@@ -88,6 +93,10 @@ const GRANT: GrantRow = {
   suspendedAt: null,
   purgeAt: null,
   lastTrafficAt: null,
+  frozen: false,
+  frozenUntil: null,
+  freezeMode: null,
+  userMayUnfreeze: false,
 };
 
 function usage(days: { uploadBytes: string; downloadBytes: string }[]): GrantUsage {

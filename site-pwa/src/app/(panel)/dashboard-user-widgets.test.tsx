@@ -63,6 +63,10 @@ const grant = (id: string, over: Partial<GrantRow> = {}): GrantRow => ({
   suspendedAt: null,
   purgeAt: null,
   lastTrafficAt: null,
+  frozen: false,
+  frozenUntil: null,
+  freezeMode: null,
+  userMayUnfreeze: false,
   ...over,
 });
 

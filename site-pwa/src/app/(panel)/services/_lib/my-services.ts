@@ -153,6 +153,19 @@ export function readLinksCaptured(payload: unknown): { grantId: string } | null 
 }
 
 /**
+ * The Grant whose freeze just moved, off the owner's `user:` channel — the
+ * user's own act, an admin's or a timed end (F-0401-e, realtime
+ * `contract.live-events.md`). Nothing else in the payload is read: who may
+ * lift it now is the list's to say.
+ */
+export function readFreezeChanged(payload: unknown): { grantId: string } | null {
+  if (!payload || typeof payload !== "object") return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== RealtimeEvents.grantFreezeChanged) return null;
+  return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
+}
+
+/**
  * `entitlement.grant.usage` (F-307-t): a Grant's committed total, as metering
  * wrote it. A total that is not a whole decimal byte count is no event.
  */

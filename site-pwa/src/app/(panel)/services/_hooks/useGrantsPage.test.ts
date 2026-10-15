@@ -53,6 +53,10 @@ const ROW: GrantRow = {
   suspendedAt: null,
   purgeAt: null,
   lastTrafficAt: null,
+  frozen: false,
+  frozenUntil: null,
+  freezeMode: null,
+  userMayUnfreeze: false,
 };
 
 const page = (...rows: Partial<GrantRow>[]) => ({

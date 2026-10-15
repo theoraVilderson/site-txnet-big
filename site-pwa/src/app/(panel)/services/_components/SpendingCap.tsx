@@ -10,6 +10,7 @@ import { billingApi, SPENDING_CAP_PERIODS, type SpendingCap as Cap, type Spendin
 import { formatInstant } from "../../_lib/datetime";
 import { formatMoney } from "../../_lib/money";
 import { amountDraft, CAP_LABEL_MAX, capAmount, capReached } from "../_lib/spending-cap";
+import { RefusalNote } from "./RefusalNote";
 
 const K = FrontendI18nKeys.common.myServices.cap;
 
@@ -129,7 +130,7 @@ export function SpendingCap({
 
       {readError ? (
         <div className="mt-3 space-y-2">
-          <ErrorLine error={readError} />
+          <RefusalNote error={readError} />
           <button
             type="button"
             onClick={() => setAsked((n) => n + 1)}
@@ -202,7 +203,7 @@ export function SpendingCap({
           </div>
           {cap && cap.period !== draft.period && <p className="text-xs text-text-secondary">{t("common", K.periodRestarts)}</p>}
 
-          {refusal && <ErrorLine error={refusal} />}
+          {refusal && <RefusalNote error={refusal} />}
 
           <div className="flex gap-2">
             <button
@@ -226,7 +227,7 @@ export function SpendingCap({
       ) : cap === null ? (
         <div className="mt-3 space-y-3">
           <p className="text-xs text-text-secondary">{t("common", K.none)}</p>
-          {refusal && <ErrorLine error={refusal} />}
+          {refusal && <RefusalNote error={refusal} />}
           <button
             type="button"
             onClick={edit}
@@ -272,7 +273,7 @@ export function SpendingCap({
             </p>
           )}
 
-          {refusal && <ErrorLine error={refusal} />}
+          {refusal && <RefusalNote error={refusal} />}
 
           {confirmRemove ? (
             <div className="rounded-2xl border border-error-border bg-error-bg p-3">
@@ -310,22 +311,5 @@ export function SpendingCap({
         </div>
       )}
     </section>
-  );
-}
-
-/** Billing's sentence for a refused read or write, and its ref for support. */
-function ErrorLine({ error }: { error: Refusal }) {
-  return (
-    <div role="alert" className="flex items-start gap-2 rounded-2xl border border-error-border bg-error-bg px-3 py-2 text-xs font-medium text-error">
-      <AlertCircle size={14} className="mt-0.5 shrink-0" aria-hidden />
-      <span className="min-w-0">
-        {error.message}
-        {error.ref && (
-          <span className="mt-1 block font-mono text-3xs opacity-70" dir="ltr">
-            {error.ref}
-          </span>
-        )}
-      </span>
-    </div>
   );
 }

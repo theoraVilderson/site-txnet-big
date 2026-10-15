@@ -3213,6 +3213,25 @@
         "suspended": "Your reseller is suspended and its buyers cannot buy. Open its menu to see why and what brings it back."
       },
       "open": "Open the reseller menu"
+    },
+    "freeze": {
+      "title": "Freeze this service",
+      "hint": "Freezing switches off all of this service's configs until you unfreeze it. Nothing is deleted, and no usage is recorded meanwhile.",
+      "freeze": "Freeze",
+      "unfreeze": "Unfreeze",
+      "confirmFreeze": {
+        "title": "Freeze this service?",
+        "body": "None of this service's configs will work until you unfreeze it. You can freeze one service at most 3 times a day."
+      },
+      "confirmUnfreeze": {
+        "title": "Unfreeze this service?",
+        "body": "This service's configs are switched back on."
+      },
+      "bySelf": "You froze this service.",
+      "bySoft": "Support froze this service, but you can unfreeze it yourself.",
+      "byHard": "Frozen by support. Only support can unfreeze it.",
+      "until": "Until {{at}}",
+      "limited": "This service was frozen {{limit}} times in the last 24 hours. The next freeze is allowed from {{at}}."
     }
   },
   "systems": {

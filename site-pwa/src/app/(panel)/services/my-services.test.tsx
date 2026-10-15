@@ -1,7 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { ConfirmProvider } from "../_components/kit";
 import userEvent from "@testing-library/user-event";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type GrantRow } from "@/lib/billing-api";
@@ -23,6 +25,9 @@ import {
 } from "./_lib/service-configs";
 import { timeLeft } from "./_lib/usage";
 import type { UserConfigRow } from "@/lib/billing-api";
+
+// The freeze asks through the kit's dialog (F-0401-e), which the panel layout mounts.
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: ConfirmProvider });
 
 /**
  * The "my services" page (F-502-s), and the two things about it that break
@@ -123,6 +128,10 @@ const GRANT: GrantRow = {
   suspendedAt: null,
   purgeAt: null,
   lastTrafficAt: null,
+  frozen: false,
+  frozenUntil: null,
+  freezeMode: null,
+  userMayUnfreeze: false,
 };
 
 const CONFIG: UserConfigRow = {

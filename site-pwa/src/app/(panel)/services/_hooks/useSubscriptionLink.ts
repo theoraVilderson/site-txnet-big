@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi } from "@/lib/billing-api";
 import { copyText } from "../../_lib/clipboard";
+import { dailyLimitOf } from "../_lib/own-freeze";
+import { useDailyLimit } from "./useDailyLimit";
 
 export interface SubscriptionLinkState {
   /** The link billing answered for this row, or `null` until something asks. */
@@ -49,16 +51,8 @@ export function useSubscriptionLink(grantId: string): SubscriptionLinkState {
   const [isResetting, setIsResetting] = useState(false);
   const [resetDone, setResetDone] = useState(false);
   const [error, setError] = useState<{ message: string; ref?: string } | null>(null);
-  const [resetLimited, setResetLimited] = useState<{ limit: number; nextAt: string } | null>(null);
-
-  // The refusal holds until the time it named, then reset is offered again —
-  // no reload. Billing still decides: a reset too early is refused the same way.
-  useEffect(() => {
-    if (!resetLimited) return;
-    const wait = Date.parse(resetLimited.nextAt) - Date.now();
-    const timer = setTimeout(() => setResetLimited(null), Math.max(0, Math.min(wait, 2 ** 31 - 1)));
-    return () => clearTimeout(timer);
-  }, [resetLimited]);
+  // Refused for the day: held until the time it named, then reset is offered again.
+  const [resetLimited, setResetLimited] = useDailyLimit();
 
   function refused(e: unknown) {
     // Billing's own sentence, laid out (`contract.errors.md`) — `link_not_kept`
@@ -116,15 +110,5 @@ export function useSubscriptionLink(grantId: string): SubscriptionLinkState {
   return { link, isReading, copied, showLink, isResetting, resetDone, error, resetLimited, readLink, copy, reset };
 }
 
-/**
- * `link_reset_limit` (F-114-e-d) with the figures it carries: the limit and
- * when the next reset is allowed, as epoch ms (`facts` carries no text). Any
- * other refusal, or one missing a figure, is `null` and read as billing's
- * sentence instead.
- */
-export function resetLimitOf(e: unknown): { limit: number; nextAt: string } | null {
-  if (!(e instanceof ApiError) || e.reason !== "link_reset_limit") return null;
-  const { limit, nextAtMs } = e.facts;
-  if (typeof limit !== "number" || typeof nextAtMs !== "number" || !Number.isFinite(nextAtMs)) return null;
-  return { limit, nextAt: new Date(nextAtMs).toISOString() };
-}
+/** `link_reset_limit` (F-114-e-d): 3 resets per Grant in 24 hours. */
+export const resetLimitOf = (e: unknown) => dailyLimitOf(e, "link_reset_limit");
