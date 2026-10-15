@@ -72,7 +72,7 @@ export async function deleteGrant(
   input: { at: Date; actorUserId: string; reason: string; refund: boolean },
   settle: RemainderSettler,
 ): Promise<Deletion> {
-  const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { id: true, tenantId: true, status: true, statusReason: true, suspendedAt: true } });
+  const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { id: true, tenantId: true, status: true, statusReason: true, suspendedAt: true, freezeStopsClock: true } });
   if (!grant) throw new EntitlementRefused('grant_not_found');
   if (CLOSED.includes(grant.status)) throw new EntitlementRefused('grant_closed', grant.status);
   if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.suspended) throw new EntitlementRefused('grant_not_active', grant.status);
@@ -93,7 +93,8 @@ export async function deleteGrant(
   let refundSkipped: RefundSkipped | null = null;
   if (input.refund) {
     try {
-      const stoppedAt = grant.statusReason === ADMIN_FROZEN ? grant.suspendedAt : null;
+      // A freeze whose clock ran (a self-freeze, F-0401-a) is measured to now, as a live Grant is.
+      const stoppedAt = grant.statusReason === ADMIN_FROZEN && grant.freezeStopsClock !== false ? grant.suspendedAt : null;
       credited = await settle(tx, grantId, { at: input.at, stoppedAt });
     } catch (e) {
       if (!(e instanceof RemainderCreditRefused)) throw e;

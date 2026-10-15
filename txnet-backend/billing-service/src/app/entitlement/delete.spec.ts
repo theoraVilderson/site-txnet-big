@@ -28,7 +28,7 @@ const GRANT = '99999999-9999-4999-8999-999999999991';
 const ADMIN = '77777777-7777-4777-8777-777777777777';
 const WALLET_ROW = '55555555-5555-4555-8555-555555555555';
 
-type Row = { id: string; tenantId: string; status: GrantStatus; statusReason: string | null; suspendedAt: Date | null; frozenUntil: Date | null };
+type Row = { id: string; tenantId: string; status: GrantStatus; statusReason: string | null; suspendedAt: Date | null; frozenUntil: Date | null; freezeStopsClock?: boolean | null };
 type Write = { where: Record<string, unknown>; data: Record<string, unknown> };
 
 function build(row: Partial<Row> | null, opts: { moved?: boolean } = {}) {
@@ -156,7 +156,7 @@ describe('deleteGrant', () => {
 
   it('deletes a suspended Grant — frozen or out of quota — and clears a timed freeze', async () => {
     const frozenAt = new Date(at.getTime() - 5 * 86_400_000);
-    const frozen = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, frozenUntil: new Date(at.getTime() + 86_400_000) });
+    const frozen = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, freezeStopsClock: true, frozenUntil: new Date(at.getTime() + 86_400_000) });
     const { settle, calls } = settler('credited');
     await deleteGrant(frozen.tx, GRANT, input(true), settle);
     // Its clock stopped when it froze: the prepaid remainder is measured to then, not to the delete.
@@ -170,6 +170,12 @@ describe('deleteGrant', () => {
     expect(second.calls).toEqual([{ grantId: GRANT, stoppedAt: null }]);
     expect(spent.grants[0].where).toEqual({ id: GRANT, status: GrantStatus.suspended, statusReason: QUOTA_EXHAUSTED });
     expect(spent.grant?.status).toBe(GrantStatus.cancelled);
+
+    // A self-freeze whose clock ran (F-0401-a) is measured to the delete, as an unfrozen Grant is.
+    const running = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, freezeStopsClock: false });
+    const third = settler('credited');
+    await deleteGrant(running.tx, GRANT, input(true), third.settle);
+    expect(third.calls).toEqual([{ grantId: GRANT, stoppedAt: null }]);
   });
 
   it('refuses a closed Grant and a pending one, writing nothing', async () => {

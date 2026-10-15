@@ -34,6 +34,16 @@ enum GrantStatus {
   @@schema("entitlement")
 }
 
+/// Who may lift a freeze (F-0401-a): `hard` only an admin, `soft` the user too
+/// (an admin chose it), `self` the user froze it. Hard beats soft beats self.
+enum FreezeMode {
+  hard
+  soft
+  self
+
+  @@schema("entitlement")
+}
+
 enum SharingPolicy {
   exclusive
   shared_pool
@@ -196,6 +206,14 @@ model Grant {
   /// it whenever the Grant stops being `admin_frozen`, so an admin's own later
   /// freeze is never lifted by the sweep.
   awaitingPanel         Boolean            @default(false)
+  /// How a frozen Grant was frozen (F-0401-a), set at the freeze; only on a
+  /// frozen Grant — a trigger clears it, and `freezeStopsClock`, whenever the
+  /// Grant stops being one (`grant_freeze_mode_is_frozen`).
+  freezeMode            FreezeMode?
+  /// Whether this freeze stopped the clock, fixed at the freeze: the unfreeze
+  /// moves `endsAt` by the frozen span only when it did. A self-freeze takes
+  /// the tenant's setting then (F-0401-b); an admin's always stops it.
+  freezeStopsClock      Boolean?
   createdAt             DateTime           @default(now())
   updatedAt             DateTime           @default(now()) @updatedAt
 

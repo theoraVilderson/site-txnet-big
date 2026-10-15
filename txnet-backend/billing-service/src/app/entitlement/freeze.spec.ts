@@ -15,12 +15,16 @@
  *  - **a freeze may be timed.** `frozenUntil` set, the hourly sweep unfreezes
  *    it at that time, in its own tenant; unset, it waits for the admin;
  *  - **the write is conditional on what was read** — a renewal that moved the
- *    end in between is `grant_moved`, never an end shifted twice.
+ *    end in between is `grant_moved`, never an end shifted twice;
+ *  - **a freeze has a mode** (F-0401-a): hard, soft or self, and whether the
+ *    clock stopped, both fixed at the freeze. Hard beats soft beats self; the
+ *    user lifts only soft or self, never a system freeze (`awaitingPanel`),
+ *    and the end moves only for a freeze that stopped the clock.
  */
-import { ConfigStatus, DesiredRemote, EnforcementState, GrantStatus } from '@prisma/client';
+import { ConfigStatus, DesiredRemote, EnforcementState, FreezeMode, GrantStatus } from '@prisma/client';
 import { TenantContext } from '@txnet-backend/shared-core';
 
-import { ADMIN_FROZEN, freezeGrant, GrantUnfreezeService, unfreezeGrant } from './freeze';
+import { ADMIN_FROZEN, freezeGrant, freezeModeBeats, GrantUnfreezeService, unfreezeGrant, unfreezeOwnGrant, userMayUnfreeze } from './freeze';
 import { EntitlementRefused } from './grant';
 import { GrantPurgeService } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
@@ -31,6 +35,8 @@ const TENANT_B = '22222222-2222-4222-8222-222222222222';
 const GRANT = '99999999-9999-4999-8999-999999999991';
 const GRANT_2 = '99999999-9999-4999-8999-999999999992';
 const DAY = 86_400_000;
+/** Every freeze from before F-0401-a reads this way (the migration's backfill). */
+const HARD = { freezeMode: FreezeMode.hard, freezeStopsClock: true };
 
 type Row = {
   id: string;
@@ -39,13 +45,16 @@ type Row = {
   suspendedAt: Date | null;
   endsAt: Date | null;
   frozenUntil: Date | null;
+  freezeMode: FreezeMode | null;
+  freezeStopsClock: boolean | null;
+  awaitingPanel: boolean;
 };
 
 type Write = { where: Record<string, unknown>; data: Record<string, unknown>; tenant: string | null };
 
 function build(row: Partial<Row> | null) {
   const grant: Row | null = row
-    ? { id: GRANT, status: GrantStatus.active, statusReason: null, suspendedAt: null, endsAt: null, frozenUntil: null, ...row }
+    ? { id: GRANT, status: GrantStatus.active, statusReason: null, suspendedAt: null, endsAt: null, frozenUntil: null, freezeMode: null, freezeStopsClock: null, awaitingPanel: false, ...row }
     : null;
   const grants: Write[] = [];
   const configs: Write[] = [];
@@ -97,6 +106,8 @@ describe('freezeGrant', () => {
 
     expect(result).toEqual({ frozenUntil: null, configsDisabled: 2 });
     expect(grant).toMatchObject({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: at, frozenUntil: null });
+    // An admin's freeze with no mode is today's: hard, clock stopped (F-0401-a).
+    expect(grant).toMatchObject({ freezeMode: FreezeMode.hard, freezeStopsClock: true });
     // Conditional on `active`: a Grant that moved on is left where it is.
     expect(grants[0].where).toMatchObject({ id: GRANT, status: GrantStatus.active });
     // Desired state only — the panel keeps the client, turned off.
@@ -132,7 +143,7 @@ describe('unfreezeGrant', () => {
 
   it('gives the frozen time back to the end and turns the same configs on again', async () => {
     const endsAt = new Date('2026-09-20T10:00:00Z');
-    const { tx, grant, grants, configs } = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt, frozenUntil: at });
+    const { tx, grant, grants, configs } = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt, frozenUntil: at, ...HARD });
 
     const result = await unfreezeGrant(tx, GRANT, at);
 
@@ -146,7 +157,7 @@ describe('unfreezeGrant', () => {
   });
 
   it('leaves a permanent Grant permanent', async () => {
-    const { tx, grant } = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt: null });
+    const { tx, grant } = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt: null, ...HARD });
     expect((await unfreezeGrant(tx, GRANT, at)).endsAt).toBeNull();
     expect(grant?.endsAt).toBeNull();
   });
@@ -159,7 +170,7 @@ describe('unfreezeGrant', () => {
   });
 
   it('is grant_moved when the end changed between the read and the write', async () => {
-    const built = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt: new Date('2026-09-20T10:00:00Z') });
+    const built = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt: new Date('2026-09-20T10:00:00Z'), ...HARD });
     const read = built.tx as unknown as { grant: { findFirst: (a: unknown) => Promise<Row> } };
     const original = read.grant.findFirst;
     // A renewal lands after the read.
@@ -173,12 +184,85 @@ describe('unfreezeGrant', () => {
   });
 });
 
+describe('a freeze has a mode (F-0401-a)', () => {
+  const frozenAt = new Date('2026-09-01T10:00:00Z');
+  const at = new Date('2026-09-11T10:00:00Z'); // ten days frozen
+  const endsAt = new Date('2026-09-20T10:00:00Z');
+  const frozen = (mode: FreezeMode, more: Partial<Row> = {}) =>
+    build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: frozenAt, endsAt, freezeMode: mode, freezeStopsClock: true, ...more });
+
+  it('ranks hard over soft over self', () => {
+    expect(freezeModeBeats(FreezeMode.hard, FreezeMode.soft)).toBe(true);
+    expect(freezeModeBeats(FreezeMode.soft, FreezeMode.self)).toBe(true);
+    expect(freezeModeBeats(FreezeMode.self, FreezeMode.soft)).toBe(false);
+    expect(freezeModeBeats(FreezeMode.soft, FreezeMode.soft)).toBe(false);
+  });
+
+  it('fixes the mode and the clock on the Grant at the freeze', async () => {
+    const { tx, grant } = build({});
+    await freezeGrant(tx, GRANT, { at: frozenAt, mode: FreezeMode.self, stopsClock: false });
+    expect(grant).toMatchObject({ status: GrantStatus.suspended, freezeMode: FreezeMode.self, freezeStopsClock: false });
+  });
+
+  it('raises a weaker freeze in place: the clock it started with and its configs untouched', async () => {
+    const { tx, grant, grants, configs } = frozen(FreezeMode.self, { freezeStopsClock: false });
+    const result = await freezeGrant(tx, GRANT, { at, mode: FreezeMode.hard });
+    expect(result).toEqual({ frozenUntil: null, configsDisabled: 0 });
+    expect(grant).toMatchObject({ freezeMode: FreezeMode.hard, freezeStopsClock: false, suspendedAt: frozenAt });
+    // Conditional on the mode it read: two raises at once land one.
+    expect(grants[0].where).toMatchObject({ id: GRANT, status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, freezeMode: FreezeMode.self });
+    expect(configs).toHaveLength(0);
+  });
+
+  it('refuses a freeze that does not beat the one in place', async () => {
+    expect(await refusal(freezeGrant(frozen(FreezeMode.hard).tx, GRANT, { at, mode: FreezeMode.soft }))).toBe('grant_not_active');
+    expect(await refusal(freezeGrant(frozen(FreezeMode.soft).tx, GRANT, { at, mode: FreezeMode.self }))).toBe('grant_not_active');
+    expect(await refusal(freezeGrant(frozen(FreezeMode.soft).tx, GRANT, { at, mode: FreezeMode.soft }))).toBe('grant_not_active');
+  });
+
+  it('moves the end only when the clock stopped', async () => {
+    const { tx, grant } = frozen(FreezeMode.self, { freezeStopsClock: false });
+    expect((await unfreezeGrant(tx, GRANT, at)).endsAt).toEqual(endsAt);
+    expect(grant).toMatchObject({ status: GrantStatus.active, endsAt, freezeMode: null, freezeStopsClock: null });
+  });
+
+  it('lets the user lift a soft or self freeze, conditional on what made it theirs', async () => {
+    for (const mode of [FreezeMode.soft, FreezeMode.self]) {
+      const { tx, grant, grants } = frozen(mode);
+      expect(await unfreezeOwnGrant(tx, GRANT, at)).toEqual({ endsAt: new Date('2026-09-30T10:00:00Z'), configsRestored: 2 });
+      expect(grant?.status).toBe(GrantStatus.active);
+      // An admin who hardened it, or an evict that left it waiting, in between: the write misses.
+      expect(grants[0].where).toMatchObject({ freezeMode: mode, awaitingPanel: false });
+    }
+  });
+
+  it('never lets the user lift a hard freeze or a system one', async () => {
+    const hard = frozen(FreezeMode.hard);
+    expect(await refusal(unfreezeOwnGrant(hard.tx, GRANT, at))).toBe('freeze_not_users');
+    expect(hard.grants).toHaveLength(0);
+
+    const waiting = frozen(FreezeMode.soft, { awaitingPanel: true });
+    expect(await refusal(unfreezeOwnGrant(waiting.tx, GRANT, at))).toBe('freeze_not_users');
+    expect(await refusal(unfreezeOwnGrant(build({}).tx, GRANT, at))).toBe('grant_not_frozen');
+
+    expect(userMayUnfreeze({ freezeMode: FreezeMode.self, awaitingPanel: false })).toBe(true);
+    expect(userMayUnfreeze({ freezeMode: FreezeMode.hard, awaitingPanel: false })).toBe(false);
+    expect(userMayUnfreeze({ freezeMode: null, awaitingPanel: false })).toBe(false);
+  });
+
+  it('lets the admin lift any freeze, a system one included', async () => {
+    const { tx, grant } = frozen(FreezeMode.hard, { awaitingPanel: true });
+    await unfreezeGrant(tx, GRANT, at);
+    expect(grant?.status).toBe(GrantStatus.active);
+  });
+});
+
 describe('GrantUnfreezeService.unfreezeDue', () => {
   it('unfreezes every timed freeze that is due, each in its own tenant', async () => {
     const now = new Date('2026-09-27T10:00:00Z');
     const scans: unknown[][] = [];
     const tenantsSeen: Array<string | null> = [];
-    const built = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: new Date(now.getTime() - DAY), frozenUntil: now });
+    const built = build({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: new Date(now.getTime() - DAY), frozenUntil: now, ...HARD });
     const tx = built.tx as unknown as { grant: { findFirst: (a: { where: { id: string } }) => Promise<unknown> } };
     const find = tx.grant.findFirst;
     tx.grant.findFirst = async (a) => {

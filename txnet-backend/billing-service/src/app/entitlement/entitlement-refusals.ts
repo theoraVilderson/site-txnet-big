@@ -39,6 +39,8 @@ export type EntitlementRejection =
   | 'grant_moved'
   /** Unfreeze (F-311-h): the Grant is not frozen — never a suspension for quota, which a top-up lifts. */
   | 'grant_not_frozen'
+  /** The user's unfreeze (F-0401-a): a hard freeze, or one an evict left waiting for a panel — only an admin or the sweep lifts it. */
+  | 'freeze_not_users'
   /** Freeze: an unfreeze time that has already come. */
   | 'freeze_until_not_future'
   /** Days (F-311-i): expired, exhausted or cancelled — only a renewal brings it back (§4.4). */
