@@ -12,7 +12,7 @@ A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
 session has nothing left to decide. Each rule names the backlog row that
-builds it; **Storage** (F-803-a), **Method kinds** (F-803-b) and **Gateway admin** (F-803-c) exist, the rest is to be built. The pages are
+builds it; **Storage** (F-803-a), **Method kinds** (F-803-b), **Gateway admin** (F-803-c) and **Starting one** (F-803-d) exist, the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -153,6 +153,19 @@ Proof: `manual-setting.spec.ts`; checked on dev 2026-10-15 (both surfaces' rules
 audit rows, and the offer rule under RLS as the app role).
 
 ## Starting one (F-803-d; later F-804, F-807)
+
+Built 2026-10-15: `payment/manual/manual-transfer.ts`, `manual-transfer.provider.ts`,
+`deposit/deposit-transfer.service.ts`. A manual gateway has a registered driver,
+`ManualTransferProvider` (settlement `manual`): it mints, verifies and quotes
+nothing and lists no unverified payments, so reconciliation passes an open
+transfer by; a browser return on one only shows it. It has **no charge currency**
+(reading it throws): `chargeOf` reads the first active destination's kind — a card
+`IRR`, a wallet its asset — for the quote, the start and the currencies a tenant
+may pin. The list answers `confirmationMode` (`automatic` for every gateway but a
+manual one confirmed by a person) and `manualKind`, automatic ones first. A start
+writes `payment_transfer_detail` (the public fields, frozen) in the payment's own
+transaction; the free path writes none. `GET …/transfer` answers 404
+`transferNotFound` for anyone else's payment or one that is not a transfer.
 
 `POST /api/billing/deposit/start` on a manual gateway answers the usual body
 with `redirectUrl: null` and `transfer: {kind, destination (public fields only),

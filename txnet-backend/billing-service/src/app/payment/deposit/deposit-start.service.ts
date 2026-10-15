@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CouponChannel, DomainVerificationStatus, PaymentStatus, Prisma, TenantDomainPurpose, TenantDomainType, WalletReasonType } from '@prisma/client';
+import { CouponChannel, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
-import { panelUrlOf } from '../../request/panel-url';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletCreditService } from '../../wallet/wallet-credit.service';
@@ -14,12 +13,14 @@ import { CouponValidationService } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 import { GatewayCredentials, GatewayFailure } from '../gateway/payment-provider';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
+import { startTransfer, transferDetailData, type TransferBody } from '../manual/manual-transfer';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { Chat } from './chat-platform';
 import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit } from './deposit-pricing';
 import { selectPayerGateway } from './payer-gateway';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
+import { callbackUrlOf, returnOriginOf } from './deposit-return';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
 /**
@@ -108,6 +109,12 @@ export type DepositStarted = {
    * a provider token is never answered to a browser. `null` otherwise.
    */
   invoiceLink: string | null;
+  /**
+   * A manual gateway's (F-803-d): where to send the money, exactly how much,
+   * by when, and the proof to keep. `redirectUrl` is then `null` — the panel
+   * opens its pay page. `null` for any other gateway and on the free path.
+   */
+  transfer: TransferBody | null;
   amount: string;
   discount: string;
   fee: string;
@@ -193,8 +200,8 @@ export class DepositStartService {
       return {
         gateway,
         coupons,
-        callbackUrl: gateway.callbackUrl ?? (await this.callbackUrl(tx, tenant.id)),
-        returnOrigin: await this.returnOrigin(tx, tenant.id, request.origin),
+        callbackUrl: gateway.callbackUrl ?? (await callbackUrlOf(tx, this.config, tenant.id)),
+        returnOrigin: await returnOriginOf(tx, this.config, tenant.id, request.origin),
         defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id),
         currencyCode,
       };
@@ -209,7 +216,7 @@ export class DepositStartService {
       providerName: gateway.providerName,
       grantId: gateway.grantId,
     };
-    const { provider, price } = await priceDeposit(
+    const { provider, price, charge } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },
       {
         gateway,
@@ -228,7 +235,9 @@ export class DepositStartService {
     // not, so it is never refused for a domain it will not use.
     // An in-chat payment has no bank to send anyone back: the bot relays its result (F-104-k).
     const inChat = provider.settlement === 'in_chat';
-    if (!price.free && !inChat && !callbackUrl) throw new DepositCallbackUnavailable(tenant.id);
+    // Paid to the seller's own card or wallet (F-803-d): no bank, so no host to answer on either.
+    const transfer = startTransfer(gateway, charge, price.chargedAmountMinor, new Date());
+    if (!price.free && !inChat && !transfer && !callbackUrl) throw new DepositCallbackUnavailable(tenant.id);
     // The row's CHECK allows a billing top-up only on a platform gateway with no
     // discount, so it is never free and never in chat (no coupon, no messenger).
     if (request.billingTenantId && (price.free || inChat || source !== 'platform' || gateway.grantId)) {
@@ -276,7 +285,8 @@ export class DepositStartService {
           status: price.free ? PaymentStatus.success : PaymentStatus.pending,
           // A hold has no clock of its own: it lives as long as its payment,
           // and a payment that has already landed never expires.
-          expiresAt: price.free ? null : new Date(Date.now() + ttl * 1000),
+          // A transfer's clock is its window plus the grace for a late proof (F-803-d).
+          expiresAt: price.free ? null : (transfer?.expiresAt ?? new Date(Date.now() + ttl * 1000)),
           returnOrigin,
           // Where it was started (F-306-a): the payer notice tells a bot payer
           // even about a webhook credit, since no success page is in front of them.
@@ -287,6 +297,8 @@ export class DepositStartService {
         },
         select: { id: true },
       });
+      // What the payer was shown, frozen beside the payment (F-803-a).
+      if (transfer) await tx.paymentTransferDetail.create({ data: transferDetailData(paymentId, tenant.id, transfer.body, transfer.plan.destinationId) });
       await this.reservations.reserve(tx, {
         userId,
         orderReferenceId: paymentId,
@@ -314,6 +326,7 @@ export class DepositStartService {
       redirectUrl: null,
       invoice: null,
       invoiceLink: null,
+      transfer: null,
       amount: money(price.amount),
       discount: money(price.discount),
       fee: money(price.fee),
@@ -325,6 +338,7 @@ export class DepositStartService {
       currencyCode,
     };
     if (price.free) return answer;
+    if (transfer) return { ...answer, transfer: transfer.body };
 
     // In chat, nothing is minted: the bot sends the invoice with its own token,
     // and `pre-checkout` gives the row its authority (`DepositInChatService`).
@@ -420,72 +434,5 @@ export class DepositStartService {
       });
       await this.reservations.release(tx, paymentId, 'cancelled');
     });
-  }
-
-  /**
-   * The panel origin the result page is on: the browser's `Origin`, kept only
-   * when CORS already trusts it (`FRONTEND_ORIGIN`) or it is one of this
-   * tenant's proven panel hosts. The callback can land on a relay or the API
-   * host, so a relative redirect would miss the panel; an origin nobody vouches
-   * for is dropped rather than becoming an open redirect.
-   */
-  private async returnOrigin(
-    tx: Prisma.TransactionClient,
-    tenantId: string,
-    origin: string | null | undefined,
-  ): Promise<string | null> {
-    let parsed: URL;
-    try {
-      parsed = new URL(origin ?? '');
-    } catch {
-      return null;
-    }
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
-
-    const allowed = this.config
-      .get('FRONTEND_ORIGIN', { infer: true })
-      .split(',')
-      .map((o) => o.trim().replace(/\/+$/, ''))
-      .filter(Boolean);
-    if (allowed.includes(parsed.origin)) return parsed.origin;
-
-    const rows = await tx.tenantDomain.findMany({
-      where: {
-        tenantId,
-        purpose: TenantDomainPurpose.panel,
-        OR: [
-          { domainType: TenantDomainType.subdomain },
-          { verificationStatus: DomainVerificationStatus.verified },
-        ],
-      },
-      select: { domainValue: true, domainType: true },
-      orderBy: [{ domainType: 'desc' }, { domainValue: 'asc' }],
-    });
-    return parsed.protocol === 'https:' && rows.some((r) => r.domainValue === parsed.host) ? parsed.origin : null;
-  }
-
-  /**
-   * Where the gateway sends the user back to when the gateway names no address
-   * of its own (`callbackUrl`, F-092-w — an operator whose terminal is
-   * registered on another domain writes it, and it is sent verbatim) — the tenant's own panel host
-   * (ADR-0020), never the platform's and never a header the client set.
-   *
-   * A proven custom domain wins: it is the brand the user chose to pay on, and
-   * a bank's redirect back to a different host reads as a failed payment
-   * (`panelUrlOf` holds the rule). With no host, the deposit is refused before
-   * a payment exists (F-018-aj).
-   *
-   * `PAYMENT_CALLBACK_ORIGIN` overrides all of it with one origin for every
-   * tenant — a development and test affordance, where no tenant owns a host
-   * that a bank's sandbox could reach.
-   */
-  private async callbackUrl(tx: Prisma.TransactionClient, tenantId: string): Promise<string | null> {
-    const prefix = this.config.get('GLOBAL_PREFIX', { infer: true });
-    const path = `/${prefix}/billing/deposit/callback`;
-
-    const override = this.config.get('PAYMENT_CALLBACK_ORIGIN', { infer: true });
-    if (override) return `${override.replace(/\/+$/, '')}${path}`;
-
-    return panelUrlOf(tx, tenantId, path);
   }
 }

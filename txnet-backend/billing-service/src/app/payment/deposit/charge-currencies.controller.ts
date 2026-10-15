@@ -4,7 +4,8 @@ import { ServiceOnlyGuard, TenantCapability, runWithTenant, tenantTransaction } 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
-import { chargeCurrenciesOf, selectableGateways } from './deposit-pricing';
+import { chargeCurrenciesOf } from './charge-currencies';
+import { selectableGateways } from './deposit-pricing';
 
 /**
  * `GET /api/internal/billing/tenants/:tenantId/charge-currencies` (F-116-j,

@@ -18,7 +18,8 @@
  */
 import { Prisma } from '@prisma/client';
 
-import { chargeCurrenciesOf, offeredInCurrency, priceDeposit, type SelectedGateway } from '../deposit/deposit-pricing';
+import { chargeCurrenciesOf } from '../deposit/charge-currencies';
+import { offeredInCurrency, priceDeposit, type SelectedGateway } from '../deposit/deposit-pricing';
 import { FxRateReader } from './fx-rate.reader';
 import { InvalidPricingInput } from './gateway-pricing';
 

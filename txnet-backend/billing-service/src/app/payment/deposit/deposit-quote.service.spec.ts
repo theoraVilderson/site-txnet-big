@@ -293,6 +293,9 @@ describe('DepositQuoteService.listGateways', () => {
         presets: [],
         currencyCode: 'USD',
         testing: false,
+        // F-803-d: settles itself, not a manual method.
+        confirmationMode: 'automatic',
+        manualKind: null,
       },
     ]);
     expect(JSON.stringify(gateways)).not.toContain('SECRET');

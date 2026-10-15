@@ -54,7 +54,6 @@ export function parseDestination(method: ManualMethod, input: unknown): FieldsPa
   return parseFields(method.destinationFields, input, (f) => !f.optional);
 }
 
-// codeshape: spec-only — its caller is the transfer start (F-803-d)
 /** What the payer is shown: the public fields only (the payment's snapshot, F-803-d). */
 export function publicDestination(method: ManualMethod, fields: DestinationFields): DestinationFields {
   const shown = new Set(method.destinationFields.filter((f) => f.public).map((f) => f.id));

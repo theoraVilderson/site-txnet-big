@@ -7,6 +7,7 @@ import { CouponModule } from '../coupon/coupon.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { DepositAbandonService } from './deposit-abandon.service';
+import { DepositTransferService } from './deposit-transfer.service';
 import { DepositCallbackController } from './deposit-callback.controller';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositController } from './deposit.controller';
@@ -54,7 +55,7 @@ import { ManualConfirmService } from './manual-confirm.service';
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
   controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController, ChargeCurrenciesController],
-  providers: [OtherGatewayService, DepositQuoteService, DepositStartService, DepositAbandonService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
+  providers: [OtherGatewayService, DepositQuoteService, DepositStartService, DepositAbandonService, DepositTransferService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PaymentProviderName } from '@prisma/client';
 
 import type { EnvConfig } from '../../config/env.validation';
+import { ManualTransferProvider } from '../manual/manual-transfer.provider';
 import { AirwallexProvider } from './airwallex.provider';
 import { BaleProvider } from './bale.provider';
 import { PaymentProvider, ProviderNotSupported } from './payment-provider';
@@ -37,6 +38,8 @@ export class PaymentProviderRegistry {
       // Settled in the chat (F-104-k): nothing to sandbox, nothing it calls.
       [PaymentProviderName.telegram_stars, new TelegramStarsProvider()],
       [PaymentProviderName.bale, new BaleProvider()],
+      // The payer moves the money; a person confirms it (F-803-d). Calls nobody.
+      [PaymentProviderName.manual_transfer, new ManualTransferProvider()],
     ]);
     // A webhook driver that cannot check a signature would make the webhook
     // door answer 404 for a gateway that is supposed to settle there (ADR-0051).

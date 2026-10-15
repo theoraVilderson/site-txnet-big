@@ -6,6 +6,7 @@ import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gate
 import type { PaymentProvider } from '../gateway/payment-provider';
 import type { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { HAS_DESTINATION_IF_MANUAL as PAYABLE } from '../manual/manual-setting';
+import { chargeOf, TRANSFER_SELECT, type TransferCharge } from '../manual/manual-transfer';
 import type { FxRateReader } from '../pricing/fx-rate.reader';
 import {
   feeBasis,
@@ -141,6 +142,8 @@ export const GATEWAY_COLUMNS = {
   callbackUrl: true,
   // What its limits, fees and `staticRate` are in (F-116-b); see `offeredInCurrency`.
   currencyCode: true,
+  // A manual gateway's setting and destination: what it charges in, and what a start shows (F-803-d).
+  ...TRANSFER_SELECT,
 } satisfies Prisma.TenantGatewayConfigSelect & Prisma.PaymentGatewaySelect;
 
 export type SelectedGateway = Prisma.TenantGatewayConfigGetPayload<{ select: typeof GATEWAY_COLUMNS }>;
@@ -378,21 +381,6 @@ export async function selectableGateways(
 }
 
 /**
- * The currencies a tenant's selectable gateways charge in (F-116-j): what its
- * own manual rate may be pinned for, beside its operating currency. A provider
- * this build does not know is left out, as the list and the quote leave it out.
- */
-export function chargeCurrenciesOf(
-  gateways: readonly Pick<GatewayOffer, 'providerName'>[],
-  providers: Pick<PaymentProviderRegistry, 'has' | 'get'>,
-): string[] {
-  const codes = gateways
-    .filter((g) => providers.has(g.providerName))
-    .map((g) => providers.get(g.providerName).chargeCurrency);
-  return [...new Set(codes)].sort();
-}
-
-/**
  * A gateway prices a payment only in the currency it is configured in
  * (F-116-e). Its limits, fee floor and ceiling, presets and `staticRate` are
  * amounts in its `currencyCode`, and the payment is in the payer tenant's
@@ -429,7 +417,8 @@ export type DepositPricingInput = {
   ratesTenantId: string | null;
 };
 
-export type DepositPricing = { provider: PaymentProvider; price: GatewayPrice };
+/** `charge`: what the gateway is asked for in — its driver's, or a manual gateway's destination's (F-803-d). */
+export type DepositPricing = { provider: PaymentProvider; price: GatewayPrice; charge: TransferCharge };
 
 /**
  * What this gateway charges for this amount — the breakdown a quote renders and
@@ -456,8 +445,9 @@ export async function priceDeposit(
     throw new InvalidPricingInput(`gateway is configured in ${gateway.currencyCode}, the payment is in ${currencyCode}`);
   }
   const provider = deps.providers.get(gateway.providerName);
+  const charge = chargeOf(gateway, provider);
   // A gateway charging the payer's own currency prices at 1 (F-104-g, F-116-e).
-  const chargesInPaymentCurrency = provider.chargeCurrency === currencyCode;
+  const chargesInPaymentCurrency = charge.currency === currencyCode;
   // A Star's `staticRate` is its value in the gateway's currency; the calculator
   // wants Stars per unit, and a Star has no live rate (F-104-e, F-104-k). Not
   // positive stays unusable.
@@ -475,8 +465,8 @@ export async function priceDeposit(
     discount,
     defaultTaxRatePercent,
     // Payer currency -> charge currency, through the USD pivot (ADR-0098 part 6).
-    liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, provider.chargeCurrency, input.ratesTenantId) : null,
-    chargeDecimals: provider.chargeDecimals,
+    liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, charge.currency, input.ratesTenantId) : null,
+    chargeDecimals: charge.decimals,
     chargesInPaymentCurrency,
   };
 
@@ -491,5 +481,5 @@ export async function priceDeposit(
     await deps.merchant.requireConfigured(ref);
   }
 
-  return { provider, price: priceAtGateway(request) };
+  return { provider, price: priceAtGateway(request), charge };
 }

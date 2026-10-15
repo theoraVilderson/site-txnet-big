@@ -96,9 +96,10 @@ export type FeeQuote = { feeMinor: bigint };
  * How a driver learns a payment's result (D-32, ADR-0051 decision 5):
  * `return` — the payer's browser comes back and we verify (Zarinpal);
  * `webhook` — the provider's server posts it, signed, and the browser return
- * only shows it; `in_chat` — a messenger delivers it (F-104-k).
+ * only shows it; `in_chat` — a messenger delivers it (F-104-k); `manual` — the
+ * payer moves the money and a person confirms it against the proof (F-803-d).
  */
-export type SettlementMode = 'return' | 'webhook' | 'in_chat';
+export type SettlementMode = 'return' | 'webhook' | 'in_chat' | 'manual';
 
 /** One webhook post, exactly as it arrived. `rawBody` is the signed bytes — never re-serialized JSON. */
 export type WebhookInput = {

@@ -195,8 +195,10 @@ export class DepositCallbackService {
       // A gateway that settles by webhook is settled by its signed post, never
       // by a browser (ADR-0051 decision 5): this return only shows the payer
       // where it stands. A recovered payment's authority is only a URL's word,
-      // so it is not even asked about.
-      if (this.providers.get(gatewayRefOf(payment).providerName).settlement === 'webhook') {
+      // so it is not even asked about. A manual transfer has no bank to ask at
+      // all: a person confirms it (F-803-d), so a crafted return only shows it.
+      const { settlement } = this.providers.get(gatewayRefOf(payment).providerName);
+      if (settlement === 'webhook' || settlement === 'manual') {
         return recovered ? { kind: 'verifying', paymentId: payment.id } : await this.showOnly(payment, authority);
       }
 

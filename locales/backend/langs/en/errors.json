@@ -188,6 +188,7 @@
   },
   "billing": {
     "gatewayNotFound": "That payment gateway is not available.",
+    "transferNotFound": "That transfer was not found.",
     "gatewayUnavailable": "This payment gateway cannot take payments right now. Choose another gateway or try again later.",
     "gatewayInvalid": "Choose a payment gateway.",
     "amountInvalid": "Enter a valid amount.",

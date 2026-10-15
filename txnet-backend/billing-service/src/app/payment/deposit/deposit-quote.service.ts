@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { CouponChannel, Prisma } from '@prisma/client';
+import { ConfirmationMode, CouponChannel, Prisma } from '@prisma/client';
 import { operatingCurrencyOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -7,6 +7,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CouponValidationService, RejectedCoupon } from '../coupon/coupon-validation';
 import { GatewayMerchant, GatewaySource, hasEverySecret } from '../gateway/gateway-merchant';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
+import { automaticFirst, isAutomatic } from '../manual/manual-transfer';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { defaultTaxRate, type GatewayOffer, offeredInCurrency, offeredInThisChat, priceDeposit, selectableGateways, type SelectOptions } from './deposit-pricing';
 import { offeredToPayer, selectPayerGateway } from './payer-gateway';
@@ -71,6 +72,14 @@ export type DepositGateway = {
   currencyCode: string;
   /** Off or not yet verified — offered only to a caller who may manage gateways, to test it. */
   testing: boolean;
+  /**
+   * Whether it settles itself or a person confirms it (F-803-d, principle 4):
+   * the list answers `automatic` ones first, so the first gateway is the one
+   * to preselect.
+   */
+  confirmationMode: ConfirmationMode;
+  /** A manual gateway's method kind (`card_to_card`, `crypto_wallet`, …) for its icon; `null` for any other. */
+  manualKind: string | null;
 };
 
 export type DepositQuoteRequest = {
@@ -170,7 +179,7 @@ export class DepositQuoteService {
         ),
       ),
     );
-    return rows
+    return automaticFirst(rows)
       // A gateway lent from a tenant in another currency cannot price this one's payment (F-116-e).
       .filter((g) => offeredInCurrency(g, currencyCode))
       .filter((g) => this.providers.has(g.providerName))
@@ -187,6 +196,8 @@ export class DepositQuoteService {
         presets: resolvePresets(g.depositPresets, tenantPresets, { min: g.minAcceptAmount, max: g.maxAcceptAmount }),
         currencyCode: g.currencyCode,
         testing: g.testing,
+        confirmationMode: isAutomatic(g) ? ConfirmationMode.automatic : ConfirmationMode.manual_admin_required,
+        manualKind: g.manualSetting?.kind ?? null,
       }));
   }
 
@@ -221,7 +232,7 @@ export class DepositQuoteService {
       return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode };
     });
 
-    const { provider, price } = await priceDeposit(
+    const { price, charge } = await priceDeposit(
       { providers: this.providers, merchant: this.merchant, fx: this.fx },
       {
         gateway,
@@ -264,11 +275,7 @@ export class DepositQuoteService {
       charge:
         price.chargedAmountMinor === null
           ? null
-          : {
-              currency: provider.chargeCurrency,
-              decimals: provider.chargeDecimals,
-              amountMinor: price.chargedAmountMinor.toString(),
-            },
+          : { currency: charge.currency, decimals: charge.decimals, amountMinor: price.chargedAmountMinor.toString() },
     };
   }
 }

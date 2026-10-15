@@ -28,6 +28,7 @@ import type { CouponRejection } from '../coupon/coupon-validation';
 import { GatewayFailure, ProviderNotSupported } from '../gateway/payment-provider';
 import { AmountOutOfGatewayRange, RateOutOfRange, RateUnavailable } from '../pricing/gateway-pricing';
 import { DepositAbandonService } from './deposit-abandon.service';
+import { DepositTransferService } from './deposit-transfer.service';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
 import { DepositCallbackUnavailable, DepositStartService } from './deposit-start.service';
 import { DepositQuoteBody, depositQuoteSchema, DepositStartBody, depositStartSchema } from './deposit.schema';
@@ -115,6 +116,7 @@ export class DepositController {
     private readonly deposits: DepositQuoteService,
     private readonly starts: DepositStartService,
     private readonly abandons: DepositAbandonService,
+    private readonly transfers: DepositTransferService,
     private readonly locale: LocaleService,
     private readonly config: ConfigService,
   ) {}
@@ -246,6 +248,24 @@ export class DepositController {
    * 200 verdict — the page has nothing to do with a refusal, and a race with
    * the bot's `paid` relay is ordinary.
    */
+  /**
+   * A manual top-up's transfer, re-read by its payer (F-803-d): where to send
+   * the money, how much, by when, and where the payment stands. The page hears
+   * a change over the socket and re-reads here (C-14), never on a timer. On the
+   * gateway list's budget: the same page, the same reader.
+   */
+  @Get(':paymentId/transfer')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.DEPOSIT_GATEWAYS, identityOf(req).userId),
+    configKey: 'DEPOSIT_GATEWAYS_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async transfer(@Param('paymentId', new ParseUUIDPipe()) paymentId: string, @Req() req: Request) {
+    const found = await this.transfers.read(identityOf(req).userId, paymentId);
+    if (!found) throw new NotFoundException({ i18nKey: E.transferNotFound, message: `no transfer ${paymentId} for this payer` });
+    return found;
+  }
+
   @Post(':paymentId/abandon')
   @HttpCode(HttpStatus.OK)
   @RateLimit({
