@@ -275,3 +275,5 @@ export const PAYMENT_FAILED = "/payment/failed";
 /** A verifying payment (F-093-l): billing's callback writes this path out too. */
 // codeshape: spec-only — billing's RESULT_PATH writes it; payment-result.test holds it
 export const PAYMENT_PENDING = "/payment/pending";
+/** A manual transfer's pay page (F-803-i): where to send the money, the proof, the live state. */
+export const paymentTransferPath = (paymentId: string) => `/payment/transfer/${encodeURIComponent(paymentId)}`;

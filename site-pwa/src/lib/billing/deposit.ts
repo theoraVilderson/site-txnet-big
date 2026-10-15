@@ -1,5 +1,6 @@
 // A top-up: its gateways, quote, start and abandon (F-093-e), and a gift code redeemed (F-093-g).
 import { call } from "./client";
+import type { ConfirmationMode, TransferInstructions } from "./manual-transfer";
 
 /**
  * What `POST /gift/redeem` answers (`billing/contract.gift.md`).
@@ -66,6 +67,14 @@ export interface DepositGateway {
   presets: string[];
   /** The gateway's own currency: what its range and presets are in (F-116-h2). */
   currencyCode: string;
+  /**
+   * Who settles a payment through it (F-803-d): `automatic` for every gateway
+   * but a manual one a person confirms. Absent on a list that predates it (the
+   * tenant top-up's), which is read as `automatic` (`settlesItself`).
+   */
+  confirmationMode?: ConfirmationMode;
+  /** A manual gateway's kind (`card_to_card`, …), `null` for any other (F-803-d). */
+  manualKind?: string | null;
 }
 
 /** A coupon that priced into the quote. `discount` is what this code took, after the ones before it. */
@@ -155,6 +164,12 @@ export interface DepositStarted {
    * never offered such a gateway.
    */
   invoiceLink: string | null;
+  /**
+   * A manual gateway's start (F-803-d): where to send the money, the exact
+   * amount and the window. `redirectUrl` is `null` with it — the pay page is
+   * the next stop, not a bank. Absent or `null` on every other gateway.
+   */
+  transfer?: TransferInstructions | null;
   amount: string;
   discount: string;
   fee: string;

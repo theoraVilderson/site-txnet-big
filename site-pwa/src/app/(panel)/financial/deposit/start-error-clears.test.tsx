@@ -38,6 +38,8 @@ vi.mock("@/lib/billing-api", () => ({
   },
 }));
 vi.mock("@/lib/mini-app", async (actual) => ({ ...(await actual<object>()), openMiniAppInvoice: vi.fn() }));
+// A manual gateway's start navigates in-app (F-803-h); nothing here starts one.
+vi.mock("next/navigation", async (actual) => ({ ...(await actual<object>()), useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/context/LocaleContext", () => ({ useLocale: () => ({ t, lang: "en" }) }));
 vi.mock("@/hooks/useApiError", () => ({
   useApiErrorMessage: () => (e: unknown) => (e as Error).message,

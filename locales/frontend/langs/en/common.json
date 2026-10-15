@@ -596,7 +596,13 @@
       "rangeUpTo": "Up to {{max}}",
       "rangeAny": "Any amount",
       "testing": "Test",
-      "testingHint": "This gateway is off or not yet verified, and only gateway managers see it. The payment is real and the amount is added to your wallet."
+      "testingHint": "This gateway is off or not yet verified, and only gateway managers see it. The payment is real and the amount is added to your wallet.",
+      "groups": {
+        "automatic": "Online payment",
+        "manual": "Manual transfer"
+      },
+      "byPerson": "Confirmed by admin",
+      "confirmedAutomatically": "Confirmed automatically"
     },
     "wallet": {
       "current": "Current balance",

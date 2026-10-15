@@ -21,6 +21,13 @@ export const DESTINATION_WEIGHT = { min: 1, max: 100, default: 1 } as const;
 /** Whether a gateway is a manual one, by its provider (C-18). */
 export const isManualProvider = (providerName: string | null | undefined): boolean => providerName === MANUAL_PROVIDER;
 
+/**
+ * Whether a gateway settles itself: any non-manual gateway, and a manual one
+ * whose mode is `automatic` (none until F-803-f). A list that carries no mode
+ * (the tenant top-up's) is gateways that settle themselves.
+ */
+export const settlesItself = (g: { confirmationMode?: ConfirmationMode | null }): boolean => g.confirmationMode !== CONFIRMED_BY_PERSON;
+
 /** A field value as billing stores it in `manual_destination.fields` or a snapshot. */
 export type TransferFieldValue = string | number;
 
@@ -52,3 +59,19 @@ export interface ManualDestination {
 }
 
 export type DestinationBody = Partial<Pick<ManualDestination, "label" | "fields" | "isActive" | "sortOrder" | "weight" | "dailyCapMinor">>;
+
+/**
+ * What `deposit/start` answers for a manual gateway (F-803-d), and `GET
+ * …/transfer` re-reads: the public destination fields frozen at start, the
+ * exact amount in the charge currency's minor units, and the window.
+ */
+export interface TransferInstructions {
+  kind: string;
+  destination: Record<string, TransferFieldValue>;
+  amountMinor: string;
+  currencyCode: string;
+  decimals: number;
+  windowEndsAt: string;
+  requiredProof: string[];
+  confirmationMode: ConfirmationMode;
+}

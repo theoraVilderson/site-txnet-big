@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { CheckCircle2, ShoppingCart, Sparkles } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
@@ -9,11 +10,12 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi, type DepositGateway, type DepositStarted } from "@/lib/billing-api";
 import { openMiniAppInvoice } from "@/lib/mini-app";
-import { panelShopInvoicePath } from "@/lib/routes";
+import { panelShopInvoicePath, paymentTransferPath } from "@/lib/routes";
 import { prefillAmount, rememberReturnInvoice, type ForInvoice } from "../../../shop/_lib/shop";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
 import { PaymentPendingView } from "../../../payment/_components/PaymentPendingView";
 import { formatMoney } from "../../../_lib/money";
+import { defaultGateway } from "../_lib/gateway-groups";
 import { useDepositQuote } from "../_hooks/useDepositQuote";
 import { useStartOnce } from "../_hooks/useStartOnce";
 import { useVerifyingGuard } from "../_hooks/useVerifyingGuard";
@@ -43,7 +45,7 @@ const D = FrontendI18nKeys.common.deposit;
  * was shown a minute ago at a rate that has since moved.
  *
  * Two things this page owns that no quote can answer: the browser's trip to the
- * gateway, and the free path — a fully discounted top-up is credited by `start`
+ * gateway (or, for a manual one, to its pay page — F-803-h), and the free path — a fully discounted top-up is credited by `start`
  * itself and there is nowhere to send anyone, so the result is shown here
  * rather than on F-093-f's return pages.
  *
@@ -58,6 +60,7 @@ const D = FrontendI18nKeys.common.deposit;
  */
 export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | null } = {}) {
   const { lang, t } = useLocale();
+  const router = useRouter();
   const messageFor = useApiErrorMessage();
   const { balance, currencyCode: walletCurrency, refresh } = useWalletBalance();
 
@@ -110,11 +113,11 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
         const list = await billingApi.depositGateways();
         if (!alive) return;
         setGateways(list);
-        // The first one, as the route ordered it — platform gateways first,
-        // each table oldest first. A page that opened with nothing selected
-        // would show an empty bill until the user noticed the picker.
+        // The first that settles itself, else the first a person confirms
+        // (F-803-h). A page that opened with nothing selected would show an
+        // empty bill until the user noticed the picker.
         setGateway((current) =>
-          current && list.some((g) => gatewayKey(g) === gatewayKey(current)) ? current : (list[0] ?? null),
+          current && list.some((g) => gatewayKey(g) === gatewayKey(current)) ? current : defaultGateway(list),
         );
         setGatewaysError(null);
       } catch (e) {
@@ -173,6 +176,12 @@ export function DepositView({ forInvoice = null }: { forInvoice?: ForInvoice | n
         // Stay in the starting state: the page is on its way out, and a button
         // that came back to life here is a second `start` and a second hold.
         window.location.assign(started.redirectUrl);
+        return;
+      }
+      if (started.transfer) {
+        // A manual gateway (F-803-h): no bank to go to — the pay page shows
+        // where to send the money. Leaving the page, so the claim stays held.
+        router.push(paymentTransferPath(started.paymentId));
         return;
       }
       if (started.invoiceLink) {

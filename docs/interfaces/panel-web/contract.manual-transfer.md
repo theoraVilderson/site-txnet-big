@@ -83,6 +83,13 @@ person" or a `success` badge "confirmed automatically". Start on a manual
 gateway navigates to the pay page instead of a redirect; the existing
 pay-once guard (`useStartOnce`) applies unchanged.
 
+Built 2026-10-15: `financial/deposit/_lib/gateway-groups.ts` (`groupGateways`,
+`defaultGateway`), `GatewaySelector.tsx`, `DepositView.tsx`. A list with no
+mode (the tenant top-up's) is read as automatic (`settlesItself`), and a single
+group's heading is for screen readers only. The start pushes
+`paymentTransferPath(paymentId)` (`lib/routes.ts`); the page there is F-803-i's.
+Proof: `manual-gateways.test.tsx`.
+
 ## Admin: `/gateways` (F-803-g) and the queue (F-803-k)
 
 - `/gateways` gains two sections, **automatic** and **manual**, the second a
