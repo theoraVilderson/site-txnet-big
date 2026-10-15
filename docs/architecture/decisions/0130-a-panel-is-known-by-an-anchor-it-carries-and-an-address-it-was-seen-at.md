@@ -1,12 +1,12 @@
 ---
 id: adr-0130
 status: active
-updated: 2026-10-07
+updated: 2026-10-15
 ---
 
 # ADR 0130 — a panel is known by an anchor it carries and the address it was seen at
 
-- **Status:** accepted (being built — rows F-027-ew..F-027-fh; `BACKLOG.md` has which are done)
+- **Status:** accepted (built 2026-10-15 — rows F-027-ew..F-027-fh, all done)
 - **Date:** 2026-10-07
 - **Affects units:** network (connection test, collector, convergence, RADIUS allowlist), billing (systems routes, placement), panel-web (systems page)
 - **Decision row:** D-67 (the agent's recommendations, accepted by the user)
