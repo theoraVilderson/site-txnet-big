@@ -52,6 +52,25 @@ One page for every kind; the kind supplies the middle.
 | Credited | the ring fills to a full circle, the check draws, the wallet balance counts up, a short confetti burst (`full` only); buttons back to the wallet and to the shop |
 | Review / rejected | the `reviewReason` as one sentence and what to do; `resubmit` reopens the proof form |
 
+**Built 2026-10-15 (F-803-i).** `payment/transfer/[paymentId]/page.tsx` and
+`payment/transfer/_components/` (`TransferPayView`, `TransferStepper`,
+`CountdownRing`, `ExactAmount`, `ProofForm`, `ReceiptDrop`, `TransferOutcome`);
+rules in `_lib/transfer-page.ts` — a window run out while `pending` is `late`
+and keeps the form (billing's grace), never "closed". The proof's shapes are
+`(panel)/_components/transfer/proof-fields.ts`, one copy for the page and the
+queue. Where it differs from the table above, and why:
+- the copy mark lasts `COPY_FEEDBACK_MS` (the panel's one figure, FE-1-b), not
+  1.2 s; the buzz is `haptic.copied` (Telegram's light impact, else `vibrate(10)`);
+- the upload bar is indeterminate: `fetch` reports no upload progress, and a
+  second HTTP client for one bar is not worth its keeping;
+- "usually within <n> minutes" has no figure: no gateway stores one, so the
+  manual text says only that a person confirms it;
+- a person's return or rejection sends the payer no event; the page shows it
+  on tab visible, and on the next confirmed/reversed read.
+The kind supplies `Destination` only — the proof is one form by field id, so a
+kind adds no `ProofField` until one needs its own input (F-803-j's paste).
+Proof: `payment/transfer/transfer-page.test.ts`.
+
 ### Card-to-card (F-803-i)
 
 A bank card drawn in CSS at 85.6 : 54 — the bank's colour pair as a gradient
@@ -61,6 +80,9 @@ light sheen (`full` only); tapping it flips it to the back with the holder's
 name and the sheba, each copyable. Below it: copy-number as the primary button,
 the holder name repeated in plain text ("check the name your bank shows matches
 this"), and the exact amount in rials with its toman in words.
+Built as `(panel)/_components/transfer/CardDestination.tsx`, the kind's
+`Destination`; a wallet pays through the plain list (`kinds/plain.tsx`
+`PlainDestination`) until F-803-j draws its own.
 
 ### Wallet (F-803-j)
 

@@ -5,8 +5,8 @@ import type { LucideIcon } from "lucide-react";
  * One manual method kind as the panel draws it (contract.manual-transfer.md
  * principle 1): a file under `kinds/` and one line in `transfer-kinds.ts`.
  * It mirrors billing's `ManualMethod` descriptor, which is the rule; this is
- * how the rule is asked for and shown. F-803-i/j add the payer's `Destination`
- * and `ProofField` beside `AdminFields`.
+ * how the rule is asked for and shown: the seller's `AdminFields` and the
+ * payer's `Destination`.
  */
 
 /** Why billing refused one field — `invalid_destination`'s `error.facts` values (billing `FieldRefusal`). */
@@ -21,6 +21,11 @@ export interface AdminFieldsProps {
   onChange: (fieldId: string, value: string) => void;
   /** The client's own check merged with billing's refusal, by field. */
   errors: DestinationErrors;
+}
+
+/** A destination as the payer is shown it: the public fields frozen at start (`TransferInstructions.destination`). */
+export interface DestinationProps {
+  destination: Readonly<Record<string, string | number>>;
 }
 
 export interface TransferKind {
@@ -41,6 +46,8 @@ export interface TransferKind {
   summary: (fields: Readonly<Record<string, string | number>>) => string;
   /** The seller's editor for one destination's fields, with its live preview (F-803-g). */
   AdminFields: ComponentType<AdminFieldsProps>;
+  /** Where the payer sends the money, on the pay page (F-803-i). The proof fields are one shared form, by id. */
+  Destination: ComponentType<DestinationProps>;
 }
 
 /** Every field the kind declares that is not optional and is blank. */

@@ -1,4 +1,5 @@
 import type { TransferReviewReason, VerifyingPayment } from "@/lib/billing-api";
+import { RECEIPT_FIELD } from "../../../_components/transfer/proof-fields";
 import { transferKind } from "../../../_components/transfer/transfer-kinds";
 import { MANUAL_KEYS } from "./manual-confirm";
 
@@ -13,9 +14,6 @@ export const REVIEW_REASON_KEYS: Record<TransferReviewReason, string> = {
   no_match: MANUAL_KEYS.transfer.reason.no_match,
   proof_only: MANUAL_KEYS.transfer.reason.proof_only,
 };
-
-/** The proof field shown as an image, never as a row of text. */
-export const RECEIPT_FIELD = "receiptImage";
 
 /**
  * A transfer has no gateway to ask — billing answers `unaskable` and the

@@ -945,6 +945,39 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   display: none;
 }
 
+/* ── A transfer's pay page (F-803-i) ─────────────────────────────────────────
+   Two loops a framer-motion component would only restate: the receipt's
+   upload bar, which cannot know how far it got (fetch reports no upload
+   progress), and the soft halo on the step a person is checking. Reduced, the
+   bar is a still full line and the halo a still tint (M3). */
+
+.transfer-upload-bar {
+  width: 33%;
+  animation: transferSlide 1.2s ease-in-out infinite;
+}
+
+.transfer-halo {
+  animation: payBreath 2.4s ease-in-out infinite;
+}
+
+@keyframes transferSlide {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(300%); }
+}
+
+[dir="rtl"] .transfer-upload-bar {
+  animation-direction: reverse;
+}
+
+[data-motion="reduced"] .transfer-upload-bar {
+  width: 100%;
+  animation: none;
+}
+
+[data-motion="reduced"] .transfer-halo {
+  animation: none;
+}
+
 /* ── My services: a service that looks alive (F-307-u) ──────────────────────
    The meter is a tank (`.tank`): a glossy capsule whose fill is what is USED.
    It fills up once when the page opens (`tankGrow`) and a glowing head rides

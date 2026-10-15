@@ -6339,5 +6339,94 @@
       "markazi": "Central Bank of Iran",
       "other": "Bank card"
     }
+  },
+  "transferPay": {
+    "title": "Pay by transfer",
+    "loading": "Loading your payment…",
+    "retry": "Retry",
+    "notFound": "This payment was not found.",
+    "steps": {
+      "send": "Send",
+      "proof": "Proof",
+      "checking": "Checking",
+      "credited": "Credited"
+    },
+    "countdown": {
+      "label": "Time left to pay",
+      "minutes": "{{time}} left",
+      "over": "Time is up — paid already? Send the proof."
+    },
+    "amount": {
+      "label": "Send exactly this amount",
+      "copy": "Copy the amount",
+      "copied": "Copied",
+      "words": "In words: {{words}}"
+    },
+    "card": {
+      "copyNumber": "Copy the card number",
+      "flip": "Tap the card for the name and IBAN",
+      "flipBack": "Show the front of the card",
+      "holder": "Cardholder",
+      "sheba": "IBAN (sheba)",
+      "copy": "Copy",
+      "copied": "Copied",
+      "nameCheck": "Check the name your bank shows matches this: {{name}}",
+      "label": "Destination card"
+    },
+    "destination": "Send to",
+    "paid": "I've paid — send the proof",
+    "proof": {
+      "title": "Send the proof",
+      "hint": "What you send is checked by a person against the account.",
+      "drop": "Drop the receipt here, paste it, or",
+      "choose": "choose a file",
+      "types": "JPEG, PNG or WebP, up to 5 MB",
+      "uploading": "Uploading the receipt…",
+      "replace": "Replace",
+      "tooBig": "This image is larger than 5 MB.",
+      "wrongType": "Send the receipt as a JPEG, PNG or WebP image.",
+      "submit": "Send the proof",
+      "sending": "Sending…",
+      "hints": {
+        "trackingCode": "The tracking number on your bank's receipt.",
+        "sourceCardLast4": "The last four digits of the card you paid from.",
+        "paidAt": "When your bank says the transfer went through.",
+        "txHash": "The transaction id your wallet shows."
+      }
+    },
+    "checking": {
+      "title": "Your payment is being checked",
+      "manual": "A person confirms this payment. You can leave this page — your wallet is credited when they do.",
+      "automatic": "We are watching the network for your transfer."
+    },
+    "credited": {
+      "title": "Your wallet was credited",
+      "balance": "Wallet balance",
+      "toWallet": "Back to the wallet",
+      "toShop": "Go to the shop"
+    },
+    "closed": {
+      "failed": "This payment was not accepted. If you sent money, contact support with your receipt.",
+      "expired": "The time for this payment ran out. If you sent money, contact support with your receipt."
+    },
+    "reason": {
+      "underpaid": "Less than the exact amount arrived. Support will contact you about the difference.",
+      "overpaid": "More than the exact amount arrived. A person will credit what arrived.",
+      "late": "Your transfer arrived after the time to pay. A person is checking it.",
+      "wrong_destination": "The transfer went to a different card or wallet. Contact support with your receipt.",
+      "duplicate_ref": "This reference was already used for another payment. Check the number and contact support.",
+      "amount_collision": "Another payment waits on the same amount. A person is matching it to yours.",
+      "no_match": "Your transfer could not be matched automatically. A person is checking it.",
+      "proof_only": "A person is checking your proof against the account."
+    },
+    "refusal": {
+      "transfer_not_found": "This payment was not found.",
+      "transfer_closed": "This payment is already closed.",
+      "proof_already_sent": "Your proof was already sent. Wait for it to be checked.",
+      "invalid_proof": "Some fields are not right — see below.",
+      "receipt_missing": "Upload the receipt again, then send.",
+      "receipt_rejected": "The receipt could not be accepted. Send a clear JPEG, PNG or WebP image.",
+      "duplicate_ref": "This reference was already used for another payment. Check the number."
+    }
   }
 }

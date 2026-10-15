@@ -186,7 +186,8 @@ grace for a late proof; F-092-k expires it after that.
   The offset is the user's cost and is shown as part of the amount; it never
   reaches the wallet as a credit beyond the quoted amount.
 - `GET /api/billing/deposit/:paymentId/transfer` re-reads the same body for the
-  owner of the payment, plus `status` and `reviewReason`.
+  owner of the payment, plus `status`, `reviewReason`, `proofSubmittedAt` and
+  the gateway's `windowMinutes` (the pay page's ring, F-803-i).
 
 ## Proof and the queue (F-805-a)
 

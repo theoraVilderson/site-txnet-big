@@ -1,4 +1,5 @@
 // A manual-transfer gateway — card-to-card, a wallet, a later kind (F-803, billing/contract.manual-transfer.md).
+import { call } from "./client";
 
 /** The provider a manual gateway is stored under (D-60 part 1): the one place it is spelled (C-18). */
 export const MANUAL_PROVIDER = "manual_transfer";
@@ -75,3 +76,35 @@ export interface TransferInstructions {
   requiredProof: string[];
   confirmationMode: ConfirmationMode;
 }
+
+/** What `GET /deposit/:paymentId/transfer` answers the payer: the start's instructions and where the payment stands. */
+export interface TransferStatus extends TransferInstructions {
+  /** Billing's `PaymentStatus`: `pending` until a person credits it (`success`) or closes it. */
+  status: "pending" | "success" | "failed" | "expired";
+  reviewReason: string | null;
+  proofSubmittedAt: string | null;
+  /** The gateway's window length; the countdown ring is the share of it left. */
+  windowMinutes: number;
+}
+
+const transferPath = (paymentId: string) => `/deposit/${encodeURIComponent(paymentId)}`;
+
+/** The pay page's calls (F-803-i, F-805-a) — spread into `billingApi` (`lib/billing-api.ts`). */
+export const transferCalls = {
+  /** Re-read on mount, on a live event and on tab visible; 404 `transferNotFound` for anyone else's payment. */
+  async transferStatus(paymentId: string): Promise<TransferStatus> {
+    return call<TransferStatus>(`${transferPath(paymentId)}/transfer`, { method: "GET" });
+  },
+
+  /** The receipt image (JPEG, PNG or WebP, ≤ 5 MB); a second upload replaces the first. Answers its stored key. */
+  async uploadTransferReceipt(paymentId: string, file: File): Promise<{ key: string }> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return call<{ key: string }>(`${transferPath(paymentId)}/proof/upload`, { method: "POST", body: form });
+  },
+
+  /** The proof, by the kind's field ids; a refusal names its fields in `error.facts`. */
+  async submitTransferProof(paymentId: string, proof: Record<string, string>): Promise<{ proofSubmittedAt: string }> {
+    return call<{ proofSubmittedAt: string }>(`${transferPath(paymentId)}/proof`, { method: "POST", body: JSON.stringify(proof) });
+  },
+};

@@ -5,6 +5,7 @@ import { CreditCard } from "lucide-react";
 import { useMotionLevel } from "@/hooks/useMotionLevel";
 import { DURATION } from "@/lib/motion";
 import { BankCard } from "../BankCard";
+import { CardDestination } from "../CardDestination";
 import { bankOfCard, CARD_LENGTH, foldDigits, isLuhnValid } from "../banks";
 import { TransferField } from "../TransferField";
 import { missingFields, type AdminFieldsProps, type DestinationDraft, type TransferKind } from "../transfer-kind";
@@ -72,4 +73,5 @@ export const CARD_TO_CARD: TransferKind = {
   check,
   summary: (f) => `•••• ${String(f.cardNumber ?? "").slice(-SHOWN_DIGITS)} · ${String(f.holderName ?? "")}`,
   AdminFields: CardAdminFields,
+  Destination: CardDestination,
 };

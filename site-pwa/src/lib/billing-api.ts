@@ -7,6 +7,7 @@ import { depositCalls } from "./billing/deposit";
 import { gatewayCalls } from "./billing/gateways";
 import { grantCalls } from "./billing/grants";
 import { manualPaymentCalls } from "./billing/manual-payments";
+import { transferCalls } from "./billing/manual-transfer";
 import { panelGroupCalls } from "./billing/panel-groups";
 import { shopCalls } from "./billing/shop";
 import { systemsCalls } from "./billing/systems";
@@ -32,6 +33,7 @@ export const billingApi = {
   ...shopCalls,
   ...grantCalls,
   ...manualPaymentCalls,
+  ...transferCalls,
   ...systemsCalls,
   ...panelGroupCalls,
   ...gatewayCalls,

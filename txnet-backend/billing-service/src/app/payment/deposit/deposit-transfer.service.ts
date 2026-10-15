@@ -6,7 +6,13 @@ import { transferRowsOf } from '../manual/transfer-rows';
 import type { TransferBody } from '../manual/manual-transfer';
 
 /** The transfer as the pay page re-reads it: the start's body, where the payment stands, and why it waits, if it does. */
-export type TransferStatus = TransferBody & { status: string; reviewReason: string | null; proofSubmittedAt: Date | null };
+export type TransferStatus = TransferBody & {
+  status: string;
+  reviewReason: string | null;
+  proofSubmittedAt: Date | null;
+  /** The gateway's window length — the pay page's countdown ring is the share of it left (F-803-i). */
+  windowMinutes: number;
+};
 
 /**
  * `GET /api/billing/deposit/:paymentId/transfer` (F-803-d): the `transfer` a
@@ -38,6 +44,7 @@ export class DepositTransferService {
         status: rows.payment.status,
         reviewReason: detail.reviewReason,
         proofSubmittedAt: detail.proofSubmittedAt,
+        windowMinutes: setting.windowMinutes,
       };
     });
   }

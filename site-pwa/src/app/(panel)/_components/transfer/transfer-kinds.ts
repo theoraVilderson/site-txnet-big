@@ -1,7 +1,7 @@
 import { Banknote } from "lucide-react";
 import { CARD_TO_CARD } from "./kinds/card-to-card";
 import { CRYPTO_WALLET } from "./kinds/crypto-wallet";
-import { PlainAdminFields } from "./kinds/plain";
+import { PlainAdminFields, PlainDestination } from "./kinds/plain";
 import type { TransferKind } from "./transfer-kind";
 
 /**
@@ -26,6 +26,7 @@ function plainKind(kind: string): TransferKind {
     check: () => ({}),
     summary: (f) => Object.values(f).join(" · "),
     AdminFields: PlainAdminFields,
+    Destination: PlainDestination,
   };
 }
 
