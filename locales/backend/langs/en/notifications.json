@@ -84,7 +84,19 @@
     "downMany": "⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.",
     "downManyTitle": "{{count}} panels unreachable",
     "recoveredMany": "✅ {{count}} of your panels are reachable again.",
-    "recoveredManyTitle": "{{count}} panels back online"
+    "recoveredManyTitle": "{{count}} panels back online",
+    "haltedRestoreTitle": "Panel paused: its counters went backward",
+    "haltedRestore": "⏸ Your panel {{panel}} stopped being read: most of its usage counters went backward at once, as after a backup restore. Its usage is held, not billed, until you acknowledge it on the systems page.",
+    "haltedDriftTitle": "Panel paused: many users changed",
+    "haltedDrift": "⏸ Your panel {{panel}} stopped being read: many of its users changed on the panel at once. Look at the drift report on the systems page and acknowledge it once you know why.",
+    "haltedForeignTitle": "Panel paused: it answers as another panel",
+    "haltedForeign": "⛔ Your panel {{panel}} answers with another panel's users: its address likely points at another server. Nothing is read or changed on it until you put its address right and acknowledge it on the systems page.",
+    "haltedIdentityTitle": "Panel paused: server not recognised",
+    "haltedIdentity": "⛔ Your panel {{panel}}'s server no longer carries its identity marker: it was reinstalled, or its address points to another server. Nothing is read or created on it until you say which on the systems page.",
+    "haltedAddressTitle": "Panel paused: its address moved",
+    "haltedAddress": "⛔ Your panel {{panel}}'s domain now points to addresses it was not accepted at, so its login was not sent there. If you moved the server, trust the new address on the systems page; if not, fix its DNS.",
+    "haltedMany": "⏸ {{count}} of your panels were paused and wait for your decision on the systems page.",
+    "haltedManyTitle": "{{count}} panels paused"
   },
   "purchase": {
     "deliveredTitle": "Your purchase is ready",

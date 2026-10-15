@@ -4,6 +4,7 @@ import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict, 
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
+import { PANEL_NOTIFY_TEMPLATES, PANEL_TEMPLATE_TEXT } from './panel-notices';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 
@@ -28,17 +29,7 @@ export const NOTIFY_TEMPLATES = [
   'lotteryWon',
   'lotteryOpened',
   'lotteryOpenedAutomatic',
-  'panelAccepted',
-  'panelRefused',
-  'panelDownDns',
-  'panelDownPort',
-  'panelDownUnreachable',
-  'panelDownTls',
-  'panelDownPath',
-  'panelDownServer',
-  'panelLoginRefused',
-  'panelRefusingUs',
-  'panelRecovered',
+  ...PANEL_NOTIFY_TEMPLATES,
   'purchaseDelivered',
   'purchaseRefunded',
   'purchaseDelayed',
@@ -150,7 +141,7 @@ export type NotifyResult = { sent: Array<BotPlatform | 'sms'> };
 
 type Texts = Partial<Record<string, string>>;
 /** `resellerQuotaKeys`: a registry quota key's name, by key (F-019-v8); a product's is its catalog name. */
-type NotificationsNamespace = {
+export type NotificationsNamespace = {
   payment?: Texts;
   subscription?: Texts;
   resellerBilling?: Texts;
@@ -167,7 +158,7 @@ type NotificationsNamespace = {
   access?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
-type Notice = Text & { inbox: Text };
+export type Notice = Text & { inbox: Text };
 
 /**
  * The key path in `notifications` each template reads, and the English it
@@ -411,118 +402,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.resellerQuota?.digestManyTitle, fallback: '{{count}} quota notices' },
     },
   },
-  // F-067-o: a connection test's verdict, told to the owner (`accepted_low_trust` is an acceptance).
-  panelAccepted: {
-    read: (ns) => ns?.panel?.accepted,
-    fallback: '✅ Your panel {{panel}} passed its connection test and was accepted.',
-    inbox: { read: (ns) => ns?.panel?.acceptedTitle, fallback: 'Panel accepted' },
-    many: {
-      read: (ns) => ns?.panel?.acceptedMany,
-      fallback: '✅ {{count}} of your panels passed their connection test and were accepted.',
-      inbox: { read: (ns) => ns?.panel?.acceptedManyTitle, fallback: '{{count}} panels accepted' },
-    },
-  },
-  panelRefused: {
-    read: (ns) => ns?.panel?.refused,
-    fallback: '❌ Your panel {{panel}} was refused: its connection test showed it cannot report what the platform needs. The details are on the systems page.',
-    inbox: { read: (ns) => ns?.panel?.refusedTitle, fallback: 'Panel refused' },
-    many: {
-      read: (ns) => ns?.panel?.refusedMany,
-      fallback: '❌ {{count}} of your panels were refused by their connection test. The details are on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.refusedManyTitle, fallback: '{{count}} panels refused' },
-    },
-  },
-  // F-027-el (ADR-0122): a panel's health changed, confirmed — told by what the owner has to fix.
-  panelDownDns: {
-    read: (ns) => ns?.panel?.downDns,
-    fallback: '⚠️ Your panel {{panel}} cannot be reached: its domain no longer resolves. Check the domain\'s DNS record, then the panel\'s address on the systems page.',
-    inbox: { read: (ns) => ns?.panel?.downDnsTitle, fallback: 'Panel unreachable: its domain does not resolve' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelDownPort: {
-    read: (ns) => ns?.panel?.downPort,
-    fallback: '⚠️ Your panel {{panel}} refuses connections on its port. The port may have changed, or the panel\'s service stopped. Check the port in the panel\'s address on the systems page.',
-    inbox: { read: (ns) => ns?.panel?.downPortTitle, fallback: 'Panel unreachable: connection refused' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelDownUnreachable: {
-    read: (ns) => ns?.panel?.downUnreachable,
-    fallback: '⚠️ Your panel {{panel}}\'s server does not answer. It may be off, overloaded, or a firewall may be dropping our connection.',
-    inbox: { read: (ns) => ns?.panel?.downUnreachableTitle, fallback: 'Panel unreachable: the server does not answer' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelDownTls: {
-    read: (ns) => ns?.panel?.downTls,
-    fallback: '⚠️ Your panel {{panel}}\'s secure connection failed: its certificate is invalid, expired or for another name.',
-    inbox: { read: (ns) => ns?.panel?.downTlsTitle, fallback: 'Panel unreachable: certificate problem' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelDownPath: {
-    read: (ns) => ns?.panel?.downPath,
-    fallback: '⚠️ Your panel {{panel}} answers, but not at the address we have: its path has probably changed. Update the panel\'s address on the systems page.',
-    inbox: { read: (ns) => ns?.panel?.downPathTitle, fallback: 'Panel unreachable: its address changed' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelDownServer: {
-    read: (ns) => ns?.panel?.downServer,
-    fallback: '⚠️ Your panel {{panel}} answers with errors. The problem is on the panel itself; check it and its logs.',
-    inbox: { read: (ns) => ns?.panel?.downServerTitle, fallback: 'Panel failing' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelLoginRefused: {
-    read: (ns) => ns?.panel?.loginRefused,
-    fallback: '🔑 Your panel {{panel}} refused our login. If you changed its username or password, enter the new one under the panel\'s settings on the systems page.',
-    inbox: { read: (ns) => ns?.panel?.loginRefusedTitle, fallback: 'Panel login refused' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelRefusingUs: {
-    read: (ns) => ns?.panel?.refusingUs,
-    fallback: '⛔ Your panel {{panel}} is refusing our server\'s requests (blocked or rate limited). Check the panel\'s firewall and its allowed addresses.',
-    inbox: { read: (ns) => ns?.panel?.refusingUsTitle, fallback: 'Panel refusing our server' },
-    many: {
-      read: (ns) => ns?.panel?.downMany,
-      fallback: '⚠️ {{count}} of your panels cannot be reached. The reason for each is on the systems page.',
-      inbox: { read: (ns) => ns?.panel?.downManyTitle, fallback: '{{count}} panels unreachable' },
-    },
-  },
-  panelRecovered: {
-    read: (ns) => ns?.panel?.recovered,
-    fallback: '✅ Your panel {{panel}} is reachable again and working.',
-    inbox: { read: (ns) => ns?.panel?.recoveredTitle, fallback: 'Panel back online' },
-    many: {
-      read: (ns) => ns?.panel?.recoveredMany,
-      fallback: '✅ {{count}} of your panels are reachable again.',
-      inbox: { read: (ns) => ns?.panel?.recoveredManyTitle, fallback: '{{count}} panels back online' },
-    },
-  },
+  ...PANEL_TEMPLATE_TEXT,
   // F-111-d: a paid Grant was delivered, or could not be and was refunded in full.
   purchaseDelivered: {
     read: (ns) => ns?.purchase?.delivered,

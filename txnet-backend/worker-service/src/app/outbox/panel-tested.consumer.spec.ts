@@ -192,3 +192,53 @@ describe('PanelTestedConsumer.handle — a panel state change (F-027-el)', () =>
     expect(published).toEqual([]);
   });
 });
+
+/**
+ * F-027-fg (ADR-0130 decision 5): a halting drift event rides the same queue.
+ * What breaks silently: users cut off while the event waits on a page nobody
+ * opens — so it is pushed live and told to the owner, naming the panel, by
+ * what happened; and an event type the worker does not know is refused, not
+ * told as nothing.
+ */
+function drift(payload: Record<string, unknown> = {}): OutboxMessage {
+  return {
+    ...event(),
+    type: 'network.panel.drift_raised',
+    payload: { panelId: PANEL, tenantId: TENANT, ownerUserId: OWNER, panelName: 'Frankfurt', driftEventId: EVENT, eventType: 'identity_lost', ...payload },
+  };
+}
+
+describe('PanelTestedConsumer.handle — a halting drift event (F-027-fg)', () => {
+  it("pushes it on the owner's tenant channel with its type", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle(drift());
+
+    expect(published).toEqual([
+      { channel: `tenant:${TENANT}`, payload: { type: OutboxEventType.PANEL_DRIFT_RAISED, panelId: PANEL, driftEventId: EVENT, eventType: 'identity_lost' } },
+    ]);
+  });
+
+  it.each([
+    ['mass_reset', 'panelHaltedRestore'],
+    ['mass_missing', 'panelHaltedDrift'],
+    ['mass_rename', 'panelHaltedDrift'],
+    ['mass_limit_override', 'panelHaltedDrift'],
+    ['foreign_claim', 'panelHaltedForeign'],
+    ['identity_lost', 'panelHaltedIdentity'],
+    ['address_moved', 'panelHaltedAddress'],
+  ])('tells the owner %s as %s, naming the panel', async (eventType, template) => {
+    const { consumer, joined } = build();
+
+    await consumer.handle(drift({ eventType }));
+
+    expect(joined).toEqual([{ burst: UnscopedRedisKeys.noticeBurst(TENANT, OWNER, template), params: { panel: 'Frankfurt' } }]);
+  });
+
+  it('refuses an event type it does not know rather than telling the owner nothing', async () => {
+    const { consumer, published } = build();
+
+    await expect(consumer.handle(drift({ eventType: 'cosmic_rays' }))).rejects.toThrow(/drift event type/);
+    expect(published).toEqual([]);
+  });
+});

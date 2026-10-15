@@ -49,6 +49,7 @@ corrected, per "Decide once".
 | `identity.access.changed` | `user:` | identity (role set, role keys edited), tenant (seat removed) → live-push | AC-1-r (not built yet) |
 | `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
 | `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
+| `network.panel.drift_raised` | `tenant:` | network → panel-tested consumer (F-027-fg) | SystemsView (F-027-fh) |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 

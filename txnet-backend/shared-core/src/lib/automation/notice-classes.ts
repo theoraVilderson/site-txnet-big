@@ -133,6 +133,12 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   panelLoginRefused: 'important',
   panelRefusingUs: 'important',
   panelRecovered: 'info',
+  // F-027-fg (ADR-0130): a panel paused by a drift event waits for its owner's decision while its users are not served.
+  panelHaltedRestore: 'important',
+  panelHaltedDrift: 'important',
+  panelHaltedForeign: 'important',
+  panelHaltedIdentity: 'important',
+  panelHaltedAddress: 'important',
   [SUGGESTION_NOTICE]: 'suggestion',
 };
 

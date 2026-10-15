@@ -69,6 +69,12 @@ describe('notice classes (F-601-s)', () => {
       'panelDownServer',
       'panelDownTls',
       'panelDownUnreachable',
+      // F-027-fg (ADR-0130): a panel paused by a drift event, waiting for its owner.
+      'panelHaltedAddress',
+      'panelHaltedDrift',
+      'panelHaltedForeign',
+      'panelHaltedIdentity',
+      'panelHaltedRestore',
       'panelLoginRefused',
       'panelRefused',
       'panelRefusingUs',

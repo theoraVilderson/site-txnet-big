@@ -327,9 +327,9 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    await this.channel.bindQueue(this.panelTestedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PANEL_TESTED));
-    // F-027-el: a panel's health change rides the same queue and consumer, so one panel's events stay in order.
-    await this.channel.bindQueue(this.panelTestedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PANEL_STATE_CHANGED));
+    // F-027-el, F-027-fg: a health change and a halting drift event ride the same queue and consumer, so one panel's events stay in order.
+    const panelEvents = [OutboxEventType.PANEL_TESTED, OutboxEventType.PANEL_STATE_CHANGED, OutboxEventType.PANEL_DRIFT_RAISED];
+    await Promise.all(panelEvents.map((type) => this.channel.bindQueue(this.panelTestedQueue, this.exchange, outboxRoutingKey(type))));
     // F-019-c: a credited billing wallet asks auth-service to renew at once; the
     // renewal notices to a reseller's owner have their own queue, both types on it.
     await this.channel.assertQueue(this.tenantBillingCreditedQueue, {

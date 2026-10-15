@@ -143,7 +143,13 @@ our clients be charged its restore twice. Then:
 While an unacknowledged event halts the panel, both loops skip its read and
 report it `OpHalted` (it is never stamped, so the watchdog ages it into an
 alert). Billing places no buyer on it and does not count it towards
-`minHealthyPanels` (F-027-fe, `contract.groups.md` rules 8 and 10). The bulk pass **still converges it**: a suspension or a delete must
+`minHealthyPanels` (F-027-fe, `contract.groups.md` rules 8 and 10).
+**Every halting event is announced in the statement that raises it**
+(F-027-fg, ADR-0130 decision 5; `PostgresDriftEvents.Raise`): an outbox
+`network.panel.drift_raised` naming the panel, the event and its type, and the
+owner — the panel's tenant, or the platform's — so `PanelTestedConsumer`
+pushes it on `tenant:` and tells the owner which panel stopped and why. A
+non-halting event is the report's alone. The bulk pass **still converges it**: a suspension or a delete must
 reach the panel whatever its counters say — except under a `foreign_claim`,
 below (`DriftEventType.Converges`; `Halted` answers that type first). Acknowledging is `billing-service`'s
 `POST /systems/drift-events/:id/acknowledge` (F-027-as,
@@ -216,6 +222,7 @@ running out starts the count again; a higher ceiling is rewritten on a
 contested config; a restore halts, charges nothing, restates the ceiling and
 resumes on acknowledgement; 20% exactly, three of four and one of one do
 not fire, while two of two and four of four do.
+`internal/collect/postgres_test.go`: a halting event's announcement is in its own statement, typed as `events.json` declares it.
 `provision_test.go`/`postgres_test.go`: a recreate, and only a recreate, restarts its
 cursor, keeping lifetime and reset count.
 `internal/converge/foreign_test.go`, through the loop: another panel's client

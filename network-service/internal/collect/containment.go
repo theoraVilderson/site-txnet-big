@@ -298,11 +298,42 @@ func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftE
 	return DriftEventType(halt), nil
 }
 
+// DriftRaisedEvent is the outbox type a halting event is announced under
+// (F-027-fg, ADR-0130 decision 5): worker-service pushes it on the owner's
+// `tenant:` channel, so an open systems page re-reads, and tells the owner
+// which panel stopped and why. Declared in contracts/realtime/events.json.
+const DriftRaisedEvent = "network.panel.drift_raised"
+
+// raiseSQL writes the event and, when it halts, its announcement in one
+// statement, so they commit or fail together (ADR-0021). The owner is the
+// panel's tenant, or the platform_owner's for a platform panel (invariant 9),
+// named as `network.panel.state_changed` names it. A non-halting event is the
+// report's alone: nobody waits on it.
 const raiseSQL = `
-INSERT INTO network.panel_drift_event
-       (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted",
-        "knownAddresses", "seenAddresses")
-VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7, $8::text[], $9::text[])`
+WITH raised AS (
+  INSERT INTO network.panel_drift_event
+         (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted",
+          "knownAddresses", "seenAddresses")
+  VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7, $8::text[], $9::text[])
+  RETURNING id, "panelId", "eventType", "collectionHalted"
+)
+INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
+SELECT gen_random_uuid(), 'network.panel', p.id::text, $10::text,
+       jsonb_build_object(
+         'panelId', p.id::text,
+         'panelName', p.name,
+         'tenantId', o.id::text,
+         'ownerUserId', o."ownerUserId"::text,
+         'driftEventId', r.id::text,
+         'eventType', r."eventType"::text)
+  FROM raised r
+  JOIN network.panel p ON p.id = r."panelId"
+  LEFT JOIN LATERAL (
+    SELECT o.id, o."ownerUserId" FROM tenant.tenant o
+     WHERE o.id = p."tenantId"
+        OR (p."tenantId" IS NULL AND o."tenantType" = 'platform_owner')
+     ORDER BY o."createdAt", o.id LIMIT 1) o ON true
+ WHERE r."collectionHalted"`
 
 func (s PostgresDriftEvents) Raise(ctx context.Context, e DriftEvent) error {
 	var foreign *string
@@ -310,7 +341,7 @@ func (s PostgresDriftEvents) Raise(ctx context.Context, e DriftEvent) error {
 		foreign = &e.ForeignPanelID
 	}
 	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), foreign, e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted,
-		e.KnownAddresses, e.SeenAddresses); err != nil {
+		e.KnownAddresses, e.SeenAddresses, DriftRaisedEvent); err != nil {
 		return fmt.Errorf("raising panel %s drift event: %w", e.PanelID, err)
 	}
 	return nil

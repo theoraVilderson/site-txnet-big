@@ -213,7 +213,7 @@ the watchdog and the health flag: [contract.resilience.md](contract.resilience.m
 |---|---|---|
 | `network.usage.delta` | one collection pass over one panel: its deltas, its quarantines and its unattributed rows (F-027-m) | `billing-service` metering (F-027-n) |
 | `outbox.network.panel.tested` (outbox row, not a publish) | a connection test's verdict or fault, in the statement that writes it (F-027-bs, [contract.registration.md](contract.registration.md)) | `automation` `PanelTestedConsumer` -> `tenant:<owner>` |
-| `outbox.network.panel.state_changed` (outbox row) | a confirmed change of a panel's state or cause, in the statement that writes it (F-027-el, [contract.panel-health.md](contract.panel-health.md)) | `automation` `PanelTestedConsumer` |
+| `outbox.network.panel.state_changed`, `…drift_raised` (outbox rows) | a confirmed change of a panel's state or cause (F-027-el, [contract.panel-health.md](contract.panel-health.md)); a halting drift event (F-027-fg, [contract.drift.md](contract.drift.md)) — each in the statement that writes it | `automation` `PanelTestedConsumer` |
 
 The delta is declared in `contracts/network/delta.json` and held to it on both sides; its shape and why it is one message per
 pass are in [contract.collection.md](contract.collection.md). No config action is pushed to a panel: each writes desired state, and one pass carries it (F-027-z).

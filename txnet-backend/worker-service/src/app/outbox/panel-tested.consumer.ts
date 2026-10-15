@@ -1,4 +1,4 @@
-import type { PanelFaultCause } from '@prisma/client';
+import type { PanelDriftEventType, PanelFaultCause } from '@prisma/client';
 import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -36,6 +36,22 @@ export const PANEL_CAUSE_TEMPLATE: Record<PanelFaultCause, string> = {
   login_refused: 'panelLoginRefused',
   forbidden: 'panelRefusingUs',
   rate_limited: 'panelRefusingUs',
+};
+
+/**
+ * The notice a halting drift event is told as (F-027-fg, ADR-0130 decision 5),
+ * by what the owner has to decide. Exhaustive over `network.PanelDriftEventType`
+ * (C-07); the `mass_*` types other than a reset are schema only today and share
+ * one notice.
+ */
+export const PANEL_DRIFT_TEMPLATE: Record<PanelDriftEventType, string> = {
+  mass_reset: 'panelHaltedRestore',
+  mass_missing: 'panelHaltedDrift',
+  mass_rename: 'panelHaltedDrift',
+  mass_limit_override: 'panelHaltedDrift',
+  foreign_claim: 'panelHaltedForeign',
+  identity_lost: 'panelHaltedIdentity',
+  address_moved: 'panelHaltedAddress',
 };
 
 /** `network-service`'s `network.panel.tested` payload (`register.PostgresStore`). */
@@ -77,11 +93,12 @@ export class PanelTestedConsumer implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     await this.broker.consumePanelTested((event) => this.handle(event));
-    this.logger.log('consuming network.panel.tested and network.panel.state_changed for the live systems page');
+    this.logger.log('consuming network.panel.tested, network.panel.state_changed and network.panel.drift_raised for the live systems page');
   }
 
   async handle(event: OutboxMessage): Promise<void> {
     if (event.type === OutboxEventType.PANEL_STATE_CHANGED) return this.stateChanged(event);
+    if (event.type === OutboxEventType.PANEL_DRIFT_RAISED) return this.driftRaised(event);
     const tested = testedOf(event);
     const template = typeof tested.reviewState === 'string' ? VERDICT_TEMPLATE[tested.reviewState] : undefined;
     const person: EventNotice['person'] =
@@ -121,6 +138,39 @@ export class PanelTestedConsumer implements OnApplicationBootstrap {
         : undefined,
     });
   }
+
+  /**
+   * A halting drift event (F-027-fg). `network-service` announces only the
+   * halting ones, so every one stops a panel until a person decides: pushed, so
+   * an open systems page re-reads, and told to the owner by what happened.
+   */
+  private async driftRaised(event: OutboxMessage): Promise<void> {
+    const raised = driftRaisedOf(event);
+    await this.notices.send({
+      consumer: CONSUMER,
+      eventId: event.id,
+      live: {
+        channel: `tenant:${raised.tenantId}`,
+        body: { type: OutboxEventType.PANEL_DRIFT_RAISED, panelId: raised.panelId, driftEventId: raised.driftEventId, eventType: raised.eventType },
+      },
+      person: raised.ownerUserId
+        ? { tenantId: raised.tenantId, userId: raised.ownerUserId, template: raised.template, params: { panel: raised.panelName ?? '' } }
+        : undefined,
+    });
+  }
+}
+
+/** `network-service`'s `network.panel.drift_raised` payload (`collect.PostgresDriftEvents.Raise`), or a throw. */
+function driftRaisedOf(event: OutboxMessage) {
+  const p = (event.payload ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : null);
+  const tenantId = str('tenantId');
+  const panelId = str('panelId');
+  const eventType = str('eventType');
+  if (!tenantId || !panelId || !eventType) throw new Error(`outbox event ${event.id} has a payload without its tenant, panel or event type`);
+  const template = PANEL_DRIFT_TEMPLATE[eventType as PanelDriftEventType] as string | undefined;
+  if (!template) throw new Error(`outbox event ${event.id} names a drift event type no notice is written for: ${eventType}`);
+  return { tenantId, panelId, eventType, template, driftEventId: str('driftEventId'), panelName: str('panelName'), ownerUserId: str('ownerUserId') };
 }
 
 /** `network-service`'s `network.panel.state_changed` payload (`panelstate.PostgresWriter`). */

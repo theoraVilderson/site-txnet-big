@@ -2,7 +2,10 @@ package collect_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -359,5 +362,46 @@ func TestPassSideWritesAreOneStatementEach(t *testing.T) {
 	// Both counts, never the ratio (invariant 23).
 	if got := pool.executed(`INSERT INTO network.panel_drift_event`); len(got) != 1 || got[0][2].(*string) != nil || got[0][3] != 6 || got[0][4] != 10 {
 		t.Fatalf("drift event = %v", got)
+	}
+}
+
+// F-027-fg (ADR-0130 decision 5): a halting event reached nobody but the
+// systems page. It is announced in the statement that raises it — never
+// without it — naming the panel and its owner, the platform's for a platform
+// panel, so the worker tells them without resolving either.
+func TestAHaltingDriftEventIsAnnouncedInItsOwnStatement(t *testing.T) {
+	pool := &pgDB{}
+	at := time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC)
+	event := collect.DriftEvent{PanelID: pgPanelA, Type: collect.IdentityLost, Affected: 1, Observed: 3, DetectedAt: at, CollectionHalted: true}
+	if err := (collect.PostgresDriftEvents{DB: pool}).Raise(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	if len(pool.sql) != 1 {
+		t.Fatalf("raising took %d statements, want 1", len(pool.sql))
+	}
+	sql := pool.sql[0]
+	for _, want := range []string{"INSERT INTO automation.outbox_event", `"collectionHalted"`, "'platform_owner'", "'ownerUserId'", "'panelName'", "'eventType'", "'driftEventId'"} {
+		if !strings.Contains(sql, want) {
+			t.Errorf("the raise statement lacks %s", want)
+		}
+	}
+	if got := pool.args[0][9]; got != collect.DriftRaisedEvent {
+		t.Errorf("the event is typed %v, want %q", got, collect.DriftRaisedEvent)
+	}
+
+	// The type is the routing key the worker binds and the `type` the panel
+	// filters on; both read it from contracts/realtime/events.json (C-08).
+	raw, err := os.ReadFile(filepath.Clean("../../../contracts/realtime/events.json"))
+	if err != nil {
+		t.Fatalf("reading the fixture: %v", err)
+	}
+	var doc struct {
+		RealtimeEvents map[string]string `json:"realtimeEvents"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parsing the fixture: %v", err)
+	}
+	if got := doc.RealtimeEvents["panelDriftRaised"]; got != collect.DriftRaisedEvent {
+		t.Errorf("events.json panelDriftRaised = %q, collect.DriftRaisedEvent = %q", got, collect.DriftRaisedEvent)
 	}
 }
