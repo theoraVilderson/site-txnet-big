@@ -823,6 +823,7 @@ model PaymentTransaction {
   createdAt             DateTime            @default(now())
   expiresAt             DateTime? // معمولاً now()+15min
   returnOrigin           String? // the panel origin the payer started from; the callback redirects there
+  returnBotLink          String? // F-093-u: the bot a top-up started in; the result page offers the way back to it
   /// Where the top-up was started (F-306-a): the panel, or the bot through the
   /// gate. The payer notice tells a `bot` payer about a webhook credit too.
   channel                CouponChannel       @default(panel)

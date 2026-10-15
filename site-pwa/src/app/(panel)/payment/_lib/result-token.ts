@@ -40,7 +40,7 @@ export function readResultToken(raw: QueryValue, secret: string, nowMs = Date.no
   const given = Buffer.from(mac, "base64url");
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
 
-  let payload: { k?: unknown; r?: unknown; a?: unknown; c?: unknown; e?: unknown; p?: unknown };
+  let payload: { k?: unknown; r?: unknown; a?: unknown; c?: unknown; e?: unknown; p?: unknown; b?: unknown };
   try {
     payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
   } catch {
@@ -50,14 +50,24 @@ export function readResultToken(raw: QueryValue, secret: string, nowMs = Date.no
 
   if (payload.k === "s") {
     const ref = typeof payload.r === "string" ? payload.r : undefined;
-    return { kind: "success", success: readSuccess(ref, payload.a === 1 ? "1" : undefined) };
+    return { kind: "success", success: { ...readSuccess(ref, payload.a === 1 ? "1" : undefined), botLink: botLinkOf(payload.b) } };
   }
   if (payload.k === "v") {
     // Signed or not, it becomes part of a request path: only a uuid is one.
     return typeof payload.p === "string" && UUID.test(payload.p) ? { kind: "verifying", paymentId: payload.p } : null;
   }
   if (payload.k === "f") {
-    return { kind: "failed", failure: readFailure(typeof payload.c === "string" ? payload.c : undefined) };
+    return { kind: "failed", failure: { ...readFailure(typeof payload.c === "string" ? payload.c : undefined), botLink: botLinkOf(payload.b) } };
   }
   return null;
+}
+
+/** The bot a top-up started in (F-093-u): a button's `href`, so https only, even signed. */
+function botLinkOf(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  try {
+    return new URL(raw).protocol === "https:" ? raw : null;
+  } catch {
+    return null;
+  }
 }

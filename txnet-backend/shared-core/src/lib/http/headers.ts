@@ -92,6 +92,8 @@ export const RequestHeaders = {
   botChatId: 'x-bot-chat-id',
   botPlatform: 'x-bot-platform',
   botTenantId: 'x-bot-tenant-id',
+  /** The bot's own link, sent with a top-up's start so the result page can lead back to it (F-093-u); believed beside the service token only. */
+  botReturnLink: 'x-bot-return-link',
   /** The domain check's nonce, sent as a header so two requests share one URL (ADR-0129 (8), EDGE-1-e). */
   domainProbe: 'x-domain-probe',
   /** One request's id across services, logs and outbox messages (H13, `platform/hosting/contract.md`). */

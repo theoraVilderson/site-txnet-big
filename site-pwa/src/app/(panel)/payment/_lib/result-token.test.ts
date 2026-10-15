@@ -19,7 +19,7 @@ describe("a token billing signed", () => {
   it("shows the success it carries", () => {
     expect(readResultToken(success("A123456789", true), SECRET, NOW)).toEqual({
       kind: "success",
-      success: { reference: "A123456789", alreadyPaid: true },
+      success: { reference: "A123456789", alreadyPaid: true, botLink: null },
     });
   });
 
@@ -27,8 +27,24 @@ describe("a token billing signed", () => {
     const token = signResultToken({ kind: "failed", code: "VERIFICATION_FAILED" }, SECRET, NOW);
     expect(readResultToken(token, SECRET, NOW)).toEqual({
       kind: "failed",
-      failure: { code: "VERIFICATION_FAILED", messageKey: PAYMENT_FAILURE_KEYS.VERIFICATION_FAILED },
+      failure: { code: "VERIFICATION_FAILED", messageKey: PAYMENT_FAILURE_KEYS.VERIFICATION_FAILED, botLink: null },
     });
+  });
+});
+
+// F-093-u: a top-up started in a bot offers the way back to that bot.
+describe("the bot a payer came from", () => {
+  const link = "https://t.me/txnet_bot?start=paid";
+
+  it("is offered on a success and on a failure", () => {
+    const ok = signResultToken({ kind: "success", referenceId: "A1", alreadyPaid: false, returnBotLink: link }, SECRET, NOW);
+    const failed = signResultToken({ kind: "failed", code: "SYSTEM_ERROR", returnBotLink: link }, SECRET, NOW);
+    expect(readResultToken(ok, SECRET, NOW)).toMatchObject({ kind: "success", success: { botLink: link } });
+    expect(readResultToken(failed, SECRET, NOW)).toMatchObject({ kind: "failed", failure: { botLink: link } });
+  });
+
+  it("is absent from a panel top-up", () => {
+    expect(readResultToken(success("A1"), SECRET, NOW)).toMatchObject({ success: { botLink: null } });
   });
 });
 

@@ -319,7 +319,7 @@
   "txnet-backend/auth-service/src/app/auth/auth.service.ts": 1299,
   "txnet-backend/auth-service/src/app/auth/bot-link/bot-link.service.ts": 555,
   "txnet-backend/auth-service/src/app/auth/bot-link/bot-session.service.ts": 409,
-  "txnet-backend/auth-service/src/app/auth/notify/user-notifier.ts": 1251,
+  "txnet-backend/auth-service/src/app/auth/notify/user-notifier.ts": 1250,
   "txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts": 418,
   "txnet-backend/auth-service/src/app/governance/user-groups/user-group-admin.service.ts": 722,
   "txnet-backend/auth-service/src/app/support-consent/support-consent.service.ts": 492,

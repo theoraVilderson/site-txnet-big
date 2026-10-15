@@ -53,6 +53,24 @@ origin: string | null | undefined,
   return parsed.protocol === 'https:' && rows.some((r) => r.domainValue === parsed.host) ? parsed.origin : null;
 }
 
+/** A link back to a bot is a button on the result page: https only, and short. */
+const BOT_LINK_MAX = 200;
+
+/**
+ * The bot a top-up started in (F-093-u), as the link the bot sent with `start`
+ * — asked of the bot alone, beside the service token (`DepositController`).
+ * It becomes a button on the panel's result page, so only an https link of a
+ * sane length is kept.
+ */
+export function returnBotLinkOf(raw: string | null | undefined): string | null {
+  if (!raw || raw.length > BOT_LINK_MAX) return null;
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Where the gateway sends the user back to when the gateway names no address
  * of its own (`callbackUrl`, F-092-w — an operator whose terminal is

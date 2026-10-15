@@ -32,6 +32,7 @@ export const RequestHeaders = {
   "botChatId": "x-bot-chat-id",
   "botPlatform": "x-bot-platform",
   "botTenantId": "x-bot-tenant-id",
+  "botReturnLink": "x-bot-return-link",
   "domainProbe": "x-domain-probe",
   "requestId": "x-request-id",
 } as const;

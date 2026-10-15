@@ -12,7 +12,7 @@ import { createHmac } from 'node:crypto';
  * cannot verify (`panel-web/contract.payment-result.md`).
  *
  * The body is the page's inputs and an expiry, nothing more: `k` success or
- * failure, `r` the reference, `a` already paid, `c` the failure code, `e` unix
+ * failure, `r` the reference, `a` already paid, `c` the failure code, `b` the bot to go back to, `e` unix
  * seconds. The panel's `_lib/result-token.ts` is the reader; its test signs
  * with this function, so a format change on one side fails on the other.
  */
@@ -25,13 +25,14 @@ export const RESULT_TOKEN_TTL_SEC = 15 * 60;
  * `CallbackOutcome` is assignable to it, which the controller's call proves.
  */
 export type ResultOutcome =
-  | { kind: 'success'; referenceId: string | null; alreadyPaid: boolean }
-  | { kind: 'failed'; code: string }
+  | { kind: 'success'; referenceId: string | null; alreadyPaid: boolean; returnBotLink?: string }
+  | { kind: 'failed'; code: string; returnBotLink?: string }
   | { kind: 'verifying'; paymentId: string };
 
+/** `b`: the bot a top-up started in (F-093-u) — the page's way back to it. */
 export type ResultTokenPayload =
-  | { k: 's'; r?: string; a?: 1; e: number }
-  | { k: 'f'; c: string; e: number }
+  | { k: 's'; r?: string; a?: 1; b?: string; e: number }
+  | { k: 'f'; c: string; b?: string; e: number }
   /** A verifying payment (F-093-l): the id the pending page polls, nothing else. */
   | { k: 'v'; p: string; e: number };
 
@@ -39,15 +40,17 @@ export function signResultToken(outcome: ResultOutcome, secret: string, nowMs = 
   // An empty key is a MAC anyone can compute; refuse rather than sign with it.
   if (!secret) throw new Error('PAYMENT_RESULT_SECRET is not set');
   const e = Math.floor(nowMs / 1000) + RESULT_TOKEN_TTL_SEC;
+  const bot = outcome.kind !== 'verifying' && outcome.returnBotLink ? { b: outcome.returnBotLink } : {};
   const payload: ResultTokenPayload =
     outcome.kind === 'failed'
-      ? { k: 'f', c: outcome.code, e }
+      ? { k: 'f', c: outcome.code, ...bot, e }
       : outcome.kind === 'verifying'
         ? { k: 'v', p: outcome.paymentId, e }
         : {
           k: 's',
           ...(outcome.referenceId ? { r: outcome.referenceId } : {}),
           ...(outcome.alreadyPaid ? { a: 1 as const } : {}),
+          ...bot,
           e,
         };
   const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');

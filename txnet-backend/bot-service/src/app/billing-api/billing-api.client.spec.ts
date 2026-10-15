@@ -32,6 +32,13 @@ describe('BillingApiClient.start', () => {
     expect(sent[0].headers['origin']).toBe('https://panel.example.test');
   });
 
+  // F-093-u: the bot's own link, so the result page offers the way back to it.
+  it('names the bot the top-up started in, when it is given one', async () => {
+    const { api, sent } = client({});
+    await api.start(body, call, 'https://t.me/txnet_bot?start=paid');
+    expect(sent[0].headers['x-bot-return-link']).toBe('https://t.me/txnet_bot?start=paid');
+  });
+
   it('names none where no panel is published, and only on start', async () => {
     const { api, sent } = client({});
     await api.start(body, call);

@@ -228,6 +228,8 @@ export class DepositController {
         couponCodes: body.couponCodes,
         channel: this.channelOf(req),
         origin: req.headers.origin ?? null,
+        // F-093-u: the bot's own link, believed only beside its service token — never a browser's header.
+        botLink: this.channelOf(req) === CouponChannel.bot ? (headerValue(req.headers, RequestHeaders.botReturnLink) ?? null) : null,
         canTest: canTest(req),
         chat: this.chatOf(req),
         lang: requestLanguage(req, this.locale),

@@ -98,6 +98,16 @@ That is why neither page has a client data path, a loading state or an effect.
    It settles nothing and asks no gateway — billing's retries do
    (`domains/billing/contract.verify.md`). The `pending` tone is theme green
    with clock hands, never gold.
+
+12. **A top-up started in a bot leads back to that bot (F-093-u, user
+   2026-10-15).** The bot sends its own link with `start` (`x-bot-return-link`,
+   built by messenger's `buildDeepLink`, payload `paid` — the main menu);
+   billing keeps it as `returnBotLink` only beside the service token, https and
+   ≤ 200 characters, and signs it as `b` into a success or failure token.
+   `_lib/result-token.ts` passes it on only as an https URL. With one,
+   `BackToBotLink` ("بازگشت به ربات") is the primary action on both pages and the
+   panel's own actions turn secondary; without one — a panel top-up — nothing
+   changes.
 12. **A top-up for an invoice leads back to it (F-111-e).** When session
    storage holds the id the top-up page kept (`shop/_lib/shop.ts`
    `returnInvoice`, read after hydration), `PaymentSuccessView` puts "continue

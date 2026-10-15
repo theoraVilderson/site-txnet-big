@@ -123,7 +123,12 @@ describe('TopUpFlow', () => {
 
     const result = await flow.handle(ctx, onConfirm, 'topup:pay');
 
-    expect(billing.start).toHaveBeenCalledWith({ gatewayId: GW, source: 'tenant', amount: '100.00' }, { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId });
+    // F-093-u: with this bot's own link, so the result page can lead back here.
+    expect(billing.start).toHaveBeenCalledWith(
+      { gatewayId: GW, source: 'tenant', amount: '100.00' },
+      { lang: 'fa', accessToken: 'access-1', platform: 'telegram', botTenantId: ctx.integration.tenantId },
+      `https://t.me/${ctx.integration.botUsername}?start=paid`,
+    );
     const pay = (result.view.actions ?? []).flat().find((a) => a.kind === 'url');
     expect(pay?.url).toBe('https://pay.example/StartPay/A1');
     // Started is a commitment billing holds now (ADR-0010): nothing here may start it twice.

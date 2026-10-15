@@ -9,6 +9,7 @@ import { PANEL_FINANCIAL, PANEL_HOME, panelShopInvoicePath } from "@/lib/routes"
 import { returnInvoice } from "../../shop/_lib/shop";
 import { PAYMENT_RESULT_KEYS as P, type PaymentSuccess } from "../_lib/payment-result";
 import { buttonClass } from "../../_components/kit";
+import { BackToBotLink } from "./BackToBotLink";
 import { PaymentResultCard } from "./PaymentResultCard";
 import { ReferenceCard } from "./ReferenceCard";
 
@@ -31,8 +32,11 @@ export const SECONDARY_ACTION = buttonClass({ variant: "quiet", size: "lg", full
  * action: back to that invoice. The id was kept in session storage by the
  * top-up page, because the bank's return URL carries nothing of the panel's;
  * the shop forgets it once the invoice is paid.
+ *
+ * A top-up started in a bot (F-093-u) leads back to that bot first: the chat
+ * is where the payer was, and the panel is one tap below it.
  */
-export function PaymentSuccessView({ reference, alreadyPaid }: PaymentSuccess) {
+export function PaymentSuccessView({ reference, alreadyPaid, botLink }: PaymentSuccess) {
   const { t } = useLocale();
   // Storage is not there on the server render: `null` there, the kept id after hydration.
   const invoiceId = useSyncExternalStore(noSubscription, returnInvoice, () => null);
@@ -44,13 +48,14 @@ export function PaymentSuccessView({ reference, alreadyPaid }: PaymentSuccess) {
       message={t("common", alreadyPaid ? P.success.alreadySubtitle : P.success.subtitle)}
       actions={
         <>
+          {botLink && <BackToBotLink href={botLink} className={PRIMARY_ACTION} />}
           {invoiceId && (
-            <Link href={panelShopInvoicePath(invoiceId)} className={PRIMARY_ACTION}>
+            <Link href={panelShopInvoicePath(invoiceId)} className={botLink ? SECONDARY_ACTION : PRIMARY_ACTION}>
               <ShoppingCart size={16} aria-hidden />
               {t("common", FrontendI18nKeys.common.paymentResult.backToInvoice)}
             </Link>
           )}
-          <Link href={PANEL_HOME} className={invoiceId ? SECONDARY_ACTION : PRIMARY_ACTION}>
+          <Link href={PANEL_HOME} className={invoiceId || botLink ? SECONDARY_ACTION : PRIMARY_ACTION}>
             {t("common", P.success.toPanel)}
             {/* Points forward in the reading direction: left in RTL, right in LTR. */}
             <ArrowLeft

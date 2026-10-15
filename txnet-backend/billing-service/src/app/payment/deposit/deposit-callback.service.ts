@@ -91,7 +91,10 @@ export type CallbackOutcome =
   | { kind: 'verifying'; paymentId: string };
 
 /** The outcome, plus the panel origin the payment was started from when the row has one. */
-export type SettledCallback = CallbackOutcome & { returnOrigin?: string };
+export type SettledCallback = CallbackOutcome & { returnOrigin?: string; returnBotLink?: string };
+/** Where a payer goes back to (F-092-i, F-093-u), read with the payment. */
+type ReturnTo = { returnOrigin: string | null; returnBotLink: string | null };
+const RETURN_SELECT = { returnOrigin: true, returnBotLink: true } as const;
 
 export type CallbackRequest = {
   /** `payment_transaction.gatewayTrackingCode` — Zarinpal's `Authority` (ADR-0028). */
@@ -125,18 +128,19 @@ export class DepositCallbackService {
   ) {}
 
   async settle(request: CallbackRequest): Promise<SettledCallback> {
-    let returnOrigin: string | null = null;
-    const outcome = await this.outcomeOf(request, (origin) => (returnOrigin = origin));
-    return returnOrigin ? { ...outcome, returnOrigin } : outcome;
+    let back: ReturnTo | null = null;
+    const outcome = await this.outcomeOf(request, (found) => (back = found));
+    const { returnOrigin, returnBotLink } = (back ?? {}) as Partial<ReturnTo>;
+    return { ...outcome, ...(returnOrigin ? { returnOrigin } : {}), ...(returnBotLink ? { returnBotLink } : {}) };
   }
 
   private async outcomeOf(
     request: CallbackRequest,
-    foundOrigin: (origin: string | null) => void,
+    foundReturn: (back: ReturnTo | null) => void,
   ): Promise<CallbackOutcome> {
     const tenant = TenantContext.current('deposit callback');
     const { authority } = request;
-    if (!authority && request.paymentId) return this.returnByPaymentId(request.paymentId, foundOrigin);
+    if (!authority && request.paymentId) return this.returnByPaymentId(request.paymentId, foundReturn);
     if (!authority) return { kind: 'failed', code: 'INVALID_PARAMS' };
 
     try {
@@ -146,7 +150,7 @@ export class DepositCallbackService {
       let payment = await tenantTransaction(this.prisma, (tx) =>
         tx.paymentTransaction.findFirst({
           where: { gatewayTrackingCode: authority },
-          select: { ...PAYMENT_SELECT, returnOrigin: true },
+          select: { ...PAYMENT_SELECT, ...RETURN_SELECT },
         }),
       );
       // No row carries it: perhaps the write of this authority was lost after
@@ -162,11 +166,11 @@ export class DepositCallbackService {
               gatewayTrackingCode: null,
               status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
             },
-            select: { ...PAYMENT_SELECT, returnOrigin: true },
+            select: { ...PAYMENT_SELECT, ...RETURN_SELECT },
           }),
         );
       }
-      foundOrigin(payment?.returnOrigin ?? null);
+      foundReturn(payment);
       if (!payment) {
         // Not logged as an error: an authority nobody minted is what a stray
         // bookmark or a probe looks like, and it is the same answer either way.
@@ -290,15 +294,15 @@ export class DepositCallbackService {
    * return never credits or closes, so a url's word shows a status and nothing
    * more. A return-settled gateway still needs its authority.
    */
-  private async returnByPaymentId(paymentId: string, foundOrigin: (origin: string | null) => void): Promise<CallbackOutcome> {
+  private async returnByPaymentId(paymentId: string, foundReturn: (back: ReturnTo | null) => void): Promise<CallbackOutcome> {
     try {
       const payment = await tenantTransaction(this.prisma, (tx) =>
-        tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: { ...PAYMENT_SELECT, returnOrigin: true } }),
+        tx.paymentTransaction.findFirst({ where: { id: paymentId }, select: { ...PAYMENT_SELECT, ...RETURN_SELECT } }),
       );
       if (!payment || this.providers.get(gatewayRefOf(payment).providerName).settlement !== 'webhook') {
         return { kind: 'failed', code: 'INVALID_PARAMS' };
       }
-      foundOrigin(payment.returnOrigin ?? null);
+      foundReturn(payment);
       if (payment.status === PaymentStatus.success) {
         return { kind: 'success', paymentId: payment.id, referenceId: payment.gatewayReferenceId, alreadyPaid: true };
       }

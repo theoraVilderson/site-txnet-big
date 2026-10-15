@@ -1012,7 +1012,8 @@
       "reversedTitle": "Payment reversed",
       "reversedSubtitle": "The gateway reversed this payment and your wallet was not charged. The bank is returning the money to your card; if it has not arrived within 72 hours, contact support."
     },
-    "backToInvoice": "Continue your purchase"
+    "backToInvoice": "Continue your purchase",
+    "backToBot": "Back to the bot"
   },
   "manualPayments": {
     "title": "Payments to confirm",

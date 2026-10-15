@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BotAction } from '@txnet-backend/messenger';
+import { BotAction, buildDeepLink, DEEP_LINK_BASE } from '@txnet-backend/messenger';
 import { BillingApiClient, BillingCallContext, DepositBody } from '../billing-api/billing-api.client';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
@@ -148,7 +148,7 @@ export class TopUpFlow {
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
 
-    const started = await this.billing.start(bodyOf(state, state.data.amount), call);
+    const started = await this.billing.start(bodyOf(state, state.data.amount), call, returnLinkOf(ctx));
     if (!started.ok || !started.data) return { view: say('topUp.refused', { raw: started.msg }), nextState: null };
 
     const s = started.data;
@@ -197,6 +197,14 @@ export class TopUpFlow {
   private signedOut(): FlowResult {
     return { view: say('topUp.signedOut', { key: BotKeys.common.notSignedIn }), nextState: null };
   }
+}
+
+/** The `/start` payload of the result page's way back (F-093-u): unrecognised on purpose, so it lands on the main menu. */
+const RETURN_FROM_PAYMENT_START = 'paid';
+
+/** This bot's own link, which billing signs into the result page so the payer can come back to this chat. */
+function returnLinkOf(ctx: ChatContext): string {
+  return buildDeepLink(DEEP_LINK_BASE[ctx.platform], ctx.integration.botUsername, RETURN_FROM_PAYMENT_START);
 }
 
 function bodyOf(state: NavState, amount: string): DepositBody {

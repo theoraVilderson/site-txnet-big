@@ -203,9 +203,10 @@ export class BillingApiClient {
    * went through (2026-10-15). The chat names the panel it already opens;
    * billing keeps it only if it trusts it (`returnOriginOf`).
    */
-  start(body: DepositBody, ctx: BillingCallContext): Promise<ApiResult<DepositStarted>> {
+  start(body: DepositBody, ctx: BillingCallContext, returnBotLink?: string): Promise<ApiResult<DepositStarted>> {
     if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
-    const auth = { ...this.authOf(ctx), ...(this.panelOrigin ? { origin: this.panelOrigin } : {}) };
+    // F-093-u: and this bot's own link, the result page's way back here — billing keeps it beside the service token only.
+    const auth = { ...this.authOf(ctx), ...(this.panelOrigin ? { origin: this.panelOrigin } : {}), ...(returnBotLink ? { [RequestHeaders.botReturnLink]: returnBotLink } : {}) };
     return this.send('POST', `${this.baseUrl}/api/billing/deposit/start`, body, { lang: ctx.lang, auth });
   }
 

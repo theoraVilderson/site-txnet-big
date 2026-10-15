@@ -37,6 +37,8 @@ export interface PaymentFailure {
   /** `null` when the code is not one of the five — nothing unrecognised is printed. */
   code: PaymentFailureCode | null;
   messageKey: string;
+  /** As on a success (F-093-u). */
+  botLink?: string | null;
 }
 
 /**
@@ -68,6 +70,8 @@ export interface PaymentSuccess {
   reference: string | null;
   /** A reload, a retried webhook, or a redirect that raced another. */
   alreadyPaid: boolean;
+  /** The bot the top-up started in (F-093-u), from the signed token only; absent or `null` for a panel top-up. */
+  botLink?: string | null;
 }
 
 /**

@@ -31,6 +31,13 @@ describe('signResultToken', () => {
     });
   });
 
+  // F-093-u: a top-up started in a bot goes back to that bot from the result page.
+  it('carries the bot a payer started from, on a success and a failure', () => {
+    const link = 'https://t.me/txnet_bot?start=paid';
+    expect(decode(signResultToken({ kind: 'success', referenceId: 'A1', alreadyPaid: false, returnBotLink: link }, SECRET, NOW)).payload).toMatchObject({ k: 's', b: link });
+    expect(decode(signResultToken({ kind: 'failed', code: 'SYSTEM_ERROR', returnBotLink: link }, SECRET, NOW)).payload).toMatchObject({ k: 'f', b: link });
+  });
+
   it('carries a failure code and nothing else', () => {
     const { payload } = decode(signResultToken({ kind: 'failed', code: 'SYSTEM_ERROR' }, SECRET, NOW));
     expect(payload).toEqual({ k: 'f', c: 'SYSTEM_ERROR', e: Math.floor(NOW / 1000) + RESULT_TOKEN_TTL_SEC });

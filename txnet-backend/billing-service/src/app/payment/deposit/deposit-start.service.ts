@@ -22,7 +22,7 @@ import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
 import { announceOpenPayment, settleOpen } from './open-payment';
 import { attachAuthority } from './payment-callback-url';
-import { callbackUrlOf, returnOriginOf } from './deposit-return';
+import { callbackUrlOf, returnBotLinkOf, returnOriginOf } from './deposit-return';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
 /**
@@ -69,8 +69,9 @@ export type DepositStartRequest = {
   couponCodes: readonly string[];
   /** Where the top-up was started, and so where the codes were typed (F-502-k, F-306-a). Absent = the panel. */
   channel?: CouponChannel;
-  /** The browser's `Origin` header — where the result page is, if it checks out. */
+  /** Where the payer goes back to: the browser's `Origin` (if it checks out), or the bot's own link (F-093-u). */
   origin?: string | null;
+  botLink?: string | null;
   /** The caller holds `gateway.manage`: its own switched-off gateways may take a test payment. */
   canTest?: boolean;
   /**
@@ -289,9 +290,8 @@ export class DepositStartService {
           // and a payment that has already landed never expires.
           // A transfer's clock is its window plus the grace for a late proof (F-803-d).
           expiresAt: price.free ? null : (transfer?.expiresAt ?? new Date(Date.now() + ttl * 1000)),
-          returnOrigin,
-          // Where it was started (F-306-a): the payer notice tells a bot payer
-          // even about a webhook credit, since no success page is in front of them.
+          returnOrigin, returnBotLink: returnBotLinkOf(request.botLink),
+          // Where it was started (F-306-a): the payer notice tells a bot payer even about a webhook credit, with no success page in front of them.
           channel: request.channel ?? CouponChannel.panel,
           // Whose messenger events may settle it (F-104-ab): the relay is
           // admitted only from this sender. An in-chat start always has one.

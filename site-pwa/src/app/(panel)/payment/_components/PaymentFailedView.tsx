@@ -5,6 +5,7 @@ import { Info, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { PANEL_DEPOSIT, PANEL_HOME } from "@/lib/routes";
 import { PAYMENT_RESULT_KEYS as P, type PaymentFailure } from "../_lib/payment-result";
+import { BackToBotLink } from "./BackToBotLink";
 import { PaymentResultCard } from "./PaymentResultCard";
 import { PRIMARY_ACTION, SECONDARY_ACTION } from "./PaymentSuccessView";
 
@@ -23,7 +24,7 @@ import { PRIMARY_ACTION, SECONDARY_ACTION } from "./PaymentSuccessView";
  * `contract.shell.md` rule 2 is that an entry with no page is hidden rather
  * than made a dead link. Legacy's failure screen linked to one anyway.
  */
-export function PaymentFailedView({ code, messageKey }: PaymentFailure) {
+export function PaymentFailedView({ code, messageKey, botLink }: PaymentFailure) {
   const { t } = useLocale();
   return (
     <PaymentResultCard
@@ -32,7 +33,9 @@ export function PaymentFailedView({ code, messageKey }: PaymentFailure) {
       message={t("common", P.failure.subtitle)}
       actions={
         <>
-          <Link href={PANEL_DEPOSIT} className={PRIMARY_ACTION}>
+          {/* F-093-u: started in a bot, it is retried there too. */}
+          {botLink && <BackToBotLink href={botLink} className={PRIMARY_ACTION} />}
+          <Link href={PANEL_DEPOSIT} className={botLink ? SECONDARY_ACTION : PRIMARY_ACTION}>
             <RefreshCw
               size={16}
               aria-hidden
