@@ -102,6 +102,8 @@ export interface MemberRows {
 export function memberMenu({ miniAppUrl, topUp, reseller, support, guides, transfers }: MemberRows = {}): BotView {
   return view('menu.member', { key: BotKeys.menu.member }, [
     ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
+    // F-307-y. First: a user opens the bot to see their services more than to do anything else. Behind billing's reachability.
+    ...(topUp ? [[{ id: ACTIONS.services, label: { key: BotKeys.action.services } }]] : []),
     // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
     ...(topUp ? [[{ id: ACTIONS.topUp, label: { key: BotKeys.action.topUp } }]] : []),
     // F-707-h. Behind the same reachability: billing says whether a wheel runs today.

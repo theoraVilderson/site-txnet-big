@@ -74,7 +74,9 @@
     "transferRejectYes": "Yes, reject it",
     "transferAll": "🧾 All receipts",
     "transferBack": "Back to the receipt",
-    "transferPaid": "✅ I have paid"
+    "transferPaid": "✅ I have paid",
+    "services": "🛡 My services",
+    "servicesBack": "↩️ My services"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -474,6 +476,36 @@
       "minutes": "{{n}} minutes ago",
       "hours": "{{n}} hours ago",
       "days": "{{n}} days ago"
+    }
+  },
+  "services": {
+    "list": "🛡 Your services ({{n}}). Pick one to see where it stands.{{more}}",
+    "more": "\nYou have {{n}} more — the app shows them all.",
+    "none": "You have no services yet.",
+    "item": "{{name}} · {{status}}",
+    "card": "🛡 {{name}}\nStatus: {{status}}\n{{traffic}}\n{{time}}",
+    "unnamed": "Service",
+    "gone": "This service is no longer in your list.",
+    "status": {
+      "pending": "Waiting to start",
+      "active": "Active",
+      "suspended": "Stopped — out of traffic or credit",
+      "exhausted": "Out of traffic",
+      "expired": "Expired",
+      "cancelled": "Cancelled"
+    },
+    "frozen": "Frozen",
+    "traffic": {
+      "unlimited": "Traffic: unlimited ({{used}} used)",
+      "metered": "Used: {{used}} — pay as you go",
+      "capped": "Used: {{used}} of {{cap}}",
+      "used": "Used: {{used}}"
+    },
+    "time": {
+      "left": "{{d}} days left",
+      "today": "Less than a day left",
+      "ended": "Its time is over",
+      "permanent": "No end date"
     }
   }
 }

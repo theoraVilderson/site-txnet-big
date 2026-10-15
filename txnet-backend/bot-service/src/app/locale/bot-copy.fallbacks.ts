@@ -1,5 +1,6 @@
 import { BotKey, BotKeys } from './bot-keys';
 import { PAYMENT_FALLBACKS } from './bot-copy.fallbacks.payment';
+import { SERVICES_FALLBACKS } from './bot-copy.fallbacks.services';
 
 /**
  * Last-resort English for every key this bot can say.
@@ -21,6 +22,7 @@ import { PAYMENT_FALLBACKS } from './bot-copy.fallbacks.payment';
  */
 export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   ...PAYMENT_FALLBACKS,
+  ...SERVICES_FALLBACKS,
   [BotKeys.menu.guest]: 'Hi 👋\nSign in to your account here, or create a new one.',
   [BotKeys.menu.member]: 'Welcome back 👋',
   [BotKeys.menu.restricted]: 'Your account is restricted: for now you can only talk to support.\nReason: {{reason}}',

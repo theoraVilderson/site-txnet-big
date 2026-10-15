@@ -24,6 +24,7 @@ import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
+import { SERVICE_ACTION_PREFIX, ServicesFlow } from '../flows/services.flow';
 import { WheelFlow } from '../flows/wheel.flow';
 import { SUPPORT_ACTION_PREFIX, SUPPORT_SUGGESTED_STEP, SupportFlow } from '../flows/support.flow';
 import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GUIDE_VOTE_PREFIX, GuideFlow } from '../flows/guide.flow';
@@ -94,6 +95,7 @@ export class ConversationRouter {
     private readonly suggestions: SuggestionOptOut,
     private readonly wheel: WheelFlow,
     private readonly lotteries: LotteryFlow,
+    private readonly services: ServicesFlow,
     private readonly support: SupportFlow,
     private readonly guides: GuideFlow,
     private readonly transferPay: TransferPayFlow,
@@ -131,17 +133,11 @@ export class ConversationRouter {
     if (command === '/logout' || actionId === ACTIONS.logout) {
       return this.logout(ctx);
     }
-    if (actionId === ACTIONS.logoutAllAsk) {
-      return { view: signOutAllConfirmView(), nextState: null };
-    }
+    if (actionId === ACTIONS.logoutAllAsk) return { view: signOutAllConfirmView(), nextState: null };
     if (actionId === ACTIONS.logoutAll) return this.logoutAll(ctx);
     if (command === '/help' || actionId === ACTIONS.help) return this.help(state);
-    if (command === '/lang' || actionId === ACTIONS.language) {
-      return this.languages(ctx, state);
-    }
-    if (actionId?.startsWith(LANGUAGE_ACTION_PREFIX)) {
-      return this.chooseLanguage(ctx, state, actionId);
-    }
+    if (command === '/lang' || actionId === ACTIONS.language) return this.languages(ctx, state);
+    if (actionId?.startsWith(LANGUAGE_ACTION_PREFIX)) return this.chooseLanguage(ctx, state, actionId);
     if (command === '/menu' || actionId === ACTIONS.menu) {
       return { view: await this.menus.forChat(ctx), nextState: null };
     }
@@ -167,6 +163,9 @@ export class ConversationRouter {
     // F-707-h. A Spin whose screen expired opens a fresh screen (a new key), never a spin.
     if (actionId === ACTIONS.wheel || (actionId === ACTIONS.wheelSpin && state?.flow !== 'wheel')) return this.wheel.start(ctx);
 
+    // F-307-y. Every service button names its service, so it needs no state.
+    if (actionId === ACTIONS.services) return this.services.start(ctx);
+    if (actionId?.startsWith(SERVICE_ACTION_PREFIX)) return this.services.tap(ctx, actionId);
     // F-707-p. Every lottery button names its lottery, so it needs no state and an old screen's tap still means what it says.
     if (actionId === ACTIONS.lotteries) return this.lotteries.start(ctx);
     if (actionId?.startsWith(LOTTERY_ACTION_PREFIX)) return this.lotteries.tap(ctx, actionId);

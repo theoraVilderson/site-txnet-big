@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { BotAction, buildDeepLink, DEEP_LINK_BASE } from '@txnet-backend/messenger';
-import { BillingApiClient, BillingCallContext, DepositBody } from '../billing-api/billing-api.client';
+import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api.client';
+import type { DepositBody } from '../billing-api/deposit.types';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
 import { currencyName, money } from '../locale/money';

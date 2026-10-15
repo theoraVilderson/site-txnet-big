@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BotText, escapeHtml, PaymentEvent, TelegramLikeBotClient } from '@txnet-backend/messenger';
-import { BillingApiClient, InChatPaymentBody, PreCheckoutVerdict } from '../billing-api/billing-api.client';
+import { BillingApiClient } from '../billing-api/billing-api.client';
+import type { InChatPaymentBody, PreCheckoutVerdict } from '../billing-api/deposit.types';
 import { ChatContext } from '../conversation/nav.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';

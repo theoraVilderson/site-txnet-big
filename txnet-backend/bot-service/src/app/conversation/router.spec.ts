@@ -131,6 +131,7 @@ function makeRouter(over: {
     { tap: vi.fn() } as never,
     { start: vi.fn(), handle: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn() } as never,
+    { start: vi.fn(), tap: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn(), handle: vi.fn(), fileOutside: vi.fn() } as never,
     { start: vi.fn(), install: vi.fn(), tap: vi.fn() } as never,
     { tap: vi.fn(), handle: vi.fn(), show: vi.fn() } as never,

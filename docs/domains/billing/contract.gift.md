@@ -111,7 +111,8 @@ closed had no way back.
 **Not covered:** searching by product name, or any scope but these two; a pasted `/sub` link (a Grant's token, not a config line). Its consumer since
 2026-09-20 is the panel's "my services" page (F-502-s,
 `panel-web/contract.my-services.md`), which asks `current` and offers `all`
-(F-502-u) and puts each Grant's link and its reset on the row.
+(F-502-u) and puts each Grant's link and its reset on the row. Since 2026-10-15 the bot's My services reads it too
+(F-307-y, bot-app [contract.services.md](../../interfaces/bot-app/contract.services.md)).
 
 ## A Grant's configs, and what a user may do to them (built — F-027-ac)
 

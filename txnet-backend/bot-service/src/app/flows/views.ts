@@ -51,6 +51,8 @@ export const ACTIONS = {
   /** The reseller's own bulk message (`F-313-b`) — the way in, and the way back to what it sent. */
   resellerCampaigns: 'reseller:campaigns',
   campaignRecent: 'campaign:list',
+  /** My services (`F-307-y`): the list. A service's own buttons carry its id (`serviceAction`). */
+  services: 'menu:services',
   /** The lucky wheel (`F-707-h`): the screen, and the one tap that spins. */
   wheel: 'menu:wheel',
   wheelSpin: 'wheel:spin',
@@ -66,15 +68,9 @@ export const ACTIONS = {
   transfers: 'menu:transfers',
 } as const;
 
-export const cancel: BotAction = {
-  id: ACTIONS.cancel,
-  label: { key: BotKeys.action.cancel },
-};
+export const cancel: BotAction = { id: ACTIONS.cancel, label: { key: BotKeys.action.cancel } };
 
-export const back: BotAction = {
-  id: ACTIONS.back,
-  label: { key: BotKeys.action.back },
-};
+export const back: BotAction = { id: ACTIONS.back, label: { key: BotKeys.action.back } };
 
 /** `lang:fa`, `lang:en` — the code is the payload, so no table maps them. */
 export const LANGUAGE_ACTION_PREFIX = 'lang:';
