@@ -159,7 +159,8 @@ export class BotViewRenderer {
    * `null` when it is not an answer to this view, which is how a flow tells a
    * choice from free text.
    */
-  matchAction(view: BotView, t: BotTranslator, input: string): string | null {
+  matchAction(on: { view: BotView; platform: BotPlatform }, t: BotTranslator, input: string): string | null {
+    const { view } = on;
     const flat = (view.actions ?? []).flat();
     if (!flat.length) return null;
     const raw = input.trim();
@@ -167,7 +168,9 @@ export class BotViewRenderer {
     const byId = flat.find((a) => a.id === raw);
     if (byId) return byId.id;
 
-    const index = /^(\d+)[.)]?$/.exec(raw);
+    // A number is a choice only where the choices were drawn as a numbered list:
+    // under buttons, "5" on the top-up amount step is five, not the fifth amount (2026-10-15).
+    const index = this.render(on.platform, view, t).numbered ? /^(\d+)[.)]?$/.exec(raw) : null;
     if (index) {
       const picked = flat[Number(index[1]) - 1];
       if (picked) return picked.id;

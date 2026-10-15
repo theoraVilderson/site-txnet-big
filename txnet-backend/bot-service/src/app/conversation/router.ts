@@ -574,7 +574,7 @@ export class ConversationRouter {
     if (ctx.callbackData) return ctx.callbackData;
     if (!ctx.text || !state?.lastView) return null;
     return this.renderer.matchAction(
-      state.lastView,
+      { view: state.lastView, platform: ctx.platform },
       this.copy.translator(ctx.lang),
       ctx.text,
     );

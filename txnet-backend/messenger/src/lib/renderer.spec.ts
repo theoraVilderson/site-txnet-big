@@ -72,7 +72,7 @@ describe('BotViewRenderer', () => {
       'bot.login.pickChannel\n1. bot.channel.sms\n2. bot.channel.bale',
     );
     // The point of the whole abstraction: the flow reads the same answer back.
-    expect(renderer.matchAction(view, t, '2')).toBe('channel:bale');
+    expect(renderer.matchAction({ view, platform: 'bale' }, t, '2')).toBe('channel:bale');
   });
 
   it('renders a contact request as a reply keyboard, whatever else it could do', () => {
@@ -136,20 +136,28 @@ describe('BotViewRenderer', () => {
   });
 
   describe('matchAction', () => {
-    it('matches an inline callback id, a number, and the label itself', () => {
-      expect(renderer.matchAction(view, t, 'channel:sms')).toBe('channel:sms');
-      expect(renderer.matchAction(view, t, '1')).toBe('channel:sms');
-      expect(renderer.matchAction(view, t, '2. bot.channel.bale')).toBe(
-        'channel:bale',
-      );
-      expect(renderer.matchAction(view, t, 'bot.channel.bale')).toBe(
-        'channel:bale',
-      );
+    const on = { view, platform: 'telegram' as const };
+
+    it('matches an inline callback id and the label itself', () => {
+      expect(renderer.matchAction(on, t, 'channel:sms')).toBe('channel:sms');
+      expect(renderer.matchAction(on, t, 'bot.channel.bale')).toBe('channel:bale');
+    });
+
+    it('matches a number only where the choices were drawn as a numbered list', () => {
+      Object.assign(MESSENGER_CAPABILITIES.bale, { inlineKeyboard: false, replyKeyboard: false });
+      expect(renderer.matchAction({ view, platform: 'bale' }, t, '1')).toBe('channel:sms');
+      expect(renderer.matchAction({ view, platform: 'bale' }, t, '2. bot.channel.bale')).toBe('channel:bale');
+    });
+
+    // 2026-10-15: typing "5" on the top-up amount step picked the fifth quick amount.
+    it('reads a bare number under buttons as free text — an amount, not the nth button', () => {
+      expect(renderer.matchAction(on, t, '1')).toBeNull();
+      expect(renderer.matchAction(on, t, '2')).toBeNull();
     });
 
     it('returns null for free text, so a flow can tell it from a choice', () => {
-      expect(renderer.matchAction(view, t, '09121234567')).toBeNull();
-      expect(renderer.matchAction(view, t, '9')).toBeNull();
+      expect(renderer.matchAction(on, t, '09121234567')).toBeNull();
+      expect(renderer.matchAction(on, t, '9')).toBeNull();
     });
   });
 });

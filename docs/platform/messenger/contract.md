@@ -160,9 +160,10 @@ throws, and it never silently drops the user's ability to act:
 | in-chat payment | the invoice flow that already works on the web | no — `F-304` |
 
 `render()` returns the substitutions it made alongside the payload, so a caller
-can assert on them; `matchAction()` reads a tap, a number and a label back to the
+can assert on them; `matchAction({view, platform}, …)` reads a tap, a number and a label back to the
 same action id, which is what makes the numbered-list fallback a real path
-rather than a stated one.
+rather than a stated one. A number counts **only where that platform draws the view as a numbered list**:
+under buttons, "5" is free text — the top-up amount five, not its fifth quick amount (fixed 2026-10-15).
 
 Two hard rules, both from ADR-0009:
 

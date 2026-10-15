@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { BotViewRenderer, aBotIntegration } from '@txnet-backend/messenger';
+import { BotViewRenderer, MESSENGER_CAPABILITIES, aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BotCopy } from '../locale/bot-copy';
 import { BotSessionStore } from '../session/bot-session.store';
@@ -87,6 +87,7 @@ function makeRouter(over: {
     handle: vi.fn(),
   } as unknown as ResellerFlow;
 
+  const topUp = { start: vi.fn(), handle: vi.fn().mockResolvedValue({ view: { id: 'topUp.confirm', body: {} }, nextState: null }) } as unknown as TopUpFlow;
   const router = new ConversationRouter(
     nav,
     sessions,
@@ -123,7 +124,7 @@ function makeRouter(over: {
       { isConfigured: false } as never,
       { isConfigured: false } as never,
     ),
-    { start: vi.fn(), handle: vi.fn() } as unknown as TopUpFlow,
+    topUp,
     reseller,
     { isConfigured: false, start: vi.fn(), handle: vi.fn() } as unknown as ResellerCampaignFlow,
     { start: vi.fn(), handle: vi.fn() } as unknown as TimeZoneFlow,
@@ -135,7 +136,7 @@ function makeRouter(over: {
     { tap: vi.fn(), handle: vi.fn(), show: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn() } as never,
   );
-  return { router, nav, sessions, api, otp, langs, locale };
+  return { router, nav, sessions, api, otp, langs, locale, topUp };
 }
 
 const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
@@ -436,10 +437,28 @@ describe('ConversationRouter', () => {
       const { router } = makeRouter({
         state: { flow: 'login', step: 'login.method', data: {}, lastView },
       });
+      const caps = { ...MESSENGER_CAPABILITIES.telegram };
+      Object.assign(MESSENGER_CAPABILITIES.telegram, { inlineKeyboard: false, replyKeyboard: false });
+      try {
+        const result = await router.route({ ...ctx, text: '2' });
+        expect(result.view.id).toBe('register.phone');
+      } finally {
+        Object.assign(MESSENGER_CAPABILITIES.telegram, caps);
+      }
+    });
 
-      const result = await router.route({ ...ctx, text: '2' });
+    // 2026-10-15: typing "5" on the top-up amount step under eight quick amounts picked the fifth.
+    it('reads a typed number under buttons as the answer itself, not the nth button', async () => {
+      const lastView = {
+        id: 'topUp.amount',
+        body: { key: 'bot.topUp.askAmount' },
+        actions: [[{ id: 'topup:a:1.00', label: { raw: '1' } }], [{ id: 'topup:a:2.00', label: { raw: '2' } }], [{ id: 'topup:a:3.00', label: { raw: '3' } }]],
+      };
+      const { router, topUp } = makeRouter({ state: { flow: 'topUp', step: 'topUp.amount', data: {}, lastView } });
 
-      expect(result.view.id).toBe('register.phone');
+      await router.route({ ...ctx, text: '2' });
+
+      expect(topUp.handle).toHaveBeenCalledWith(expect.objectContaining({ text: '2' }), expect.anything(), null);
     });
 
     it('treats free text as free text, not as a choice', async () => {
