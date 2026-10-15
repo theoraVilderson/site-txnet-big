@@ -1,7 +1,7 @@
 ---
 id: adr-0042
 status: accepted
-updated: 2026-09-12
+updated: 2026-10-15
 ---
 
 # ADR 0042 — A bounced deep link is remembered as a relative path, in the tab
@@ -78,7 +78,11 @@ no session — and needed at exactly one other: when a sign-in screen finishes.
 - **`?returnTo=` on the login URL.** Rejected: forgeable from outside by
   design, and it puts a payment reference in a URL, in history and in logs.
 - **Making the result pages public.** Rejected in `contract.payment-result.md`
-  already: a result page that cannot say whose payment it is.
+  already: a result page that cannot say whose payment it is. **Reversed
+  2026-10-15 (user)** for `/payment/success` and `/payment/failed`: a bot's payer
+  has no panel session, and since the signed token (rule 10) the page shows only
+  what billing signed — the login never checked ownership. The rest of this ADR
+  stands.
 - **Remembering it per page, where the deep link is known.** Rejected: the
   destination is lost at the guard, so every page would have to re-implement
   the same rule, and the one that forgot would be the one nobody tested.

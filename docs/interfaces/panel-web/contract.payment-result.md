@@ -99,7 +99,7 @@ That is why neither page has a client data path, a loading state or an effect.
    (`domains/billing/contract.verify.md`). The `pending` tone is theme green
    with clock hands, never gold.
 
-12. **A top-up started in a bot leads back to that bot (F-093-u, user
+13. **A top-up started in a bot leads back to that bot (F-093-u, user
    2026-10-15).** The bot sends its own link with `start` (`x-bot-return-link`,
    built by messenger's `buildDeepLink`, payload `paid` — the main menu);
    billing keeps it as `returnBotLink` only beside the service token, https and
@@ -133,16 +133,16 @@ server-rendered, and a `Math.random()` burst would fail hydration.
 
 ## Known gap
 
-These pages sit inside `(panel)`, so a session that expired during the trip to
-the bank is a login redirect and the query string is lost. The payment itself
-is unaffected — it settled before the redirect — and the reference is on the
-financial page. Making them public would mean a result page that cannot say
-whose payment it is, so the fix belongs at the guard instead — and landed
-there: **F-093-i** (ADR-0042) teaches the login redirect to remember the path it
-bounced from, in `sessionStorage`, as a relative path and nothing else. A payer
-whose session expired at the bank now signs in and arrives back on this page,
-with the reference still on the query string. Nothing on these two pages
-changed.
+**Closed 2026-10-15 (user): the two pages are public.** They lived inside
+`(panel)`, whose session provider sends a signed-out visitor to the login page —
+and a payer who started in a bot has no panel session in that browser, so the
+page vanished before "back to the bot" (rule 13) could be tapped. They now live
+in `app/(payment-result)/` (same URLs; `layout.tsx` signs nobody in or out) and
+reuse `(panel)/payment/_components`. ADR-0042 had rejected this ("a page that
+cannot say whose payment it is"); since rule 10 a page shows only what billing
+signed, and the login never checked ownership — any signed-in holder of the link
+saw the same — so it bought nothing. `/payment/pending` stays in `(panel)`: it
+reads the payment. F-093-i still brings a bounced deep link back after login.
 
 ## Proof
 

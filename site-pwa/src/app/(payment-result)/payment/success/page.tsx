@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 
 import { PAYMENT_RESULT_SECRET } from "@/env";
 import { PANEL_FINANCIAL } from "@/lib/routes";
-import { PaymentSuccessView } from "../_components/PaymentSuccessView";
-import { readResultToken } from "../_lib/result-token";
+import { PaymentSuccessView } from "@/app/(panel)/payment/_components/PaymentSuccessView";
+import { readResultToken } from "@/app/(panel)/payment/_lib/result-token";
 
 /**
  * `/payment/success` — where `billing`'s callback redirects a payer whose
