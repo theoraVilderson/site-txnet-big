@@ -161,3 +161,18 @@ with a login JWT no gateway holds (`contract.webhook.md`).
 | Nothing is closed here: the row expires on its own 15-minute clock like any unpaid top-up, and a webhook arriving later still credits an `expired` row (ADR-0046 decision 1) | the provider repeats its IPN. The clock is the close a webhook gateway needs; the ladder never was |
 | `cannot_ask` counts as `unchanged`, not an error, and lets a person confirm **or** reject by hand | a webhook-settled gateway is working as meant; every unpaid crypto invoice counted as an error, on every sweep of the lookback, would bury the errors that are |
 | An offered authority (F-092-ag) is neither proven nor disowned: all are kept, the first non-answer ends the loop | a gateway that cannot be asked says nothing about any candidate |
+
+## The open list moves live (built — RT-1-j)
+
+The manual list is every open payment, so every write that adds, moves or
+closes one writes `billing.payment.open_changed` in its own transaction —
+`announceOpenPayment` (`payment/deposit/open-payment.ts`), one outbox row for
+the payment's tenant and one for the platform owner, payload `{tenantId,
+paymentId}`, routed to `tenant:<tenantId>` by live-push.
+
+| Rule | Why |
+|---|---|
+| Writers: a start (not a free one), `attachAuthority`, the in-chat approval, `settleOpen` (every credit and every close by the callback, webhook, reconciliation or a person), the callback's refusal, abandon, the expiry sweep, and `scheduleVerifyRetry` / `flagLongVerifying` / `clearVerifyRetry` — each only when its guarded write matched | each changes a column the list shows, or the list itself; a guard that matched nothing moved nothing |
+| `settleOpen` is the one pending-then-expired flip: it answers which status matched (the coupon holds turn on it) and announces | the two copies in `deposit-settlement.ts` are one now, so a new close cannot skip the event |
+| Both tenants, always: a reseller re-reads a list that may not hold the row | the platform owner lists every tenant's payments; deciding who lists a row would repeat billing's scope in the producer |
+| Ageing out of the lookback writes nothing | time moves no row; the next read drops it |

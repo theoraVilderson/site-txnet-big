@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Ban, KeyRound, Loader2, RotateCw, SearchCheck, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi, type ManualAnswer, type VerifyingPayment } from "@/lib/billing-api";
 import { formatMoney } from "../../../_lib/money";
+import { useOpenPayments } from "../_hooks/useOpenPayments";
 import { formatInstant } from "../../../_lib/datetime";
 import {
   MANUAL_KEYS as K,
@@ -42,22 +43,9 @@ import { Button, Field, Input, Textarea } from "../../../_components/kit";
 export function ManualPaymentsView() {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
-  const [rows, setRows] = useState<VerifyingPayment[]>([]);
-  const [isLoading, setLoading] = useState(true);
-  const [error, setError] = useState<unknown>(null);
+  const { rows, isLoading, error, reload } = useOpenPayments();
   // The row a settled answer was about leaves the list on reload; its sentence stays here.
   const [notice, setNotice] = useState<ManualAnswer | null>(null);
-
-  const reload = useCallback(async () => {
-    try {
-      setRows(await billingApi.manualPayments());
-      setError(null);
-    } catch (e) {
-      setError(e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const settled = useCallback(
     async (answer: ManualAnswer) => {
@@ -66,12 +54,6 @@ export function ManualPaymentsView() {
     },
     [reload],
   );
-
-  useEffect(() => {
-    // Every setState in reload runs after its first await, as in `useGateways`.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void reload();
-  }, [reload]);
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">

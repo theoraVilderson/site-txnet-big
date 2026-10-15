@@ -27,6 +27,7 @@ import { serializeTenantStatusState, TenantContext } from '@txnet-backend/shared
 import { TelegramStarsProvider } from '../gateway/telegram-stars.provider';
 import { offeredInThisChat, priceDeposit } from './deposit-pricing';
 import { DepositInChatService } from './deposit-in-chat.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '22222222-2222-4222-8222-222222222222';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -76,9 +77,13 @@ function build(
     credited: [] as Array<{ referenceId: string; source: string; received?: unknown }>,
   };
   let current = row;
+  const open = openPaymentFakes();
   const tx = {
+    tenant: open.tenant,
+    outboxEvent: open.outboxEvent(),
     $executeRaw: async () => 0,
     paymentTransaction: {
+      findUnique: open.findUnique,
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         calls.reads.push(where);
         calls.tenants.push(TenantContext.currentOrNull()?.id);

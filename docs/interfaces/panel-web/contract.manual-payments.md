@@ -38,6 +38,10 @@ top-up.
    can be read.
 5. **Nothing is patched from an answer.** A settled answer re-reads the list;
    its sentence moves to a page-level notice, because its row leaves the list.
+6. **The list re-reads on `billing.payment.open_changed`** (RT-1-j), on
+   `tenantChannelOf(me)`: `_hooks/useOpenPayments.ts` holds the list and the
+   listener, and the dashboard widget re-reads on the same event
+   (`useOpenPaymentsLive`). Nothing polls.
    An `unsettled` answer keeps the row and opens the way to the form.
 6. **Every open payment, badged** (F-093-o, ADR-0046 decision 7). Billing lists
    every `pending` or `expired` payment of the lookback; `stateBadges` names

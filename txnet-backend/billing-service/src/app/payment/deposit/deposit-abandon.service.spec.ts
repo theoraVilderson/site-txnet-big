@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { DepositAbandonService } from './deposit-abandon.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '22222222-2222-4222-8222-222222222222';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -55,9 +56,13 @@ function build(row: ReturnType<typeof paymentRow> | null = paymentRow(), opts: {
     updates: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>,
     released: [] as Array<{ orderReferenceId: string; status: string }>,
   };
+  const open = openPaymentFakes();
   const tx = {
+    tenant: open.tenant,
+    outboxEvent: open.outboxEvent(),
     $executeRaw: async () => 0,
     paymentTransaction: {
+      findUnique: open.findUnique,
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         calls.reads.push(where);
         return row && where['id'] === row.id && where['userId'] === row.userId ? row : null;

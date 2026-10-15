@@ -1,4 +1,5 @@
 import { PaymentStatus, Prisma } from '@prisma/client';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * A verifying payment's own retry clock (F-092-x, ADR-0044 decisions 1, 2).
@@ -38,7 +39,9 @@ export async function scheduleVerifyRetry(
     where: { id: payment.id, status: PaymentStatus.pending, verifyAttempts: payment.verifyAttempts },
     data: { verifyAttempts: payment.verifyAttempts + 1, nextVerifyAt },
   });
-  return count === 1 ? nextVerifyAt : null;
+  if (count !== 1) return null;
+  await announceOpenPayment(tx, payment.id);
+  return nextVerifyAt;
 }
 
 /**
@@ -62,6 +65,7 @@ export async function flagLongVerifying(
     },
     data: { verifyFlaggedAt: now },
   });
+  if (count === 1) await announceOpenPayment(tx, paymentId);
   return count === 1;
 }
 
@@ -70,8 +74,9 @@ export async function flagLongVerifying(
  * — how many times it took is part of the record a person reads later.
  */
 export async function clearVerifyRetry(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
-  await tx.paymentTransaction.updateMany({
+  const { count } = await tx.paymentTransaction.updateMany({
     where: { id: paymentId, nextVerifyAt: { not: null } },
     data: { nextVerifyAt: null },
   });
+  if (count === 1) await announceOpenPayment(tx, paymentId);
 }

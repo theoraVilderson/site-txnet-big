@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * The payment id a gateway callback URL carries (F-092-ad, ADR-0046 decision 4).
@@ -69,7 +70,10 @@ export async function attachAuthority(
     where: { id: paymentId, gatewayTrackingCode: null },
     data: { gatewayTrackingCode: authority },
   });
-  return count === 1;
+  if (count !== 1) return false;
+  // The manual-payments list shows the authority (RT-1-j).
+  await announceOpenPayment(tx, paymentId);
+  return true;
 }
 
 /**

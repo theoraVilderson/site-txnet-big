@@ -20,6 +20,8 @@ import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit } fr
 import { selectPayerGateway } from './payer-gateway';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
+import { announceOpenPayment, settleOpen } from './open-payment';
+import { attachAuthority } from './payment-callback-url';
 import { callbackUrlOf, returnOriginOf } from './deposit-return';
 import { webhookUrlFor, withPaymentId } from './payment-callback-url';
 
@@ -297,6 +299,7 @@ export class DepositStartService {
         },
         select: { id: true },
       });
+      if (!price.free) await announceOpenPayment(tx, paymentId);
       // What the payer was shown, frozen beside the payment (F-803-a).
       if (transfer) await tx.paymentTransferDetail.create({ data: transferDetailData(paymentId, tenant.id, transfer.body, transfer.plan.destinationId) });
       await this.reservations.reserve(tx, {
@@ -408,14 +411,9 @@ export class DepositStartService {
       throw e;
     }
 
-    await tenantTransaction(this.prisma, (tx) =>
-      tx.paymentTransaction.update({
-        where: { id: paymentId },
-        // ADR-0028: for Zarinpal the tracking code is the `authority`, not the
-        // receipt number — it is what a duplicate callback shares.
-        data: { gatewayTrackingCode: minted.authority },
-      }),
-    );
+    // ADR-0028: for Zarinpal the tracking code is the `authority`, not the
+    // receipt number — it is what a duplicate callback shares.
+    await tenantTransaction(this.prisma, (tx) => attachAuthority(tx, paymentId, minted.authority));
 
     return { ...answer, redirectUrl: minted.redirectUrl };
   }
@@ -428,10 +426,7 @@ export class DepositStartService {
   private async abandon(paymentId: string, cause: unknown): Promise<void> {
     const failureCode = cause instanceof GatewayFailure ? cause.reason : 'unavailable';
     await tenantTransaction(this.prisma, async (tx) => {
-      await tx.paymentTransaction.update({
-        where: { id: paymentId },
-        data: { status: PaymentStatus.failed, failureCode },
-      });
+      await settleOpen(tx, paymentId, { status: PaymentStatus.failed, failureCode });
       await this.reservations.release(tx, paymentId, 'cancelled');
     });
   }

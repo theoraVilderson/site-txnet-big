@@ -14,13 +14,18 @@
 import { PaymentStatus } from '@prisma/client';
 
 import { clearVerifyRetry, scheduleVerifyRetry, verifyRetryDelaySec } from './verify-retry';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const PAYMENT = '77777777-7777-4777-8777-777777777777';
 
 function fakeTx(count = 1) {
   const updated: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
+  const open = openPaymentFakes();
   const tx = {
+    tenant: open.tenant,
+    outboxEvent: open.outboxEvent(),
     paymentTransaction: {
+      findUnique: open.findUnique,
       updateMany: async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         updated.push(args);
         return { count };

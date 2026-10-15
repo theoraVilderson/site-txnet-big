@@ -22,6 +22,7 @@ import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import { DepositSettlementService, PaymentRow } from '../payment/deposit/deposit-settlement';
 import { TENANT_BILLING_TOPUP, TenantTopupRefused, TenantTopupService } from './tenant-topup.service';
+import { openPaymentFakes } from '../../test-support/open-payment.fake';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -40,15 +41,18 @@ describe('settling a reseller billing top-up', () => {
       tenantCredits: [] as Array<Record<string, unknown>>,
       writes: [] as string[],
     };
+    const open = openPaymentFakes();
     const tx = (pool: string) => ({
+      tenant: open.tenant,
       paymentTransaction: {
+        findUnique: open.findUnique,
         updateMany: async ({ where }: { where: { status: PaymentStatus } }) => {
           const matched = !lostTheFlip && where.status === PaymentStatus.pending;
           calls.writes.push(matched ? `flip@${pool}` : `miss@${pool}`);
           return { count: matched ? 1 : 0 };
         },
       },
-      outboxEvent: { create: async () => void calls.writes.push('event') },
+      outboxEvent: open.outboxEvent(() => void calls.writes.push('event')),
       gatewaySettlementEntry: { create: async () => void calls.writes.push('accrual') },
       $executeRaw: async () => 0,
     });

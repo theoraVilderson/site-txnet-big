@@ -12,6 +12,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { PAYMENT_SELECT, PaymentRow, DepositSettlementService, gatewayRefOf } from './deposit-settlement';
 import { offerAuthority } from './payment-callback-url';
 import { scheduleVerifyRetry } from './verify-retry';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * Settling a top-up (F-092-j) — the half of a payment the bank starts.
@@ -387,6 +388,7 @@ export class DepositCallbackService {
         data: { status: PaymentStatus.failed, failureCode, expiresAt: null, nextVerifyAt: null },
       });
       if (count !== 1) return;
+      await announceOpenPayment(tx, payment.id);
       await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
     });
   }

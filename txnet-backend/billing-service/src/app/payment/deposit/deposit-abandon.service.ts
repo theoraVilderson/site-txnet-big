@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
 import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { gatewayRefOf, PAYMENT_SELECT } from './deposit-settlement';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * A Mini App top-up the payer never went through with (F-093-q).
@@ -88,6 +89,7 @@ export class DepositAbandonService {
         data: { status: PaymentStatus.failed, failureCode: 'abandoned', expiresAt: null, nextVerifyAt: null },
       });
       if (count !== 1) return { status: 'already_closed' };
+      await announceOpenPayment(tx, payment.id);
 
       await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);
       return { status: 'closed' };

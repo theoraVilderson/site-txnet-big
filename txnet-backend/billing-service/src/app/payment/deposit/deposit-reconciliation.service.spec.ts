@@ -25,6 +25,7 @@ import { CredentialUnavailable, TenantContext, runWithTenant } from '@txnet-back
 
 import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositReconciliationService } from './deposit-reconciliation.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -127,12 +128,16 @@ function build(setup: Setup = {}) {
   };
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
+  const open = openPaymentFakes();
   const tx = {
+    tenant: open.tenant,
+    outboxEvent: open.outboxEvent(),
     $executeRaw: async (sql: TemplateStringsArray, ...values: unknown[]) => {
       if (sql.join('?').includes('array_remove')) calls.withdrawn.push({ authority: values[0], paymentId: values[1] });
       return 1;
     },
     paymentTransaction: {
+      findUnique: open.findUnique,
       findFirst: async () => row,
       updateMany: async (args: Record<string, unknown>) => {
         calls.updated.push(args);

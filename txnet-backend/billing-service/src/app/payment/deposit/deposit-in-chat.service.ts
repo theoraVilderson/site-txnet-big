@@ -17,6 +17,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { money } from './deposit-quote.service';
 import { DepositSettlementService, gatewayRefOf, PAYMENT_SELECT, PaymentRow } from './deposit-settlement';
 import { scheduleVerifyRetry } from './verify-retry';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * Settling a payment made inside a chat (F-104-k, D-32).
@@ -133,6 +134,7 @@ export class DepositInChatService {
         data: { gatewayTrackingCode: payment.id },
       });
       if (count !== 1) return false;
+      await announceOpenPayment(tx, payment.id);
       // A repeated query for an approved payment is already on the clock.
       if (payment.nextVerifyAt === null) await scheduleVerifyRetry(tx, payment, now);
       return true;

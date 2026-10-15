@@ -16,6 +16,7 @@ import {
   validateReject,
 } from "./_lib/manual-confirm";
 import type { VerifyingPayment } from "@/lib/billing-api";
+import { OPEN_PAYMENT_EVENTS } from "./_hooks/useOpenPayments";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6). What breaks
@@ -179,5 +180,22 @@ describe("every key this screen can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(MANUAL_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+describe("the open list moves without a reload (RT-1-j)", () => {
+  const read = (path: string) => readFileSync(join(__dirname, path), "utf8");
+
+  it("re-reads on an open payment moving, and on nothing else the channel carries", () => {
+    expect([...OPEN_PAYMENT_EVENTS]).toEqual(["billing.payment.open_changed"]);
+  });
+
+  it("the screen, its widget and the menu badge listen; none of them polls", () => {
+    expect(read("_components/ManualPaymentsView.tsx")).toMatch(/useOpenPayments\(\)/);
+    expect(read("../../_components/dashboard/widgets/ManualPaymentsWidget.tsx")).toMatch(/useOpenPaymentsLive\(/);
+    const badges = read("../../_hooks/useMenuBadges.ts");
+    expect(badges).not.toMatch(/setInterval\(/);
+    expect(badges).toMatch(/OPEN_PAYMENT_EVENTS/);
+    expect(badges).toMatch(/INBOX_EVENTS/);
   });
 });

@@ -13,6 +13,7 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
+import { settleOpen } from './open-payment';
 import { GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 
 /**
@@ -227,23 +228,9 @@ export class DepositSettlementService {
         nextVerifyAt: null,
         ...(verified.authority ? { gatewayTrackingCode: verified.authority } : {}),
       };
-      // Two guards, tried in order, rather than `status: { in: [...] }`: which
-      // one matched is what says whether the coupon holds are still held. A row
-      // read `pending` may have been expired by the sweep since (ADR-0046
-      // decision 1) — the money is paid either way, and only a settled row is
-      // matched by neither.
-      const flip = async (from: PaymentStatus) =>
-        (
-          await tx.paymentTransaction.updateMany({
-            where: { id: payment.id, status: from, ...(verified.authority ? { gatewayTrackingCode: null } : {}) },
-            data,
-          })
-        ).count === 1;
-      const from = (await flip(PaymentStatus.pending))
-        ? PaymentStatus.pending
-        : (await flip(PaymentStatus.expired))
-          ? PaymentStatus.expired
-          : null;
+      // A row read `pending` may have been expired by the sweep since (ADR-0046
+      // decision 1) — the money is paid either way; only a settled row matches neither.
+      const from = await settleOpen(tx, payment.id, data, verified.authority ? { gatewayTrackingCode: null } : {});
       if (from === null) return false;
       const settled: PaymentRow = { ...payment, amountCredited: credited };
 
@@ -329,14 +316,7 @@ export class DepositSettlementService {
     payment: PaymentRow,
     failureCode: string,
   ): Promise<PaymentStatus | null> {
-    const data = { status: PaymentStatus.failed, failureCode, expiresAt: null, nextVerifyAt: null };
-    const flip = async (from: PaymentStatus) =>
-      (await tx.paymentTransaction.updateMany({ where: { id: payment.id, status: from }, data })).count === 1;
-    const from = (await flip(PaymentStatus.pending))
-      ? PaymentStatus.pending
-      : (await flip(PaymentStatus.expired))
-        ? PaymentStatus.expired
-        : null;
+    const from = await settleOpen(tx, payment.id, { status: PaymentStatus.failed, failureCode, expiresAt: null, nextVerifyAt: null });
     if (from === null) return null;
     // An expired row may still hold its coupons (F-092-ah); a release moves only live holds, so both statuses run it.
     await this.reservations.release(tx, payment.id, RedemptionStatus.cancelled);

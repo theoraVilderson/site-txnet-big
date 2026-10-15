@@ -52,6 +52,7 @@ corrected, per "Decide once".
 | `network.panel.drift_raised` | `tenant:` | network → panel-tested consumer (F-027-fg) | SystemsView (F-027-fh) |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
+| `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
 | `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
 
 ## Planned — the RT-1 rows
@@ -150,14 +151,15 @@ poll goes. `contract.channels.md` needs no new rule.
 file goes, and its C-14 `except` entry with it. A new-version banner, if ever
 wanted, is a new row with a broadcast decision of its own.
 
-**RT-1-j — manual payments, and the badges stop polling.** Type
-`billing.payment.verifying_changed`, `tenant:`, body `{type, paymentId}`.
-Written by every write that moves a payment into or out of `verifying` in
-`billing-service/src/app/payment/deposit/` (`verify-retry.ts`,
-`deposit-settlement.ts`, `manual-confirm.service.ts` confirm and reject).
-`ManualPaymentsView` and `ManualPaymentsWidget` re-read. useMenuBadges listens to it,
-`support.inbox.changed` and `notification.created`, and drops its 60 s poll
-(keeping the re-read on tab visible).
+**RT-1-j — manual payments, and the badges stop polling** — built 2026-10-15.
+**Corrected (user, 2026-10-15):** the list is every open payment, not only
+verifying ones, and the platform owner lists every tenant's — so the type is
+`billing.payment.open_changed`, written by every write that adds, moves or
+closes an open payment (the list in billing `contract.verify.md`), one row per
+tenant: the payment's and the platform owner's. `tenant:`, body `{type,
+paymentId}`. ManualPaymentsView and ManualPaymentsWidget re-read; useMenuBadges
+listens to it and `support.inbox.changed` on `tenant:`, `notification.created`
+on `user:`, and re-reads on tab visible; its 60 s poll is gone.
 
 **RT-1-k — the `members:` channel** (user, 2026-10-06). A change that
 reaches a whole tenant, staff or not, reaches **that tenant's own users

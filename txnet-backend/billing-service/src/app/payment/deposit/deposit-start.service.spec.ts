@@ -26,6 +26,7 @@ import { CouponReservationRefused } from '../coupon/coupon-reservation';
 import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositGatewayNotFound } from './deposit-quote.service';
 import { DepositCallbackUnavailable, DepositStartService } from './deposit-start.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -121,11 +122,13 @@ function build(setup: Setup = {}) {
   const calls: Calls = { created: [], updated: [], reserved: [], settled: [], credited: [], requested: [], links: [] };
   let nextId = 0;
 
+  const open = openPaymentFakes();
   const tx = {
+    outboxEvent: open.outboxEvent(),
     // No restriction on the person (F-030-e).
     userRestriction: { findMany: async () => [] },
     $executeRaw: async () => 0,
-    tenant: { findUnique: async () => ({ tenantType, operatingCurrencyCode: 'USD' }) },
+    tenant: { ...open.tenant, findUnique: async () => ({ tenantType, operatingCurrencyCode: 'USD' }) },
     // No grant: `selectGateway` looks for one only after the tenant's own row
     // misses, and `selectableGateways` always asks (F-096-b).
     paymentGatewayGrant: { findMany: async () => [] },
@@ -160,9 +163,11 @@ function build(setup: Setup = {}) {
         calls.created.push(data);
         return { id: (data['id'] as string) ?? `payment-${++nextId}` };
       },
-      update: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
-        calls.updated.push({ ...where, ...data });
-        return { id: where['id'] };
+      findUnique: open.findUnique,
+      // The authority and a mint's failure are guarded flips (`attachAuthority`, `settleOpen`): recorded as the row and what it became.
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        calls.updated.push({ id: where['id'], ...data });
+        return { count: 1 };
       },
     },
   };

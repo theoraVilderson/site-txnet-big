@@ -7,6 +7,7 @@ import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
+import { announceOpenPayment } from './open-payment';
 
 /**
  * The clock on a pending top-up, and the capacity it is holding (F-092-k).
@@ -194,7 +195,9 @@ export class DepositExpiryService {
           data: { status: PaymentStatus.expired },
         });
         // The holds stay: `releaseLapsedHolds` gives them back later (F-092-ah).
-        if (count === 1) expired++;
+        if (count !== 1) continue;
+        expired++;
+        await announceOpenPayment(tx, id);
       }
       return expired;
     });

@@ -4,19 +4,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { billingApi } from "@/lib/billing-api";
 import { holdsPermission } from "@/lib/permissions";
 import { userChannel } from "@/lib/realtime";
+import { tenantChannelOf } from "@/lib/tenant-channel";
 import { RealtimeEvents } from "@/generated/wire";
 import { useLiveReread } from "@/hooks/useLiveReread";
 import { supportAgentApi, supportApi } from "@/lib/support-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
+import { OPEN_PAYMENT_EVENTS } from "../payments/manual/_hooks/useOpenPayments";
+import { INBOX_EVENTS } from "../support/_lib/support-agent";
 
 /** The menu entries that carry a count (N4), by menu id. */
 export type BadgedEntry = "support" | "support-inbox" | "manual-payments";
 export type MenuBadges = Partial<Record<BadgedEntry, number>>;
 
-/** N4: re-read this often while the tab is visible, when no live event says sooner. */
-export const BADGE_POLL_MS = 60_000;
-
 const BADGE_EVENTS = [RealtimeEvents.notificationCreated];
+/** RT-1-j, RT-1-g: the payments list and the inbox move on the tenant's channel. */
+const TENANT_BADGE_EVENTS = [...OPEN_PAYMENT_EVENTS, ...INBOX_EVENTS];
 
 /**
  * The sidebar's counts (UX-1-j, `contract.ux.md` N4), each over the first page
@@ -26,8 +28,9 @@ const BADGE_EVENTS = [RealtimeEvents.notificationCreated];
  * keeps the last count: a badge is a hint, and a blink to nothing is a lie.
  *
  * Re-read on mount, on a notification on the caller's channel (a reply is
- * one; the inbox and the payments list have no live event of their own), on
- * the tab becoming visible, and every 60s while it is.
+ * one), on the inbox or the open payments moving on the tenant's (RT-1-g,
+ * RT-1-j), and on the tab becoming visible — an event missed while hidden.
+ * Nothing polls (C-14).
  */
 export function useMenuBadges(): MenuBadges {
   const { me, group } = usePanelSession();
@@ -58,15 +61,12 @@ export function useMenuBadges(): MenuBadges {
     const tick = () => {
       if (document.visibilityState === "visible") readRef.current();
     };
-    const timer = setInterval(tick, BADGE_POLL_MS);
     document.addEventListener("visibilitychange", tick);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", tick);
-    };
+    return () => document.removeEventListener("visibilitychange", tick);
   }, [read]);
 
   useLiveReread(userId ? userChannel(userId) : null, BADGE_EVENTS, () => readRef.current());
+  useLiveReread(tenantChannelOf(me ?? null), TENANT_BADGE_EVENTS, () => readRef.current());
 
   return badges;
 }

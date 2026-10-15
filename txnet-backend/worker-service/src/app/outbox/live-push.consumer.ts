@@ -43,6 +43,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.ACCESS_CHANGED]: { audience: ['user'], fields: [] },
   /** F-019-c3: the platform owner moved the renewal deadline — the section shows the new date. */
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: { audience: ['user'], fields: [] },
+  /** RT-1-j: one row per tenant that lists it — the payment's and the platform owner's; the page re-reads. */
+  [OutboxEventType.PAYMENT_OPEN_CHANGED]: { audience: ['tenant'], fields: ['paymentId'] },
 };
 
 /**

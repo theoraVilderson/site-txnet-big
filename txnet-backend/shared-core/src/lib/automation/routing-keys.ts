@@ -47,6 +47,8 @@ export const RealtimeEventType = {
   TENANT_SUBSCRIPTION_GRACE_EXTENDED: 'tenant.subscription.grace_extended',
   /** AC-1-q: what a person may do moved — a role set or edited, a seat removed (`recordAccessChange`, shared-core). */
   ACCESS_CHANGED: 'identity.access.changed',
+  /** RT-1-j: an open payment (`pending`/`expired`) appeared, moved or settled — the manual-payments list and its badge re-read (`announceOpenPayment`). */
+  PAYMENT_OPEN_CHANGED: 'billing.payment.open_changed',
 } as const;
 
 /**
@@ -202,6 +204,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',
+  [OutboxEventType.PAYMENT_OPEN_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

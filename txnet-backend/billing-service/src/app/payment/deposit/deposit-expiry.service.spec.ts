@@ -23,6 +23,7 @@ import { PaymentStatus, RedemptionStatus } from '@prisma/client';
 import { TenantContext } from '@txnet-backend/shared-core';
 
 import { DepositExpiryService } from './deposit-expiry.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
@@ -57,11 +58,15 @@ function build(setup: Setup = {}) {
 
   const scoped = () => TenantContext.currentOrNull()?.id ?? null;
 
+  const open = openPaymentFakes();
   const tx = {
+    tenant: open.tenant,
+    outboxEvent: open.outboxEvent(),
     $executeRaw: async () => 0,
     // The row lock the release takes on a payment still `expired`.
     $queryRaw: async (_sql: TemplateStringsArray, id: string) => (settledSince.includes(id) ? [] : [{ locked: 1 }]),
     paymentTransaction: {
+      findUnique: open.findUnique,
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         calls.updated.push({ where, data, tenantInScope: scoped() });
         return { count: lost.includes(where['id'] as string) ? 0 : 1 };

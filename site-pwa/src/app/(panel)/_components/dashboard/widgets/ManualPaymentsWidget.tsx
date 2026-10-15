@@ -5,6 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { billingApi } from "@/lib/billing-api";
 import { PANEL_MANUAL_PAYMENTS } from "@/lib/routes";
+import { useOpenPaymentsLive } from "../../../payments/manual/_hooks/useOpenPayments";
 import { EmptyState } from "../../kit";
 import { FooterLink } from "../parts";
 import { useWidgetSource } from "../useWidgetSource";
@@ -16,6 +17,7 @@ const D = FrontendI18nKeys.common.dashboard;
 export default function ManualPaymentsWidget() {
   const { t } = useLocale();
   const source = useWidgetSource("manual-payments", async () => (await billingApi.manualPayments()).length);
+  useOpenPaymentsLive(source.retry);
   return (
     <WidgetBody
       source={source}

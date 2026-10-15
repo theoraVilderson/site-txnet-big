@@ -19,6 +19,7 @@ import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import type { AskAnswer } from './deposit-reconciliation.service';
 import { ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const OWNER = '00000000-0000-4000-8000-000000000001';
 const RESELLER = '11111111-1111-4111-8111-111111111111';
@@ -94,6 +95,7 @@ function build(setup: Setup = {}) {
     },
   });
 
+  const open = openPaymentFakes();
   const prisma = {
     tenant: {
       findUnique: async ({ where }: { where: { id: string } }) => ({
@@ -103,6 +105,8 @@ function build(setup: Setup = {}) {
     $transaction: (fn: (t: unknown) => unknown) =>
       fn({
         $executeRaw: async () => 0,
+        tenant: open.tenant,
+        outboxEvent: open.outboxEvent(),
         paymentTransaction: {
           ...reads('app'),
           findFirst: async () => paymentRow(),

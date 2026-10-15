@@ -27,6 +27,7 @@ import { GatewayFailure } from '../gateway/payment-provider';
 import { DepositCallbackService } from './deposit-callback.service';
 import { DepositSettlementService } from './deposit-settlement';
 import { MAX_AUTHORITY_CANDIDATES } from './payment-callback-url';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -81,9 +82,12 @@ function build(setup: Setup = {}) {
   const { row = paymentRow(), verifyFails, lostTheFlip = false, credentialsFail, lost, webhook } = setup;
   const calls: Calls = { updated: [], settled: [], credited: [], verified: [], events: [], inquired: 0 };
 
+  const open = openPaymentFakes();
   const tx = {
     $executeRaw: async () => 0,
+    tenant: open.tenant,
     paymentTransaction: {
+      findUnique: open.findUnique,
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         if (where['gatewayTrackingCode'] === AUTHORITY) return row;
         if (lost && where['id'] === lost.id && where['gatewayTrackingCode'] === null) return lost;
@@ -102,12 +106,10 @@ function build(setup: Setup = {}) {
         return { count: lostTheFlip || !statusMatches ? 0 : 1 };
       },
     },
-    outboxEvent: {
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        calls.events.push(data);
-        return { id: 'event-1' };
-      },
-    },
+    outboxEvent: open.outboxEvent((data) => {
+      calls.events.push(data);
+      return { id: 'event-1' };
+    }),
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
 

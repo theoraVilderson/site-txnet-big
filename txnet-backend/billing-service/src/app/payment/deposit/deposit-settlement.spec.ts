@@ -24,6 +24,7 @@ import { ConfirmationSource, PaymentStatus, Prisma } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { DepositSettlementService, PaymentRow } from './deposit-settlement';
+import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -65,14 +66,17 @@ type Calls = {
 function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentStatus } = {}) {
   const calls: Calls = { writes: [], accruals: [], flips: [], events: [], credits: [], committed: false };
 
+  const open = openPaymentFakes();
   const tx = {
     $executeRaw: async () => 0,
+    tenant: open.tenant,
     // The row lock `releaseFailedHolds` takes: found only while the row is still open.
     $queryRaw: async () => {
       calls.writes.push('lock');
       return rowIs === PaymentStatus.pending || rowIs === PaymentStatus.expired ? [{ locked: 1 }] : [];
     },
     paymentTransaction: {
+      findUnique: open.findUnique,
       // The row really is `rowIs`: a guard naming another status matches nothing.
       updateMany: async ({ where, data }: { where: { status: PaymentStatus }; data: Record<string, unknown> }) => {
         const matched = !lostTheFlip && where.status === rowIs;
@@ -88,13 +92,11 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
         return { id: 'entry-1' };
       },
     },
-    outboxEvent: {
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        calls.events.push(data);
-        calls.writes.push('event');
-        return { id: 'event-1' };
-      },
-    },
+    outboxEvent: open.outboxEvent((data) => {
+      calls.events.push(data);
+      calls.writes.push('event');
+      return { id: 'event-1' };
+    }),
     adminAuditLog: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         calls.writes.push('audit');
