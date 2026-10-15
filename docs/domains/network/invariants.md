@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: draft
-updated: 2026-09-27
+updated: 2026-10-15
 ---
 
 # Invariants — network
@@ -79,6 +79,7 @@ F-027-l, its push half as of F-027-af (`internal/radius`).
 | 55 | No two live (non-retired) push panels share an `ipAddress`, normalised as the RADIUS allowlist parses it (`network.panel_push_address`; an IPv4-mapped IPv6 address is its IPv4) (F-027-ff, ADR-0130) | the partial unique index `panel_push_address_key`; billing's register, edit and restore refuse it first (`panel-address.spec.ts`) | two push panels at one IP drop each other off the allowlist, across tenants, with only a log line |
 | 56 | A pull panel the connection test takes carries one anchor — a disabled 1-byte client whose tag and uuid `network.panel` holds, unique — planted under the registration lock with the duplicate check, or on its first pass if accepted before; the anchor is never an orphan, a seat, billed or converged (F-027-ew, ADR-0130) | `Registrar.take` + `Loop.backfill` + `Anchor.Without` + CHECKs `panel_anchor_is_whole`, `_is_pull_only`, asserted by `register/anchor_test.go`, `collect/anchor_test.go` | a server recognised only while it holds our configs: an empty or reinstalled one behind a re-pointed address converged as ours |
 | 57 | A pull panel carrying an anchor is neither read nor converged in a turn that did not first find that anchor among its clients: another panel's anchor halts it with `foreign_claim` naming that panel, neither halts it with `identity_lost` (F-027-ex, ADR-0130) | `Loop.identify` + `DriftEventType.Converges` + `haltedSQL` ordering, asserted by `collect/anchor_test.go` | an empty, reinstalled or foreign server behind a re-pointed address gets every config recreated on it, or the wrong panel halted |
+| 58 | A panel registered by a name is dialed only at an address its accepting test dialed (`knownAddresses`), resolved once per test or turn and pinned; none answering = the login is not sent and a halting `address_moved` names old and new, unless `addressMayMove` (F-027-ez, ADR-0130) | `egress.PinnedClient` + `Loop.locate` + `Registrar.pinFor` + CHECK `panel_drift_event_addresses_are_a_move`, asserted by `collect/address_test.go`, `egress_test.go`, `register_test.go` | a re-pointed or stolen domain receives the panel's login, or a DNS rebinding passes the check |
 
 ## How to test
 

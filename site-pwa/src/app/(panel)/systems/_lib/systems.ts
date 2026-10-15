@@ -167,14 +167,8 @@ export const HOLD_STATE_KEYS: Record<SystemsHold["state"], string> = {
   written_off: K.holds.state.written_off,
 };
 
-export const DRIFT_EVENT_KEYS: Record<SystemsDriftEvent["eventType"], string> = {
-  mass_reset: K.drift.type.mass_reset,
-  mass_missing: K.drift.type.mass_missing,
-  mass_rename: K.drift.type.mass_rename,
-  mass_limit_override: K.drift.type.mass_limit_override,
-  foreign_claim: K.drift.type.foreign_claim,
-  identity_lost: K.drift.type.identity_lost,
-};
+/** One locale key per event type, named as the type: the annotation fails the build if either side lacks one. */
+export const DRIFT_EVENT_KEYS: Record<SystemsDriftEvent["eventType"], string> = K.drift.type;
 
 /**
  * The acceptance questionnaire, in `contracts/network/capabilities.json`'s

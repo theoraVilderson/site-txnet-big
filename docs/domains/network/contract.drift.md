@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 14
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 # Drift — which remote client is which config, and what the panel did to it
@@ -198,6 +198,9 @@ rules 11–13) lists its clients before it reads usage (`Loop.identify`,
   with a choice — `rebuilt` or `address_fixed` — is F-027-fa; until then an
   acknowledgement raises it again on the next pass. A panel with no anchor
   yet is not checked: it is planted first (rule 13).
+- **Before it, the address check** (F-027-ez): a name answering none of the
+  addresses the panel was accepted at halts it `address_moved`, unread and
+  unconverged, before the login is sent — `contract.address.md` rule 6.
 
 ## Proof
 

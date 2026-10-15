@@ -24,6 +24,8 @@ type Record struct {
 	Registered Registered
 	// Retired is `retiredAt` set: archived, out of every loop (F-027-bz).
 	Retired bool
+	// KnownAddresses is what the accepting test dialed (F-027-ez).
+	KnownAddresses []string
 }
 
 // MemoryStore holds registration state in memory. It is what the pass is
@@ -146,6 +148,7 @@ func (m *MemoryStore) Answer(_ context.Context, p Pending, caps driver.Capabilit
 	}
 	r.Capabilities = &caps
 	r.ReviewState = state
+	r.KnownAddresses = KnownAddresses(p)
 	r.TestedAt, r.Fault, r.Detail = at, "", ""
 	return true, nil
 }

@@ -286,6 +286,8 @@ describe('network usage accounting: a byte is billed, held or quarantined', () =
       'foreign_claim',
       // F-027-ex: neither its own anchor nor another panel's (ADR-0130).
       'identity_lost',
+      // F-027-ez: its name resolved to none of the addresses it was accepted at.
+      'address_moved',
     ]);
     expect(sql).toContain('panel_drift_event_counts_sane');
   });

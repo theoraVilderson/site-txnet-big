@@ -31,6 +31,7 @@ import (
 
 	"network-service/internal/anchor"
 	"network-service/internal/driver"
+	"network-service/internal/egress"
 	"network-service/internal/panelstate"
 )
 
@@ -84,6 +85,11 @@ type Pending struct {
 	// Anchor is the one the panel already carries (F-027-ew), zero for none;
 	// a test that plants one sets it before the answer records it.
 	Anchor anchor.Anchor
+	// Pin is the addresses the driver dials when the host is a name (F-027-ez):
+	// the test's own resolution, recorded with its verdict as
+	// `knownAddresses`; a collected panel's, as its turn last checked them.
+	// Nil dials the host as it resolves — an address, or no pin asked for.
+	Pin *egress.Pin
 }
 
 // Candidate is a pending panel and its last test, if it had one.
@@ -235,6 +241,11 @@ func (r *Registrar) test(ctx context.Context, p Pending, report *Report) error {
 		return nil
 	}
 
+	pin, err := r.pinFor(ctx, p.APIBaseURL)
+	if err != nil {
+		return fail(FaultKind(driver.FaultUnavailable), err.Error())
+	}
+	p.Pin = pin
 	d, err := r.Opener.Open(ctx, p)
 	if err != nil {
 		return fail(faultOf(err, FaultUnopenable), err.Error())

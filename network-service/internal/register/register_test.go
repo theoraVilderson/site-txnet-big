@@ -3,6 +3,8 @@ package register_test
 import (
 	"context"
 	"errors"
+	"net/netip"
+	"slices"
 	"testing"
 	"time"
 
@@ -24,11 +26,16 @@ var t0 = time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 type opener struct {
 	panels map[string]driver.Driver
 	err    error
+	// dialed is the pin each panel's driver was opened with (F-027-ez).
+	dialed map[string][]netip.Addr
 }
 
 func (o opener) Open(_ context.Context, p register.Pending) (driver.Driver, error) {
 	if o.err != nil {
 		return nil, o.err
+	}
+	if p.Pin != nil && o.dialed != nil {
+		o.dialed[p.PanelID] = p.Pin.Addrs()
 	}
 	d, ok := o.panels[p.PanelID]
 	if !ok {
@@ -57,11 +64,15 @@ func setup(panels map[string]driver.Driver, rows ...register.Pending) (*register
 	c := &clock{at: t0}
 	return &register.Registrar{
 		Store:   store,
-		Opener:  opener{panels: panels},
+		Opener:  opener{panels: panels, dialed: map[string][]netip.Addr{}},
 		Timeout: 50 * time.Millisecond,
 		Now:     c.now,
+		Resolve: func(context.Context, string) ([]string, error) { return []string{testedIP}, nil },
 	}, store, c
 }
+
+// testedIP is where every test panel's host resolves, unless a test says otherwise.
+const testedIP = "203.0.113.10"
 
 func pass(t *testing.T, r *register.Registrar) register.Report {
 	t.Helper()
@@ -313,5 +324,33 @@ func TestOnlyAnAcceptedVerdictIsCollectable(t *testing.T) {
 		if got := state.Collectable(); got != want {
 			t.Errorf("%q.Collectable() = %v, want %v", state, got, want)
 		}
+	}
+}
+
+// A domain is pinned at acceptance (F-027-ez, ADR-0130 decision 4): the test
+// resolves the host once, its driver dials only that, and the verdict records
+// it as the addresses every later pass is held to.
+func TestAnAcceptedPanelKnowsTheAddressesItWasTestedAt(t *testing.T) {
+	r, store, _ := setup(map[string]driver.Driver{"p1": fake.New(fake.Config{})}, pending("p1", driver.TransportPull, driver.CounterCumulative))
+	lookups := 0
+	r.Resolve = func(context.Context, string) ([]string, error) { lookups++; return []string{testedIP}, nil }
+
+	pass(t, r)
+	got := store.Record("p1")
+	if got.ReviewState != driver.ReviewAccepted || !slices.Equal(got.KnownAddresses, []string{testedIP}) || lookups != 1 {
+		t.Fatalf("p1 = %s knowing %v after %d lookups, want accepted knowing [%s] after one", got.ReviewState, got.KnownAddresses, lookups, testedIP)
+	}
+	if dialed := r.Opener.(opener).dialed["p1"]; !slices.Equal(dialed, []netip.Addr{netip.MustParseAddr(testedIP)}) {
+		t.Fatalf("the test's driver was pinned to %v, want [%s]", dialed, testedIP)
+	}
+}
+
+func TestAHostThatDoesNotResolveIsNoVerdict(t *testing.T) {
+	r, store, _ := setup(map[string]driver.Driver{"p1": fake.New(fake.Config{})}, pending("p1", driver.TransportPull, driver.CounterCumulative))
+	r.Resolve = func(context.Context, string) ([]string, error) { return nil, errors.New("no such host") }
+
+	pass(t, r)
+	if got := store.Record("p1"); got.ReviewState != driver.ReviewPending || got.Fault != register.FaultKind(driver.FaultUnavailable) {
+		t.Fatalf("p1 = %s fault %q, want pending, unavailable", got.ReviewState, got.Fault)
 	}
 }

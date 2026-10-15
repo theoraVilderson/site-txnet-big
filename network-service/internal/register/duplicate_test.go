@@ -45,7 +45,12 @@ func registered(ip string) register.Registered {
 func dupSetup(a, b *fake.Panel, holder register.Registered, resolve map[string][]string) (*register.Registrar, *register.MemoryStore) {
 	r, store, _ := setup(map[string]driver.Driver{holderID: a, "panel-b": b}, pending("panel-b", driver.TransportPull, driver.CounterCumulative))
 	store.PutRegistered(holder, driver.ReviewAccepted)
-	r.Resolve = func(_ context.Context, host string) ([]string, error) { return resolve[host], nil }
+	r.Resolve = func(_ context.Context, host string) ([]string, error) {
+		if host == "panel-b.example" && resolve[host] == nil {
+			return []string{testedIP}, nil // B must resolve to be tested at all (F-027-ez)
+		}
+		return resolve[host], nil
+	}
 	return r, store
 }
 

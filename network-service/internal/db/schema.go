@@ -60,6 +60,8 @@ var RequiredColumns = map[string][]string{
 		"name", "ipAddress",
 		// The client a pull panel is known by (F-027-ew, ADR-0130).
 		"anchorTag", "anchorUuid", "anchorRemoteId",
+		// The addresses a name is held to, and its CDN opt-out (F-027-ez).
+		"knownAddresses", "addressMayMove",
 		"panelState", "blockedSince", "maxRequestsPerMinute",
 		// Why it is not healthy, since when, and when it was last judged (ADR-0122).
 		"panelStateCause", "panelStateSince", "panelCheckedAt",
@@ -125,6 +127,8 @@ var RequiredColumns = map[string][]string{
 	"panel_drift_event": {
 		"id", "panelId", "eventType", "foreignPanelId", "affectedConfigCount",
 		"observedConfigCount", "detectedAt", "collectionHalted", "acknowledgedAt",
+		// What an address_moved panel was accepted at and resolved to (F-027-ez).
+		"knownAddresses", "seenAddresses",
 	},
 	"unattributed_usage": {
 		"id", "panelId", "remoteIdentifier", "upBytes", "downBytes",

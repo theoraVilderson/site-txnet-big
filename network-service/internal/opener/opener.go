@@ -124,6 +124,10 @@ type Opener struct {
 	// HTTP, so a missing allowlist fails closed. The choice is made here,
 	// from the panel row; a driver never sees which guard it got.
 	Platform *http.Client
+	// Guard and PlatformGuard are the same two guards, for a panel opened
+	// with a pin (F-027-ez): its driver gets a client of its own that dials
+	// only the pin. Zero refuses every inward address, as HTTP nil does.
+	Guard, PlatformGuard egress.Guard
 }
 
 // unconfigured is the client an Opener with no HTTP uses; one, so its
@@ -154,13 +158,7 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	if err != nil {
 		return nil, err
 	}
-	hc := o.HTTP
-	if p.TenantID == "" && o.Platform != nil {
-		hc = o.Platform
-	}
-	if hc == nil {
-		hc = unconfigured
-	}
+	hc := o.client(p)
 	if p.DriverType == driver.DriverHiddify {
 		// Hiddify's API takes no username: the login is the admin's API key
 		// (its uuid), typed alone.
@@ -184,6 +182,26 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 		return xuialireza.New(p.APIBaseURL, p.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, hc)
 	}
 	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, hc)
+}
+
+// client is the guarded client p is dialed through: its own, pinned, when
+// its host is a name (F-027-ez); else the shared one for its guard.
+func (o Opener) client(p register.Pending) *http.Client {
+	platform := p.TenantID == ""
+	if p.Pin != nil {
+		if platform {
+			return egress.PinnedClient(o.PlatformGuard, p.Pin)
+		}
+		return egress.PinnedClient(o.Guard, p.Pin)
+	}
+	hc := o.HTTP
+	if platform && o.Platform != nil {
+		hc = o.Platform
+	}
+	if hc == nil {
+		hc = unconfigured
+	}
+	return hc
 }
 
 // usernamePassword reads a login typed as `username:password`, split at the

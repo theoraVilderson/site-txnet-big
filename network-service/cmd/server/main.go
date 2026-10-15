@@ -98,10 +98,13 @@ func main() {
 	// above is ours and inward on purpose, so it keeps its own client. The
 	// operator's allowlist opens only a platform panel's dial (ADR-0095): a
 	// tenant's panel gets the bare guard.
+	tenantGuard, platformGuard := egress.Guard{}, egress.Guard{Allow: cfg.PanelEgressAllow}
 	panelOpener := opener.Opener{
 		Logins:   vault,
-		HTTP:     egress.Client(egress.Guard{}),
-		Platform: egress.Client(egress.Guard{Allow: cfg.PanelEgressAllow}),
+		HTTP:     egress.Client(tenantGuard),
+		Platform: egress.Client(platformGuard),
+		// A panel registered by a name dials only its checked addresses (F-027-ez).
+		Guard: tenantGuard, PlatformGuard: platformGuard,
 	}
 	registrar := &register.Registrar{
 		Store:  register.PostgresStore{DB: pool, Locks: pool},
@@ -164,9 +167,10 @@ func main() {
 		Planner:     planner,
 		// A push panel's turn plans on what the RADIUS receiver accounted
 		// (F-027-du): it is in this loop for its plan and its convergence.
-		Sessions: cursors,
-		Anchors:  collect.PostgresAnchors{DB: pool},
-		Log:      log,
+		Sessions:  cursors,
+		Anchors:   collect.PostgresAnchors{DB: pool},
+		Addresses: collect.PostgresAddresses{DB: pool},
+		Log:       log,
 	}
 
 	// A config whose desired state changed wakes its panel's convergence turn

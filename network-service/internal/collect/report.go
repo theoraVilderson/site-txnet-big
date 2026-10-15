@@ -1,6 +1,9 @@
 package collect
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // PassReport is what one pass did, for the log line and the watchdog. The
 // detail is in the published Results; this is the count.
@@ -35,4 +38,36 @@ func (l *Loop) logReport(r PassReport) {
 	l.log().Info("collection pass",
 		"panels", r.Panels, "collected", r.Collected, "failed", len(r.Failed), "unreviewed", r.Unreviewed,
 		"deltas", r.Deltas, "quarantines", r.Quarantines, "unattributed", r.Unattributed)
+}
+
+// record writes the rates this pass measured. It runs after the publish and
+// the cursor move, and a failure here is logged rather than failing the pass:
+// the bytes are billed by then, and failing would re-read and republish them
+// to fix a figure the next pass rewrites anyway.
+func (l *Loop) record(ctx context.Context, samples []RateSample) {
+	if l.Rates == nil || len(samples) == 0 {
+		return
+	}
+	if err := l.Rates.Record(ctx, samples); err != nil {
+		l.log().Error("observed rate write failed", "samples", len(samples), "error", err)
+	}
+}
+
+// stamp records the panels this pass actually read, for the external watchdog
+// (F-027-w). Only a turn that published and moved its cursor is in the list:
+// the value of `lastSuccessfulCollectionAt` is entirely that it is *not*
+// written when nothing was collected, and a stamp on a failed turn is a
+// watchdog that reports health it never observed.
+//
+// A failure here is logged and does not fail the pass, for the same reason the
+// rate write does not: the bytes are billed by then, and failing would re-read
+// and republish them to fix a clock. An unwritten clock ages into an alert,
+// which is the safe direction on its own.
+func (l *Loop) stamp(ctx context.Context, marks []PanelProgress) {
+	if l.Progress == nil || len(marks) == 0 {
+		return
+	}
+	if err := l.Progress.Collected(ctx, marks); err != nil {
+		l.log().Error("collection progress write failed", "panels", len(marks), "error", err)
+	}
 }

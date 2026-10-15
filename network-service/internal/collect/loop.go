@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -173,6 +174,10 @@ type Loop struct {
 	// Anchors records the anchor a pull panel accepted before F-027-ew gets
 	// on its first pass. Nil plants none.
 	Anchors Anchors
+	// Addresses records what a panel accepted before F-027-ez first resolves
+	// to; Resolve is the turn's one lookup (nil: the system resolver).
+	Addresses AddressBook
+	Resolve   func(ctx context.Context, host string) ([]netip.Addr, error)
 
 	// Interval is the gap between passes (DefaultInterval).
 	Interval time.Duration
@@ -319,6 +324,9 @@ func (l *Loop) collect(ctx context.Context, p Panel, minWindow time.Duration, po
 	panelCtx, cancel := context.WithTimeout(ctx, l.panelTimeout())
 	defer cancel()
 
+	if op, err := l.locate(ctx, panelCtx, &p); err != nil {
+		return Result{}, op, err
+	}
 	if p.Transport == driver.TransportPush {
 		return l.pushTurn(ctx, panelCtx, p, polled)
 	}
@@ -420,38 +428,6 @@ func (l *Loop) observe(ctx context.Context, panelID string, err error) {
 	}
 	if obsErr := l.Health.Observe(ctx, panelID, err, l.now()); obsErr != nil {
 		l.log().Error("panel state write failed", "panel", panelID, "error", obsErr)
-	}
-}
-
-// record writes the rates this pass measured. It runs after the publish and
-// the cursor move, and a failure here is logged rather than failing the pass:
-// the bytes are billed by then, and failing would re-read and republish them
-// to fix a figure the next pass rewrites anyway.
-func (l *Loop) record(ctx context.Context, samples []RateSample) {
-	if l.Rates == nil || len(samples) == 0 {
-		return
-	}
-	if err := l.Rates.Record(ctx, samples); err != nil {
-		l.log().Error("observed rate write failed", "samples", len(samples), "error", err)
-	}
-}
-
-// stamp records the panels this pass actually read, for the external watchdog
-// (F-027-w). Only a turn that published and moved its cursor is in the list:
-// the value of `lastSuccessfulCollectionAt` is entirely that it is *not*
-// written when nothing was collected, and a stamp on a failed turn is a
-// watchdog that reports health it never observed.
-//
-// A failure here is logged and does not fail the pass, for the same reason the
-// rate write does not: the bytes are billed by then, and failing would re-read
-// and republish them to fix a clock. An unwritten clock ages into an alert,
-// which is the safe direction on its own.
-func (l *Loop) stamp(ctx context.Context, marks []PanelProgress) {
-	if l.Progress == nil || len(marks) == 0 {
-		return
-	}
-	if err := l.Progress.Collected(ctx, marks); err != nil {
-		l.log().Error("collection progress write failed", "panels", len(marks), "error", err)
 	}
 }
 

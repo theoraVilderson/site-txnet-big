@@ -64,4 +64,7 @@ type Panel struct {
 	// Anchor is `panel.anchor*` (F-027-ew): the client the panel is known by,
 	// never a user. Zero is a panel that carries none yet.
 	Anchor anchor.Anchor
+	// Address holds a panel registered by a name to the addresses it was
+	// accepted at (F-027-ez).
+	Address Address
 }

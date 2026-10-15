@@ -128,9 +128,23 @@ UPDATE network.panel
        "connectionTestDetail" = NULL,
        "anchorTag" = CASE WHEN $8 <> '' THEN $8 ELSE "anchorTag" END,
        "anchorUuid" = CASE WHEN $8 <> '' THEN $9 ELSE "anchorUuid" END,
-       "anchorRemoteId" = CASE WHEN $8 <> '' THEN $10 ELSE "anchorRemoteId" END
+       "anchorRemoteId" = CASE WHEN $8 <> '' THEN $10 ELSE "anchorRemoteId" END,
+       "knownAddresses" = $11::text[]
  WHERE id = $1::uuid AND "reviewState" = 'pending'` + testedAddressSQL + `
 RETURNING id, name, "tenantId", "reviewState", "connectionTestFault")` + fmt.Sprintf(announceSQL, 7)
+
+// KnownAddresses is what an answer records as `panel.knownAddresses`: the
+// addresses the test dialed (F-027-ez); none for a host that is an address.
+func KnownAddresses(p Pending) []string {
+	if p.Pin == nil {
+		return nil
+	}
+	var out []string
+	for _, a := range p.Pin.Addrs() {
+		out = append(out, a.String())
+	}
+	return out
+}
 
 // Answer writes the verdict and announces it. false is a panel no longer
 // pending — withdrawn or already answered — or no longer at the address
@@ -142,7 +156,8 @@ func (s PostgresStore) Answer(ctx context.Context, p Pending, caps driver.Capabi
 		return false, fmt.Errorf("encoding capabilities: %w", err)
 	}
 	tag, err := s.DB.Exec(ctx, answerSQL, p.PanelID, doc, string(state), at,
-		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent, p.Anchor.Tag, p.Anchor.UUID, p.Anchor.RemoteID)
+		p.APIBaseURL, p.ClientBaseURL, PanelTestedEvent, p.Anchor.Tag, p.Anchor.UUID, p.Anchor.RemoteID,
+		nonNil(KnownAddresses(p)))
 	if err != nil {
 		return false, fmt.Errorf("writing panel %s verdict: %w", p.PanelID, err)
 	}
@@ -242,7 +257,7 @@ func (s PostgresStore) holder(ctx context.Context, sql, panelID string, tags, uu
 const registeredSQL = `
 SELECT p.id::text, p."driverType"::text, p.transport::text, p."counterSemantics"::text,
        p."apiBaseUrl", coalesce(p."clientBaseUrl", ''), p."panelApiCredentials",
-       p.name, coalesce(p."ipAddress", ''),
+       p.name, coalesce(p."ipAddress", ''), p."knownAddresses", p."addressMayMove",
        coalesce(array_agg(i."remoteId" ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
        coalesce(array_agg(i.port ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
        coalesce(array_agg(coalesce(i.protocol::text, '')) FILTER (WHERE i."remoteId" IS NOT NULL), '{}')
@@ -269,7 +284,7 @@ func (s PostgresStore) Registered(ctx context.Context, panelID string) ([]Regist
 		var ports []int32
 		if err := rows.Scan(&r.PanelID, &family, &transport, &semantics,
 			&r.APIBaseURL, &r.ClientBaseURL, &r.Credentials, &r.Name, &r.IPAddress,
-			&ids, &ports, &protocols); err != nil {
+			&r.KnownAddresses, &r.AddressMayMove, &ids, &ports, &protocols); err != nil {
 			return nil, fmt.Errorf("reading registered panels: %w", err)
 		}
 		r.DriverType = driver.DriverType(family)

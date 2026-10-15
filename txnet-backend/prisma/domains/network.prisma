@@ -279,6 +279,9 @@ enum PanelDriftEventType {
   /// A pass found neither this panel's anchor nor another's: an unknown or
   /// reinstalled server (F-027-ex, ADR-0130). Stops convergence too.
   identity_lost
+  /// The panel's name resolved to none of the addresses it was accepted at
+  /// (F-027-ez, ADR-0130): its login is not sent. Stops convergence too.
+  address_moved
 
   @@schema("network")
 }
@@ -431,8 +434,8 @@ model Panel {
   /// has passed — a dead panel never confirms). It takes no new group meanwhile.
   removeRequestedAt          DateTime?
   /// The registered panel the connection test found this one to be, under
-  /// another address (F-027-ce, ADR-0090): a claim tag of its configs, or a
-  /// canary created through it, seen here. Set only with `refused`
+  /// another address (F-027-ce, F-027-ey; ADR-0090, ADR-0130): its anchor, or
+  /// a canary created through it, seen here. Set only with `refused`
   /// (CHECK `panel_duplicate_is_refused`); cleared when it is re-tested.
   duplicateOfPanelId         String?            @db.Uuid
   /// The anchor (F-027-ew, ADR-0130): a disabled client with a 1-byte limit
@@ -444,6 +447,14 @@ model Panel {
   anchorTag                  String?            @unique
   anchorUuid                 String?            @unique
   anchorRemoteId             String?
+  /// The addresses its name resolved to when the connection test dialed it
+  /// (F-027-ez, ADR-0130): every turn dials only one of these, and a name
+  /// answering none halts it `address_moved` before the login is sent.
+  /// Empty for a host that is an address, or a panel not yet re-learned.
+  knownAddresses             String[]           @default([])
+  /// Behind a CDN: dialed wherever the turn's one lookup answers, never
+  /// halted for a move; the anchor alone guards it. Default off.
+  addressMayMove             Boolean            @default(false)
   /// The lease planner's clock for this panel (ADR-0093, F-027-cx): the
   /// counter-refresh period `J` it learned, and the feasible phase bins as a
   /// 32-bit mask (`quota.TickClock`). Null = not learned yet; the planner then
@@ -1028,6 +1039,11 @@ model PanelDriftEvent {
   /// The panel whose clients a `foreign_claim` found, and set on no other type
   /// (`panel_drift_event_foreign_is_claim`); a deleted one leaves it NULL.
   foreignPanelId        String?             @db.Uuid
+  /// What an `address_moved` panel was accepted at and what its name answered
+  /// (F-027-ez); set together and on no other type
+  /// (`panel_drift_event_addresses_are_a_move`).
+  knownAddresses        String[]
+  seenAddresses         String[]
 
   panel        Panel  @relation("PanelDriftEventPanel", fields: [panelId], references: [id])
   foreignPanel Panel? @relation("PanelDriftEventForeign", fields: [foreignPanelId], references: [id], onDelete: SetNull)

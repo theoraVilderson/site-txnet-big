@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"time"
 
 	"network-service/internal/anchor"
 	"network-service/internal/driver"
+	"network-service/internal/egress"
 )
 
 // A panel is registered once (F-027-ce, ADR-0090 decision 1). billing refuses
@@ -51,6 +53,9 @@ type Registered struct {
 	IPAddress string
 	// Inbounds is its `panel_inbound` rows not gone, as last read.
 	Inbounds []InboundKey
+	// KnownAddresses and AddressMayMove are its pin (F-027-ez).
+	KnownAddresses []string
+	AddressMayMove bool
 }
 
 // Holder is the registered panel a duplicate is.
@@ -119,7 +124,10 @@ func (r *Registrar) bySuspects(ctx context.Context, d driver.Driver, p Pending) 
 	if err != nil {
 		return Holder{}, false, fmt.Errorf("duplicate check: listing inbounds: %w", err)
 	}
-	ips := r.ipsOf(ctx, p.APIBaseURL)
+	ips := pinnedIPs(p.Pin)
+	if ips == nil {
+		ips = r.ipsOf(ctx, p.APIBaseURL)
+	}
 	for _, reg := range registered {
 		if !sameInbounds(reg.Inbounds, inbounds) && !r.sharesIP(ctx, reg, ips) {
 			continue
@@ -137,6 +145,7 @@ func (r *Registrar) bySuspects(ctx context.Context, d driver.Driver, p Pending) 
 
 // canary creates a disabled client through reg and looks for it through d.
 func (r *Registrar) canary(ctx context.Context, reg Registered, d driver.Driver) (bool, error) {
+	reg.Pin = pinOf(reg)
 	rd, err := r.Opener.Open(ctx, reg.Pending)
 	if err != nil {
 		return false, err
@@ -220,6 +229,70 @@ func (r *Registrar) sharesIP(ctx context.Context, reg Registered, ips map[string
 	return false
 }
 
+// pinFor resolves a base url's host once, for the test (F-027-ez): its driver
+// dials only what this lookup answered, and the verdict records it. A host
+// that is an address needs no pin (nil); a name that answers nothing is no
+// verdict — the panel was not reached.
+func (r *Registrar) pinFor(ctx context.Context, baseURL string) (*egress.Pin, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Hostname() == "" {
+		return nil, nil // the Opener refuses it, as before
+	}
+	host := u.Hostname()
+	if _, err := netip.ParseAddr(host); err == nil {
+		return nil, nil
+	}
+	addrs, err := r.resolver()(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("resolving %s: %w", host, err)
+	}
+	var pinned []netip.Addr
+	for _, a := range addrs {
+		if ip, err := netip.ParseAddr(a); err == nil {
+			pinned = append(pinned, ip.Unmap())
+		}
+	}
+	if len(pinned) == 0 {
+		return nil, fmt.Errorf("resolving %s: no address", host)
+	}
+	return egress.NewPin(pinned...), nil
+}
+
+// pinnedIPs is a pin's addresses as ipsOf answers them; nil for no pin.
+func pinnedIPs(pin *egress.Pin) map[string]bool {
+	if pin == nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, a := range pin.Addrs() {
+		out[a.String()] = true
+	}
+	return out
+}
+
+// pinOf is a registered panel's pin: the addresses it is known at, so a
+// canary's login goes where the panel was accepted (F-027-ez). None known,
+// or a panel that may move, is dialed as its host resolves.
+func pinOf(reg Registered) *egress.Pin {
+	if reg.AddressMayMove || len(reg.KnownAddresses) == 0 {
+		return nil
+	}
+	var addrs []netip.Addr
+	for _, a := range reg.KnownAddresses {
+		if ip, err := netip.ParseAddr(a); err == nil {
+			addrs = append(addrs, ip)
+		}
+	}
+	return egress.NewPin(addrs...)
+}
+
+func (r *Registrar) resolver() func(ctx context.Context, host string) ([]string, error) {
+	if r.Resolve != nil {
+		return r.Resolve
+	}
+	return net.DefaultResolver.LookupHost
+}
+
 // ipsOf is the addresses a base url's host resolves to. A lookup that fails
 // is no address: the IP is a reason to suspect, never a reason to refuse.
 func (r *Registrar) ipsOf(ctx context.Context, baseURL string) map[string]bool {
@@ -227,11 +300,7 @@ func (r *Registrar) ipsOf(ctx context.Context, baseURL string) map[string]bool {
 	if err != nil || u.Hostname() == "" {
 		return nil
 	}
-	resolve := r.Resolve
-	if resolve == nil {
-		resolve = net.DefaultResolver.LookupHost
-	}
-	addrs, err := resolve(ctx, u.Hostname())
+	addrs, err := r.resolver()(ctx, u.Hostname())
 	if err != nil {
 		return nil
 	}

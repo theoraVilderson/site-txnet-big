@@ -130,3 +130,30 @@ func TestParseAllow(t *testing.T) {
 		t.Fatal("a bare address is not a range; it must be refused, not read as /32 or /0")
 	}
 }
+
+// A pinned client dials the checked address, never the name (F-027-ez): the
+// host below does not resolve at all, and the call still lands.
+func TestAPinnedClientDialsThePinNotTheName(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(r.Host))
+	}))
+	defer srv.Close()
+	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	g := Guard{Allow: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}
+	pin := NewPin(netip.MustParseAddr("127.0.0.1"))
+
+	resp, err := PinnedClient(g, pin).Get("http://panel.invalid:" + port + "/")
+	if err != nil {
+		t.Fatalf("pinned dial: %v", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if string(body) != "panel.invalid:"+port {
+		t.Fatalf("Host %q, want the name kept for the panel's virtual host", body)
+	}
+
+	pin.Set(nil)
+	if _, err := PinnedClient(g, pin).Get("http://panel.invalid:" + port + "/"); !errors.Is(err, ErrRefused) {
+		t.Fatalf("an empty pin: got %v, want ErrRefused", err)
+	}
+}

@@ -36,14 +36,20 @@ const (
 	// another panel's (F-027-ex, ADR-0130 decision 2): re-pointed to a server
 	// we do not know, or the same one reinstalled. Only a person can say which.
 	IdentityLost DriftEventType = "identity_lost"
+	// AddressMoved is a panel's name resolving to none of the addresses it
+	// was accepted at (F-027-ez, ADR-0130 decision 4): its login is not sent.
+	AddressMoved DriftEventType = "address_moved"
 )
 
 // Converges says whether a panel halted by this event is still converged. A
 // restore's counters are not believed, but the server is ours, so a
 // suspension or a delete still has to reach it. A foreign claim is the
 // opposite: the server is not the one our configs are on, and converging it
-// would recreate them there. A lost identity is not known to be ours.
-func (t DriftEventType) Converges() bool { return t != ForeignClaim && t != IdentityLost }
+// would recreate them there. A lost identity is not known to be ours, and a
+// moved address is not one we may send the login to.
+func (t DriftEventType) Converges() bool {
+	return t != ForeignClaim && t != IdentityLost && t != AddressMoved
+}
 
 // The defaults the stop fires at (user, 2026-09-23): **more than** 20% of the
 // panel's cumulative counters going backward in one pass, and at least five
@@ -75,7 +81,12 @@ type DriftEvent struct {
 	Type    DriftEventType
 	// ForeignPanelID is the panel whose clients a ForeignClaim found, and set
 	// on no other type (`panel_drift_event_foreign_is_claim`).
-	ForeignPanelID   string
+	ForeignPanelID string
+	// KnownAddresses and SeenAddresses are what an AddressMoved panel was
+	// accepted at and what its name answered; set on no other type
+	// (`panel_drift_event_addresses_are_a_move`).
+	KnownAddresses   []string
+	SeenAddresses    []string
 	Affected         int
 	Observed         int
 	DetectedAt       time.Time
@@ -85,7 +96,7 @@ type DriftEvent struct {
 
 // DriftEvents is where the events go and whether one still halts a panel.
 // Halted answers the type of the open event that halts it, "" for none; of
-// several, one that stops convergence too (ForeignClaim, IdentityLost).
+// several, one that stops convergence too (DriftEventType.Converges).
 type DriftEvents interface {
 	Halted(ctx context.Context, panelID string) (DriftEventType, error)
 	Raise(ctx context.Context, event DriftEvent) error
@@ -266,7 +277,7 @@ var _ DriftEvents = PostgresDriftEvents{}
 const haltedSQL = `
 SELECT "eventType"::text FROM network.panel_drift_event
  WHERE "panelId" = $1::uuid AND "collectionHalted" AND "acknowledgedAt" IS NULL
- ORDER BY ("eventType" IN ('foreign_claim', 'identity_lost')) DESC
+ ORDER BY ("eventType" IN ('foreign_claim', 'identity_lost', 'address_moved')) DESC
  LIMIT 1`
 
 func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftEventType, error) {
@@ -289,15 +300,17 @@ func (s PostgresDriftEvents) Halted(ctx context.Context, panelID string) (DriftE
 
 const raiseSQL = `
 INSERT INTO network.panel_drift_event
-       (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted")
-VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7)`
+       (id, "panelId", "eventType", "foreignPanelId", "affectedConfigCount", "observedConfigCount", "detectedAt", "collectionHalted",
+        "knownAddresses", "seenAddresses")
+VALUES (gen_random_uuid(), $1::uuid, $2::network."PanelDriftEventType", $3::uuid, $4, $5, $6, $7, $8::text[], $9::text[])`
 
 func (s PostgresDriftEvents) Raise(ctx context.Context, e DriftEvent) error {
 	var foreign *string
 	if e.ForeignPanelID != "" {
 		foreign = &e.ForeignPanelID
 	}
-	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), foreign, e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted); err != nil {
+	if _, err := s.DB.Exec(ctx, raiseSQL, e.PanelID, string(e.Type), foreign, e.Affected, e.Observed, e.DetectedAt, e.CollectionHalted,
+		e.KnownAddresses, e.SeenAddresses); err != nil {
 		return fmt.Errorf("raising panel %s drift event: %w", e.PanelID, err)
 	}
 	return nil

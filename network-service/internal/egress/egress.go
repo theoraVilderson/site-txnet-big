@@ -12,9 +12,14 @@
 // (DNS rebinding) is refused, and so is every redirect hop, because a
 // redirect is only another dial through the same transport. Nothing is
 // resolved twice, so nothing can change between the check and the connect.
+//
+// A domain panel is also pinned (F-027-ez, ADR-0130 decision 4): its client
+// dials only the addresses the turn checked against those it was accepted
+// at (Pin), never what the name resolves to at the moment of the dial.
 package egress
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -22,6 +27,7 @@ import (
 	"net/http"
 	"net/netip"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -110,13 +116,85 @@ func (g Guard) control(_, address string, _ syscall.RawConn) error {
 // proxy: an HTTP_PROXY in the environment would be dialed instead of the
 // panel, and the guard would be checking the proxy.
 func Client(g Guard) *http.Client {
+	return client(g, nil)
+}
+
+// PinnedClient is Client for one panel whose host is a name: every dial goes
+// to pin's addresses, at the port asked for, and the url's name stays the
+// Host header and the TLS server name. An empty pin dials nothing (ErrRefused):
+// a panel whose address no turn has checked is not reached at all. A host
+// that is an address already is dialed as it is, through the same guard.
+func PinnedClient(g Guard, pin *Pin) *http.Client {
+	return client(g, pin)
+}
+
+func client(g Guard, pin *Pin) *http.Client {
 	if g.MaxBody <= 0 {
 		g.MaxBody = DefaultMaxBody
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	tr.Proxy = nil
-	tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: g.control}).DialContext
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second, Control: g.control}
+	tr.DialContext = dialer.DialContext
+	if pin != nil {
+		tr.DialContext = pin.dialer(dialer)
+	}
 	return &http.Client{Transport: &bodyCap{next: tr, max: g.MaxBody}}
+}
+
+// Pin is the addresses one panel's name may be dialed at. The turn that
+// checked them sets it; the driver's client reads it on every dial, so a
+// driver kept between turns follows the latest check.
+type Pin struct {
+	mu    sync.RWMutex
+	addrs []netip.Addr
+}
+
+// NewPin is a pin at addrs; none is a pin that dials nothing yet.
+func NewPin(addrs ...netip.Addr) *Pin {
+	p := &Pin{}
+	p.Set(addrs)
+	return p
+}
+
+// Set replaces the addresses.
+func (p *Pin) Set(addrs []netip.Addr) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.addrs = append([]netip.Addr(nil), addrs...)
+}
+
+// Addrs is a copy of the addresses.
+func (p *Pin) Addrs() []netip.Addr {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return append([]netip.Addr(nil), p.addrs...)
+}
+
+// dialer dials the pinned addresses in turn, the first that connects.
+func (p *Pin) dialer(d *net.Dialer) func(ctx context.Context, network, address string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(address)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %q is not an address", ErrRefused, address)
+		}
+		if _, err := netip.ParseAddr(host); err == nil {
+			return d.DialContext(ctx, network, address)
+		}
+		addrs := p.Addrs()
+		if len(addrs) == 0 {
+			return nil, fmt.Errorf("%w: %s has no checked address to dial", ErrRefused, host)
+		}
+		var last error
+		for _, a := range addrs {
+			conn, err := d.DialContext(ctx, network, net.JoinHostPort(a.String(), port))
+			if err == nil {
+				return conn, nil
+			}
+			last = err
+		}
+		return nil, last
+	}
 }
 
 // ParseAllow reads PANEL_EGRESS_ALLOW_CIDRS: comma-separated ranges. A bare
