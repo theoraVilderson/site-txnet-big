@@ -65,10 +65,11 @@ export function canReturnProof(detail: { proofSubmittedAt: Date | null; proofRet
 
 /** What the manual-payments queue reads of a transfer's detail (`ManualConfirmService.list`). */
 export type TransferDetailRow = {
-  destination: { label: string };
+  destination: { label: string; setting: { kind: string } };
   expectedAmountMinor: bigint;
   chargeCurrency: string;
   chargeDecimals: number;
+  network: string | null;
   proof: unknown;
   proofSubmittedAt: Date | null;
   proofReturnedAt: Date | null;
@@ -76,11 +77,15 @@ export type TransferDetailRow = {
 };
 
 export type TransferView = {
+  /** The method kind (`card_to_card`, …) — the panel draws the proof by it. */
+  kind: string;
   destinationLabel: string;
   /** In `currencyCode`'s minor unit, a string as every amount on the wire. */
   expectedAmountMinor: string;
   currencyCode: string;
   decimals: number;
+  /** A wallet's network as the seller wrote it — the panel links a tx hash to its explorer by it; null for a card. */
+  network: string | null;
   proof: Record<string, unknown> | null;
   proofSubmittedAt: Date | null;
   reviewReason: TransferReviewReason | null;
@@ -99,10 +104,12 @@ export function transferViewOf(detail: TransferDetailRow, secret: string, now: D
   const key = typeof proof?.['receiptImage'] === 'string' ? proof['receiptImage'] : null;
   const signed = key ? signedObjectUrl({ key, fileName: 'receipt', ttlSec: RECEIPT_URL_TTL_SEC, secret, now }) : null;
   return {
+    kind: detail.destination.setting.kind,
     destinationLabel: detail.destination.label,
     expectedAmountMinor: detail.expectedAmountMinor.toString(),
     currencyCode: detail.chargeCurrency,
     decimals: detail.chargeDecimals,
+    network: detail.network,
     proof,
     proofSubmittedAt: detail.proofSubmittedAt,
     reviewReason: detail.reviewReason,

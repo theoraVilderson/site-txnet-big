@@ -96,6 +96,7 @@ const payment = (overrides: Partial<VerifyingPayment>): VerifyingPayment => ({
   verifyAttempts: 0,
   nextVerifyAt: null,
   flaggedAt: null,
+  transfer: null,
   ...overrides,
 });
 
@@ -106,6 +107,7 @@ describe("stateBadges", () => {
     ["a flagged one", { nextVerifyAt: "2026-09-14T11:00:00Z", flaggedAt: "2026-09-15T10:00:00Z" }, ["verifying", "flagged"]],
     ["an expired one", { status: "expired" }, ["expired"]],
     ["one whose authority was lost", { authority: null }, ["waiting", "noAuthority"]],
+    ["a manual transfer, which never had an authority", { authority: null, transfer: {} as VerifyingPayment["transfer"] }, ["waiting"]],
   ])("names %s", (_what, overrides, badges) => {
     expect(stateBadges(payment(overrides))).toEqual(badges);
   });
@@ -121,6 +123,7 @@ describe("attaching a lost authority", () => {
   it("is offered only for a payment that has none", () => {
     expect(canAttachAuthority(payment({ authority: null }))).toBe(true);
     expect(canAttachAuthority(payment({ authority: "A1" }))).toBe(false);
+    expect(canAttachAuthority(payment({ authority: null, transfer: {} as VerifyingPayment["transfer"] }))).toBe(false);
   });
 
   it("mirrors billing's limits, trimmed", () => {

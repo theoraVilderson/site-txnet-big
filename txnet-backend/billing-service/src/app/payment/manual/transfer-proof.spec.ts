@@ -76,10 +76,11 @@ describe('canReturnProof', () => {
 describe('transferViewOf', () => {
   const now = new Date('2026-10-15T10:00:00Z');
   const detail = {
-    destination: { label: 'Melli card' },
+    destination: { label: 'Melli card', setting: { kind: 'card_to_card' } },
     expectedAmountMinor: BigInt(5_000_000),
     chargeCurrency: 'IRR',
     chargeDecimals: 0,
+    network: null,
     proof: { receiptImage: RECEIPT, trackingCode: '12345678' },
     proofSubmittedAt: now,
     proofReturnedAt: null,
@@ -90,16 +91,22 @@ describe('transferViewOf', () => {
   it('shows the queue what to judge by, with the receipt signed for five minutes', () => {
     const view = transferViewOf(detail, secret, now);
     expect(view).toMatchObject({
+      kind: 'card_to_card',
       destinationLabel: 'Melli card',
       expectedAmountMinor: '5000000',
       currencyCode: 'IRR',
       decimals: 0,
+      network: null,
       proof: detail.proof,
       reviewReason: 'proof_only',
       canReturn: true,
     });
     expect(view.receiptUrl).toContain(`/private-files/${RECEIPT}?`);
     expect(view.receiptUrlExpiresAt).toEqual(new Date(now.getTime() + 5 * 60_000));
+  });
+
+  it("names a wallet's network, so the panel can link the hash to its explorer", () => {
+    expect(transferViewOf({ ...detail, network: 'TRC20' }, secret, now).network).toBe('TRC20');
   });
 
   it('signs nothing when the proof has no image', () => {

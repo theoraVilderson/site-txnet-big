@@ -67,6 +67,7 @@ export const CARD_TO_CARD: TransferKind = {
   icon: CreditCard,
   destinationFields: [{ id: "cardNumber" }, { id: "holderName" }, { id: "sheba", optional: true }],
   proofFields: ["receiptImage", "trackingCode", "sourceCardLast4", "paidAt"],
+  refProofField: "trackingCode",
   defaultProof: ["receiptImage", "trackingCode"],
   check,
   summary: (f) => `•••• ${String(f.cardNumber ?? "").slice(-SHOWN_DIGITS)} · ${String(f.holderName ?? "")}`,

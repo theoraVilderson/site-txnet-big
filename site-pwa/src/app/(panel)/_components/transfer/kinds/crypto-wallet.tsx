@@ -69,6 +69,7 @@ export const CRYPTO_WALLET: TransferKind = {
   icon: Wallet,
   destinationFields: [{ id: "asset" }, { id: "network" }, { id: "address" }, { id: "memo", optional: true }, { id: "decimals" }],
   proofFields: ["txHash", "receiptImage", "paidAt"],
+  refProofField: "txHash",
   defaultProof: ["txHash"],
   check,
   summary: (f) => `${String(f.asset ?? "")} · ${String(f.network ?? "")} · ${ends(String(f.address ?? ""))}`,

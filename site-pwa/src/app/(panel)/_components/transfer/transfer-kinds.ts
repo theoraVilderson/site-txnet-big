@@ -21,6 +21,7 @@ function plainKind(kind: string): TransferKind {
     icon: Banknote,
     destinationFields: [],
     proofFields: [],
+    refProofField: null,
     defaultProof: [],
     check: () => ({}),
     summary: (f) => Object.values(f).join(" · "),

@@ -519,7 +519,6 @@
   "site-pwa/src/app/(panel)/my-resellers/[id]/users/_components/BulkByFilter.tsx": 18,
   "site-pwa/src/app/(panel)/my-resellers/[id]/users/_components/FindByLink.tsx": 15,
   "site-pwa/src/app/(panel)/my-resellers/_components/GrantLimitCards.tsx": 13,
-  "site-pwa/src/app/(panel)/payments/manual/_components/ManualPaymentsView.tsx": 13,
   "site-pwa/src/app/(panel)/resellers/[id]/_components/ResellerDetailView.tsx": 16,
   "site-pwa/src/app/(panel)/resellers/limits/_components/LimitsView.tsx": 14,
   "site-pwa/src/app/(panel)/shop/_components/ShopView.tsx": 18,

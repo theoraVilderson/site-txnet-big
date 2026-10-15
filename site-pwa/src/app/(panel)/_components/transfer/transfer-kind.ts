@@ -31,6 +31,8 @@ export interface TransferKind {
   destinationFields: readonly { id: string; optional?: boolean }[];
   /** The proof ids the kind declares — what `requiredProof` picks from (D-60 part 4). */
   proofFields: readonly string[];
+  /** The proof field billing keeps as the transfer's reference (`refProofField`) — the confirm form's reference. */
+  refProofField: string | null;
   /** What a new gateway of this kind asks for until the seller changes it. */
   defaultProof: readonly string[];
   /** What the client can tell before a request: a missing field, a card's Luhn. Billing still decides. */

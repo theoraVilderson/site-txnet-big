@@ -121,3 +121,13 @@ Proof: `manual-gateways.test.tsx`.
   lightbox (pinch/scroll zoom), a tx hash linked to the network's explorer
   when known, and the `reviewReason` badge. Confirm and reject are the existing
   forms, reject gaining "let them send it again".
+- **Built 2026-10-15 (F-803-k).** `payments/manual/_components/`:
+  `ManualPaymentItem.tsx` (one row), `TransferDetails.tsx`, `ReceiptLightbox.tsx`
+  (wheel, pinch, buttons; a lapsed signed URL says reload), `ManualForms.tsx`
+  (authority, confirm, reject). A transfer has no gateway to ask, so its row
+  offers confirm and reject at once and neither "ask the gateway" nor an
+  authority; confirm's reference starts as the proof's `refProofField`. Rules in
+  `_lib/transfer-review.ts`; the explorer table is
+  `_components/transfer/networks.ts` (one chain named in the seller's text, and
+  the hash in that chain's shape, or no link). "Let them send it again" is drawn
+  only while `canReturn`. Proof: `payments/manual/transfer-review.test.ts`.

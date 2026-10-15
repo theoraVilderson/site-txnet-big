@@ -150,7 +150,7 @@ const VIEW_SELECT = {
   gateway: { select: { displayName: true, providerName: true } },
   tenantGatewayConfig: { select: { displayName: true, providerName: true } },
   transferDetail: {
-    select: { destination: { select: { label: true } }, expectedAmountMinor: true, chargeCurrency: true, chargeDecimals: true, proof: true, proofSubmittedAt: true, proofReturnedAt: true, reviewReason: true },
+    select: { destination: { select: { label: true, setting: { select: { kind: true } } } }, expectedAmountMinor: true, chargeCurrency: true, chargeDecimals: true, network: true, proof: true, proofSubmittedAt: true, proofReturnedAt: true, reviewReason: true },
   },
 } satisfies Prisma.PaymentTransactionSelect;
 

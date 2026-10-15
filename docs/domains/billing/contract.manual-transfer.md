@@ -211,9 +211,9 @@ Both routes are the payment's owner's, on `DEPOSIT_PROOF_RATE_LIMIT` (20 / 15 mi
   not verifying, and writes `billing.payment.open_changed` (RT-1-j).
 - **A proof waits on a person however late** (`WITH_PROOF`): the expiry sweep
   never scans or closes it, and the queue lists it past its lookback.
-- **The queue** (F-092-af) gains `transfer` per row: destination label,
-  expected amount in the charge currency, proof, `receiptUrl` signed for
-  5 min, `reviewReason`, `canReturn`. Confirm and reject are the existing
+- **The queue** (F-092-af) gains `transfer` per row: `kind`, destination label,
+  expected amount in the charge currency, `network`, proof, `receiptUrl` signed
+  for 5 min, `reviewReason`, `canReturn`. Confirm and reject are the existing
   routes (a transfer is `unaskable`). Confirm writes `transfer_tx_ref` in the
   credit's transaction (`recordTransferRef`); a reference credited meanwhile
   rolls it back as `duplicate_ref`. `reject` with `resubmit: true` sends the

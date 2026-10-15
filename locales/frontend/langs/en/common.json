@@ -1032,7 +1032,10 @@
       "reason": "Reason",
       "submit": "Reject the payment",
       "cancel": "Cancel",
-      "invalidReason": "Write a reason of 5 to 500 characters."
+      "invalidReason": "Write a reason of 5 to 500 characters.",
+      "resubmit": "Let them send it again",
+      "resubmitHint": "The payment stays open: the proof goes back to the payer and their window restarts. Allowed once per payment.",
+      "submitReturn": "Send it back"
     },
     "form": {
       "title": "Confirm this payment by hand",
@@ -1070,6 +1073,30 @@
       "submit": "Save and ask",
       "cancel": "Cancel",
       "invalid": "Enter the authority (at most 64 characters)."
+    },
+    "transfer": {
+      "destination": "Paid to",
+      "expected": "Transfer expected",
+      "credits": "Credits the wallet",
+      "proof": "What the payer sent",
+      "noProof": "The payer has not sent the proof yet.",
+      "receipt": "Receipt",
+      "openReceipt": "Open the receipt",
+      "receiptExpired": "The receipt link has expired — reload the list.",
+      "explorer": "View on the explorer",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Fit to screen",
+      "reason": {
+        "underpaid": "Less than expected arrived",
+        "overpaid": "More than expected arrived",
+        "late": "Paid after the window closed",
+        "wrong_destination": "Sent to a different card or wallet",
+        "duplicate_ref": "This reference was already credited",
+        "amount_collision": "Two payments wait on this amount",
+        "no_match": "No open payment matches it",
+        "proof_only": "Only the payer's proof — check the account"
+      }
     }
   },
   "coupons": {

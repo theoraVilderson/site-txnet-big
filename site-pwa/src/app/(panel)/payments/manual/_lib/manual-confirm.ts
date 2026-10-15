@@ -84,13 +84,14 @@ export function stateBadges(row: VerifyingPayment): StateBadge[] {
   if (row.status === "expired") badges.push("expired");
   else badges.push(row.nextVerifyAt ? "verifying" : "waiting");
   if (row.flaggedAt) badges.push("flagged");
-  if (row.authority === null) badges.push("noAuthority");
+  // A manual transfer has no gateway, so no authority to lose (F-803-k).
+  if (row.authority === null && row.transfer === null) badges.push("noAuthority");
   return badges;
 }
 
-/** Only a payment with no authority takes one — billing refuses the rest (`authority_present`). */
+/** Only a gateway payment with no authority takes one — billing refuses the rest (`authority_present`). */
 export function canAttachAuthority(row: VerifyingPayment): boolean {
-  return row.authority === null;
+  return row.authority === null && row.transfer === null;
 }
 
 /** billing's `manualAuthoritySchema`, mirrored. */

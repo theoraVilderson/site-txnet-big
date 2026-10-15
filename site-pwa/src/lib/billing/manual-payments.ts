@@ -2,6 +2,38 @@
 import { call } from "./client";
 import type { GatewaySource } from "./gateways";
 
+/** Why a transfer waits on a person (billing `TransferReviewReason`, F-805-a). */
+export type TransferReviewReason =
+  | "underpaid"
+  | "overpaid"
+  | "late"
+  | "wrong_destination"
+  | "duplicate_ref"
+  | "amount_collision"
+  | "no_match"
+  | "proof_only";
+
+/** What the queue shows of a manual transfer (billing `TransferView`, F-805-a). */
+export interface TransferView {
+  /** The method kind (`card_to_card`, …); the panel draws the proof through its registry. */
+  kind: string;
+  destinationLabel: string;
+  /** In `currencyCode`'s minor unit — the charge currency the payer sends, not the wallet's. */
+  expectedAmountMinor: string;
+  currencyCode: string;
+  decimals: number;
+  /** A wallet's network as the seller wrote it; null for a card. */
+  network: string | null;
+  proof: Record<string, unknown> | null;
+  proofSubmittedAt: string | null;
+  reviewReason: TransferReviewReason | null;
+  /** The receipt, signed for five minutes; a reload mints a fresh one. */
+  receiptUrl: string | null;
+  receiptUrlExpiresAt: string | null;
+  /** Whether a reject may still send the proof back to the payer (once). */
+  canReturn: boolean;
+}
+
 /** An open payment a person may act on (F-092-z; every `pending` or `expired` one since F-092-af). */
 export interface VerifyingPayment {
   id: string;
@@ -23,6 +55,8 @@ export interface VerifyingPayment {
   nextVerifyAt: string | null;
   /** Still verifying a day after it was made (F-092-y). */
   flaggedAt: string | null;
+  /** A manual transfer's destination, amount and proof (F-805-a); null for every other payment. */
+  transfer: TransferView | null;
 }
 
 /** What asking the gateway, or confirming by hand, came to (billing `ManualOutcome`). */
@@ -79,11 +113,14 @@ export const manualPaymentCalls = {
     });
   },
 
-  /** End a payment nobody paid (F-092-ak). Billing asks the gateway first and never rejects money it can see. */
-  async manualReject(id: string, reason: string): Promise<ManualAnswer> {
+  /**
+   * End a payment nobody paid (F-092-ak). Billing asks the gateway first and never rejects money it can see.
+   * `resubmit` on a transfer sends its proof back to the payer once instead (F-805-a).
+   */
+  async manualReject(id: string, reason: string, resubmit = false): Promise<ManualAnswer> {
     return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/reject`, {
       method: "POST",
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify(resubmit ? { reason, resubmit } : { reason }),
     });
   },
 };
