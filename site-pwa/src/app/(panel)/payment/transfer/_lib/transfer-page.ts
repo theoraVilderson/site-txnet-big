@@ -59,11 +59,17 @@ export function countdownOf(windowEndsAt: string, windowMinutes: number, now: nu
 export type ProofDraft = Readonly<Record<string, string>>;
 export type ProofErrors = Partial<Record<string, FieldRefusal>>;
 
+/** What a proof is checked against besides its typed fields: the uploaded receipt, the wallet's network (F-803-j). */
+export interface ProofContext {
+  receiptKey: string | null;
+  network?: string | null;
+}
+
 /** Every required field that would be refused; submit stays disabled while this is not empty. */
-export function proofErrors(requiredProof: readonly string[], draft: ProofDraft, receiptKey: string | null): ProofErrors {
+export function proofErrors(requiredProof: readonly string[], draft: ProofDraft, { receiptKey, network }: ProofContext): ProofErrors {
   const errors: ProofErrors = {};
   for (const id of requiredProof) {
-    const refusal = id === RECEIPT_FIELD ? (receiptKey ? null : "missing") : proofRefusal(id, draft[id] ?? "");
+    const refusal = id === RECEIPT_FIELD ? (receiptKey ? null : "missing") : proofRefusal(id, draft[id] ?? "", network);
     if (refusal) errors[id] = refusal;
   }
   return errors;

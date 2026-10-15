@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Send } from "lucide-react";
+import { ClipboardPaste, Send } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
 import { billingApi } from "@/lib/billing-api";
-import { Button, Field, Input } from "../../../_components/kit";
-import { PAID_AT_FIELD, RECEIPT_FIELD } from "../../../_components/transfer/proof-fields";
+import { Button, Field, IconButton, Input } from "../../../_components/kit";
+import { PAID_AT_FIELD, RECEIPT_FIELD, TX_HASH_FIELD } from "../../../_components/transfer/proof-fields";
+import { pasteText } from "../../../_lib/clipboard";
 import { PAY_KEYS, PROOF_REFUSAL_KEYS, proofBody, proofErrors, refusedFields, type ProofErrors } from "../_lib/transfer-page";
 import { ReceiptDrop } from "./ReceiptDrop";
 
@@ -22,7 +23,7 @@ const INPUT: Readonly<Record<string, { type?: string; inputMode?: "numeric"; ltr
   trackingCode: { inputMode: "numeric", ltr: true },
   sourceCardLast4: { inputMode: "numeric", ltr: true },
   [PAID_AT_FIELD]: { type: "datetime-local", ltr: true },
-  txHash: { ltr: true },
+  [TX_HASH_FIELD]: { ltr: true },
 };
 
 /**
@@ -30,8 +31,11 @@ const INPUT: Readonly<Record<string, { type?: string; inputMode?: "numeric"; ltr
  * receipt as a drop zone, each field's refusal shown once it was touched or
  * billing named it, and submit disabled until every field would pass. One
  * proof per payment until a person sends it back, so `onSent` re-reads.
+ * A wallet's `network` holds its tx hash to that chain's shape, and the hash
+ * pastes in one tap (F-803-j).
  */
-export function ProofForm({ paymentId, requiredProof, onSent }: { paymentId: string; requiredProof: readonly string[]; onSent: () => void }) {
+export function ProofForm(props: { paymentId: string; requiredProof: readonly string[]; network?: string | null; onSent: () => void }) {
+  const { paymentId, requiredProof, network, onSent } = props;
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
   const [draft, setDraft] = useState<Record<string, string>>({});
@@ -41,7 +45,7 @@ export function ProofForm({ paymentId, requiredProof, onSent }: { paymentId: str
   const [sending, setSending] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const errors = proofErrors(requiredProof, draft, receiptKey);
+  const errors = proofErrors(requiredProof, draft, { receiptKey, network });
   const ready = Object.keys(errors).length === 0;
   const shown = (id: string) => refused[id] ?? (touched.has(id) ? errors[id] : undefined);
 
@@ -97,6 +101,7 @@ export function ProofForm({ paymentId, requiredProof, onSent }: { paymentId: str
               value={draft[id] ?? ""}
               onChange={(e) => type(id, e.target.value)}
               onBlur={() => setTouched((s) => new Set(s).add(id))}
+              end={id === TX_HASH_FIELD ? <PasteButton onPaste={(text) => type(id, text.trim())} /> : undefined}
             />
           </Field>
         ),
@@ -111,4 +116,14 @@ export function ProofForm({ paymentId, requiredProof, onSent }: { paymentId: str
       </Button>
     </form>
   );
+}
+
+/** Fills the field from the clipboard in one tap; a refused read leaves it for an ordinary paste. */
+function PasteButton({ onPaste }: { onPaste: (text: string) => void }) {
+  const { t } = useLocale();
+  const paste = async () => {
+    const text = await pasteText();
+    if (text) onPaste(text);
+  };
+  return <IconButton aria-label={t("common", K.paste)} icon={<ClipboardPaste size={16} aria-hidden />} onClick={() => void paste()} size="sm" />;
 }

@@ -69,7 +69,7 @@ queue. Where it differs from the table above, and why:
 - a person's return or rejection sends the payer no event; the page shows it
   on tab visible, and on the next confirmed/reversed read.
 The kind supplies `Destination` only — the proof is one form by field id, so a
-kind adds no `ProofField` until one needs its own input (F-803-j's paste).
+kind adds no `ProofField`; F-803-j's paste is the `txHash` field's, by id.
 Proof: `payment/transfer/transfer-page.test.ts`.
 
 ### Card-to-card (F-803-i)
@@ -82,8 +82,7 @@ name and the sheba, each copyable. Below it: copy-number as the primary button,
 the holder name repeated in plain text ("check the name your bank shows matches
 this"), and the exact amount in rials with its toman in words.
 Built as `(panel)/_components/transfer/CardDestination.tsx`, the kind's
-`Destination`; a wallet pays through the plain list (`kinds/plain.tsx`
-`PlainDestination`) until F-803-j draws its own.
+`Destination`.
 
 ### Wallet (F-803-j)
 
@@ -96,6 +95,21 @@ a red "required" mark. Amount in the asset with its decimals and copy. The tx
 hash field checks length/charset per known network and pastes in one tap. In
 automatic mode (**later**, F-803-f), after the watcher first sees the transfer, a confirmations bar
 fills `n / required` live from `transfer_seen`.
+
+**Built 2026-10-15 (F-803-j).** `(panel)/_components/transfer/WalletDestination.tsx`,
+the kind's `Destination`; segments in `wallet-address.ts` (`addressSegments`).
+Where it differs from the text above, and why:
+- the QR's centre is the asset's ticker on a round mark (QR level `H`): there
+  are no asset logos yet, as the drawn card's bank logo is its initial;
+- the network warning is an `Alert` (one line, and why another chain loses
+  the money), not a chip — the sentence does not fit a chip on a phone;
+- the amount is the page's `ExactAmount` (asset, decimals, copy), not a second
+  figure in the destination — principle 2's one largest figure;
+- the hash check: a `network` naming one chain of `networks.ts` holds `txHash`
+  to that chain's shape (`proofRefusal`); any other keeps billing's generic one.
+  The paste button reads the clipboard (`pasteText`) and is silent when refused;
+- the confirmations bar is a `TODO(F-803-f)` slot.
+Proof: `_components/transfer/wallet.test.ts`.
 
 ## The deposit picker (F-803-h)
 

@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { Badge } from "../../kit";
 import { TransferField } from "../TransferField";
-import { PlainDestination } from "./plain";
+import { WalletDestination } from "../WalletDestination";
 import { missingFields, type AdminFieldsProps, type DestinationDraft, type TransferKind } from "../transfer-kind";
 
 const T = FrontendI18nKeys.common.transfer;
@@ -75,6 +75,5 @@ export const CRYPTO_WALLET: TransferKind = {
   check,
   summary: (f) => `${String(f.asset ?? "")} · ${String(f.network ?? "")} · ${ends(String(f.address ?? ""))}`,
   AdminFields: WalletAdminFields,
-  // The QR, address segments and network warning are F-803-j's; until then the plain list pays.
-  Destination: PlainDestination,
+  Destination: WalletDestination,
 };

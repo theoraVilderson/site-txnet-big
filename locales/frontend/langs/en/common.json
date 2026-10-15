@@ -6396,7 +6396,8 @@
         "sourceCardLast4": "The last four digits of the card you paid from.",
         "paidAt": "When your bank says the transfer went through.",
         "txHash": "The transaction id your wallet shows."
-      }
+      },
+      "paste": "Paste from the clipboard"
     },
     "checking": {
       "title": "Your payment is being checked",
@@ -6432,6 +6433,18 @@
       "receipt_missing": "Upload the receipt again, then send.",
       "receipt_rejected": "The receipt could not be accepted. Send a clear JPEG, PNG or WebP image.",
       "duplicate_ref": "This reference was already used for another payment. Check the number."
+    },
+    "wallet": {
+      "qr": "QR code of the {{asset}} wallet address",
+      "onlyOn": "Send only on the {{network}} network",
+      "onlyOnWhy": "A transfer on any other network is lost and cannot be returned.",
+      "compare": "Compare the first and last six characters with the address your wallet shows.",
+      "copyAddress": "Copy the wallet address",
+      "memo": "Memo / tag",
+      "memoRequired": "required",
+      "memoWhy": "Without it your transfer cannot be found.",
+      "copy": "Copy",
+      "copied": "Copied"
     }
   }
 }

@@ -88,7 +88,12 @@ function TransferBody({ transfer, paymentId, reload }: { transfer: TransferStatu
                     {t("common", K.paid)}
                   </Button>
                 ) : (
-                  <ProofForm paymentId={paymentId} requiredProof={transfer.requiredProof} onSent={() => void reload()} />
+                  <ProofForm
+                    paymentId={paymentId}
+                    requiredProof={transfer.requiredProof}
+                    network={typeof transfer.destination.network === "string" ? transfer.destination.network : null}
+                    onSent={() => void reload()}
+                  />
                 )}
               </Card>
             </>

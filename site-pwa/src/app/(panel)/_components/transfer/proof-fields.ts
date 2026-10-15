@@ -1,4 +1,5 @@
 import { foldDigits } from "./banks";
+import { knownNetwork } from "./networks";
 import type { FieldRefusal } from "./transfer-kind";
 
 /**
@@ -13,10 +14,13 @@ export const RECEIPT_FIELD = "receiptImage";
 /** The proof field that is an instant, typed as a local date and time. */
 export const PAID_AT_FIELD = "paidAt";
 
+/** The proof field that is a transaction's hash on the wallet's chain. */
+export const TX_HASH_FIELD = "txHash";
+
 const SHAPES: Readonly<Record<string, (value: string) => boolean>> = {
   trackingCode: (v) => /^[A-Za-z0-9]{4,40}$/.test(v),
   sourceCardLast4: (v) => /^\d{4}$/.test(v),
-  txHash: (v) => /^(0x)?[A-Za-z0-9]{16,128}$/.test(v),
+  [TX_HASH_FIELD]: (v) => /^(0x)?[A-Za-z0-9]{16,128}$/.test(v),
   [PAID_AT_FIELD]: (v) => !Number.isNaN(Date.parse(v)),
 };
 
@@ -28,9 +32,16 @@ export function foldProof(id: string, raw: string): string {
   return FOLDED.has(id) ? foldDigits(raw.trim()) : raw.trim();
 }
 
-/** Why one typed proof field would be refused, or null. The receipt is checked by whether it was uploaded. */
-export function proofRefusal(id: string, raw: string): FieldRefusal | null {
+/**
+ * Why one typed proof field would be refused, or null. The receipt is checked
+ * by whether it was uploaded. A tx hash on a chain the seller's `network` names
+ * is held to that chain's shape (F-803-j): billing takes any hash-like string,
+ * and a hash of another chain is one no reviewer could ever find.
+ */
+export function proofRefusal(id: string, raw: string, network?: string | null): FieldRefusal | null {
   const value = foldProof(id, raw);
   if (!value) return "missing";
+  const chain = id === TX_HASH_FIELD ? knownNetwork(network) : null;
+  if (chain) return chain.hash.test(value) ? null : "invalid";
   return SHAPES[id] && !SHAPES[id](value) ? "invalid" : null;
 }

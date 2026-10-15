@@ -75,7 +75,7 @@ describe("proofErrors", () => {
   const card = ["receiptImage", "trackingCode", "sourceCardLast4"];
 
   it("holds back submit until every required field is there and well-formed", () => {
-    expect(proofErrors(card, { trackingCode: "", sourceCardLast4: "12" }, null)).toEqual({
+    expect(proofErrors(card, { trackingCode: "", sourceCardLast4: "12" }, { receiptKey: null })).toEqual({
       receiptImage: "missing",
       trackingCode: "missing",
       sourceCardLast4: "invalid",
@@ -83,13 +83,13 @@ describe("proofErrors", () => {
   });
 
   it("mirrors billing's shapes, digits folded from any script", () => {
-    expect(proofErrors(card, { trackingCode: "۱۲۳۴۵۶", sourceCardLast4: "۴۳۲۱" }, "t/transfers/p/receipt")).toEqual({});
-    expect(proofErrors(["txHash"], { txHash: "not a hash" }, null)).toEqual({ txHash: "invalid" });
-    expect(proofErrors(["paidAt"], { paidAt: "yesterday" }, null)).toEqual({ paidAt: "invalid" });
+    expect(proofErrors(card, { trackingCode: "۱۲۳۴۵۶", sourceCardLast4: "۴۳۲۱" }, { receiptKey: "t/transfers/p/receipt" })).toEqual({});
+    expect(proofErrors(["txHash"], { txHash: "not a hash" }, { receiptKey: null })).toEqual({ txHash: "invalid" });
+    expect(proofErrors(["paidAt"], { paidAt: "yesterday" }, { receiptKey: null })).toEqual({ paidAt: "invalid" });
   });
 
   it("asks only for what the seller required", () => {
-    expect(proofErrors(["trackingCode"], { trackingCode: "ABC123" }, null)).toEqual({});
+    expect(proofErrors(["trackingCode"], { trackingCode: "ABC123" }, { receiptKey: null })).toEqual({});
   });
 });
 

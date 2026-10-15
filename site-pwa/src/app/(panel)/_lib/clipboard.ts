@@ -36,3 +36,18 @@ export async function copyText(text: string): Promise<boolean> {
     document.body.removeChild(textarea);
   }
 }
+
+/**
+ * Read text from the clipboard for a one-tap paste (F-803-j, a tx hash).
+ * Null when the browser refuses or has none — there is no fallback for
+ * reading, so the caller leaves the field for an ordinary paste.
+ */
+export async function pasteText(): Promise<string | null> {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.readText || !window.isSecureContext) return null;
+  try {
+    return await navigator.clipboard.readText();
+  } catch {
+    // Permission refused or nothing textual: the field still takes a long-press paste.
+    return null;
+  }
+}
