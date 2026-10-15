@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { billingApi, type DepositGateway, type DepositQuote } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { QUOTE_DEBOUNCE_MS, useDepositQuote, type DepositInputs } from "./_hooks/useDepositQuote";
-import { fromCents, fromMinor, offeredPresets, presetAmounts, tomanFromRial, toCents } from "./_lib/deposit-amount";
+import { fromCents, fromMinor, offeredPresets, tomanFromRial, toCents } from "./_lib/deposit-amount";
 
 /**
  * The top-up page (F-093-e), and the one thing about it that has to be true:
@@ -228,30 +228,6 @@ describe("the amount box works in cents", () => {
   });
 });
 
-describe("presetAmounts", () => {
-  it("comes from the gateway's own range, not from a constant", () => {
-    const presets = presetAmounts("1.00", "500.00");
-    expect(presets[0]).toBe("1.00");
-    expect(presets).toContain("500.00");
-    expect(presets.every((p) => toCents(p)! >= 100 && toCents(p)! <= 50000)).toBe(true);
-  });
-
-  it("drops every step a narrow gateway cannot take", () => {
-    expect(presetAmounts("100.00", "150.00")).toEqual(["100.00", "150.00"]);
-  });
-
-  it("offers nothing rather than an unusable step when the range is empty", () => {
-    expect(presetAmounts("100.00", "50.00")).toEqual([]);
-    expect(presetAmounts("nonsense", "50.00")).toEqual([]);
-  });
-
-  it("builds the ladder for a gateway that left either end of its range open", () => {
-    expect(presetAmounts(null, null)).toEqual(["1.00", "2.00", "5.00", "10.00", "20.00", "50.00"]);
-    expect(presetAmounts("5.00", null)).toEqual(["5.00", "10.00", "25.00", "50.00", "100.00", "250.00"]);
-    expect(presetAmounts(null, "8.00")).toEqual(["1.00", "2.00", "5.00", "8.00"]);
-  });
-});
-
 describe("fromMinor", () => {
   it("splits the gateway's minor units on the digits, never through a float", () => {
     // A rial charge past 2^53 minor units still reads correctly, which is why
@@ -299,8 +275,9 @@ describe("offeredPresets", () => {
     expect(offeredPresets({ ...gateway, presets: ["2.00", "2.50"] })).toEqual(["2.00", "2.50"]);
   });
 
-  it("falls back to the automatic ladder when nothing is configured", () => {
-    expect(offeredPresets({ ...gateway, presets: [] })).toEqual(presetAmounts("1.00", "500.00"));
-    expect(offeredPresets(gateway)).toEqual(presetAmounts("1.00", "500.00"));
+  // The ladder is billing's since 2026-10-15 (`deposit-presets.ts` automaticPresets): nothing is invented here.
+  it("adds nothing of its own when billing answered none", () => {
+    expect(offeredPresets({ ...gateway, presets: [] })).toEqual([]);
+    expect(offeredPresets({})).toEqual([]);
   });
 });

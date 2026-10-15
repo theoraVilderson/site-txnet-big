@@ -290,7 +290,8 @@ describe('DepositQuoteService.listGateways', () => {
         category: 'domestic_rial',
         minAmount: '1.00',
         maxAmount: '1000.00',
-        presets: [],
+        // Nothing configured: the automatic ladder of 1.00..1000.00, as every surface draws it (2026-10-15).
+        presets: ['1.00', '2.00', '5.00', '10.00', '20.00', '1000.00'],
         currencyCode: 'USD',
         testing: false,
         // F-803-d: settles itself, not a manual method.

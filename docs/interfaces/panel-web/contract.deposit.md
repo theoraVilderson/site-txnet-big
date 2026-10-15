@@ -74,15 +74,14 @@ route returns the whole breakdown instead of the pieces of one.
    already carries the adjustment gap, so the two figures say everything the
    projection did and neither is a guess.
 7. **The gateway's range is the configuration.** `minAmount` / `maxAmount` from
-   the gateway list are the amount box's bounds, its slider's ends and the
-   source of its presets (`_lib/deposit-amount.ts`). Legacy kept six rial
-   figures and a two-million ceiling in `_util/constants.ts` — one tenant's
-   pricing decision compiled into the app, wrong for every other tenant.
-   Either bound may be `null` (no limit): the box checks only the side that is
-   set, the slider needs both, and with no maximum the ladder is `STEPS` alone.
-   **Still open:** a tenant cannot yet name its *own* preset ladder; deriving
-   one from the range it already publishes is what this row does instead of
-   inventing a route.
+   the gateway list are the amount box's bounds and its slider's ends; its
+   quick amounts are billing's `presets` as answered — the gateway's list, the
+   tenant's, else billing's automatic ladder from the range (moved there
+   2026-10-15 so the bot offers the same; `offeredPresets` adds nothing).
+   Legacy kept six rial figures and a two-million ceiling in
+   `_util/constants.ts` — one tenant's pricing compiled into the app. Either
+   bound may be `null` (no limit): the box checks only the side that is set,
+   and the slider needs both.
 8. **The amount box works in integer cents and speaks ASCII.** A slider that
    emits a float is how `0.1 + 0.2` reaches a payment route as
    `0.30000000000000004`; Persian digits typed into the box are converted at

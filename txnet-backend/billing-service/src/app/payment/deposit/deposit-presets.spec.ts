@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 
-import { InvalidDepositPresets, MAX_DEPOSIT_PRESETS, normalizePresets, resolvePresets } from './deposit-presets';
+import { InvalidDepositPresets, MAX_DEPOSIT_PRESETS, automaticPresets, normalizePresets, resolvePresets } from './deposit-presets';
 
 /**
  * Quick amounts on the top-up page (F-092-v): a tenant's default list, which a
@@ -57,9 +57,11 @@ describe('resolvePresets', () => {
     expect(resolvePresets([], [d('0.5'), d('2'), d('150')], range)).toEqual(['2.00']);
   });
 
-  it('answers empty when neither list has anything, so the panel draws its ladder', () => {
-    expect(resolvePresets([], [], range)).toEqual([]);
-    expect(resolvePresets([], null, range)).toEqual([]);
+  // 2026-10-15: the ladder was the panel's alone, so the bot showed no quick amount for the same gateway.
+  it('answers the automatic ladder when neither list has anything, or nothing of it fits', () => {
+    expect(resolvePresets([], [], range)).toEqual(automaticPresets(range));
+    expect(resolvePresets([], null, range)).toEqual(automaticPresets(range));
+    expect(resolvePresets([d('500')], [], range)).toEqual(automaticPresets(range));
   });
 
   it('bounds only by the side a gateway set — a missing minimum or maximum is no limit', () => {
@@ -67,5 +69,27 @@ describe('resolvePresets', () => {
     expect(resolvePresets(list, [], { min: null, max: null })).toEqual(['0.50', '2.00', '150.00']);
     expect(resolvePresets(list, [], { min: d('1'), max: null })).toEqual(['2.00', '150.00']);
     expect(resolvePresets(list, [], { min: null, max: d('100') })).toEqual(['0.50', '2.00']);
+  });
+});
+
+// Moved from the panel (2026-10-15): one home, so the panel and the bot offer the same amounts.
+describe('automaticPresets', () => {
+  it("comes from the gateway's own range, not from a constant, with its maximum last", () => {
+    expect(automaticPresets({ min: d('1'), max: d('500') })).toEqual(['1.00', '2.00', '5.00', '10.00', '20.00', '500.00']);
+  });
+
+  it('drops every step a narrow gateway cannot take', () => {
+    expect(automaticPresets({ min: d('100'), max: d('150') })).toEqual(['100.00', '150.00']);
+  });
+
+  it('offers nothing rather than an unusable step when the range is empty', () => {
+    expect(automaticPresets({ min: d('100'), max: d('50') })).toEqual([]);
+    expect(automaticPresets({ min: null, max: d('0') })).toEqual([]);
+  });
+
+  it('builds the ladder for a gateway that left either end of its range open', () => {
+    expect(automaticPresets({ min: null, max: null })).toEqual(['1.00', '2.00', '5.00', '10.00', '20.00', '50.00']);
+    expect(automaticPresets({ min: d('5'), max: null })).toEqual(['5.00', '10.00', '25.00', '50.00', '100.00', '250.00']);
+    expect(automaticPresets({ min: null, max: d('8') })).toEqual(['1.00', '2.00', '5.00', '8.00']);
   });
 });

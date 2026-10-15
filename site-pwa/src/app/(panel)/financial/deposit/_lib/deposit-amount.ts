@@ -42,47 +42,6 @@ export function fromCents(cents: number): string {
 }
 
 /**
- * How much each preset is worth relative to the gateway's own minimum. Legacy
- * hard-coded six rial figures in `_util/constants.ts` — which is a tenant's
- * pricing decision written into the app, and wrong for every tenant that is
- * not the one it was written for.
- */
-const STEPS = [1, 2, 5, 10, 20, 50];
-
-/**
- * The preset buttons for one gateway, as decimal strings.
- *
- * **The gateway's range is the configuration.** `minAmount` / `maxAmount` are
- * the tenant's own `tenant_gateway_config` columns, answered by
- * `GET /deposit/gateways`, so the presets move when the tenant moves them and
- * there is no second place to keep them in step. A row of its own can give a
- * tenant an explicit list later; until one exists, deriving the ladder from
- * the range the gateway already publishes beats a constant that is nobody's.
- *
- * The maximum is always offered last when it fits, because "everything this
- * gateway will take" is the one amount a user is most likely to want and the
- * least likely to type correctly. An unreadable or empty range offers nothing.
- * A bound the gateway left open (`null`) is no limit: without a maximum the
- * ladder is the whole of `STEPS` and nothing is appended.
- */
-export function presetAmounts(minAmount: string | null, maxAmount: string | null): string[] {
-  const min = minAmount === null ? 0 : toCents(minAmount);
-  const max = maxAmount === null ? null : toCents(maxAmount);
-  if (min === null || (maxAmount !== null && (max === null || max <= 0 || min > max))) return [];
-
-  // A gateway with no floor of its own still needs somewhere to start the
-  // ladder; one base-currency unit is the smallest step worth a button.
-  const base = min > 0 ? min : SCALE;
-  if (max === null) return STEPS.map((step) => fromCents(base * step));
-  // One slot is held back for the maximum, so a long ladder cannot crowd it out.
-  const ladder = STEPS.map((step) => base * step)
-    .filter((c) => c > 0 && c <= max)
-    .slice(0, STEPS.length - 1);
-  const presets = [...new Set([...ladder, max])].sort((a, b) => a - b);
-  return presets.map(fromCents);
-}
-
-/**
  * The gateway's own charge, as a decimal string in the gateway's own currency.
  *
  * `charge.amountMinor` is a string because JSON has no bigint, and it can be
@@ -99,12 +58,12 @@ export function fromMinor(amountMinor: string, decimals: number): string | null 
 }
 
 /**
- * The buttons one gateway offers (F-093-k): the list its tenant or the gateway
- * itself configured, as billing resolved it, else the automatic ladder — so a
- * tenant that set nothing sees exactly what it saw before.
+ * The buttons one gateway offers (F-093-k): billing's answer, as it is — the
+ * gateway's own list, else its tenant's, else the automatic ladder from its
+ * range. The ladder moved to billing (2026-10-15) so the bot offers the same.
  */
-export function offeredPresets(gateway: { minAmount: string | null; maxAmount: string | null; presets?: readonly string[] }): string[] {
-  return gateway.presets && gateway.presets.length > 0 ? [...gateway.presets] : presetAmounts(gateway.minAmount, gateway.maxAmount);
+export function offeredPresets(gateway: { presets?: readonly string[] }): string[] {
+  return [...(gateway.presets ?? [])];
 }
 
 /**
