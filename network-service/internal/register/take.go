@@ -22,7 +22,7 @@ func (r *Registrar) take(
 ) error {
 	checkCtx, cancel := context.WithTimeout(ctx, orDefault(r.Timeout, DefaultTimeout))
 	defer cancel()
-	holder, found, err := r.duplicateOf(checkCtx, d, p)
+	holder, found, leftovers, err := r.duplicateOf(checkCtx, d, p)
 	if err == nil && found {
 		return r.duplicate(ctx, p, caps, holder, at, report)
 	}
@@ -38,6 +38,11 @@ func (r *Registrar) take(
 	}
 
 	written, err := r.answer(ctx, p, caps, verdict, at, report)
+	if written && leftovers {
+		// Named to no one: the configs are another owner's business (F-027-ey).
+		report.Leftovers++
+		r.log().Warn("panel taken over clients another panel left behind; they are not its users", "panel", p.PanelID)
+	}
 	if planted && !written {
 		// Withdrawn or edited while it was tested, or the write failed: the
 		// row does not name this anchor, so it would be an orphan of ours.

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"network-service/internal/anchor"
 	"network-service/internal/driver"
 	"network-service/internal/driver/fake"
 	"network-service/internal/register"
@@ -16,8 +17,10 @@ import (
 // it, call the other's orphans and, under `delete_remote`, delete them. What
 // would break silently:
 //
-//   - a copy that already carries our clients passing as new: a claim tag (or
-//     Xray uuid) of another panel's config on it names that panel;
+//   - a copy passing as new: another non-retired panel's anchor on it names
+//     that panel (F-027-ey, ADR-0130 decision 3);
+//   - a server refused forever for clients another panel left behind: a claim
+//     tag of its configs with no anchor of its own is a warning, not a refusal;
 //   - an empty copy passing because it carries nothing of ours: a suspect —
 //     same inbound set, or same IP — gets a canary, a disabled client created
 //     through the registered panel and looked for here;
@@ -46,13 +49,12 @@ func dupSetup(a, b *fake.Panel, holder register.Registered, resolve map[string][
 	return r, store
 }
 
-func TestAPanelCarryingAnotherPanelsClaimTagIsThatPanel(t *testing.T) {
+func TestAPanelCarryingAnotherPanelsAnchorIsThatPanel(t *testing.T) {
 	a, b := fake.New(fake.Config{}), fake.New(fake.Config{})
-	if _, err := b.CreateClient(context.Background(), driver.CreateClientRequest{ClaimTag: "ct-42", UUID: "u-42", InboundRemoteID: "inbound-1", Enabled: true}); err != nil {
-		t.Fatal(err)
-	}
-	r, store := dupSetup(a, b, registered(""), nil)
-	store.Claim(holderID, "ct-42", "u-42")
+	plant(t, b, "anchor-a", "u-anchor-a")
+	holder := registered("")
+	holder.Anchor = anchor.Anchor{Tag: "anchor-a", UUID: "u-anchor-a", RemoteID: "1"}
+	r, store := dupSetup(a, b, holder, nil)
 
 	pass(t, r)
 	got := store.Record("panel-b")
@@ -60,7 +62,47 @@ func TestAPanelCarryingAnotherPanelsClaimTagIsThatPanel(t *testing.T) {
 		t.Fatalf("B = %s duplicate of %q, want refused as a duplicate of %s", got.ReviewState, got.DuplicateOf, holderID)
 	}
 	if a.CallCount("CreateClient") != 0 {
-		t.Fatal("a claim tag is proof enough: no canary")
+		t.Fatal("an anchor is proof enough: no canary")
+	}
+}
+
+func TestClientsAnotherPanelLeftBehindAreAWarningNotARefusal(t *testing.T) {
+	a, b := fake.New(fake.Config{}), fake.New(fake.Config{})
+	plant(t, b, "ct-42", "u-42") // A's config, left behind; A's anchor is not here
+	holder := registered("")
+	holder.Anchor = anchor.Anchor{Tag: "anchor-a", UUID: "u-anchor-a", RemoteID: "1"}
+	r, store := dupSetup(a, b, holder, nil)
+	store.Claim(holderID, "ct-42", "u-42")
+
+	report := pass(t, r)
+	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewAccepted || got.DuplicateOf != "" {
+		t.Fatalf("B = %s duplicate of %q, want accepted: leftovers are not a duplicate", got.ReviewState, got.DuplicateOf)
+	}
+	if report.Leftovers != 1 {
+		t.Fatalf("leftovers warned %d times, want once", report.Leftovers)
+	}
+}
+
+func TestARetiredPanelsAnchorNamesNoDuplicate(t *testing.T) {
+	a, b := fake.New(fake.Config{Inbounds: []driver.Inbound{{RemoteID: "x", Protocol: "vmess", Port: 1, Enabled: true}}}), fake.New(fake.Config{})
+	plant(t, b, "anchor-a", "u-anchor-a")
+	holder := registered("")
+	holder.Inbounds = []register.InboundKey{{RemoteID: "x", Port: 1, Protocol: "vmess"}}
+	holder.Anchor = anchor.Anchor{Tag: "anchor-a", UUID: "u-anchor-a", RemoteID: "1"}
+	r, store := dupSetup(a, b, holder, nil)
+	store.Retire(holderID)
+
+	pass(t, r)
+	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewAccepted || got.DuplicateOf != "" {
+		t.Fatalf("B = %s duplicate of %q, want accepted: an archived panel holds no server", got.ReviewState, got.DuplicateOf)
+	}
+}
+
+// plant puts a disabled client with this tag and uuid on p.
+func plant(t *testing.T, p *fake.Panel, tag, uuid string) {
+	t.Helper()
+	if _, err := p.CreateClient(context.Background(), driver.CreateClientRequest{ClaimTag: tag, UUID: uuid, InboundRemoteID: "inbound-1"}); err != nil {
+		t.Fatal(err)
 	}
 }
 

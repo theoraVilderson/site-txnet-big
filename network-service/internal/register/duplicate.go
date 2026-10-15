@@ -16,8 +16,12 @@ import (
 // one — a second domain, or its bare IP. It is asked of the panel itself,
 // because only the panel knows which server it is:
 //
-//  1. A client carrying a claim tag (or Xray uuid) of another panel's config
-//     names that panel. Our tags are global (invariant 17), so a match is proof.
+//  1. A client that is another non-retired panel's anchor names that panel
+//     (F-027-ey, ADR-0130 decision 3): the anchor is the server's identity.
+//     A client carrying only a claim tag (or Xray uuid) of another panel's
+//     config, with no anchor of that panel, is a leftover — a warning naming
+//     no panel, never a refusal: otherwise a server once used by panel A would
+//     be refused to anyone, forever.
 //  2. Otherwise each **suspect** — a registered panel with the same inbound
 //     set, or the same IP — gets a canary: a disabled client under a random
 //     tag, created through the registered panel and looked for here. Seen is
@@ -57,6 +61,9 @@ type Holder struct {
 
 // DuplicateStore is what the check reads and writes, beside Store.
 type DuplicateStore interface {
+	// AnchorHolder is the non-retired panel other than panelID whose anchor
+	// tag is one of tags or whose anchor uuid is one of uuids.
+	AnchorHolder(ctx context.Context, panelID string, tags, uuids []string) (Holder, bool, error)
 	// ClaimHolder is a panel other than panelID with a config whose claim tag
 	// is one of tags or whose uuid is one of uuids.
 	ClaimHolder(ctx context.Context, panelID string, tags, uuids []string) (Holder, bool, error)
@@ -72,10 +79,12 @@ type DuplicateStore interface {
 const canaryDeleteTimeout = 10 * time.Second
 
 // duplicateOf asks the new panel, through d, whether it is one registered.
-func (r *Registrar) duplicateOf(ctx context.Context, d driver.Driver, p Pending) (Holder, bool, error) {
+// leftovers is true when it carries clients of another panel's configs that
+// named no holder: the caller warns, and takes it.
+func (r *Registrar) duplicateOf(ctx context.Context, d driver.Driver, p Pending) (holder Holder, found, leftovers bool, err error) {
 	clients, err := d.ListClients(ctx)
 	if err != nil {
-		return Holder{}, false, fmt.Errorf("duplicate check: listing clients: %w", err)
+		return Holder{}, false, false, fmt.Errorf("duplicate check: listing clients: %w", err)
 	}
 	var tags, uuids []string
 	for _, c := range clients {
@@ -87,11 +96,20 @@ func (r *Registrar) duplicateOf(ctx context.Context, d driver.Driver, p Pending)
 		}
 	}
 	if len(tags)+len(uuids) > 0 {
-		h, found, err := r.Store.ClaimHolder(ctx, p.PanelID, tags, uuids)
-		if err != nil || found {
-			return h, found, err
+		if holder, found, err = r.Store.AnchorHolder(ctx, p.PanelID, tags, uuids); err != nil || found {
+			return holder, found, false, err
+		}
+		if _, leftovers, err = r.Store.ClaimHolder(ctx, p.PanelID, tags, uuids); err != nil {
+			return Holder{}, false, false, err
 		}
 	}
+	holder, found, err = r.bySuspects(ctx, d, p)
+	return holder, found, leftovers, err
+}
+
+// bySuspects is rule 7: a canary through every registered panel the new one
+// looks like.
+func (r *Registrar) bySuspects(ctx context.Context, d driver.Driver, p Pending) (Holder, bool, error) {
 
 	registered, err := r.Store.Registered(ctx, p.PanelID)
 	if err != nil || len(registered) == 0 {

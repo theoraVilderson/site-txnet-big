@@ -189,6 +189,21 @@ func truncate(s string, max int) string {
 	return s
 }
 
+// anchorHolderSQL is the non-retired panel whose anchor one of the new
+// panel's clients is (F-027-ey). An archived panel holds no server: its
+// anchor left behind is a leftover like any other client.
+const anchorHolderSQL = `
+SELECT id::text, name
+  FROM network.panel
+ WHERE id <> $1::uuid AND "retiredAt" IS NULL
+   AND ("anchorTag" = ANY($2::text[]) OR "anchorUuid" = ANY($3::text[]))
+ ORDER BY id
+ LIMIT 1`
+
+func (s PostgresStore) AnchorHolder(ctx context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
+	return s.holder(ctx, anchorHolderSQL, panelID, tags, uuids)
+}
+
 // claimHolderSQL is a config of another panel carrying one of the tags or
 // uuids the new panel's clients hold. Every config counts, retired ones too:
 // a client of ours left behind is still proof of which server this is.
@@ -202,16 +217,21 @@ SELECT p.id::text, p.name
  LIMIT 1`
 
 func (s PostgresStore) ClaimHolder(ctx context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
-	rows, err := s.DB.Query(ctx, claimHolderSQL, panelID, nonNil(tags), nonNil(uuids))
+	return s.holder(ctx, claimHolderSQL, panelID, tags, uuids)
+}
+
+// holder runs one of the two holder queries: $1 the panel, $2 tags, $3 uuids.
+func (s PostgresStore) holder(ctx context.Context, sql, panelID string, tags, uuids []string) (Holder, bool, error) {
+	rows, err := s.DB.Query(ctx, sql, panelID, nonNil(tags), nonNil(uuids))
 	if err != nil {
-		return Holder{}, false, fmt.Errorf("reading claim holders for panel %s: %w", panelID, err)
+		return Holder{}, false, fmt.Errorf("reading holders for panel %s: %w", panelID, err)
 	}
 	defer rows.Close()
 	var h Holder
 	found := rows.Next()
 	if found {
 		if err := rows.Scan(&h.PanelID, &h.Name); err != nil {
-			return Holder{}, false, fmt.Errorf("reading claim holders for panel %s: %w", panelID, err)
+			return Holder{}, false, fmt.Errorf("reading holders for panel %s: %w", panelID, err)
 		}
 	}
 	return h, found, rows.Err()

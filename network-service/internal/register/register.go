@@ -154,8 +154,11 @@ type Report struct {
 	Waiting int
 	// Stale is how many answers — verdicts or faults — arrived for a panel no
 	// longer pending, or no longer at the address that was tested.
-	Stale  int
-	Failed []Failure
+	Stale int
+	// Leftovers is how many panels were taken over clients another panel left
+	// behind with no anchor of its own: a warning, not a refusal (F-027-ey).
+	Leftovers int
+	Failed    []Failure
 }
 
 // Run passes on the interval until the context ends, starting with a pass: a

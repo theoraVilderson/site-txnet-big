@@ -22,6 +22,8 @@ type Record struct {
 	DuplicateOf string
 	// Registered is the panel as the duplicate check sees it, once accepted.
 	Registered Registered
+	// Retired is `retiredAt` set: archived, out of every loop (F-027-bz).
+	Retired bool
 }
 
 // MemoryStore holds registration state in memory. It is what the pass is
@@ -47,6 +49,15 @@ func (m *MemoryStore) PutRegistered(r Registered, state driver.ReviewState) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.rows[r.PanelID] = &Record{Pending: r.Pending, ReviewState: state, Registered: r}
+}
+
+// Retire archives a panel, as billing's archive route does.
+func (m *MemoryStore) Retire(panelID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if r := m.rows[panelID]; r != nil {
+		r.Retired = true
+	}
 }
 
 // Claim gives a panel a config with this claim tag and uuid.
@@ -150,6 +161,33 @@ func (m *MemoryStore) Fail(_ context.Context, p Pending, fault FaultKind, detail
 	return true, nil
 }
 
+func (m *MemoryStore) AnchorHolder(_ context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clients := make([]driver.RemoteClient, 0, len(tags)+len(uuids))
+	for _, t := range tags {
+		clients = append(clients, driver.RemoteClient{Label: t})
+	}
+	for _, u := range uuids {
+		clients = append(clients, driver.RemoteClient{UUID: u})
+	}
+	ids := make([]string, 0, len(m.rows))
+	for id := range m.rows {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		r := m.rows[id]
+		if id == panelID || r.Retired {
+			continue
+		}
+		if _, ok := r.Anchor.In(clients); ok {
+			return Holder{PanelID: id, Name: r.Registered.Name}, true, nil
+		}
+	}
+	return Holder{}, false, nil
+}
+
 func (m *MemoryStore) ClaimHolder(_ context.Context, panelID string, tags, uuids []string) (Holder, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -187,7 +225,7 @@ func (m *MemoryStore) Registered(_ context.Context, panelID string) ([]Registere
 	defer m.mu.Unlock()
 	var out []Registered
 	for id, r := range m.rows {
-		if id == panelID || r.Transport != driver.TransportPull ||
+		if id == panelID || r.Retired || r.Transport != driver.TransportPull ||
 			(r.ReviewState != driver.ReviewAccepted && r.ReviewState != driver.ReviewAcceptedLowTrust) {
 			continue
 		}

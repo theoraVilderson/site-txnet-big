@@ -2,8 +2,8 @@
 id: network
 layer: domain
 status: active
-version: 16
-updated: 2026-10-14
+version: 17
+updated: 2026-10-15
 ---
 
 # Registration: the connection test and its verdict
@@ -73,7 +73,7 @@ kinds (`contract.md` "The driver contract") plus `unopenable` and
 `invalid_answers`. `register.FaultKind` mirrors it, and
 `network-panel-declaration.spec.ts` pins the eight values.
 
-## Registered once — the duplicate check (F-027-ce, ADR-0090 decision 1)
+## Registered once — the duplicate check (F-027-ce, F-027-ey; ADR-0090, ADR-0130)
 
 billing refuses a second row at the same normalised address (F-027-cd,
 invariant 51); this catches the same panel under another one. It runs after
@@ -81,9 +81,12 @@ the answers validate, for a pull panel the questionnaire would take — a
 refused one is not taken anyway, and a push panel is never called
 (`register/duplicate.go`, `duplicate_test.go`).
 
-6. **Our client on it names the panel.** A client of the new panel carrying a
-   `claimTag` or `uuid` of another panel's config — any status, since a client
-   left behind is still proof — makes it that panel's duplicate. No canary.
+6. **An anchor on it names the panel** (F-027-ey, ADR-0130 decision 3). A
+   client that is the anchor of another panel not archived makes it that
+   panel's duplicate; no canary. A client carrying only a `claimTag` or `uuid`
+   of another panel's config is a **leftover**: the panel is taken, the
+   warning (`Report.Leftovers`, a log line) names no panel — never a refusal,
+   or a server once used by panel A is refused to anyone, forever.
 7. **A suspect gets a canary.** Otherwise every panel in service (pull,
    accepted, not archived) whose inbound set equals the new panel's — remote
    id and port, and protocol where `panel_inbound` has one — or whose IP (its
