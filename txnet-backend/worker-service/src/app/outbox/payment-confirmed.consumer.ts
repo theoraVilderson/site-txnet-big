@@ -85,7 +85,12 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
         template: 'paymentCredited',
         // A transfer confirmed by hand from a proof with no reference has none (F-805-b): the payment's
         // own id is then what the payer can quote to support.
-        params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? payment.paymentId },
+        params: {
+          amount: payment.amountCredited,
+          // The notifier says its name in the reader's language: the figure alone did not say rials, toman or dollars.
+          ...(payment.currencyCode ? { currencyCode: payment.currencyCode } : {}),
+          reference: payment.gatewayReferenceId ?? payment.paymentId,
+        },
       },
     });
   }

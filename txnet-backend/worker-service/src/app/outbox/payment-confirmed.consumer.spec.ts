@@ -108,7 +108,7 @@ describe('PaymentConfirmedConsumer.handle', () => {
       },
     ]);
     expect(calls.joined).toEqual([
-      { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'paymentCredited'), eventId: EVENT, params: { amount: '19.80', reference: '900900900' } },
+      { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'paymentCredited'), eventId: EVENT, params: { amount: '19.80', currencyCode: 'IRR', reference: '900900900' } },
     ]);
     expect(calls.fetched).toEqual([]);
     expect(calls.del).toEqual([]);
@@ -117,7 +117,7 @@ describe('PaymentConfirmedConsumer.handle', () => {
   it("quotes the payment's own id when a transfer was confirmed from a proof with no reference (F-805-b)", async () => {
     const { consumer, calls } = build();
     await consumer.handle(event({ gatewayReferenceId: null }));
-    expect(calls.joined.map((j) => j.params)).toEqual([{ amount: '19.80', reference: PAYMENT }]);
+    expect(calls.joined.map((j) => j.params)).toEqual([{ amount: '19.80', currencyCode: 'IRR', reference: PAYMENT }]);
   });
 
   it('does nothing for an event it already handled', async () => {

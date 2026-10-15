@@ -108,7 +108,7 @@ describe('PaymentReversedConsumer.handle', () => {
       },
     ]);
     expect(calls.joined).toEqual([
-      { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'paymentReversed'), eventId: EVENT, params: { amount: '19.80' } },
+      { burst: UnscopedRedisKeys.noticeBurst(TENANT, USER, 'paymentReversed'), eventId: EVENT, params: { amount: '19.80', currencyCode: 'IRR' } },
     ]);
     expect(calls.fetched).toEqual([]);
     expect(calls.del).toEqual([]);

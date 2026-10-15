@@ -525,6 +525,25 @@ describe('UserNotifier', () => {
     );
   });
 
+  // 2026-10-15: "2.00 was added" said nothing of whether it was rials, toman or dollars.
+  it("names an amount's currency in the reader's language, and a code it has no name for as the code", async () => {
+    const client = botClient();
+    const locale = {
+      getNamespace: vi.fn((_lang: string, name: string) =>
+        name === 'bot' ? { money: { currency: { IRT: 'تومان' } } } : { payment: { credited: '{{amount}} {{currency}} ✅' } },
+      ),
+      getKey: vi.fn(() => undefined),
+      getDefaultLanguage: () => 'fa',
+    } as unknown as LocaleService;
+    const notifier = new UserNotifier(notifierPrisma({ links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService, registry(client), locale);
+
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '2.00', currencyCode: 'IRT', reference: '9' } }));
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '2.00', currencyCode: 'EUR', reference: '9' } }));
+    await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '2.00', reference: '9' } }));
+
+    expect(client.sendMessage.mock.calls.map((c) => c[1])).toEqual(['2.00 تومان ✅', '2.00 EUR ✅', '2.00  ✅']);
+  });
+
   // F-601-u, ADR-0097: the user picks Telegram, Bale or both; unchosen is both.
   describe('the chosen messenger (F-601-u)', () => {
     const links = [

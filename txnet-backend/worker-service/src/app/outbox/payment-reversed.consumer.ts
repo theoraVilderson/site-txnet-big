@@ -56,7 +56,7 @@ export class PaymentReversedConsumer implements OnApplicationBootstrap {
           ...(payment.currencyCode ? { currencyCode: payment.currencyCode } : {}),
         },
       },
-      person: { tenantId: payment.tenantId, userId: payment.userId, template: 'paymentReversed', params: { amount: payment.amountCredited } },
+      person: { tenantId: payment.tenantId, userId: payment.userId, template: 'paymentReversed', params: { amount: payment.amountCredited, ...(payment.currencyCode ? { currencyCode: payment.currencyCode } : {}) } },
     });
   }
 }

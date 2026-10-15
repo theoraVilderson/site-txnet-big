@@ -5,6 +5,7 @@ import { suggestionCopyVerdict } from '@txnet-backend/shared-core';
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
 import { noticeButton } from './notice-buttons';
+import { withCurrencyName } from './notice-currency';
 import { PANEL_NOTIFY_TEMPLATES, PANEL_TEMPLATE_TEXT } from './panel-notices';
 import { TRANSFER_NOTIFY_TEMPLATES, TRANSFER_TEMPLATE_TEXT } from './transfer-notices';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -195,7 +196,7 @@ const accessNotice = (key: string, fallback: string, title: string): Notice & { 
 const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   paymentCredited: {
     read: (ns) => ns?.payment?.credited,
-    fallback: '✅ Your payment was confirmed and {{amount}} was added to your wallet. Reference: {{reference}}',
+    fallback: '✅ Your payment was confirmed and {{amount}} {{currency}} was added to your wallet. Reference: {{reference}}',
     inbox: { read: (ns) => ns?.payment?.creditedTitle, fallback: 'Payment confirmed' },
     many: {
       read: (ns) => ns?.payment?.creditedMany,
@@ -207,7 +208,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   paymentReversed: {
     read: (ns) => ns?.payment?.reversed,
     fallback:
-      '↩️ Your payment of {{amount}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.',
+      '↩️ Your payment of {{amount}} {{currency}} was reversed by the gateway and was not added to your wallet. The bank is returning it to your card; if it has not arrived within 72 hours, contact support.',
     inbox: { read: (ns) => ns?.payment?.reversedTitle, fallback: 'Payment reversed' },
     many: {
       read: (ns) => ns?.payment?.reversedMany,
@@ -1098,11 +1099,9 @@ export class UserNotifier {
     const ns = this.locale.getNamespace(user.languagePreference, 'notifications') as NotificationsNamespace | undefined;
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
-    const told = this.withKeyLabels(
-      this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, user.languagePreference, ns), user.languagePreference, ns),
-      user.languagePreference,
-      ns,
-    );
+    const lang = user.languagePreference;
+    const named = this.withKeyLabels(this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, lang, ns), lang, ns), lang, ns);
+    const told = withCurrencyName(named, this.locale.getNamespace(lang, 'bot'));
     const params = combined ? { ...told, count: String(request.count) } : told;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
     const list = combined && request.services?.length ? this.serviceList(request.services, user.languagePreference, ns) : null;
