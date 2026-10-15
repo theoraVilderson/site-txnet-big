@@ -4359,7 +4359,8 @@
         "rotate": "New subscription link",
         "renew": "Renew for free",
         "delete": "Delete service",
-        "issue": "Give a new service"
+        "issue": "Give a new service",
+        "freezeMode": "Change freeze type"
       },
       "confirm": {
         "freeze": "The service stops and all its configs are switched off. Its clock stops too: unfreezing adds the frozen time to its end.",
@@ -4374,7 +4375,8 @@
         "rotate": "The current subscription link stops now and a new one is made. The user must put the new link in their app.",
         "renew": "The same service is renewed, same link and configs, and nothing is charged. With nothing typed, one full period of the plan the user bought is added.",
         "delete": "The service is closed and all its configs are removed from their panels now. This cannot be undone.",
-        "issue": "A free service of this product is made for the user and placed on a panel like a purchase."
+        "issue": "A free service of this product is made for the user and placed on a panel like a purchase.",
+        "freezeMode": "Hard: only an admin can unfreeze it. Soft: the user can unfreeze it too. The clock and the configs stay as they are, and the user is told."
       },
       "submit": {
         "freeze": "Freeze",
@@ -4389,7 +4391,8 @@
         "rotate": "Make a new link",
         "renew": "Renew",
         "delete": "Delete for good",
-        "issue": "Give the service"
+        "issue": "Give the service",
+        "freezeMode": "Save the freeze type"
       },
       "field": {
         "reason": "Reason (kept in the service's history)",
@@ -4411,7 +4414,10 @@
         "variant": "Product",
         "variantPick": "Pick a product",
         "variantsLoading": "Reading the products…",
-        "variantsNone": "This reseller has no active product."
+        "variantsNone": "This reseller has no active product.",
+        "freezeMode": "Who can unfreeze it?",
+        "modeHard": "Hard — only an admin",
+        "modeSoft": "Soft — the user can too"
       },
       "done": {
         "freeze": "Frozen; {{count}} configs switched off.",
@@ -4434,7 +4440,9 @@
         "issue": "The service was given.",
         "issueRepeat": "This service was already given; it was not given again.",
         "spent": "The traffic is now below what was used, so the service stops.",
-        "revived": "The service is active again."
+        "revived": "The service is active again.",
+        "freezeModeHard": "Now only an admin can unfreeze it.",
+        "freezeModeSoft": "Now the user can unfreeze it themselves."
       },
       "refusal": {
         "grant_not_active": "This service does not take this action in its current state.",
@@ -4465,7 +4473,13 @@
         "devices_unchanged": "It already has this limit.",
         "rate_limit_unsupported": "A panel of this service cannot cap speed. Move its configs to another panel first.",
         "no_configs": "This service has no configs yet.",
-        "not_in_audience": "This product is sold only to chosen groups, and this user is in none of them. Add them to a group first."
+        "not_in_audience": "This product is sold only to chosen groups, and this user is in none of them. Add them to a group first.",
+        "freeze_mode_unchanged": "The freeze is already of this type; nothing changed."
+      },
+      "frozenAs": {
+        "hard": "Hard freeze — only an admin lifts it",
+        "soft": "Soft freeze — the user can lift it",
+        "self": "Frozen by the user"
       }
     },
     "find": {
@@ -4520,7 +4534,15 @@
         "config_disable": "Config disabled",
         "config_enable": "Config enabled",
         "config_retire": "Config retired",
-        "config_move": "Config moved to another panel"
+        "config_move": "Config moved to another panel",
+        "grant_self_freeze": "Frozen by the user",
+        "grant_self_unfreeze": "Unfrozen by the user",
+        "grant_freeze_mode_set": "Freeze type changed"
+      },
+      "mode": {
+        "hard": "hard",
+        "soft": "soft",
+        "self": "by the user"
       }
     },
     "bulkJob": {
@@ -4652,6 +4674,15 @@
         "givesKeys": "gives access",
         "notYours": "You do not hold every access this group gives, so you cannot change who is in it."
       }
+    },
+    "freezeSettings": {
+      "title": "Freezing by users",
+      "hint": "Your users can freeze their own pay-as-you-go services, each at most 3 times a day. A freeze you or support set does not depend on this.",
+      "enabled": "Users may freeze their own services",
+      "stopsClock": "Add the frozen time to the service's end",
+      "stopsClockHint": "Only for freezes from now on; a service frozen already keeps what it had.",
+      "save": "Save",
+      "saved": "Saved."
     }
   },
   "operatingCurrency": {

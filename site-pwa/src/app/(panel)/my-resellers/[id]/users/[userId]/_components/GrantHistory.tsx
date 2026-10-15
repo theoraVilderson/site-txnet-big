@@ -7,7 +7,7 @@ import type { GrantHistoryRow, ResellerUserGrantsApi } from "@/lib/billing-api";
 import { Pagination } from "../../../../../_components/kit/Pagination";
 import { TableSkeleton } from "../../../../../_components/kit/TableSkeleton";
 import { formatInstant } from "../../../../../_lib/datetime";
-import { HISTORY_KEYS as H, historyActionKey } from "../../../../_lib/grant-bulk";
+import { HISTORY_KEYS as H, historyActionKey, historyFreezeMode } from "../../../../_lib/grant-bulk";
 import { useUserMessage } from "./useUserMessage";
 import { Alert, Button } from "../../../../../_components/kit";
 
@@ -20,6 +20,8 @@ const PAGE_SIZE = 20;
  *  - **read only when opened**, and again after an act (`refresh`), so a
  *    closed sheet asks nothing;
  *  - **no IP** — billing does not answer one to the reseller;
+ *  - **who froze it and how** (F-0401-f): the user's own freeze is its own
+ *    act, and an admin's freeze or mode change shows the mode it set;
  *  - the actor is an id: the panel has no read of another admin by id, so it
  *    is shown short, enough to tell two admins apart.
  */
@@ -66,6 +68,7 @@ export function GrantHistory({ api, grantId, refresh }: { api: ResellerUserGrant
                   <p className="flex flex-wrap items-center gap-x-2 font-bold text-text-primary">
                     {t("common", historyActionKey(row.action))}
                     {row.targetType === "config" && <span className="font-normal text-text-secondary">{t("common", H.onConfig)}</span>}
+                    <FreezeModeChip row={row} />
                   </p>
                   <p className="flex flex-wrap gap-x-3 text-text-secondary">
                     <span>{formatInstant(row.at, lang)}</span>
@@ -93,4 +96,11 @@ export function GrantHistory({ api, grantId, refresh }: { api: ResellerUserGrant
       )}
     </section>
   );
+}
+
+/** The mode an admin's freeze set, beside the act's name; nothing for any other act. */
+function FreezeModeChip({ row }: { row: GrantHistoryRow }) {
+  const { t } = useLocale();
+  const mode = historyFreezeMode(row);
+  return mode && <span className="rounded-full bg-gold-bg px-2 py-0.5 text-2xs font-normal text-gold">{t("common", H.mode[mode])}</span>;
 }

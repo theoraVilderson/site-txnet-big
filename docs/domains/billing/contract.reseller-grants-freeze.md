@@ -38,4 +38,4 @@ beats soft beats self — are entitlement's ([contract.admin.md](../entitlement/
 | Bucket `RESELLER_USER_CONFIG_ACTION`, shared with the config actions | all are an admin's writes on a user's service |
 
 Bulk by id and by filter take the same `mode` on `freeze` ([contract.reseller-grants-bulk.md](contract.reseller-grants-bulk.md)).
-**Not covered:** the panel's mode picker and history (F-0401-f).
+The panel's mode picker, mode change and history: panel-web [contract.reseller-users.md](../../interfaces/panel-web/contract.reseller-users.md) rules 38–40 (F-0401-f).

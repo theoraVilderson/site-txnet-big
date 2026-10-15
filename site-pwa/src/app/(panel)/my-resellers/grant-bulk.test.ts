@@ -117,7 +117,8 @@ describe("a history row", () => {
     const union = (name: string) => [
       ...(new RegExp(`export type ${name} = Extract<[^;]*;`).exec(audit)?.[0] ?? "").matchAll(/'([a-z_]+)'/g),
     ].map((m) => m[1]);
-    const acts = [...union("GrantAuditAction"), ...union("ConfigAuditAction")];
+    // The user's own freeze and unfreeze are on the same Grant's history (F-0401-c).
+    const acts = [...union("GrantAuditAction"), ...union("ConfigAuditAction"), ...union("OwnGrantAuditAction")];
     expect(acts.length).toBeGreaterThan(15);
     expect(Object.keys(HISTORY_ACTION_KEYS).sort()).toEqual(acts.sort());
   });

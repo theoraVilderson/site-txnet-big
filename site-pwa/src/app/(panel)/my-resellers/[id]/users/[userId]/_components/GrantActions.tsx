@@ -1,32 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { resellerGrantsApi, type GrantActionResult, type GrantRow, type ResellerUserGrantsApi } from "@/lib/billing-api";
+import { type GrantActionResult, type GrantRow, type ResellerUserGrantsApi } from "@/lib/billing-api";
 import { DatePicker } from "../../../../../_components/kit/DatePicker";
 import { formatInstant } from "../../../../../_lib/datetime";
 import { formatMoney } from "../../../../../_lib/money";
 import { formatBytes } from "../../../../../services/_lib/service-configs";
 import {
+  ADMIN_FREEZE_MODES,
   GRANT_ACTION_KEY,
+  GRANT_ACTION_METHODS,
   GRANT_ACTION_ROUTES,
   GRANT_KEYS as G,
   REASON_REQUIRED,
   emptyDraft,
   grantActionBody,
   grantActionsOf,
-  issueBody,
   type GrantAction,
   type GrantActionDraft,
 } from "../../../../_lib/grant-actions";
-import { USER_KEYS, issuableProducts } from "../../../../_lib/users";
+import { USER_KEYS } from "../../../../_lib/users";
 import { useUserMessage } from "./useUserMessage";
 import { useMayGrant } from "./grant-keys-context";
-import { Alert, Button, Field, Input, NativeSelect } from "../../../../../_components/kit";
+import { Alert, Button, Field, Input } from "../../../../../_components/kit";
 import { formatList } from "../../../../../_lib/digits";
 
-const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
+/** The one open form's frame — an act's here, an issue's in `IssueGrant`. */
+export const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
 
 /**
  * An admin's acts on one Grant (F-311-w, `panel-web/contract.reseller-users.md`),
@@ -39,6 +40,8 @@ const panel = "space-y-2 rounded-2xl border border-card-border bg-bg-inner p-3";
  *  - **a delete asks the refund, either way**, before it can be pressed;
  *  - **a renewal is one request per opened form** (`requestId`), so a double
  *    click renews once;
+ *  - **a freeze names its mode** (F-0401-f): hard unless the admin picks
+ *    soft; a frozen Grant's mode form opens on the other one;
  *  - after an act the list is read again: status, end and meter are billing's.
  */
 export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi; row: GrantRow; onActed: () => void }) {
@@ -57,7 +60,8 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
 
   function start(action: GrantAction) {
     setOpen(action);
-    setDraft(emptyDraft());
+    // A mode change opens on the mode the Grant does not have: the same one is billing's `freeze_mode_unchanged`.
+    setDraft({ ...emptyDraft(), ...(action === "freezeMode" && row.freezeMode === "hard" ? { freezeMode: "soft" } : {}) });
     setError(null);
     setDone(null);
   }
@@ -67,7 +71,7 @@ export function GrantActions({ api, row, onActed }: { api: ResellerUserGrantsApi
     setBusy(true);
     setError(null);
     try {
-      const result = await api.grantAction(row.id, GRANT_ACTION_ROUTES[open], body);
+      const result = await api.grantAction(row.id, GRANT_ACTION_ROUTES[open], body, GRANT_ACTION_METHODS[open]);
       setDone({ action: open, result });
       setOpen(null);
       onActed();
@@ -149,7 +153,14 @@ export function ActionFields({ action, draft, set }: { action: GrantAction; draf
 
   switch (action) {
     case "freeze":
-      return <DatePicker label={t("common", G.field.until)} value={draft.until || null} onChange={(v) => set({ until: v ?? "" })} />;
+      return (
+        <>
+          <FreezeModeField draft={draft} set={set} />
+          <DatePicker label={t("common", G.field.until)} value={draft.until || null} onChange={(v) => set({ until: v ?? "" })} />
+        </>
+      );
+    case "freezeMode":
+      return <FreezeModeField draft={draft} set={set} />;
     case "compensate":
       return (
         <div className="grid gap-2 sm:grid-cols-2">
@@ -191,6 +202,22 @@ export function ActionFields({ action, draft, set }: { action: GrantAction; draf
   }
 }
 
+/** Who may lift the freeze (F-0401-d): hard, only an admin; soft, the user too. */
+function FreezeModeField({ draft, set }: { draft: GrantActionDraft; set: (p: Partial<GrantActionDraft>) => void }) {
+  const { t } = useLocale();
+  return (
+    <fieldset className="space-y-1 text-xs text-text-primary">
+      <legend className="mb-1 font-bold text-text-secondary">{t("common", G.field.freezeMode)}</legend>
+      {ADMIN_FREEZE_MODES.map((mode) => (
+        <label key={mode} className="flex items-center gap-2">
+          <input type="radio" name="freezeMode" checked={draft.freezeMode === mode} onChange={() => set({ freezeMode: mode })} />
+          {t("common", mode === "hard" ? G.field.modeHard : G.field.modeSoft)}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
 /** What billing answered, in the admin's words — each route fills its own fields. */
 function Outcome({ action, result }: { action: GrantAction; result: GrantActionResult }) {
   const { t, lang } = useLocale();
@@ -203,6 +230,9 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
       break;
     case "unfreeze":
       lines.push(t("common", G.done.unfreeze, { count: result.configsRestored ?? 0 }));
+      break;
+    case "freezeMode":
+      lines.push(t("common", result.freezeMode === "soft" ? G.done.freezeModeSoft : G.done.freezeModeHard));
       break;
     case "days":
       lines.push(t("common", G.done.days, { date: formatInstant(result.endsAtAfter ?? null, lang, { withTime: false }) ?? "" }));
@@ -251,145 +281,6 @@ function Outcome({ action, result }: { action: GrantAction; result: GrantActionR
           {result.subscriptionUrl}
         </p>
       )}
-    </div>
-  );
-}
-
-interface IssuableVariant {
-  id: string;
-  label: string;
-}
-
-/**
- * Give the user a new service by hand (F-311-o): a variant of the reseller's
- * own catalog, read the first time the form opens — its products, then each
- * one's variants, the switched-off left out. One `requestId` per opened form,
- * so a double click issues once; billing refuses what it could not place.
- */
-export function IssueGrant({
-  api,
-  tenantId,
-  userId,
-  texts,
-  onIssued,
-}: {
-  api: ResellerUserGrantsApi;
-  tenantId: string;
-  /** Whom the issue is for: a product sold to groups they are in none of is not offered (PT-1-b). */
-  userId: string;
-  texts: Record<string, string>;
-  onIssued: () => void;
-}) {
-  const { t } = useLocale();
-  const message = useUserMessage();
-  const [open, setOpen] = useState(false);
-  const [variants, setVariants] = useState<IssuableVariant[] | null>(null);
-  const [variantId, setVariantId] = useState("");
-  const [reason, setReason] = useState("");
-  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<boolean | null>(null);
-  const [error, setError] = useState<unknown>(null);
-
-  const body = issueBody(variantId, requestId, reason);
-
-  async function readVariants() {
-    // The users-admin door's list (F-311-ab2, D-57): no `catalog.manage`, the platform's too.
-    const products = issuableProducts(await resellerGrantsApi(tenantId).usersCatalog(userId));
-    return products.flatMap((p) =>
-      p.variants.map((v) => {
-        const name = texts[v.nameKey ?? p.nameKey] || texts[p.nameKey];
-        return { id: v.id, label: name ? `${name} · ${v.sku}` : v.sku };
-      }),
-    );
-  }
-
-  function start() {
-    setOpen(true);
-    setVariantId("");
-    setReason("");
-    setRequestId(crypto.randomUUID());
-    setDone(null);
-    setError(null);
-    if (variants !== null) return;
-    readVariants()
-      .then(setVariants)
-      .catch((e) => {
-        setOpen(false);
-        setError(e);
-      });
-  }
-
-  async function send() {
-    if (!body || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const answer = await api.issue(body);
-      setDone(answer.issued);
-      setOpen(false);
-      onIssued();
-    } catch (e) {
-      console.error(e);
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <Button variant="primary" size="sm" disabled={busy} onClick={start} icon={<Plus size={12} aria-hidden />}>
-        {t("common", G.label.issue)}
-      </Button>
-      {open && (
-        <form
-          className={panel}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send();
-          }}
-        >
-          <p className="text-xs text-text-secondary">{t("common", G.confirm.issue)}</p>
-          {variants === null ? (
-            <p className="flex items-center gap-2 text-xs text-text-secondary">
-              <Loader2 size={12} className="animate-spin" aria-hidden />
-              {t("common", G.field.variantsLoading)}
-            </p>
-          ) : variants.length === 0 ? (
-            <p className="text-xs text-text-secondary">{t("common", G.field.variantsNone)}</p>
-          ) : (
-            <label className="block text-xs font-bold text-text-secondary">
-              {t("common", G.field.variant)}
-              <NativeSelect className="mt-1" value={variantId} onChange={(e) => setVariantId(e.target.value)}>
-                <option value="">{t("common", G.field.variantPick)}</option>
-                {variants.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.label}
-                  </option>
-                ))}
-              </NativeSelect>
-            </label>
-          )}
-          <Field label={t("common", G.field.reasonOptional)}>
-            <Input className="mt-1" value={reason} maxLength={500} placeholder={t("common", G.field.reasonPlaceholder)} onChange={(e) => setReason(e.target.value)} />
-          </Field>
-          <div className="flex gap-2">
-            <Button variant="primary" size="sm" type="submit" disabled={body === null} loading={busy}>
-              {t("common", G.submit.issue)}
-            </Button>
-            <Button variant="quiet" size="sm" onClick={() => setOpen(false)}>
-              {t("common", USER_KEYS.actions.cancel)}
-            </Button>
-          </div>
-        </form>
-      )}
-      {done !== null && (
-        <p role="status" className="text-xs font-bold text-primary">
-          {t("common", done ? G.done.issue : G.done.issueRepeat)}
-        </p>
-      )}
-      {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </div>
   );
 }

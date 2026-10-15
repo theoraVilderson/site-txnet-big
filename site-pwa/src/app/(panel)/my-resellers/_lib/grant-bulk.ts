@@ -1,3 +1,4 @@
+import { FREEZE_MODES, type FreezeMode, type GrantHistoryRow } from "@/lib/billing-api";
 import { GRANT_REFUSAL_KEYS, grantActionBody, type GrantAction, type GrantActionDraft } from "./grant-actions";
 import { USER_KEYS } from "./users";
 
@@ -141,4 +142,18 @@ export const HISTORY_ACTION_KEYS: Record<keyof typeof HISTORY_KEYS.action, strin
 /** A history row's label; an act added to the audit later reads as a plain admin act, not a blank. */
 export function historyActionKey(action: string): string {
   return action in HISTORY_ACTION_KEYS ? HISTORY_ACTION_KEYS[action as keyof typeof HISTORY_ACTION_KEYS] : HISTORY_KEYS.other;
+}
+
+/** The acts whose `after` names the mode an admin set: a freeze, and a frozen Grant's mode changed (F-0401-d). */
+const MODE_SETTING_ACTS: readonly string[] = ["grant_freeze", "grant_freeze_mode_set"];
+
+/**
+ * How an admin froze it (F-0401-f): the mode billing wrote in the row's
+ * `after`, or `null` for any other act — the user's own freeze names itself
+ * by its action — or a value that is no mode.
+ */
+export function historyFreezeMode(row: Pick<GrantHistoryRow, "action" | "after">): FreezeMode | null {
+  if (!MODE_SETTING_ACTS.includes(row.action) || !row.after || typeof row.after !== "object") return null;
+  const mode = (row.after as { freezeMode?: unknown }).freezeMode;
+  return (FREEZE_MODES as readonly unknown[]).includes(mode) ? (mode as FreezeMode) : null;
 }

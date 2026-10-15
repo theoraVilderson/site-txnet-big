@@ -1,4 +1,4 @@
-import type { GrantRow } from "@/lib/billing-api";
+import type { FreezeMode, GrantRow } from "@/lib/billing-api";
 import { holdsPermission } from "@/lib/permissions";
 import { USER_KEYS, type OfferedAction } from "./users";
 import { toEnglishDigits } from "@/util/helper";
@@ -11,15 +11,17 @@ export const GRANT_KEYS = USER_KEYS.grant;
  * `POST …/users/:userId/grants/:grantId/<route>` (`billing/contract.reseller-grants.md`):
  * freeze (F-311-h), days (-i, -z), traffic (-j), reset (-k), gift (-l),
  * speed (-p), devices (-q), the `/sub` link (-n), renew (-d), delete (-m),
- * and compensate (KS-1-c): days or GB within the tenant's cap.
+ * and compensate (KS-1-c): days or GB within the tenant's cap; a frozen
+ * Grant's mode changed in place (F-0401-d, the one `PUT`).
  * Issue (-o) is the user's, not a Grant's: {@link issueBody}.
  */
-export const GRANT_ACTIONS = ["freeze", "unfreeze", "compensate", "days", "traffic", "reset", "gift", "speed", "devices", "rotate", "renew", "delete"] as const;
+export const GRANT_ACTIONS = ["freeze", "unfreeze", "freezeMode", "compensate", "days", "traffic", "reset", "gift", "speed", "devices", "rotate", "renew", "delete"] as const;
 export type GrantAction = (typeof GRANT_ACTIONS)[number];
 
 export const GRANT_ACTION_ROUTES: Record<GrantAction, string> = {
   freeze: "freeze",
   unfreeze: "unfreeze",
+  freezeMode: "freeze-mode",
   compensate: "compensate",
   days: "duration",
   traffic: "traffic",
@@ -31,6 +33,15 @@ export const GRANT_ACTION_ROUTES: Record<GrantAction, string> = {
   renew: "renew",
   delete: "delete",
 };
+
+/** Every act is a `POST` but the mode of a frozen Grant, which sets one field in place. */
+export const GRANT_ACTION_METHODS: Record<GrantAction, "POST" | "PUT"> = Object.fromEntries(
+  GRANT_ACTIONS.map((a) => [a, a === "freezeMode" ? "PUT" : "POST"]),
+) as Record<GrantAction, "POST" | "PUT">;
+
+/** What an admin's freeze may be (F-0401-d): `hard` only an admin lifts, `soft` the user may too. `self` is the user's own act. */
+export const ADMIN_FREEZE_MODES = ["hard", "soft"] as const satisfies readonly FreezeMode[];
+export type AdminFreezeMode = (typeof ADMIN_FREEZE_MODES)[number];
 
 /** The actions whose schema requires a `reason`; the others take one optionally. */
 export const REASON_REQUIRED = ["compensate", "days", "traffic", "reset", "gift", "speed", "devices", "delete"] as const satisfies readonly GrantAction[];
@@ -44,13 +55,15 @@ export interface GrantActionDraft {
   days: string;
   /** A freeze's last day, `YYYY-MM-DD` in the admin's own time; empty = until unfrozen. */
   until: string;
+  /** Who may lift a freeze, or the mode a frozen Grant moves to; `hard` until the admin picks. */
+  freezeMode: AdminFreezeMode;
   /** A delete's refund, `null` until the admin answers it (user, 2026-09-26). */
   refund: boolean | null;
   /** Minted once per opened form: a double click renews or issues once. */
   requestId: string;
 }
 
-export const emptyDraft = (): GrantActionDraft => ({ reason: "", amount: "", days: "", until: "", refund: null, requestId: crypto.randomUUID() });
+export const emptyDraft = (): GrantActionDraft => ({ reason: "", amount: "", days: "", until: "", freezeMode: "hard", refund: null, requestId: crypto.randomUUID() });
 
 const MAX_REASON = 500;
 const MAX_GB = 100_000;
@@ -100,10 +113,14 @@ export function grantActionBody(action: GrantAction, d: GrantActionDraft, now: D
 
   switch (action) {
     case "freeze": {
-      if (d.until === "") return why;
+      // Always named: absent is billing's `hard`, and the admin's pick is what is sent.
+      const mode = { mode: d.freezeMode };
+      if (d.until === "") return { ...mode, ...why };
       const until = dayStart(d.until);
-      return until && until.getTime() > now.getTime() ? { until: until.toISOString(), ...why } : null;
+      return until && until.getTime() > now.getTime() ? { ...mode, until: until.toISOString(), ...why } : null;
     }
+    case "freezeMode":
+      return { mode: d.freezeMode, ...why };
     case "unfreeze":
     case "rotate":
     case "reset":
@@ -168,15 +185,17 @@ export function issueBody(variantId: string, requestId: string, rawReason: strin
  * `grant_not_renewable` or `grant_not_active` — and the link is reset in
  * any state (its contract: "status is not a gate"). Traffic and its reset
  * move a limited prepaid bag, a gift a metered one; a permanent Grant has no
- * end to move. Anything subtler (a quota-stopped Grant is not frozen) is
- * billing's to refuse, with its sentence.
+ * end to move. A frozen Grant's mode changes in place, and only a frozen
+ * one's: a quota-stopped Grant is `suspended` too, but billing's `frozen`
+ * says it is not. Anything subtler is billing's to refuse, with its sentence.
  */
-export function grantActionsOf(row: Pick<GrantRow, "status" | "endsAt" | "billingMode" | "trafficUnlimited">): GrantAction[] {
+export function grantActionsOf(row: Pick<GrantRow, "status" | "endsAt" | "billingMode" | "trafficUnlimited" | "frozen">): GrantAction[] {
   if (row.status !== "active" && row.status !== "suspended") return ["rotate"];
   const prepaidBag = row.billingMode === "prepaid" && !row.trafficUnlimited;
   const metered = row.billingMode === "metered" && !row.trafficUnlimited;
   const offered: (GrantAction | false)[] = [
     row.status === "active" ? "freeze" : "unfreeze",
+    row.frozen && "freezeMode",
     // Days onto an end, or GB onto a bag (KS-1-c): billing refuses the kind this Grant has not.
     (row.endsAt !== null || prepaidBag || metered) && "compensate",
     row.endsAt !== null && "days",

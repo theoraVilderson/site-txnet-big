@@ -511,7 +511,6 @@
   "site-pwa/src/app/(panel)/my-resellers/[id]/_components/SupportAccessCard.tsx": 12,
   "site-pwa/src/app/(panel)/my-resellers/[id]/bot/_components/ResellerBotView.tsx": 14,
   "site-pwa/src/app/(panel)/my-resellers/[id]/domains/_components/ResellerDomainsView.tsx": 13,
-  "site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/GrantActions.tsx": 13,
   "site-pwa/src/app/(panel)/my-resellers/[id]/users/[userId]/_components/UserServicesView.tsx": 16,
   "site-pwa/src/app/(panel)/my-resellers/[id]/users/_components/BulkByFilter.tsx": 18,
   "site-pwa/src/app/(panel)/my-resellers/[id]/users/_components/FindByLink.tsx": 15,

@@ -1,6 +1,6 @@
 // A reseller's users' Grants, limits, revenue and bulk jobs, scoped by tenant id (F-311-v, F-019-r).
 import { type Paged, call } from "./client";
-import type { ConfigActionRefusal, GrantRow, GrantScope, GrantStatus, GrantUsage, GrantsPage, UserConfigRow } from "./grants";
+import type { ConfigActionRefusal, FreezeMode, GrantRow, GrantScope, GrantStatus, GrantUsage, GrantsPage, UserConfigRow } from "./grants";
 
 /**
  * What a reseller's admin may take on a user's config (F-311-g): billing's
@@ -42,9 +42,9 @@ export interface ResellerUserGrantsApi {
    * An admin's act on one Grant (F-311-w): `route` is the action's segment
    * under `…/grants/:grantId/` and `body` exactly what its schema takes —
    * both from `my-resellers/_lib/grant-actions.ts`, which the spec holds to
-   * the controller.
+   * the controller. `method` is `GRANT_ACTION_METHODS`' — `PUT` for a freeze's mode alone.
    */
-  grantAction(grantId: string, route: string, body: Record<string, unknown>): Promise<GrantActionResult>;
+  grantAction(grantId: string, route: string, body: Record<string, unknown>, method?: "POST" | "PUT"): Promise<GrantActionResult>;
   /** An admin issues this user a service by hand (F-311-o). */
   issue(body: Record<string, unknown>): Promise<GrantIssued>;
   /** Every audited admin act on this Grant and its configs, newest first (F-311-r). */
@@ -79,6 +79,8 @@ export type GrantHistoryPage = Paged<GrantHistoryRow> & { grantId: string };
 export interface GrantActionResult {
   grantId: string;
   configsDisabled?: number;
+  /** Who may lift it now — a freeze's and a mode change's (F-0401-d). */
+  freezeMode?: FreezeMode;
   configsRestored?: number;
   endsAtAfter?: string | null;
   purchasedBytesAfter?: string;
@@ -130,7 +132,7 @@ export function resellerUserGrantsApi(tenantId: string, userId: string): Reselle
         method: "POST",
         body: JSON.stringify(body),
       }),
-    grantAction: (grantId, route, body) => call<GrantActionResult>(`${grant(grantId)}/${route}`, { method: "POST", body: JSON.stringify(body) }),
+    grantAction: (grantId, route, body, method = "POST") => call<GrantActionResult>(`${grant(grantId)}/${route}`, { method, body: JSON.stringify(body) }),
     issue: (body) => call<GrantIssued>(`${at}/grants`, { method: "POST", body: JSON.stringify(body) }),
     history: (grantId, page, pageSize) =>
       call<GrantHistoryPage>(`${grant(grantId)}/history?${new URLSearchParams({ page: String(page), pageSize: String(pageSize) })}`, { method: "GET" }),
@@ -175,6 +177,15 @@ export interface CompensationCap {
   windowDays: number;
 }
 
+/** A tenant's freeze switches (F-0401-b): whether its users may freeze their own, and whether that stops the clock. */
+export interface FreezeSettings {
+  selfFreezeEnabled: boolean;
+  selfFreezeStopsClock: boolean;
+}
+
+/** The tenant's switches as billing answers them: in effect, and the platform's pair beside them. */
+export type TenantFreezeSettings = FreezeSettings & { platformDefault: FreezeSettings };
+
 /**
  * How many open pay-as-you-go services a user may hold (F-118-ap,
  * `entitlement/contract.limits.md`): the tenant's default and one user's own
@@ -196,6 +207,11 @@ export function grantLimitsApi(tenantId: string) {
     /** Set with `grant.assign` only; `null` goes back to the platform's default. */
     setCompensation: (cap: { days: number; gb: number } | null) =>
       call<CompensationCap>(`${at}/compensation-cap`, { method: "PUT", body: JSON.stringify({ cap }) }),
+    /** The freeze switches (F-0401-b), on the same door as the limit; `platformDefault` is what applies with none set. */
+    freezeSettings: () => call<TenantFreezeSettings>(`${at}/freeze-settings`, { method: "GET" }),
+    /** Both, always: billing's schema takes nothing less. */
+    setFreezeSettings: (settings: FreezeSettings) =>
+      call<TenantFreezeSettings>(`${at}/freeze-settings`, { method: "PUT", body: JSON.stringify(settings) }),
   };
 }
 

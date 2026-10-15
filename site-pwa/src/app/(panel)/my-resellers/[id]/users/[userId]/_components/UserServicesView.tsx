@@ -22,7 +22,8 @@ import { UserGrantLimitCard } from "../../../../_components/GrantLimitCards";
 import { ConsentNeeded, PlatformAccessBanner } from "../../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../../_lib/support-access";
 import { AdminConfigs } from "./AdminConfigs";
-import { GrantActions, IssueGrant } from "./GrantActions";
+import { GrantActions } from "./GrantActions";
+import { IssueGrant } from "./IssueGrant";
 import { MayGrantProvider } from "./grant-keys-context";
 import { grantKeyHeld, type GrantKey } from "../../../../_lib/grant-actions";
 import { GrantHistory } from "./GrantHistory";
@@ -257,6 +258,8 @@ function AdminGrantCard({
       <p className="mt-1 text-xs text-text-secondary">
         {row.endsAt ? t("common", S.ends, { date: formatInstant(row.endsAt, lang, { withTime: false }) ?? "" }) : t("common", S.permanent)}
       </p>
+      {/* Who may lift it (F-0401-f): the user is told the same in their notice. */}
+      {row.frozen && row.freezeMode && <p className="mt-1 text-xs font-bold text-gold">{t("common", K.grant.frozenAs[row.freezeMode])}</p>}
       <div className="mt-3">
         <UsageMeter row={row} live={false} warn={false} />
       </div>

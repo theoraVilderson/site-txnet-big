@@ -6,6 +6,7 @@ import type { GrantRow } from "@/lib/billing-api";
 import { resellerUserGrantsPath } from "@/lib/billing-api";
 import {
   GRANT_ACTIONS,
+  GRANT_ACTION_METHODS,
   GRANT_ACTION_ROUTES,
   CONFIG_ACTION_KEY,
   GRANT_ACTION_KEY,
@@ -36,6 +37,7 @@ import {
  *    the admin as English, read from the controller's own map.
  */
 const REPO = join(__dirname, "../../../../..");
+const FREEZE_CONTROLLER = source("txnet-backend/billing-service/src/app/payment/gift/reseller-grant-freeze.controller.ts");
 const CONTROLLER = source("txnet-backend/billing-service/src/app/payment/gift/reseller-user-grants.controller.ts");
 const SPEED = source("txnet-backend/billing-service/src/app/traffic/grant-speed.ts");
 
@@ -71,7 +73,16 @@ const row = (over: Partial<GrantRow>): GrantRow => ({
 
 describe("the routes the sheet posts to", () => {
   it("are the ones the controller serves, under the path's reseller and user", () => {
-    for (const action of GRANT_ACTIONS) expect(CONTROLLER, action).toContain(`@Post('grants/:grantId/${GRANT_ACTION_ROUTES[action]}')`);
+    // A freeze's three acts are their own controller's, under `…/grants/:grantId` (F-0401-d).
+    const FREEZE = ["freeze", "unfreeze", "freezeMode"] as const;
+    for (const action of GRANT_ACTIONS.filter((a) => !(FREEZE as readonly string[]).includes(a))) {
+      expect(CONTROLLER, action).toContain(`@Post('grants/:grantId/${GRANT_ACTION_ROUTES[action]}')`);
+    }
+    expect(FREEZE_CONTROLLER).toContain("@Controller('billing/tenants/:tenantId/users/:userId/grants/:grantId')");
+    for (const action of FREEZE) {
+      const verb = GRANT_ACTION_METHODS[action] === "PUT" ? "Put" : "Post";
+      expect(FREEZE_CONTROLLER, action).toContain(`@${verb}('${GRANT_ACTION_ROUTES[action]}')`);
+    }
     expect(CONTROLLER).toContain("@Post('grants')");
     expect(resellerUserGrantsPath("t-1", "u-1")).toBe("/tenants/t-1/users/u-1");
   });
@@ -93,7 +104,7 @@ describe("a body", () => {
   });
 
   it("freezes until a future day, or with no end", () => {
-    expect(grantActionBody("freeze", draft({}), NOW)).toEqual({});
+    expect(grantActionBody("freeze", draft({}), NOW)).toEqual({ mode: "hard" });
     const until = grantActionBody("freeze", draft({ until: "2026-10-05" }), NOW) as { until: string };
     expect(new Date(until.until).getTime()).toBeGreaterThan(NOW.getTime());
     expect(grantActionBody("freeze", draft({ until: "2026-09-01" }), NOW)).toBeNull();
