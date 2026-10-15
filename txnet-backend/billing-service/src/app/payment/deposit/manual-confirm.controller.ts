@@ -33,10 +33,12 @@ import {
   manualConfirmSchema,
   manualRejectSchema,
 } from './manual-confirm.schema';
-import { PAYMENT_CONFIRM_MANUAL } from './manual-confirm.permission';
 import { ManualConfirmRefused } from './manual-confirm.refusals';
 import { ManualActor, ManualConfirmService } from './manual-confirm.service';
 
+
+/** The permission (F-092-z, ADR-0044 decision 6). SuperAdmin holds it as `*`; a staff group gives it. */
+export const PAYMENT_CONFIRM_MANUAL = 'payment.confirm_manual';
 
 /** The first door — not the boundary, which is `ManualConfirmService`'s scope rule. */
 @Injectable()

@@ -17,10 +17,8 @@ import { RECEIPT_POLICY, checkProof, receiptPath } from '../manual/transfer-proo
 import { tellReviewers, type ProofToReview } from '../manual/transfer-reviewers';
 import { transferRowsOf, type TransferRows } from '../manual/transfer-rows';
 import { announceOpenPayment } from './open-payment';
+import { PROOF_OBJECT_DRIVER, PROOF_VIRUS_SCANNER } from './proof-storage.tokens';
 
-/** The DI tokens of the receipt's storage and scanner (`deposit-proof.module.ts`). */
-export const PROOF_OBJECT_DRIVER = Symbol('PROOF_OBJECT_DRIVER');
-export const PROOF_VIRUS_SCANNER = Symbol('PROOF_VIRUS_SCANNER');
 
 export type ProofRejection =
   | 'transfer_not_found'

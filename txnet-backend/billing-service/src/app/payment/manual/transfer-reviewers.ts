@@ -1,7 +1,7 @@
 import { Prisma, UserStatus } from '@prisma/client';
 import { OutboxEventType, findKeyHolders } from '@txnet-backend/shared-core';
 
-import { PAYMENT_CONFIRM_MANUAL } from '../deposit/manual-confirm.permission';
+import { PAYMENT_CONFIRM_MANUAL } from '../deposit/manual-confirm.controller';
 
 /** What a reviewer is told of a proof: which payment, and the amount it should show. */
 export type ProofToReview = { ownerTenantId: string; paymentId: string; expectedAmountMinor: bigint; decimals: number; currencyCode: string };

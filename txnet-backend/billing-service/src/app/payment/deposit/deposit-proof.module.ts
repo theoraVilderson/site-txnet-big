@@ -6,7 +6,8 @@ import { objectDriverFromEnv, scannerFromEnv } from '@txnet-backend/shared-core'
 import type { EnvConfig } from '../../config/env.validation';
 import { RECEIPT_POLICY } from '../manual/transfer-proof';
 import { DepositProofController } from './deposit-proof.controller';
-import { DepositProofService, PROOF_OBJECT_DRIVER, PROOF_VIRUS_SCANNER } from './deposit-proof.service';
+import { DepositProofService } from './deposit-proof.service';
+import { PROOF_OBJECT_DRIVER, PROOF_VIRUS_SCANNER } from './proof-storage.tokens';
 
 type Config = ConfigService<EnvConfig, true>;
 

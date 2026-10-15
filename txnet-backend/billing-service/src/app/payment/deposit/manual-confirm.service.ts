@@ -12,7 +12,7 @@ import { WITH_PROOF, transferViewOf, type TransferView } from '../manual/transfe
 import { readReceipt, type StoredReceipt } from '../manual/transfer-receipt';
 import { returnProof } from '../manual/transfer-return';
 import { payerReference } from '../manual/transfer-rows';
-import { PROOF_OBJECT_DRIVER } from './deposit-proof.service';
+import { PROOF_OBJECT_DRIVER } from './proof-storage.tokens';
 import { ManualConfirmRefused } from './manual-confirm.refusals';
 import { attachAuthority } from './payment-callback-url';
 
