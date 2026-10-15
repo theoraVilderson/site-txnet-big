@@ -7,14 +7,15 @@ import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { LocaleService } from '../locale/locale.service';
 import { ChatAccess } from '../session/chat-access';
+import { freezeRefusalOf, frozenNoteOf, ownFreezeOf } from './own-freeze';
 import { ACTIONS, say, view } from './views';
 
 /** Every entitlement status in the chat's words; the spec holds it to the Prisma enum. */
 export const SERVICE_STATUS_KEYS: Record<GrantStatus, BotKey> = BotKeys.services.status;
 
-/** A service's own buttons carry its id, so they need no conversation state: `svc:<kind>:<id>`, 42 bytes. */
+/** A service's own buttons carry its id, so they need no conversation state: `svc:<kind>:<id>`, at most 43 bytes. */
 export const SERVICE_ACTION_PREFIX = 'svc:';
-const KIND = { open: 'o' } as const;
+const KIND = { open: 'o', freezeAsk: 'fq', freeze: 'fy', unfreezeAsk: 'uq', unfreeze: 'uy' } as const;
 type Kind = keyof typeof KIND;
 const KIND_OF: Record<string, Kind> = Object.fromEntries(Object.entries(KIND).map(([k, v]) => [v, k as Kind]));
 
@@ -33,6 +34,13 @@ const CATALOG_PREFIX = 'catalog.';
 
 const back: BotAction = { id: ACTIONS.services, label: { key: BotKeys.action.servicesBack } };
 
+/** The service's screen's button for what it offers (F-0401-g), and the question's yes. */
+const OFFER = {
+  freeze: { ask: 'freezeAsk', act: 'freeze', label: BotKeys.action.serviceFreeze, yes: BotKeys.action.serviceFreezeYes, question: BotKeys.services.freezeAsk },
+  unfreeze: { ask: 'unfreezeAsk', act: 'unfreeze', label: BotKeys.action.serviceUnfreeze, yes: BotKeys.action.serviceUnfreezeYes, question: BotKeys.services.unfreezeAsk },
+} as const;
+type Offer = keyof typeof OFFER;
+
 /**
  * My services in the chat (F-307-y): the panel's own `GET /api/billing/gift/grants`,
  * through the gate, so the chat names the same services in the same state as
@@ -41,7 +49,9 @@ const back: BotAction = { id: ACTIONS.services, label: { key: BotKeys.action.ser
  * List, then a service's screen: what it is called, its status, its traffic
  * and its time. Every button names its service, so a tap on an old screen
  * still means what it says; each answer ends the conversation. What may be
- * done to a service from here is added by the rows that ride this screen.
+ * done to a service from here is added by the rows that ride this screen:
+ * the user's own freeze and unfreeze (F-0401-g, `own-freeze.ts`), each asked
+ * first, the screen read again after billing answers.
  */
 @Injectable()
 export class ServicesFlow {
@@ -78,20 +88,55 @@ export class ServicesFlow {
   /** A service's own button. An unknown kind opens the list. */
   async tap(ctx: ChatContext, actionId: string): Promise<FlowResult> {
     const [kindCode, id] = actionId.slice(SERVICE_ACTION_PREFIX.length).split(':');
-    if (!KIND_OF[kindCode] || !id) return this.start(ctx);
+    const kind = KIND_OF[kindCode];
+    if (!kind || !id) return this.start(ctx);
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
+    if (kind === 'freezeAsk') return this.ask(call, id, 'freeze');
+    if (kind === 'unfreezeAsk') return this.ask(call, id, 'unfreeze');
+    if (kind === 'freeze' || kind === 'unfreeze') return this.act(call, id, kind);
     return this.card(call, id);
   }
 
-  /** One service as billing now lists it. */
+  /** One service as billing now lists it, with what it offers. */
   private async card(call: BillingCallContext, id: string): Promise<FlowResult> {
+    const found = await this.find(call, id);
+    if ('view' in found) return found;
+    const s = found.service;
+    const values = { name: this.name(s, call.lang), status: statusOf(s), traffic: trafficOf(s), time: this.timeOf(s), frozen: frozenNoteOf(s, this.now()) };
+    const offer = ownFreezeOf(s);
+    const buttons: BotAction[][] = offer ? [[{ id: serviceAction(OFFER[offer].ask, s.id), label: { key: OFFER[offer].label } }], [back]] : [[back]];
+    return { view: view('services.card', { key: BotKeys.services.card, values }, buttons), nextState: null };
+  }
+
+  /** A freeze stops every device on the service, so both ask first (panel rule 4); No sends nothing. */
+  private async ask(call: BillingCallContext, id: string, offer: Offer): Promise<FlowResult> {
+    const found = await this.find(call, id);
+    if ('view' in found) return found;
+    const o = OFFER[offer];
+    return {
+      view: view('services.ask', { key: o.question, values: { name: this.name(found.service, call.lang) } }, [
+        [{ id: serviceAction(o.act, id), label: { key: o.yes } }],
+        [{ id: serviceAction('open', id), label: { key: BotKeys.action.cancel } }],
+      ]),
+      nextState: null,
+    };
+  }
+
+  /** Billing decides; nothing is patched from its answer — the screen is read again (panel rule 5). */
+  private async act(call: BillingCallContext, id: string, offer: Offer): Promise<FlowResult> {
+    const done = await (offer === 'freeze' ? this.billing.freezeOwnGrant(id, call) : this.billing.unfreezeOwnGrant(id, call));
+    if (done.ok) return this.card(call, id);
+    const toService: BotAction = { id: serviceAction('open', id), label: { key: BotKeys.action.back } };
+    return { view: view('services.refused', freezeRefusalOf(done, this.now()), [[toService]]), nextState: null };
+  }
+
+  /** The row billing now lists under this id, or the screen that says why there is none. */
+  private async find(call: BillingCallContext, id: string): Promise<{ service: MyService } | FlowResult> {
     const read = await this.billing.myServices(CARD_READ_MAX, call);
     if (!read.ok || !read.data) return { view: say('services.failed', { raw: read.msg }), nextState: null };
-    const s = read.data.rows.find((x) => x.id === id);
-    if (!s) return { view: view('services.gone', { key: BotKeys.services.gone }, [[back]]), nextState: null };
-    const values = { name: this.name(s, call.lang), status: statusOf(s), traffic: trafficOf(s), time: this.timeOf(s) };
-    return { view: view('services.card', { key: BotKeys.services.card, values }, [[back]]), nextState: null };
+    const service = read.data.rows.find((x) => x.id === id);
+    return service ? { service } : { view: view('services.gone', { key: BotKeys.services.gone }, [[back]]), nextState: null };
   }
 
   /**

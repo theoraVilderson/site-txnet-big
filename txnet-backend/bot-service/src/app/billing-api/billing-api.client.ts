@@ -180,6 +180,16 @@ export class BillingApiClient {
     return this.call('GET', `${GRANTS_PATH}?pageSize=${pageSize}`, undefined, ctx);
   }
 
+  /** The user freezes their own metered service (F-0401-g): billing's own route, which decides (`contract.gift.md`). */
+  freezeOwnGrant(grantId: string, ctx: BillingCallContext): Promise<ApiResult<{ grantId: string }>> {
+    return this.call('POST', `${GRANTS_PATH}/${encodeURIComponent(grantId)}/freeze`, undefined, ctx);
+  }
+
+  /** And lifts a freeze billing says is theirs to lift (`userMayUnfreeze`). */
+  unfreezeOwnGrant(grantId: string, ctx: BillingCallContext): Promise<ApiResult<{ grantId: string }>> {
+    return this.call('POST', `${GRANTS_PATH}/${encodeURIComponent(grantId)}/unfreeze`, undefined, ctx);
+  }
+
   /** A transfer a start answered, re-read with where it stands (F-803-d) — for a payer coming back to it. */
   transfer(paymentId: string, ctx: BillingCallContext): Promise<ApiResult<TransferStatus>> {
     return this.call('GET', `${depositPath(paymentId)}/transfer`, undefined, ctx);

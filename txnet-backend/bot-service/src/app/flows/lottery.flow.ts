@@ -6,6 +6,7 @@ import type { ChatLottery, ChatLotteryResult } from '../billing-api/engagement.t
 import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { ChatAccess } from '../session/chat-access';
+import { spanUntil } from './span';
 import { ACTIONS, say, view } from './views';
 
 /** Billing's `ExclusionReason` (the close, F-707-k); the spec reads the union from the service. */
@@ -112,7 +113,7 @@ export class LotteryFlow {
             title: raw(l.title),
             description: raw(l.description),
             status: this.status(l, true),
-            closes: l.status === 'published' && l.open ? { key: BotKeys.lotteries.closesIn, values: { left: this.left(l.closesAt) } } : raw(''),
+            closes: l.status === 'published' && l.open ? { key: BotKeys.lotteries.closesIn, values: { left: spanUntil(new Date(l.closesAt).getTime(), this.now().getTime(), BotKeys.lotteries.left) } } : raw(''),
             // A prize's name is the tenant's data, shown as it is; `×n` is how many win it.
             prizes: raw(l.prizes.map((p) => `${p.rank}. ${p.label} ×${p.winnersCount}`).join('\n')),
             entry: entry.text,
@@ -146,17 +147,6 @@ export class LotteryFlow {
       return l.entry ? { text: { key: BotKeys.lotteries.entry.joined }, offer: 'leave' } : { text: { key: BotKeys.lotteries.entry.canJoin }, offer: 'join' };
     }
     return { text: raw(''), offer: null };
-  }
-
-  /** Time to the close, as a span: a span needs no time zone. */
-  private left(closesAt: string): BotText {
-    const minutes = Math.max(0, Math.floor((new Date(closesAt).getTime() - this.now().getTime()) / 60_000));
-    const d = Math.floor(minutes / 1440);
-    const h = Math.floor((minutes % 1440) / 60);
-    const m = minutes % 60;
-    if (d > 0) return { key: BotKeys.lotteries.left.days, values: { d, h } };
-    if (h > 0) return { key: BotKeys.lotteries.left.hours, values: { h, m } };
-    return { key: BotKeys.lotteries.left.minutes, values: { m } };
   }
 
   private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {

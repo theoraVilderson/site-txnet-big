@@ -177,7 +177,7 @@ Its consumer is `panel-web/contract.my-services.md`.
 | Each act is one `admin_audit_log` row, `grant_self_freeze` / `grant_self_unfreeze`, the **user** its actor, before and after (with `freezeMode`); **no notice** — only `entitlement.grant.freeze_changed` to `user:` (realtime `contract.live-events.md`), in the act's transaction | the history says who froze it; the user did it, so a message would tell them what they just pressed. The page re-reads on the event (C-14) |
 | Bucket `CONFIG_ACTION`, as naming a service; the `subscriptionLink` capability, as the list | one budget for the buyer's writes on their own service |
 
-**Not covered:** the panel's buttons (F-0401-e) and the bot's (F-0401-g).
+Consumers: the panel's buttons (F-0401-e, panel-web `contract.own-freeze.md`) and the bot's (F-0401-g, bot-app `contract.services.md`).
 
 ## A metered Grant's billing period (built — F-118-ai)
 

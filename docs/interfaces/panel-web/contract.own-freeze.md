@@ -45,6 +45,6 @@ daily cap named with the button off; `self_freeze_off` in billing's sentence;
 ## Not covered
 
 How long a freeze lasted, and whether its clock stopped, are not shown — the
-list answers neither. The bot's own freeze is F-0401-g. A freeze for a payment
+list answers neither. The bot's own freeze is bot-app [contract.services.md](../bot-app/contract.services.md) (F-0401-g). A freeze for a payment
 dispute (`payment_dispute`, CB-1-f) is named as support's until
 [contract.disputes.md](contract.disputes.md) U4 is built.

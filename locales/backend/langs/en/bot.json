@@ -76,7 +76,11 @@
     "transferBack": "Back to the receipt",
     "transferPaid": "✅ I have paid",
     "services": "🛡 My services",
-    "servicesBack": "↩️ My services"
+    "servicesBack": "↩️ My services",
+    "serviceFreeze": "🧊 Freeze this service",
+    "serviceUnfreeze": "▶️ Unfreeze",
+    "serviceFreezeYes": "Yes, freeze it",
+    "serviceUnfreezeYes": "Yes, unfreeze it"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -483,7 +487,7 @@
     "more": "\nYou have {{n}} more — the app shows them all.",
     "none": "You have no services yet.",
     "item": "{{name}} · {{status}}",
-    "card": "🛡 {{name}}\nStatus: {{status}}\n{{traffic}}\n{{time}}",
+    "card": "🛡 {{name}}\nStatus: {{status}}\n{{traffic}}\n{{time}}{{frozen}}",
     "unnamed": "Service",
     "gone": "This service is no longer in your list.",
     "status": {
@@ -506,6 +510,20 @@
       "today": "Less than a day left",
       "ended": "Its time is over",
       "permanent": "No end date"
-    }
+    },
+    "frozenBy": {
+      "self": "\n\n🧊 You froze this service; unfreeze it whenever you like.{{until}}",
+      "soft": "\n\n🧊 Support froze this service, and you may unfreeze it yourself.{{until}}",
+      "hard": "\n\n🧊 Support froze this service, and only support can lift it.{{until}}"
+    },
+    "frozenUntil": " The freeze lifts by itself in {{left}}.",
+    "left": {
+      "days": "{{d}} days and {{h}} hours",
+      "hours": "{{h}} hours and {{m}} minutes",
+      "minutes": "{{m}} minutes"
+    },
+    "freezeAsk": "Freeze «{{name}}»? No device connects with it until you unfreeze it.",
+    "unfreezeAsk": "Unfreeze «{{name}}»? Its configs work again.",
+    "freezeLimited": "A service can be frozen at most {{limit}} times in 24 hours. You can freeze this one again in {{left}}."
   }
 }
