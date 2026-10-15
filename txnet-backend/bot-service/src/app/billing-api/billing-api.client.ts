@@ -171,6 +171,8 @@ export class BillingApiClient {
   private readonly internalBaseUrl: string;
   private readonly serviceToken: string;
   private readonly timeoutMs: number;
+  /** The panel the chat opens (`PANEL_BASE_URL`), or none — where the bank sends a chat's payer back to. */
+  private readonly panelOrigin: string | null;
 
   constructor(
     config: ConfigService,
@@ -180,6 +182,7 @@ export class BillingApiClient {
     this.internalBaseUrl = (config.get<string>('BILLING_INTERNAL_BASE_URL') ?? '').replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 8000);
+    this.panelOrigin = originOf(config.get<string>('PANEL_BASE_URL'));
   }
 
   get isConfigured(): boolean {
@@ -194,8 +197,16 @@ export class BillingApiClient {
     return this.call('POST', '/api/billing/deposit/quote', body, ctx);
   }
 
+  /**
+   * A browser's start names its panel by `Origin`; a chat has none, so the
+   * callback's result page landed on the API host — a 404 after a payment that
+   * went through (2026-10-15). The chat names the panel it already opens;
+   * billing keeps it only if it trusts it (`returnOriginOf`).
+   */
   start(body: DepositBody, ctx: BillingCallContext): Promise<ApiResult<DepositStarted>> {
-    return this.call('POST', '/api/billing/deposit/start', body, ctx);
+    if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
+    const auth = { ...this.authOf(ctx), ...(this.panelOrigin ? { origin: this.panelOrigin } : {}) };
+    return this.send('POST', `${this.baseUrl}/api/billing/deposit/start`, body, { lang: ctx.lang, auth });
   }
 
   /**
@@ -377,3 +388,12 @@ async function readImage(r: Response): Promise<ApiResult<OutgoingFile>> {
 const depositPath = (paymentId: string) => `/api/billing/deposit/${encodeURIComponent(paymentId)}`;
 const MANUAL_PATH = '/api/billing/payments/manual';
 const manualPath = (paymentId: string) => `${MANUAL_PATH}/${encodeURIComponent(paymentId)}`;
+
+/** `https://panel.example/app` -> `https://panel.example`; unset or unreadable is none. */
+function originOf(url: string | undefined): string | null {
+  try {
+    return url ? new URL(url).origin : null;
+  } catch {
+    return null;
+  }
+}
