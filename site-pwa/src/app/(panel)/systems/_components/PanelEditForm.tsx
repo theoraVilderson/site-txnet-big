@@ -9,7 +9,7 @@ import { addressChanged, panelEditFormOf, validatePanelEdit, type PanelEditForm 
 import { SYSTEMS_KEYS as K, resubmitOutcome } from "../_lib/systems";
 import { BAD, useSystemsError } from "./parts";
 import { PanelLoginFields } from "./PanelLoginFields";
-import { Alert, Button, Input } from "../../_components/kit";
+import { Alert, Button, Input, Toggle } from "../../_components/kit";
 
 /**
  * Every setting of one panel in one form (F-027-cb -> billing F-027-by), the
@@ -28,7 +28,7 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const push = panel.transport === "push";
-  const set = (field: keyof PanelEditForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [field]: e.target.value }));
+  const set = (field: Exclude<keyof PanelEditForm, "addressMayMove">) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [field]: e.target.value }));
   const error = (field: keyof PanelEditForm | "credentials") => (errors[field] ? errors[field] : undefined);
 
   const save = async () => {
@@ -80,6 +80,12 @@ export function PanelEditForm({ panel, onSaved }: { panel: SystemsPanel; onSaved
             <Field label={t("common", K.register.field.clientBaseUrl)} error={error("clientBaseUrl")} hint={t("common", K.register.field.clientBaseUrlHint)}>
               <Input dir="ltr" value={form.clientBaseUrl} maxLength={500} onChange={set("clientBaseUrl")} className="font-mono" />
             </Field>
+            <Toggle
+              checked={form.addressMayMove}
+              onChange={(addressMayMove) => setForm((f) => ({ ...f, addressMayMove }))}
+              label={t("common", K.edit.addressMayMove)}
+              hint={t("common", K.edit.addressMayMoveHint)}
+            />
           </>
         )}
         <Field label={t("common", K.register.field.ipAddress)} error={error("ipAddress")} hint={push ? t("common", K.edit.ipHint) : undefined}>

@@ -52,6 +52,8 @@ export interface SystemsPanel {
   ipAddress: string | null;
   apiBaseUrl: string | null;
   clientBaseUrl: string | null;
+  /** The CDN opt-out (F-027-fa): dialed wherever its name resolves, never halted `address_moved`. */
+  addressMayMove: boolean;
   /** Archived (F-027-bz): kept for its records, skipped by every loop. Null for a panel in service. */
   retiredAt: string | null;
   /** Deleted in one step while in groups (F-027-eg): leaving them, archived once empty. */
@@ -120,7 +122,16 @@ export interface SystemsDriftEvent {
   acknowledgedAt: string | null;
   acknowledgedByAdminId: string | null;
   note: string | null;
+  /** An `address_moved`'s addresses (F-027-ez): accepted at, and seen instead. Empty or null on any other type. */
+  knownAddresses: string[] | null;
+  seenAddresses: string[] | null;
 }
+
+/** What an `identity_lost` server is (billing `DRIFT_RESOLUTIONS`, rule 9b). */
+export type DriftResolution = "rebuilt" | "address_fixed";
+
+/** billing `acknowledgeDriftSchema`: a `resolution` only on `identity_lost`, where it is required. */
+export type AcknowledgeDriftBody = { note?: string; resolution?: DriftResolution };
 
 export type HoldReason =
   | "gigawords_missing"
@@ -155,6 +166,7 @@ export type PanelSettingsBody = Partial<{
   apiBaseUrl: string;
   clientBaseUrl: string | null;
   maxRequestsPerMinute: number;
+  addressMayMove: boolean;
 }>;
 
 export type UpdatedPanel = { id: string; reviewState: PanelReviewState; retest: boolean };
@@ -291,10 +303,10 @@ export const systemsCalls = {
   },
 
   /** The decision a halted panel waits for; its collection resumes on the next pass. */
-  async acknowledgeDrift(id: string, note?: string): Promise<SystemsDriftEvent> {
+  async acknowledgeDrift(id: string, body: AcknowledgeDriftBody): Promise<SystemsDriftEvent> {
     return call<SystemsDriftEvent>(`/systems/drift-events/${encodeURIComponent(id)}/acknowledge`, {
       method: "POST",
-      body: JSON.stringify(note === undefined ? {} : { note }),
+      body: JSON.stringify(body),
     });
   },
 

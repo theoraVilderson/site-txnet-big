@@ -3457,7 +3457,27 @@
         "foreign_claim": "Answers with another panel's users",
         "identity_lost": "Doesn't carry its identity marker",
         "address_moved": "Its address points to another server"
-      }
+      },
+      "story": {
+        "identity_lost": "The server at this panel's address no longer carries the hidden marker we placed on it. Either the panel was reinstalled (or its database replaced), or the address now points to a different server. Until you say which, nothing is read from it and no user is created on it.",
+        "address_moved": "The panel's name now points to addresses it was not accepted at — its DNS was changed, or someone took the domain. We stopped before sending its login there. If you moved the server yourself, trust the new address; if not, fix the DNS first."
+      },
+      "resolutionTitle": "What happened to this server?",
+      "resolution": {
+        "rebuilt": {
+          "label": "Same server, reinstalled",
+          "hint": "A new marker is placed on the next pass and every user is created on it again."
+        },
+        "address_fixed": {
+          "label": "The address is right again",
+          "hint": "Nothing is changed: the next pass looks for the same marker. If it is still missing, this is raised again."
+        }
+      },
+      "chooseResolution": "Choose what happened to the server first.",
+      "knownAddresses": "Accepted at",
+      "seenAddresses": "Points to now",
+      "trustAddress": "Trust the new address",
+      "trustHint": "Only if you moved the server yourself. The new addresses are trusted and the panel goes back to its connection test, usually within a minute."
     },
     "holds": {
       "title": "Holds queue",
@@ -3519,7 +3539,9 @@
       "group_has_members": "The group still has members. Remove or drain them first.",
       "group_in_use": "A variant still sells on this group. Move it to another group in the catalog first.",
       "inbound_assigned_elsewhere": "Another group already sells this inbound on this panel. Take it off that group's member first.",
-      "inbound_has_configs": "Buyers of another group still have configs on this inbound. Drain that group's member on this panel first, so they are moved."
+      "inbound_has_configs": "Buyers of another group still have configs on this inbound. Drain that group's member on this panel first, so they are moved.",
+      "resolution_required": "Choose what happened to the server before acknowledging.",
+      "resolution_not_for_event": "This event takes no choice. Reload the page and try again."
     },
     "resubmit": {
       "open": "New login",
@@ -3678,7 +3700,9 @@
       "saved": "Saved.",
       "savedRetest": "Saved. The new address is tested on the next pass; collection resumes once it passes.",
       "unchanged": "Nothing was changed.",
-      "invalidBudget": "Enter a whole number from 1 to 6000."
+      "invalidBudget": "Enter a whole number from 1 to 6000.",
+      "addressMayMove": "Address may move (behind a CDN)",
+      "addressMayMoveHint": "Turn on only if the panel sits behind a CDN whose addresses change. The panel is then not stopped when its name points elsewhere; its marker alone guards it, after the login has been sent."
     },
     "remove": {
       "action": "Delete panel",

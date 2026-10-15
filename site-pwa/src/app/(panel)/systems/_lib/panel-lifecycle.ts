@@ -25,6 +25,7 @@ export type PanelEditForm = {
   apiBaseUrl: string;
   clientBaseUrl: string;
   maxRequestsPerMinute: string;
+  addressMayMove: boolean;
   username: string;
   password: string;
   apiKey: string;
@@ -38,6 +39,7 @@ export function panelEditFormOf(panel: SystemsPanel): PanelEditForm {
     apiBaseUrl: panel.apiBaseUrl ?? "",
     clientBaseUrl: panel.clientBaseUrl ?? "",
     maxRequestsPerMinute: String(panel.budget.maxRequestsPerMinute),
+    addressMayMove: panel.addressMayMove,
     username: "",
     password: "",
     apiKey: "",
@@ -86,6 +88,8 @@ export function validatePanelEdit(form: PanelEditForm, panel: SystemsPanel): Pan
   if (!push && apiBaseUrl !== (panel.apiBaseUrl ?? "")) body.apiBaseUrl = apiBaseUrl;
   if (!push && (clientBaseUrl || null) !== panel.clientBaseUrl) body.clientBaseUrl = clientBaseUrl || null;
   if (budget !== panel.budget.maxRequestsPerMinute) body.maxRequestsPerMinute = budget;
+  // A setting, not an address: it re-tests nothing (billing rule 5b).
+  if (!push && form.addressMayMove !== panel.addressMayMove) body.addressMayMove = form.addressMayMove;
   if (Object.keys(body).length === 0 && credentials === null) return { ok: false, errors: { form: K.edit.unchanged } };
   return { ok: true, body, credentials };
 }

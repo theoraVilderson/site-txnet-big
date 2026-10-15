@@ -24,12 +24,10 @@ import {
   REFUSAL_KEYS,
   REVIEW_KEYS,
   SYSTEMS_KEYS,
-  canAcknowledge,
   canResubmit,
   canResubmitRadiusSecret,
   canResolveHold,
   emptyRegisterForm,
-  haltsCollection,
   radiusSecretMissing,
   refusedBecause,
   resubmitOutcome,
@@ -39,6 +37,7 @@ import {
   validateRegister,
   verdictOf,
 } from "./_lib/systems";
+import { canAcknowledge, haltsCollection } from "./_lib/drift-resolution";
 
 /**
  * The systems page (F-027-ad, ADR-0080). What breaks silently:
@@ -221,6 +220,7 @@ const panel = (review: Partial<SystemsPanel["review"]>): SystemsPanel => ({
   ipAddress: null,
   apiBaseUrl: "https://de-1.example.com",
   clientBaseUrl: null,
+  addressMayMove: false,
   retiredAt: null,
   removeRequestedAt: null,
   review: { reviewState: "pending", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, duplicateOf: null, ...review },
@@ -365,6 +365,8 @@ const drift = (overrides: Partial<SystemsDriftEvent>): SystemsDriftEvent => ({
   acknowledgedAt: null,
   acknowledgedByAdminId: null,
   note: null,
+  knownAddresses: null,
+  seenAddresses: null,
   ...overrides,
 });
 

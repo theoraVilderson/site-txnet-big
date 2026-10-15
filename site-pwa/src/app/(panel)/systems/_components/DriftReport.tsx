@@ -3,12 +3,21 @@
 import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { billingApi, type SystemsDriftEvent } from "@/lib/billing-api";
+import { billingApi, type DriftResolution, type SystemsDriftEvent } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
-import { DRIFT_EVENT_KEYS, SYSTEMS_KEYS as K, canAcknowledge, haltsCollection } from "../_lib/systems";
+import {
+  RESOLUTION_KEYS,
+  acknowledgeBodyOf,
+  addressMoveOf,
+  canAcknowledge,
+  driftStoryOf,
+  haltsCollection,
+  resolutionsOf,
+} from "../_lib/drift-resolution";
+import { DRIFT_EVENT_KEYS, SYSTEMS_KEYS as K } from "../_lib/systems";
 import { ListState, NoteForm, Section, StateFilter, useSystemsError } from "./parts";
 import { useCursorList } from "./useCursorList";
-import { Button } from "../../_components/kit";
+import { Button, RadioCards } from "../../_components/kit";
 
 const FILTERS = [
   { id: "open", label: K.filter.open },
@@ -58,12 +67,23 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
   const [formOpen, setFormOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [resolution, setResolution] = useState<DriftResolution | null>(null);
+  const story = driftStoryOf(event);
+  const move = addressMoveOf(event);
+  const choices = resolutionsOf(event);
+  // A move is acknowledged by trusting the new address (billing rule 9b); every other event is acknowledged as it is.
+  const submitLabel = move ? K.drift.trustAddress : K.drift.submit;
 
   const acknowledge = async (note: string | undefined) => {
+    const checked = acknowledgeBodyOf(event, note, resolution);
+    if (!checked.ok) {
+      setFailure(t("common", checked.error));
+      return;
+    }
     setBusy(true);
     setFailure(null);
     try {
-      await billingApi.acknowledgeDrift(event.id, note);
+      await billingApi.acknowledgeDrift(event.id, checked.body);
       setFormOpen(false);
       await onAcknowledged();
     } catch (e) {
@@ -111,6 +131,8 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
           {event.eventType === "foreign_claim" && haltsCollection(event) && (
             <span className="text-text-secondary">{t("common", K.drift.foreignHint)}</span>
           )}
+          {story && <span className="leading-5 text-text-primary">{t("common", story)}</span>}
+          {move && <AddressMove known={move.known} seen={move.seen} />}
           {event.note && <span className="text-text-secondary">{event.note}</span>}
         </div>
         {canAcknowledge(event) && !formOpen && (
@@ -119,7 +141,7 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
             size="sm"
             onClick={() => setFormOpen(true)}
           >
-            {t("common", K.drift.acknowledge)}
+            {t("common", move ? K.drift.trustAddress : K.drift.acknowledge)}
           </Button>
         )}
       </div>
@@ -130,15 +152,39 @@ function DriftItem({ event, onAcknowledged }: { event: SystemsDriftEvent; onAckn
       )}
       {formOpen && canAcknowledge(event) && (
         <NoteForm
-          title={t("common", K.drift.acknowledge)}
-          hint={t("common", K.drift.acknowledgeHint)}
-          submitLabel={t("common", K.drift.submit)}
+          title={t("common", move ? K.drift.trustAddress : K.drift.acknowledge)}
+          hint={t("common", move ? K.drift.trustHint : K.drift.acknowledgeHint)}
+          submitLabel={t("common", submitLabel)}
           required={false}
           busy={busy}
           onSubmit={(note) => void acknowledge(note)}
           onCancel={() => setFormOpen(false)}
-        />
+        >
+          {choices.length > 0 && (
+            <RadioCards<DriftResolution | "">
+              value={resolution ?? ""}
+              onChange={(v) => setResolution(v === "" ? null : v)}
+              ariaLabel={t("common", K.drift.resolutionTitle)}
+              options={choices.map((c) => ({ value: c, label: t("common", RESOLUTION_KEYS[c].label), description: t("common", RESOLUTION_KEYS[c].hint) }))}
+            />
+          )}
+        </NoteForm>
       )}
     </li>
+  );
+}
+
+/** An `address_moved`'s two lists (F-027-fb): what the panel was accepted at, and where its name points now. */
+function AddressMove({ known, seen }: { known: string[]; seen: string[] }) {
+  const { t } = useLocale();
+  return (
+    <span className="flex flex-col gap-0.5 text-text-secondary">
+      <span>
+        {t("common", K.drift.knownAddresses)}: <span dir="ltr" className="font-mono">{known.join(", ") || "—"}</span>
+      </span>
+      <span>
+        {t("common", K.drift.seenAddresses)}: <span dir="ltr" className="font-mono text-error">{seen.join(", ") || "—"}</span>
+      </span>
+    </span>
   );
 }

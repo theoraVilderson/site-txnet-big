@@ -24,6 +24,7 @@ const panel = (over: Partial<SystemsPanel> = {}, review: Partial<SystemsPanel["r
   ipAddress: null,
   apiBaseUrl: "https://de-1.example.com",
   clientBaseUrl: null,
+  addressMayMove: false,
   retiredAt: null,
   removeRequestedAt: null,
   review: { reviewState: "accepted", connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null, duplicateOf: null, ...review },

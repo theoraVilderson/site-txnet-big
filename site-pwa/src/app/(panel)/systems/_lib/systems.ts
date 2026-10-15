@@ -232,7 +232,9 @@ export type SystemsRefusal =
   | "group_in_use"
   // An inbound is the pool's or one group's (F-027-ch).
   | "inbound_assigned_elsewhere"
-  | "inbound_has_configs";
+  | "inbound_has_configs"
+  | "resolution_required"
+  | "resolution_not_for_event";
 
 export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   not_found: K.refusals.not_found,
@@ -261,6 +263,8 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   group_in_use: K.refusals.group_in_use,
   inbound_assigned_elsewhere: K.refusals.inbound_assigned_elsewhere,
   inbound_has_configs: K.refusals.inbound_has_configs,
+  resolution_required: K.refusals.resolution_required,
+  resolution_not_for_event: K.refusals.resolution_not_for_event,
 };
 
 /** The refusal's own sentence key, when billing named one this page knows; else the generic message applies. */
@@ -481,17 +485,7 @@ export function validateRadiusSecret(input: string): { ok: true; radiusSecret: s
     : { ok: false, error: K.register.invalid.radiusSecret };
 }
 
-// ── Drift and holds ───────────────────────────────────────────────────────────
-
-/** The collector's own test (`collect.Containment.Halted`, billing rule 8) — the page cannot disagree with the loop. */
-export function haltsCollection(event: SystemsDriftEvent): boolean {
-  return event.collectionHalted && event.acknowledgedAt === null;
-}
-
-/** Acknowledging happens once; who decided is never rewritten (billing rule 9). */
-export function canAcknowledge(event: SystemsDriftEvent): boolean {
-  return event.acknowledgedAt === null;
-}
+// ── Holds ───────────────────────────────────────────────────────────
 
 /** Release and write-off end a `pending` hold; a decided one is 409 `already_resolved`. */
 export function canResolveHold(hold: SystemsHold): boolean {

@@ -174,6 +174,7 @@ export function NoteForm({
   busy,
   onSubmit,
   onCancel,
+  children,
 }: {
   title: string;
   hint: string;
@@ -183,6 +184,8 @@ export function NoteForm({
   busy: boolean;
   onSubmit: (note: string | undefined) => void;
   onCancel: () => void;
+  /** A choice the decision takes beside its note (F-027-fb), above the note. */
+  children?: ReactNode;
 }) {
   const { t } = useLocale();
   const [note, setNote] = useState("");
@@ -206,6 +209,7 @@ export function NoteForm({
     >
       <p className={`text-sm font-bold ${tone === "error" ? "text-error" : "text-text-primary"}`}>{title}</p>
       <p className="text-xs leading-5 text-text-secondary">{hint}</p>
+      {children}
       <Field label={t("common", K.note.label)} error={error ? t("common", error) : undefined}>
         <Textarea
           value={note}

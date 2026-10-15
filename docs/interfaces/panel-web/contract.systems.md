@@ -62,6 +62,12 @@ The *why* is **ADR-0080**.
    *and* the panels, since the halt ends on the next pass. A 409 re-reads too.
    A `foreign_claim` names the other panel when billing does (`foreignPanel`,
    F-027-cf) and, while it halts, says to put the address right first.
+   **`identity_lost` and `address_moved` say what happened in plain words**
+   (F-027-fb, `_lib/drift-resolution.ts`, billing rule 9b). The first asks
+   which it is — reinstalled (`rebuilt`) or address right again
+   (`address_fixed`) — and is refused here without one; no other type ever
+   sends a `resolution`. The second lists the old and new addresses, and its
+   acknowledge is "trust the new address", said to re-test the panel.
 7. **Holds: release or write off, only while `pending`** (`canResolveHold`).
    A release answers `202` and the hold stays `pending` until the meter bills
    it — the row says "queued", never "released". A write-off requires a note
@@ -159,7 +165,9 @@ The *why* is **ADR-0080**.
    "Settings" on the card opens it on details and connection — name and
    region, addresses, request budget and login, grouped — beside the
    inbounds (rule 12), the test's answer (rule 3) and the health; a
-   push panel is asked only its NAS IP (billing `not_for_transport`).
+   push panel is asked only its NAS IP (billing `not_for_transport`). A
+   pull panel's "address may move (behind a CDN)" switch is `addressMayMove`
+   (F-027-fb, billing rule 5b), sent when changed, re-testing nothing.
    `validatePanelEdit` mirrors `updatePanelSchema` and sends **only what
    differs** — an untouched form is refused here — and a changed API or link
    address is warned about before the save (`addressChanged`): it re-tests
@@ -231,5 +239,6 @@ RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
 `systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `inboundChoices`, `sellsNobody`, `refusalSentence` named and plain.
 `systems/systems-guide.test.ts` — rules 16 and 18: `guideOf`, `panelStatusOf`, `attentionOf`; `memberChoiceOf` / `validateMemberChoice` ("same as the panel" as null, an own cap, own inbounds needing one, only what changed).
+`systems/drift-resolution.test.ts` — rules 6 and 13 (F-027-fb): the choices against billing's `DRIFT_RESOLUTIONS`, asked only of `identity_lost`, the move's addresses, `addressMayMove` sent only when changed.
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove` / `isLastToServe` / `canEvict`, `drainEarliestAt`, `waitOf`.
