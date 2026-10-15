@@ -1,6 +1,5 @@
 /**
- * Every rate-limit bucket this platform counts, declared once (F-077,
- * ADR-0036).
+ * Every rate-limit bucket this platform counts, declared once (F-077, ADR-0036).
  *
  * **What a bucket actually is.** The on-the-wire counter key is
  * `ratelimit:<tenantId>:<bucket>:<subject>`. `RedisKeys.rateLimit()` owns the
@@ -20,8 +19,7 @@
  * **A registry, not a builder.** There is no structure here to build: the
  * bucket is a name. What the registry buys is a compile error on a typo or a
  * duplicate, and one place to read the whole rate-limit surface of the
- * platform — which, before this, could only be assembled by grepping for a
- * decorator.
+ * platform — which, before this, could only be assembled by grepping for a decorator.
  */
 
 /**
@@ -544,6 +542,8 @@ export const RateLimitBucket = {
    * caps the window at a year; this caps how often a caller may ask for one.
    */
   RESELLER_REVENUE_READ: 'reseller-revenue:read',
+  /** The analytics tabs in `billing-service` (F-1001-b), per caller: one read bucket; answers are cached, so it bounds the misses. */
+  ANALYTICS_READ: 'analytics:read',
 
   /**
    * An admin reading one user's services in `billing-service` (F-311-f), per

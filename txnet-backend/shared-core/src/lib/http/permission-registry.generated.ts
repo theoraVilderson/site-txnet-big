@@ -4,6 +4,7 @@
 /** Every permission key the policy file names (`*` aside), with its area and whether only the platform may hold it. */
 export const PERMISSION_REGISTRY = [
   { permission: "ai.manage", area: "ai", platformOnly: false },
+  { permission: "analytics.read", area: "analytics", platformOnly: false },
   { permission: "audit.read", area: "audit", platformOnly: false },
   { permission: "bot.manage", area: "bot", platformOnly: false },
   { permission: "bot.webhook_rotate", area: "bot", platformOnly: false },

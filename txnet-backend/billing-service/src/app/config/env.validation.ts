@@ -25,8 +25,7 @@ const rateLimit = (fallback: number) =>
  * application on the platform with no env validation at all: `main.ts` read
  * `process.env.PORT` raw and logged a hardcoded `http://localhost:<port>`. The
  * other four each have a zod `envSchema` behind `ConfigService`, so this was
- * also the only deployable that could start with a typo'd variable and report
- * itself healthy.
+ * also the only deployable that could start with a typo'd variable and report itself healthy.
  *
  * Doing it later would have been a migration of `process.env` call sites. A
  * field is added when something reads it — never as a guess at what billing
@@ -419,6 +418,7 @@ export const envSchema = z.object({
   COUPON_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
   /** Catalog management (`catalog/catalog-admin.controller.ts`, F-026-d), per user. */
   RESELLER_REVENUE_READ_RATE_LIMIT: rateLimit(120),
+  ANALYTICS_READ_RATE_LIMIT: rateLimit(300), // the analytics tabs (F-1001-b), per user: a page reads several at once
   RESELLER_USER_GRANTS_READ_RATE_LIMIT: rateLimit(300),
   /** An admin's config actions on one user's configs (F-311-g), per caller, per request of 1..50. */
   RESELLER_USER_CONFIG_ACTION_RATE_LIMIT: rateLimit(60),

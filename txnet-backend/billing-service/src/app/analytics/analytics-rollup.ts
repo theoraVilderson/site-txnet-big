@@ -57,7 +57,7 @@ export async function rollupFingerprint(tx: Prisma.TransactionClient, r: RollupR
       SELECT 's' || row(s."day", s."currencyCode", s."productId", s."variantId", s."panelId", s."kind", s."gross", s."refunds", s."net", s."orders", s."bytesSold", s."discounts")::text AS x
         FROM billing.analytics_sales_day s WHERE s."tenantId" = public.current_tenant_id() AND s."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
       UNION ALL
-      SELECT 'u' || row(u."day", u."currencyCode", u."userId", u."net", u."orders", u."topUps", u."firstPurchase")::text
+      SELECT 'u' || row(u."day", u."currencyCode", u."userId", u."productId", u."panelId", u."net", u."orders", u."topUps", u."firstPurchase")::text
         FROM billing.analytics_user_day u WHERE u."tenantId" = public.current_tenant_id() AND u."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
       UNION ALL
       SELECT 'p' || row(p."day", p."currencyCode", p."gatewayKind", p."started", p."settled", p."failed", p."settledAmount", p."giftsCredited")::text
@@ -77,67 +77,73 @@ export async function clearFlows(tx: Prisma.TransactionClient, r: RollupRange): 
 }
 
 /**
+ * Each sale and refund of the window tied to what was sold: a purchase through
+ * its invoice, a block or a meter's charge through its Grant (`REFERS_TO`);
+ * the panel is the Grant's first config's. `bytes` is a package's traffic bag
+ * (`quotas.traffic_bytes`) — a block's bytes are not on its ledger row.
+ */
+const withTied = (r: RollupRange) => Prisma.sql`
+  WITH led AS (${ledger(r)}),
+  tied AS (
+    SELECT led.*, v."productId", sold."variantId", pn."panelId",
+           CASE WHEN jsonb_typeof(gi."quotas"->'traffic_bytes'->'limit') = 'number'
+                THEN (gi."quotas"->'traffic_bytes'->>'limit')::numeric::bigint ELSE 0 END AS "bytes",
+           COALESCE(i."discount" + i."ruleDiscount", 0) AS "discount"
+    FROM led
+    LEFT JOIN billing.invoice i ON i."id" = led."referenceId" AND led."package"
+    LEFT JOIN entitlement."grant" g ON g."id" = led."referenceId" AND led."reason" = ANY(${GRANT_REASONS})
+    LEFT JOIN LATERAL (
+      SELECT x."id", x."quotas" FROM entitlement."grant" x WHERE x."sourceReferenceId" = i."id" ORDER BY x."createdAt" LIMIT 1
+    ) gi ON i."id" IS NOT NULL
+    CROSS JOIN LATERAL (SELECT COALESCE(i."variantId", g."variantId") AS "variantId", COALESCE(gi."id", g."id") AS "grantId") sold
+    LEFT JOIN catalog.product_variant v ON v."id" = sold."variantId"
+    LEFT JOIN LATERAL (
+      SELECT c."panelId" FROM network.config c WHERE c."grantId" = sold."grantId" ORDER BY c."createdAt" LIMIT 1
+    ) pn ON sold."grantId" IS NOT NULL
+  )`;
+
+/** Package orders net of the package refunds that undo them. */
+const NET_ORDERS = Prisma.sql`(COUNT(*) FILTER (WHERE t."package" AND t."sale") - COUNT(*) FILTER (WHERE t."package" AND NOT t."sale"))::int`;
+
+/**
  * `analytics_sales_day`: per day, currency, product, variant, panel and kind.
- * A purchase is tied to its product through its invoice, a block or a meter's
- * charge through its Grant (`REFERS_TO`); the panel is the Grant's first
- * config's. `bytesSold` is a package's traffic bag (`quotas.traffic_bytes`) —
- * a block's bytes are not on its ledger row, so usage sells 0 bytes here and
- * its traffic is `bytesUsed`.
+ * `bytesSold` is net of a refunded package; usage sells 0 bytes here, and its
+ * traffic is `bytesUsed`.
  */
 export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
   await tx.$executeRaw`
     INSERT INTO billing.analytics_sales_day ("tenantId", "day", "currencyCode", "productId", "variantId", "panelId", "kind", "gross", "refunds", "net", "orders", "bytesSold", "discounts")
-    WITH led AS (${ledger(r)}),
-    tied AS (
-      SELECT led.*,
-             COALESCE(i."variantId", g."variantId") AS "variantId",
-             COALESCE(gi."id", g."id") AS "grantId",
-             CASE WHEN jsonb_typeof(gi."quotas"->'traffic_bytes'->'limit') = 'number'
-                  THEN (gi."quotas"->'traffic_bytes'->>'limit')::numeric::bigint ELSE 0 END AS "bytes",
-             COALESCE(i."discount" + i."ruleDiscount", 0) AS "discount"
-      FROM led
-      LEFT JOIN billing.invoice i ON i."id" = led."referenceId" AND led."package"
-      LEFT JOIN entitlement."grant" g ON g."id" = led."referenceId" AND led."reason" = ANY(${GRANT_REASONS})
-      LEFT JOIN LATERAL (
-        SELECT x."id", x."quotas" FROM entitlement."grant" x WHERE x."sourceReferenceId" = i."id" ORDER BY x."createdAt" LIMIT 1
-      ) gi ON i."id" IS NOT NULL
-    )
-    SELECT public.current_tenant_id(), t."day", t."currencyCode", v."productId", t."variantId", pn."panelId",
+    ${withTied(r)}
+    SELECT public.current_tenant_id(), t."day", t."currencyCode", t."productId", t."variantId", t."panelId",
            (CASE WHEN t."package" THEN 'package' ELSE 'usage' END)::billing."AnalyticsSaleKind",
            COALESCE(SUM(t."amount") FILTER (WHERE t."sale"), 0),
            COALESCE(SUM(t."amount") FILTER (WHERE NOT t."sale"), 0),
            SUM(CASE WHEN t."sale" THEN t."amount" ELSE -t."amount" END),
-           (COUNT(*) FILTER (WHERE t."package" AND t."sale") - COUNT(*) FILTER (WHERE t."package" AND NOT t."sale"))::int,
+           ${NET_ORDERS},
            SUM(CASE WHEN NOT t."package" THEN 0 WHEN t."sale" THEN t."bytes" ELSE -t."bytes" END)::bigint,
            COALESCE(SUM(t."discount") FILTER (WHERE t."sale"), 0)
     FROM tied t
-    LEFT JOIN catalog.product_variant v ON v."id" = t."variantId"
-    LEFT JOIN LATERAL (
-      SELECT c."panelId" FROM network.config c WHERE c."grantId" = t."grantId" ORDER BY c."createdAt" LIMIT 1
-    ) pn ON t."grantId" IS NOT NULL
-    GROUP BY t."day", t."currencyCode", v."productId", t."variantId", pn."panelId", t."package"`;
+    GROUP BY t."day", t."currencyCode", t."productId", t."variantId", t."panelId", t."package"`;
 }
 
 /**
- * `analytics_user_day`: each user's net sales, orders and settled top-ups per
- * day and currency — only users with any. `firstPurchase` marks the day and
- * currency of the user's first sale ever in this tenant, read over all time.
- * Top-ups are `/revenue`'s: settled, and never a reseller's own payment to the
- * platform (`billingTenantId` set).
+ * `analytics_user_day`: each user's net sales and orders per day, currency,
+ * product and panel, and settled top-ups (no product, no panel) — only users
+ * with any. `firstPurchase` marks the day and currency of the user's first
+ * sale ever in this tenant, read over all time. Top-ups are `/revenue`'s:
+ * settled, and never a reseller's own payment to the platform.
  */
 export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
   await tx.$executeRaw`
-    INSERT INTO billing.analytics_user_day ("tenantId", "day", "currencyCode", "userId", "net", "orders", "topUps", "firstPurchase")
-    WITH led AS (${ledger(r)}),
+    INSERT INTO billing.analytics_user_day ("tenantId", "day", "currencyCode", "userId", "productId", "panelId", "net", "orders", "topUps", "firstPurchase")
+    ${withTied(r)},
     sold AS (
-      SELECT led."day", led."currencyCode", led."owner" AS "userId",
-             SUM(CASE WHEN led."sale" THEN led."amount" ELSE -led."amount" END) AS "net",
-             (COUNT(*) FILTER (WHERE led."package" AND led."sale") - COUNT(*) FILTER (WHERE led."package" AND NOT led."sale"))::int AS "orders",
-             0::numeric AS "topUps"
-      FROM led GROUP BY 1, 2, 3
+      SELECT t."day", t."currencyCode", t."owner" AS "userId", t."productId", t."panelId",
+             SUM(CASE WHEN t."sale" THEN t."amount" ELSE -t."amount" END) AS "net", ${NET_ORDERS} AS "orders", 0::numeric AS "topUps"
+      FROM tied t GROUP BY 1, 2, 3, 4, 5
     ),
     paid AS (
-      SELECT ${dayIn(Prisma.sql`p."createdAt"`, r.zone)} AS "day", p."currencyCode", p."userId",
+      SELECT ${dayIn(Prisma.sql`p."createdAt"`, r.zone)} AS "day", p."currencyCode", p."userId", NULL::uuid AS "productId", NULL::uuid AS "panelId",
              0::numeric AS "net", 0 AS "orders", SUM(p."amountCredited") AS "topUps"
       FROM billing.payment_transaction p
       WHERE p."tenantId" = public.current_tenant_id() AND p."status" = 'success' AND p."billingTenantId" IS NULL
@@ -152,10 +158,10 @@ export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange): 
         AND w."ownerUserId" IN (SELECT "userId" FROM sold)
       ORDER BY w."ownerUserId", wt."createdAt", wt."id"
     )
-    SELECT public.current_tenant_id(), a."day", a."currencyCode", a."userId", SUM(a."net"), SUM(a."orders")::int, SUM(a."topUps"),
+    SELECT public.current_tenant_id(), a."day", a."currencyCode", a."userId", a."productId", a."panelId", SUM(a."net"), SUM(a."orders")::int, SUM(a."topUps"),
            EXISTS (SELECT 1 FROM firsts f WHERE f."userId" = a."userId" AND f."day" = a."day" AND f."currencyCode" = a."currencyCode")
     FROM (SELECT * FROM sold UNION ALL SELECT * FROM paid) a
-    GROUP BY a."day", a."currencyCode", a."userId"`;
+    GROUP BY a."day", a."currencyCode", a."userId", a."productId", a."panelId"`;
 }
 
 /**

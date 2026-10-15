@@ -11,7 +11,8 @@ updated: 2026-10-06
 The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
-worker (F-1001-a).** Everything else is not yet — each rule names its row. The page and its charts are
+worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
+(F-1001-b).** Everything else is not yet — each rule names its row. The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -39,9 +40,12 @@ A fact that turns out wrong is said in one line and the rule corrected.
    `currencyCode`. A range that spans a currency change (F-116) answers one
    series per currency, and the page says so; nothing is converted here.
 7. **Money is a decimal string** end to end (C-02); counts are ints.
-8. **Permission `analytics.read`**, granted to Admin by default, so a
-   reseller can give a staff seat its numbers without `tenant.manage`
-   (permissions.yaml, seed, a migration — F-1001-b).
+8. **Permission `analytics.read`**, so a reseller can give a staff seat its
+   numbers and nothing else (`ResellerAccess.for('analytics.read')`).
+   **Corrected (ADR-0144, no Admin role):** a tenant key on `grantable:`,
+   given to every holder of `report.read` by migration
+   `20261015001500_analytics_read_key` (role, group or person, same source)
+   and suggested by the finance and sales group presets.
 
 ## Rollup tables — schema `billing` (F-1001-a)
 
@@ -51,7 +55,7 @@ days) and **stocks** (what stood at the end of a day, never summed over days).
 | table | grain (key) | measures |
 |---|---|---|
 | `analytics_sales_day` (flow) | tenant · day · currency · product · variant · panel · kind (`package` = a sale naming an invoice, `product_purchase`; `usage` = one naming a Grant, `traffic_consumption` and `usage_charge` — `REFERS_TO`) | `gross`, `refunds`, `net`, `orders` (package purchases net of refunds), `bytesSold`, `discounts` (invoice discount taken) |
-| `analytics_user_day` (flow) | tenant · day · currency · user | `net`, `orders`, `topUps`, `firstPurchase` (bool) — sparse, only users with activity |
+| `analytics_user_day` (flow) | tenant · day · currency · user · product · panel (F-1001-b: buyers per product and panel; a top-up row has neither) | `net`, `orders`, `topUps`, `firstPurchase` (bool) — sparse, only users with activity |
 | `analytics_payment_day` (flow) | tenant · day · currency · gateway kind | `started`, `settled`, `failed`, `settledAmount`, `giftsCredited` (coupon/gift credits) |
 | `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
 | `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
@@ -126,6 +130,20 @@ All `GET /api/billing/tenants/:tenantId/analytics/<tab>` with
 | `resellers` | F-1001-h | platform owner only: each reseller's net, top-ups, buyers, active Grants, delta, sparkline — tier A |
 | `margin` | F-1001-l | revenue − attributed cost per user, product, panel (and reseller for the owner); loss-making rows flagged |
 | `cohorts` | F-1004-a | first-purchase month × month k: share still buying, net per user, cumulative LTV; split by acquisition channel |
+
+**As built (F-1001-b, `analytics/analytics.service.ts`).** Money is a map per
+currency, `{"USD": "41.25"}`; `currencies` lists them, the operating currency
+first, and a share is of that one. Every answer carries `tab`, `query` (as
+resolved; `calendar` defaults to `gregorian`), `refreshedAt` (read fresh, never
+cached) and `rebuilding`; while true there are no figures. A buyer is a user
+with a sale or refund in the cell (`net` or `orders` ≠ 0); `topUps` is
+`analytics_payment_day.settledAmount`, so product and panel filters leave it
+whole. `renewal` is `null` until F-1001-f. Buckets are named by their first day
+inside the window. To the platform's staff on a reseller (`suppressed`): series
+buckets, calendar days and product/panel rows under 5 buyers, with their
+complements (`hiddenCells`), and `payments.byKind` is `null` — the rollup has
+no payer per gateway. Cache: `analytics:<tenant>:v<version>:<tab>:<hash>`, 1 h,
+bucket `ANALYTICS_READ`.
 
 **Insights** (F-1001-j): `overview` also answers up to three `insights`, each
 `{key, params}` rendered from locale keys — no language model. In order: the

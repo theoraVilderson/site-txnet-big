@@ -130,11 +130,13 @@ Proof: `shared-core/src/lib/prisma/billing-top-up-tax.spec.ts`.
 `analytics_sales_day`, `_user_day`, `_payment_day` (flows) and `_stock_day` (a
 stock), each strict RLS on `tenantId`, the grain a unique index — `NULLS NOT
 DISTINCT` where a product, panel or gateway kind may be null — plus
-`analytics_rollup_state`, one row per tenant. Written only by the rollup,
+`analytics_rollup_state`, one row per tenant. `20261015001400_analytics_buyers_by_product`
+(F-1001-b) put product and panel on the user grain and flagged every tenant
+for a whole rebuild. Written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:
-`analytics/analytics-rollup.int.spec.ts`.
+`analytics/analytics-rollup.int.spec.ts`; the reads, `analytics/analytics.spec.ts`.
 
 There is deliberately **no outstanding-balance column**: what is owed is the
 accruals minus the payouts, because ADR-0041 §5 says the ledger and not a

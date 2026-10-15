@@ -15,6 +15,7 @@ import type { RegisteredPermission } from '../http/permission-registry.generated
  * carries them when their route lands. `audit.read` opens the access log (AC-1-p).
  */
 export const RESELLER_KEYS = [
+  'analytics.read',
   'audit.read',
   'bot.manage',
   'campaign.manage',

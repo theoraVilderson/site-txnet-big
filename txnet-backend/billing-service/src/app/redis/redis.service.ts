@@ -71,4 +71,9 @@ export class RedisService implements RateLimitStore, OnModuleInit, OnModuleDestr
   get(key: string): Promise<string | null> {
     return this.client.get(key);
   }
+
+  /** Write `value` under `key` for `ttlSec` seconds — a cache entry, never the truth. */
+  async setWithTtl(key: string, value: string, ttlSec: number): Promise<void> {
+    await this.client.set(key, value, 'EX', ttlSec);
+  }
 }

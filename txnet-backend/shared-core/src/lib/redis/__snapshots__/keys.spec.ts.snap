@@ -63,6 +63,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
 [
   "aiSilence",
   "aiSilenceAll",
+  "analyticsAnswer",
   "botGuideFile",
   "botLang",
   "botLinkChat",

@@ -3,6 +3,9 @@
     "ai": {
       "label": "AI"
     },
+    "analytics": {
+      "label": "Analytics"
+    },
     "audit": {
       "label": "Audit"
     },
@@ -102,6 +105,12 @@
       "manage": {
         "label": "Manage AI",
         "description": "Set up the AI assistant and its provider."
+      }
+    },
+    "analytics": {
+      "read": {
+        "label": "See analytics",
+        "description": "See the analytics page: sales, buyers, payments and products over time."
       }
     },
     "audit": {

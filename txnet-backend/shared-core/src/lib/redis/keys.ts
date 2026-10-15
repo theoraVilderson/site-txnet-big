@@ -13,8 +13,7 @@ import { REALTIME_FANOUT_PREFIX } from '../realtime/fanout';
  * Two services spelling one key is not a tidiness problem. A key that changes
  * shape does not fail: it silently stops finding data that is already there.
  * `session:` reading differently in the gateway than in the service that wrote
- * it means every request is answered "session revoked", which is a total outage
- * wearing the costume of a mass logout.
+ * it means every request is answered "session revoked", which is a total outage wearing the costume of a mass logout.
  *
  * **The split into two exports is about ambient scope, not about tidiness.**
  * The tenant-derived families read the request's tenant out of an ambient
@@ -27,8 +26,7 @@ import { REALTIME_FANOUT_PREFIX } from '../realtime/fanout';
  *
  * So {@link UnscopedRedisKeys} is what every process can build, and
  * {@link createScopedRedisKeys} is the rest, constructed with the scope
- * `auth-service` owns. The policy stays where the context is; only the strings
- * moved.
+ * `auth-service` owns. The policy stays where the context is; only the strings moved.
  */
 
 /**
@@ -347,6 +345,8 @@ export const UnscopedRedisKeys = {
    * stale value is answered from the figure the render was built with.
    */
   subUsage: (grantId: string) => `sub:usage:${grantId}`,
+  /** An analytics tab's answer (F-1001-b) under the rollup `version` a changed pass bumps — never stale, never deleted. */
+  analyticsAnswer: (tenantId: string, version: number, tab: string, query: string) => `analytics:${tenantId}:v${version}:${tab}:${query}`,
 } as const;
 
 /** A notice burst's lane segment: none (10 s), `-hour` (F-601-p), `-hour-inbox` (held, F-601-q). */

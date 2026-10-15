@@ -79,6 +79,7 @@ export * from './lib/catalog/rate-card';
 export * from './lib/catalog/meter';
 export * from './lib/catalog/seasons';
 export * from './lib/time/zoned';
+export * from './lib/time/jalali';
 export * from './lib/engagement/lottery-draw';
 export * from './lib/tenant/billing/tenant-billing-ledger';
 export * from './lib/tenant/feature-keys';

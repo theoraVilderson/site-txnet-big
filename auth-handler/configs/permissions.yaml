@@ -120,6 +120,9 @@ grantable:
   - staff.manage
   - settings.manage
   - report.read
+  # The analytics page (F-1001-b): a tenant's own figures over time, apart from
+  # `report.read` so a seat can be given the numbers and nothing else.
+  - analytics.read
   # A tenant's roles (F-018-n): `/api/auth/roles` and, on a reseller's own
   # path, its roles and who holds them (ADR-0134).
   - role.manage

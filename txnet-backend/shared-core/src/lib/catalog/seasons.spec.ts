@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { jalaliToGregorian, seasonOccurrences, type SeasonRule } from './seasons';
+import { jalaliToGregorian } from '../time/jalali';
+import { seasonOccurrences, type SeasonRule } from './seasons';
 
 /**
  * F-505-a: a tenant's seasons on the Jalali calendar, in the tenant's zone.
