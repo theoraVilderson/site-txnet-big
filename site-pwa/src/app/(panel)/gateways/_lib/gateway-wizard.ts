@@ -16,7 +16,7 @@ export const WIZARD_STEPS: readonly { id: WizardStepId; fields: readonly (keyof 
   { id: "details", fields: ["displayName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "isActive"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
   // A manual gateway asks for its proof and window here instead of keys (F-803-g).
-  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "requiredProof", "windowMinutes"] },
+  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "requiredProof", "windowMinutes", "confirmWithinMinutes"] },
   { id: "review", fields: [] },
 ];
 

@@ -186,7 +186,8 @@
       "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "url": "Enter a full address like https://example.com/...",
       "percent": "Between 0 and 100",
-      "window": "The time must be between 10 and 1440 minutes."
+      "window": "The time must be between 10 and 1440 minutes.",
+      "confirmWithin": "Enter whole minutes between 1 and 1440, or leave it empty."
     },
     "range": {
       "between": "{{min}} – {{max}}",
@@ -503,7 +504,10 @@
       "removed": "Removed.",
       "deactivated": "A payment was already shown it, so it was deactivated instead of removed.",
       "retry": "Try again",
-      "full": "At most {{max}} destinations per gateway."
+      "full": "At most {{max}} destinations per gateway.",
+      "confirmWithinMinutes": "Usual time to confirm",
+      "confirmWithinHint": "Optional. Shown to the payer while they wait: “usually within this many minutes”. Between {{min}} and {{max}}; leave empty to show no figure.",
+      "confirmWithinNone": "Not shown"
     }
   },
   "wallet": {
@@ -6397,7 +6401,8 @@
     "checking": {
       "title": "Your payment is being checked",
       "manual": "A person confirms this payment. You can leave this page — your wallet is credited when they do.",
-      "automatic": "We are watching the network for your transfer."
+      "automatic": "We are watching the network for your transfer.",
+      "manualWithin": "A person confirms this payment, usually within {{minutes}} minutes. You can leave this page — your wallet is credited when they do."
     },
     "credited": {
       "title": "Your wallet was credited",

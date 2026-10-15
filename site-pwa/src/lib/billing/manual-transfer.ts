@@ -14,6 +14,8 @@ export const CONFIRMED_BY_PERSON: ConfirmationMode = "manual_admin_required";
 
 /** The payer's window, in minutes — billing's `WINDOW_MINUTES` (the migration's CHECK and default). */
 export const WINDOW_MINUTES = { min: 10, max: 1440, default: 30 } as const;
+/** The seller's usual time to confirm, in minutes — billing's `CONFIRM_WITHIN_MINUTES` (F-803-l); none is "no figure". */
+export const CONFIRM_WITHIN_MINUTES = { min: 1, max: 1440 } as const;
 /** Destinations one gateway may hold — billing's `MAX_DESTINATIONS`. */
 export const MAX_DESTINATIONS = 50;
 /** A destination's rotation weight bounds (F-807, stored and unread until then). */
@@ -38,12 +40,14 @@ export interface ManualSetting {
   confirmationMode: ConfirmationMode;
   requiredProof: string[];
   windowMinutes: number;
+  /** The payer's "usually within n minutes"; null when the seller set none (F-803-l). */
+  confirmWithinMinutes: number | null;
   destinations: number;
   activeDestinations: number;
 }
 
 /** The writable part of {@link ManualSetting}: required whole on create, partial on update. */
-export type ManualSettingBody = Partial<Pick<ManualSetting, "kind" | "confirmationMode" | "requiredProof" | "windowMinutes">>;
+export type ManualSettingBody = Partial<Pick<ManualSetting, "kind" | "confirmationMode" | "requiredProof" | "windowMinutes" | "confirmWithinMinutes">>;
 
 /** A card or wallet a manual gateway's payer is shown, as the seller's editor reads it — private fields included. */
 export interface ManualDestination {
@@ -85,6 +89,8 @@ export interface TransferStatus extends TransferInstructions {
   proofSubmittedAt: string | null;
   /** The gateway's window length; the countdown ring is the share of it left. */
   windowMinutes: number;
+  /** The seller's usual time to confirm a proof; null when they set none (F-803-l). */
+  confirmWithinMinutes: number | null;
 }
 
 const transferPath = (paymentId: string) => `/deposit/${encodeURIComponent(paymentId)}`;

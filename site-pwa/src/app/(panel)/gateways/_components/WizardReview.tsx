@@ -34,6 +34,7 @@ function useConnectionRows(form: GatewayForm): ReviewRow[] {
     return [
       [t("common", M.requiredProof), proof.join(" · ")],
       [t("common", M.windowMinutes), `${form.windowMinutes.trim()} ${t("common", M.minutes)}`],
+      [t("common", M.confirmWithinMinutes), form.confirmWithinMinutes.trim() ? `${form.confirmWithinMinutes.trim()} ${t("common", M.minutes)}` : t("common", M.confirmWithinNone)],
     ];
   }
   const secretState = (v: string) =>

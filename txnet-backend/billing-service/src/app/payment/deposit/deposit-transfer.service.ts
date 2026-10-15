@@ -12,6 +12,8 @@ export type TransferStatus = TransferBody & {
   proofSubmittedAt: Date | null;
   /** The gateway's window length — the pay page's countdown ring is the share of it left (F-803-i). */
   windowMinutes: number;
+  /** The seller's "usually within n minutes" (F-803-l); null when they set none. */
+  confirmWithinMinutes: number | null;
 };
 
 /**
@@ -45,6 +47,7 @@ export class DepositTransferService {
         reviewReason: detail.reviewReason,
         proofSubmittedAt: detail.proofSubmittedAt,
         windowMinutes: setting.windowMinutes,
+        confirmWithinMinutes: setting.confirmWithinMinutes,
       };
     });
   }

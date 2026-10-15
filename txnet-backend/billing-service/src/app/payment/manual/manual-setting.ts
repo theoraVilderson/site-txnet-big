@@ -13,16 +13,32 @@ import { manualMethod, parseDestination } from './manual-methods';
  */
 
 /** The `manual` body as it travels; every key optional on update. */
-export type ManualSettingInput = { kind?: string; confirmationMode?: string; requiredProof?: string[]; windowMinutes?: number };
+export type ManualSettingInput = {
+  kind?: string;
+  confirmationMode?: string;
+  requiredProof?: string[];
+  windowMinutes?: number;
+  /** `null` clears it; absent keeps it. */
+  confirmWithinMinutes?: number | null;
+};
 
 /** A setting's values, settled: what `manual_gateway_setting` stores. */
-export type ManualSettingValues = { kind: string; confirmationMode: string; requiredProof: string[]; windowMinutes: number };
+export type ManualSettingValues = {
+  kind: string;
+  confirmationMode: string;
+  requiredProof: string[];
+  windowMinutes: number;
+  confirmWithinMinutes: number | null;
+};
 
 /** The gateway columns the manual rules read, as the row will be. */
 type GatewayShape = { providerName?: string; gatewayCategory?: string; feeCalculationMode?: string };
 
 /** The window the payer has, in minutes — the migration's CHECK and default (F-803-a). */
 export const WINDOW_MINUTES = { min: 10, max: 1440, default: 30 } as const;
+
+/** The seller's usual time to confirm, in minutes — the migration's CHECK (F-803-l); none is "no figure". */
+export const CONFIRM_WITHIN_MINUTES = { min: 1, max: 1440 } as const;
 
 /** Destinations one gateway may hold: a seller rotates a handful of cards, never hundreds (C-28). */
 export const MAX_DESTINATIONS = 50;
@@ -91,12 +107,17 @@ export function settleManualSetting(before: ManualSettingValues | null, patch: M
     confirmationMode: patch.confirmationMode ?? before?.confirmationMode ?? ConfirmationMode.manual_admin_required,
     requiredProof: [...new Set(patch.requiredProof ?? before?.requiredProof ?? [])],
     windowMinutes: patch.windowMinutes ?? before?.windowMinutes ?? WINDOW_MINUTES.default,
+    confirmWithinMinutes: patch.confirmWithinMinutes !== undefined ? patch.confirmWithinMinutes : (before?.confirmWithinMinutes ?? null),
   };
   const declared = new Set(method.proofFields.map((f) => f.id));
   const foreign = next.requiredProof.find((id) => !declared.has(id));
   if (foreign) throw new GatewayAdminRefused('invalid_manual_setting', `manual.requiredProof ${foreign} is not a ${method.kind} proof field`);
   if (!Number.isInteger(next.windowMinutes) || next.windowMinutes < WINDOW_MINUTES.min || next.windowMinutes > WINDOW_MINUTES.max) {
     throw new GatewayAdminRefused('invalid_manual_setting', `manual.windowMinutes must be ${WINDOW_MINUTES.min}..${WINDOW_MINUTES.max}`);
+  }
+  const within = next.confirmWithinMinutes;
+  if (within !== null && (!Number.isInteger(within) || within < CONFIRM_WITHIN_MINUTES.min || within > CONFIRM_WITHIN_MINUTES.max)) {
+    throw new GatewayAdminRefused('invalid_manual_setting', `manual.confirmWithinMinutes must be ${CONFIRM_WITHIN_MINUTES.min}..${CONFIRM_WITHIN_MINUTES.max} or null`);
   }
   if (!(next.confirmationMode in ConfirmationMode)) throw new GatewayAdminRefused('invalid_manual_setting', 'manual.confirmationMode');
   assertAutomaticPossible(method, next.confirmationMode, active);
@@ -118,6 +139,7 @@ export const MANUAL_SETTING_SELECT = {
   confirmationMode: true,
   requiredProof: true,
   windowMinutes: true,
+  confirmWithinMinutes: true,
   destinations: { select: { isActive: true, fields: true }, take: MAX_DESTINATIONS },
 } satisfies Prisma.ManualGatewaySettingSelect;
 export type ManualSettingRow = Prisma.ManualGatewaySettingGetPayload<{ select: typeof MANUAL_SETTING_SELECT }>;
@@ -127,8 +149,8 @@ export type ManualSettingView = ManualSettingValues & { destinations: number; ac
 
 export function manualSettingView(row: ManualSettingRow | null | undefined): ManualSettingView | null {
   if (!row) return null;
-  const { kind, confirmationMode, requiredProof, windowMinutes, destinations } = row;
-  return { kind, confirmationMode, requiredProof, windowMinutes, destinations: destinations.length, activeDestinations: destinations.filter((d) => d.isActive).length };
+  const { kind, confirmationMode, requiredProof, windowMinutes, confirmWithinMinutes, destinations } = row;
+  return { kind, confirmationMode, requiredProof, windowMinutes, confirmWithinMinutes, destinations: destinations.length, activeDestinations: destinations.filter((d) => d.isActive).length };
 }
 
 /** A gateway's setting row is found by the gateway column its table uses (F-803-a: exactly one is set). */

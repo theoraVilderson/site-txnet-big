@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { ApiError } from "@/lib/api-error";
 import {
   PAYER_REASON_KEYS,
+  PAY_KEYS,
+  checkingText,
   TRANSFER_EVENTS,
   WARNING_MS,
   countdownOf,
@@ -120,6 +122,23 @@ describe("live, never polled (C-14)", () => {
     const hook = readFileSync(join(__dirname, "_hooks/useTransfer.ts"), "utf8");
     expect(hook).toMatch(/useLiveReread\(/);
     expect(hook).not.toMatch(/setInterval\(/);
+  });
+});
+
+describe("checkingText", () => {
+  it("says the seller's usual time when they set one (F-803-l)", () => {
+    expect(checkingText({ confirmationMode: "manual_admin_required", confirmWithinMinutes: 20 })).toEqual({
+      key: PAY_KEYS.checking.manualWithin,
+      vars: { minutes: "20" },
+    });
+  });
+
+  it("says only that a person confirms it when they set none", () => {
+    expect(checkingText({ confirmationMode: "manual_admin_required", confirmWithinMinutes: null })).toEqual({ key: PAY_KEYS.checking.manual });
+  });
+
+  it("an automatic gateway watches the network, whatever the figure", () => {
+    expect(checkingText({ confirmationMode: "automatic", confirmWithinMinutes: 20 })).toEqual({ key: PAY_KEYS.checking.automatic });
   });
 });
 

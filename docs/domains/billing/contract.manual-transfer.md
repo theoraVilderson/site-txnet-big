@@ -76,7 +76,7 @@ each with its row.
 
 | table | holds | rule |
 |---|---|---|
-| `manual_gateway_setting` | per gateway row: `kind`, `confirmationMode` (`manual_admin_required`/`automatic`), `requiredProof` (string[] of the kind's proof field ids), `windowMinutes` (default 30, 10..1440), `instructions` (optional override text by language) | one per gateway (above); RLS by tenant |
+| `manual_gateway_setting` | per gateway row: `kind`, `confirmationMode` (`manual_admin_required`/`automatic`), `requiredProof` (string[] of the kind's proof field ids), `windowMinutes` (default 30, 10..1440), `confirmWithinMinutes` (optional, 1..1440 — the payer's "usually within n minutes", F-803-l), `instructions` (optional override text by language) | one per gateway (above); RLS by tenant |
 | `manual_destination` | `settingId`, `label`, `fields` (JSON, validated by the kind), `isActive`, `sortOrder`, `weight` (1..100), `dailyCapMinor` (optional) | RLS by tenant; a destination referenced by any payment is deactivated, never deleted (Restrict) |
 | `payment_transfer_detail` | `paymentId` (PK), `destinationId`, `destinationSnapshot` (the fields shown to the user), `expectedAmountMinor`, `chargeCurrency`, `chargeDecimals`, `network` (crypto), `windowEndsAt`, `proof` (JSON), `proofSubmittedAt`, `proofReturnedAt` (F-805-a), `reviewReason` (enum below, nullable), `seenTxRef` | written by `start`; the snapshot is what the user saw, so editing a destination never changes an open payment |
 | `transfer_tx_ref` | `(tenantId, network, txRef)` unique — a tx hash, a bank tracking number or an SMS reference | one external reference credits at most once per tenant, whichever path saw it first |
@@ -125,13 +125,13 @@ Built 2026-10-15: `payment/manual/manual-setting.ts` (the rules),
 `gateway-admin/manual-destination.{service,controller}.ts`. The gateway routes
 of contract.gateways.md take provider `manual_transfer` with category `manual`
 and a `manual` body (`kind`, `confirmationMode`, `requiredProof`,
-`windowMinutes`) — the three together or `manual_setting_mismatch`; the body is
+`windowMinutes`, `confirmWithinMinutes` — null clears it) — the three together or `manual_setting_mismatch`; the body is
 required on create, partial on update, saved in the gateway's own transaction
 and audit row (`newValue.manual`), and every view carries `manual` (with
 `destinations` / `activeDestinations` counts) or `null`.
 
-- An unknown kind, a proof id the kind does not declare, or a window outside
-  10..1440 is `invalid_manual_setting`. A gateway never changes to or from
+- An unknown kind, a proof id the kind does not declare, a window outside
+  10..1440 or a usual confirmation time outside 1..1440 is `invalid_manual_setting`. A gateway never changes to or from
   `manual_transfer`; its kind is fixed once it has a destination (`kind_in_use`).
 - `confirmationMode = automatic` is `automatic_unavailable` unless every active
   destination has a watcher (and one exists) — today always. So is
@@ -186,8 +186,8 @@ grace for a late proof; F-092-k expires it after that.
   The offset is the user's cost and is shown as part of the amount; it never
   reaches the wallet as a credit beyond the quoted amount.
 - `GET /api/billing/deposit/:paymentId/transfer` re-reads the same body for the
-  owner of the payment, plus `status`, `reviewReason`, `proofSubmittedAt` and
-  the gateway's `windowMinutes` (the pay page's ring, F-803-i).
+  owner of the payment, plus `status`, `reviewReason`, `proofSubmittedAt`, the
+  gateway's `windowMinutes` (the ring, F-803-i) and `confirmWithinMinutes`.
 
 ## Proof and the queue (F-805-a)
 

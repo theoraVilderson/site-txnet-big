@@ -4,19 +4,20 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Hourglass, ShoppingBag, Wallet, XCircle } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { CONFIRMED_BY_PERSON, billingApi, type TransferStatus, type WalletBalance } from "@/lib/billing-api";
+import { billingApi, type TransferStatus, type WalletBalance } from "@/lib/billing-api";
 import { PANEL_FINANCIAL, PANEL_SHOP } from "@/lib/routes";
 import { AnimatedNumber, buttonClass, useCelebration } from "../../../_components/kit";
 import { formatMoney } from "../../../_lib/money";
-import { PAY_KEYS, payerReasonKey } from "../_lib/transfer-page";
+import { PAY_KEYS, checkingText, payerReasonKey } from "../_lib/transfer-page";
 
 /**
  * A proof with a person (contract "Checking"): a soft halo on the step, the
  * sentence for the gateway's mode, and why it waits when billing says more
  * than "a person checks the proof".
  */
-export function CheckingPanel({ transfer }: { transfer: Pick<TransferStatus, "confirmationMode" | "reviewReason"> }) {
+export function CheckingPanel({ transfer }: { transfer: Pick<TransferStatus, "confirmationMode" | "confirmWithinMinutes" | "reviewReason"> }) {
   const { t } = useLocale();
+  const waiting = checkingText(transfer);
   const reason = transfer.reviewReason === "proof_only" ? null : payerReasonKey(transfer.reviewReason);
   return (
     <div className="flex flex-col items-center gap-3 text-center">
@@ -26,7 +27,7 @@ export function CheckingPanel({ transfer }: { transfer: Pick<TransferStatus, "co
       </span>
       <h2 className="text-base font-bold text-text-primary">{t("common", PAY_KEYS.checking.title)}</h2>
       <p className="max-w-sm text-sm leading-6 text-text-secondary">
-        {t("common", transfer.confirmationMode === CONFIRMED_BY_PERSON ? PAY_KEYS.checking.manual : PAY_KEYS.checking.automatic)}
+        {t("common", waiting.key, waiting.vars)}
       </p>
       {reason && <p className="max-w-sm text-sm font-bold text-warning">{t("common", reason)}</p>}
     </div>

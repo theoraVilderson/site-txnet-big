@@ -1257,6 +1257,8 @@ model ManualGatewaySetting {
   requiredProof         String[]         @default([])
   /// 10..1440, CHECK in the migration.
   windowMinutes         Int              @default(30)
+  /// The seller's usual time to confirm a proof, shown to the payer ("usually within n minutes"); 1..1440, CHECK in the migration; null = no figure (F-803-l).
+  confirmWithinMinutes  Int?
   /// Payer instructions replacing the kind's default, by language code; null = the default.
   instructions          Json?
   createdAt             DateTime         @default(now())

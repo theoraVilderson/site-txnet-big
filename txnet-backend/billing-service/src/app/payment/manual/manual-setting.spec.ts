@@ -54,6 +54,7 @@ describe('the manual setting', () => {
       confirmationMode: 'manual_admin_required',
       requiredProof: [],
       windowMinutes: 30,
+      confirmWithinMinutes: null,
     });
   });
 
@@ -78,8 +79,21 @@ describe('the manual setting', () => {
     expect(settleManualSetting(null, { kind: 'card_to_card', windowMinutes: 1440 }, []).windowMinutes).toBe(1440);
   });
 
+  it("keeps the seller's usual confirmation time to 1..1440 minutes, or none", () => {
+    expect(settleManualSetting(null, { kind: 'card_to_card', confirmWithinMinutes: 20 }, []).confirmWithinMinutes).toBe(20);
+    expect(refusal(() => settleManualSetting(null, { kind: 'card_to_card', confirmWithinMinutes: 0 }, [])).reason).toBe('invalid_manual_setting');
+    expect(refusal(() => settleManualSetting(null, { kind: 'card_to_card', confirmWithinMinutes: 1441 }, [])).reason).toBe('invalid_manual_setting');
+    expect(refusal(() => settleManualSetting(null, { kind: 'card_to_card', confirmWithinMinutes: 2.5 }, [])).reason).toBe('invalid_manual_setting');
+  });
+
+  it('clears the usual confirmation time with null, and keeps it when unnamed', () => {
+    const before = { kind: 'card_to_card', confirmationMode: 'manual_admin_required', requiredProof: [], windowMinutes: 30, confirmWithinMinutes: 15 };
+    expect(settleManualSetting(before, { confirmWithinMinutes: null }, []).confirmWithinMinutes).toBeNull();
+    expect(settleManualSetting(before, { windowMinutes: 40 }, []).confirmWithinMinutes).toBe(15);
+  });
+
   it('patches only what it names', () => {
-    const before = { kind: 'crypto_wallet', confirmationMode: 'manual_admin_required', requiredProof: ['txHash'], windowMinutes: 60 };
+    const before = { kind: 'crypto_wallet', confirmationMode: 'manual_admin_required', requiredProof: ['txHash'], windowMinutes: 60, confirmWithinMinutes: 15 };
     expect(settleManualSetting(before, { windowMinutes: 90 }, [])).toEqual({ ...before, windowMinutes: 90 });
   });
 

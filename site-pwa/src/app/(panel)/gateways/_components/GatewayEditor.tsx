@@ -33,7 +33,7 @@ import { FeeFields, Field, PROVIDER_ICONS, TextInput, useRangeText, type SetFiel
 import { GatewayConnectionFields } from "./GatewayConnectionFields";
 import { useKindText } from "./WizardProviderPicker";
 import { Toggle } from "../../_components/kit/Toggle";
-import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
+import { EDITOR_SECTIONS, FIELD_LABELS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
 import {
   CATEGORIES,
   PROVIDERS,
@@ -59,31 +59,6 @@ const SECTION_ICONS: Record<EditorSectionId, LucideIcon> = {
   amounts: Wallet,
   fee: Percent,
   connection: KeyRound,
-};
-
-/** What the list of changes calls each field — the same labels the form shows. */
-const FIELD_LABELS: Partial<Record<keyof GatewayForm, string>> = {
-  displayName: F.displayName,
-  providerName: F.provider,
-  gatewayCategory: F.category,
-  isActive: F.isActive,
-  blockedReason: F.blockedReason,
-  minAcceptAmount: F.minAmount,
-  maxAcceptAmount: F.maxAmount,
-  depositPresets: G.presets.title,
-  feeCalculationMode: F.feeMode,
-  feeType: F.feeType,
-  feeValue: F.feeValue,
-  feeFloor: F.feeFloor,
-  feeCeiling: F.feeCeiling,
-  taxRatePercent: G.tax.label,
-  merchantId: G.merchantId,
-  secretKey: G.secretKey,
-  webhookSecret: G.fields.webhookSecret,
-  staticRate: G.fields.starRate,
-  callbackUrl: G.callback.label,
-  requiredProof: G.manual.requiredProof,
-  windowMinutes: G.manual.windowMinutes,
 };
 
 /** A bound worth putting into words: empty (no limit) or a plain decimal. */

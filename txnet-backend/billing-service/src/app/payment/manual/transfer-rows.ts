@@ -22,7 +22,7 @@ export type TransferRows = {
     reviewReason: Prisma.PaymentTransferDetailGetPayload<object>['reviewReason'];
   };
   payment: { userId: string; status: string; tenantId: string | null };
-  setting: { kind: string; confirmationMode: string; requiredProof: string[]; windowMinutes: number; tenantId: string };
+  setting: { kind: string; confirmationMode: string; requiredProof: string[]; windowMinutes: number; confirmWithinMinutes: number | null; tenantId: string };
   /** Undefined only for a kind no longer registered — then nothing may be checked against it. */
   method: ManualMethod | undefined;
   destination: DestinationFields;
@@ -39,7 +39,7 @@ export async function transferRowsOf(tx: Prisma.TransactionClient, paymentId: st
   const ref = payment.gatewayId ? { source: 'platform' as const, id: payment.gatewayId } : { source: 'tenant' as const, id: payment.tenantGatewayConfigId ?? '' };
   const setting = await tx.manualGatewaySetting.findFirst({
     where: settingWhere(ref),
-    select: { kind: true, confirmationMode: true, requiredProof: true, windowMinutes: true, tenantId: true },
+    select: { kind: true, confirmationMode: true, requiredProof: true, windowMinutes: true, confirmWithinMinutes: true, tenantId: true },
   });
   if (!setting) return null;
   return { detail, payment, setting, method: manualMethod(setting.kind), destination: fieldsOf(detail.destinationSnapshot) };

@@ -37,7 +37,13 @@ describe("a manual gateway's form (F-803-g)", () => {
 
   it("sends the manual body whole on create, confirmed by a person", () => {
     const body = createBody({ ...manualForm(), windowMinutes: "45" }, null);
-    expect(body.manual).toEqual({ kind: "card_to_card", confirmationMode: "manual_admin_required", requiredProof: [...CARD.defaultProof], windowMinutes: 45 });
+    expect(body.manual).toEqual({
+      kind: "card_to_card",
+      confirmationMode: "manual_admin_required",
+      requiredProof: [...CARD.defaultProof],
+      windowMinutes: 45,
+      confirmWithinMinutes: null,
+    });
     expect(body).not.toHaveProperty("merchantId");
   });
 
@@ -46,6 +52,14 @@ describe("a manual gateway's form (F-803-g)", () => {
     expect(validateForm({ ...manualForm(), windowMinutes: "9" }).windowMinutes).toBe("window");
     expect(validateForm({ ...manualForm(), windowMinutes: "1441" }).windowMinutes).toBe("window");
     expect(validateForm({ ...manualForm(), windowMinutes: "1440" }).windowMinutes).toBeUndefined();
+  });
+
+  it("takes the usual confirmation time as optional whole minutes, 1..1440 (F-803-l)", () => {
+    expect(validateForm({ ...manualForm(), confirmWithinMinutes: "" }).confirmWithinMinutes).toBeUndefined();
+    expect(validateForm({ ...manualForm(), confirmWithinMinutes: "0" }).confirmWithinMinutes).toBe("confirmWithin");
+    expect(validateForm({ ...manualForm(), confirmWithinMinutes: "1441" }).confirmWithinMinutes).toBe("confirmWithin");
+    expect(validateForm({ ...manualForm(), confirmWithinMinutes: "2.5" }).confirmWithinMinutes).toBe("confirmWithin");
+    expect(createBody({ ...manualForm(), confirmWithinMinutes: " 20 " }, null).manual?.confirmWithinMinutes).toBe(20);
   });
 
   it("leaves the manual fields out of an online gateway entirely", () => {
@@ -91,11 +105,15 @@ describe("a manual gateway's form (F-803-g)", () => {
       createdAt: "2026-10-15T00:00:00Z",
       updatedAt: "2026-10-15T00:00:00Z",
       userGroupIds: [],
-      manual: { kind: "card_to_card", confirmationMode: "manual_admin_required", requiredProof: ["receiptImage", "trackingCode"], windowMinutes: 30, destinations: 1, activeDestinations: 1 },
+      manual: { kind: "card_to_card", confirmationMode: "manual_admin_required", requiredProof: ["receiptImage", "trackingCode"], windowMinutes: 30, confirmWithinMinutes: 15, destinations: 1, activeDestinations: 1 },
     };
     const form = formFromGateway(g);
     expect(updateBody(g, { ...form, requiredProof: ["trackingCode", "receiptImage"] }, null)).toEqual({});
     expect(updateBody(g, { ...form, windowMinutes: "60" }, null)).toEqual({ manual: { windowMinutes: 60 } });
+    expect(form.confirmWithinMinutes).toBe("15");
+    expect(updateBody(g, { ...form, confirmWithinMinutes: "30" }, null)).toEqual({ manual: { confirmWithinMinutes: 30 } });
+    // Emptied, it is cleared — the payer then sees no figure.
+    expect(updateBody(g, { ...form, confirmWithinMinutes: "" }, null)).toEqual({ manual: { confirmWithinMinutes: null } });
   });
 });
 

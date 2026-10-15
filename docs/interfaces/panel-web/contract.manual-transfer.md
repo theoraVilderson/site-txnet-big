@@ -63,8 +63,9 @@ queue. Where it differs from the table above, and why:
   1.2 s; the buzz is `haptic.copied` (Telegram's light impact, else `vibrate(10)`);
 - the upload bar is indeterminate: `fetch` reports no upload progress, and a
   second HTTP client for one bar is not worth its keeping;
-- "usually within <n> minutes" has no figure: no gateway stores one, so the
-  manual text says only that a person confirms it;
+- "usually within <n> minutes" is the seller's own `confirmWithinMinutes`
+  (F-803-l, `checkingText`); a gateway with none set says only that a person
+  confirms it;
 - a person's return or rejection sends the payer no event; the page shows it
   on tab visible, and on the next confirmed/reversed read.
 The kind supplies `Destination` only — the proof is one form by field id, so a
@@ -125,7 +126,9 @@ Proof: `manual-gateways.test.tsx`.
 - `confirmationMode`: a segmented control drawn only when the kind or network
   has a watcher — so not before F-803-f; until then every manual gateway is
   `manual` and the control is absent. `requiredProof`: checkboxes from
-  the kind, at least one.
+  the kind, at least one. "Usual time to confirm" (F-803-l): optional whole
+  minutes 1..1440 beside the window, empty = no figure for the payer; an edit
+  that empties it sends `null`.
 - **Built 2026-10-15 (F-803-g).** The kind registry is
   `(panel)/_components/transfer/` (`transfer-kinds.ts`, `kinds/<kind>.tsx`
   exporting the kind with its `AdminFields`; `kinds/plain.tsx` is the unknown

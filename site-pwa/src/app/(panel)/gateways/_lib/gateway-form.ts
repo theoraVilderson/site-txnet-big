@@ -1,6 +1,6 @@
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, CreateGatewayBody, GatewaySource, UpdateGatewayBody } from "@/lib/billing-api";
-import { CONFIRMED_BY_PERSON, isManualProvider, WINDOW_MINUTES, type ManualSettingBody } from "@/lib/billing/manual-transfer";
+import { CONFIRM_WITHIN_MINUTES, CONFIRMED_BY_PERSON, isManualProvider, WINDOW_MINUTES, type ManualSettingBody } from "@/lib/billing/manual-transfer";
 import { samePresets } from "./presets";
 import { PROVIDER_FIELDS, secretFields, takesStaticRate, type Provider } from "./provider-fields";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -53,11 +53,13 @@ export interface GatewayForm {
   requiredProof: string[];
   /** The payer's window in minutes, `WINDOW_MINUTES` bounds. */
   windowMinutes: string;
+  /** The seller's usual time to confirm, whole minutes; empty = no figure shown to the payer (F-803-l). */
+  confirmWithinMinutes: string;
 }
 
 /** More decimal places than the column that stores this field keeps. `places` is that column's. */
 export type PrecisionError = { kind: "precision"; places: number };
-export type FormError = "required" | "decimal" | "range" | "percent" | "merchantFormat" | "url" | "window" | PrecisionError;
+export type FormError = "required" | "decimal" | "range" | "percent" | "merchantFormat" | "url" | "window" | "confirmWithin" | PrecisionError;
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
@@ -165,6 +167,7 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     manualKind: "",
     requiredProof: [],
     windowMinutes: String(WINDOW_MINUTES.default),
+    confirmWithinMinutes: "",
   };
 }
 
@@ -199,6 +202,7 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     manualKind: g.manual?.kind ?? "",
     requiredProof: [...(g.manual?.requiredProof ?? [])],
     windowMinutes: String(g.manual?.windowMinutes ?? WINDOW_MINUTES.default),
+    confirmWithinMinutes: g.manual?.confirmWithinMinutes == null ? "" : String(g.manual.confirmWithinMinutes),
   };
 }
 
@@ -268,12 +272,25 @@ function manualErrors(form: GatewayForm): FormErrors {
   if (form.requiredProof.length === 0) errors.requiredProof = "required";
   const minutes = form.windowMinutes.trim();
   if (!WHOLE_MINUTES.test(minutes) || Number(minutes) < WINDOW_MINUTES.min || Number(minutes) > WINDOW_MINUTES.max) errors.windowMinutes = "window";
+  const within = form.confirmWithinMinutes.trim();
+  if (within && (!WHOLE_MINUTES.test(within) || Number(within) < CONFIRM_WITHIN_MINUTES.min || Number(within) > CONFIRM_WITHIN_MINUTES.max)) {
+    errors.confirmWithinMinutes = "confirmWithin";
+  }
   return errors;
 }
 
+/** The usual confirmation time as billing takes it: whole minutes, or null for none. */
+const confirmWithinOf = (form: GatewayForm): number | null => (form.confirmWithinMinutes.trim() ? Number(form.confirmWithinMinutes.trim()) : null);
+
 /** The `manual` body a create sends whole: every manual gateway is confirmed by a person until F-803-f. */
 function manualBody(form: GatewayForm): ManualSettingBody {
-  return { kind: form.manualKind, confirmationMode: CONFIRMED_BY_PERSON, requiredProof: form.requiredProof, windowMinutes: Number(form.windowMinutes.trim()) };
+  return {
+    kind: form.manualKind,
+    confirmationMode: CONFIRMED_BY_PERSON,
+    requiredProof: form.requiredProof,
+    windowMinutes: Number(form.windowMinutes.trim()),
+    confirmWithinMinutes: confirmWithinOf(form),
+  };
 }
 
 /** What an edit changed of the setting; the kind and mode are not edited here. */
@@ -282,6 +299,7 @@ function manualPatch(before: GatewayForm, form: GatewayForm): ManualSettingBody 
   const sameProof = form.requiredProof.length === before.requiredProof.length && form.requiredProof.every((id) => before.requiredProof.includes(id));
   if (!sameProof) patch.requiredProof = form.requiredProof;
   if (form.windowMinutes.trim() !== before.windowMinutes.trim()) patch.windowMinutes = Number(form.windowMinutes.trim());
+  if (form.confirmWithinMinutes.trim() !== before.confirmWithinMinutes.trim()) patch.confirmWithinMinutes = confirmWithinOf(form);
   return patch;
 }
 

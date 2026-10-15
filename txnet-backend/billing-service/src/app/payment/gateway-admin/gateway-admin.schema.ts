@@ -90,6 +90,7 @@ const fields = {
       confirmationMode: z.nativeEnum(ConfirmationMode),
       requiredProof: z.array(z.string().max(40)).max(10),
       windowMinutes: z.number().int(),
+      confirmWithinMinutes: z.number().int().nullable(),
     })
     .partial()
     .strict(),

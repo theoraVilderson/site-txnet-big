@@ -1,7 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
 import { ApiError } from "@/lib/api-error";
-import type { TransferReviewReason, TransferStatus } from "@/lib/billing-api";
+import { CONFIRMED_BY_PERSON, type TransferReviewReason, type TransferStatus } from "@/lib/billing-api";
 import { PAID_AT_FIELD, RECEIPT_FIELD, foldProof, proofRefusal } from "../../../_components/transfer/proof-fields";
 import type { FieldRefusal } from "../../../_components/transfer/transfer-kind";
 
@@ -99,6 +99,13 @@ export function refusedFields(error: unknown): ProofErrors {
 
 /** What the page re-reads on (contract principle 3); `transfer_seen` joins with F-803-f. */
 export const TRANSFER_EVENTS: readonly string[] = [RealtimeEvents.paymentConfirmed, RealtimeEvents.paymentReversed];
+
+/** The waiting sentence: an automatic gateway watches; a person's says the seller's usual time when there is one (F-803-l). */
+export function checkingText(t: Pick<TransferStatus, "confirmationMode" | "confirmWithinMinutes">): { key: string; vars?: Record<string, string> } {
+  if (t.confirmationMode !== CONFIRMED_BY_PERSON) return { key: PAY_KEYS.checking.automatic };
+  if (t.confirmWithinMinutes === null) return { key: PAY_KEYS.checking.manual };
+  return { key: PAY_KEYS.checking.manualWithin, vars: { minutes: String(t.confirmWithinMinutes) } };
+}
 
 /** Why a transfer waits, said to its payer with what to do (billing `TransferReviewReason`). */
 export const PAYER_REASON_KEYS: Record<TransferReviewReason, string> = {

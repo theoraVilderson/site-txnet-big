@@ -3,7 +3,7 @@
 import { UserCheck } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { WINDOW_MINUTES } from "@/lib/billing/manual-transfer";
+import { CONFIRM_WITHIN_MINUTES, WINDOW_MINUTES } from "@/lib/billing/manual-transfer";
 import { Checkbox } from "../../../_components/kit";
 import { transferKind } from "../../../_components/transfer/transfer-kinds";
 import type { FormErrors, GatewayForm } from "../../_lib/gateway-form";
@@ -15,7 +15,8 @@ const T = FrontendI18nKeys.common.transfer;
 /**
  * A manual gateway's own settings (F-803-g), the same in the add wizard and
  * the edit screen: the proof the payer must send, ticked from the kind's
- * fields — at least one — and the payer's window.
+ * fields — at least one — the payer's window, and the usual time to confirm
+ * that the payer is told while they wait (F-803-l; empty tells no figure).
  *
  * The confirmation mode has no control: it is drawn only once a kind or
  * network has a watcher (F-803-f), and until then every manual gateway is
@@ -58,6 +59,24 @@ export function ManualSettingFields({ form, set, errors }: { form: GatewayForm; 
           value={form.windowMinutes}
           onChange={(v) => set("windowMinutes", v)}
           invalid={Boolean(errors.windowMinutes)}
+          ltr
+          decimal
+          suffix={t("common", M.minutes)}
+        />
+      </Field>
+
+      <Field
+        id="gw-confirmWithinMinutes"
+        label={t("common", M.confirmWithinMinutes)}
+        error={errors.confirmWithinMinutes}
+        optional
+        hint={t("common", M.confirmWithinHint, { min: String(CONFIRM_WITHIN_MINUTES.min), max: String(CONFIRM_WITHIN_MINUTES.max) })}
+      >
+        <TextInput
+          id="gw-confirmWithinMinutes"
+          value={form.confirmWithinMinutes}
+          onChange={(v) => set("confirmWithinMinutes", v)}
+          invalid={Boolean(errors.confirmWithinMinutes)}
           ltr
           decimal
           suffix={t("common", M.minutes)}
