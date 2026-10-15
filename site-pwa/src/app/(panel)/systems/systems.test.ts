@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { PANEL_MENU, isMenuGroup } from "../_lib/panel-menu";
 import { PANEL_SYSTEMS } from "@/lib/routes";
+import { tenantChannelOf } from "@/lib/tenant-channel";
 import type { SystemsDriftEvent, SystemsHold, SystemsPanel } from "@/lib/billing-api";
 import {
   CAPABILITY_KEYS,
@@ -16,7 +17,6 @@ import {
   HOLD_STATE_KEYS,
   CAUSE_KEYS,
   PANEL_EVENTS,
-  liveChannelOf,
   PANEL_MANAGE,
   PANEL_ROLES,
   PANEL_STATE_KEYS,
@@ -415,11 +415,11 @@ describe("a connection test's answer arrives without a reload (F-027-bs)", () =>
   const me = (permissions: string[]) => ({ tenant: { id: "t-1" }, permissions });
 
   it("listens on its own tenant's channel only when the gateway would let it", () => {
-    expect(liveChannelOf(me(["*"]))).toBe("tenant:t-1");
-    expect(liveChannelOf(me(["panel.manage", "realtime.tenant.read"]))).toBe("tenant:t-1");
+    expect(tenantChannelOf(me(["*"]))).toBe("tenant:t-1");
+    expect(tenantChannelOf(me(["panel.manage", "realtime.tenant.read"]))).toBe("tenant:t-1");
     // Refused as `realtime.channelForbidden`: the page reads on load, as before.
-    expect(liveChannelOf(me(["panel.manage"]))).toBeNull();
-    expect(liveChannelOf(null)).toBeNull();
+    expect(tenantChannelOf(me(["panel.manage"]))).toBeNull();
+    expect(tenantChannelOf(null)).toBeNull();
   });
 
   it("re-reads on a panel's test result, health change or halt, and on nothing else the channel carries", () => {

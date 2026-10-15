@@ -73,4 +73,5 @@ export const RealtimeEvents = {
   "tenantStatusChanged": "tenant.status.changed",
   "tenantSubscriptionGraceExtended": "tenant.subscription.grace_extended",
   "accessChanged": "identity.access.changed",
+  "supportInboxChanged": "support.inbox.changed",
 } as const;

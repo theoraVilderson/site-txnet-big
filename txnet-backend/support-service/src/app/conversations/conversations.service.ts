@@ -5,7 +5,6 @@ import {
   ConversationMode,
   ConversationPriority,
   ConversationStatus,
-  Language,
   MessageSenderKind,
   Prisma,
 } from '@prisma/client';
@@ -17,6 +16,7 @@ import { NoticeTarget, SupportNotifier } from '../notify/support-notifier';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 import { applySla } from '../sla/sla';
+import { nameIn, visibleCategories } from './categories';
 import { ConversationRefused, SupportCaller } from './refusal';
 
 /**
@@ -158,7 +158,7 @@ export class SupportConversationService {
 
   async open(caller: SupportCaller, input: OpenInput): Promise<ConversationSummary> {
     const mode = await this.availability.mode(caller.tenantId);
-    return this.writingMessage(async (tx, now) => {
+    const summary = await this.writingMessage(async (tx, now) => {
       const unfinished = await tx.supportConversation.count({
         where: { userId: caller.userId, status: { in: UNFINISHED } },
       });
@@ -197,6 +197,8 @@ export class SupportConversationService {
       await applySla(tx, conversation.id, now, 'opened');
       return summaryOf(conversation, 0);
     });
+    await this.realtime.tenant(caller.tenantId, summary.id);
+    return summary;
   }
 
   async send(caller: SupportCaller, conversationId: string, input: { body: string }): Promise<MessageView> {
@@ -206,6 +208,8 @@ export class SupportConversationService {
       return { view: viewOf(message, caller, []), status, assignee };
     });
     await this.realtime.message(conversationId, view, status);
+    // Waiting on us again, assigned or not: every agent's `pending` view moved (RT-1-g).
+    await this.realtime.tenant(caller.tenantId, conversationId);
     // After the commit and off the request: a notice never fails or slows the message (F-033-i).
     if (assignee) void this.notifier.tell(caller.tenantId, 'supportUserWrote', assignee);
     return view;
@@ -460,30 +464,6 @@ async function ownConversation(tx: Prisma.TransactionClient, caller: SupportCall
   const conversation = await tx.supportConversation.findFirst({ where: { id, userId: caller.userId } });
   if (!conversation) throw new ConversationRefused('not_found');
   return conversation;
-}
-
-/**
- * The categories a tenant's user may open under (ADR-0112 point 6): the
- * tenant's own active ones, or — while it has none — the platform's defaults.
- */
-async function visibleCategories(tx: Prisma.TransactionClient, tenantId: string) {
-  const query = (owner: string | null) =>
-    tx.supportCategory.findMany({
-      where: { tenantId: owner, isActive: true },
-      include: { texts: true },
-      orderBy: [{ sortOrder: 'asc' }, { key: 'asc' }],
-    });
-  const own = await query(tenantId);
-  return own.length > 0 ? own : query(null);
-}
-
-/** The name in `lang`, else in the reference language, else any. */
-function nameIn(texts: { lang: Language; name: string }[], lang: string): string | undefined {
-  return (
-    texts.find((t) => t.lang === lang)?.name ??
-    texts.find((t) => t.lang === Language.fa)?.name ??
-    texts[0]?.name
-  );
 }
 
 /** Ups the cursor to `seq` unless it is already past it; returns where it stands. */

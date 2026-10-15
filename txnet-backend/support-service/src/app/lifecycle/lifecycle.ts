@@ -49,7 +49,7 @@ export interface RatingView {
 }
 
 /** The realtime calls this needs. */
-type StatusChannel = Pick<SupportRealtime, 'status'>;
+type StatusChannel = Pick<SupportRealtime, 'status' | 'tenant'>;
 
 @Injectable()
 export class SupportLifecycle {
@@ -101,20 +101,21 @@ export class SupportLifecycle {
 
     let closed = 0;
     for (const { id } of due) {
-      const done = await this.crossTenant.$transaction(async (tx) => {
-        const [row] = await tx.$queryRaw<{ id: string }[]>`
+      const tenantId = await this.crossTenant.$transaction(async (tx) => {
+        const [row] = await tx.$queryRaw<{ tenantId: string }[]>`
           UPDATE support.conversation c
              SET status = 'closed'::support."ConversationStatus",
                  "closedAt" = ${now}, "updatedAt" = ${now}, "closedAutomatically" = true
            WHERE c.id = ${id}::uuid AND ${idle(now)}
-          RETURNING c.id`;
-        if (!row) return false;
+          RETURNING c."tenantId"`;
+        if (!row) return null;
         await applySla(tx, id, now, 'settled');
-        return true;
+        return row.tenantId;
       });
-      if (!done) continue;
+      if (!tenantId) continue;
       closed += 1;
       await this.realtime.status(id, ConversationStatus.closed);
+      await this.realtime.tenant(tenantId, id);
     }
     if (closed > 0) this.logger.log(`closed ${closed} idle conversation(s) of ${due.length} due`);
     return { scanned: due.length, closed };
@@ -169,6 +170,8 @@ export class SupportLifecycle {
       return { id: conversationId, status };
     });
     await this.realtime.status(conversationId, result.status);
+    // Back in the queue, as if opened (RT-1-g).
+    await this.realtime.tenant(caller.tenantId, conversationId);
     return result;
   }
 }

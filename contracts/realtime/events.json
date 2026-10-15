@@ -1,7 +1,7 @@
 {
   "note": "Hand-written, language-neutral. The declared home of every realtime event `type` a browser reads off a `user:` or `tenant:` channel (ADR-0036 amendment 2026-09-14, C-08). Read by txnet-backend/shared-core/src/lib/automation/routing-keys.contract.spec.ts, which holds OutboxEventType to it, and by tools/wire-gen.py, which generates site-pwa/src/generated/wire.ts from it.",
   "realtimeEvents": {
-    "note": "Each is also the outbox event type that produced it: the worker's consumer republishes the producing domain's event under the same name.",
+    "note": "Each is also the outbox event type that produced it: the worker's consumer republishes the producing domain's event under the same name — except a DirectRealtimeEventType (routing-keys.ts), which its service publishes itself.",
     "paymentConfirmed": "billing.payment.confirmed",
     "paymentReversed": "billing.payment.reversed",
     "notificationCreated": "notification.created",
@@ -17,6 +17,7 @@
     "tenantSubscriptionRenewed": "tenant.subscription.renewed",
     "tenantStatusChanged": "tenant.status.changed",
     "tenantSubscriptionGraceExtended": "tenant.subscription.grace_extended",
-    "accessChanged": "identity.access.changed"
+    "accessChanged": "identity.access.changed",
+    "supportInboxChanged": "support.inbox.changed"
   }
 }

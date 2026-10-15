@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { RealtimeEventType } from './routing-keys';
+import { DirectRealtimeEventType, RealtimeEventType } from './routing-keys';
 
 /**
  * `RealtimeEventType` is also the `type` of the realtime event the panel reads,
@@ -15,6 +15,6 @@ describe('contracts/realtime/events.json', () => {
   it('declares exactly the realtime event types routing-keys.ts exports', () => {
     const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { realtimeEvents: Record<string, string> };
     const { note: _note, ...events } = fixture.realtimeEvents;
-    expect(Object.values(events).sort()).toEqual(Object.values(RealtimeEventType).sort());
+    expect(Object.values(events).sort()).toEqual([...Object.values(RealtimeEventType), ...Object.values(DirectRealtimeEventType)].sort());
   });
 });

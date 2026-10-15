@@ -49,6 +49,16 @@ export const RealtimeEventType = {
   ACCESS_CHANGED: 'identity.access.changed',
 } as const;
 
+/**
+ * The realtime events a service publishes on a channel itself, never through
+ * the outbox — so never an {@link OutboxEventType} and never bound by a queue.
+ * Held to `contracts/realtime/events.json` beside {@link RealtimeEventType}.
+ */
+export const DirectRealtimeEventType = {
+  /** RT-1-g: a support conversation moved in its tenant's queue — opened, assigned, answered, settled, reopened (`SupportRealtime.tenant`). */
+  SUPPORT_INBOX_CHANGED: 'support.inbox.changed',
+} as const;
+
 /** Outbox event types (`outbox_event.type`), routed as `outboxRoutingKey(type)`. Only {@link RealtimeEventType} reach a browser. */
 export const OutboxEventType = {
   ...RealtimeEventType,

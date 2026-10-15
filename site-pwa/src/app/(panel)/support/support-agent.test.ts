@@ -8,6 +8,7 @@ import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
 import { applySupportEvent, readSupportEvent, type ThreadState } from "./_lib/support";
 import {
   AGENT_KEYS,
+  INBOX_EVENTS,
   PRIORITY_KEYS,
   VIEW_KEYS,
   agentActions,
@@ -41,6 +42,7 @@ const REPO = join(__dirname, "../../../../..");
 const LOCALES = join(REPO, "locales/frontend/langs");
 const PRISMA = readFileSync(join(REPO, "txnet-backend/prisma/domains/support.prisma"), "utf8");
 const AGENT_SERVICE = readFileSync(join(REPO, "txnet-backend/support-service/src/app/agent/agent.service.ts"), "utf8");
+const INBOX_VIEW = readFileSync(join(__dirname, "_components/SupportInboxView.tsx"), "utf8");
 
 const CONV = "aaaaaaaa-0000-4000-8000-0000000000d1";
 const NOW = Date.parse("2026-10-04T12:00:00.000Z");
@@ -228,5 +230,16 @@ describe("names and links on a ticket (F-033-r)", () => {
     const links = userLinksOf("u 1");
     expect(links.page).toBe("/users/u%201");
     expect(links.grant("g-9")).toBe("/users/u%201?grant=g-9");
+  });
+});
+
+describe("the inbox moves without a reload (RT-1-g)", () => {
+  it("re-reads on its tenant's queue moving, and on nothing else the channel carries", () => {
+    expect([...INBOX_EVENTS]).toEqual(["support.inbox.changed"]);
+  });
+
+  it("listens instead of polling: no interval, one useLiveReread on the tenant channel", () => {
+    expect(INBOX_VIEW).not.toMatch(/setInterval\(/);
+    expect(INBOX_VIEW).toMatch(/useLiveReread\(tenantChannelOf\(me\), INBOX_EVENTS,/);
   });
 });

@@ -89,7 +89,7 @@ beforeAll(async () => {
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   const limits: Record<string, number> = { SUPPORT_UNFINISHED_MAX: 3 };
   // Live events are SupportRealtime's own spec (F-034); here they go nowhere.
-  const realtime = { message: async () => undefined, read: async () => undefined, typing: async () => undefined, channelProof: async () => null } as never;
+  const realtime = { message: async () => undefined, read: async () => undefined, typing: async () => undefined, tenant: async () => undefined, channelProof: async () => null } as never;
   // Live/async is the availability spec's (F-033-g); here every thread is async.
   const availability = { mode: async () => 'async' } as never;
   support = new SupportConversationService(app, { get: (key: string) => limits[key] } as never, realtime, availability, { tell: async () => false } as never);

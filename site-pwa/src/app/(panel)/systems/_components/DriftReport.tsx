@@ -32,7 +32,7 @@ const fetchDrift = (q: { state: "open" | "all"; after?: string }) => billingApi.
  * The drift report (F-027-as's routes). An event that halts collection waits
  * for a person; acknowledging it — once — resumes collection on the next pass
  * (billing `contract.systems.md` rules 8–9). A new halting event arrives
- * without a reload (F-027-fh): `channel` is the page's (`liveChannelOf`).
+ * without a reload (F-027-fh): `channel` is the page's (`tenantChannelOf`).
  */
 export function DriftReport({ channel, onAcknowledged }: { channel: string | null; onAcknowledged: () => Promise<void> }) {
   const { t } = useLocale();

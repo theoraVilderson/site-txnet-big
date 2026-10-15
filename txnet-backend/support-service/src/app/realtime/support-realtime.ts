@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
+  DirectRealtimeEventType,
+  RealtimeChannelFamily,
   RedisTtl,
   SupportRealtimeEvent,
   encodeRealtimeFanout,
@@ -98,13 +100,28 @@ export class SupportRealtime {
     return this.publish(conversationId, { kind: 'support.status', conversationId, status });
   }
 
+  /**
+   * The thread moved in its tenant's queue (RT-1-g): the agents' inbox re-reads.
+   * Direct, not outbox — support-service has none — and on `tenant:`, which only
+   * `realtime.tenant.read` holders of this tenant hear; the body is ids only.
+   */
+  tenant(tenantId: string, conversationId: string): Promise<void> {
+    const channel = `${RealtimeChannelFamily.tenant}:${tenantId}`;
+    return this.send(channel, { type: DirectRealtimeEventType.SUPPORT_INBOX_CHANGED, conversationId });
+  }
+
+  private publish(conversationId: string, event: SupportRealtimeEvent): Promise<void> {
+    return this.send(supportRealtimeChannel(conversationId), event);
+  }
+
   /** Logged and swallowed: the write it announces already happened. */
-  private async publish(conversationId: string, event: SupportRealtimeEvent): Promise<void> {
-    const wire = `${this.redis.keyPrefix}${RedisKeys.realtimeFanout(supportRealtimeChannel(conversationId))}`;
+  private async send(channel: string, event: SupportRealtimeEvent | { type: string; conversationId: string }): Promise<void> {
+    const wire = `${this.redis.keyPrefix}${RedisKeys.realtimeFanout(channel)}`;
     try {
       await this.redis.publish(wire, encodeRealtimeFanout(event));
     } catch (e) {
-      this.logger.error(`could not publish ${event.kind} on support:${conversationId}: ${(e as Error).message}`);
+      const what = 'kind' in event ? event.kind : event.type;
+      this.logger.error(`could not publish ${what} on ${channel}: ${(e as Error).message}`);
     }
   }
 }

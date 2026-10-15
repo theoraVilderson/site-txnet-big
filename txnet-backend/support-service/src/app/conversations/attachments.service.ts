@@ -157,6 +157,7 @@ export class SupportAttachmentService {
       throw e;
     }
     await this.realtime.message(conversationId, sent.view, sent.status);
+    await this.realtime.tenant(caller.tenantId, conversationId);
     if (sent.assignee) void this.notifier.tell(caller.tenantId, 'supportUserWrote', sent.assignee);
     return sent.view;
   }

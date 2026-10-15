@@ -128,6 +128,7 @@ beforeAll(async () => {
     message: async (conversationId: string, view: unknown) => void published.push({ kind: 'message', conversationId, detail: view }),
     read: async (conversationId: string, readerKind: string) => void published.push({ kind: 'read', conversationId, detail: readerKind }),
     typing: async () => undefined,
+    tenant: async () => undefined,
     status: async (conversationId: string, status: string) => void published.push({ kind: 'status', conversationId, detail: status }),
     channelProof: async () => null,
   } as never;

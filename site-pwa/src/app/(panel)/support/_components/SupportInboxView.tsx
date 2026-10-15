@@ -5,12 +5,14 @@ import Link from "next/link";
 import { Inbox, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { panelSupportInboxThreadPath } from "@/lib/routes";
 import { supportAgentApi, type AgentConversation, type InboxView } from "@/lib/support-api";
+import { tenantChannelOf } from "@/lib/tenant-channel";
 import { formatInstant } from "../../_lib/datetime";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { AGENT_KEYS as K, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, assigneeOf, slaState } from "../_lib/support-agent";
+import { AGENT_KEYS as K, INBOX_EVENTS, INBOX_VIEWS, PRIORITY_KEYS, VIEW_KEYS, assigneeOf, slaState } from "../_lib/support-agent";
 import { StatusPill } from "./SupportView";
 import { usePresence } from "./usePresence";
 import { PageHeader } from "../../_components/kit/PageHeader";
@@ -53,11 +55,8 @@ export function SupportInboxView() {
     };
   }, [view, asked]);
 
-  // The queue moves without an event per thread (new threads have no channel yet): re-read each minute.
-  useEffect(() => {
-    const timer = setInterval(reload, 60_000);
-    return () => clearInterval(timer);
-  }, [reload]);
+  // A thread opened, answered, assigned or settled anywhere in the tenant moves this queue (RT-1-g).
+  useLiveReread(tenantChannelOf(me), INBOX_EVENTS, reload);
 
   async function more() {
     if (!nextAfter) return;

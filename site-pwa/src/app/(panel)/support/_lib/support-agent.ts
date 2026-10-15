@@ -1,4 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { RealtimeEvents } from "@/generated/wire";
 import { panelUserGrantPath, panelUserPath } from "@/lib/routes";
 import type { AgentConversation, ConversationStatus, InboxView, SlaTarget, SupportMessage, SupportPriority, SupportSla } from "@/lib/support-api";
 
@@ -11,6 +12,9 @@ export const VIEW_KEYS: Record<InboxView, string> = K.views;
 /** Urgent first: the queue's own order (support/contract.md "SLA"). */
 export const PRIORITIES: readonly SupportPriority[] = ["urgent", "high", "normal", "low"];
 export const INBOX_VIEWS: readonly InboxView[] = ["pending", "live", "mine", "unassigned"];
+
+/** What the inbox re-reads on (RT-1-g): support-service says a thread of this tenant moved in the queue. */
+export const INBOX_EVENTS: readonly string[] = [RealtimeEvents.supportInboxChanged];
 
 /** The presence heartbeat (F-033-g): support forgets an agent 90s after the last beat. */
 export const PRESENCE_EVERY_MS = 30_000;

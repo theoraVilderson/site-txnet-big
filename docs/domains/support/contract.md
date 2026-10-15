@@ -225,8 +225,8 @@ agent's of the tenant; a signed-in socket only.
 | `support.typing` | `POST …/typing` | `conversationId`, `senderKind`, `expiresInMs` |
 | `support.status` | an agent resolved or closed it (F-033-d) | `conversationId`, `status` |
 
-The actor is a kind, never an account. An internal note is never published here
-(invariant 5).
+The actor is a kind, never an account; a note is never published (invariant 5). On `tenant:<id>`,
+`support.inbox.changed` `{type, conversationId}` follows every write but a read, typing or a note (RT-1-g).
 
 ## Consumes
 

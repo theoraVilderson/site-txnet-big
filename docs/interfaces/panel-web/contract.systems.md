@@ -30,7 +30,7 @@ The *why* is **ADR-0080**.
    getting no answer, not a verdict, and the panel still reads `pending`
    (`verdictOf`). Staleness shows as a timestamp, never as a guess.
    **The answer arrives without a reload** (F-027-bs): `SystemsView`
-   subscribes to `liveChannelOf(me)` — `tenant:<me.tenant.id>`, only when
+   subscribes to `tenantChannelOf(me)` (`lib/tenant-channel.ts`) — `tenant:<me.tenant.id>`, only when
    `me` holds `realtime.tenant.read` or `*`, since the gateway refuses anyone
    else — and on `network.panel.tested` (`isPanelTested`) re-reads
    `GET /systems/panels`. The event is a nudge, never rendered: the row shown
@@ -236,7 +236,7 @@ The *why* is **ADR-0080**.
 (`network.prisma` enums, `contracts/network/capabilities.json` in order,
 billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),
 `validateRegister`'s limits, `verdictOf` with and without a fault,
-`liveChannelOf` and `isPanelTested` (rule 2),
+`tenantChannelOf` and `isPanelTested` (rule 2),
 `refusedBecause`, `canResubmit`, `validateLogin`, `resubmitOutcome`, the
 RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.

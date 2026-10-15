@@ -8,7 +8,8 @@ import { useLiveReread } from "@/hooks/useLiveReread";
 import { StorageKeys, readStored, writeStored } from "@/lib/storage";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { formatInstant } from "../../_lib/datetime";
-import { HELD_KEYS, SYSTEMS_KEYS as K, PANEL_EVENTS, liveChannelOf } from "../_lib/systems";
+import { tenantChannelOf } from "@/lib/tenant-channel";
+import { HELD_KEYS, SYSTEMS_KEYS as K, PANEL_EVENTS } from "../_lib/systems";
 import { attentionOf, guideOf, type SystemsTab } from "../_lib/systems-guide";
 import { DriftReport } from "./DriftReport";
 import { HoldsQueue } from "./HoldsQueue";
@@ -93,7 +94,7 @@ export function SystemsView() {
   }, [reload]);
 
   const { me } = usePanelSession();
-  const channel = liveChannelOf(me);
+  const channel = tenantChannelOf(me);
   // A burst of tests is one read now and one at the end (F-067-p), not one per event.
   useLiveReread(channel, PANEL_EVENTS, () => void reload());
 

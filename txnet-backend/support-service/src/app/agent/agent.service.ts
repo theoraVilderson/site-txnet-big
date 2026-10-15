@@ -30,7 +30,7 @@ import { NoticeTarget, SupportNotice, SupportNotifier } from '../notify/support-
 import { PrismaService } from '../prisma/prisma.service';
 import { ChannelProof, SupportRealtime, TYPING_TTL_MS } from '../realtime/support-realtime';
 import { SlaView, applySla, slaViewOf } from '../sla/sla';
-import { SUPPORT_AGENT_PERMISSION } from './support-agent.guard';
+import { isAgent } from './is-agent';
 
 /**
  * The agent's side of support (F-033-d, catalog §11.3): the unified inbox,
@@ -230,13 +230,15 @@ export class SupportAgentService {
     // Invariant 5: the user reads this channel, so a note is never on it.
     // It carries the user-side view, the agent named as on the page (F-033-q).
     if (!internal) await this.realtime.message(conversationId, viewOf(message, caller, [], names), status);
+    // A reply claims an unassigned thread and hands it to the user; a note moves nothing in the queue.
+    if (!internal) await this.realtime.tenant(caller.tenantId, conversationId);
     if (user) void this.notifier.tell(caller.tenantId, 'supportReplied', user);
     return agentMessageOf(message, caller, [], names);
   }
 
   /** Hands the thread to an agent of this tenant, or with `null` back to the queue. */
   async assign(caller: SupportCaller, conversationId: string, input: { assigneeUserId: string | null }): Promise<AgentConversationView> {
-    return tenantTransaction(this.prisma, async (tx) => {
+    const view = await tenantTransaction(this.prisma, async (tx) => {
       await tenantConversation(tx, conversationId);
       if (input.assigneeUserId !== null && !(await isAgent(tx, caller.tenantId, input.assigneeUserId))) {
         throw new ConversationRefused('assignee_unknown');
@@ -247,6 +249,8 @@ export class SupportAgentService {
       });
       return agentViewOf(updated, 0, await namesOf(tx, [updated.assignedToUserId]));
     });
+    await this.realtime.tenant(caller.tenantId, conversationId);
+    return view;
   }
 
   /** Done for now; the user's next message reopens it (invariant 7). A closed thread stays closed. */
@@ -280,13 +284,16 @@ export class SupportAgentService {
 
   /** Queue position only (catalog §11.5); the SLA targets follow the new priority (F-033-h). */
   async prioritize(caller: SupportCaller, conversationId: string, input: { priority: ConversationPriority }): Promise<AgentConversationView> {
-    return tenantTransaction(this.prisma, async (tx) => {
+    const view = await tenantTransaction(this.prisma, async (tx) => {
       await tenantConversation(tx, conversationId);
       await tx.supportConversation.update({ where: { id: conversationId }, data: { priority: input.priority } });
       await applySla(tx, conversationId, new Date(), 'reprioritized');
       const row = await tenantConversation(tx, conversationId);
       return agentViewOf(row, 0, await namesOf(tx, [row.assignedToUserId]));
     });
+    // Priority is queue position (catalog §11.5): the inbox re-orders.
+    await this.realtime.tenant(caller.tenantId, conversationId);
+    return view;
   }
 
   /** Moves the agent's own cursor forward; the user sees "seen" (F-034). */
@@ -322,6 +329,7 @@ export class SupportAgentService {
       return { view: agentViewOf(row, 0, await namesOf(tx, [row.assignedToUserId])), notice };
     });
     await this.realtime.status(conversationId, status);
+    await this.realtime.tenant(caller.tenantId, conversationId);
     if (notice) void this.notifier.tell(caller.tenantId, notice.template, notice.target);
     return view;
   }
@@ -337,51 +345,6 @@ async function tenantConversation(tx: Prisma.TransactionClient, id: string): Pro
 async function missingOrClosed(tx: Prisma.TransactionClient, id: string): Promise<ConversationRefused> {
   const exists = await tx.supportConversation.findFirst({ where: { id }, select: { id: true } });
   return new ConversationRefused(exists ? 'closed' : 'not_found');
-}
-
-/**
- * An active account of this tenant holding `support.agent` (or `*`) from any
- * source — its role, a live membership of a group giving the key or a role
- * that holds it, or the key given to it — and not taken from it (ADR-0138's
- * one answer; F-033-s: a role-only read missed every agent in a group). The
- * tenant is matched explicitly as well as by RLS: an assignee from another
- * tenant must answer exactly as a missing one.
- */
-async function isAgent(tx: Prisma.TransactionClient, tenantId: string, userId: string): Promise<boolean> {
-  const rows = await tx.$queryRaw<{ ok: number }[]>`
-    WITH u_role AS (
-      SELECT u."roleId" AS id FROM identity."user" u
-       WHERE u.id = ${userId}::uuid
-         AND u."tenantId" = ${tenantId}::uuid
-         AND u."deletedAt" IS NULL
-         AND u.status = 'active'::identity."UserStatus"
-    ), held AS (
-      SELECT p.key FROM u_role JOIN identity.role_permission rp ON rp."roleId" = u_role.id JOIN identity.permission p ON p.id = rp."permissionId"
-      UNION ALL
-      SELECT p.key
-        FROM governance.user_group_member m
-        JOIN governance.user_group_permission gp ON gp."groupId" = m."groupId"
-        JOIN identity.permission p ON p.id = gp."permissionId"
-       WHERE m."userId" = ${userId}::uuid AND m."memberType" = 'user' AND (m."expiresAt" IS NULL OR m."expiresAt" > now())
-      UNION ALL
-      SELECT p.key
-        FROM governance.user_group_member m
-        JOIN governance.user_group g ON g.id = m."groupId"
-        JOIN identity.role_permission rp ON rp."roleId" = g."roleId"
-        JOIN identity.permission p ON p.id = rp."permissionId"
-       WHERE m."userId" = ${userId}::uuid AND m."memberType" = 'user' AND (m."expiresAt" IS NULL OR m."expiresAt" > now())
-      UNION ALL
-      SELECT p.key FROM identity.user_permission up JOIN identity.permission p ON p.id = up."permissionId"
-       WHERE up."userId" = ${userId}::uuid AND up.effect = 'give'
-    )
-    SELECT 1 AS ok
-      FROM u_role
-     WHERE EXISTS (SELECT 1 FROM held WHERE key IN (${SUPPORT_AGENT_PERMISSION}, '*'))
-       AND NOT EXISTS (
-         SELECT 1 FROM identity.user_permission up JOIN identity.permission p ON p.id = up."permissionId"
-          WHERE up."userId" = ${userId}::uuid AND up.effect = 'take' AND p.key = ${SUPPORT_AGENT_PERMISSION})
-     LIMIT 1`;
-  return rows.length > 0;
 }
 
 function agentViewOf(c: ConversationRow, unread: number, names?: ReadonlyMap<string, string>, now = new Date()): AgentConversationView {

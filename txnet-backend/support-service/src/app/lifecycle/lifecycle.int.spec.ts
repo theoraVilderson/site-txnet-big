@@ -97,6 +97,7 @@ beforeAll(async () => {
     message: async () => undefined,
     read: async () => undefined,
     typing: async () => undefined,
+    tenant: async () => undefined,
     status: async (conversationId: string, status: string) => void statuses.push({ conversationId, status }),
     channelProof: async () => null,
   } as never;

@@ -115,5 +115,17 @@ describe('events on support:<conversationId>', () => {
       throw new Error('connection lost');
     };
     await expect(new SupportRealtime(redis).message(CONVERSATION, message, 'open')).resolves.toBeUndefined();
+    await expect(new SupportRealtime(redis).tenant(ALICE.tenantId, CONVERSATION)).resolves.toBeUndefined();
+  });
+});
+
+// RT-1-g: the agents' inbox hears its tenant's queue move, by type and id only — the page re-reads.
+describe('the inbox event', () => {
+  it("publishes `support.inbox.changed` on the tenant's prefixed fan-out name, with the conversation id and nothing else", async () => {
+    const redis = fakeRedis();
+    await new SupportRealtime(redis).tenant(ALICE.tenantId, CONVERSATION);
+    const [[wire, raw]] = redis.published;
+    expect(wire).toBe(`${PREFIX}realtime:tenant:${ALICE.tenantId}`);
+    expect(payloadOf(raw)).toEqual({ type: 'support.inbox.changed', conversationId: CONVERSATION });
   });
 });

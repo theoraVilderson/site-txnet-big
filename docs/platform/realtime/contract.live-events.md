@@ -52,6 +52,7 @@ corrected, per "Decide once".
 | `network.panel.drift_raised` | `tenant:` | network → panel-tested consumer (F-027-fg) | SystemsView (F-027-fh) |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
+| `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
 
 ## Planned — the RT-1 rows
 
@@ -128,13 +129,14 @@ least one config or removed the member, in that write's transaction; the
 tenant is the member's. No Go change. SystemsView adds the type to the
 `useLiveReread` it got in RT-1-a.
 
-**RT-1-g — support inbox.** Type `support.inbox.changed`, `tenant:`, body
-`{type, conversationId}`. support-service has no outbox: publish directly,
-as `SupportRealtime` does, with a `tenant(tenantId, conversationId)` method
-on the same class (logged and swallowed). Called on a conversation created,
-assigned, resolved or closed, and on a user's message to an unassigned
-thread. Also declared in `events.json` for the browser's type. SupportInboxView
-re-reads the current view; its 60 s poll goes.
+**RT-1-g — support inbox** — built 2026-10-15. Type `support.inbox.changed`,
+`tenant:`, body `{type, conversationId}`, published directly by
+`SupportRealtime.tenant` (logged and swallowed). **Corrected:** after every
+write but a read, typing or an internal note — open, a user's message (assigned
+or not: `pending` is tenant-wide), a reply, assign, prioritize, resolve, close,
+the idle sweep, reopen. A direct type is `DirectRealtimeEventType`
+(`routing-keys.ts`), never an `OutboxEventType`; `events.json` holds both.
+SupportInboxView re-reads on `tenantChannelOf(me)`; its 60 s poll is gone.
 
 **RT-1-h — bot linking before sign-in.** No new channel family: reuse `otp:`.
 `BotLinkService.startLink` calls `OtpDeliveryStore.mintHandles()` and returns
