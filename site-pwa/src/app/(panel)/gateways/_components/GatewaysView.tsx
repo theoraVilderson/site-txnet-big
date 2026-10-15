@@ -6,6 +6,7 @@ import { KeyRound, Landmark, Loader2, Pencil, Plus, RotateCw, Trash2, TriangleAl
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
+import { isManualProvider } from "@/lib/billing/manual-transfer";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Skeleton } from "../../_components/kit/Skeleton";
 import { useGateways } from "../_hooks/useGateways";
@@ -17,6 +18,8 @@ import { DepositPresetsCard } from "./DepositPresetsCard";
 import { DepositTaxCard } from "./DepositTaxCard";
 import { GatewayLinks } from "./GatewayLinks";
 import { GatewayWizard } from "./GatewayWizard";
+import { DestinationsDialog } from "./manual/DestinationsDialog";
+import { ManualGatewaysSection } from "./manual/ManualGatewaysSection";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { Button, useConfirm } from "../../_components/kit";
 
@@ -69,6 +72,11 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
   };
 
   const [editing, setEditing] = useState<AdminGateway | "new" | null>(null);
+  // A manual gateway's cards or wallets (F-803-g); `startWithNew` when the wizard just created it.
+  const [destinationsOf, setDestinationsOf] = useState<{ gateway: AdminGateway; startWithNew: boolean } | null>(null);
+  // Two sections (F-803-g): gateways that settle themselves, then manual ones by kind.
+  const automatic = gateways.filter((g) => !isManualProvider(g.providerName));
+  const manual = gateways.filter((g) => isManualProvider(g.providerName));
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -138,6 +146,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
             className="relative rounded-3xl border border-card-border bg-card-bg p-5 shadow-sm sm:p-6"
           >
             {isRefreshing && <Loader2 size={16} className="absolute end-4 top-4 animate-spin text-primary" aria-label={t("common", G.loading)} />}
+            <h2 className="mb-1 text-sm font-bold text-text-primary">{t("common", G.manual.automaticSection)}</h2>
             <div className={`transition-opacity duration-200 ${isRefreshing ? "opacity-60" : "opacity-100"}`}>
               {error ? (
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -148,7 +157,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                     {t("common", G.retry)}
                   </Button>
                 </div>
-              ) : gateways.length === 0 ? (
+              ) : automatic.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center">
                   <span className="grid size-14 place-items-center rounded-2xl bg-[var(--leaf-bg)] text-primary">
                     <Landmark size={26} aria-hidden />
@@ -164,7 +173,7 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
                 </div>
               ) : (
                 <ul className="divide-y divide-card-border">
-                  {gateways.map((g, i) => (
+                  {automatic.map((g, i) => (
                     <motion.li
                       key={`${g.source}:${g.id}`}
                       {...(reduceMotion
@@ -248,6 +257,18 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
             </div>
           </motion.section>
 
+          {!error && (
+            <motion.div {...reveal(1)}>
+              <ManualGatewaysSection
+                gateways={manual}
+                onAdd={() => setEditing("new")}
+                onEdit={setEditing}
+                onRemove={(g) => void remove(g)}
+                onDestinations={(g) => setDestinationsOf({ gateway: g, startWithNew: false })}
+              />
+            </motion.div>
+          )}
+
           {presets && (
             <motion.div {...reveal(1)}>
               <DepositPresetsCard surface={surface} initial={presets.presets} currency={presets.currencyCode} />
@@ -278,6 +299,10 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
             setNotice(null);
             await changed();
           }}
+          onAddDestination={(g) => {
+            setEditing(null);
+            setDestinationsOf({ gateway: g, startWithNew: true });
+          }}
         />
       )}
       {editing && editing !== "new" && (
@@ -292,6 +317,15 @@ export function GatewaysView({ surface = AMBIENT_GATEWAYS }: { surface?: Gateway
             setNotice(null);
             await changed();
           }}
+        />
+      )}
+      {destinationsOf && (
+        <DestinationsDialog
+          surface={surface}
+          gateway={destinationsOf.gateway}
+          startWithNew={destinationsOf.startWithNew}
+          onClose={() => setDestinationsOf(null)}
+          onChanged={() => void changed()}
         />
       )}
     </div>

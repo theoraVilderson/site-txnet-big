@@ -56,6 +56,7 @@ const GATEWAY: AdminGateway = {
   isActive: true,
   blocked: null,
   userGroupIds: [],
+  manual: null,
   description: null,
   supportedCurrencies: null,
   confirmationMode: null,

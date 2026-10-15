@@ -1,9 +1,10 @@
 /**
  * Iranian card issuers by BIN (the card number's first six digits), for the
  * `card_to_card` kind (F-803-b) and the drawn card on the pay page (F-803-i).
- * Data, not logic: a bank that issues a new BIN is one prefix added here. The
- * bank's logo asset is named by its `id`; `colors` is the drawn card's
- * gradient, from the bank's own brand.
+ * Data, not logic: a bank that issues a new BIN is one prefix added here and
+ * in `contracts/billing/iran-banks.json`, the panel's copy (F-803-g), which
+ * `card-to-card.spec.ts` holds this table to. The bank's logo asset is named
+ * by its `id`; `colors` is the drawn card's gradient, from the bank's own brand.
  */
 export interface IranBank {
   id: string;

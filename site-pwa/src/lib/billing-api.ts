@@ -18,6 +18,7 @@ export * from "./billing/deposit";
 export * from "./billing/gateways";
 export * from "./billing/grants";
 export * from "./billing/manual-payments";
+export * from "./billing/manual-transfer";
 export * from "./billing/panel-groups";
 export * from "./billing/reseller-grants";
 export * from "./billing/shop";

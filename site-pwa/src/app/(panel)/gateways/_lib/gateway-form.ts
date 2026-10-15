@@ -1,5 +1,6 @@
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway, CreateGatewayBody, GatewaySource, UpdateGatewayBody } from "@/lib/billing-api";
+import { CONFIRMED_BY_PERSON, isManualProvider, WINDOW_MINUTES, type ManualSettingBody } from "@/lib/billing/manual-transfer";
 import { samePresets } from "./presets";
 import { PROVIDER_FIELDS, secretFields, takesStaticRate, type Provider } from "./provider-fields";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -46,11 +47,17 @@ export interface GatewayForm {
   callbackUrl: string;
   /** Tax on a top-up through this gateway, a percentage; empty inherits the tenant's default (ADR-0076). */
   taxRatePercent: string;
+  /** A manual gateway's kind (F-803-g); fixed once it has a destination (`kind_in_use`). Empty on any other. */
+  manualKind: string;
+  /** The proof the payer must send, from the kind's fields — at least one (D-60 part 4). */
+  requiredProof: string[];
+  /** The payer's window in minutes, `WINDOW_MINUTES` bounds. */
+  windowMinutes: string;
 }
 
 /** More decimal places than the column that stores this field keeps. `places` is that column's. */
 export type PrecisionError = { kind: "precision"; places: number };
-export type FormError = "required" | "decimal" | "range" | "percent" | "merchantFormat" | "url" | PrecisionError;
+export type FormError = "required" | "decimal" | "range" | "percent" | "merchantFormat" | "url" | "window" | PrecisionError;
 export type FormErrors = Partial<Record<keyof GatewayForm, FormError>>;
 
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,8})?$/;
@@ -155,6 +162,9 @@ export function emptyForm(source: GatewaySource): GatewayForm {
     depositPresets: [],
     callbackUrl: "",
     taxRatePercent: "",
+    manualKind: "",
+    requiredProof: [],
+    windowMinutes: String(WINDOW_MINUTES.default),
   };
 }
 
@@ -186,6 +196,9 @@ export function formFromGateway(g: AdminGateway): GatewayForm {
     depositPresets: [...(g.depositPresets ?? [])],
     callbackUrl: g.callbackUrl ?? "",
     taxRatePercent: g.taxRatePercent ?? "",
+    manualKind: g.manual?.kind ?? "",
+    requiredProof: [...(g.manual?.requiredProof ?? [])],
+    windowMinutes: String(g.manual?.windowMinutes ?? WINDOW_MINUTES.default),
   };
 }
 
@@ -241,8 +254,35 @@ export function validateForm(form: GatewayForm): FormErrors {
   }
   const tax = taxRateError(form.taxRatePercent);
   if (tax) errors.taxRatePercent = tax;
+  if (isManualProvider(form.providerName)) Object.assign(errors, manualErrors(form));
   if (form.callbackUrl.trim() && !isWebAddress(form.callbackUrl.trim())) errors.callbackUrl = "url";
   return errors;
+}
+
+const WHOLE_MINUTES = /^\d{1,4}$/;
+
+/** A manual gateway's own rules (F-803-c): a kind, at least one proof, a window billing accepts. */
+function manualErrors(form: GatewayForm): FormErrors {
+  const errors: FormErrors = {};
+  if (!form.manualKind) errors.providerName = "required";
+  if (form.requiredProof.length === 0) errors.requiredProof = "required";
+  const minutes = form.windowMinutes.trim();
+  if (!WHOLE_MINUTES.test(minutes) || Number(minutes) < WINDOW_MINUTES.min || Number(minutes) > WINDOW_MINUTES.max) errors.windowMinutes = "window";
+  return errors;
+}
+
+/** The `manual` body a create sends whole: every manual gateway is confirmed by a person until F-803-f. */
+function manualBody(form: GatewayForm): ManualSettingBody {
+  return { kind: form.manualKind, confirmationMode: CONFIRMED_BY_PERSON, requiredProof: form.requiredProof, windowMinutes: Number(form.windowMinutes.trim()) };
+}
+
+/** What an edit changed of the setting; the kind and mode are not edited here. */
+function manualPatch(before: GatewayForm, form: GatewayForm): ManualSettingBody {
+  const patch: ManualSettingBody = {};
+  const sameProof = form.requiredProof.length === before.requiredProof.length && form.requiredProof.every((id) => before.requiredProof.includes(id));
+  if (!sameProof) patch.requiredProof = form.requiredProof;
+  if (form.windowMinutes.trim() !== before.windowMinutes.trim()) patch.windowMinutes = Number(form.windowMinutes.trim());
+  return patch;
 }
 
 function value(form: GatewayForm, k: (typeof EDITABLE)[number]): string | boolean | null {
@@ -275,6 +315,7 @@ export function createBody(form: GatewayForm, me: Me | null): CreateGatewayBody 
   if (body.feeValue === undefined || body.feeValue === "") body.feeValue = "0";
   if (form.depositPresets.length > 0) body.depositPresets = form.depositPresets;
   if (form.callbackUrl.trim()) body.callbackUrl = form.callbackUrl.trim();
+  if (isManualProvider(form.providerName)) body.manual = manualBody(form);
   // A Star has no live rate: its value is the operator's (D-32).
   if (takesStaticRate(form.providerName)) Object.assign(body, { staticRate: form.staticRate.trim(), useLiveRate: false });
   return { ...(body as unknown as CreateGatewayBody), ...secrets(form) };
@@ -300,10 +341,16 @@ export function updateBody(original: AdminGateway, form: GatewayForm, me: Me | n
     if (form.staticRate.trim() !== before.staticRate.trim()) body.staticRate = form.staticRate.trim();
     if (original.useLiveRate !== false) body.useLiveRate = false;
   }
+  if (isManualProvider(original.providerName)) {
+    const manual = manualPatch(before, form);
+    if (Object.keys(manual).length > 0) body.manual = manual;
+  }
   return { ...(body as UpdateGatewayBody), ...secrets(form) };
 }
 
 /** The fields a save would send, in the order it sends them — the edit screen's list of changes. */
 export function changedFields(original: AdminGateway, form: GatewayForm, me: Me | null): (keyof GatewayForm)[] {
-  return Object.keys(updateBody(original, form, me)) as (keyof GatewayForm)[];
+  const body = updateBody(original, form, me);
+  // The `manual` body is named by the form fields it carries, so each is labelled and placed in its section.
+  return Object.keys(body).flatMap((k) => (k === "manual" ? (Object.keys(body.manual ?? {}) as (keyof GatewayForm)[]) : [k as keyof GatewayForm]));
 }

@@ -13,7 +13,8 @@ export const EDITOR_SECTIONS: readonly { id: EditorSectionId; fields: readonly (
   { id: "general", fields: ["displayName", "providerName", "gatewayCategory", "isActive", "blockedReason"] },
   { id: "amounts", fields: ["minAcceptAmount", "maxAcceptAmount", "depositPresets"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
-  { id: "connection", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl"] },
+  // A manual gateway's proof and window sit where a provider's keys do (F-803-g).
+  { id: "connection", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "requiredProof", "windowMinutes"] },
 ];
 
 export function sectionOf(field: keyof GatewayForm): EditorSectionId | null {

@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 1
-updated: 2026-10-06
+updated: 2026-10-15
 ---
 
 # Contract — panel-web: paying by card-to-card or to a wallet, and setting them up (F-803…F-807)
@@ -97,6 +97,18 @@ pay-once guard (`useStartOnce`) applies unchanged.
   has a watcher — so not before F-803-f; until then every manual gateway is
   `manual` and the control is absent. `requiredProof`: checkboxes from
   the kind, at least one.
+- **Built 2026-10-15 (F-803-g).** The kind registry is
+  `(panel)/_components/transfer/` (`transfer-kinds.ts`, `kinds/<kind>.tsx`
+  exporting the kind with its `AdminFields`; `kinds/plain.tsx` is the unknown
+  kind's fallback). The bank table is `contracts/billing/iran-banks.json`,
+  generated into `@/generated/wire` (`IranBanks`) and held to billing's by
+  `card-to-card.spec.ts`; the drawn card's logo slot is the bank's initial
+  until logo assets exist. The panel never sends `bankId` — billing derives it.
+  `/gateways`: `_components/manual/` (section, destinations dialog, editor,
+  `ManualSettingFields` shared by the wizard's proof step and the edit
+  screen's connection section), rules in `_lib/destination-form.ts` and
+  `_lib/gateway-form.ts`; the wizard's done screen opens the new gateway's
+  destinations. Proof: `gateways/manual-gateways.test.ts`.
 - The manual-payments screen (F-093-n) shows a transfer row's destination
   label, expected vs. claimed amount, the proof fields, the receipt in a
   lightbox (pinch/scroll zoom), a tx hash linked to the network's explorer

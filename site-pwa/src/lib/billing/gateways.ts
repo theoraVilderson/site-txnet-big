@@ -1,5 +1,6 @@
 // Payment gateways: the caller's own or a named reseller's, and the platform's links (ADR-0041).
 import { call } from "./client";
+import type { DestinationBody, ManualDestination, ManualSetting, ManualSettingBody } from "./manual-transfer";
 
 /**
  * Where a gateway call goes: the ambient surface, which configures the
@@ -14,13 +15,13 @@ import { call } from "./client";
 export const gatewayApiPrefix = (tenantId: string | null) =>
   tenantId === null ? "/gateways" : `/tenants/${encodeURIComponent(tenantId)}/gateways`;
 
-/** The eight calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
 /** The tenant's default quick amounts, and the currency they are in (F-116-h2). */
 export interface DepositPresets {
   presets: string[];
   currencyCode: string;
 }
 
+/** The calls both gateway surfaces answer. `GatewaysView` takes one of these, not `billingApi`. */
 export interface GatewayAdminApi {
   list(): Promise<AdminGateway[]>;
   create(body: CreateGatewayBody): Promise<AdminGateway>;
@@ -33,6 +34,13 @@ export interface GatewayAdminApi {
   setTax(taxRatePercent: string | null): Promise<{ taxRatePercent: string | null }>;
   /** Who it is offered to (F-102-g): the owner's groups, replaced whole; `[]` = everyone. */
   setAudience(source: GatewaySource, id: string, userGroupIds: string[]): Promise<{ userGroupIds: string[] }>;
+  /** A manual gateway's cards or wallets (F-803-c), in their sort order, private fields included. */
+  destinations(source: GatewaySource, id: string): Promise<ManualDestination[]>;
+  /** `fields` is checked by the gateway's kind: `invalid_destination` names each refused field in `error.facts`. */
+  createDestination(source: GatewaySource, id: string, body: DestinationBody & { label: string; fields: ManualDestination["fields"] }): Promise<ManualDestination>;
+  updateDestination(source: GatewaySource, id: string, destinationId: string, body: DestinationBody): Promise<ManualDestination>;
+  /** `deactivated` once a payment showed it — its snapshot and review need the row. */
+  removeDestination(source: GatewaySource, id: string, destinationId: string): Promise<{ id: string; mode: "deleted" | "deactivated" }>;
 }
 
 /**
@@ -56,6 +64,13 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
       call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "PUT", body: JSON.stringify({ taxRatePercent }) }),
     setAudience: (source, id, userGroupIds) =>
       call<{ userGroupIds: string[] }>(`${row(source, id)}/audience`, { method: "PUT", body: JSON.stringify({ userGroupIds }) }),
+    destinations: (source, id) => call<ManualDestination[]>(`${row(source, id)}/destinations`, { method: "GET" }),
+    createDestination: (source, id, body) =>
+      call<ManualDestination>(`${row(source, id)}/destinations`, { method: "POST", body: JSON.stringify(body) }),
+    updateDestination: (source, id, destinationId, body) =>
+      call<ManualDestination>(`${row(source, id)}/destinations/${encodeURIComponent(destinationId)}`, { method: "PATCH", body: JSON.stringify(body) }),
+    removeDestination: (source, id, destinationId) =>
+      call<{ id: string; mode: "deleted" | "deactivated" }>(`${row(source, id)}/destinations/${encodeURIComponent(destinationId)}`, { method: "DELETE" }),
   };
 }
 
@@ -122,6 +137,8 @@ export interface AdminGateway {
   updatedAt: string;
   /** The owner's user groups it is offered to; empty = everyone (F-102-g). */
   userGroupIds: string[];
+  /** A manual gateway's kind, mode, proof, window and destination counts (F-803-c); `null` for any other. */
+  manual: ManualSetting | null;
 }
 
 type GatewayFieldsBody = {
@@ -149,6 +166,8 @@ type GatewayFieldsBody = {
   merchantId?: string;
   secretKey?: string;
   webhookSecret?: string;
+  /** A manual gateway's setting (F-803-c): whole on create, the changed keys on update. */
+  manual?: ManualSettingBody;
 };
 
 export type CreateGatewayBody = GatewayFieldsBody & { source: GatewaySource; tenantId?: string };

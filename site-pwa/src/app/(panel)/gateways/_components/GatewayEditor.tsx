@@ -11,8 +11,6 @@ import {
   KeyRound,
   Percent,
   RotateCcw,
-  ShieldCheck,
-  ShieldOff,
   SlidersHorizontal,
   TriangleAlert,
   Wallet,
@@ -24,13 +22,16 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { ownsAudience, useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
-import type { AdminGateway, GatewaySecretState } from "@/lib/billing-api";
+import type { AdminGateway } from "@/lib/billing-api";
+import { isManualProvider } from "@/lib/billing/manual-transfer";
+import { transferKind } from "../../_components/transfer/transfer-kinds";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
 import { GatewayAudienceSection } from "./GatewayAudienceSection";
-import { secretFields, takesStaticRate } from "../_lib/provider-fields";
-import { FeeFields, Field, PROVIDER_ICONS, SecretInput, TextInput, fieldErrorText, useRangeText, type SetField } from "./gateway-fields";
+import { FeeFields, Field, PROVIDER_ICONS, TextInput, useRangeText, type SetField } from "./gateway-fields";
+import { GatewayConnectionFields } from "./GatewayConnectionFields";
+import { useKindText } from "./WizardProviderPicker";
 import { Toggle } from "../../_components/kit/Toggle";
 import { EDITOR_SECTIONS, firstInvalidSection, sectionOf, type EditorSectionId } from "../_lib/gateway-editor";
 import {
@@ -81,6 +82,8 @@ const FIELD_LABELS: Partial<Record<keyof GatewayForm, string>> = {
   webhookSecret: G.fields.webhookSecret,
   staticRate: G.fields.starRate,
   callbackUrl: G.callback.label,
+  requiredProof: G.manual.requiredProof,
+  windowMinutes: G.manual.windowMinutes,
 };
 
 /** A bound worth putting into words: empty (no limit) or a plain decimal. */
@@ -114,6 +117,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
   const confirm = useConfirm();
   const errorMessage = useGatewayMessage(surface);
   const reduceMotion = useReducedMotionConfig();
+  const kindText = useKindText();
   const owner = isPlatformTenant(me?.tenant?.type);
 
   const initial = useMemo(() => formFromGateway(gateway), [gateway]);
@@ -214,8 +218,9 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
 
   if (typeof document === "undefined") return null;
 
+  const manual = isManualProvider(form.providerName);
   const provider = form.providerName as Provider | "";
-  const ProviderIcon = provider ? PROVIDER_ICONS[provider] : Building2;
+  const ProviderIcon = manual ? transferKind(form.manualKind).icon : (PROVIDER_ICONS[provider as Provider] ?? Building2);
   const rangeReadable = AMOUNT.test(form.minAcceptAmount) && AMOUNT.test(form.maxAcceptAmount) && !errors.minAcceptAmount;
 
   const chip = (text: string, ok: boolean) => (
@@ -285,6 +290,11 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
             <TextInput id="gw-displayName" value={form.displayName} onChange={(v) => set("displayName", v)} invalid={Boolean(errors.displayName)} />
           </Field>
         </div>
+        {manual ? (
+          // A manual gateway's kind and category are fixed (`manual_setting_mismatch`, `kind_in_use`).
+          <p className="text-sm font-bold text-text-primary sm:col-span-2">{kindText(form.manualKind).title}</p>
+        ) : (
+          <>
         <Field id="gw-providerName" label={t("common", F.provider)} error={errors.providerName}>
           <Select
             value={form.providerName}
@@ -303,6 +313,8 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
             options={CATEGORIES.map((c) => ({ value: c, label: t("common", W.categories[c]) }))}
           />
         </Field>
+          </>
+        )}
         <div className="sm:col-span-2">
           <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label={t("common", F.isActive)} hint={t("common", W.hints.isActive)} />
         </div>
@@ -359,63 +371,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
 
     fee: <FeeFields form={form} set={set} errors={errors} money={money} currency={gateway.currencyCode} />,
 
-    connection: (
-      <div className="flex flex-col gap-4">
-        {provider && (
-          <div className="flex items-start gap-3 rounded-2xl border border-card-border bg-[var(--bg-inner)] p-3">
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-card-bg text-primary">
-              <ProviderIcon size={16} aria-hidden />
-            </span>
-            <p className="text-xs leading-6 text-text-primary">{t("common", W.providers[provider].where)}</p>
-          </div>
-        )}
-        {takesStaticRate(form.providerName) && (
-          <Field id="gw-staticRate" label={t("common", G.fields.starRate)} error={errors.staticRate} hint={t("common", G.fields.starRateHint)}>
-            <TextInput id="gw-staticRate" value={form.staticRate} onChange={(v) => set("staticRate", v)} invalid={Boolean(errors.staticRate)} ltr decimal suffix="USD" />
-          </Field>
-        )}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {/* The provider's own secrets, from the one map (F-104-f). */}
-          {secretFields(form.providerName).map(({ slot: k, label }) => {
-            const state = gateway.credentials?.[k];
-            return (
-              <div key={k} className="flex flex-col gap-2 rounded-2xl border border-card-border bg-[var(--bg-inner)] p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <label htmlFor={`gw-${k}`} className="text-xs font-bold text-text-primary">
-                    {t("common", G.fields[label])}
-                  </label>
-                  <SecretBadge state={state} />
-                </div>
-                <SecretInput
-                  id={`gw-${k}`}
-                  value={form[k]}
-                  onChange={(v) => set(k, v)}
-                  showLabel={t("common", W.secrets.show)}
-                  hideLabel={t("common", W.secrets.hide)}
-                />
-                {errors[k] ? (
-                  <span role="alert" className="text-2xs font-bold text-error">
-                    {fieldErrorText(t, errors[k]!)}
-                  </span>
-                ) : (
-                  <span className="text-2xs leading-5 text-text-secondary">{t("common", state?.configured ? E.keepCurrent : E.enterNew)}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <Field id="gw-callbackUrl" label={t("common", G.callback.label)} error={errors.callbackUrl} hint={t("common", G.callback.hint)} optional>
-          <TextInput
-            id="gw-callbackUrl"
-            value={form.callbackUrl}
-            onChange={(v) => set("callbackUrl", v)}
-            invalid={Boolean(errors.callbackUrl)}
-            ltr
-            placeholder={t("common", G.callback.placeholder)}
-          />
-        </Field>
-      </div>
-    ),
+    connection: <GatewayConnectionFields gateway={gateway} form={form} set={set} errors={errors} />,
   };
 
   return createPortal(
@@ -569,29 +525,5 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
       </motion.div>
     </div>,
     document.body,
-  );
-}
-
-/** Whether a secret is stored — never what it is. */
-function SecretBadge({ state }: { state: GatewaySecretState | null | undefined }) {
-  const { t } = useLocale();
-  if (!state) {
-    return <span className="rounded-full bg-card-bg px-2 py-0.5 text-3xs font-bold text-text-secondary">{t("common", G.unknown)}</span>;
-  }
-  return state.configured ? (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-3xs font-bold text-success">
-      <ShieldCheck size={12} aria-hidden />
-      {t("common", G.configured)}
-      {state.version != null && (
-        <span dir="ltr" className="font-normal opacity-80">
-          v{state.version}
-        </span>
-      )}
-    </span>
-  ) : (
-    <span className="inline-flex items-center gap-1 rounded-full bg-[var(--error-bg)] px-2 py-0.5 text-3xs font-bold text-error">
-      <ShieldOff size={12} aria-hidden />
-      {t("common", G.notConfigured)}
-    </span>
   );
 }

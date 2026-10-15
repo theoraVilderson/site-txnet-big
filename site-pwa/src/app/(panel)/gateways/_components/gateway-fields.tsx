@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Bitcoin, ChevronDown, CircleCheckBig, CreditCard, Eye, EyeOff, Globe, Landmark, MessageCircle, Percent, Star, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { isManualProvider } from "@/lib/billing/manual-transfer";
 import type { FormError, FormErrors, GatewayForm } from "../_lib/gateway-form";
 import { feePreview, type Provider } from "../_lib/gateway-wizard";
 import { Field as KitField, IconButton, Input, RadioCards, SegmentedControl } from "../../_components/kit";
@@ -196,7 +197,8 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
 
   return (
     <div className="flex flex-col gap-5">
-      <ChoiceCards
+      {/* A manual gateway has no provider to quote a fee (`automatic_unavailable`): the seller sets it. */}
+      {!isManualProvider(form.providerName) && <ChoiceCards
         name={t("common", F.feeMode)}
         value={form.feeCalculationMode}
         options={[
@@ -204,7 +206,7 @@ export function FeeFields({ form, set, errors, money, currency }: { form: Gatewa
           { value: "automatic", title: t("common", W.feeModes.automatic.title), desc: t("common", W.feeModes.automatic.desc), icon: CircleCheckBig },
         ]}
         onPick={(v) => set("feeCalculationMode", v)}
-      />
+      />}
 
       {manual ? (
         <div className="grid gap-4 sm:grid-cols-2">

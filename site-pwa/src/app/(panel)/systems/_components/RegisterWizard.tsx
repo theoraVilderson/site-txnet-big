@@ -51,7 +51,7 @@ import {
 } from "../_lib/register-wizard";
 import { useSystemsError } from "./parts";
 import { Wizard, useWizard } from "../../_components/kit/Wizard";
-import { Button, Field, Input } from "../../_components/kit";
+import { Button, Field, Input, ReviewRows } from "../../_components/kit";
 
 const R = SYSTEMS_KEYS.register;
 const F = R.field;
@@ -631,23 +631,7 @@ function ReviewStep({ form, onEdit }: { form: RegisterForm; onEdit: (id: Registe
             transition={{ delay: reduceMotion ? 0 : i * 0.06 }}
             className="rounded-2xl border border-card-border bg-[var(--bg-inner)] p-4"
           >
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-xs font-bold text-text-primary">
-                <Icon size={14} className="text-primary" aria-hidden />
-                {t("common", W.steps[id].title)}
-              </h3>
-              <Button variant="quiet" size="sm" onClick={() => onEdit(id)} className="text-primary hover:text-primary">
-                {t("common", W.edit)}
-              </Button>
-            </div>
-            <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
-              {rows.map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-3 text-xs">
-                  <dt className="shrink-0 text-text-secondary">{k}</dt>
-                  <dd className="min-w-0 text-end font-bold text-text-primary">{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <ReviewRows icon={Icon} title={t("common", W.steps[id].title)} editLabel={t("common", W.edit)} onEdit={() => onEdit(id)} rows={rows} />
           </motion.section>
         );
       })}

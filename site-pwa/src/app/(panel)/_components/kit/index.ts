@@ -17,6 +17,7 @@ export { Menu, type MenuItem } from "./Menu";
 export { PageHeader, type PageHeaderProps } from "./PageHeader";
 export { notify, PanelToaster } from "./notify";
 export { Popover } from "./Popover";
+export { ReviewRows, type ReviewRow } from "./ReviewRows";
 export { SaveBar, type SaveBarProps } from "./SaveBar";
 export { Sheet, type SheetProps } from "./Sheet";
 export { Tabs, type TabItem } from "./Tabs";

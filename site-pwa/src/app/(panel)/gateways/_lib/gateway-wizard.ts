@@ -1,3 +1,5 @@
+import { MANUAL_CATEGORY, MANUAL_PROVIDER } from "@/lib/billing/manual-transfer";
+import type { TransferKind } from "../../_components/transfer/transfer-kind";
 import { validateForm, type FormErrors, type GatewayForm } from "./gateway-form";
 import type { Provider } from "./provider-fields";
 
@@ -13,7 +15,8 @@ export const WIZARD_STEPS: readonly { id: WizardStepId; fields: readonly (keyof 
   { id: "provider", fields: ["source", "tenantId", "providerName"] },
   { id: "details", fields: ["displayName", "gatewayCategory", "minAcceptAmount", "maxAcceptAmount", "isActive"] },
   { id: "fee", fields: ["feeCalculationMode", "feeType", "feeValue", "feeFloor", "feeCeiling", "taxRatePercent"] },
-  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl"] },
+  // A manual gateway asks for its proof and window here instead of keys (F-803-g).
+  { id: "secrets", fields: ["merchantId", "secretKey", "webhookSecret", "staticRate", "callbackUrl", "requiredProof", "windowMinutes"] },
   { id: "review", fields: [] },
 ];
 
@@ -42,6 +45,29 @@ export function applyProvider(form: GatewayForm, provider: Provider): GatewayFor
     providerName: provider,
     gatewayCategory: d.category,
     displayName: name === "" || SUGGESTED_NAMES.has(name) ? d.name : form.displayName,
+    manualKind: "",
+    requiredProof: [],
+  };
+}
+
+/**
+ * Pick a manual method kind (F-803-g): provider `manual_transfer` and category
+ * `manual` together, the kind's default proof, and a fee the seller sets — no
+ * provider is there to quote one (`automatic_unavailable`). `suggested` is the
+ * kind's name in the page's language, offered as the display name the same
+ * way a provider's is; `previous` is the name the last kind suggested, so it follows too.
+ */
+export function applyKind(form: GatewayForm, kind: TransferKind, names: { suggested: string; previous: string | null }): GatewayForm {
+  const name = form.displayName.trim();
+  const wasSuggested = name === "" || SUGGESTED_NAMES.has(name) || name === names.previous;
+  return {
+    ...form,
+    providerName: MANUAL_PROVIDER,
+    gatewayCategory: MANUAL_CATEGORY,
+    manualKind: kind.kind,
+    requiredProof: [...kind.defaultProof],
+    feeCalculationMode: "manual",
+    displayName: wasSuggested ? names.suggested : form.displayName,
   };
 }
 

@@ -185,7 +185,8 @@
       "range": "Must not be above the maximum",
       "merchantFormat": "A Zarinpal merchant id is 36 characters, like xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
       "url": "Enter a full address like https://example.com/...",
-      "percent": "Between 0 and 100"
+      "percent": "Between 0 and 100",
+      "window": "The time must be between 10 and 1440 minutes."
     },
     "range": {
       "between": "{{min}} – {{max}}",
@@ -445,6 +446,64 @@
       "save": "Save access",
       "saved": "Saved",
       "limited": "Groups only"
+    },
+    "manual": {
+      "automaticSection": "Automatic gateways",
+      "automaticGroup": "Online gateway (automatic)",
+      "automaticGroupHint": "The payment happens on the provider's site and confirms itself.",
+      "manualGroup": "Manual method",
+      "manualGroupHint": "The payer moves the money themselves and an admin confirms it.",
+      "byPersonShort": "Confirmed by admin",
+      "proofStep": {
+        "title": "Proof of payment",
+        "subtitle": "What the payer sends, and how long they have",
+        "tip": "The fewer proofs you require, the easier paying is; a tracking code or a tx hash is enough to find the transfer. You add the cards or wallets after creating it."
+      },
+      "requiredProof": "Required proof",
+      "requiredProofHint": "The payer cannot submit the payment without these.",
+      "atLeastOneProof": "Pick at least one.",
+      "windowMinutes": "Time to pay",
+      "windowHint": "Between {{min}} and {{max}} minutes.",
+      "minutes": "min",
+      "byPersonNote": "Every payment is checked and confirmed by a person from the payments-to-confirm queue.",
+      "done": {
+        "subtitle": "It is shown to no one until it has at least one active card or wallet.",
+        "addDestination": "Add a card or wallet"
+      },
+      "sectionTitle": "Manual methods (card to card, wallet)",
+      "sectionSubtitle": "Each has its own limits, fee and proof; a person confirms the payment.",
+      "add": "New manual method",
+      "empty": "No manual method yet.",
+      "destinationCount": "{{active}} of {{total}} destinations active",
+      "notOffered": "No active destination, so it is not offered.",
+      "destinations": "Cards and wallets",
+      "destinationsOf": "Destinations of “{{name}}”",
+      "destinationsHint": "The order is the order payers are offered them; drag the handle to change it.",
+      "noDestinations": "No card or wallet yet.",
+      "addDestination": "Add destination",
+      "editDestination": "Edit destination",
+      "label": "Internal label",
+      "labelHint": "Only you and your admins see it, e.g. “Main Mellat card”.",
+      "required": "This is required.",
+      "shown": "Shown to payers",
+      "shownHint": "When off, no new payment is sent to it.",
+      "advanced": "Advanced",
+      "weight": "Weight",
+      "weightHint": "This destination's share when payments are spread (1–100).",
+      "dailyCap": "Daily cap",
+      "dailyCapHint": "In the smallest unit (rials for a card); empty is no cap.",
+      "invalidNumber": "Not a valid number.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving…",
+      "reorder": "Reorder",
+      "edit": "Edit",
+      "remove": "Remove",
+      "confirmRemove": "Remove “{{label}}”?",
+      "removed": "Removed.",
+      "deactivated": "A payment was already shown it, so it was deactivated instead of removed.",
+      "retry": "Try again",
+      "full": "At most {{max}} destinations per gateway."
     }
   },
   "wallet": {
@@ -6165,5 +6224,87 @@
     "none": "No group you may pick yet. Groups that give access need every key they give.",
     "failed": "The groups could not be read. Open the page again.",
     "notAllowed": "You may not aim at that group: it gives access you do not hold all of, or you may not see groups."
+  },
+  "transfer": {
+    "kinds": {
+      "card_to_card": {
+        "title": "Card to card",
+        "desc": "The payer moves the money to your card with their banking app and sends the receipt."
+      },
+      "crypto_wallet": {
+        "title": "Crypto wallet",
+        "desc": "The payer sends crypto to your wallet address, on the network you set."
+      }
+    },
+    "fields": {
+      "cardNumber": "Card number",
+      "holderName": "Cardholder name",
+      "bankId": "Bank",
+      "sheba": "IBAN (sheba)",
+      "asset": "Asset",
+      "network": "Network",
+      "address": "Wallet address",
+      "memo": "Memo / tag",
+      "decimals": "Decimal places"
+    },
+    "hints": {
+      "holderName": "The name the payer's bank shows for this card.",
+      "sheba": "Optional; shown on the back of the card.",
+      "network": "Shown to the payer exactly as you write it.",
+      "memo": "Only if your wallet needs a memo.",
+      "decimals": "Places after the point for this asset; USDT on TRC20 has 6."
+    },
+    "refusal": {
+      "missing": "This is required.",
+      "invalid": "This is not in the right form.",
+      "checksum": "A digit is mistyped — check the number again.",
+      "unknown_field": "This method has no such field."
+    },
+    "proof": {
+      "receiptImage": "Receipt image",
+      "trackingCode": "Tracking code",
+      "sourceCardLast4": "Last 4 digits of the paying card",
+      "paidAt": "Time of payment",
+      "txHash": "Transaction hash"
+    },
+    "admin": {
+      "qrLabel": "QR code of the wallet address",
+      "qrEmpty": "The QR appears here as you type the address."
+    },
+    "banks": {
+      "melli": "Bank Melli",
+      "sepah": "Bank Sepah",
+      "mellat": "Bank Mellat",
+      "tejarat": "Tejarat Bank",
+      "saderat": "Bank Saderat",
+      "keshavarzi": "Keshavarzi Bank",
+      "maskan": "Bank Maskan",
+      "refah": "Refah Bank",
+      "parsian": "Parsian Bank",
+      "pasargad": "Pasargad Bank",
+      "eghtesad_novin": "EN Bank",
+      "saman": "Saman Bank",
+      "sina": "Sina Bank",
+      "shahr": "Shahr Bank",
+      "dey": "Dey Bank",
+      "ayandeh": "Ayandeh Bank",
+      "karafarin": "Karafarin Bank",
+      "sarmayeh": "Sarmayeh Bank",
+      "tosee_saderat": "Export Development Bank",
+      "post_bank": "Post Bank",
+      "tosee_taavon": "Tosee Taavon Bank",
+      "sanat_madan": "Bank of Industry and Mine",
+      "resalat": "Resalat Bank",
+      "mehr_iran": "Mehr Iran Bank",
+      "khavarmianeh": "Middle East Bank",
+      "iran_zamin": "Iran Zamin Bank",
+      "gardeshgari": "Gardeshgari Bank",
+      "melal": "Melal Credit Institution",
+      "kosar": "Kosar Credit Institution",
+      "hekmat": "Hekmat Iranian Bank",
+      "noor": "Noor Credit Institution",
+      "markazi": "Central Bank of Iran",
+      "other": "Bank card"
+    }
   }
 }

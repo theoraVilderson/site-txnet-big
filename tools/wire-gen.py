@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SOURCES = [
     ROOT / "contracts" / "http" / "wire.json",
     ROOT / "contracts" / "realtime" / "events.json",
+    ROOT / "contracts" / "billing" / "iran-banks.json",
 ]
 OUT = ROOT / "site-pwa" / "src" / "generated" / "wire.ts"
 

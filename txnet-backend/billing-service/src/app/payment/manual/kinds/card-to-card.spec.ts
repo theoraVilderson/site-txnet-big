@@ -4,7 +4,11 @@
  * A card number that fails Luhn, or a sheba that fails its checksum, is a typo
  * the payer would otherwise send money to.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { manualMethod, parseDestination, parseProof, publicDestination } from '../manual-methods';
+import { IRAN_BANKS } from './iran-banks';
 
 const CARD = manualMethod('card_to_card');
 const MELLI = '6037991234567893';
@@ -86,5 +90,13 @@ describe('a card payment\'s proof', () => {
       ok: false,
       refusals: [{ field: 'trackingCode', reason: 'missing' }, { field: 'sourceCardLast4', reason: 'invalid' }, { field: 'txHash', reason: 'unknown_field' }],
     });
+  });
+});
+
+describe('the bank table', () => {
+  // The panel draws the card from the generated copy of this contract (F-803-g); the two must not drift (ADR-0036).
+  it('is exactly contracts/billing/iran-banks.json', () => {
+    const fixture = JSON.parse(readFileSync(join(__dirname, '../../../../../../../contracts/billing/iran-banks.json'), 'utf8')) as { iranBanks: Record<string, { bins: string[]; colors: string[] }> };
+    expect(Object.fromEntries(IRAN_BANKS.map((b) => [b.id, { bins: [...b.bins], colors: [...b.colors] }]))).toEqual(fixture.iranBanks);
   });
 });

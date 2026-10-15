@@ -109,8 +109,8 @@ Digits are folded from any script, spaces and dashes dropped (`foldDigits`).
 | `card_to_card` | `cardNumber` (16 digits, Luhn), `holderName`, `bankId` (derived from the 6-digit BIN, overridable), `sheba` (optional, `IR` + 24 digits, checksum) | `receiptImage`, `trackingCode`, `sourceCardLast4`, `paidAt` | `IRR`, 0 decimals; priced through the FX rate as a rial gateway (F-092-c) |
 | `crypto_wallet` | `asset` (`^[A-Z0-9]{2,10}$`), `network` (free text, shown verbatim), `address`, `memo` (optional), `decimals` (0..18) | `txHash`, `receiptImage`, `paidAt` | the asset, its `decimals`; priced by the gateway's rate (F-0609: static or live) |
 
-The BIN → bank table is data in `payment/manual/kinds/iran-banks.ts`
-(id, BIN prefixes, colour pair; the logo asset is named by the id); an unknown
+The BIN → bank table is data in `payment/manual/kinds/iran-banks.ts`, held to
+`contracts/billing/iran-banks.json` (the panel's copy, F-803-g); an unknown
 BIN shows `bankId = other` and is still accepted. `bankId` may be overridden
 only with an id of the table or `other`.
 
