@@ -150,6 +150,8 @@ enum AdminAction {
   grant_limit_user_remove
   // KS-1-c (ADR-0140 (2)). A tenant's cap on what `grant.compensate` may add, set or cleared.
   grant_compensation_cap_set
+  // F-0401-b. A tenant's freeze switches: self-freeze on or off, and whether it stops the clock.
+  grant_freeze_settings_set
   // F-019-m (ADR-0106). A reseller limit set or cleared at one level.
   reseller_limit_set
   reseller_limit_clear

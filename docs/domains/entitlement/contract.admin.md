@@ -46,6 +46,19 @@ its write conditional on both. The end moves only when `freezeStopsClock`; a
 delete's refund measures a running clock to the delete. Whether self is allowed
 and stops the clock is the tenant's (F-0401-b); routes are billing's (F-0401-c, -d).
 
+**Freeze settings (F-0401-b)** — `freezeSettingsOf(tx, tenantId)` in
+`entitlement/freeze-settings.ts`: the tenant's `grant_freeze_setting` row, else
+`SELF_FREEZE_DEFAULTS` — self-freeze **on**, clock **running** (catalog F-0401). A
+self-freeze copies `selfFreezeStopsClock` onto the Grant then, so a later change
+never moves a frozen one. Staff read and set both at
+`GET` / `PUT /api/billing/tenants/:tenantId/freeze-settings`, body
+`{selfFreezeEnabled, selfFreezeStopsClock}` (both required, nothing else: **400**),
+answer `{selfFreezeEnabled, selfFreezeStopsClock, platformDefault}` — the
+grant-limits door, buckets and refusals ([contract.limits.md](contract.limits.md)
+"Staff routes"); a change audited `grant_freeze_settings_set` against the tenant,
+before and after; the same values again write nothing. Nobody is told.
+Proved by `payment/gift/grant-limits.spec.ts`.
+
 **Days (F-311-i)** — `changeGrantDuration(tx, id, {at, actorUserId, change, reason})`
 in `entitlement/duration.ts`, proved by `duration.spec.ts`. `change` is `{days}`
 (±N from the end it **has**, not from now) or `{endsAt}`; an `active` or

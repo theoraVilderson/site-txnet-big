@@ -13,11 +13,13 @@
  *  - **another tenant's user.** A user id the tenant does not hold is
  *    `user_not_found`, decided before anything is read or written;
  *  - **the effective number lies.** It is `meteredCapOf`'s, the same the sale
- *    is refused by: the user's own, else the tenant's, else the platform's 5.
+ *    is refused by: the user's own, else the tenant's, else the platform's 5;
+ *  - **a tenant's freeze switches** (F-0401-b): self-freeze on unless turned
+ *    off, the clock running unless told to stop — the same door and audit.
  */
 import { ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
 
-import { grantLimitSchema, tenantGrantLimitSchema } from './grant-limits.schema';
+import { freezeSettingsSchema, grantLimitSchema, tenantGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
@@ -32,7 +34,11 @@ const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as strin
 const staff = { userId: STAFF_USER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'], ip: '203.0.113.8' };
 const stranger = { userId: CUSTOMER, tenantId: PLATFORM, permissions: [] as string[], ip: '203.0.113.9' };
 
-function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string }; open?: number; ceiling?: number | null } = {}) {
+type FreezeRow = { selfFreezeEnabled: boolean; selfFreezeStopsClock: boolean };
+
+function build(
+  seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; reason: string }; open?: number; ceiling?: number | null; freeze?: FreezeRow } = {},
+) {
   const scope = () => TenantContext.currentOrNull()?.id;
   const tenants: Record<string, unknown> = {
     [PLATFORM]: { id: PLATFORM, slug: 'platform', tenantType: 'platform_owner', ownerUserId: null, status: 'active', graceEndsAt: null, deletedAt: null },
@@ -57,6 +63,7 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
   const userRow = seed.userCap
     ? { key: 'metered_services_max', value: seed.userCap.meteredOpenCap, reason: seed.userCap.reason, setByUserId: STAFF_USER, updatedAt: new Date('2026-09-30T10:00:00Z') }
     : null;
+  let freezeRow: FreezeRow | null = seed.freeze ?? null;
   const audit: Array<Record<string, unknown>> = [];
   const writes: Array<{ what: string; scope: string | undefined; data: unknown }> = [];
 
@@ -85,6 +92,14 @@ function build(seed: { tenantCap?: number; userCap?: { meteredOpenCap: number; r
         const count = tenantRow ? 1 : 0;
         tenantRow = null;
         return { count };
+      },
+    },
+    grantFreezeSetting: {
+      findUnique: async () => freezeRow,
+      upsert: async (args: { create: FreezeRow & { tenantId: string } }) => {
+        writes.push({ what: 'freeze.upsert', scope: scope(), data: args.create });
+        freezeRow = { selfFreezeEnabled: args.create.selfFreezeEnabled, selfFreezeStopsClock: args.create.selfFreezeStopsClock };
+        return freezeRow;
       },
     },
     userRestriction: {
@@ -197,7 +212,54 @@ describe('the reseller\'s ceiling (F-019-n, ADR-0106 user_metered_cap_max)', () 
   });
 });
 
+describe('GrantLimitsService — the tenant\'s freeze switches (F-0401-b)', () => {
+  const DEFAULTS = { selfFreezeEnabled: true, selfFreezeStopsClock: false };
+
+  it('reads the platform\'s defaults when the tenant set nothing: self-freeze on, the clock running', async () => {
+    await expect(build().service.freezeSettings(owner, RESELLER)).resolves.toEqual({ ...DEFAULTS, platformDefault: DEFAULTS });
+    const own = { selfFreezeEnabled: false, selfFreezeStopsClock: true };
+    await expect(build({ freeze: own }).service.freezeSettings(owner, RESELLER)).resolves.toEqual({ ...own, platformDefault: DEFAULTS });
+  });
+
+  it('sets both in the path\'s tenant and audits before and after', async () => {
+    const { service, audit, writes } = build();
+    const after = { selfFreezeEnabled: false, selfFreezeStopsClock: true };
+    await expect(service.setFreezeSettings(owner, RESELLER, after)).resolves.toEqual({ ...after, platformDefault: DEFAULTS });
+    expect(writes).toEqual([{ what: 'freeze.upsert', scope: RESELLER, data: { tenantId: RESELLER, ...after, updatedByUserId: OWNER_USER } }]);
+    expect(audit).toEqual([
+      expect.objectContaining({
+        tenantId: RESELLER,
+        adminId: OWNER_USER,
+        action: 'grant_freeze_settings_set',
+        targetEntityType: 'tenant',
+        targetEntityId: RESELLER,
+        oldValue: DEFAULTS,
+        newValue: after,
+      }),
+    ]);
+  });
+
+  it('a change to nothing writes nothing; a suspended reseller reads but changes none', async () => {
+    const same = build();
+    await same.service.setFreezeSettings(owner, RESELLER, DEFAULTS);
+    expect(same.writes).toHaveLength(0);
+    expect(same.audit).toHaveLength(0);
+
+    const late = build();
+    await expect(late.service.freezeSettings(owner, SUSPENDED)).resolves.toMatchObject(DEFAULTS);
+    await expect(late.service.setFreezeSettings(owner, SUSPENDED, { selfFreezeEnabled: false, selfFreezeStopsClock: false })).rejects.toMatchObject({ reason: 'reseller_suspended' });
+    expect(late.writes).toHaveLength(0);
+  });
+});
+
 describe('the bodies', () => {
+  it('the freeze switches are both required booleans, nothing else', () => {
+    expect(freezeSettingsSchema.parse({ selfFreezeEnabled: false, selfFreezeStopsClock: true })).toEqual({ selfFreezeEnabled: false, selfFreezeStopsClock: true });
+    expect(freezeSettingsSchema.safeParse({ selfFreezeEnabled: false }).success).toBe(false);
+    expect(freezeSettingsSchema.safeParse({ selfFreezeEnabled: 'no', selfFreezeStopsClock: true }).success).toBe(false);
+    expect(freezeSettingsSchema.safeParse({ selfFreezeEnabled: true, selfFreezeStopsClock: true, extra: 1 }).success).toBe(false);
+  });
+
   it('take a whole number 0..1000; the tenant\'s may be null', () => {
     expect(grantLimitSchema.safeParse(0).success).toBe(true);
     expect(grantLimitSchema.safeParse(1000).success).toBe(true);

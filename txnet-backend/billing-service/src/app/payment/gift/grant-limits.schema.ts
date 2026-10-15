@@ -16,3 +16,8 @@ export const grantLimitSchema = z
 export const tenantGrantLimitSchema = z.object({ meteredOpenCap: grantLimitSchema.nullable() }).strict();
 
 export type TenantGrantLimitBody = z.infer<typeof tenantGrantLimitSchema>;
+
+/** `PUT …/tenants/:tenantId/freeze-settings` (F-0401-b): both switches, so an empty body changes nothing by accident. */
+export const freezeSettingsSchema = z.object({ selfFreezeEnabled: z.boolean(), selfFreezeStopsClock: z.boolean() }).strict();
+
+export type FreezeSettingsBody = z.infer<typeof freezeSettingsSchema>;

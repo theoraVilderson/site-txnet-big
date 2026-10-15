@@ -6,7 +6,7 @@ import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { CompensationCapBody, compensationCapSchema } from './grant-compensation.schema';
-import { TenantGrantLimitBody, tenantGrantLimitSchema } from './grant-limits.schema';
+import { FreezeSettingsBody, freezeSettingsSchema, TenantGrantLimitBody, tenantGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';
 import { bytesOfGb } from './grant-traffic.schema';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';
@@ -75,6 +75,25 @@ export class GrantLimitsController {
   ) {
     const cap = body.cap && { days: body.cap.days, bytes: bytesOfGb(body.cap.gb) };
     return this.refusing(() => this.limits.setCompensationCap({ ...actorOf(req), ip }, tenantId, cap));
+  }
+
+  /** The tenant's freeze switches (F-0401-b): self-freeze on or off, and whether it stops the clock. */
+  @Get('freeze-settings')
+  @readLimit
+  freezeSettings(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.refusing(() => this.limits.freezeSettings(actorOf(req), tenantId));
+  }
+
+  @Put('freeze-settings')
+  @writeLimit
+  setFreezeSettings(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Body(new ZodValidationPipe(freezeSettingsSchema)) body: FreezeSettingsBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    const settings = { selfFreezeEnabled: body.selfFreezeEnabled, selfFreezeStopsClock: body.selfFreezeStopsClock };
+    return this.refusing(() => this.limits.setFreezeSettings({ ...actorOf(req), ip }, tenantId, settings));
   }
 
   @Get('users/:userId/grant-limit')

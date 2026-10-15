@@ -1,6 +1,7 @@
 import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 
 import { adminNoticeOf, configNoticeOf, emitAdminNotice } from './admin-notice';
+import type { FreezeSettings } from '../entitlement/freeze-settings';
 
 /**
  * An admin's act on a user's Grant or config, written down (F-311-r, audit
@@ -130,6 +131,14 @@ export async function auditCompensationCap(
   after: { days: number; bytes: string } | null,
 ): Promise<void> {
   await write(tx, actor, tenantId, 'grant_compensation_cap_set', AuditTargetType.tenant, tenantId, { cap: before }, { cap: after }, null);
+}
+
+/**
+ * A tenant's freeze switches changed (F-0401-b): before and after, whole.
+ * Nobody is told: it changes what a user may do next, not what they hold.
+ */
+export async function auditFreezeSettings(tx: Prisma.TransactionClient, actor: AuditActor, tenantId: string, before: FreezeSettings, after: FreezeSettings): Promise<void> {
+  await write(tx, actor, tenantId, 'grant_freeze_settings_set', AuditTargetType.tenant, tenantId, before, after, null);
 }
 
 /**

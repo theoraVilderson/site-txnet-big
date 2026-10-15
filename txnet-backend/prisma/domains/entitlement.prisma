@@ -491,6 +491,22 @@ model GrantLimitSetting {
   @@schema("entitlement")
 }
 
+/// A tenant's freeze switches (F-0401-b). One row per tenant; none = the
+/// platform's defaults (`SELF_FREEZE_DEFAULTS`): self-freeze on, clock running.
+model GrantFreezeSetting {
+  tenantId             String   @id @db.Uuid
+  /// Whether this tenant's users may freeze their own metered Grant.
+  selfFreezeEnabled    Boolean
+  /// Whether a self-freeze stops the clock; copied onto the Grant at the
+  /// freeze (`grant.freezeStopsClock`), so a change never moves a frozen one.
+  selfFreezeStopsClock Boolean
+  updatedByUserId      String?  @db.Uuid
+  updatedAt            DateTime @updatedAt
+
+  @@map("grant_freeze_setting")
+  @@schema("entitlement")
+}
+
 /// How much a `grant.compensate` holder may add to one Grant over a rolling
 /// 30 days (KS-1-c, ADR-0140 (2)), set by a `grant.assign` holder. One row per
 /// tenant; none = the platform's default (`PLATFORM_COMPENSATION_CAP`). 0 closes that kind.

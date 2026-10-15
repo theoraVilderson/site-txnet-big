@@ -2,8 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { Prisma, VariantBillingMode } from '@prisma/client';
 import { liveRestriction, ResellerAccess, ResellerAccessRefused, ResellerActor, ResellerKey, ResellerLimitReached, SupportConsentRefused, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { FreezeSettings, freezeSettingsOf, SELF_FREEZE_DEFAULTS } from '../../entitlement/freeze-settings';
 import { meteredCapOf, meteredCeilingOf, OPEN_GRANT_STATUSES, PLATFORM_METERED_CAP, underCeiling } from '../../entitlement/metered-cap';
-import { auditCompensationCap, auditLimit } from '../../grant-audit/grant-audit';
+import { auditCompensationCap, auditFreezeSettings, auditLimit } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CompensationCap, compensationCapView, CompensationCapView } from './grant-compensation';
 import { ResellerUserGrantsRefused } from './reseller-user-grants.service';
@@ -16,6 +17,9 @@ export type TenantGrantLimit = {
   /** The reseller's ceiling (F-019-n): no number here is in effect above it. `null`: none. */
   ceiling: number | null;
 };
+
+/** The switches in effect, and the platform's for a panel to say which is the default (F-0401-b). */
+export type TenantFreezeSettings = FreezeSettings & { platformDefault: FreezeSettings };
 
 export type UserGrantLimitView = {
   userId: string;
@@ -34,7 +38,8 @@ export type UserGrantLimitView = {
 /**
  * Staff's half of the metered cap (F-118-ap, `entitlement/contract.limits.md`):
  * a tenant's default, read and set, and one user's number read — set on their
- * Profile tab as the `metered_services_max` restriction (F-030-e).
+ * Profile tab as the `metered_services_max` restriction (F-030-e). The tenant's
+ * freeze switches (F-0401-b) ride the same door.
  *
  * **The tenant is the path's**, admitted by the users-admin door
  * (`ResellerAccess.runIncludingPlatform`): the platform's staff on any tenant
@@ -110,6 +115,27 @@ export class GrantLimitsService {
     );
   }
 
+  /** The tenant's freeze switches (F-0401-b): whether its users self-freeze, and whether that stops the clock. */
+  freezeSettings(actor: ResellerActor, tenantId: string): Promise<TenantFreezeSettings> {
+    return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => freezeView(tx, TenantContext.current('freeze settings').id)));
+  }
+
+  /** Both switches at once; the same values again writes no row and no audit. */
+  setFreezeSettings(actor: AdminActor, tenantId: string, after: FreezeSettings): Promise<TenantFreezeSettings> {
+    return this.admitted(actor, tenantId, 'staffWrite', () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const scoped = TenantContext.current('freeze settings').id;
+        const before = await freezeSettingsOf(tx, scoped);
+        if (before.selfFreezeEnabled !== after.selfFreezeEnabled || before.selfFreezeStopsClock !== after.selfFreezeStopsClock) {
+          const row = { selfFreezeEnabled: after.selfFreezeEnabled, selfFreezeStopsClock: after.selfFreezeStopsClock, updatedByUserId: actor.userId };
+          await tx.grantFreezeSetting.upsert({ where: { tenantId: scoped }, create: { tenantId: scoped, ...row }, update: row });
+          await auditFreezeSettings(tx, actor, scoped, before, after);
+        }
+        return freezeView(tx, scoped);
+      }),
+    );
+  }
+
   userLimit(actor: ResellerActor, tenantId: string, userId: string): Promise<UserGrantLimitView> {
     return this.onUser(actor, tenantId, userId, 'read', (tx) => this.userView(tx, userId));
   }
@@ -175,6 +201,10 @@ export class GrantLimitsService {
       throw e;
     }
   }
+}
+
+async function freezeView(tx: Prisma.TransactionClient, tenantId: string): Promise<TenantFreezeSettings> {
+  return { ...(await freezeSettingsOf(tx, tenantId)), platformDefault: { ...SELF_FREEZE_DEFAULTS } };
 }
 
 /**
