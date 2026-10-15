@@ -68,6 +68,9 @@ The *why* is **ADR-0080**.
    (`address_fixed`) — and is refused here without one; no other type ever
    sends a `resolution`. The second lists the old and new addresses, and its
    acknowledge is "trust the new address", said to re-test the panel.
+   **A halt arrives without a reload** (F-027-fh, network F-027-fg): on
+   `network.panel.drift_raised` the drift list (`DRIFT_EVENTS`) and the panels
+   (`PANEL_EVENTS`, rule 2) re-read through `useLiveReread`; nothing polls.
 7. **Holds: release or write off, only while `pending`** (`canResolveHold`).
    A release answers `202` and the hold stays `pending` until the meter bills
    it — the row says "queued", never "released". A write-off requires a note
@@ -239,6 +242,6 @@ RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
 `systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `inboundChoices`, `sellsNobody`, `refusalSentence` named and plain.
 `systems/systems-guide.test.ts` — rules 16 and 18: `guideOf`, `panelStatusOf`, `attentionOf`; `memberChoiceOf` / `validateMemberChoice` ("same as the panel" as null, an own cap, own inbounds needing one, only what changed).
-`systems/drift-resolution.test.ts` — rules 6 and 13 (F-027-fb): the choices against billing's `DRIFT_RESOLUTIONS`, asked only of `identity_lost`, the move's addresses, `addressMayMove` sent only when changed.
+`systems/drift-resolution.test.ts` — rules 6 and 13 (F-027-fb): the choices against billing's `DRIFT_RESOLUTIONS`, asked only of `identity_lost`, the move's addresses, `addressMayMove` sent only when changed; `DRIFT_EVENTS` against `events.json` (F-027-fh).
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove` / `isLastToServe` / `canEvict`, `drainEarliestAt`, `waitOf`.

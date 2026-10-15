@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import type { SystemsDriftEvent, SystemsPanel } from "@/lib/billing-api";
 import {
+  DRIFT_EVENTS,
   DRIFT_RESOLUTIONS,
   acknowledgeBodyOf,
   addressMoveOf,
@@ -126,6 +127,15 @@ describe("drift resolution (F-027-fb)", () => {
         }),
       ),
     ).toBeNull();
+  });
+});
+
+describe("the drift report live (F-027-fh, ADR-0121)", () => {
+  it("re-reads on a halting drift event alone, as events.json names it", () => {
+    const events = JSON.parse(
+      readFileSync(join(REPO, "contracts/realtime/events.json"), "utf8"),
+    ).realtimeEvents;
+    expect([...DRIFT_EVENTS]).toEqual([events.panelDriftRaised]);
   });
 });
 

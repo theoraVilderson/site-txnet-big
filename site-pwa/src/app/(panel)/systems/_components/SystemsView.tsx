@@ -185,7 +185,7 @@ export function SystemsView() {
           <>
             <p className="text-xs leading-5 text-text-secondary">{t("common", K.tabs.reportsHint)}</p>
             {/* Acknowledging resumes a halted panel: its health line is read again. */}
-            <DriftReport onAcknowledged={reload} />
+            <DriftReport channel={channel} onAcknowledged={reload} />
             <HoldsQueue />
           </>
         )}

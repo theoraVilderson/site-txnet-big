@@ -4,8 +4,10 @@ import { useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type DriftResolution, type SystemsDriftEvent } from "@/lib/billing-api";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import { formatInstant } from "../../_lib/datetime";
 import {
+  DRIFT_EVENTS,
   RESOLUTION_KEYS,
   acknowledgeBodyOf,
   addressMoveOf,
@@ -29,11 +31,13 @@ const fetchDrift = (q: { state: "open" | "all"; after?: string }) => billingApi.
 /**
  * The drift report (F-027-as's routes). An event that halts collection waits
  * for a person; acknowledging it — once — resumes collection on the next pass
- * (billing `contract.systems.md` rules 8–9).
+ * (billing `contract.systems.md` rules 8–9). A new halting event arrives
+ * without a reload (F-027-fh): `channel` is the page's (`liveChannelOf`).
  */
-export function DriftReport({ onAcknowledged }: { onAcknowledged: () => Promise<void> }) {
+export function DriftReport({ channel, onAcknowledged }: { channel: string | null; onAcknowledged: () => Promise<void> }) {
   const { t } = useLocale();
   const list = useCursorList<SystemsDriftEvent, "open" | "all">(fetchDrift, "open");
+  useLiveReread(channel, DRIFT_EVENTS, () => void list.reload());
 
   const acknowledged = async () => {
     await Promise.all([list.reload(), onAcknowledged()]);

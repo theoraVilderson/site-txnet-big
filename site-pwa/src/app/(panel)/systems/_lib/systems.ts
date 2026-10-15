@@ -39,12 +39,12 @@ export function liveChannelOf(me: { tenant: { id: string }; permissions: readonl
 
 /**
  * A filter, not a parser: `automation` pushes a test result
- * (`network.panel.tested`) or a confirmed health change
- * (`network.panel.state_changed`, F-027-el), and the page re-reads
+ * (`network.panel.tested`), a confirmed health change (`network.panel.state_changed`,
+ * F-027-el) or a halt (`network.panel.drift_raised`, F-027-fh), and the page re-reads
  * `GET /systems/panels` for the row, so what is shown is still only what
  * billing reads back.
  */
-export const PANEL_EVENTS: readonly string[] = [RealtimeEvents.panelTested, RealtimeEvents.panelStateChanged];
+export const PANEL_EVENTS: readonly string[] = [RealtimeEvents.panelTested, RealtimeEvents.panelStateChanged, RealtimeEvents.panelDriftRaised];
 
 // The closed sets the register form offers, as `network.prisma` declares them
 // (C-09). `systems.test.ts` reads each enum out of the schema.

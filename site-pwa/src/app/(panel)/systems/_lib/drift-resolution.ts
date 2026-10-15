@@ -1,3 +1,4 @@
+import { RealtimeEvents } from "@/generated/wire";
 import type {
   AcknowledgeDriftBody,
   DriftResolution,
@@ -23,6 +24,14 @@ export function haltsCollection(event: SystemsDriftEvent): boolean {
 export function canAcknowledge(event: SystemsDriftEvent): boolean {
   return event.acknowledgedAt === null;
 }
+
+/**
+ * What the drift list re-reads on (F-027-fh, ADR-0121): a halting event raised
+ * (network F-027-fg). An acknowledgement re-reads from its own answer.
+ */
+export const DRIFT_EVENTS: readonly string[] = [
+  RealtimeEvents.panelDriftRaised,
+];
 
 /** billing `DRIFT_RESOLUTIONS`, in its order. */
 export const DRIFT_RESOLUTIONS = [
