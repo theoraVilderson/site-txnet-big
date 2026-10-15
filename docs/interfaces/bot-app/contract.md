@@ -2,13 +2,13 @@
 id: bot-app
 layer: interface
 status: active
-version: 15
-updated: 2026-10-04
+version: 16
+updated: 2026-10-15
 ---
 
 # bot-app — contract
 
-`F-303`, `F-309`, `F-311-c`, `F-313-b`, `F-414-f` ([contract.guides.md](contract.guides.md)) are implemented; the rest of §10.4 is intent
+`F-303`, `F-309`, `F-311-c`, `F-313-b`, `F-414-f` ([contract.guides.md](contract.guides.md)), `F-805-b` ([contract.transfer.md](contract.transfer.md)) are implemented; the rest of §10.4 is intent
 (§0 level 4), from ADR-0009. Resolve an id with `python3 tools/spec.py <F-id>`.
 
 ## TL;DR
@@ -84,7 +84,7 @@ contract — **not** a rule written in the bot because it is faster there
 | `flows/views.ts` `miniApp()` | the Mini App as a row on the member menu (`F-310`) |
 | `flows/account-add.flow.ts` | an account joining that group, by one of `F-0205`'s two proofs |
 | `auth-api/auth-api.client.ts` | the only way out — to identity |
-| `flows/top-up.flow.ts`, `billing-api/billing-api.client.ts` | the wallet top-up, and the way out to billing (F-306-a, below) |
+| `flows/top-up.flow.ts`, `billing-api/billing-api.client.ts` | the wallet top-up, and the way out to billing (F-306-a, below); a manual gateway's transfer, its proof and its review: [contract.transfer.md](contract.transfer.md) (F-805-b) |
 | `flows/reseller.flow.ts` + `reseller-campaign.flow.ts`, `tenant-api/` + `notification-api/` clients | the reseller panel — menu row, customers, block, revenue (F-311-c) and its bulk message (F-313-b): [contract.reseller.md](contract.reseller.md) |
 
 **The bot reaches `auth-api` with a service credential** (`X-Service-Token`,
@@ -144,7 +144,7 @@ URL carries are in [contract.mini-app.md](contract.mini-app.md).
 
 ## Top-up (`F-306-a`, `F-104-m`)
 
-Gateway → amount → billing's quote (`topUp.quote`; `topUp.quoteTaxed` adds the tax line when billing's `tax` is not zero, ADR-0076, F-104-ai) → `start` → a bank `url` button, the credit (free), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen, with the `providerToken` billing answered — Bale's wallet, F-104-n). **Every amount names its currency** — the code billing answered beside it, via `locale/money.ts` (`bot.money.*`; a code with no name prints as itself); the prompt, quick amounts and summary the gateway's (F-116-h4).
+Gateway → amount → billing's quote (`topUp.quote`; `topUp.quoteTaxed` adds the tax line when billing's `tax` is not zero, ADR-0076, F-104-ai) → `start` → a bank `url` button, the credit (free), a **transfer** to pay by hand and prove ([contract.transfer.md](contract.transfer.md)), or an **invoice** (in-chat gateway: `FlowResult.invoice`, sent after the screen, with the `providerToken` billing answered — Bale's wallet, F-104-n). **Every amount names its currency** — the code billing answered beside it, via `locale/money.ts` (`bot.money.*`; a code with no name prints as itself); the prompt, quick amounts and summary the gateway's (F-116-h4).
 Billing's deposit routes **through the gate** (`BILLING_API_BASE_URL`), chat access token as Bearer; `X-Service-Token` records the `bot` channel,
 `X-Bot-Platform` + `X-Bot-Tenant-Id` (believed only beside it) offer an in-chat gateway only for **this bot's tenant's** payment — the owner in their reseller's bot pays the platform, and the Stars would reach the reseller's bot (F-061-j). Every number is billing's; it ends at `start`.
 A payment event (`ChatContext.payment`) never reaches a flow: `InChatPayment` relays it to billing's `internal/.../in-chat/*` (`BILLING_INTERNAL_BASE_URL`, service token, no session) with the sender and this bot's tenant; billing admits only the payer (F-104-ab). Every

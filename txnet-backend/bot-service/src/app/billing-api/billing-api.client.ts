@@ -5,7 +5,10 @@ import { ConfigService } from '@nestjs/config';
 import { ApiResult } from '../auth-api/auth-api.types';
 import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
+import type { OutgoingFile } from '../support-api/support-api.client';
 import type { CurrencyAmount } from '../locale/money';
+import type { ChatLottery, ChatLotteryResult, LotteryEntryAnswer, SpinAnswer, UserWheel } from './engagement.types';
+import type { DepositTransfer, ManualAnswer, ManualQueueRow, ProofAccepted, TransferStatus } from './transfer.types';
 
 /** One gateway as `GET /api/billing/deposit/gateways` lists it (`billing/contract.deposit.md`). */
 export interface DepositGateway {
@@ -59,6 +62,8 @@ export interface DepositStarted extends DepositQuote {
    * wallet, F-104-n) or `null`. `null` for every other gateway.
    */
   invoice: { payload: string; currency: string; amountMinor: string; providerToken: string | null } | null;
+  /** A manual gateway's destination and proof (F-803-d); absent from an older billing, null for any other gateway. */
+  transfer?: DepositTransfer | null;
 }
 
 /**
@@ -121,69 +126,6 @@ export interface ResellerRevenue {
 }
 
 /** Whose call this is: the chat's access token, in the chat's language. */
-/** A prize's kind, as billing names it (`SpinPrizeType`, never `wallet_credit`). */
-export type WheelPrizeType = 'bonus_traffic_gb' | 'extra_days' | 'discount_coupon' | 'free_grant' | 'empty';
-
-/** `GET /api/billing/wheel` (`engagement/contract.md`, F-707-d): the public odds and whether this user may spin. */
-export interface UserWheel {
-  tenantDay: string;
-  version: number;
-  currencyCode: string;
-  prizes: Array<{ position: number; label: string; prizeType: WheelPrizeType; prizeValue: string; oddsPercent: string }>;
-  eligible: boolean;
-  refusalReason: string | null;
-  spinsLeftToday: number;
-  nextSpinAt: string | null;
-}
-
-/** `GET /api/billing/lotteries` (`engagement/contract.md`, F-707-j): the lotteries this user sees, narrowed to what the chat tells. */
-export interface ChatLottery {
-  id: string;
-  title: string;
-  description: string | null;
-  entryMode: 'automatic' | 'opt_in';
-  status: 'published' | 'frozen' | 'drawn' | 'cancelled';
-  closesAt: string;
-  cancelReason: string | null;
-  /** Published and before its close: a join or a leave is accepted now. */
-  open: boolean;
-  prizes: Array<{ rank: number; label: string; prizeType: WheelPrizeType; prizeValue: string; winnersCount: number }>;
-  entry: { optedInAt: string | null; ticketNumber: number | null; excludedReason: string | null } | null;
-}
-
-export interface LotteryEntryAnswer {
-  lotteryId: string;
-  joined: boolean;
-  replay: boolean;
-}
-
-/** `GET /api/billing/lotteries/:id/result` (F-707-m), narrowed to what the chat tells; the check itself is the panel's. */
-export interface ChatLotteryResult {
-  lotteryId: string;
-  title: string;
-  entrantCount: number;
-  places: Array<{
-    position: number;
-    ticketNumber: number;
-    prize: { rank: number; label: string } | null;
-    delivery: 'pending' | 'delivered' | 'passed_on';
-    passedOnReason: string | null;
-    replacesPosition: number | null;
-  }>;
-  mine: { entrantId: string; ticketNumber: number | null; excludedReason: string | null } | null;
-}
-
-/** `POST /api/billing/wheel/spin`, narrowed to what the chat tells. A refused spin is a recorded `ok`. */
-export interface SpinAnswer {
-  attemptId: string;
-  status: 'awarded' | 'voided_fraud' | 'rejected_ineligible';
-  refusalReason: string | null;
-  position: number | null;
-  prize: { position: number; label: string; prizeType: WheelPrizeType; prizeValue: string } | null;
-  reward: { grantId: string | null; coupon: { id: string; code: string; percent: string; expiresAt: string } | null } | null;
-  replay: boolean;
-}
-
 export interface BillingCallContext {
   lang: string;
   accessToken: string;
@@ -300,6 +242,44 @@ export class BillingApiClient {
     return this.call('GET', `/api/billing/lotteries/${encodeURIComponent(id)}/result`, undefined, ctx);
   }
 
+  /** A transfer a start answered, re-read with where it stands (F-803-d) — for a payer coming back to it. */
+  transfer(paymentId: string, ctx: BillingCallContext): Promise<ApiResult<TransferStatus>> {
+    return this.call('GET', `${depositPath(paymentId)}/transfer`, undefined, ctx);
+  }
+
+  /** The receipt image, multipart as the panel sends it (F-805-a); answers the key the proof must name. */
+  uploadReceipt(paymentId: string, file: OutgoingFile, ctx: BillingCallContext): Promise<ApiResult<{ key: string }>> {
+    const form = new FormData();
+    form.append('file', new Blob([new Uint8Array(file.bytes)], { type: file.contentType }), file.fileName);
+    return this.call('POST', `${depositPath(paymentId)}/proof/upload`, form, ctx);
+  }
+
+  /** The proof by the kind's field ids (F-805-a); a refused field comes back in `error.facts`. */
+  submitProof(paymentId: string, proof: Record<string, string>, ctx: BillingCallContext): Promise<ApiResult<ProofAccepted>> {
+    return this.call('POST', `${depositPath(paymentId)}/proof`, proof, ctx);
+  }
+
+  /** Every open payment this person may act on (F-092-af), oldest first — `payment.confirm_manual` only. */
+  manualQueue(ctx: BillingCallContext): Promise<ApiResult<ManualQueueRow[]>> {
+    return this.call('GET', MANUAL_PATH, undefined, ctx);
+  }
+
+  /** A transfer's receipt (F-805-b): a refusal is the envelope, an image is the body itself. */
+  receipt(paymentId: string, ctx: BillingCallContext): Promise<ApiResult<OutgoingFile>> {
+    if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
+    return this.send('GET', `${this.baseUrl}${manualPath(paymentId)}/receipt`, undefined, { lang: ctx.lang, auth: this.authOf(ctx), read: readImage });
+  }
+
+  /** Confirm by hand, no reference typed: billing records a transfer's payer's own (F-805-b). */
+  confirmManual(paymentId: string, reason: string, ctx: BillingCallContext): Promise<ApiResult<ManualAnswer>> {
+    return this.call('POST', `${manualPath(paymentId)}/confirm`, { reason }, ctx);
+  }
+
+  /** Reject by hand; `resubmit` sends a transfer's proof back once instead of closing it (F-092-ak, F-805-a). */
+  rejectManual(paymentId: string, body: { reason: string; resubmit: boolean }, ctx: BillingCallContext): Promise<ApiResult<ManualAnswer>> {
+    return this.call('POST', `${manualPath(paymentId)}/reject`, body, ctx);
+  }
+
   /** Relay a `pre_checkout_query` (F-104-m, F-104-ab). */
   preCheckout(body: InChatPaymentBody, lang: string): Promise<ApiResult<PreCheckoutVerdict>> {
     return this.relay('/api/internal/billing/deposit/in-chat/pre-checkout', body, lang);
@@ -312,12 +292,17 @@ export class BillingApiClient {
 
   private call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
     if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
-    return this.send(method, `${this.baseUrl}${path}`, body, ctx.lang, {
+    return this.send(method, `${this.baseUrl}${path}`, body, { lang: ctx.lang, auth: this.authOf(ctx) });
+  }
+
+  /** The chat's session through the gate, and this service's token beside it (see the class comment). */
+  private authOf(ctx: BillingCallContext): Record<string, string> {
+    return {
       authorization: `Bearer ${ctx.accessToken}`,
       ...serviceCallHeaders(this.serviceToken),
       [RequestHeaders.botPlatform]: ctx.platform,
       [RequestHeaders.botTenantId]: ctx.botTenantId,
-    });
+    };
   }
 
   private relay<T>(path: string, body: InChatPaymentBody, lang: string): Promise<ApiResult<T>> {
@@ -325,15 +310,15 @@ export class BillingApiClient {
       this.logger.error(`billing relay ${path}: BILLING_INTERNAL_BASE_URL is unset`);
       return Promise.resolve(this.unreachable(lang));
     }
-    return this.send('POST', `${this.internalBaseUrl}${path}`, body, lang, { ...serviceCallHeaders(this.serviceToken) });
+    return this.send('POST', `${this.internalBaseUrl}${path}`, body, { lang, auth: { ...serviceCallHeaders(this.serviceToken) } });
   }
 
+  /** A JSON body, or a `FormData` one that sets its own type; the answer read as an envelope unless `read` says otherwise. */
   private async send<T>(
     method: 'GET' | 'POST' | 'DELETE',
     url: string,
     body: unknown,
-    lang: string,
-    auth: Record<string, string>,
+    { lang, auth, read = readEnvelope }: { lang: string; auth: Record<string, string>; read?: ReadAnswer<T> },
   ): Promise<ApiResult<T>> {
     const path = new URL(url).pathname;
 
@@ -343,8 +328,9 @@ export class BillingApiClient {
     try {
       response = await fetch(url, {
         method,
-        headers: { 'content-type': 'application/json', 'accept-language': lang, ...auth },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        // A FormData body sets its own boundary; naming the type here would drop it.
+        headers: { ...(body instanceof FormData ? {} : { 'content-type': 'application/json' }), 'accept-language': lang, ...auth },
+        ...(body === undefined ? {} : { body: body instanceof FormData ? body : JSON.stringify(body) }),
         signal: controller.signal,
       });
     } catch (e: unknown) {
@@ -356,7 +342,7 @@ export class BillingApiClient {
 
     let envelope: ApiResult<T>;
     try {
-      envelope = (await response.json()) as ApiResult<T>;
+      envelope = await read(response);
     } catch {
       this.logger.error(`billing ${method} ${path} answered ${response.status} with a non-JSON body`);
       return this.unreachable(lang);
@@ -375,3 +361,19 @@ export class BillingApiClient {
     return { ok: false, msg: this.copy.text(lang, { key: BotKeys.common.tryAgain }) };
   }
 }
+
+/** How an answer is read: the envelope, or a body that is the file itself. */
+type ReadAnswer<T> = (r: Response) => Promise<ApiResult<T>>;
+
+const readEnvelope = async <T>(r: Response): Promise<ApiResult<T>> => (await r.json()) as ApiResult<T>;
+
+/** An image body is the receipt (F-805-b); a JSON one is billing's refusal. */
+async function readImage(r: Response): Promise<ApiResult<OutgoingFile>> {
+  const contentType = r.headers.get('content-type') ?? '';
+  if (contentType.startsWith('application/json') || !r.ok) return readEnvelope<OutgoingFile>(r);
+  return { ok: true, msg: 'ok', data: { fileName: 'receipt', contentType, bytes: Buffer.from(await r.arrayBuffer()) } };
+}
+
+const depositPath = (paymentId: string) => `/api/billing/deposit/${encodeURIComponent(paymentId)}`;
+const MANUAL_PATH = '/api/billing/payments/manual';
+const manualPath = (paymentId: string) => `${MANUAL_PATH}/${encodeURIComponent(paymentId)}`;

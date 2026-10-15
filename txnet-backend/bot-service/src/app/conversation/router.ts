@@ -1,4 +1,4 @@
-import { SUGGESTION_OPT_OUT_PREFIX } from '@txnet-backend/shared-core';
+import { SUGGESTION_OPT_OUT_PREFIX, TRANSFER_REVIEW_CALLBACK_PREFIX } from '@txnet-backend/shared-core';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -10,7 +10,6 @@ import {
   parseStartPayload,
 } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { BillingApiClient } from '../billing-api/billing-api.client';
 import { BotCopy } from '../locale/bot-copy';
 import { ChatLanguage } from '../locale/chat-language';
 import { LocaleService } from '../locale/locale.service';
@@ -28,8 +27,9 @@ import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
 import { WheelFlow } from '../flows/wheel.flow';
 import { SUPPORT_ACTION_PREFIX, SUPPORT_SUGGESTED_STEP, SupportFlow } from '../flows/support.flow';
 import { GUIDE_KEY_PREFIX, GUIDE_OS_PREFIX, GUIDE_VOTE_PREFIX, GuideFlow } from '../flows/guide.flow';
-import { GuideApiClient } from '../guide-api/guide-api.client';
-import { SupportApiClient } from '../support-api/support-api.client';
+import { TransferPayFlow } from '../flows/transfer-pay.flow';
+import { TRANSFER_PAY_PREFIX } from '../flows/transfer.views';
+import { TransferReviewFlow } from '../flows/transfer-review.flow';
 import { SuggestionOptOut } from '../suggestion/suggestion-opt-out';
 import { OtpStep } from '../flows/otp.step';
 import {
@@ -37,20 +37,16 @@ import {
   LANGUAGE_ACTION_PREFIX,
   TIME_ZONE_ACTION_PREFIX,
   back,
-  guestMenu,
   helpView,
   languageView,
-  memberMenu,
-  restrictedMenu,
   MINI_APP_PARAM,
   say,
   signOutAllConfirmView,
 } from '../flows/views';
 import { progressOf, summaryOf } from '../flows/steps';
-import { ChatAccess } from '../session/chat-access';
+import { ChatMenu } from './chat-menu';
 import { ConversationStore } from './conversation.store';
 import { callContextOf, ChatContext, FlowResult, NavState } from './nav.types';
-import { isRestrictedToken } from './restricted';
 import { BotKeys, botLinkMessageKey } from '../locale/bot-keys';
 
 /** The one step that belongs to no flow: the panel drives it (`F-0203`). */
@@ -90,9 +86,8 @@ export class ConversationRouter {
     private readonly accounts: AccountsFlow,
     private readonly accountAdd: AccountAddFlow,
     private readonly config: ConfigService,
-    private readonly access: ChatAccess,
+    private readonly menus: ChatMenu,
     private readonly topUp: TopUpFlow,
-    private readonly billing: BillingApiClient,
     private readonly reseller: ResellerFlow,
     private readonly campaigns: ResellerCampaignFlow,
     private readonly timeZone: TimeZoneFlow,
@@ -100,9 +95,9 @@ export class ConversationRouter {
     private readonly wheel: WheelFlow,
     private readonly lotteries: LotteryFlow,
     private readonly support: SupportFlow,
-    private readonly supportApi: SupportApiClient,
     private readonly guides: GuideFlow,
-    private readonly guideApi: GuideApiClient,
+    private readonly transferPay: TransferPayFlow,
+    private readonly transferReview: TransferReviewFlow,
   ) {}
 
   /**
@@ -148,7 +143,7 @@ export class ConversationRouter {
       return this.chooseLanguage(ctx, state, actionId);
     }
     if (command === '/menu' || actionId === ACTIONS.menu) {
-      return { view: await this.menu(ctx), nextState: null };
+      return { view: await this.menus.forChat(ctx), nextState: null };
     }
     if (actionId === ACTIONS.cancel || command === '/cancel') {
       return { view: say('cancelled', { key: BotKeys.common.cancelled }), nextState: null };
@@ -190,8 +185,12 @@ export class ConversationRouter {
       // F-414-k: a guide opened from support's offer keeps the written message and the way on.
       return state?.step === SUPPORT_SUGGESTED_STEP ? this.support.keepDraft(shown, state) : shown;
     }
-    // A file only means something inside a thread; anywhere else it has nowhere to go.
-    if (ctx.file && state?.flow !== 'support') return this.support.fileOutside();
+    // F-805-b. A transfer's buttons name its payment, so they need no state; the review one is also under a proof notice.
+    if (actionId === ACTIONS.transfers) return this.transferReview.start(ctx);
+    if (actionId?.startsWith(TRANSFER_REVIEW_CALLBACK_PREFIX)) return this.transferReview.tap(ctx, actionId);
+    if (actionId?.startsWith(TRANSFER_PAY_PREFIX)) return this.transferPay.tap(ctx, actionId);
+    // A file only means something inside a thread or a transfer's proof; anywhere else it has nowhere to go.
+    if (ctx.file && state?.flow !== 'support' && state?.flow !== 'transfer') return this.support.fileOutside();
 
     // F-038-g4: "don't show this again" under an AI suggestion — any screen, any state.
     if (actionId?.startsWith(SUGGESTION_OPT_OUT_PREFIX)) return this.suggestions.tap(ctx, actionId);
@@ -236,6 +235,8 @@ export class ConversationRouter {
         return this.wheel.handle(ctx, state, actionId);
       case 'support':
         return this.support.handle(ctx, state, actionId);
+      case 'transfer':
+        return this.transferPay.handle(ctx, state, actionId);
       default:
         return { view: say('unknown', { key: BotKeys.common.unknown }), nextState: null };
     }
@@ -253,7 +254,7 @@ export class ConversationRouter {
    */
   private async withoutState(ctx: ChatContext): Promise<FlowResult> {
     if (!ctx.text?.trim() || ctx.text.trim().startsWith('/')) {
-      return { view: await this.menu(ctx), nextState: null };
+      return { view: await this.menus.forChat(ctx), nextState: null };
     }
     return {
       view: say('expired', { key: BotKeys.common.expired }),
@@ -344,7 +345,7 @@ export class ConversationRouter {
         lang,
       };
     }
-    return { view: await this.menu(ctx), nextState: null, lang };
+    return { view: await this.menus.forChat(ctx), nextState: null, lang };
   }
 
   /**
@@ -386,7 +387,7 @@ export class ConversationRouter {
       // has somewhere to go, and replacing its buttons with the menu's would
       // take away the very thing it was opened for.
       if ((view.actions ?? []).flat().length) return { ...result, view };
-      const menu = await this.menu(ctx);
+      const menu = await this.menus.forChat(ctx);
       return {
         ...result,
         view: { ...view, footer: menu.body, actions: menu.actions },
@@ -466,7 +467,7 @@ export class ConversationRouter {
       this.logger.log(`${ctx.platform}: ${parsed.kind} deep link, not built yet`);
     }
 
-    return { view: await this.menu(ctx), nextState: null };
+    return { view: await this.menus.forChat(ctx), nextState: null };
   }
 
   /**
@@ -537,33 +538,6 @@ export class ConversationRouter {
       view: say('signedOutAll', { key: BotKeys.common.signedOutAll }),
       nextState: null,
     };
-  }
-
-  /**
-   * Which menu this chat sees depends on its session, never on its chat id.
-   *
-   * It asks `ChatAccess` rather than reading the Redis entry, and the
-   * difference is the whole point (ADR-0033): the entry is a local cache of
-   * "this chat has a session", and nothing local can know that session was
-   * revoked somewhere else — a Mini App logout, an `F-0208` removal, thirty
-   * days of silence. `ChatAccess` refreshes, so a refusal both answers the
-   * question and drops the dead entry. The cost is one round trip on a menu
-   * render, which is what every other authenticated screen already pays.
-   */
-  private async menu(ctx: ChatContext) {
-    const token = await this.access.token(ctx);
-    if (!token) return guestMenu(this.guideApi.isConfigured);
-    // BAN-1-g (ADR-0133): a restricted account sees why, and support.
-    if (isRestrictedToken(token)) {
-      const me = await this.api.me({ ...callContextOf(ctx), accessToken: token });
-      return restrictedMenu(me.ok ? (me.data.restriction?.reason ?? null) : null, this.supportApi.isConfigured);
-    }
-    // F-311-c: the management row exists only for a chat the door admits
-    // (F-311-e). Asked here, on the same token the menu was decided with, and
-    // remembered nowhere — this bot serves the reseller's customers too, and
-    // they are most of the chats that reach this line.
-    const reseller = await this.reseller.canAdminister(ctx, token);
-    return memberMenu(ctx.miniAppUrl, this.billing.isConfigured, reseller, this.supportApi.isConfigured, this.guideApi.isConfigured);
   }
 
   /**

@@ -53,6 +53,17 @@ export const lotteryJoinCallback = (lotteryId: string) => `${LOTTERY_CALLBACK_PR
 export const SUPPORT_CALLBACK_PREFIX = 'sup:';
 export const supportOpenCallback = (conversationId: string) => `${SUPPORT_CALLBACK_PREFIX}o:${conversationId}`;
 
+/**
+ * A manual transfer's review buttons in the bot (F-805-b): `mtr:<kind>:<payment id>`.
+ * A proof notice carries the open one, which auth-service sends and
+ * bot-service routes from any state — the tap lands on that transfer's
+ * receipt, ready to confirm. 42 bytes.
+ */
+export const TRANSFER_REVIEW_CALLBACK_PREFIX = 'mtr:';
+export const transferReviewCallback = (paymentId: string) => `${TRANSFER_REVIEW_CALLBACK_PREFIX}o:${paymentId}`;
+/** Every receipt waiting, in the bot — what a combined proof notice opens (`mtr:l`). */
+export const TRANSFER_REVIEW_LIST_CALLBACK = `${TRANSFER_REVIEW_CALLBACK_PREFIX}l`;
+
 const OF_KIND: Record<RetentionKind, NoticeClass> = {
   cutoff: 'critical',
   // "An all-clear follows its alarm": it takes the stopped state's channels; its mute switch stays the kind's.
@@ -103,6 +114,8 @@ export const NOTICE_CLASS_OF: Readonly<Record<string, NoticeClass>> = {
   resellerQuotaDigest: 'important',
   // F-707-e: the wheel's day is nearly spent; the admin may raise the cap tomorrow, nothing is lost today.
   wheelCapNearing: 'important',
+  // F-805-b: a payer waits on a person to judge their receipt — soon, nothing is lost yet.
+  transferProofSent: 'important',
   // F-707-m: a prize given — the user got something, nothing to do.
   lotteryWon: 'important',
   // F-707-q: an opt-in lottery opened to the user's group — join before it closes; an automatic one asks nothing, so the inbox's alone.

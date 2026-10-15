@@ -1,10 +1,12 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform, escapeHtml } from '@txnet-backend/messenger';
-import { lotteryJoinCallback, SUGGESTION_OPT_OUT_PREFIX, suggestionCopyVerdict, supportOpenCallback } from '@txnet-backend/shared-core';
+import { suggestionCopyVerdict } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
+import { noticeButton } from './notice-buttons';
 import { PANEL_NOTIFY_TEMPLATES, PANEL_TEMPLATE_TEXT } from './panel-notices';
+import { TRANSFER_NOTIFY_TEMPLATES, TRANSFER_TEMPLATE_TEXT } from './transfer-notices';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 
@@ -30,6 +32,7 @@ export const NOTIFY_TEMPLATES = [
   'lotteryOpened',
   'lotteryOpenedAutomatic',
   ...PANEL_NOTIFY_TEMPLATES,
+  ...TRANSFER_NOTIFY_TEMPLATES,
   'purchaseDelivered',
   'purchaseRefunded',
   'purchaseDelayed',
@@ -403,6 +406,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     },
   },
   ...PANEL_TEMPLATE_TEXT,
+  ...TRANSFER_TEMPLATE_TEXT,
   // F-111-d: a paid Grant was delivered, or could not be and was refunded in full.
   purchaseDelivered: {
     read: (ns) => ns?.purchase?.delivered,
@@ -1141,18 +1145,7 @@ export class UserNotifier {
     // The chosen platform first; the rest keep linked-last order for the fallback.
     const ordered = every ? links : [...links.filter((l) => l.platform === choice), ...links.filter((l) => l.platform !== choice)];
 
-    // F-038-g4: an AI suggestion carries its "don't show this again" — the action id only, never the user.
-    // F-707-q: an opt-in lottery's announcement carries Join — the lottery id only; bot-service routes it from any state.
-    // F-309: a support reply or resolve carries Open — bot-service routes it from any state too.
-    const markup =
-      request.template.startsWith('suggestion') && params.actionId
-        ? { inline_keyboard: [[{ text: ns?.suggestion?.optOut ?? "🔕 Don't show this again", callback_data: `${SUGGESTION_OPT_OUT_PREFIX}${params.actionId}` }]] }
-        : request.template === 'lotteryOpened' && params.lotteryId
-          ? { inline_keyboard: [[{ text: ns?.engagement?.lotteryJoin ?? '✅ Join', callback_data: lotteryJoinCallback(params.lotteryId) }]] }
-          : // F-309: a reply or resolve opens its thread in the chat, ready for an answer — the conversation id only.
-            (request.template === 'supportReplied' || request.template === 'supportResolved') && params.conversationId
-            ? { inline_keyboard: [[{ text: ns?.support?.open ?? '💬 Open the conversation', callback_data: supportOpenCallback(params.conversationId) }]] }
-            : undefined;
+    const markup = noticeButton(request.template, params, ns);
     // A chat message is sent in HTML parse mode; these templates hold no markup, so the whole text is
     // escaped — a subject or a title a person wrote can never fail the send. The inbox row stays as written.
     const chatText = escapeHtml(text);

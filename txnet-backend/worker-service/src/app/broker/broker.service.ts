@@ -353,10 +353,10 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       OutboxEventType.TENANT_EMERGENCY_ENTRY,
       // RT-1-e2: a custom domain live, failed its window, or lost its record — the same owner.
       OutboxEventType.TENANT_DOMAIN_NOTICE,
-      // F-707-e: the wheel's day at 80% of its cap — to each of the tenant's wheel admins, not the owner.
+      // F-707-e, F-707-m, F-805-b: a person notice — to each wheel admin, a winner, each person who may confirm a transfer.
       OutboxEventType.TENANT_WHEEL_CAP_NEARING,
-      // F-707-m: a lottery prize given — to its winner, a person notice as the one above.
       OutboxEventType.LOTTERY_WON,
+      OutboxEventType.TRANSFER_PROOF_SENT,
     ]) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }

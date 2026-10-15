@@ -27,6 +27,9 @@ import { RegisterFlow } from './flows/register.flow';
 import { ResellerCampaignFlow } from './flows/reseller-campaign.flow';
 import { ResellerFlow } from './flows/reseller.flow';
 import { TopUpFlow } from './flows/top-up.flow';
+import { TransferPayFlow } from './flows/transfer-pay.flow';
+import { TransferReviewFlow } from './flows/transfer-review.flow';
+import { ChatMenu } from './conversation/chat-menu';
 import { InChatPayment } from './flows/in-chat-payment';
 import { BillingApiClient } from './billing-api/billing-api.client';
 import { NotificationApiClient } from './notification-api/notification-api.client';
@@ -98,6 +101,10 @@ import { WebhookController } from './webhook/webhook.controller';
     TenantApiClient,
     NotificationApiClient,
     TopUpFlow,
+    // F-805-b: a manual transfer's proof from the payer, and its review by whoever may confirm it.
+    TransferPayFlow,
+    TransferReviewFlow,
+    ChatMenu,
     ResellerFlow,
     ResellerCampaignFlow,
     InChatPayment,

@@ -92,9 +92,9 @@ export const PAYMENT_SELECT = {
 
 export type PaymentRow = Prisma.PaymentTransactionGetPayload<{ select: typeof PAYMENT_SELECT }>;
 
-/** What a gateway's `verify` answered, and which of the two askers is holding it. */
+/** What a gateway's `verify` answered — no reference only from a person confirming a transfer whose proof named none (F-805-b). */
 export type VerifiedPayment = {
-  referenceId: string;
+  referenceId: string | null;
   cardPan: string | null;
   /**
    * The authority to write in the same flip, for a payment found without one
@@ -390,7 +390,7 @@ export class DepositSettlementService {
   private async auditManual(
     tx: Prisma.TransactionClient,
     payment: PaymentRow,
-    referenceId: string,
+    referenceId: string | null,
     manual: ManualConfirmation,
   ): Promise<void> {
     const tenant = TenantContext.current('manual confirmation audit');
@@ -479,7 +479,7 @@ export class DepositSettlementService {
   private async publishConfirmed(
     tx: Prisma.TransactionClient,
     payment: PaymentRow,
-    referenceId: string,
+    referenceId: string | null,
     source: ConfirmationSource,
     /** What the payment was priced to credit, before any receipt changed it. */
     amountAsked: Prisma.Decimal,

@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfirmationSource, PaymentStatus, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, isPlatformTenant, type ObjectDriver } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -9,7 +9,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AskAnswer, DepositReconciliationService } from './deposit-reconciliation.service';
 import { DepositSettlementService, PAYMENT_SELECT } from './deposit-settlement';
 import { WITH_PROOF, transferViewOf, type TransferView } from '../manual/transfer-proof';
+import { readReceipt, type StoredReceipt } from '../manual/transfer-receipt';
 import { returnProof } from '../manual/transfer-return';
+import { payerReference } from '../manual/transfer-rows';
+import { PROOF_OBJECT_DRIVER } from './deposit-proof.service';
+import { ManualConfirmRefused } from './manual-confirm.refusals';
 import { attachAuthority } from './payment-callback-url';
 
 /**
@@ -45,28 +49,6 @@ import { attachAuthority } from './payment-callback-url';
  */
 
 export type ManualActor = { adminId: string; tenantId: string; ip: string };
-
-/**
- * `not_open`: the payment is `success` or `failed` — settled, not a person's to
- * reopen (F-092-af; `not_verifying` before it). `authority_present` and
- * `authority_taken` answer attaching an authority (F-092-af).
- */
-export type ManualConfirmRejection =
-  | 'payment_not_found'
-  | 'not_open'
-  | 'authority_present'
-  | 'authority_taken'
-  /** F-805-a: the transfer's reference was credited to another payment since its proof arrived. */
-  | 'duplicate_ref'
-  /** F-805-a: `resubmit` on a payment with no proof to return, or one already returned once. */
-  | 'cannot_return';
-
-export class ManualConfirmRefused extends Error {
-  constructor(readonly reason: ManualConfirmRejection, detail?: string) {
-    super(detail ? `${reason}: ${detail}` : reason);
-    this.name = 'ManualConfirmRefused';
-  }
-}
 
 /**
  * Spelled out, not derived: the panel's screen reads this union from this file
@@ -169,6 +151,8 @@ export class ManualConfirmService {
     private readonly reconciliation: DepositReconciliationService,
     private readonly settlement: DepositSettlementService,
     private readonly config: ConfigService<EnvConfig, true>,
+    /** Where the transfer receipts are (F-805-b), as `DepositProofModule` stores them. */
+    @Inject(PROOF_OBJECT_DRIVER) private readonly driver: ObjectDriver,
   ) {}
 
   /**
@@ -255,9 +239,10 @@ export class ManualConfirmService {
   }
 
   /** Ask first; credit by hand only if the gateway left it unsettled. */
-  async confirm(actor: ManualActor, paymentId: string, input: { referenceId: string; reason: string }): Promise<ManualAnswer> {
+  async confirm(actor: ManualActor, paymentId: string, input: { referenceId?: string; reason: string }): Promise<ManualAnswer> {
     const tenantId = await this.eligible(actor, paymentId);
     return runWithTenant({ id: tenantId }, async () => {
+      const referenceId = await this.referenceFor(paymentId, input.referenceId);
       const asked = await this.reconciliation.askOnce(paymentId);
       if (!UNSETTLED.includes(asked.kind)) return this.answerOf(paymentId, asked);
 
@@ -267,7 +252,7 @@ export class ManualConfirmService {
       if (!payment) throw new ManualConfirmRefused('payment_not_found', paymentId);
 
       const credited = await this.settlement
-        .creditVerified(payment, { referenceId: input.referenceId, cardPan: null }, ConfirmationSource.admin_manual, { adminId: actor.adminId, reason: input.reason, ip: actor.ip })
+        .creditVerified(payment, { referenceId, cardPan: null }, ConfirmationSource.admin_manual, { adminId: actor.adminId, reason: input.reason, ip: actor.ip })
         .catch((e: unknown) => {
           // `transfer_tx_ref`'s unique index (F-805-a): the credit rolled back with the reference.
           if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ManualConfirmRefused('duplicate_ref', paymentId);
@@ -278,7 +263,7 @@ export class ManualConfirmService {
         paymentId,
         outcome: credited ? 'confirmed_manually' : 'already_settled',
         gatewayStatus: asked.gatewayStatus,
-        referenceId: credited ? input.referenceId : null,
+        referenceId: credited ? referenceId : null,
       };
     });
   }
@@ -321,6 +306,22 @@ export class ManualConfirmService {
         referenceId: null,
       };
     });
+  }
+
+  /** A typed reference, else a transfer's payer's own (F-805-b) — none when its proof named none. Any other payment needs one typed. */
+  private async referenceFor(paymentId: string, typed: string | undefined): Promise<string | null> {
+    if (typed) return typed;
+    const payer = await tenantTransaction(this.prisma, (tx) => payerReference(tx, paymentId));
+    if (!payer) throw new ManualConfirmRefused('reference_required', paymentId);
+    return payer.reference;
+  }
+
+  /** A transfer's receipt bytes (F-805-b), in the caller's scope — for the bot, which has no Host for the signed URL. */
+  async receipt(actor: ManualActor, paymentId: string): Promise<StoredReceipt> {
+    const tenantId = await this.eligible(actor, paymentId);
+    const found = await runWithTenant({ id: tenantId }, () => readReceipt(this.prisma, this.driver, paymentId));
+    if (!found) throw new ManualConfirmRefused('receipt_missing', paymentId);
+    return found;
   }
 
   /** A transfer has no gateway to ask: its proof goes back once, in one audited write (`returnProof`). */

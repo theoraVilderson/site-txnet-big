@@ -83,7 +83,9 @@ export class PaymentConfirmedConsumer implements OnApplicationBootstrap {
         tenantId: payment.tenantId,
         userId: payment.userId,
         template: 'paymentCredited',
-        params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? '' },
+        // A transfer confirmed by hand from a proof with no reference has none (F-805-b): the payment's
+        // own id is then what the payer can quote to support.
+        params: { amount: payment.amountCredited, reference: payment.gatewayReferenceId ?? payment.paymentId },
       },
     });
   }

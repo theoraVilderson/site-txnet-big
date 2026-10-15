@@ -7,6 +7,8 @@ import { money } from '../locale/money';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
+import { ChatFiles } from './chat-files';
+import { TransferPayFlow } from './transfer-pay.flow';
 import { TopUpFlow } from './top-up.flow';
 
 const ctx: ChatContext = { integration: aBotIntegration(), platform: 'telegram', chatId: '5501', senderId: 42, lang: 'fa' };
@@ -36,7 +38,8 @@ function harness(over: { session?: unknown; billing?: Partial<BillingApiClient> 
     save: vi.fn(),
     clear: vi.fn(),
   } as unknown as BotSessionStore;
-  return { billing, flow: new TopUpFlow(billing, new ChatAccess(auth, sessions)) };
+  const access = new ChatAccess(auth, sessions);
+  return { billing, flow: new TopUpFlow(billing, access, new TransferPayFlow(billing, access, {} as ChatFiles)) };
 }
 
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);

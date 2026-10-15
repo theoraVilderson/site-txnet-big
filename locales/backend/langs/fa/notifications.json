@@ -33,7 +33,12 @@
     "creditedMany": "✅ {{count}} پرداخت شما تأیید شد و به کیف پولتان اضافه شد.",
     "creditedManyTitle": "{{count}} پرداخت تأیید شد",
     "reversedMany": "↩️ {{count}} پرداخت شما توسط درگاه برگشت خورد و به کیف پولتان اضافه نشد. بانک مبلغ‌ها را به کارت شما بازمی‌گرداند.",
-    "reversedManyTitle": "{{count}} پرداخت برگشت خورد"
+    "reversedManyTitle": "{{count}} پرداخت برگشت خورد",
+    "transferProofSent": "🧾 یک رسید منتظر بررسی شماست: {{amount}} {{currencyCode}} با واریز دستی. ببینید رسیده یا نه، بعد تأیید یا ردش کنید.",
+    "transferProofSentTitle": "یک رسید برای بررسی",
+    "transferProofSentMany": "🧾 {{count}} رسید منتظر بررسی شما هستن.",
+    "transferProofSentManyTitle": "{{count}} رسید برای بررسی",
+    "transferReview": "🧾 بررسی رسید"
   },
   "campaign": {
     "emailSubject": "پیامی تازه برای شما"

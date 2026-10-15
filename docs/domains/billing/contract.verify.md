@@ -57,7 +57,8 @@ SuperAdmin through `*`, ADR-0043). The permission is not the boundary.
 |---|---|---|
 | `GET /api/billing/payments/manual` | — | `[{id, status, tenantId, userId, source, gatewayId, gatewayName, providerName, amountRequested, amountCredited, currencyCode, chargedAmountMinor, authority, createdAt, verifyAttempts, nextVerifyAt, flaggedAt}]` — `currencyCode` the payment's own (F-116-h3) — since F-092-af every `pending` or `expired` payment made inside `RECONCILIATION_LOOKBACK_SEC`, verifying or not, `authority` null or not; oldest first, at most 200 |
 | `POST /api/billing/payments/manual/:id/inquire` | — | `{paymentId, outcome, gatewayStatus, referenceId}` |
-| `POST /api/billing/payments/manual/:id/confirm` | `{referenceId ≤64, reason 5..500}`, strict | the same shape |
+| `POST /api/billing/payments/manual/:id/confirm` | `{referenceId ≤64, reason 5..500}`, strict; a manual transfer may omit `referenceId` — its payer's reference off the proof is taken, or none when the proof names none (F-805-b); any other payment without one is 400 `reference_required` | the same shape |
+| `GET /api/billing/payments/manual/:id/receipt` (F-805-b) | — | a transfer's receipt **bytes** (its stored type, `no-store`), read in the gateway owner's scope — for the bot, which has no Host for the signed `receiptUrl`; none is 404 `receipt_missing`, a refusal the ordinary envelope |
 | `POST /api/billing/payments/manual/:id/authority` (F-092-af) | `{authority 1..64}`, strict | the same shape — the answer of the ask that follows the attach |
 
 `outcome`: `credited` / `already_settled` / `refused` / `mismatch` (the gateway

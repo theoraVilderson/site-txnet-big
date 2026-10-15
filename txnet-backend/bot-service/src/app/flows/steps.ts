@@ -73,6 +73,8 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   wheel: [],
   // A thread is a place to talk in, not a conversation with an end (F-309).
   support: [],
+  // A transfer's proof is the seller's pick of fields (F-805-b): its length is not this table's to know.
+  transfer: [],
 };
 
 /**
@@ -98,6 +100,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   timeZone: null,
   wheel: null,
   support: null,
+  transfer: null,
 };
 
 export function progressOf(state: NavState): BotText | undefined {

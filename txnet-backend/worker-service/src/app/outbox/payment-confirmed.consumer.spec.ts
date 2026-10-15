@@ -114,6 +114,12 @@ describe('PaymentConfirmedConsumer.handle', () => {
     expect(calls.del).toEqual([]);
   });
 
+  it("quotes the payment's own id when a transfer was confirmed from a proof with no reference (F-805-b)", async () => {
+    const { consumer, calls } = build();
+    await consumer.handle(event({ gatewayReferenceId: null }));
+    expect(calls.joined.map((j) => j.params)).toEqual([{ amount: '19.80', reference: PAYMENT }]);
+  });
+
   it('does nothing for an event it already handled', async () => {
     const { consumer, calls } = build({ marked: true });
 

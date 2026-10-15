@@ -20,6 +20,7 @@ import { LoginFlow } from '../flows/login.flow';
 import { RegisterFlow } from '../flows/register.flow';
 import { OtpStep } from '../flows/otp.step';
 import { ConversationStore } from './conversation.store';
+import { ChatMenu } from './chat-menu';
 import { ConversationRouter, PANEL_LINK_STEP } from './router';
 import { ChatContext, NavState } from './nav.types';
 
@@ -80,6 +81,11 @@ function makeRouter(over: {
   } as unknown as LocaleService;
 
   const phones = new PhoneNumbers(new ConfigService({ DEFAULT_LANGUAGE: 'fa' }));
+  const reseller = {
+    canAdminister: vi.fn().mockResolvedValue(over.reseller ?? false),
+    start: vi.fn(),
+    handle: vi.fn(),
+  } as unknown as ResellerFlow;
 
   const router = new ConversationRouter(
     nav,
@@ -109,23 +115,25 @@ function makeRouter(over: {
     new ConfigService(
       over.env ?? { PANEL_BASE_URL: 'https://panel.example.test' },
     ),
-    new ChatAccess(api, sessions),
+    new ChatMenu(
+      new ChatAccess(api, sessions),
+      api,
+      { isConfigured: over.topUp ?? false } as unknown as BillingApiClient,
+      reseller,
+      { isConfigured: false } as never,
+      { isConfigured: false } as never,
+    ),
     { start: vi.fn(), handle: vi.fn() } as unknown as TopUpFlow,
-    { isConfigured: over.topUp ?? false } as unknown as BillingApiClient,
-    {
-      canAdminister: vi.fn().mockResolvedValue(over.reseller ?? false),
-      start: vi.fn(),
-      handle: vi.fn(),
-    } as unknown as ResellerFlow,
+    reseller,
     { isConfigured: false, start: vi.fn(), handle: vi.fn() } as unknown as ResellerCampaignFlow,
     { start: vi.fn(), handle: vi.fn() } as unknown as TimeZoneFlow,
     { tap: vi.fn() } as never,
     { start: vi.fn(), handle: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn() } as never,
     { start: vi.fn(), tap: vi.fn(), handle: vi.fn(), fileOutside: vi.fn() } as never,
-    { isConfigured: false } as never,
     { start: vi.fn(), install: vi.fn(), tap: vi.fn() } as never,
-    { isConfigured: false } as never,
+    { tap: vi.fn(), handle: vi.fn(), show: vi.fn() } as never,
+    { start: vi.fn(), tap: vi.fn() } as never,
   );
   return { router, nav, sessions, api, otp, langs, locale };
 }

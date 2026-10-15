@@ -824,6 +824,27 @@ describe('UserNotifier', () => {
       expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '🎟 auto «مهر»');
     });
 
+    it('a transfer proof (F-805-b) carries Review for that payment; a combined one opens every receipt waiting', async () => {
+      const client = botClient();
+      const locale = {
+        getNamespace: vi.fn(() => ({ payment: { transferProofSent: '🧾 {{amount}} {{currencyCode}}', transferProofSentMany: '🧾 {{count}}', transferReview: '🧾 بررسی رسید' } })),
+        getKey: vi.fn(() => undefined),
+        getDefaultLanguage: () => 'fa',
+      } as unknown as LocaleService;
+      const notifier = new UserNotifier(
+        notifierPrisma({ user: { languagePreference: 'fa' }, links: [{ platform: 'telegram', platformUserId: '5501' }] }) as unknown as PrismaService,
+        registry(client),
+        locale,
+      );
+      const params = { paymentId: '0f0e0d0c-0b0a-4908-8706-050403020100', amount: '12500000', currencyCode: 'IRR' };
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'transferProofSent', params }));
+      expect(client.sendMessage).toHaveBeenCalledWith('5501', '🧾 12500000 IRR', {
+        inline_keyboard: [[{ text: '🧾 بررسی رسید', callback_data: 'mtr:o:0f0e0d0c-0b0a-4908-8706-050403020100' }]],
+      });
+      await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'transferProofSent', params, count: 3 }));
+      expect(client.sendMessage).toHaveBeenLastCalledWith('5501', '🧾 3', { inline_keyboard: [[{ text: '🧾 بررسی رسید', callback_data: 'mtr:l' }]] });
+    });
+
     it('a support reply or resolve (F-309) carries Open for that thread; the agent\'s notice carries nothing', async () => {
       const client = botClient();
       const locale = {

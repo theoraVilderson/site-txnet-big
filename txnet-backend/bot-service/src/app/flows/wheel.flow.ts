@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { BotText } from '@txnet-backend/messenger';
-import { BillingApiClient, BillingCallContext, SpinAnswer, WheelPrizeType } from '../billing-api/billing-api.client';
+import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api.client';
+import type { SpinAnswer, WheelPrizeType } from '../billing-api/engagement.types';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { ChatAccess } from '../session/chat-access';

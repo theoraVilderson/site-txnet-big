@@ -1,8 +1,10 @@
-import { objectKey } from '@txnet-backend/shared-core';
+import type { Prisma } from '@prisma/client';
+import { OutboxEventType, objectKey } from '@txnet-backend/shared-core';
 
 import { CARD_TO_CARD } from './kinds/card-to-card';
 import { CRYPTO_WALLET } from './kinds/crypto-wallet';
 import { RECEIPT_POLICY, canReturnProof, checkProof, receiptPath, transferViewOf } from './transfer-proof';
+import { tellReviewers } from './transfer-reviewers';
 
 /**
  * A payer's proof of a manual transfer (F-805-a, billing
@@ -112,5 +114,50 @@ describe('transferViewOf', () => {
   it('signs nothing when the proof has no image', () => {
     const view = transferViewOf({ ...detail, proof: { trackingCode: '12345678' } }, secret, now);
     expect(view).toMatchObject({ receiptUrl: null, receiptUrlExpiresAt: null });
+  });
+});
+
+// F-805-b: the people who judge a proof hear of it — in the bot, with a button onto the receipt.
+describe('tellReviewers', () => {
+  const REVIEWERS = ['00000000-0000-4000-8000-0000000000e1', '00000000-0000-4000-8000-0000000000e2'];
+
+  function reviewTx(holders: string[]) {
+    const events: Array<Record<string, unknown>> = [];
+    const userQueries: unknown[] = [];
+    const tx = {
+      user: { findMany: async (a: unknown) => (userQueries.push(a), holders.map((id) => ({ id }))) },
+      userGroupMember: { findMany: async () => [] },
+      outboxEvent: { create: async ({ data }: { data: Record<string, unknown> }) => (events.push(data), { id: `ev-${events.length}` }) },
+    };
+    return { tx: tx as unknown as Prisma.TransactionClient, events, userQueries };
+  }
+
+  it("tells each person of the gateway's owner who may confirm it by hand, once each, with the amount the payer was asked for", async () => {
+    const { tx, events, userQueries } = reviewTx(REVIEWERS);
+
+    const told = await tellReviewers(tx, { ownerTenantId: OWNER, paymentId: PAYMENT, expectedAmountMinor: BigInt(12_500_000), decimals: 0, currencyCode: 'IRR' });
+
+    expect(told).toBe(2);
+    expect(JSON.stringify(userQueries[0])).toContain('payment.confirm_manual');
+    expect(events).toEqual(
+      REVIEWERS.map((userId) => ({
+        aggregate: 'billing.payment',
+        aggregateId: PAYMENT,
+        type: OutboxEventType.TRANSFER_PROOF_SENT,
+        payload: { tenantId: OWNER, userId, paymentId: PAYMENT, amount: '12500000', currencyCode: 'IRR' },
+      })),
+    );
+  });
+
+  it("spells a wallet's amount in its asset's decimals, never as a float", async () => {
+    const { tx, events } = reviewTx(REVIEWERS.slice(0, 1));
+    await tellReviewers(tx, { ownerTenantId: OWNER, paymentId: PAYMENT, expectedAmountMinor: BigInt(12_500_001), decimals: 6, currencyCode: 'USDT' });
+    expect(events[0].payload).toMatchObject({ amount: '12.500001', currencyCode: 'USDT' });
+  });
+
+  it('writes nothing when nobody holds the key', async () => {
+    const { tx, events } = reviewTx([]);
+    expect(await tellReviewers(tx, { ownerTenantId: OWNER, paymentId: PAYMENT, expectedAmountMinor: BigInt(1), decimals: 0, currencyCode: 'IRR' })).toBe(0);
+    expect(events).toEqual([]);
   });
 });

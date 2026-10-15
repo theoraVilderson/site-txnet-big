@@ -33,7 +33,12 @@
     "creditedMany": "✅ {{count}} of your payments were confirmed and added to your wallet.",
     "creditedManyTitle": "{{count}} payments confirmed",
     "reversedMany": "↩️ {{count}} of your payments were reversed by the gateway and were not added to your wallet. The bank is returning them to your card.",
-    "reversedManyTitle": "{{count}} payments reversed"
+    "reversedManyTitle": "{{count}} payments reversed",
+    "transferProofSent": "🧾 A receipt is waiting for your review: {{amount}} {{currencyCode}} by transfer. Check that it arrived, then confirm or reject it.",
+    "transferProofSentTitle": "A receipt to review",
+    "transferProofSentMany": "🧾 {{count}} receipts are waiting for your review.",
+    "transferProofSentManyTitle": "{{count}} receipts to review",
+    "transferReview": "🧾 Review the receipt"
   },
   "campaign": {
     "emailSubject": "A new message for you"

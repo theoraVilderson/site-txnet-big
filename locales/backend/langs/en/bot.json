@@ -65,7 +65,16 @@
     "supportFile": "📎 {{name}}",
     "guides": "📖 Guides",
     "guidesInstall": "📲 How to connect",
-    "supportSendAnyway": "📨 Send it anyway"
+    "supportSendAnyway": "📨 Send it anyway",
+    "transfers": "🧾 Receipts to review",
+    "transferSendProof": "📎 Send the receipt",
+    "transferConfirm": "✅ Confirm",
+    "transferReturn": "↩️ Ask for a new receipt",
+    "transferReject": "❌ Reject",
+    "transferRejectYes": "Yes, reject it",
+    "transferAll": "🧾 All receipts",
+    "transferBack": "Back to the receipt",
+    "transferPaid": "✅ I have paid"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -395,6 +404,76 @@
       "no": "👎 Not helpful",
       "thanks": "Thanks, your answer is saved.",
       "failed": "Your answer was not saved. Please try again in a moment."
+    }
+  },
+  "transfer": {
+    "pay": "Send exactly {{amount}} to:\n\n{{destination}}\n\nPay within {{minutes}} minutes. Once you have paid, {{ask}}",
+    "line": "{{label}}: {{value}}",
+    "lines": "{{first}}\n{{rest}}",
+    "next": "Got it ✅ Now {{ask}}",
+    "askAgain": "Please {{ask}}",
+    "justNow": "Just now",
+    "field": {
+      "cardNumber": "Card number",
+      "holderName": "Card holder",
+      "sheba": "Sheba (IBAN)",
+      "asset": "Currency",
+      "network": "Network",
+      "address": "Wallet address",
+      "memo": "Memo",
+      "trackingCode": "Tracking code",
+      "sourceCardLast4": "Last 4 digits of the card",
+      "paidAt": "Paid",
+      "txHash": "Transaction hash",
+      "receiptImage": "Receipt"
+    },
+    "ask": {
+      "receiptImage": "send a photo of the receipt here 📎",
+      "trackingCode": "type the transfer's tracking code.",
+      "sourceCardLast4": "type the last 4 digits of the card you paid from.",
+      "paidAt": "when did you pay? Pick the nearest.",
+      "txHash": "send the transaction hash (TxID)."
+    },
+    "askOther": "send the {{field}}.",
+    "askDone": "tap “I have paid” below.",
+    "photoExpected": "Please send the receipt as a photo.",
+    "textExpected": "Please type it as a message.",
+    "fileUnreadable": "That file could not be read here. Please send the receipt as a photo again.",
+    "sent": "✅ Your receipt was sent. It will be checked, and you will get a message here as soon as the amount is in your wallet.",
+    "alreadySent": "Your receipt is already waiting to be checked. You will get a message here once it is confirmed.",
+    "closed": "This payment is closed and takes no receipt now. Start a new top-up from the menu.",
+    "refused": {
+      "transfer_not_found": "This payment was not found. Start a new top-up from the menu.",
+      "transfer_closed": "This payment is closed and takes no receipt now. Start a new top-up from the menu.",
+      "proof_already_sent": "Your receipt is already waiting to be checked.",
+      "invalid_proof": "The {{field}} you sent does not look right. Please {{ask}}",
+      "receipt_missing": "The receipt photo did not arrive. Please {{ask}}",
+      "receipt_rejected": "That file cannot be used as a receipt: send a photo (JPEG, PNG or WebP) of at most 5 MB.",
+      "duplicate_ref": "This tracking code or transaction hash was already used for another payment. Check it, then send your proof again with the “📎 Send the receipt” button above."
+    },
+    "review": {
+      "list": "🧾 Receipts waiting for your review. Choose one:",
+      "none": "No receipt is waiting for review ✅",
+      "row": "{{amount}} · {{destination}}",
+      "screen": "🧾 Receipt to review\n\nSend exactly: {{expected}}\nTo: {{destination}}\nTo the wallet: {{credited}}\nSent: {{sentAgo}}{{proof}}",
+      "proof": "\n\n{{lines}}",
+      "noPicture": "\n\nThe receipt picture could not be shown here; it is on the manual payments page of the panel.",
+      "gone": "This payment no longer waits for review: it was confirmed, rejected or closed.",
+      "rejectAsk": "Reject this payment for good? Its user is not credited, and if the money did arrive, only support can put it right.",
+      "confirmed": "✅ Confirmed. The amount was added to the user's wallet.",
+      "returned": "↩️ Sent back. The user can send a new receipt, once.",
+      "rejected": "❌ Rejected. The payment is closed.",
+      "settled": "This payment was already settled; nothing was changed.",
+      "duplicate": "This tracking code was already credited to another payment, so this one was not confirmed.",
+      "cannotReturn": "This receipt was already sent back once. Confirm or reject it.",
+      "reasonConfirm": "Confirmed in the bot after checking the receipt",
+      "reasonReturn": "Sent back from the bot for a new receipt",
+      "reasonReject": "Rejected in the bot after checking the receipt"
+    },
+    "ago": {
+      "minutes": "{{n}} minutes ago",
+      "hours": "{{n}} hours ago",
+      "days": "{{n}} days ago"
     }
   }
 }

@@ -7,8 +7,8 @@ import { z } from 'zod';
  */
 export const manualConfirmSchema = z
   .object({
-    /** The gateway's reference number, as its own panel shows it. */
-    referenceId: z.string().trim().min(1, { message: 'referenceId must not be empty' }).max(64),
+    /** The gateway's reference number, as its own panel shows it. A transfer may omit it: its payer's is taken (F-805-b). */
+    referenceId: z.string().trim().min(1, { message: 'referenceId must not be empty' }).max(64).optional(),
     /** Why a person, not the gateway, is confirming this. Kept on the row and in the audit row. */
     reason: z.string().trim().min(5, { message: 'reason must be at least 5 characters' }).max(500),
   })

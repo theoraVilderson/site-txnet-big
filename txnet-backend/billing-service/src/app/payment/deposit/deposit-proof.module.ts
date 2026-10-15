@@ -38,5 +38,7 @@ type Config = ConfigService<EnvConfig, true>;
       },
     },
   ],
+  // F-805-b: the manual-payments queue reads a transfer's receipt for the bot.
+  exports: [PROOF_OBJECT_DRIVER],
 })
 export class DepositProofModule {}

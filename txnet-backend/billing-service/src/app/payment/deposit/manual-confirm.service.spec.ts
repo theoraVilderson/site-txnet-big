@@ -15,11 +15,12 @@
  *  - only a `pending` payment that is verifying or flagged is eligible.
  */
 import { ConfirmationSource, PaymentStatus, Prisma, TenantType } from '@prisma/client';
-import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
+import { TenantContext, objectKey, runWithTenant } from '@txnet-backend/shared-core';
 
 import type { AskAnswer } from './deposit-reconciliation.service';
-import { WITH_PROOF } from '../manual/transfer-proof';
-import { ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
+import { WITH_PROOF, receiptPath } from '../manual/transfer-proof';
+import { ManualConfirmRefused } from './manual-confirm.refusals';
+import { ManualConfirmService } from './manual-confirm.service';
 import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
 const OWNER = '00000000-0000-4000-8000-000000000001';
@@ -74,10 +75,14 @@ type Setup = {
   lostTheFlip?: boolean;
   /** How many rows the guarded authority write matches; a throw is the unique index refusing it. */
   attach?: number | Error;
+  /** F-805-b: the payment is a manual transfer with this proof (null: none sent); absent, it is no transfer. */
+  proof?: Record<string, unknown> | null;
+  /** F-805-b: what object storage holds, by key. */
+  stored?: Record<string, { contentType: string; bytes: Buffer }>;
 };
 
 function build(setup: Setup = {}) {
-  const { callerTenant = RESELLER, row = scopeRow(), ask = { kind: 'unanswered', gatewayStatus: null, referenceId: null }, lostTheFlip = false, attach = 1 } = setup;
+  const { callerTenant = RESELLER, row = scopeRow(), ask = { kind: 'unanswered', gatewayStatus: null, referenceId: null }, lostTheFlip = false, attach = 1, proof, stored = {} } = setup;
   const calls = {
     asked: [] as Array<{ paymentId: string; tenantInScope: string | null }>,
     credits: [] as Array<{ source: string; verified: unknown; manual: Record<string, unknown> | undefined; tenantInScope: string | null }>,
@@ -86,6 +91,7 @@ function build(setup: Setup = {}) {
     rejects: [] as Array<{ manual: Record<string, unknown>; tenantInScope: string | null }>,
     /** Which pool served each read of the payment or the list (ADR-0053). */
     pools: [] as string[],
+    storageReads: [] as Array<{ key: string; tenantInScope: string | null }>,
   };
   const reads = (pool: string) => ({
     findUnique: async () => (calls.pools.push(`${pool}:findUnique`), row),
@@ -108,6 +114,19 @@ function build(setup: Setup = {}) {
         $executeRaw: async () => 0,
         tenant: open.tenant,
         outboxEvent: open.outboxEvent(),
+        paymentTransferDetail: {
+          findUnique: async () => (proof === undefined ? null : transferDetail(proof)),
+        },
+        manualGatewaySetting: {
+          findFirst: async () => (proof === undefined ? null : { kind: 'card_to_card', confirmationMode: 'manual_admin_required', requiredProof: ['receiptImage', 'trackingCode'], windowMinutes: 30, confirmWithinMinutes: null, tenantId: RESELLER }),
+        },
+        storedObject: {
+          findUnique: async ({ where }: { where: { key: string; tenantId: string } }) => {
+            calls.storageReads.push({ key: where.key, tenantInScope: TenantContext.currentOrNull()?.id ?? null });
+            const hit = stored[where.key];
+            return hit ? { key: where.key, tenantId: where.tenantId, contentType: hit.contentType, size: hit.bytes.length, sha256: 'x', private: true } : null;
+          },
+        },
         paymentTransaction: {
           ...reads('app'),
           findFirst: async () => paymentRow(),
@@ -141,12 +160,14 @@ function build(setup: Setup = {}) {
   };
 
   const config = { get: (key: string) => (key === 'RECONCILIATION_LOOKBACK_SEC' ? 7 * 86_400 : undefined) };
+  const driver = { read: async (key: string) => stored[key]?.bytes ?? null };
   const inner = new ManualConfirmService(
     prisma as never,
     crossTenant as never,
     reconciliation as never,
     settlement as never,
     config as never,
+    driver as never,
   );
   // Every call in the caller's tenant, as `identity.middleware.ts` runs it.
   const service = new Proxy(inner, {
@@ -161,6 +182,24 @@ function build(setup: Setup = {}) {
 }
 
 const BODY = { referenceId: '900900900', reason: 'Checked the Zarinpal panel: paid at 10:02' };
+
+/** A card-to-card transfer's frozen detail, as `transferRowsOf` reads it (F-803-d). */
+function transferDetail(proof: Record<string, unknown> | null) {
+  return {
+    destinationSnapshot: { cardNumber: '6037991234567890', holderName: 'A. Rahimi', bankId: 'melli' },
+    expectedAmountMinor: BigInt(12_500_000),
+    chargeCurrency: 'IRR',
+    chargeDecimals: 0,
+    windowEndsAt: new Date(),
+    proof,
+    proofSubmittedAt: proof ? new Date() : null,
+    proofReturnedAt: null,
+    reviewReason: proof ? 'proof_only' : null,
+    payment: { userId: USER, status: PaymentStatus.pending, tenantId: RESELLER, gatewayId: null, tenantGatewayConfigId: CONFIG },
+  };
+}
+
+const RECEIPT_KEY = objectKey(RESELLER, receiptPath(PAYMENT));
 
 describe('ManualConfirmService scope', () => {
   it('lets a tenant act on its own user’s payment on its own gateway config', async () => {
@@ -286,6 +325,74 @@ describe('ManualConfirmService.confirm', () => {
   it('answers already_settled when another path won the flip between the ask and the credit', async () => {
     const { service, actor } = build({ lostTheFlip: true });
     expect((await service.confirm(actor, PAYMENT, BODY)).outcome).toBe('already_settled');
+  });
+});
+
+// F-805-b: a one-tap confirmation in the bot types no reference — a transfer's is its payer's.
+describe('ManualConfirmService.confirm without a typed reference (F-805-b)', () => {
+  const ONE_TAP = { reason: 'Confirmed in the bot, by its receipt' };
+
+  it("records a transfer's payer reference, read off its proof", async () => {
+    const { service, calls, actor } = build({ proof: { receiptImage: RECEIPT_KEY, trackingCode: '448812' } });
+
+    const result = await service.confirm(actor, PAYMENT, ONE_TAP);
+
+    expect(calls.credits.map((c) => c.verified)).toEqual([{ referenceId: '448812', cardPan: null }]);
+    expect(result).toMatchObject({ outcome: 'confirmed_manually', referenceId: '448812' });
+  });
+
+  it('records none for a transfer whose proof named no reference — the receipt is its evidence', async () => {
+    const { service, calls, actor } = build({ proof: { receiptImage: RECEIPT_KEY } });
+
+    const result = await service.confirm(actor, PAYMENT, ONE_TAP);
+
+    expect(calls.credits.map((c) => c.verified)).toEqual([{ referenceId: null, cardPan: null }]);
+    expect(result).toMatchObject({ outcome: 'confirmed_manually', referenceId: null });
+  });
+
+  it('refuses a payment that is no transfer, and asks nothing: a gateway payment needs its reference typed', async () => {
+    const { service, calls, actor } = build();
+
+    await expect(service.confirm(actor, PAYMENT, ONE_TAP)).rejects.toMatchObject({ reason: 'reference_required' });
+    expect(calls.asked).toEqual([]);
+    expect(calls.credits).toEqual([]);
+  });
+
+  it('keeps a typed reference over the payer’s', async () => {
+    const { service, calls, actor } = build({ proof: { receiptImage: RECEIPT_KEY, trackingCode: '448812' } });
+    await service.confirm(actor, PAYMENT, BODY);
+    expect(calls.credits.map((c) => c.verified)).toEqual([{ referenceId: '900900900', cardPan: null }]);
+  });
+});
+
+// F-805-b: the bot has no Host to spend the signed receipt URL on, so it asks for the bytes.
+describe('ManualConfirmService.receipt (F-805-b)', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+
+  it("hands the reviewer the receipt's bytes, read in the gateway owner's scope", async () => {
+    const { service, calls, actor } = build({ proof: { receiptImage: RECEIPT_KEY }, stored: { [RECEIPT_KEY]: { contentType: 'image/png', bytes: PNG } } });
+
+    expect(await service.receipt(actor, PAYMENT)).toEqual({ contentType: 'image/png', bytes: PNG });
+    expect(calls.storageReads).toEqual([{ key: RECEIPT_KEY, tenantInScope: RESELLER }]);
+  });
+
+  it.each([
+    ['no proof was sent', null],
+    ['the proof names no receipt', { trackingCode: '448812' }],
+  ])('answers receipt_missing when %s', async (_case, proof) => {
+    const { service, actor } = build({ proof });
+    await expect(service.receipt(actor, PAYMENT)).rejects.toMatchObject({ reason: 'receipt_missing' });
+  });
+
+  it('answers receipt_missing when the stored file is gone', async () => {
+    const { service, actor } = build({ proof: { receiptImage: RECEIPT_KEY } });
+    await expect(service.receipt(actor, PAYMENT)).rejects.toMatchObject({ reason: 'receipt_missing' });
+  });
+
+  it('refuses another tenant’s payment before reading anything', async () => {
+    const { service, calls, actor } = build({ callerTenant: OTHER, proof: { receiptImage: RECEIPT_KEY }, stored: { [RECEIPT_KEY]: { contentType: 'image/png', bytes: PNG } } });
+    await expect(service.receipt(actor, PAYMENT)).rejects.toMatchObject({ reason: 'payment_not_found' });
+    expect(calls.storageReads).toEqual([]);
   });
 });
 

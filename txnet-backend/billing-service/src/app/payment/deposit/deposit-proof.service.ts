@@ -14,6 +14,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import type { FieldRefused } from '../manual/manual-methods';
 import { RECEIPT_POLICY, checkProof, receiptPath } from '../manual/transfer-proof';
+import { tellReviewers, type ProofToReview } from '../manual/transfer-reviewers';
 import { transferRowsOf, type TransferRows } from '../manual/transfer-rows';
 import { announceOpenPayment } from './open-payment';
 
@@ -85,8 +86,18 @@ export class DepositProofService {
     }
   }
 
-  /** Check and keep the proof; the payment joins the manual-payments queue (`proof_only`). */
+  /** Check and keep the proof; the payment joins the manual-payments queue (`proof_only`), and its reviewers hear of it. */
   async submit(userId: string, paymentId: string, input: unknown): Promise<ProofAccepted> {
+    const { accepted, review } = await this.keepProof(userId, paymentId, input);
+    // F-805-b: after the commit, in the owner's scope — the tenant whose people judge it. Best effort:
+    // the queue is the record, so a notice that failed is logged and the proof stands.
+    await runWithTenant({ id: review.ownerTenantId }, () => tenantTransaction(this.prisma, (tx) => tellReviewers(tx, review))).catch((e: unknown) =>
+      this.logger.warn(`payment ${paymentId}: reviewers not told of its proof: ${e instanceof Error ? e.message : String(e)}`),
+    );
+    return accepted;
+  }
+
+  private keepProof(userId: string, paymentId: string, input: unknown): Promise<{ accepted: ProofAccepted; review: ProofToReview }> {
     return tenantTransaction(this.prisma, async (tx) => {
       const rows = await this.openTransfer(tx, userId, paymentId);
       if (!rows.method) throw new ProofRefused('transfer_not_found');
@@ -103,7 +114,11 @@ export class DepositProofService {
       });
       if (count !== 1) throw new ProofRefused('proof_already_sent');
       await announceOpenPayment(tx, paymentId);
-      return { paymentId, proofSubmittedAt: now, reviewReason: TransferReviewReason.proof_only };
+      const { expectedAmountMinor, chargeDecimals: decimals, chargeCurrency: currencyCode } = rows.detail;
+      return {
+        accepted: { paymentId, proofSubmittedAt: now, reviewReason: TransferReviewReason.proof_only },
+        review: { ownerTenantId: rows.setting.tenantId, paymentId, expectedAmountMinor, decimals, currencyCode },
+      };
     });
   }
 

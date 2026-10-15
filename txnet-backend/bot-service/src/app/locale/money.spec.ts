@@ -4,6 +4,7 @@ import { AuthApiClient } from '../auth-api/auth-api.client';
 import { BillingApiClient } from '../billing-api/billing-api.client';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { TopUpFlow } from '../flows/top-up.flow';
+import type { TransferPayFlow } from '../flows/transfer-pay.flow';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { BotCopy } from './bot-copy';
@@ -45,7 +46,8 @@ describe('the top-up screens', () => {
   function flowWith(billing: Partial<BillingApiClient>) {
     const auth = { refresh: vi.fn().mockResolvedValue(ok({ accessToken: 'a', expiresIn: 900, refreshToken: 'r' })) } as unknown as Mocked<AuthApiClient>;
     const sessions = { get: vi.fn().mockResolvedValue({ refreshToken: 'r', signedInAt: 0 }), save: vi.fn(), clear: vi.fn() } as unknown as BotSessionStore;
-    return new TopUpFlow(billing as BillingApiClient, new ChatAccess(auth, sessions));
+    // No quote here reaches a manual gateway, so the transfer flow is never asked.
+    return new TopUpFlow(billing as BillingApiClient, new ChatAccess(auth, sessions), {} as TransferPayFlow);
   }
 
   it('prices the quote in the currency billing answered it in — every line', async () => {

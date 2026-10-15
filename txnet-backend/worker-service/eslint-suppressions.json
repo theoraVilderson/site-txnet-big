@@ -89,7 +89,7 @@
   },
   "src/app/outbox/tenant-renewal.consumers.ts": {
     "@typescript-eslint/no-non-null-assertion": {
-      "count": 3
+      "count": 1
     }
   },
   "src/app/redis/redis.service.ts": {

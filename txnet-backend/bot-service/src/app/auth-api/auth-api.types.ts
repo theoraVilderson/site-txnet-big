@@ -24,7 +24,11 @@ export interface ApiResult<T> {
    * refusal that names no reason is an ordinary refusal and is rendered as
    * its `msg`, which is every refusal that existed before this field.
    */
-  error?: { reason?: string };
+  error?: {
+    reason?: string;
+    /** The refusal's figures, when it named any — billing's refused fields, `{trackingCode: 'invalid'}` (F-805-b). */
+    facts?: Record<string, string>;
+  };
 }
 
 export type OtpChannelName = 'sms' | BotPlatform;

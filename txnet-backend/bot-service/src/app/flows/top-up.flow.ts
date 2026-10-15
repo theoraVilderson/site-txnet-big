@@ -6,6 +6,7 @@ import { BotKeys } from '../locale/bot-keys';
 import { currencyName, money } from '../locale/money';
 import { ChatAccess } from '../session/chat-access';
 import { digitValue } from './phone-number';
+import { TransferPayFlow } from './transfer-pay.flow';
 import { ACTIONS, ask, say, toMenu, view } from './views';
 
 /** `topup:g:<source>:<gatewayId>` — which gateway, as the list answered it. */
@@ -36,12 +37,17 @@ export const AMOUNT_ACTION_PREFIX = 'topup:a:';
  * because every call names this chat's messenger (`X-Bot-Platform`). Its
  * `start` answers an invoice instead of a URL: the screen says to pay below,
  * and the dispatcher sends the invoice after it. Its result is `InChatPayment`'s.
+ *
+ * A **manual** gateway (card-to-card, a wallet, F-803-d) answers a `transfer`:
+ * the destination and the exact amount, and the proof goes back through
+ * `TransferPayFlow` (F-805-b).
  */
 @Injectable()
 export class TopUpFlow {
   constructor(
     private readonly billing: BillingApiClient,
     private readonly access: ChatAccess,
+    private readonly transferPay: TransferPayFlow,
   ) {}
 
   /** The gateway list. */
@@ -170,7 +176,9 @@ export class TopUpFlow {
         },
       };
     }
-    // Neither free, nor a page, nor an invoice: nothing the payer could pay with.
+    // F-805-b: a manual gateway answers where to send the money; its proof comes back here.
+    if (s.transfer) return this.transferPay.show(s.paymentId, s.transfer);
+    // Neither free, nor a page, nor an invoice, nor a transfer: nothing the payer could pay with.
     if (!s.redirectUrl) return { view: say('topUp.refused', { key: BotKeys.common.tryAgain }), nextState: null };
     return {
       view: view('topUp.pay', { key: BotKeys.topUp.pay }, [

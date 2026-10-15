@@ -101,14 +101,27 @@ export function quotaNotice(type: string, p: Record<string, unknown>): { templat
 }
 
 /**
+ * The notices told to the person their event names, one event per person —
+ * never the owner: the template, and the payload keys passed on as its params.
+ */
+const PERSON_NOTICES: Partial<Record<string, { template: string; params: readonly string[] }>> = {
+  // F-707-e: the wheel's day at 80% of its cap, to each wheel admin.
+  [OutboxEventType.TENANT_WHEEL_CAP_NEARING]: { template: 'wheelCapNearing', params: ['day', 'spent', 'cap', 'currencyCode'] },
+  // F-707-m: a lottery prize given, to its winner.
+  [OutboxEventType.LOTTERY_WON]: { template: 'lotteryWon', params: ['title', 'prize'] },
+  // F-805-b: a transfer's proof, to each person who may confirm it by hand; the bot's button opens it by id.
+  [OutboxEventType.TRANSFER_PROOF_SENT]: { template: 'transferProofSent', params: ['paymentId', 'amount', 'currencyCode'] },
+};
+
+/**
  * Tell a reseller's owner its renewal is unpaid, or that the panel was
  * suspended for it (F-019-c), or that its billing wallet no longer funds its
  * users on platform panels (F-118-w, once per refusal spell) — through `EventNoticeSender` (F-067-o): the
  * owner's inbox and bot, each once under its own marker. Its quotas too
  * (F-019-v8): 80%, 100%, stopped, and the daily digest ({@link quotaNotice}). An emergency
  * entry by the platform's staff (F-117-d), at entry. A custom domain live,
- * failed or lost (RT-1-e2). The wheel's
- * day at 80% of its cap (F-707-e) goes to each wheel admin the payload names. Each person is
+ * failed or lost (RT-1-e2). A notice for the person the payload names rather
+ * than the owner is one row of {@link PERSON_NOTICES}. Each person is
  * told in the tenant they live in (F-067-q): a bought reseller's owner is a platform user,
  * whom auth-service finds under no reseller's tenant. No live push of its
  * own: the inbox row's `notification.created` already reaches every open
@@ -143,22 +156,17 @@ export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap 
   async handle(event: OutboxMessage): Promise<void> {
     const p = (event.payload ?? {}) as Record<string, unknown>;
     const tenantId = str(p, 'tenantId');
-    if (event.type === OutboxEventType.TENANT_WHEEL_CAP_NEARING) {
-      // One event per admin (F-707-e): the person is the payload's, never the owner.
+    const forPerson = PERSON_NOTICES[event.type];
+    if (forPerson) {
       const userId = str(p, 'userId');
-      if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or admin`);
-      const params: Record<string, string> = {};
-      for (const k of ['day', 'spent', 'cap', 'currencyCode'] as const) if (str(p, k)) params[k] = str(p, k)!;
-      await this.tell(event.id, { tenantId, userId, template: 'wheelCapNearing', params });
-      return;
-    }
-    if (event.type === OutboxEventType.LOTTERY_WON) {
-      // One event per winner place (F-707-m): the person is the winner.
-      const userId = str(p, 'userId');
-      if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or winner`);
-      const params: Record<string, string> = {};
-      for (const k of ['title', 'prize'] as const) if (str(p, k)) params[k] = str(p, k)!;
-      await this.tell(event.id, { tenantId, userId, template: 'lotteryWon', params });
+      if (!tenantId || !userId) throw new Error(`outbox event ${event.id} has a payload without its tenant or person`);
+      const params = Object.fromEntries(
+        forPerson.params.flatMap((k) => {
+          const value = str(p, k);
+          return value ? [[k, value]] : [];
+        }),
+      );
+      await this.tell(event.id, { tenantId, userId, template: forPerson.template, params });
       return;
     }
     const ownerUserId = str(p, 'ownerUserId');

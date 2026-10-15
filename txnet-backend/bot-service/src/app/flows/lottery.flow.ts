@@ -1,7 +1,8 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BotAction, BotText } from '@txnet-backend/messenger';
 import { LOTTERY_CALLBACK_PREFIX } from '@txnet-backend/shared-core';
-import { BillingApiClient, BillingCallContext, ChatLottery, ChatLotteryResult } from '../billing-api/billing-api.client';
+import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api.client';
+import type { ChatLottery, ChatLotteryResult } from '../billing-api/engagement.types';
 import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { ChatAccess } from '../session/chat-access';

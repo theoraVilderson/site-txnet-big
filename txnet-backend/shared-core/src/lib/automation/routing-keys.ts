@@ -82,6 +82,8 @@ export const OutboxEventType = {
   TENANT_EMERGENCY_ENTRY: 'tenant.support.emergency_entry',
   /** F-707-e: a tenant's wheel spent 80% of the day's cap — once a tenant day, one event per admin holding `engagement.manage` (`alertCapCrossing`). */
   TENANT_WHEEL_CAP_NEARING: 'tenant.engagement.wheel_cap_nearing',
+  /** F-805-b: a payer sent a manual transfer's proof — one event per person of the gateway's owner who holds `payment.confirm_manual` (`tellReviewers`). */
+  TRANSFER_PROOF_SENT: 'billing.payment.transfer_proof_sent',
   /** F-707-m: a lottery winner was given its prize — once per winner row (`LotteryDeliveryService`). */
   LOTTERY_WON: 'engagement.lottery.won',
   /** F-707-q: a lottery was published — once per lottery, in the publish (`LotteryAdminService.publish`); worker-service tells its group's members. */
@@ -215,6 +217,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_EMERGENCY_ENTRY]: 'worker-service',
   [OutboxEventType.TENANT_DOMAIN_NOTICE]: 'worker-service',
   [OutboxEventType.TENANT_WHEEL_CAP_NEARING]: 'worker-service',
+  [OutboxEventType.TRANSFER_PROOF_SENT]: 'worker-service',
   [OutboxEventType.LOTTERY_WON]: 'worker-service',
   [OutboxEventType.LOTTERY_PUBLISHED]: 'worker-service',
   [OutboxEventType.USAGE_RELEASE]: 'metering-service',

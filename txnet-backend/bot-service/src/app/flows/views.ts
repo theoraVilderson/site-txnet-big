@@ -62,6 +62,8 @@ export const ACTIONS = {
   guides: 'menu:guides',
   guidesInstall: 'guides:install',
   supportNew: 'sup:n',
+  /** F-805-b. The receipts waiting for whoever may confirm a transfer by hand. */
+  transfers: 'menu:transfers',
 } as const;
 
 export const cancel: BotAction = {
@@ -202,28 +204,6 @@ export function view(
   return { id, body, actions };
 }
 
-/** F-414-f. Only where tenant-service's guide route is reachable (`GuideApiClient.isConfigured`). */
-const guidesRow: BotAction = { id: ACTIONS.guides, label: { key: BotKeys.action.guides } };
-
-/**
- * The signed-out menu: the two things an anonymous chat can do, plus the way
- * to ask what any of it means. Sign-in leads, because a returning user is the
- * common case and a returning user should not have to read three options.
- */
-export function guestMenu(guides = false): BotView {
-  return view('menu.guest', { key: BotKeys.menu.guest }, [
-    [{ id: ACTIONS.login, label: { key: BotKeys.action.login } }],
-    [{ id: ACTIONS.register, label: { key: BotKeys.action.register } }],
-    [{ id: ACTIONS.forgot, label: { key: BotKeys.action.forgot } }],
-    // F-414-f. A guide is public: a stranger may need the install guide before an account.
-    ...(guides ? [[guidesRow]] : []),
-    [
-      { id: ACTIONS.help, label: { key: BotKeys.action.help } },
-      { id: ACTIONS.language, label: { key: BotKeys.action.language } },
-    ],
-  ]);
-}
-
 /**
  * The Mini App as a choice on a menu (`F-310`).
  *
@@ -257,58 +237,6 @@ export function miniApp(url: string): BotAction {
     url,
     label: { key: BotKeys.action.miniApp },
   };
-}
-
-/**
- * The signed-in menu. Everything past sign-out arrives with §10.4's own rows.
- *
- * `miniAppUrl` is optional because `PANEL_BASE_URL` is: a deployment that has
- * not published a panel yet shows a menu without the row, rather than a button
- * that opens nothing.
- */
-export function memberMenu(miniAppUrl?: string, topUp = false, reseller = false, support = false, guides = false): BotView {
-  return view('menu.member', { key: BotKeys.menu.member }, [
-    ...(miniAppUrl ? [[miniApp(miniAppUrl)]] : []),
-    // F-306-a. Only where billing is reachable (`BillingApiClient.isConfigured`).
-    ...(topUp ? [[{ id: ACTIONS.topUp, label: { key: BotKeys.action.topUp } }]] : []),
-    // F-707-h. Behind the same reachability: billing says whether a wheel runs today.
-    ...(topUp ? [[{ id: ACTIONS.wheel, label: { key: BotKeys.action.wheel } }]] : []),
-    // F-707-p. Behind the same reachability: billing says which lotteries this user sees.
-    ...(topUp ? [[{ id: ACTIONS.lotteries, label: { key: BotKeys.action.lotteries } }]] : []),
-    // F-309. Only where support is reachable (`SupportApiClient.isConfigured`).
-    ...(support ? [[{ id: ACTIONS.support, label: { key: BotKeys.action.support } }]] : []),
-    ...(guides ? [[guidesRow]] : []),
-    // F-311-c. The row exists only for a chat the **door** says may administer
-    // this bot's reseller (`GET /api/tenants/:id/access`, F-311-e) — never on
-    // a rule of the bot's own, and never for the customers this same bot
-    // serves, who are the majority of the chats that reach this line.
-    ...(reseller ? [[{ id: ACTIONS.reseller, label: { key: BotKeys.action.reseller } }]] : []),
-    [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
-    // TZ-1-h. Member menu only: a zone is the account's, and a guest has none.
-    [{ id: ACTIONS.timeZone, label: { key: BotKeys.action.timeZone } }],
-    [
-      { id: ACTIONS.help, label: { key: BotKeys.action.help } },
-      { id: ACTIONS.language, label: { key: BotKeys.action.language } },
-    ],
-    [{ id: ACTIONS.logout, label: { key: BotKeys.action.logout } }],
-  ]);
-}
-
-/**
- * A restricted account's menu (BAN-1-g, ADR-0133): why, and the way to
- * support — plus its other accounts and sign-out, which are its own. Nothing
- * a gate would refuse a tap later.
- */
-export function restrictedMenu(reason: string | null, support = false): BotView {
-  return view(
-    'menu.restricted',
-    reason ? { key: BotKeys.menu.restricted, values: { reason } } : { key: BotKeys.menu.restrictedNoReason },
-    [
-      ...(support ? [[{ id: ACTIONS.support, label: { key: BotKeys.action.support } }]] : []),
-      [{ id: ACTIONS.accounts, label: { key: BotKeys.action.accounts } }],
-      [{ id: ACTIONS.logout, label: { key: BotKeys.action.logout } }],
-    ],
-  );
 }
 
 /**

@@ -1,4 +1,5 @@
 import { BotKey, BotKeys } from './bot-keys';
+import { PAYMENT_FALLBACKS } from './bot-copy.fallbacks.payment';
 
 /**
  * Last-resort English for every key this bot can say.
@@ -19,6 +20,7 @@ import { BotKey, BotKeys } from './bot-keys';
  * `BotCopy` renders the raw key and the bot keeps answering.
  */
 export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
+  ...PAYMENT_FALLBACKS,
   [BotKeys.menu.guest]: 'Hi 👋\nSign in to your account here, or create a new one.',
   [BotKeys.menu.member]: 'Welcome back 👋',
   [BotKeys.menu.restricted]: 'Your account is restricted: for now you can only talk to support.\nReason: {{reason}}',
@@ -159,30 +161,6 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   [BotKeys.progress.topUp]: 'Topping up · step {{n}} of {{total}}',
   [BotKeys.field.gateway]: 'Gateway: {{value}} ✅',
   [BotKeys.field.amount]: 'Amount: {{value}} ✅',
-  // An amount and the currency it is in (F-116-h4): billing names the code, the
-  // chat says its name. A code with no name here prints as the code (`money.ts`).
-  [BotKeys.money.amount]: '{{amount}} {{currency}}',
-  [BotKeys.money.list]: '{{first}}, {{rest}}',
-  [BotKeys.money.currency.IRT]: 'Toman',
-  [BotKeys.money.currency.IRR]: 'rials',
-  [BotKeys.money.currency.USD]: 'USD',
-  [BotKeys.topUp.pickGateway]: 'Which gateway would you like to pay with?',
-  [BotKeys.topUp.none]: 'No payment gateway is available right now. Please try again a little later.',
-  [BotKeys.topUp.askAmount]: 'How much would you like to add, in {{currency}}? Pick an amount or type one.',
-  [BotKeys.topUp.quote]: 'Amount: {{amount}}\nFee: {{fee}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}',
-  [BotKeys.topUp.quoteTaxed]: 'Amount: {{amount}}\nFee: {{fee}}\nTax ({{taxRatePercent}}%): {{tax}}\nYou pay: {{payable}}\nAdded to your wallet: {{credited}}',
-  [BotKeys.topUp.pay]:
-    'Your payment is ready. Tap the button below to pay — once it is confirmed, you will get a message here.',
-  [BotKeys.topUp.credited]: '{{credited}} was added to your wallet. Your balance is now {{balance}} ✅',
-  [BotKeys.topUp.payInChat]: 'Your invoice is below. Pay it right here in the chat — you will get a message as soon as it is confirmed.',
-  [BotKeys.topUp.invoiceTitle]: 'Wallet top-up',
-  [BotKeys.topUp.invoiceDescription]: '{{credited}} added to your wallet',
-  [BotKeys.topUp.invoiceLabel]: 'Top-up',
-  [BotKeys.topUp.paidCredited]: '{{credited}} was added to your wallet ✅',
-  [BotKeys.topUp.paidPending]: 'Your payment arrived and is being checked. You will get a message here once it is in your wallet.',
-  [BotKeys.topUp.refusedNotFound]: 'This invoice is not yours or no longer exists. Start a new top-up from the menu.',
-  [BotKeys.topUp.refusedNotPayable]: 'This invoice has expired or was already paid. Start a new top-up from the menu.',
-  [BotKeys.topUp.refusedAmount]: 'This invoice no longer matches its payment. Start a new top-up from the menu.',
   // The reseller panel inside the bot (`F-311-c`). The two revenue figures are
   // labelled and never added: ADR-0067 decision 1, and `sales` is empty until
   // `entitlement` ships — a zero labelled "revenue" reads as a broken report.

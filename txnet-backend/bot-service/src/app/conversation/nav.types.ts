@@ -21,7 +21,8 @@ export type BotFlow =
   | 'campaign'
   | 'timeZone'
   | 'wheel'
-  | 'support';
+  | 'support'
+  | 'transfer';
 
 /**
  * Navigation state: the screen, the breadcrumb and a half-typed input.
@@ -127,6 +128,8 @@ export interface FlowResult {
   deleteIncoming?: boolean;
   /** Send this invoice right after the screen (F-104-m). */
   invoice?: FlowInvoice;
+  /** Send this picture just before the screen (F-805-b): a receipt, which the screen's buttons judge. */
+  picture?: { fileName: string; contentType: string; bytes: Buffer };
   /** Send this file right after the screen (F-309): a support attachment the user asked for. */
   document?: { fileName: string; contentType: string; bytes: Buffer };
   /** Send these pictures and videos right after the screen (F-414-f): a guide's, by object key. */

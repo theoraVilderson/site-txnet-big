@@ -1,7 +1,8 @@
 import type { Mocked } from 'vitest';
 import { aBotIntegration } from '@txnet-backend/messenger';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { BillingApiClient, SpinAnswer, UserWheel } from '../billing-api/billing-api.client';
+import { BillingApiClient } from '../billing-api/billing-api.client';
+import type { SpinAnswer, UserWheel } from '../billing-api/engagement.types';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
 import { BotSessionStore } from '../session/bot-session.store';

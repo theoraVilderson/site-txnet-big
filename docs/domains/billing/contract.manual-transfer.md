@@ -12,7 +12,7 @@ A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
 session has nothing left to decide. Each rule names the backlog row that
-builds it; **Storage** (F-803-a), **Method kinds** (F-803-b), **Gateway admin** (F-803-c), **Starting one** (F-803-d) and **Proof and the queue** (F-805-a) exist, the rest is to be built. The pages are
+builds it; **Storage** (F-803-a), **Method kinds** (F-803-b), **Gateway admin** (F-803-c), **Starting one** (F-803-d), **Proof and the queue** (F-805-a) and its bot half (F-805-b, [bot-app/contract.transfer.md](../../interfaces/bot-app/contract.transfer.md)) exist, the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -221,6 +221,8 @@ Both routes are the payment's owner's, on `DEPOSIT_PROOF_RATE_LIMIT` (20 / 15 mi
   proof back **once** (`proofReturnedAt`): proof cleared, window reopened from
   now with its grace, still `pending`, audited `payment_manual_return`,
   outcome `returned_for_proof`; a second is `cannot_return`.
+- **Its reviewers are told** (F-805-b, `transfer-reviewers.ts`): after the proof commits, in the gateway owner's scope, one `billing.payment.transfer_proof_sent` `{tenantId, userId, paymentId, amount, currencyCode}` per active holder of `payment.confirm_manual` there (`findKeyHolders`) — best effort, the queue is the record.
+  A confirm may omit `referenceId` (the payer's is taken); `GET …/manual/:id/receipt` hands the bot the bytes ([contract.verify.md](contract.verify.md)).
 
 ## Later — matching (F-803-e): the one rule every automatic path calls
 

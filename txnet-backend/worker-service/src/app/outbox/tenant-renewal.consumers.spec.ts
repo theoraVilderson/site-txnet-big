@@ -114,6 +114,12 @@ describe("TenantSubscriptionNoticeConsumer — the person's own tenant (F-067-q)
     expect(person()).toMatchObject({ tenantId: PLATFORM, userId: ADMIN, template: 'wheelCapNearing' });
   });
 
+  it('tells each person who may confirm a transfer of its proof, with what the bot button opens (F-805-b)', async () => {
+    const { consumer, person } = build({ [ADMIN]: TENANT });
+    await consumer.handle(event(OutboxEventType.TRANSFER_PROOF_SENT, { userId: ADMIN, paymentId: 'p-1', amount: '12500000', currencyCode: 'IRR' }));
+    expect(person()).toMatchObject({ tenantId: TENANT, userId: ADMIN, template: 'transferProofSent', params: { paymentId: 'p-1', amount: '12500000', currencyCode: 'IRR' } });
+  });
+
   it("keeps the event's tenant for an owner who lives in the reseller itself", async () => {
     const { consumer, person } = build({ [OWNER]: TENANT });
     await consumer.handle(event(OutboxEventType.TENANT_WHOLESALE_UNFUNDED));

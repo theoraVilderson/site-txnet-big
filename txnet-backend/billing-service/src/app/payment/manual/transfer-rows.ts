@@ -45,6 +45,24 @@ export async function transferRowsOf(tx: Prisma.TransactionClient, paymentId: st
   return { detail, payment, setting, method: manualMethod(setting.kind), destination: fieldsOf(detail.destinationSnapshot) };
 }
 
+/** The payer's reference in a proof — the kind's `refProofField` (a tracking code, a tx hash) — or null when it names none. */
+function payerRefOf(rows: TransferRows): string | null {
+  const proof = rows.detail.proof;
+  if (!rows.method || typeof proof !== 'object' || proof === null || Array.isArray(proof)) return null;
+  const ref = proof[rows.method.refProofField];
+  return typeof ref === 'string' || typeof ref === 'number' ? String(ref) : null;
+}
+
+/**
+ * The reference a person's confirmation records when they typed none (F-805-b):
+ * the payer's own, off the proof — `reference: null` when the proof names none,
+ * the receipt then being the evidence. Null when the payment is no transfer.
+ */
+export async function payerReference(tx: Prisma.TransactionClient, paymentId: string): Promise<{ reference: string | null } | null> {
+  const rows = await transferRowsOf(tx, paymentId);
+  return rows ? { reference: payerRefOf(rows) } : null;
+}
+
 /**
  * A confirmed transfer's reference, kept once per tenant (`transfer_tx_ref`,
  * F-805-a) in the crediting transaction: the unique index refuses a reference
@@ -53,11 +71,9 @@ export async function transferRowsOf(tx: Prisma.TransactionClient, paymentId: st
  */
 export async function recordTransferRef(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
   const rows = await transferRowsOf(tx, paymentId);
-  const proof = rows?.detail.proof;
-  if (!rows?.method || !rows.payment.tenantId || typeof proof !== 'object' || proof === null || Array.isArray(proof)) return;
-  const txRef = proof[rows.method.refProofField];
-  if (typeof txRef !== 'string' && typeof txRef !== 'number') return;
+  const txRef = rows ? payerRefOf(rows) : null;
+  if (!rows?.method || !rows.payment.tenantId || txRef === null) return;
   await tx.transferTxRef.create({
-    data: { tenantId: rows.payment.tenantId, paymentId, network: rows.method.refNetwork(rows.destination), txRef: String(txRef) },
+    data: { tenantId: rows.payment.tenantId, paymentId, network: rows.method.refNetwork(rows.destination), txRef },
   });
 }

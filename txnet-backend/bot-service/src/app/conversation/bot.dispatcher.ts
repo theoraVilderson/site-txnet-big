@@ -95,6 +95,12 @@ export class BotDispatcher {
         ? `${escapeHtml(this.copy.text(lang, { key: BotKeys.register.passwordKept }))}\n\n${rendered.text}`
         : rendered.text;
 
+      // A receipt goes first (F-805-b): the screen under it holds the buttons that judge it.
+      if (result.picture) {
+        await client.sendMedia(ctx.chatId, 'photo', result.picture).catch((e: unknown) =>
+          this.logger.warn(`${ctx.platform}: picture for chat=${ctx.chatId} not sent: ${e instanceof Error ? e.message : String(e)}`),
+        );
+      }
       await client.sendMessage(ctx.chatId, text, rendered.replyMarkup);
 
       // The invoice goes after the screen that explains it (F-104-m).

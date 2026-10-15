@@ -31,6 +31,17 @@ export function money(amount: string, currencyCode: string | null | undefined): 
   return { key: BotKeys.money.amount, values: { amount, currency: currencyName(currencyCode) } };
 }
 
+/**
+ * A minor-unit figure (`12500001`, 6 places) as the decimal string `money`
+ * takes (`12.500001`) — the point moved, as text: no arithmetic, no float
+ * (C-02). For a transfer, whose amount billing answers in minor units (F-803-d).
+ */
+export function minorAsDecimal(amountMinor: string, decimals: number): string {
+  if (decimals <= 0) return amountMinor;
+  const digits = amountMinor.padStart(decimals + 1, '0');
+  return `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`;
+}
+
 /** One currency's figure, as billing answers it beside a converted total. */
 export interface CurrencyAmount {
   currencyCode: string;

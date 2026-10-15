@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   CanActivate,
   ConflictException,
@@ -15,10 +16,11 @@ import {
   ParseUUIDPipe,
   Post,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { RateLimitBucket, holdsPermission, rateLimitBucketKey } from '@txnet-backend/shared-core';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
@@ -31,10 +33,10 @@ import {
   manualConfirmSchema,
   manualRejectSchema,
 } from './manual-confirm.schema';
-import { ManualActor, ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
+import { PAYMENT_CONFIRM_MANUAL } from './manual-confirm.permission';
+import { ManualConfirmRefused } from './manual-confirm.refusals';
+import { ManualActor, ManualConfirmService } from './manual-confirm.service';
 
-/** The permission (F-092-z, ADR-0044 decision 6). SuperAdmin holds it as `*`; `Admin` by migration. */
-export const PAYMENT_CONFIRM_MANUAL = 'payment.confirm_manual';
 
 /** The first door — not the boundary, which is `ManualConfirmService`'s scope rule. */
 @Injectable()
@@ -99,8 +101,21 @@ export class ManualConfirmController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    // The schema requires both keys; the cast is for the non-strict tsconfig.
-    return this.refusing(() => this.manual.confirm(this.actor(req, ip), id, body as Required<ManualConfirmBody>));
+    // The schema requires the reason; the cast is for the non-strict tsconfig.
+    return this.refusing(() => this.manual.confirm(this.actor(req, ip), id, { referenceId: body.referenceId, reason: body.reason as string }));
+  }
+
+  /**
+   * A transfer's receipt bytes (F-805-b), for a surface with no Host to spend
+   * the signed `receiptUrl` on — the bot. Outside the envelope: the body is the
+   * image; a refusal is the ordinary envelope.
+   */
+  @Get(':id/receipt')
+  @RateLimit(READ)
+  async receipt(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string, @Res() res: Response): Promise<void> {
+    const file = await this.refusing(() => this.manual.receipt(this.actor(req, ip), id));
+    res.set({ 'Content-Type': file.contentType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.status(200).send(file.bytes);
   }
 
   /**
@@ -144,7 +159,8 @@ export class ManualConfirmController {
     } catch (e) {
       if (!(e instanceof ManualConfirmRefused)) throw e;
       const payload = { reason: e.reason, message: e.message };
-      if (e.reason === 'payment_not_found') throw new NotFoundException(payload);
+      if (e.reason === 'payment_not_found' || e.reason === 'receipt_missing') throw new NotFoundException(payload);
+      if (e.reason === 'reference_required') throw new BadRequestException(payload);
       throw new ConflictException(payload);
     }
   }

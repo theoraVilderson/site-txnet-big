@@ -25,6 +25,7 @@ import { DepositStartService } from './deposit-start.service';
 import { InvoiceLinkClient } from './invoice-link.client';
 import { DepositWebhookController } from './deposit-webhook.controller';
 import { DepositWebhookService } from './deposit-webhook.service';
+import { DepositProofModule } from './deposit-proof.module';
 import { ManualConfirmController } from './manual-confirm.controller';
 import { ManualConfirmService } from './manual-confirm.service';
 
@@ -53,7 +54,7 @@ import { ManualConfirmService } from './manual-confirm.service';
  * not a chat session, says whose it is.
  */
 @Module({
-  imports: [LocaleModule, CouponModule, GatewayModule, WalletModule],
+  imports: [LocaleModule, CouponModule, GatewayModule, WalletModule, DepositProofModule],
   controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController, ChargeCurrenciesController],
   providers: [OtherGatewayService, DepositQuoteService, DepositStartService, DepositAbandonService, DepositTransferService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
