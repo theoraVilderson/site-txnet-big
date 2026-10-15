@@ -623,8 +623,13 @@ model TenantGatewayConfig {
   couponLimits CouponGateway[]
   /// The groups it is offered to; none = everyone (F-102-g, `billing.gateway_audience`).
   audience     GatewayAudience[]
+  /// A `manual_transfer` gateway's kind, proof and window (F-803-a).
+  manualSetting ManualGatewaySetting?
 
-  @@unique([tenantId, providerName])
+  // One gateway per provider per tenant (D-20), except `manual_transfer`: the
+  // index is partial (`WHERE "providerName" <> 'manual_transfer'`, user
+  // 2026-10-15), which Prisma cannot express — hand-written SQL in
+  // `migrations/20261015000300_a_manual_transfer_is_stored`.
   /// What `gateway_audience` points at, so an audience row is its owner's (F-102-g).
   @@unique([id, tenantId])
   @@map("tenant_gateway_config")

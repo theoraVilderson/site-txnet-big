@@ -22,6 +22,12 @@ export type ProviderFields = {
    * for a provider that posts no webhook.
    */
   webhookSignedWith: GatewaySecretName | null;
+  /**
+   * A tenant runs at most one gateway of this provider (D-20). Not
+   * `manual_transfer`: a card and two wallets are three gateways (F-803-a,
+   * user 2026-10-15) — the database index is partial on the same rule.
+   */
+  onePerTenant: boolean;
 };
 
 /**
@@ -37,12 +43,14 @@ export type ProviderFields = {
  * `secretKey`; what it signs posts with → `webhookSecret`.
  */
 export const PROVIDER_FIELDS: Record<PaymentProviderName, ProviderFields> = {
-  zarinpal: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null },
-  idpay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null },
-  stripe: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
-  nowpayments: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
-  oxapay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: 'merchantId' },
-  airwallex: { secrets: ['merchantId', 'secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret' },
-  telegram_stars: { secrets: [], staticRateRequired: true, webhookSignedWith: null },
-  bale: { secrets: ['secretKey'], staticRateRequired: false, webhookSignedWith: null },
+  zarinpal: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null, onePerTenant: true },
+  idpay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: null, onePerTenant: true },
+  stripe: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret', onePerTenant: true },
+  nowpayments: { secrets: ['secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret', onePerTenant: true },
+  oxapay: { secrets: ['merchantId'], staticRateRequired: false, webhookSignedWith: 'merchantId', onePerTenant: true },
+  airwallex: { secrets: ['merchantId', 'secretKey', 'webhookSecret'], staticRateRequired: false, webhookSignedWith: 'webhookSecret', onePerTenant: true },
+  telegram_stars: { secrets: [], staticRateRequired: true, webhookSignedWith: null, onePerTenant: true },
+  bale: { secrets: ['secretKey'], staticRateRequired: false, webhookSignedWith: null, onePerTenant: true },
+  // No secret: the destination is the seller's card or wallet, entered as data (F-803-c).
+  manual_transfer: { secrets: [], staticRateRequired: false, webhookSignedWith: null, onePerTenant: false },
 };

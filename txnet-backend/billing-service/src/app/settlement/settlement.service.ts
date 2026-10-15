@@ -129,11 +129,10 @@ const PAYOUT_LOCK = 96_07;
 type LedgerReader = Prisma.TransactionClient;
 
 /**
- * Which providers a grant may lend (D-32, F-104-p). An in-chat payment is made
- * inside the owning tenant's own bot or Mini App, which the borrowing tenant's
- * user never talks to — so a lent `telegram_stars` or `bale` gateway could not
- * be paid at all. Exhaustive, so a new provider does not compile until someone
- * decides.
+ * Which providers a grant may lend (D-32, F-104-p): not an in-chat one, paid
+ * in the owner's bot the borrower's user never talks to; not `manual_transfer`
+ * until decided (F-803-a: its proof queue is the lender's). Exhaustive, so a
+ * new provider does not compile until someone decides.
  */
 const GRANTABLE: Record<PaymentProviderName, boolean> = {
   zarinpal: true,
@@ -144,6 +143,7 @@ const GRANTABLE: Record<PaymentProviderName, boolean> = {
   airwallex: true,
   telegram_stars: false,
   bale: false,
+  manual_transfer: false,
 };
 
 @Injectable()

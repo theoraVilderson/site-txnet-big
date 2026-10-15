@@ -426,7 +426,7 @@ export class GatewayAdminService {
         const exists = await tx.tenant.findUnique({ where: { id: tenantId }, select: { id: true } });
         if (!exists) throw new GatewayAdminRefused('tenant_not_found', tenantId);
       }
-      if (tenantId) {
+      if (tenantId && PROVIDER_FIELDS[input.providerName as PaymentProviderName].onePerTenant) {
         const duplicate = await tx.tenantGatewayConfig.findFirst({
           where: { tenantId, providerName: input.providerName as PaymentProviderName },
           select: { id: true },
@@ -514,7 +514,7 @@ export class GatewayAdminService {
       this.assertRanges({ ...this.snapshot(row), ...patch });
       const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
 
-      if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName']) {
+      if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName'] && PROVIDER_FIELDS[patch.providerName as PaymentProviderName].onePerTenant) {
         const duplicate = await tx.tenantGatewayConfig.findFirst({
           where: { tenantId: row['tenantId'] as string, providerName: patch.providerName as PaymentProviderName },
           select: { id: true },

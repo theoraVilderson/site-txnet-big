@@ -98,6 +98,7 @@ enum PaymentProviderName {
   airwallex
   telegram_stars // paid in the tenant's own bot or Mini App (D-32)
   bale // in-chat, like telegram_stars
+  manual_transfer // the payer moves the money themselves: a card, a wallet (F-803, D-60)
 
   @@schema("billing")
 }
@@ -107,6 +108,7 @@ enum GatewayCategory {
   international_card
   crypto
   in_chat // settled inside a messenger chat, never in a browser (D-32)
+  manual // confirmed against the payer's proof (F-803, D-60)
 
   @@schema("billing")
 }
@@ -580,6 +582,8 @@ model PaymentGateway {
   grants       PaymentGatewayGrant[]
   /// The groups it is offered to; none = everyone (F-102-g).
   audience     GatewayAudience[]
+  /// A `manual_transfer` gateway's kind, proof and window (F-803-a).
+  manualSetting ManualGatewaySetting?
 
   @@map("payment_gateway")
   @@schema("billing")
@@ -852,6 +856,8 @@ model PaymentTransaction {
   reconciliationLogs      PaymentReconciliationLog[]
   cryptoDetail            CryptoPaymentDetail?
   affiliateCommissions    AffiliateCommission[]
+  transferDetail          PaymentTransferDetail?
+  transferRefs            TransferTxRef[]
 
   // ADR-0028, once per gateway column. NULLs never collide, so a pending row
   // with no code yet, or a row on the other column, is outside each key.
@@ -1207,5 +1213,145 @@ model UsageAuthorization {
   @@index([status, expiresAt])
   @@index([tenantId])
   @@map("usage_authorization")
+  @@schema("billing")
+}
+
+// =============================================================================
+// F-803-a, D-60 — a manual transfer: the payer moves the money to a card or a
+// wallet the seller entered, and a person confirms it against the proof
+// (`billing/contract.manual-transfer.md` "Storage"). RLS strict on all four;
+// the triggers and CHECKs are in 20261015000300_a_manual_transfer_is_stored.
+// =============================================================================
+
+/// Why a transfer sits in the review queue. Only `proof_only` is written until
+/// automatic confirmation lands (F-803-e); the rest are its outcomes, here so
+/// that row needs no migration.
+enum TransferReviewReason {
+  underpaid
+  overpaid
+  late
+  wrong_destination
+  duplicate_ref
+  amount_collision
+  no_match
+  proof_only
+
+  @@schema("billing")
+}
+
+/// One per `manual_transfer` gateway: its method kind, how it is confirmed,
+/// the proof the payer must send and how long the payer has. Exactly one of
+/// the two gateway columns (CHECK); a platform gateway's is the platform
+/// owner's and only a `manual_transfer` gateway has one (trigger).
+/// `confirmationMode` is the gateway enum; only `manual_admin_required` is
+/// accepted until a kind has a watcher (F-803-c refuses the other).
+model ManualGatewaySetting {
+  id                    String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String           @db.Uuid
+  gatewayId             String?          @unique @db.Uuid
+  tenantGatewayConfigId String?          @db.Uuid
+  /// A `ManualMethod` registry id (`payment/manual/kinds/`), not an enum: a new kind is one file (F-803-b).
+  kind                  String
+  confirmationMode      ConfirmationMode @default(manual_admin_required)
+  /// The kind's proof field ids the payer must send (D-60 part 4).
+  requiredProof         String[]         @default([])
+  /// 10..1440, CHECK in the migration.
+  windowMinutes         Int              @default(30)
+  /// Payer instructions replacing the kind's default, by language code; null = the default.
+  instructions          Json?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  gateway             PaymentGateway?      @relation(fields: [gatewayId], references: [id], onDelete: Cascade)
+  tenantGatewayConfig TenantGatewayConfig? @relation(fields: [tenantGatewayConfigId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  destinations        ManualDestination[]
+
+  /// One per reseller gateway; composite because the relation is (a config is one tenant's).
+  @@unique([tenantGatewayConfigId, tenantId])
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@map("manual_gateway_setting")
+  @@schema("billing")
+}
+
+/// A card or a wallet a manual gateway shows the payer. `fields` is validated
+/// by the setting's kind (F-803-b). A destination a payment showed is
+/// deactivated, never deleted (Restrict from `payment_transfer_detail`).
+model ManualDestination {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @db.Uuid
+  settingId     String   @db.Uuid
+  label         String
+  fields        Json
+  isActive      Boolean  @default(true)
+  /// The order the first active destination is picked by, until rotation (F-807).
+  sortOrder     Int      @default(0)
+  /// F-807's rotation weight, 1..100 (CHECK); unread until then.
+  weight        Int      @default(1)
+  /// F-807's daily cap in the charge currency's minor unit; unread until then.
+  dailyCapMinor BigInt?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  setting   ManualGatewaySetting    @relation(fields: [settingId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  transfers PaymentTransferDetail[]
+
+  @@unique([id, tenantId])
+  @@index([settingId, isActive, sortOrder])
+  @@index([tenantId])
+  @@map("manual_destination")
+  @@schema("billing")
+}
+
+/// What one manual payment showed the payer and the proof it got. The
+/// snapshot is what the payer saw, so editing a destination never changes an
+/// open payment. `tenantId` is the payment's (trigger).
+model PaymentTransferDetail {
+  paymentId           String                @id @db.Uuid
+  tenantId            String                @db.Uuid
+  destinationId       String                @db.Uuid
+  /// The destination's public fields as shown, frozen at start (F-803-d).
+  destinationSnapshot Json
+  /// What the payer must send, in `chargeCurrency`'s minor unit (> 0, CHECK).
+  expectedAmountMinor BigInt
+  chargeCurrency      String
+  chargeDecimals      Int
+  /// A wallet's network, shown verbatim; null for a card.
+  network             String?
+  windowEndsAt        DateTime
+  /// The payer's proof by the kind's field ids; set with `proofSubmittedAt` (CHECK, F-805-a).
+  proof               Json?
+  proofSubmittedAt    DateTime?
+  reviewReason        TransferReviewReason?
+  /// The reference an automatic path saw, before a person confirmed (F-803-f).
+  seenTxRef           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  payment     PaymentTransaction @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  destination ManualDestination  @relation(fields: [destinationId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([destinationId])
+  @@map("payment_transfer_detail")
+  @@schema("billing")
+}
+
+/// An external reference already credited — a tx hash, a bank tracking code
+/// or an SMS reference: once per (tenant, network, ref), whichever path saw it
+/// first. A card's `network` is the kind's own namespace (F-803-b).
+model TransferTxRef {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @db.Uuid
+  paymentId String   @db.Uuid
+  network   String
+  txRef     String
+  createdAt DateTime @default(now())
+
+  payment PaymentTransaction @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, network, txRef])
+  @@index([paymentId])
+  @@map("transfer_tx_ref")
   @@schema("billing")
 }

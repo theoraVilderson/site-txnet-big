@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-10-06
+updated: 2026-10-15
 ---
 
 # Contract — billing / manual transfer: card-to-card, a wallet, and the next method (F-803…F-807)
@@ -11,8 +11,8 @@ updated: 2026-10-06
 A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
-session has nothing left to decide. **Nothing below exists yet** — each rule
-names the backlog row that builds it. The pages are
+session has nothing left to decide. Each rule names the backlog row that
+builds it; **Storage** exists (F-803-a), the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -39,7 +39,7 @@ A fact that turns out wrong is said in one line and the rule corrected.
    a manual gateway in `automatic` mode joins that group once F-803-f exists.
 7. **Automatic confirmation of a transfer is deferred** (user, 2026-10-06).
    The first slice is confirmed by a person only. What it keeps so the later
-   part needs no rebuild: the `confirmationMode` column (only `manual` is
+   part needs no rebuild: the `confirmationMode` column (only `manual_admin_required` is
    accepted — no kind has a watcher yet), the descriptor's `uniqueStep` and
    `watcherFor` (none), `transfer_tx_ref`, and the `transfer_seen` slot on the
    pay page. Sections marked **later** below are its spec, not today's work.
@@ -51,14 +51,33 @@ A fact that turns out wrong is said in one line and the rule corrected.
 
 ## Storage (F-803-a)
 
-Additive migration. `PaymentProviderName` gains `manual_transfer`;
-`GatewayCategory` gains `manual`. **Later:** `ConfirmationSource` gains
-`chain_watch` (F-803-f) and `sms_match` (F-806), each with its row.
+Built 2026-10-15: `20261015000200_a_manual_gateway_is_a_provider` (the enum
+values, alone because Postgres refuses a value in the transaction that added
+it) and `20261015000300_a_manual_transfer_is_stored`. `PaymentProviderName`
+gains `manual_transfer`; `GatewayCategory` gains `manual`. **Later:**
+`ConfirmationSource` gains `chain_watch` (F-803-f) and `sms_match` (F-806),
+each with its row.
+
+- **A tenant may run several manual gateways** (user, 2026-10-15): a card and
+  two wallets are three gateways with their own limits, fee and proof. The
+  one-per-provider index on `tenant_gateway_config` (D-20) is partial —
+  `WHERE "providerName" <> 'manual_transfer'` — and gateway admin reads the
+  same rule from `PROVIDER_FIELDS[…].onePerTenant`.
+- **A gateway is named as everywhere else** — exactly one of `gatewayId` /
+  `tenantGatewayConfigId` (CHECK, as `gateway_audience`), the latter by
+  `(id, tenantId)`; `tenantId` is the owner, the platform owner for a platform
+  gateway (trigger, which also refuses a setting on any other provider).
+- **`confirmationMode` is the gateway enum** (`manual_admin_required` /
+  `automatic`), not a second one; the default is `manual_admin_required`.
+- A detail's and a reference's `tenantId` is its payment's, by trigger — not a
+  composite key, whose index on `payment_transaction` would lock it to build.
+- `GRANTABLE.manual_transfer` is `false`: lending a manual gateway is not
+  decided (its queue is the lender's staff's, its payer the borrower's).
 
 | table | holds | rule |
 |---|---|---|
-| `manual_gateway_setting` | per gateway row: `kind`, `confirmationMode` (`manual`/`automatic`), `requiredProof` (string[] of the kind's proof field ids), `windowMinutes` (default 30, 10..1440), `instructionsKey` override text (optional, per locale) | one per gateway; `(source, gatewayId)` unique, `source` = `tenant`/`platform` as in the vault label |
-| `manual_destination` | `gatewayId`, `label`, `fields` (JSON, validated by the kind), `isActive`, `weight` (1..100), `dailyCapMinor` (optional) | RLS by tenant; a destination referenced by an open payment is deactivated, never deleted |
+| `manual_gateway_setting` | per gateway row: `kind`, `confirmationMode` (`manual_admin_required`/`automatic`), `requiredProof` (string[] of the kind's proof field ids), `windowMinutes` (default 30, 10..1440), `instructions` (optional override text by language) | one per gateway (above); RLS by tenant |
+| `manual_destination` | `settingId`, `label`, `fields` (JSON, validated by the kind), `isActive`, `sortOrder`, `weight` (1..100), `dailyCapMinor` (optional) | RLS by tenant; a destination referenced by any payment is deactivated, never deleted (Restrict) |
 | `payment_transfer_detail` | `paymentId` (PK), `destinationId`, `destinationSnapshot` (the fields shown to the user), `expectedAmountMinor`, `chargeCurrency`, `chargeDecimals`, `network` (crypto), `windowEndsAt`, `proof` (JSON), `proofSubmittedAt`, `reviewReason` (enum below, nullable), `seenTxRef` | written by `start`; the snapshot is what the user saw, so editing a destination never changes an open payment |
 | `transfer_tx_ref` | `(tenantId, network, txRef)` unique — a tx hash, a bank tracking number or an SMS reference | one external reference credits at most once per tenant, whichever path saw it first |
 
