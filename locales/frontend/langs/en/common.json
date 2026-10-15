@@ -987,7 +987,8 @@
       "unsettled": "The gateway still cannot confirm or refuse it. You may confirm or reject it by hand.",
       "confirmed_manually": "Confirmed by hand. The wallet was credited.",
       "rejected_manually": "Rejected by hand. The payment is closed and nothing was credited.",
-      "still_in_bank": "The payer is still on the bank's page, so it cannot be rejected yet. Ask again in a few minutes."
+      "still_in_bank": "The payer is still on the bank's page, so it cannot be rejected yet. Ask again in a few minutes.",
+      "returned_for_proof": "Sent back to the payer. Their window reopened and the payment stays open until they send the proof again."
     },
     "state": {
       "waiting": "Awaiting payment",

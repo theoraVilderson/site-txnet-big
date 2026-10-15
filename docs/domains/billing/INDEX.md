@@ -67,6 +67,8 @@ source:
   - txnet-backend/prisma/domains/migrations/20261015000200_a_manual_gateway_is_a_provider/**
   - txnet-backend/prisma/domains/migrations/20261015000300_a_manual_transfer_is_stored/**
   - txnet-backend/prisma/domains/migrations/20261015000400_a_manual_destination_is_audited/**
+  - txnet-backend/prisma/domains/migrations/20261015000500_a_returned_proof_is_remembered/**
+  - txnet-backend/prisma/domains/migrations/20261015000600_a_returned_proof_is_audited/**
   - txnet-backend/billing-service/src/app/usage/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change, manual_gateway_setting, manual_destination, payment_transfer_detail, transfer_tx_ref]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]

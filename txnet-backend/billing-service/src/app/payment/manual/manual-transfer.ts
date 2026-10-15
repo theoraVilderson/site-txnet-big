@@ -119,7 +119,7 @@ export function automaticFirst<T extends TransferGateway>(gateways: readonly T[]
 }
 
 /** The window the payer has, and the payment's clock: the window plus {@link TRANSFER_GRACE_MS}. */
-export function transferWindow(plan: TransferPlan, now: Date): { windowEndsAt: Date; expiresAt: Date } {
+export function transferWindow(plan: Pick<TransferPlan, 'windowMinutes'>, now: Date): { windowEndsAt: Date; expiresAt: Date } {
   const windowEndsAt = new Date(now.getTime() + plan.windowMinutes * 60_000);
   return { windowEndsAt, expiresAt: new Date(windowEndsAt.getTime() + TRANSFER_GRACE_MS) };
 }

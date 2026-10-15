@@ -70,6 +70,7 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
   const tx = {
     $executeRaw: async () => 0,
     tenant: open.tenant,
+    paymentTransferDetail: open.paymentTransferDetail,
     // The row lock `releaseFailedHolds` takes: found only while the row is still open.
     $queryRaw: async () => {
       calls.writes.push('lock');

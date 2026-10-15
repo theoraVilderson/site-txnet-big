@@ -8,6 +8,8 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { AskAnswer, DepositReconciliationService } from './deposit-reconciliation.service';
 import { DepositSettlementService, PAYMENT_SELECT } from './deposit-settlement';
+import { WITH_PROOF, transferViewOf, type TransferView } from '../manual/transfer-proof';
+import { returnProof } from '../manual/transfer-return';
 import { attachAuthority } from './payment-callback-url';
 
 /**
@@ -49,7 +51,15 @@ export type ManualActor = { adminId: string; tenantId: string; ip: string };
  * reopen (F-092-af; `not_verifying` before it). `authority_present` and
  * `authority_taken` answer attaching an authority (F-092-af).
  */
-export type ManualConfirmRejection = 'payment_not_found' | 'not_open' | 'authority_present' | 'authority_taken';
+export type ManualConfirmRejection =
+  | 'payment_not_found'
+  | 'not_open'
+  | 'authority_present'
+  | 'authority_taken'
+  /** F-805-a: the transfer's reference was credited to another payment since its proof arrived. */
+  | 'duplicate_ref'
+  /** F-805-a: `resubmit` on a payment with no proof to return, or one already returned once. */
+  | 'cannot_return';
 
 export class ManualConfirmRefused extends Error {
   constructor(readonly reason: ManualConfirmRejection, detail?: string) {
@@ -72,7 +82,9 @@ export type ManualOutcome =
   /** F-092-ak: a person closed it — the gateway saw no money. */
   | 'rejected_manually'
   /** F-092-ak: not rejected — the payer is still at the bank and may be about to pay. */
-  | 'still_in_bank';
+  | 'still_in_bank'
+  /** F-805-a: not closed — the transfer's proof went back to the payer to send again. */
+  | 'returned_for_proof';
 
 export type ManualAnswer = {
   paymentId: string;
@@ -102,6 +114,8 @@ export type VerifyingPaymentView = {
   verifyAttempts: number;
   nextVerifyAt: Date | null;
   flaggedAt: Date | null;
+  /** A manual transfer's destination, amount and proof (F-805-a); null for every other payment. */
+  transfer: TransferView | null;
 };
 
 const SCOPE_SELECT = {
@@ -135,6 +149,9 @@ const VIEW_SELECT = {
   verifyFlaggedAt: true,
   gateway: { select: { displayName: true, providerName: true } },
   tenantGatewayConfig: { select: { displayName: true, providerName: true } },
+  transferDetail: {
+    select: { destination: { select: { label: true } }, expectedAmountMinor: true, chargeCurrency: true, chargeDecimals: true, proof: true, proofSubmittedAt: true, proofReturnedAt: true, reviewReason: true },
+  },
 } satisfies Prisma.PaymentTransactionSelect;
 
 /** Silence and `in_bank`: the only answers that leave the decision to a person. */
@@ -167,7 +184,8 @@ export class ManualConfirmService {
       db.paymentTransaction.findMany({
         where: {
           status: { in: [PaymentStatus.pending, PaymentStatus.expired] },
-          createdAt: { gte: new Date(Date.now() - lookbackSec * 1000) },
+          // A proof waits on a person past the lookback (F-805-a).
+          OR: [{ createdAt: { gte: new Date(Date.now() - lookbackSec * 1000) } }, WITH_PROOF],
           ...(owner ? {} : this.tenantScope(actor)),
         },
         select: VIEW_SELECT,
@@ -175,6 +193,8 @@ export class ManualConfirmService {
         take: 200,
       }),
     );
+    const secret = this.config.get('OBJECT_STORAGE_SIGNING_SECRET', { infer: true });
+    const now = new Date();
     return rows.map((r) => {
       const gw = r.gateway ?? r.tenantGatewayConfig;
       return {
@@ -195,6 +215,7 @@ export class ManualConfirmService {
         verifyAttempts: r.verifyAttempts,
         nextVerifyAt: r.nextVerifyAt,
         flaggedAt: r.verifyFlaggedAt,
+        transfer: r.transferDetail ? transferViewOf(r.transferDetail, secret, now) : null,
       };
     });
   }
@@ -245,12 +266,13 @@ export class ManualConfirmService {
       );
       if (!payment) throw new ManualConfirmRefused('payment_not_found', paymentId);
 
-      const credited = await this.settlement.creditVerified(
-        payment,
-        { referenceId: input.referenceId, cardPan: null },
-        ConfirmationSource.admin_manual,
-        { adminId: actor.adminId, reason: input.reason, ip: actor.ip },
-      );
+      const credited = await this.settlement
+        .creditVerified(payment, { referenceId: input.referenceId, cardPan: null }, ConfirmationSource.admin_manual, { adminId: actor.adminId, reason: input.reason, ip: actor.ip })
+        .catch((e: unknown) => {
+          // `transfer_tx_ref`'s unique index (F-805-a): the credit rolled back with the reference.
+          if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new ManualConfirmRefused('duplicate_ref', paymentId);
+          throw e;
+        });
       if (credited) this.logger.warn(`payment ${paymentId} confirmed by hand by ${actor.adminId} (gateway: ${asked.kind})`);
       return {
         paymentId,
@@ -269,8 +291,9 @@ export class ManualConfirmService {
    * or a refusal that left the row open (`authority_invalid`) let a person close
    * it, with a reason, through `DepositSettlementService.rejectManually`.
    */
-  async reject(actor: ManualActor, paymentId: string, input: { reason: string }): Promise<ManualAnswer> {
+  async reject(actor: ManualActor, paymentId: string, input: { reason: string; resubmit?: boolean }): Promise<ManualAnswer> {
     const tenantId = await this.eligible(actor, paymentId);
+    if (input.resubmit) return runWithTenant({ id: tenantId }, () => this.returnProof(actor, paymentId, tenantId, input.reason));
     return runWithTenant({ id: tenantId }, async () => {
       const asked = await this.reconciliation.askOnce(paymentId);
       if (asked.kind === 'in_bank') {
@@ -298,6 +321,14 @@ export class ManualConfirmService {
         referenceId: null,
       };
     });
+  }
+
+  /** A transfer has no gateway to ask: its proof goes back once, in one audited write (`returnProof`). */
+  private async returnProof(actor: ManualActor, paymentId: string, tenantId: string, reason: string): Promise<ManualAnswer> {
+    const by = { adminId: actor.adminId, reason, ip: actor.ip, tenantId };
+    if (!(await tenantTransaction(this.prisma, (tx) => returnProof(tx, paymentId, by)))) throw new ManualConfirmRefused('cannot_return', paymentId);
+    this.logger.warn(`payment ${paymentId}: transfer proof returned to the payer by ${actor.adminId}`);
+    return { paymentId, outcome: 'returned_for_proof', gatewayStatus: null, referenceId: null };
   }
 
   private answerOf(paymentId: string, asked: AskAnswer): ManualAnswer {

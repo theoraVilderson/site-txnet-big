@@ -36,7 +36,9 @@ export type ManualOutcome =
   /** A person closed it; the gateway saw no money (F-092-ak). */
   | "rejected_manually"
   /** Not rejected: the payer is still at the bank (F-092-ak). */
-  | "still_in_bank";
+  | "still_in_bank"
+  /** Not closed: a transfer's proof went back to the payer to send again (F-805-a). */
+  | "returned_for_proof";
 
 export interface ManualAnswer {
   paymentId: string;

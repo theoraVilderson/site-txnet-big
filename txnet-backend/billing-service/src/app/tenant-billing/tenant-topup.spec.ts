@@ -44,6 +44,7 @@ describe('settling a reseller billing top-up', () => {
     const open = openPaymentFakes();
     const tx = (pool: string) => ({
       tenant: open.tenant,
+      paymentTransferDetail: open.paymentTransferDetail,
       paymentTransaction: {
         findUnique: open.findUnique,
         updateMany: async ({ where }: { where: { status: PaymentStatus } }) => {

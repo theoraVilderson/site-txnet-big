@@ -13,6 +13,7 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletCreditService } from '../../wallet/wallet-credit.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
+import { recordTransferRef } from '../manual/transfer-rows';
 import { settleOpen } from './open-payment';
 import { GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 
@@ -222,16 +223,15 @@ export class DepositSettlementService {
         cardPanMasked: verified.cardPan,
         confirmationSource: source,
         ...(manual ? { confirmedByAdminId: manual.adminId, manualConfirmReason: manual.reason } : {}),
-        // A payment that has landed has no clock left to run out (F-092-k),
-        // and nothing left to verify (F-092-x).
+        // Landed: no clock left to run out (F-092-k), nothing left to verify (F-092-x).
         expiresAt: null,
         nextVerifyAt: null,
         ...(verified.authority ? { gatewayTrackingCode: verified.authority } : {}),
       };
-      // A row read `pending` may have been expired by the sweep since (ADR-0046
-      // decision 1) — the money is paid either way; only a settled row matches neither.
+      // A row read `pending` may have been expired since (ADR-0046 decision 1): paid either way; a settled row matches neither.
       const from = await settleOpen(tx, payment.id, data, verified.authority ? { gatewayTrackingCode: null } : {});
       if (from === null) return false;
+      await recordTransferRef(tx, payment.id);
       const settled: PaymentRow = { ...payment, amountCredited: credited };
 
       if (billingTenantId) {

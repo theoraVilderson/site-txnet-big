@@ -1,4 +1,5 @@
 import {
+  OBJECT_STORAGE_ENV,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
   localeEnv,
@@ -79,21 +80,8 @@ export const envSchema = z.object({
    */
   EDGE_LIFECYCLE_ENABLED: z.enum(['true', 'false']).default('false'),
 
-  /**
-   * Object storage (F-018-m, `platform/object-storage`): which driver holds the
-   * bytes, and for `local` the mounted volume. Only `local` is built; an
-   * S3-compatible driver arrives behind the same port. **One node, or a volume
-   * every replica shares** — replicas on separate disks each hold a different
-   * subset of the files.
-   */
-  OBJECT_STORAGE_DRIVER: z.enum(['local']).default('local'),
-  OBJECT_STORAGE_LOCAL_ROOT: z.string().min(1).default('/data/objects'),
-  /**
-   * The HMAC key of private files' signed URLs (F-033-c, ADR-0113) — the same
-   * value in every service that mints one (support-service) and here, where
-   * `private-files` verifies it. At least 32 characters.
-   */
-  OBJECT_STORAGE_SIGNING_SECRET: z.string().min(32, 'OBJECT_STORAGE_SIGNING_SECRET must be at least 32 characters'),
+  /** Object storage (F-018-m): the volume branding and guides are stored in, and the key `private-files` verifies. */
+  ...OBJECT_STORAGE_ENV,
 
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),

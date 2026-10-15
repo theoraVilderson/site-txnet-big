@@ -1,6 +1,8 @@
 import {
+  OBJECT_STORAGE_ENV,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
+  VIRUS_SCAN_ENV,
   localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
@@ -55,19 +57,9 @@ export const envSchema = z.object({
   /** What one user's attachments may hold in total, across all their conversations. 100 MB. */
   SUPPORT_STORAGE_QUOTA_BYTES: rateLimit(100 * 1024 * 1024),
 
-  /** Where attachments' bytes live (`platform/object-storage`): the volume tenant-service serves from. */
-  OBJECT_STORAGE_DRIVER: z.enum(['local']).default('local'),
-  OBJECT_STORAGE_LOCAL_ROOT: z.string().min(1).default('/data/objects'),
-  /** `clamd` in production; `none` calls every file clean (ADR-0113 point 4). */
-  VIRUS_SCAN_DRIVER: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['clamd', 'none']).default('none')),
-  /** `host:port` of clamd, when the driver is `clamd`. */
-  CLAMD_ADDR: z.string().default(''),
-
-  /**
-   * Signs attachments' 5-minute URLs (F-033-c, ADR-0113); tenant-service's
-   * `private-files` route verifies with the same value. At least 32 characters.
-   */
-  OBJECT_STORAGE_SIGNING_SECRET: z.string().min(32, 'OBJECT_STORAGE_SIGNING_SECRET must be at least 32 characters'),
+  /** Where attachments' bytes live, and the key of their 5-minute URLs (F-033-c); scanned before stored. */
+  ...OBJECT_STORAGE_ENV,
+  ...VIRUS_SCAN_ENV,
 
   /**
    * auth-service's `internal/notify/user` seam, which renders a notice in the

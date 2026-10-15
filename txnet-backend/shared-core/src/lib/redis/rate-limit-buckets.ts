@@ -187,13 +187,11 @@ export const RateLimitBucket = {
    */
   DEPOSIT_START: 'deposit:start',
 
-  /**
-   * Giving up a Mini App top-up before paying it (F-093-q), per user. One per
-   * `DEPOSIT_START`, near enough — a sheet the payer closed is followed by
-   * exactly one of these — so it gets a budget of its own rather than eating
-   * the one a payer needs to try again.
-   */
+  /** Giving up a Mini App top-up before paying it (F-093-q), per user: about one per `DEPOSIT_START`, so a budget of its own, not the one a retry needs. */
   DEPOSIT_ABANDON: 'deposit:abandon',
+
+  /** A manual transfer's receipt upload and proof, per payer (F-805-a): each stores a file or writes the queue's row. */
+  DEPOSIT_PROOF: 'deposit:proof',
 
   /**
    * Creating an invoice in `billing-service` (F-111-a), per user. Each call

@@ -172,7 +172,7 @@ paymentId}`, routed to `tenant:<tenantId>` by live-push.
 
 | Rule | Why |
 |---|---|
-| Writers: a start (not a free one), `attachAuthority`, the in-chat approval, `settleOpen` (every credit and every close by the callback, webhook, reconciliation or a person), the callback's refusal, abandon, the expiry sweep, and `scheduleVerifyRetry` / `flagLongVerifying` / `clearVerifyRetry` — each only when its guarded write matched | each changes a column the list shows, or the list itself; a guard that matched nothing moved nothing |
+| Writers: a start (not a free one), `attachAuthority`, the in-chat approval, a transfer's proof and its return (F-805-a), `settleOpen` (every credit and every close by the callback, webhook, reconciliation or a person), the callback's refusal, abandon, the expiry sweep, and `scheduleVerifyRetry` / `flagLongVerifying` / `clearVerifyRetry` — each only when its guarded write matched | each changes a column the list shows, or the list itself; a guard that matched nothing moved nothing |
 | `settleOpen` is the one pending-then-expired flip: it answers which status matched (the coupon holds turn on it) and announces | the two copies in `deposit-settlement.ts` are one now, so a new close cannot skip the event |
 | Both tenants, always: a reseller re-reads a list that may not hold the row | the platform owner lists every tenant's payments; deciding who lists a row would repeat billing's scope in the producer |
 | Ageing out of the lookback writes nothing | time moves no row; the next read drops it |

@@ -64,11 +64,6 @@
       "count": 1
     }
   },
-  "src/app/payment/deposit/manual-confirm.service.spec.ts": {
-    "@typescript-eslint/no-non-null-assertion": {
-      "count": 1
-    }
-  },
   "src/app/payment/gateway-admin/gateway-admin.service.spec.ts": {
     "@typescript-eslint/no-non-null-assertion": {
       "count": 2

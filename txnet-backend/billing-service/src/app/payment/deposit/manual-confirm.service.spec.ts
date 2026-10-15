@@ -18,6 +18,7 @@ import { ConfirmationSource, PaymentStatus, Prisma, TenantType } from '@prisma/c
 import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
 import type { AskAnswer } from './deposit-reconciliation.service';
+import { WITH_PROOF } from '../manual/transfer-proof';
 import { ManualConfirmRefused, ManualConfirmService } from './manual-confirm.service';
 import { openPaymentFakes } from '../../../test-support/open-payment.fake';
 
@@ -218,10 +219,11 @@ describe('ManualConfirmService scope', () => {
     const { service, calls, actor } = build({ callerTenant: OWNER });
     const before = Date.now();
     await service.list(actor);
-    const where = calls.listed[0]['where'] as Record<string, { in?: string[]; gte?: Date }>;
+    const where = calls.listed[0]['where'] as { status: unknown; OR: [{ createdAt: { gte: Date } }, unknown] };
     expect(where['status']).toEqual({ in: [PaymentStatus.pending, PaymentStatus.expired] });
-    expect(before - where['createdAt'].gte!.getTime()).toBeGreaterThanOrEqual(7 * 86_400_000 - 1_000);
-    expect(where).not.toHaveProperty('OR');
+    expect(before - where.OR[0].createdAt.gte.getTime()).toBeGreaterThanOrEqual(7 * 86_400_000 - 1_000);
+    // F-805-a: a transfer whose proof waits on a person stays listed past the lookback.
+    expect(where.OR[1]).toEqual(WITH_PROOF);
     expect(where).not.toHaveProperty('gatewayTrackingCode');
   });
 

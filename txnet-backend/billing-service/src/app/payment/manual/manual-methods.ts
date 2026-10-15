@@ -60,7 +60,6 @@ export function publicDestination(method: ManualMethod, fields: DestinationField
   return Object.fromEntries(Object.entries(fields).filter(([id]) => shown.has(id)));
 }
 
-// codeshape: spec-only — its caller is the proof route (F-805-a)
 /** A payer's proof: every `required` field present, every given field one the kind declares (F-805-a). */
 export function parseProof(method: ManualMethod, input: unknown, required: readonly string[]): FieldsParse {
   return parseFields(method.proofFields, input, (f) => required.includes(f.id));

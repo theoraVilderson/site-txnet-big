@@ -38,6 +38,8 @@ export const manualRejectSchema = z
   .object({
     /** Why a person, not the gateway, is ending this payment. Kept in the audit row. */
     reason: z.string().trim().min(5, { message: 'reason must be at least 5 characters' }).max(500),
+    /** A transfer's proof goes back to the payer instead, once (F-805-a): the payment stays open. */
+    resubmit: z.boolean().optional(),
   })
   .strict();
 

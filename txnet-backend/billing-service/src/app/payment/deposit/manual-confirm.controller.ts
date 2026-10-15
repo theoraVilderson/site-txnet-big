@@ -135,7 +135,7 @@ export class ManualConfirmController {
     @Ip() ip: string,
   ) {
     // The schema requires the key; the cast is for the non-strict tsconfig.
-    return this.refusing(() => this.manual.reject(this.actor(req, ip), id, { reason: body.reason as string }));
+    return this.refusing(() => this.manual.reject(this.actor(req, ip), id, { reason: body.reason as string, resubmit: body.resubmit === true }));
   }
 
   private async refusing<T>(run: () => Promise<T>): Promise<T> {

@@ -153,6 +153,8 @@ services:
       # `!override` replaces main.yml's list, so the vault KEK it mounts must be
       # repeated here — without it the service refuses to boot (ADR-0039).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+      # And the object-storage volume, or transfer receipts land in the container (F-805-a).
+      - object_storage:/data/objects
 
   # ---- Memory ceilings for the services not run from the host checkout ----
   # Sized at ~2-3x what each uses at rest (docker stats, 2026-10-06).

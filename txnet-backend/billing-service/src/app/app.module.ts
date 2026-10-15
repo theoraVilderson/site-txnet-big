@@ -12,6 +12,7 @@ import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
 import { CouponModule } from './payment/coupon/coupon.module';
 import { DepositModule } from './payment/deposit/deposit.module';
+import { DepositProofModule } from './payment/deposit/deposit-proof.module';
 import { GatewayModule } from './payment/gateway/gateway.module';
 import { GiftModule } from './payment/gift/gift.module';
 import { InvoiceModule } from './invoice/invoice.module';
@@ -64,6 +65,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     GatewayModule,
     CouponModule,
     DepositModule,
+    DepositProofModule,
     GiftModule,
     InvoiceModule,
     SettlementModule,

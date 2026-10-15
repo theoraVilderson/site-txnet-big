@@ -4,8 +4,10 @@ type OutboxData = { type: string; aggregateId: string };
 
 /**
  * What `announceOpenPayment` (RT-1-j) reads and writes, for a spec's fake
- * transaction: `tenant` and `outboxEvent` go on the tx, `findUnique` on its
- * `paymentTransaction`. Each announced payment id is collected in `announced`;
+ * transaction: `tenant`, `outboxEvent` and `paymentTransferDetail` go on the
+ * tx, `findUnique` on its `paymentTransaction`. `paymentTransferDetail` is
+ * what a credit reads for a transfer's reference (`recordTransferRef`,
+ * F-805-a): none here, so no payment is a transfer. Each announced payment id is collected in `announced`;
  * `outboxEvent(other)` hands every other outbox row to the spec's own recorder,
  * so the specs that order their writes see only the rows they assert.
  */
@@ -20,6 +22,7 @@ export function openPaymentFakes(announced: string[] = []) {
   return {
     announced,
     tenant: { findFirst: async () => ({ id: 'platform-tenant' }) },
+    paymentTransferDetail: { findUnique: async () => null },
     findUnique: async () => ({ tenantId: null }),
     outboxEvent,
   };

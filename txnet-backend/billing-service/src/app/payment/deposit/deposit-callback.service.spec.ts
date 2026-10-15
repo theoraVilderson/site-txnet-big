@@ -86,6 +86,7 @@ function build(setup: Setup = {}) {
   const tx = {
     $executeRaw: async () => 0,
     tenant: open.tenant,
+    paymentTransferDetail: open.paymentTransferDetail,
     paymentTransaction: {
       findUnique: open.findUnique,
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {

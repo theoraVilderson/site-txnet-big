@@ -16,6 +16,8 @@ const DB = {
   REDIS_URL: 'redis://redis:6379',
   // Required since F-027-cl: the hot loop's queue.
   RABBITMQ_URL: 'amqp://rabbitmq:5672',
+  // Required since F-805-a: a transfer receipt's signed URL.
+  OBJECT_STORAGE_SIGNING_SECRET: 's'.repeat(32),
 };
 
 describe('envSchema', () => {

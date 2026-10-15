@@ -21,6 +21,7 @@ export const OUTCOME_KEYS: Record<ManualOutcome, string> = {
   confirmed_manually: MANUAL_KEYS.outcome.confirmed_manually,
   rejected_manually: MANUAL_KEYS.outcome.rejected_manually,
   still_in_bank: MANUAL_KEYS.outcome.still_in_bank,
+  returned_for_proof: MANUAL_KEYS.outcome.returned_for_proof,
 };
 
 /**

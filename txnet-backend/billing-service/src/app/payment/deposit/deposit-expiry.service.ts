@@ -7,6 +7,7 @@ import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CouponReservationService } from '../coupon/coupon-reservation';
+import { WITHOUT_PROOF } from '../manual/transfer-proof';
 import { announceOpenPayment } from './open-payment';
 
 /**
@@ -92,8 +93,8 @@ export class DepositExpiryService {
     const due = await this.crossTenant.paymentTransaction.findMany({
       // A verifying row is skipped (F-092-x, ADR-0044 decision 4): the gateway
       // may have the money, so its holds stay until a settled answer or a
-      // person closes it.
-      where: { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
+      // person closes it; so is a transfer whose proof waits on one (F-805-a).
+      where: { status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null, ...WITHOUT_PROOF },
       select: { id: true, tenantId: true },
       // Oldest first: a backlog larger than one batch drains in the order it
       // accumulated, and no row can be starved by newer ones arriving.
@@ -191,7 +192,7 @@ export class DepositExpiryService {
           // flip to `success` and `close()`'s to `failed`. Those are final; an
           // expired payment is still inquired at the gateway by F-092-l, and
           // when we stopped waiting is part of what a mismatch is judged on.
-          where: { id, status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null },
+          where: { id, status: PaymentStatus.pending, expiresAt: { lte: now }, nextVerifyAt: null, ...WITHOUT_PROOF },
           data: { status: PaymentStatus.expired },
         });
         // The holds stay: `releaseLapsedHolds` gives them back later (F-092-ah).

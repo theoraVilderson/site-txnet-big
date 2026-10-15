@@ -42,6 +42,7 @@ enum AdminAction {
   // `payment_manual_confirm`: a credit by hand and a refusal by hand are
   // opposite acts, and the trail must say which one a person took.
   payment_manual_reject
+  payment_manual_return
   // F-502-c (D-33) — managing a coupon. Delete is its own value; `newValue.mode`
   // tells a hard delete from a soft one.
   coupon_create

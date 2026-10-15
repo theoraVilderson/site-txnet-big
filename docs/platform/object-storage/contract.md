@@ -104,8 +104,8 @@ does not own, which is a bug to surface.
 |---|---|
 | `OBJECT_STORAGE_DRIVER` | `local` (the only one built) |
 | `OBJECT_STORAGE_LOCAL_ROOT` | the volume; `/data/objects`, mounted from `object_storage` in compose |
-| `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one |
-| `VIRUS_SCAN_DRIVER` / `CLAMD_ADDR` / `CLAMD_TIMEOUT_MS` | in a service that takes uploads (support-service); `none` is the default |
+| `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one. The three `OBJECT_STORAGE_*` and the scan variables are declared once, `OBJECT_STORAGE_ENV` / `VIRUS_SCAN_ENV` (`object-storage/env.ts`), and spread into each service's schema |
+| `VIRUS_SCAN_DRIVER` / `CLAMD_ADDR` / `CLAMD_TIMEOUT_MS` | in a service that takes uploads (support-service, billing-service); `none` is the default |
 
 Moving to S3: copy each file by key, check it against `sha256`, switch the
 driver. No row changes.
@@ -128,3 +128,4 @@ driver. No row changes.
 | guide | guide images, public, `guides/<guideId>/<uuid>.<ext>` of the owner; the platform's served on every Host (F-414-c, [contract.md](../../domains/guide/contract.md)) |
 | guide video | MP4/WebM ≤ 50 MiB at the same path, served **only** by `guide-media` (rule 10), never by the file route's Host check (F-414-i, ADR-0118) |
 | support | attachments, `private`, scanned; URLs minted on each message read (F-033-c), uploads F-033-f ([contract.md](../../domains/support/contract.md)) |
+| billing | a manual transfer's receipt, `private`, scanned, under the gateway owner's prefix at `transfers/<paymentId>/receipt`; URLs minted on each queue read (F-805-a, [contract.manual-transfer.md](../../domains/billing/contract.manual-transfer.md)) |

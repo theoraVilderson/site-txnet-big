@@ -12,7 +12,7 @@ A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
 session has nothing left to decide. Each rule names the backlog row that
-builds it; **Storage** (F-803-a), **Method kinds** (F-803-b), **Gateway admin** (F-803-c) and **Starting one** (F-803-d) exist, the rest is to be built. The pages are
+builds it; **Storage** (F-803-a), **Method kinds** (F-803-b), **Gateway admin** (F-803-c), **Starting one** (F-803-d) and **Proof and the queue** (F-805-a) exist, the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -78,7 +78,7 @@ each with its row.
 |---|---|---|
 | `manual_gateway_setting` | per gateway row: `kind`, `confirmationMode` (`manual_admin_required`/`automatic`), `requiredProof` (string[] of the kind's proof field ids), `windowMinutes` (default 30, 10..1440), `instructions` (optional override text by language) | one per gateway (above); RLS by tenant |
 | `manual_destination` | `settingId`, `label`, `fields` (JSON, validated by the kind), `isActive`, `sortOrder`, `weight` (1..100), `dailyCapMinor` (optional) | RLS by tenant; a destination referenced by any payment is deactivated, never deleted (Restrict) |
-| `payment_transfer_detail` | `paymentId` (PK), `destinationId`, `destinationSnapshot` (the fields shown to the user), `expectedAmountMinor`, `chargeCurrency`, `chargeDecimals`, `network` (crypto), `windowEndsAt`, `proof` (JSON), `proofSubmittedAt`, `reviewReason` (enum below, nullable), `seenTxRef` | written by `start`; the snapshot is what the user saw, so editing a destination never changes an open payment |
+| `payment_transfer_detail` | `paymentId` (PK), `destinationId`, `destinationSnapshot` (the fields shown to the user), `expectedAmountMinor`, `chargeCurrency`, `chargeDecimals`, `network` (crypto), `windowEndsAt`, `proof` (JSON), `proofSubmittedAt`, `proofReturnedAt` (F-805-a), `reviewReason` (enum below, nullable), `seenTxRef` | written by `start`; the snapshot is what the user saw, so editing a destination never changes an open payment |
 | `transfer_tx_ref` | `(tenantId, network, txRef)` unique — a tx hash, a bank tracking number or an SMS reference | one external reference credits at most once per tenant, whichever path saw it first |
 
 `reviewReason`: `underpaid`, `overpaid`, `late`, `wrong_destination`,
@@ -190,23 +190,36 @@ grace for a late proof; F-092-k expires it after that.
 
 ## Proof and the queue (F-805-a)
 
-`POST /api/billing/deposit/:paymentId/proof` by the payment's owner: the
-gateway's `requiredProof` fields, each validated by its kind; `receiptImage`
-is an object-storage key from `POST …/proof/upload` (image/jpeg, png, webp;
-≤ 5 MB; stored under the tenant prefix, ADR-0120). A `txHash`/`trackingCode`
-already in `transfer_tx_ref` → `duplicate_ref`, refused. Accepted → the row
-stays `pending` with `proofSubmittedAt` set and `reviewReason = proof_only`
-(manual mode). It is **not** `verifying` (`nextVerifyAt` stays null: there is
-no gateway to ask), but the expiry sweep skips it the same way, and it writes
-the manual list's one re-read signal, `billing.payment.verifying_changed` on
-`tenant:` (RT-1-j). One proof per
-payment; a second is refused unless a person sent it back (`reject` with
-`resubmit: true`, which reopens the window once).
+Built 2026-10-15: `payment/manual/transfer-proof.ts` (the rules), `transfer-rows.ts`
+(the one lookup), `transfer-return.ts`, `deposit/deposit-proof.{service,controller,module}.ts`.
+Both routes are the payment's owner's, on `DEPOSIT_PROOF_RATE_LIMIT` (20 / 15 min).
 
-The manual-payments list (F-092-af) also lists a pending row with a proof, and gains `transfer` (destination label, expected amount,
-proof, image URL signed for 5 min, `reviewReason`). Confirm and reject are the
-existing routes; confirm writes the `transfer_tx_ref` row in the same
-transaction and credits `admin_manual`.
+- `POST /api/billing/deposit/:paymentId/proof/upload`, multipart `file`: JPEG,
+  PNG or WebP, ≤ 5 MB (multer cuts it off while it streams), scanned, private,
+  at `transfers/<paymentId>/receipt` under the **gateway owner's** prefix
+  (corrected: `private-files` serves a Host's own keys only, so the receipt
+  lives where its reviewers' panel is). A second upload replaces the first.
+  Answers `{key}`.
+- `POST /api/billing/deposit/:paymentId/proof`: the gateway's `requiredProof`,
+  each checked by its kind (`parseProof`); `receiptImage` must be exactly this
+  payment's key and stored. Refusals, as `reason` (+ `error.facts`
+  `{field: reason}`): `transfer_not_found` 404 (anyone else's too),
+  `transfer_closed`, `proof_already_sent`, `duplicate_ref` (the kind's
+  reference already in `transfer_tx_ref`) 409; `invalid_proof`,
+  `receipt_missing`, `receipt_rejected` 400. Accepted → `proof`,
+  `proofSubmittedAt`, `reviewReason = proof_only`; the row stays `pending`,
+  not verifying, and writes `billing.payment.open_changed` (RT-1-j).
+- **A proof waits on a person however late** (`WITH_PROOF`): the expiry sweep
+  never scans or closes it, and the queue lists it past its lookback.
+- **The queue** (F-092-af) gains `transfer` per row: destination label,
+  expected amount in the charge currency, proof, `receiptUrl` signed for
+  5 min, `reviewReason`, `canReturn`. Confirm and reject are the existing
+  routes (a transfer is `unaskable`). Confirm writes `transfer_tx_ref` in the
+  credit's transaction (`recordTransferRef`); a reference credited meanwhile
+  rolls it back as `duplicate_ref`. `reject` with `resubmit: true` sends the
+  proof back **once** (`proofReturnedAt`): proof cleared, window reopened from
+  now with its grace, still `pending`, audited `payment_manual_return`,
+  outcome `returned_for_proof`; a second is `cannot_return`.
 
 ## Later — matching (F-803-e): the one rule every automatic path calls
 

@@ -1322,6 +1322,8 @@ model PaymentTransferDetail {
   /// The payer's proof by the kind's field ids; set with `proofSubmittedAt` (CHECK, F-805-a).
   proof               Json?
   proofSubmittedAt    DateTime?
+  /// When a person sent the proof back to be sent again — once at most (F-805-a).
+  proofReturnedAt     DateTime?
   reviewReason        TransferReviewReason?
   /// The reference an automatic path saw, before a person confirmed (F-803-f).
   seenTxRef           String?

@@ -1,7 +1,9 @@
 import {
   AUTOMATION_EXCHANGE_DEFAULT,
+  OBJECT_STORAGE_ENV,
   REDIS_KEYSPACE_VERSION_DEFAULT,
   REDIS_KEY_NAMESPACE_DEFAULT,
+  VIRUS_SCAN_ENV,
   localeEnv,
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
@@ -36,22 +38,10 @@ export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
 
-  /**
-   * The prefix every route sits under. A constant in `main.ts` until now, and
-   * configuration here for the same reason the port is: it is part of the
-   * address Traefik routes to, and an address the image cannot be told about
-   * is one that needs a rebuild to change.
-   */
+  /** The prefix every route sits under: part of the address Traefik routes to, so configuration, not a rebuild. */
   GLOBAL_PREFIX: z.string().min(1).default('api'),
 
-  /**
-   * The host this service reports itself reachable at, for the boot log only.
-   *
-   * `main.ts` logged `http://localhost:<port>` unconditionally, which is wrong
-   * in every environment where it matters: inside a container `localhost` is
-   * the container, and the line an operator reads after a deploy pointed at an
-   * address nothing outside could reach.
-   */
+  /** The host the boot log says this service is reachable at — inside a container `localhost` is the container. */
   PUBLIC_HOST: z.string().min(1).default('localhost'),
 
   /**
@@ -92,6 +82,10 @@ export const envSchema = z.object({
    * than one no page can reach.
    */
   FRONTEND_ORIGIN: z.string().default(''),
+
+  /** A transfer's receipt (F-805-a): stored in the shared volume, scanned, served by a 5-minute signed URL. */
+  ...OBJECT_STORAGE_ENV,
+  ...VIRUS_SCAN_ENV,
 
   /**
    * The platform's own processes, proving themselves to the internal seam
@@ -354,6 +348,8 @@ export const envSchema = z.object({
   DEPOSIT_START_RATE_LIMIT: rateLimit(20),
   /** Giving up a Mini App top-up before paying it (`payment/deposit/deposit-abandon.service.ts`). */
   DEPOSIT_ABANDON_RATE_LIMIT: rateLimit(30),
+  /** A transfer's receipt upload and its proof (`payment/deposit/deposit-proof.service.ts`, F-805-a). */
+  DEPOSIT_PROOF_RATE_LIMIT: rateLimit(20),
   /** Each call holds coupons for 30 minutes (`invoice/invoice.service.ts`, F-111-a). */
   INVOICE_CREATE_RATE_LIMIT: rateLimit(20),
   INVOICE_PAY_RATE_LIMIT: rateLimit(20),

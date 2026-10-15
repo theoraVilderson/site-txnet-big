@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
-import type { DestinationFields } from '../manual/manual-method';
-import { settingWhere } from '../manual/manual-setting';
+import { transferRowsOf } from '../manual/transfer-rows';
 import type { TransferBody } from '../manual/manual-transfer';
 
 /** The transfer as the pay page re-reads it: the start's body, where the payment stands, and why it waits, if it does. */
@@ -24,25 +23,19 @@ export class DepositTransferService {
 
   read(userId: string, paymentId: string): Promise<TransferStatus | null> {
     return tenantTransaction(this.prisma, async (tx) => {
-      const detail = await tx.paymentTransferDetail.findUnique({
-        where: { paymentId },
-        include: { payment: { select: { userId: true, status: true, gatewayId: true, tenantGatewayConfigId: true } } },
-      });
-      if (!detail || detail.payment.userId !== userId) return null;
-      const { gatewayId, tenantGatewayConfigId } = detail.payment;
-      const ref = gatewayId ? { source: 'platform' as const, id: gatewayId } : { source: 'tenant' as const, id: tenantGatewayConfigId ?? '' };
-      const setting = await tx.manualGatewaySetting.findFirst({ where: settingWhere(ref), select: { kind: true, confirmationMode: true, requiredProof: true } });
-      if (!setting) return null;
+      const rows = await transferRowsOf(tx, paymentId);
+      if (!rows || rows.payment.userId !== userId) return null;
+      const { detail, setting } = rows;
       return {
         kind: setting.kind,
-        destination: detail.destinationSnapshot as DestinationFields,
+        destination: rows.destination,
         amountMinor: detail.expectedAmountMinor.toString(),
         currencyCode: detail.chargeCurrency,
         decimals: detail.chargeDecimals,
         windowEndsAt: detail.windowEndsAt,
         requiredProof: setting.requiredProof,
         confirmationMode: setting.confirmationMode,
-        status: detail.payment.status,
+        status: rows.payment.status,
         reviewReason: detail.reviewReason,
         proofSubmittedAt: detail.proofSubmittedAt,
       };

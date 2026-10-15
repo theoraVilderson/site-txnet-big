@@ -34,6 +34,9 @@ services:
       # The same vault KEK auth-service mounts, read-only: this service decrypts
       # a gateway's merchant id itself (ADR-0039).
       - ./secrets/vault-kek:/run/secrets/vault-kek:ro
+      # Transfer receipts (F-805-a): the volume tenant-service serves private
+      # files from. The `local` driver needs this to be one shared volume.
+      - object_storage:/data/objects
     environment:
       # Validated at boot by `app/config/env.validation.ts` (F-089); a typo'd
       # variable is a refusal to start rather than a default nobody chose.
@@ -108,6 +111,13 @@ services:
       - DEPOSIT_QUOTE_RATE_LIMIT=${DEPOSIT_QUOTE_RATE_LIMIT:-}
       - DEPOSIT_START_RATE_LIMIT=${DEPOSIT_START_RATE_LIMIT:-}
       - DEPOSIT_ABANDON_RATE_LIMIT=${DEPOSIT_ABANDON_RATE_LIMIT:-}
+      - DEPOSIT_PROOF_RATE_LIMIT=${DEPOSIT_PROOF_RATE_LIMIT:-}
+      # Transfer receipts (F-805-a, ADR-0113): stored, scanned, signed for 5 minutes; tenant-service verifies.
+      - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
+      - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
+      - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}
+      - VIRUS_SCAN_DRIVER=${VIRUS_SCAN_DRIVER:-}
+      - CLAMD_ADDR=${CLAMD_ADDR:-}
       - INVOICE_CREATE_RATE_LIMIT=${INVOICE_CREATE_RATE_LIMIT:-}
       - INVOICE_PAY_RATE_LIMIT=${INVOICE_PAY_RATE_LIMIT:-}
       - INVOICE_CANCEL_RATE_LIMIT=${INVOICE_CANCEL_RATE_LIMIT:-}
