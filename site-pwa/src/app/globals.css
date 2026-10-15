@@ -60,6 +60,23 @@
     --info: #1f6fa3;
     --info-bg: rgba(31, 111, 163, 0.1);
     --info-border: rgba(31, 111, 163, 0.3);
+    /* Chart kit (F-1001-c, panel-web contract.analytics.md "Colour"): the
+       categorical slots in their fixed order, validated against the card
+       surface below; the theme's own accent (a tenant brand overrides
+       --accent-primary, never this); Other, the previous period and the grid. */
+    --chart-1: #2a78d6;
+    --chart-2: #eb6834;
+    --chart-3: #1baf7a;
+    --chart-4: #eda100;
+    --chart-5: #e87ba4;
+    --chart-6: #008300;
+    --chart-7: #4a3aa7;
+    --chart-8: #e34948;
+    --chart-surface: #fdfefd;
+    --chart-accent: #19a055;
+    --chart-other: #8b958f;
+    --chart-muted: #9aaba1;
+    --chart-grid: rgba(15, 46, 28, 0.08);
     color-scheme: light;
   }
 
@@ -109,6 +126,19 @@
     --info: #7cc4f0;
     --info-bg: rgba(124, 196, 240, 0.1);
     --info-border: rgba(124, 196, 240, 0.3);
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-6: #008300;
+    --chart-7: #9085e9;
+    --chart-8: #e66767;
+    --chart-surface: #112218;
+    --chart-accent: #4ade80;
+    --chart-other: #7d8a83;
+    --chart-muted: #5f7468;
+    --chart-grid: rgba(232, 247, 236, 0.08);
     color-scheme: dark;
   }
 
@@ -158,6 +188,19 @@
     --info: #8fd0f0;
     --info-bg: rgba(143, 208, 240, 0.1);
     --info-border: rgba(143, 208, 240, 0.3);
+    --chart-1: #3987e5;
+    --chart-2: #d95926;
+    --chart-3: #199e70;
+    --chart-4: #c98500;
+    --chart-5: #d55181;
+    --chart-6: #008300;
+    --chart-7: #9085e9;
+    --chart-8: #e66767;
+    --chart-surface: #0b2a3b;
+    --chart-accent: #267ca1;
+    --chart-other: #7d8a91;
+    --chart-muted: #557386;
+    --chart-grid: rgba(220, 240, 250, 0.08);
     color-scheme: dark;
   }
 }
@@ -1199,4 +1242,29 @@ div:has(> .password-field-input:autofill) > .password-field-label {
   animation: none;
   width: 100%;
   opacity: 0.35;
+}
+
+/* Chart kit motion (F-1001-c, panel-web contract.analytics.md rule 10): a
+   line draws and an area rises in 600ms when first inserted; new data morphs
+   its path in `slow` (320ms) where the browser animates `d`. The kit leaves
+   the classes off at the `reduced` motion level. */
+.chart-draw {
+  stroke-dasharray: 1;
+  animation: chart-draw 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.chart-rise {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: chart-rise 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.chart-morph {
+  transition: d 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes chart-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes chart-rise {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
 }

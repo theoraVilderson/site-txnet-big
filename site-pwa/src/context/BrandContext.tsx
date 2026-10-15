@@ -39,3 +39,8 @@ export function useBrand() {
     logoUrl: theme === "light" ? (light ?? dark) : (dark ?? light),
   };
 }
+
+/** The tenant's brand colour (`#rrggbb`), or null — the chart kit checks it before drawing with it (F-1001-c). */
+export function useBrandColor(): string | null {
+  return useContext(BrandContext).brand?.primaryColorHex ?? null;
+}

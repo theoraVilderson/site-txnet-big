@@ -12,7 +12,8 @@ The analytics page for the platform owner and every reseller, and the chart
 kit it is built on. Decided by the user on 2026-10-06; written before any of it
 is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
-this file never redefines one.
+this file never redefines one. **Built: the chart kit (F-1001-c).** The page
+and its tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -37,6 +38,20 @@ page that needs a chart uses the kit.
 | `CohortGrid` | a heatmap table, sequential |
 | `ChartCard` | title, subtitle, legend, a table-view toggle, its own skeleton / empty / error |
 | `chartPalette`, `useChartTheme` | the colours below, per theme, with the brand check |
+
+**As built (F-1001-c).** Pages import `kit/charts` (its own index, so only a
+chart route loads visx). The slots are tokens, `--chart-1`…`--chart-8` per
+theme in `globals.css`, beside `--chart-surface`, `--chart-accent` (the
+theme's accent, which a brand never overrides), `--chart-other`, `--chart-muted`
+and `--chart-grid`; `palette.ts` names them (`slotColor`, `slotsByEntity`), and
+`charts.test.tsx` holds them to the table below. `useChartTheme` reads the
+computed surface off `<html>`. Formats come from the page (`formatValue`, x
+labels in its calendar), the compact default from `numberLocale`. Ticks are
+chosen, never d3's hint (which can give 8). `CohortGrid` is built with its
+first user (F-1004-b). **Found:** the dark accent (`#4ade80`, L 0.80) and
+ocean's (chroma 0.098) sit outside the series band, yet are the fallback this
+contract names; a brand that passes beats them, and nothing else changes until
+the user decides otherwise.
 
 ### Rules every chart obeys
 

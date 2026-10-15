@@ -886,6 +886,27 @@
     "pageHeader": {
       "breadcrumb": "Breadcrumb",
       "back": "Back to {{page}}"
+    },
+    "chart": {
+      "vsPrevious": "vs previous",
+      "new": "New",
+      "up": "Up {{value}}",
+      "down": "Down {{value}}",
+      "flat": "No change",
+      "other": "Other",
+      "previous": "Previous period",
+      "showTable": "Show as table",
+      "showChart": "Show as chart",
+      "empty": "Nothing in this period yet",
+      "failed": "This chart could not load",
+      "retry": "Try again",
+      "label": "Label",
+      "value": "Value",
+      "share": "Share",
+      "date": "Date",
+      "chart": "Chart: {{title}}",
+      "less": "Less",
+      "more": "More"
     }
   },
   "money": {
