@@ -44,7 +44,10 @@ lifts any; `unfreezeOwnGrant` (the user) lifts soft or self only, never `hard`
 or `awaitingPanel` (`freeze_not_users`; `userMayUnfreeze` answers it for a list),
 its write conditional on both. The end moves only when `freezeStopsClock`; a
 delete's refund measures a running clock to the delete. Whether self is allowed
-and stops the clock is the tenant's (F-0401-b); routes are billing's (F-0401-d).
+and stops the clock is the tenant's (F-0401-b). **An admin re-modes a frozen Grant**
+(F-0401-d): `setFreezeMode` — hard or soft, either way, the mode alone, conditional
+on the one read (`freeze_mode_unchanged`, `grant_moved`); `ADMIN_FREEZE_MODES` never
+hands out `self`. Routes: billing `contract.reseller-grants-freeze.md`.
 **The user's own** (F-0401-c, `self-freeze.ts`): `freezeOwnGrant` — metered only,
 the tenant's switch, 3 per Grant in 24h from `grant_self_freeze` audit rows — and
 `unfreezeOwn`; routes and refusals: billing `contract.gift.md` "Freezing one's own service".

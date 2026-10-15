@@ -33,7 +33,6 @@ import { GrantDevicesBody, grantDevicesSchema } from './grant-devices.schema';
 import { GrantCompensateBody, grantCompensateSchema } from './grant-compensation.schema';
 import { CompensationOverCap } from './grant-compensation';
 import { GrantDurationBody, grantDurationSchema } from './grant-duration.schema';
-import { GrantFreezeBody, grantFreezeSchema } from './grant-freeze.schema';
 import { GrantIssueBody, grantIssueSchema } from './grant-issue.schema';
 import { GrantListQuery, grantListSchema } from './grant-list.schema';
 import { GrantRenewBody, grantRenewSchema } from './grant-renew.schema';
@@ -71,6 +70,7 @@ const STATUS: Record<ResellerUserGrantsRejection, 403 | 404 | 409> = {
 const GRANT_ACTION_STATUS: Partial<Record<EntitlementRejection, 400 | 409>> = {
   grant_not_active: 409,
   grant_not_frozen: 409,
+  freeze_mode_unchanged: 400,
   grant_moved: 409,
   freeze_until_not_future: 400,
   grant_closed: 409,
@@ -106,7 +106,7 @@ const readLimit = RateLimit({
 });
 
 /** Per request, not per config: one request is 1..50 configs. */
-const actionLimit = RateLimit({
+export const actionLimit = RateLimit({
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_CONFIG_ACTION, identityOf(req).userId),
   configKey: 'RESELLER_USER_CONFIG_ACTION_RATE_LIMIT',
   windowSec: 900,
@@ -234,43 +234,6 @@ export class ResellerUserGrantsController {
     @Ip() ip: string,
   ) {
     return { action: body.action, results: await this.refusing(() => this.service.act(adminOf(req, ip), tenantId, userId, body as AdminConfigCommand)) };
-  }
-
-  /**
-   * An admin freezes one of this user's Grants (F-311-h): its configs off, its
-   * clock stopped, kept — never purged. `until` unfreezes it by itself.
-   * The config actions' bucket: both are an admin's writes on a user's service.
-   */
-  @Post('grants/:grantId/freeze')
-  @HttpCode(HttpStatus.OK)
-  @actionLimit
-  async freeze(
-    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Param('grantId', new ParseUUIDPipe()) grantId: string,
-    @Body(new ZodValidationPipe(grantFreezeSchema)) body: GrantFreezeBody,
-    @Req() req: Request,
-    @Ip() ip: string,
-  ) {
-    const until = body.until ? new Date(body.until) : null;
-    const done = await this.refusing(() => this.service.freeze(adminOf(req, ip), tenantId, userId, grantId, until, body.reason ?? null));
-    return { grantId, frozenUntil: done.frozenUntil?.toISOString() ?? null, configsDisabled: done.configsDisabled };
-  }
-
-  /** And unfreezes it: its end moves by the time it stood still. */
-  @Post('grants/:grantId/unfreeze')
-  @HttpCode(HttpStatus.OK)
-  @actionLimit
-  async unfreeze(
-    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
-    @Param('userId', new ParseUUIDPipe()) userId: string,
-    @Param('grantId', new ParseUUIDPipe()) grantId: string,
-    @Body(new ZodValidationPipe(grantReasonSchema)) body: GrantReasonBody,
-    @Req() req: Request,
-    @Ip() ip: string,
-  ) {
-    const done = await this.refusing(() => this.service.unfreeze(adminOf(req, ip), tenantId, userId, grantId, body.reason ?? null));
-    return { grantId, endsAt: done.endsAt?.toISOString() ?? null, configsRestored: done.configsRestored };
   }
 
   /**
@@ -528,34 +491,39 @@ export class ResellerUserGrantsController {
     try {
       return await fn();
     } catch (e) {
-      if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
-        throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
-      }
-      // Past the tenant's cap (KS-1-c): its figures, so the admin knows what is left.
-      if (e instanceof CompensationOverCap) {
-        throw new ConflictException({ i18nKey: E.compensationOverCap, reason: e.reason, message: e.message, facts: e.facts });
-      }
-      if (e instanceof SpeedCapRefused) {
-        throw new ConflictException({ reason: e.reason, panels: e.panels, message: e.message });
-      }
-      if (e instanceof EntitlementRefused) {
-        const payload = { reason: e.reason, message: e.message };
-        if (e.reason === 'grant_not_found') throw new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
-        if (e.reason === 'variant_not_found') throw new NotFoundException({ i18nKey: E.invoice.variantNotFound, ...payload });
-        if (GRANT_ACTION_STATUS[e.reason] === 400) throw new BadRequestException(payload);
-        if (GRANT_ACTION_STATUS[e.reason] === 409) throw new ConflictException(payload);
-        throw e;
-      }
-      // The reseller's own limit (ADR-0106: issued by hand, F-019-p; platform panels, F-019-o): its figures, so the admin knows what to ask to raise.
-      if (e instanceof ResellerLimitReached) {
-        throw new ConflictException({ i18nKey: E.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
-      }
-      // Past its package quota for the product (F-019-v6): the engine's one refusal shape, figures included — the admin is the reseller.
-      if (e instanceof ResellerQuotaExhausted) throw new ConflictException({ ...e.refusal, message: e.message });
-      if (!(e instanceof ResellerUserGrantsRefused)) throw e;
-      throw resellerRefusal(e);
+      throw grantActRefusal(e);
     }
   }
+}
+
+/** A refusal of an admin's act on a user's service as its HTTP answer (shared with the freeze routes, F-0401-d); anything else unchanged. */
+export function grantActRefusal(e: unknown): unknown {
+  if (e instanceof ConfigActionRefused && e.reason === 'grant_not_found') {
+    return new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+  }
+  // Past the tenant's cap (KS-1-c): its figures, so the admin knows what is left.
+  if (e instanceof CompensationOverCap) {
+    return new ConflictException({ i18nKey: E.compensationOverCap, reason: e.reason, message: e.message, facts: e.facts });
+  }
+  if (e instanceof SpeedCapRefused) {
+    return new ConflictException({ reason: e.reason, panels: e.panels, message: e.message });
+  }
+  if (e instanceof EntitlementRefused) {
+    const payload = { reason: e.reason, message: e.message };
+    if (e.reason === 'grant_not_found') return new NotFoundException({ i18nKey: E.grant.notFound, ...payload });
+    if (e.reason === 'variant_not_found') return new NotFoundException({ i18nKey: E.invoice.variantNotFound, ...payload });
+    if (GRANT_ACTION_STATUS[e.reason] === 400) return new BadRequestException(payload);
+    if (GRANT_ACTION_STATUS[e.reason] === 409) return new ConflictException(payload);
+    return e;
+  }
+  // The reseller's own limit (ADR-0106: issued by hand, F-019-p; platform panels, F-019-o): its figures, so the admin knows what to ask to raise.
+  if (e instanceof ResellerLimitReached) {
+    return new ConflictException({ i18nKey: E.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
+  }
+  // Past its package quota for the product (F-019-v6): the engine's one refusal shape, figures included — the admin is the reseller.
+  if (e instanceof ResellerQuotaExhausted) return new ConflictException({ ...e.refusal, message: e.message });
+  if (!(e instanceof ResellerUserGrantsRefused)) return e;
+  return resellerRefusal(e);
 }
 
 /** A refusal of this surface's door or user fence, as its status (shared with the search, F-311-t). */
@@ -578,4 +546,4 @@ export const actorOf = (req: Request) => {
 };
 
 /** A write's actor also carries the address its audit row keeps (F-311-r). */
-const adminOf = (req: Request, ip: string) => ({ ...actorOf(req), ip });
+export const adminOf = (req: Request, ip: string) => ({ ...actorOf(req), ip });

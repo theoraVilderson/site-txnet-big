@@ -294,7 +294,9 @@
     "linesChangedTitle": "Update your subscription",
     "linesChanged": "🔄 The connection settings of your service were changed on the server. Open your VPN app and update the subscription; if you added a config by hand, copy it again from My services.",
     "linesChangedMany": "🔄 The connection settings of {{count}} of your services were changed on the server. Open your VPN app and update their subscriptions; configs added by hand are in My services to copy again.",
-    "linesChangedManyTitle": "Update {{count}} subscriptions"
+    "linesChangedManyTitle": "Update {{count}} subscriptions",
+    "selfUnfreezeLine": "🔓 You can resume it yourself on My services.",
+    "supportUnfreezeLine": "🔒 Only support can resume it."
   },
   "resellerQuota": {
     "nearing": "📊 {{quota}}: 80% of the {{included}} included in your package this period is used.",

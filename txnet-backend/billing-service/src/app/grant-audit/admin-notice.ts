@@ -1,9 +1,10 @@
-import { Prisma } from '@prisma/client';
+import { FreezeMode, Prisma } from '@prisma/client';
 import { OutboxEventType, remainingLabel } from '@txnet-backend/shared-core';
 
 import type { AdminRenewed } from '../entitlement/admin-renewal';
 import type { DeviceLimitChange } from '../entitlement/devices';
 import type { DurationChange } from '../entitlement/duration';
+import { type Freeze, type FreezeModeChange, userMayUnfreeze } from '../entitlement/freeze';
 import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import type { TrafficChange } from '../entitlement/traffic';
 import { PANEL_MY_SERVICES_PATH, panelUrlOf } from '../request/panel-url';
@@ -23,6 +24,12 @@ type AdminNotice = { type: OutboxEventType; params: Record<string, string>; serv
 const reactivated = (result: { reactivated?: boolean }) => (result.reactivated ? { reactivated: 'yes' } : {});
 
 /**
+ * Who may lift the freeze, said as the notice's closing line (F-0401-d): the
+ * user, or support. A mode change is told as the freeze it now is.
+ */
+const liftLine = (mode: FreezeMode) => (userMayUnfreeze({ freezeMode: mode, awaitingPanel: false }) ? { selfUnfreeze: 'yes' } : { supportUnfreeze: 'yes' });
+
+/**
  * What the user is told of an admin's act on their service (F-311-s): every
  * act on a Grant has one. Only the act's direction and size — never the
  * admin's reason, which is staff's, and never a rotated link.
@@ -30,7 +37,8 @@ const reactivated = (result: { reactivated?: boolean }) => (result.reactivated ?
 export function adminNoticeOf(action: GrantAuditAction, result: unknown): AdminNotice {
   switch (action) {
     case 'grant_freeze':
-      return { type: OutboxEventType.GRANT_ADMIN_FROZEN, params: {} };
+    case 'grant_freeze_mode_set':
+      return { type: OutboxEventType.GRANT_ADMIN_FROZEN, params: liftLine((result as Freeze | FreezeModeChange).freezeMode) };
     case 'grant_unfreeze':
       return { type: OutboxEventType.GRANT_ADMIN_UNFROZEN, params: {} };
     case 'grant_duration_change': {
@@ -89,16 +97,22 @@ export function configNoticeOf(action: ConfigAuditAction): AdminNotice {
  * however often an admin freezes the same Grant (notification `contract.retention.md`).
  */
 export async function emitAdminNotice(tx: Prisma.TransactionClient, tenantId: string, grantId: string, auditId: string, notice: AdminNotice): Promise<void> {
-  const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { userId: true } });
-  if (!grant) throw new Error(`grant ${grantId} was audited and is gone`);
+  const userId = await ownerOf(tx, grantId);
   const servicesUrl = notice.servicesUrl ? await panelUrlOf(tx, tenantId, PANEL_MY_SERVICES_PATH) : null;
   await tx.outboxEvent.create({
     data: {
       aggregate: GRANT_AGGREGATE,
       aggregateId: grantId,
       type: notice.type,
-      payload: { tenantId, userId: grant.userId, grantId, period: auditId, ...notice.params, ...(servicesUrl ? { servicesUrl } : {}) },
+      payload: { tenantId, userId, grantId, period: auditId, ...notice.params, ...(servicesUrl ? { servicesUrl } : {}) },
     },
     select: { id: true },
   });
+}
+
+/** The audited Grant's owner: whom its notice and its live event go to. */
+export async function ownerOf(tx: Prisma.TransactionClient, grantId: string): Promise<string> {
+  const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { userId: true } });
+  if (!grant) throw new Error(`grant ${grantId} was audited and is gone`);
+  return grant.userId;
 }

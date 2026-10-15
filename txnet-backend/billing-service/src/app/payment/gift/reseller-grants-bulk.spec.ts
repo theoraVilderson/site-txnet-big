@@ -43,8 +43,9 @@ function step<T>(fn: string, grantId: string, input: unknown, result: T): Promis
   return e ? Promise.reject(e) : Promise.resolve(result);
 }
 
-vi.mock('../../entitlement/freeze', () => ({
-  freezeGrant: (_tx: unknown, id: string, input: unknown) => step('freeze', id, input, { frozenUntil: null, configsDisabled: 2 }),
+vi.mock('../../entitlement/freeze', async (real) => ({
+  ...(await real<typeof import('../../entitlement/freeze')>()),
+  freezeGrant: (_tx: unknown, id: string, input: unknown) => step('freeze', id, input, { frozenUntil: null, configsDisabled: 2, freezeMode: 'hard' }),
   unfreezeGrant: (_tx: unknown, id: string) => step('unfreeze', id, null, { endsAt: new Date('2026-10-10T00:00:00Z'), configsRestored: 2 }),
 }));
 vi.mock('../../entitlement/duration', () => ({
@@ -187,7 +188,7 @@ describe('ResellerUserGrantsService.bulk (F-311-u)', () => {
 
     expect(results).toEqual([
       { grantId: FOREIGN, ok: false, reason: 'grant_not_found' },
-      { grantId: G1, userId: 'u1', ok: true, result: { frozenUntil: null, configsDisabled: 2 } },
+      { grantId: G1, userId: 'u1', ok: true, result: { frozenUntil: null, configsDisabled: 2, freezeMode: 'hard' } },
     ]);
     expect(reads.every((r) => r.tenantId === RESELLER)).toBe(true);
     expect(calls.map((c) => c.grantId)).toEqual([G1]);

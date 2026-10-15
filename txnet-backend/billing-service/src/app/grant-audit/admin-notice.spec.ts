@@ -56,7 +56,7 @@ function fakeTx(log: string[], outbox: Row[]) {
 }
 
 const TOLD: { name: string; action: GrantAuditAction; result: unknown; type: string; params: Row }[] = [
-  { name: 'a freeze', action: 'grant_freeze', result: { frozenUntil: null, configsDisabled: 2 }, type: OutboxEventType.GRANT_ADMIN_FROZEN, params: {} },
+  { name: 'a freeze', action: 'grant_freeze', result: { frozenUntil: null, configsDisabled: 2, freezeMode: 'hard' }, type: OutboxEventType.GRANT_ADMIN_FROZEN, params: { supportUnfreeze: 'yes' } },
   { name: 'an unfreeze', action: 'grant_unfreeze', result: { endsAt: at(24 * 30), configsRestored: 2 }, type: OutboxEventType.GRANT_ADMIN_UNFROZEN, params: {} },
   {
     name: 'days added',
@@ -125,8 +125,10 @@ describe("an admin's act on a service is told to its owner (F-311-s)", () => {
   it.each(TOLD)('$name: one $type row after the audit row, the act its period', async (c) => {
     const { log, outbox } = await act(c.action, c.result);
 
-    expect(log).toEqual(['act', 'audit', 'notice']);
-    expect(outbox).toEqual([
+    // A freeze act also writes its owner's page re-read, after the notice (F-0401-d); `admin-freeze-mode.spec.ts` holds it.
+    const notices = outbox.filter((r) => r.type !== OutboxEventType.GRANT_FREEZE_CHANGED);
+    expect(log.slice(0, 3)).toEqual(['act', 'audit', 'notice']);
+    expect(notices).toEqual([
       {
         aggregate: 'entitlement.grant',
         aggregateId: GRANT,

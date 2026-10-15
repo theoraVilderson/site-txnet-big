@@ -41,6 +41,8 @@ export type EntitlementRejection =
   | 'grant_not_frozen'
   /** The user's unfreeze (F-0401-a): a hard freeze, or one an evict left waiting for a panel — only an admin or the sweep lifts it. */
   | 'freeze_not_users'
+  /** An admin's change of a frozen Grant's mode (F-0401-d): the mode it already has. */
+  | 'freeze_mode_unchanged'
   /** The user's own freeze (F-0401-c): their reseller turned it off (`selfFreezeEnabled`). */
   | 'self_freeze_off'
   /** The user's fourth freeze of a Grant in 24 hours (F-0401-c, `SelfFreezeLimited`): nothing frozen. */

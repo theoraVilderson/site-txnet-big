@@ -104,7 +104,7 @@ describe('freezeGrant', () => {
 
     const result = await freezeGrant(tx, GRANT, { at });
 
-    expect(result).toEqual({ frozenUntil: null, configsDisabled: 2 });
+    expect(result).toEqual({ frozenUntil: null, configsDisabled: 2, freezeMode: FreezeMode.hard });
     expect(grant).toMatchObject({ status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, suspendedAt: at, frozenUntil: null });
     // An admin's freeze with no mode is today's: hard, clock stopped (F-0401-a).
     expect(grant).toMatchObject({ freezeMode: FreezeMode.hard, freezeStopsClock: true });
@@ -207,7 +207,7 @@ describe('a freeze has a mode (F-0401-a)', () => {
   it('raises a weaker freeze in place: the clock it started with and its configs untouched', async () => {
     const { tx, grant, grants, configs } = frozen(FreezeMode.self, { freezeStopsClock: false });
     const result = await freezeGrant(tx, GRANT, { at, mode: FreezeMode.hard });
-    expect(result).toEqual({ frozenUntil: null, configsDisabled: 0 });
+    expect(result).toEqual({ frozenUntil: null, configsDisabled: 0, freezeMode: FreezeMode.hard });
     expect(grant).toMatchObject({ freezeMode: FreezeMode.hard, freezeStopsClock: false, suspendedAt: frozenAt });
     // Conditional on the mode it read: two raises at once land one.
     expect(grants[0].where).toMatchObject({ id: GRANT, status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, freezeMode: FreezeMode.self });

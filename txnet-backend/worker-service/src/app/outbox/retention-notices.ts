@@ -75,7 +75,8 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_RUNS_OUT_WITHIN_A_DAY]: { template: 'serviceRunsOutWithinADay', params: ['remaining'] },
   // F-311-s: an admin's act on the service, told once per act (period = its audit row); never muted. `reactivated`: the act
   // also brought a stopped service back, said as the message's closing line instead of a second "active again".
-  [OutboxEventType.GRANT_ADMIN_FROZEN]: { template: 'serviceFrozenByAdmin', params: [] },
+  // F-0401-d: who may lift it — the user (a soft freeze) or support (hard) — as its closing line; a mode change is told so too.
+  [OutboxEventType.GRANT_ADMIN_FROZEN]: { template: 'serviceFrozenByAdmin', params: [], optional: ['selfUnfreeze', 'supportUnfreeze'] },
   [OutboxEventType.GRANT_ADMIN_UNFROZEN]: { template: 'serviceUnfrozenByAdmin', params: [] },
   [OutboxEventType.GRANT_ADMIN_DAYS_ADDED]: { template: 'serviceDaysAddedByAdmin', params: ['days'], optional: ['reactivated'] },
   [OutboxEventType.GRANT_ADMIN_DAYS_REMOVED]: { template: 'serviceDaysRemovedByAdmin', params: ['days'] },

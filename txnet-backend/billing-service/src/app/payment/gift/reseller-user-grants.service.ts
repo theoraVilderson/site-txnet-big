@@ -17,7 +17,7 @@ import { AdminRenew, AdminRenewed, renewGrantByAdmin } from '../../entitlement/a
 import { deleteGrant, Deletion } from '../../entitlement/delete';
 import { DeviceLimitChange, setGrantDeviceLimit } from '../../entitlement/devices';
 import { changeGrantDuration, DurationChange, DurationMove } from '../../entitlement/duration';
-import { Freeze, freezeGrant, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
+import { AdminFreezeMode, Freeze, freezeGrant, FreezeInput, FreezeModeChange, setFreezeMode, Unfreeze, unfreezeGrant } from '../../entitlement/freeze';
 import { EntitlementRefused, GrantPage, GrantService, TenantGrantView } from '../../entitlement/grant';
 import { adjustGrantTraffic, resetGrantTraffic, TrafficChange, TrafficReset } from '../../entitlement/traffic';
 import { giftGrantBytes, giverOf } from '../../traffic/gift-bytes';
@@ -190,17 +190,17 @@ export class ResellerUserGrantsService {
   }
 
   /**
-   * An admin freezes this user's Grant (F-311-h), until `until` or until
-   * unfrozen: `staffWrite`, as for a config action. A Grant of another user
-   * is `grant_not_found`, never frozen.
+   * An admin freezes this user's Grant (F-311-h) — until `until` or lifted, `mode` hard (absent) or soft (F-0401-d) —
+   * unfreezes it, its end moved by the frozen time, or changes its mode. `staffWrite`; another user's Grant is `grant_not_found`.
    */
-  freeze(actor: AdminActor, tenantId: string, userId: string, grantId: string, until: Date | null, reason: string | null): Promise<Freeze> {
-    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_freeze', reason, outcome: (r) => r }, (tx) => freezeGrant(tx, grantId, { at: new Date(), until }));
+  freeze(actor: AdminActor, tenantId: string, userId: string, grantId: string, input: Omit<FreezeInput, 'at' | 'stopsClock'>, reason: string | null): Promise<Freeze> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_freeze', reason, outcome: (r) => r }, (tx) => freezeGrant(tx, grantId, { at: new Date(), ...input }));
   }
-
-  /** An admin unfreezes it: the frozen time is added to its end (F-311-h). */
   unfreeze(actor: AdminActor, tenantId: string, userId: string, grantId: string, reason: string | null): Promise<Unfreeze> {
     return this.audited(actor, tenantId, userId, grantId, { action: 'grant_unfreeze', reason, outcome: (r) => r }, (tx) => unfreezeGrant(tx, grantId, new Date()));
+  }
+  setFreezeMode(actor: AdminActor, tenantId: string, userId: string, grantId: string, mode: AdminFreezeMode, reason: string | null): Promise<FreezeModeChange> {
+    return this.audited(actor, tenantId, userId, grantId, { action: 'grant_freeze_mode_set', reason, outcome: (r) => r }, (tx) => setFreezeMode(tx, grantId, mode));
   }
 
   /**

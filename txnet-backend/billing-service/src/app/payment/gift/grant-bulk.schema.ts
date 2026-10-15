@@ -32,7 +32,7 @@ const days = z.number({ message: E.configActionInvalid }).int({ message: E.confi
 export const grantBulkSchema = z.discriminatedUnion(
   'action',
   [
-    z.object({ requestId, action: z.literal('freeze'), grantIds, until: grantFreezeSchema.shape.until, reason }).strict(),
+    z.object({ requestId, action: z.literal('freeze'), grantIds, until: grantFreezeSchema.shape.until, mode: grantFreezeSchema.shape.mode, reason }).strict(),
     z.object({ requestId, action: z.literal('unfreeze'), grantIds, reason }).strict(),
     z.object({ requestId, action: z.literal('days'), grantIds, days, reason }).strict(),
     z.object({ requestId, action: z.literal('traffic'), grantIds, gb: grantTrafficSchema.shape.gb, reason }).strict(),

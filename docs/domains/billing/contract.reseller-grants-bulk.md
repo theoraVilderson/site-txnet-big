@@ -23,7 +23,7 @@ body `grant-bulk.schema.ts`.
 
 | `action` | Its own input (the single route's bounds) | `result` of an `ok` Grant |
 |---|---|---|
-| `freeze` | `until?` (ISO instant with offset) | `{frozenUntil, configsDisabled}` |
+| `freeze` | `until?` (ISO instant with offset), `mode?` `hard` (absent) \| `soft` (F-0401-d) | `{frozenUntil, configsDisabled, freezeMode}` |
 | `unfreeze` | — | `{endsAt, configsRestored}` |
 | `days` | `days`, whole ±1..3650 — **relative only**, no `endsAt` | `{changeId, endsAtBefore, endsAtAfter, revived}` |
 | `traffic` | `gb`, ±GiB, never 0, \|gb\| ≤ 100 000 | `{adjustmentId, purchasedBytesBefore, purchasedBytesAfter, usedBytes, spent, revived}` |

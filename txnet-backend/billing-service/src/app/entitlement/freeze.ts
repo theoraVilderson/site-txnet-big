@@ -13,7 +13,8 @@ import { ADMIN_FROZEN } from './suspension';
 
 export { ADMIN_FROZEN };
 
-export type Freeze = { frozenUntil: Date | null; configsDisabled: number };
+/** `freezeMode` is the mode the Grant holds after the act — the notice names who may lift it (F-0401-d). */
+export type Freeze = { frozenUntil: Date | null; configsDisabled: number; freezeMode: FreezeMode };
 export type Unfreeze = { endsAt: Date | null; configsRestored: number };
 
 /** Hard beats soft beats self (F-0401-a): a freeze replaces one in place only by beating it. */
@@ -21,6 +22,10 @@ const FREEZE_MODE_RANK: Record<FreezeMode, number> = { [FreezeMode.self]: 1, [Fr
 
 /** The freezes a user lifts themselves (F-0401-a): an admin's soft one, and their own. */
 const USER_LIFTED: readonly FreezeMode[] = [FreezeMode.soft, FreezeMode.self];
+
+/** The modes an admin freezes with (F-0401-d): `self` is the user's own act, never handed out. */
+export const ADMIN_FREEZE_MODES = [FreezeMode.hard, FreezeMode.soft] as const;
+export type AdminFreezeMode = (typeof ADMIN_FREEZE_MODES)[number];
 
 /** Whether a freeze of `mode` overrides one of `held` (F-0401-a). */
 export function freezeModeBeats(mode: FreezeMode, held: FreezeMode): boolean {
@@ -107,7 +112,7 @@ export async function freezeGrant(tx: Prisma.TransactionClient, grantId: string,
     where: { grantId, desiredEnabled: true },
     data: { desiredEnabled: false },
   });
-  return { frozenUntil: until, configsDisabled: disabled.count };
+  return { frozenUntil: until, configsDisabled: disabled.count, freezeMode: mode };
 }
 
 /**
@@ -126,7 +131,31 @@ async function raiseFreeze(
     data: { freezeMode: raise.mode, frozenUntil: raise.until },
   });
   if (moved.count === 0) throw new EntitlementRefused('grant_moved');
-  return { frozenUntil: raise.until, configsDisabled: 0 };
+  return { frozenUntil: raise.until, configsDisabled: 0, freezeMode: raise.mode };
+}
+
+export type FreezeModeChange = { freezeModeBefore: FreezeMode; freezeMode: AdminFreezeMode };
+
+/**
+ * An admin changes who may lift a frozen Grant (F-0401-d): hard to soft or
+ * back, or over the user's own freeze, in any direction — unlike a freeze,
+ * which only raises. The mode alone moves: the clock keeps what the first
+ * freeze fixed, the timed end and the configs stay. Conditional on the mode
+ * read, so a change racing another is `grant_moved`.
+ */
+export async function setFreezeMode(tx: Prisma.TransactionClient, grantId: string, mode: AdminFreezeMode): Promise<FreezeModeChange> {
+  const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { status: true, statusReason: true, freezeMode: true } });
+  if (!grant) throw new EntitlementRefused('grant_not_found');
+  if (!isFrozen(grant)) throw new EntitlementRefused('grant_not_frozen', grant.status);
+  // A freeze from before F-0401-a with no mode read was an admin's, hard.
+  const held = grant.freezeMode ?? FreezeMode.hard;
+  if (held === mode) throw new EntitlementRefused('freeze_mode_unchanged', mode);
+  const moved = await tx.grant.updateMany({
+    where: { id: grantId, status: GrantStatus.suspended, statusReason: ADMIN_FROZEN, freezeMode: grant.freezeMode },
+    data: { freezeMode: mode },
+  });
+  if (moved.count === 0) throw new EntitlementRefused('grant_moved');
+  return { freezeModeBefore: held, freezeMode: mode };
 }
 
 function isFrozen(grant: { status: GrantStatus; statusReason: string | null }): boolean {

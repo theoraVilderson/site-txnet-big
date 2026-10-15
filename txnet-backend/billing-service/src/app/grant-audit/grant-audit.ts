@@ -1,6 +1,7 @@
 import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 
-import { adminNoticeOf, configNoticeOf, emitAdminNotice } from './admin-notice';
+import { emitFreezeChanged } from '../entitlement/freeze';
+import { adminNoticeOf, configNoticeOf, emitAdminNotice, ownerOf } from './admin-notice';
 import type { FreezeSettings } from '../entitlement/freeze-settings';
 
 /**
@@ -25,6 +26,7 @@ export type GrantAuditAction = Extract<
   AdminAction,
   | 'grant_freeze'
   | 'grant_unfreeze'
+  | 'grant_freeze_mode_set'
   | 'grant_duration_change'
   | 'grant_traffic_change'
   | 'grant_traffic_reset'
@@ -74,8 +76,12 @@ export async function auditedGrantAct<T>(
   const after = await tx.grant.findUnique({ where: { id: target }, select: GRANT_STATE });
   const auditId = await write(tx, actor, tenantId, spec.action, AuditTargetType.grant, target, before, { ...after, outcome: spec.outcome?.(result) }, spec.reason);
   await emitAdminNotice(tx, tenantId, target, auditId, adminNoticeOf(spec.action, result));
+  if (FREEZE_ACTIONS.has(spec.action)) await emitFreezeChanged(tx, { tenantId, userId: await ownerOf(tx, target), grantId: target });
   return result;
 }
+
+/** The acts that freeze, lift or re-mode a Grant: its owner's My services re-reads on each (C-14, F-0401-d). */
+const FREEZE_ACTIONS: ReadonlySet<GrantAuditAction> = new Set(['grant_freeze', 'grant_unfreeze', 'grant_freeze_mode_set']);
 
 /** One config's act (F-311-g), written down against the config; a move's new config is its outcome. */
 export async function auditedConfigAct<T extends string | void>(

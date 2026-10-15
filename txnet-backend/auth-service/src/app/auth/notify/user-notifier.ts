@@ -1017,17 +1017,17 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
 };
 
 /**
- * Lines a notice ends with when it was given their param; one without it reads
- * whole. An admin's act that also brought a stopped service back
- * (`reactivated`, F-311-s — one message, not a second "active again"), a
- * delivered purchase's My services page (`servicesUrl`, F-601-h), the
- * tenant's support link (`supportUrl`, F-601-c).
+ * Lines a notice ends with when given their param; one without reads whole: a
+ * stopped service back in the same message (`reactivated`, F-311-s), My services (`servicesUrl`,
+ * F-601-h), support (`supportUrl`, F-601-c), who may lift a freeze (F-0401-d),
+ * the keys a role edit gave and took, by their labels (AC-1-s, `withKeyLabels`).
  */
 const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
   { param: 'reactivated', read: (ns) => ns?.retention?.reactivatedLine, fallback: '✅ Your service is active again and reconnects within a few minutes — its link stays the same.' },
   { param: 'servicesUrl', read: (ns) => ns?.purchase?.servicesLine, fallback: '👉 Open it: {{servicesUrl}}' },
   { param: 'supportUrl', read: (ns) => ns?.retention?.supportLine, fallback: '🛟 Support: {{supportUrl}}' },
-  // AC-1-s: the keys a role edit gave and took, by their labels (`withKeyLabels`).
+  { param: 'selfUnfreeze', read: (ns) => ns?.retention?.selfUnfreezeLine, fallback: '🔓 You can resume it yourself on My services.' },
+  { param: 'supportUnfreeze', read: (ns) => ns?.retention?.supportUnfreezeLine, fallback: '🔒 Only support can resume it.' },
   { param: 'given', read: (ns) => ns?.access?.givenLine, fallback: '➕ Now allowed: {{given}}' },
   { param: 'taken', read: (ns) => ns?.access?.takenLine, fallback: '➖ No longer allowed: {{taken}}' },
 ];

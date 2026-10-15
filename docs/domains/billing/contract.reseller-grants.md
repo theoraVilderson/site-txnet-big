@@ -77,20 +77,9 @@ controller, over `ResellerUserGrantsService.act` -> `UserConfigsService.actAsAdm
 | A move goes to a panel shared or dedicated to the Grant's tenant, not archived, not the config's own (`panel_not_found`, `same_panel`), and only while the Grant is `active` (`grant_not_active`) — `ConfigActionsService.move`, unchanged | the new row is provisioned like a purchase's |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, default **60**/900s per caller, per request | acting must not spend the budget for looking |
 
-## An admin freezes one of a user's Grants (built — F-311-h)
+## An admin freezes one of a user's Grants (built — F-311-h, F-0401-d)
 
-`POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/freeze`, body
-`{until?, reason?}` (ISO instant with offset) -> `{grantId, frozenUntil, configsDisabled}`;
-`POST …/grants/:grantId/unfreeze`, `{reason?}` or no body -> `{grantId, endsAt, configsRestored}`. Same
-controller, over `freezeGrant` / `unfreezeGrant` (entitlement `contract.admin.md` "Freeze").
-
-| Rule | Why |
-|---|---|
-| Door `staffWrite`, the reseller's user (**404** `user_not_found`) and **the path user's Grant** (**404** `grant_not_found`, read in the write's transaction) — as for config actions | the same fences |
-| **409** `grant_not_active` (freeze), `grant_not_frozen` / `grant_moved` (unfreeze); **400** `freeze_until_not_future` | a quota stop stays the top-up's; a raced end is retried, never shifted twice |
-| Bucket `RESELLER_USER_CONFIG_ACTION`, shared with the config actions | both are an admin's writes on a user's service |
-
-**Not covered:** telling the user (F-311-s).
+Freeze, unfreeze and a frozen Grant's mode, hard or soft: [contract.reseller-grants-freeze.md](contract.reseller-grants-freeze.md).
 
 ## An admin changes one of a user's Grants' days (built — F-311-i)
 

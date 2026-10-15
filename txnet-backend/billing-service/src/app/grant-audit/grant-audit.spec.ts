@@ -18,9 +18,11 @@ import { EntitlementRefused } from '../entitlement/grant';
 import { ResellerUserGrantsService } from '../payment/gift/reseller-user-grants.service';
 import { UserConfigsService } from '../traffic/user-configs';
 
-vi.mock('../entitlement/freeze', () => ({
-  freezeGrant: vi.fn(async () => (log.push('act'), { frozenUntil: null, configsDisabled: 2 })),
+vi.mock('../entitlement/freeze', async (real) => ({
+  ...(await real<typeof import('../entitlement/freeze')>()),
+  freezeGrant: vi.fn(async () => (log.push('act'), { frozenUntil: null, configsDisabled: 2, freezeMode: 'hard' })),
   unfreezeGrant: vi.fn(async () => (log.push('act'), { endsAt: new Date('2026-10-30T00:00:00Z'), configsRestored: 2 })),
+  setFreezeMode: vi.fn(async () => (log.push('act'), { freezeModeBefore: 'hard', freezeMode: 'soft' })),
 }));
 vi.mock('../entitlement/duration', () => ({
   changeGrantDuration: vi.fn(async () => (log.push('act'), { changeId: 'c1', endsAtBefore: new Date('2026-10-01T00:00:00Z'), endsAtAfter: new Date('2026-10-08T00:00:00Z'), revived: false })),
@@ -130,7 +132,8 @@ type Case = { method: string; action: AdminAction; reason: string | null; call: 
 
 /** Every write `ResellerUserGrantsService` offers. A new write method is one line here. */
 const EVERY_WRITE: Case[] = [
-  { method: 'freeze', action: 'grant_freeze', reason: 'chargeback', call: (s) => s.freeze(admin, RESELLER, CUSTOMER, GRANT, null, 'chargeback') },
+  { method: 'freeze', action: 'grant_freeze', reason: 'chargeback', call: (s) => s.freeze(admin, RESELLER, CUSTOMER, GRANT, { until: null }, 'chargeback') },
+  { method: 'setFreezeMode', action: 'grant_freeze_mode_set', reason: 'paid back', call: (s) => s.setFreezeMode(admin, RESELLER, CUSTOMER, GRANT, 'soft', 'paid back') },
   { method: 'unfreeze', action: 'grant_unfreeze', reason: null, call: (s) => s.unfreeze(admin, RESELLER, CUSTOMER, GRANT, null) },
   { method: 'changeDuration', action: 'grant_duration_change', reason: 'outage', call: (s) => s.changeDuration(admin, RESELLER, CUSTOMER, GRANT, { days: 7 }, 'outage') },
   { method: 'changeTraffic', action: 'grant_traffic_change', reason: 'goodwill', call: (s) => s.changeTraffic(admin, RESELLER, CUSTOMER, GRANT, BigInt(10), 'goodwill') },
@@ -180,13 +183,17 @@ describe('an admin action on a Grant or config writes a row (F-311-r)', () => {
 
   it("tells the Grant's owner of a told act, in the reseller's transaction (F-311-s)", async () => {
     const { service, notices } = build();
-    await service.freeze(admin, RESELLER, CUSTOMER, GRANT, null, 'chargeback');
-    expect(notices).toEqual([expect.objectContaining({ type: 'entitlement.grant.admin_frozen', payload: expect.objectContaining({ userId: CUSTOMER, grantId: GRANT }), scope: RESELLER })]);
+    await service.freeze(admin, RESELLER, CUSTOMER, GRANT, { until: null }, 'chargeback');
+    expect(notices).toEqual([
+      expect.objectContaining({ type: 'entitlement.grant.admin_frozen', payload: expect.objectContaining({ userId: CUSTOMER, grantId: GRANT }), scope: RESELLER }),
+      // And the owner's My services re-reads it (F-0401-d, C-14).
+      expect.objectContaining({ type: 'entitlement.grant.freeze_changed', payload: { tenantId: RESELLER, userId: CUSTOMER, grantId: GRANT }, scope: RESELLER }),
+    ]);
   });
 
   it('writes the state on either side of the act, bytes as text', async () => {
     const { service, rows } = build();
-    await service.freeze(admin, RESELLER, CUSTOMER, GRANT, null, 'chargeback');
+    await service.freeze(admin, RESELLER, CUSTOMER, GRANT, { until: null }, 'chargeback');
     expect(rows[0].oldValue).toMatchObject({ status: 'active', purchasedBytes: '10' });
     expect(rows[0].newValue).toMatchObject({ status: 'suspended', purchasedBytes: '10', outcome: { configsDisabled: 2 } });
   });
@@ -203,7 +210,7 @@ describe('an admin action on a Grant or config writes a row (F-311-r)', () => {
     vi.mocked(freezeGrant).mockRejectedValueOnce(new EntitlementRefused('grant_not_active'));
     const { service, rows } = build();
 
-    await expect(service.freeze(admin, RESELLER, CUSTOMER, GRANT, null, 'x')).rejects.toThrow(EntitlementRefused);
+    await expect(service.freeze(admin, RESELLER, CUSTOMER, GRANT, { until: null }, 'x')).rejects.toThrow(EntitlementRefused);
     repeat = true;
     await service.renew(admin, RESELLER, CUSTOMER, GRANT, { requestId: 'req-2', reason: null });
     await service.issue(admin, RESELLER, CUSTOMER, 'v1', 'req-1', null);

@@ -156,6 +156,8 @@ enum AdminAction {
   // the user, and the day's freezes are counted from these rows.
   grant_self_freeze
   grant_self_unfreeze
+  // F-0401-d. An admin changed who may lift a frozen Grant: hard or soft.
+  grant_freeze_mode_set
   // F-019-m (ADR-0106). A reseller limit set or cleared at one level.
   reseller_limit_set
   reseller_limit_clear

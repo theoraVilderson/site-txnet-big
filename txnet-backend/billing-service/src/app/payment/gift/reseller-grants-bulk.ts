@@ -151,8 +151,8 @@ async function act(tx: Prisma.TransactionClient, audited: Audited, actor: BulkAc
   const { reason } = command;
   switch (command.action) {
     case 'freeze': {
-      const r = await audited(() => freezeGrant(tx, grantId, { at, until: command.until ? new Date(command.until) : null }));
-      return { frozenUntil: r.frozenUntil?.toISOString() ?? null, configsDisabled: r.configsDisabled };
+      const r = await audited(() => freezeGrant(tx, grantId, { at, until: command.until ? new Date(command.until) : null, mode: command.mode }));
+      return { frozenUntil: r.frozenUntil?.toISOString() ?? null, configsDisabled: r.configsDisabled, freezeMode: r.freezeMode };
     }
     case 'unfreeze': {
       const r = await audited(() => unfreezeGrant(tx, grantId, at));
