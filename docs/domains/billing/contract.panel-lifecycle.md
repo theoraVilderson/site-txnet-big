@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 47
-updated: 2026-09-26
+version: 48
+updated: 2026-10-15
 ---
 
 # Systems — a panel after registration
@@ -19,7 +19,7 @@ its next tick.
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `facts.panelId` when in scope (rule 2a) |
+| `PATCH /api/billing/systems/panels/:id` | any of `name` (1–100), `region` (1–50), `ipAddress` (v4/v6 \| null), `apiBaseUrl` (URL ≤500, never null), `clientBaseUrl` (URL ≤500 \| null), `maxRequestsPerMinute` (1–6000), `ovpnProfile` (text ≤64 KiB \| null, rule 5a), `addressMayMove` (boolean, rule 5b); at least one; `.strict()` | `200 {id, reviewState, retest}` | 400; 403; 404 `not_found`; 409 `not_for_transport` / `not_for_driver` / `panel_retired` / `panel_already_registered` + `facts.panelId` when in scope (rule 2a) |
 | `DELETE /api/billing/systems/panels/:id` | `?orphans=pause\|refund` (optional; rule 6a) | `200 {id, outcome: 'deleted' \| 'archived' \| 'removing', groups?}` | 400; 403; 404 `not_found`; 409 `panel_in_group` / `panel_has_configs` / `panel_retired` |
 | `GET /api/billing/systems/panels/:id/remove-preview` | — | `{groups, liveConfigs, soleLineGrants}`, summed over its groups (rule 6a) | 400; 403; 404 `not_found` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` / `panel_already_registered` |
@@ -66,8 +66,12 @@ its next tick.
    `auth-user-pass`, and a `<key>` block or PEM private key is a 400. It is a
    file for buyers, not an address: no re-test. The panel list answers it back
    as `ovpnProfile` for the edit form.
+5b. **The CDN opt-out (F-027-fa, ADR-0130 decision 4).** `addressMayMove`
+   lets a panel behind a CDN be dialed wherever its name resolves, never
+   halted `address_moved` (`network/contract.address.md` rule 7). A setting,
+   not an address: no re-test. The panel list answers it back.
 
-`panel-edit.spec.ts` pins rules 1–4, 5a and the scope.
+`panel-edit.spec.ts` pins rules 1–4, 5a, 5b and the scope.
 
 ## Deleting a panel — the rules (F-027-bz)
 

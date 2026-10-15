@@ -5,6 +5,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { drainConfigs, soleLineGrants } from '../traffic/group-drain';
 import { PrismaService } from '../prisma/prisma.service';
 import { claimingAddress, claimingPushAddress } from './panel-address';
+import { PANEL_RETEST } from './panel-retest';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -18,6 +19,8 @@ export type PanelSettingsInput = {
   maxRequestsPerMinute?: number;
   /** A User Manager router's shared `.ovpn` (F-307-d); null clears it. */
   ovpnProfile?: string | null;
+  /** Behind a CDN: dialed wherever its name resolves, never halted for a move (F-027-fa, ADR-0130). */
+  addressMayMove?: boolean;
 };
 
 /** The addresses the connection test reached: changing one may point at another server. */
@@ -73,19 +76,7 @@ export class PanelLifecycleService {
     }
 
     const retest = TESTED_ADDRESSES.some((k) => input[k] !== undefined && input[k] !== panel[k]);
-    const data = {
-      ...input,
-      ...(retest
-        ? {
-            reviewState: PanelReviewState.pending,
-            connectionTestedAt: null,
-            connectionTestFault: null,
-            connectionTestDetail: null,
-            // A duplicate's name goes with its refusal (CHECK `panel_duplicate_is_refused`, F-027-ce).
-            duplicateOfPanelId: null,
-          }
-        : {}),
-    };
+    const data = { ...input, ...(retest ? PANEL_RETEST : {}) };
     // A new API address is one no other panel holds (F-027-cd); its own, re-spelled, is not a duplicate.
     const apiBaseUrl = input.apiBaseUrl !== undefined && input.apiBaseUrl !== panel.apiBaseUrl ? input.apiBaseUrl : undefined;
     // So is a push panel's new IP (F-027-ff); a pull panel's IP feeds no allowlist.
@@ -166,14 +157,7 @@ export class PanelLifecycleService {
     const { count } = await claimingPushAddress(this.all, scope, pushAddress, panelId, () =>
       this.all.panel.updateMany({
         where: { ...where, retiredAt: { not: null } },
-        data: {
-          retiredAt: null,
-          reviewState: PanelReviewState.pending,
-          connectionTestedAt: null,
-          connectionTestFault: null,
-          connectionTestDetail: null,
-          duplicateOfPanelId: null,
-        },
+        data: { retiredAt: null, ...PANEL_RETEST },
       }),
     );
     // Restored by another request between the read and the write.

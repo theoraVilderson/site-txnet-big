@@ -21,7 +21,7 @@ import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
 import { assignMemberInboundsSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
-import { refusing } from './systems.controller';
+import { refusing } from './systems-refusals';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';

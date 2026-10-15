@@ -11,7 +11,6 @@ import {
   HttpException,
   HttpStatus,
   Injectable,
-  NotFoundException,
   Delete,
   Param,
   ParseUUIDPipe,
@@ -70,9 +69,9 @@ import {
   writeOffHoldSchema,
 } from './panel-registration.schema';
 import { PanelScopeRefused, SystemsActor } from './panel-scope';
-import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
-import { PanelAlreadyRegistered } from './panel-address';
-import { SystemsReadService, SystemsRefused, SystemsRejection } from './systems-read';
+import { MemberInboundsService } from './member-inbounds';
+import { SystemsReadService } from './systems-read';
+import { refusing } from './systems-refusals';
 import { UsageHoldsService } from './usage-holds';
 
 /** The permission the systems surface needs (F-027-ar; `panel.manage` until AC-1-d, ADR-0135). SuperAdmin holds it as `*`. */
@@ -104,54 +103,6 @@ const SYSTEMS_ADMIN_READ = {
   configKey: 'SYSTEMS_ADMIN_READ_RATE_LIMIT' as const,
   windowSec: 900,
 };
-
-/** The refusals that are a state already reached, not something absent: 409. */
-const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
-  'already_acknowledged',
-  'already_resolved',
-  'already_member',
-  'already_draining',
-  'no_other_member',
-  'member_has_configs',
-  'inbound_not_sellable',
-  'not_for_transport',
-  'panel_already_registered',
-  'not_for_driver',
-  'panel_in_group',
-  'panel_has_configs',
-  'panel_retired',
-  'panel_not_retired',
-  'group_has_members',
-  'group_in_use',
-  'inbound_assigned_elsewhere',
-  'inbound_has_configs',
-]);
-
-/**
- * The service's refusals as HTTP: the scope is a 403, a panel, group or event
- * outside it a 404. A holder travels as `facts` ids — the envelope drops every
- * other field and a fact is never free text, so the page names it from its own
- * scoped lists (F-027-ci). Exported for the spec that pins that.
- */
-export async function refusing<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (e) {
-    if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
-    if (e instanceof SystemsRefused) {
-      if (e instanceof PanelAlreadyRegistered) {
-        throw new ConflictException({ reason: e.reason, message: e.message, facts: e.panel ? { panelId: e.panel.id } : undefined });
-      }
-      if (e instanceof InboundHeldElsewhere) {
-        const facts = { remoteId: e.remoteId ?? undefined, groupId: e.group?.id, configs: e.configs ?? undefined };
-        throw new ConflictException({ reason: e.reason, message: e.message, facts });
-      }
-      if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
-      throw new NotFoundException({ reason: e.reason, message: e.message });
-    }
-    throw e;
-  }
-}
 
 /**
  * The platform owner's systems surface (F-027-ar, ADR-0080): `/api/billing/systems`.

@@ -109,6 +109,7 @@ export const updatePanelSchema = z
     clientBaseUrl: z.string().trim().url().max(500).nullable(),
     maxRequestsPerMinute: z.number().int().positive().max(6000),
     ovpnProfile: ovpnProfileSchema.nullable(),
+    addressMayMove: z.boolean(),
   })
   .partial()
   .strict()
@@ -131,12 +132,25 @@ export const driftEventQuerySchema = z
 export type DriftEventQueryInput = z.infer<typeof driftEventQuerySchema>;
 
 /**
+ * What a person says an `identity_lost` server is (F-027-fa, ADR-0130
+ * decision 2): `rebuilt` — the same server, reinstalled; `address_fixed` — the
+ * address is right again.
+ */
+export const DRIFT_RESOLUTIONS = ['rebuilt', 'address_fixed'] as const;
+
+export type DriftResolution = (typeof DRIFT_RESOLUTIONS)[number];
+
+/**
  * Acknowledging a drift event. `.strict()`: who acknowledged and when come
  * from the gate and the clock, and a body naming either is refused, not
  * dropped. The note is why — the restore that explains the reset.
  */
 export const acknowledgeDriftSchema = z
-  .object({ note: z.string().trim().min(1).max(1000).optional() })
+  .object({
+    note: z.string().trim().min(1).max(1000).optional(),
+    // What an `identity_lost` server is (F-027-fa); refused on any other type.
+    resolution: z.enum(DRIFT_RESOLUTIONS).optional(),
+  })
   .strict();
 
 export type AcknowledgeDriftBody = z.infer<typeof acknowledgeDriftSchema>;

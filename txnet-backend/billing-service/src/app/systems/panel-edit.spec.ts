@@ -109,6 +109,14 @@ describe('PanelLifecycleService.update (F-027-by)', () => {
     expect(panel).toMatchObject({ name: 'de-fra-main', region: 'eu', maxRequestsPerMinute: 30, connectionTestedAt: TESTED });
   });
 
+  it('the CDN opt-out is a setting, not an address: written without a re-test (F-027-fa)', async () => {
+    const { service, panel, actor } = harness();
+    const answer = await service.update(actor, PANEL, { addressMayMove: true });
+    expect(answer).toEqual({ id: PANEL, reviewState: PanelReviewState.accepted, retest: false });
+    expect(panel).toMatchObject({ addressMayMove: true, reviewState: PanelReviewState.accepted });
+    expect(updatePanelSchema.safeParse({ addressMayMove: 'yes' }).success).toBe(false);
+  });
+
   it('the same address sent again is not a change', async () => {
     const { service, panel, actor } = harness();
     const answer = await service.update(actor, PANEL, { apiBaseUrl: 'https://fra.example.com:2053/panel', name: 'x' });

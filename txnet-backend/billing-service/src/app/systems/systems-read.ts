@@ -1,8 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { capabilityMatrix } from './capabilities';
+import { acknowledgeWrite } from './drift-resolution';
+import { DriftResolution } from './panel-registration.schema';
 import { judgePanelHealth } from './panel-health';
 import { inScope, panelScopeOf, SystemsActor } from './panel-scope';
 
@@ -36,7 +39,10 @@ export type SystemsRejection =
   | 'group_in_use'
   // An inbound is the pool's or one group's (F-027-ch).
   | 'inbound_assigned_elsewhere'
-  | 'inbound_has_configs';
+  | 'inbound_has_configs'
+  // Acknowledging with a choice (F-027-fa).
+  | 'resolution_required'
+  | 'resolution_not_for_event';
 
 export class SystemsRefused extends Error {
   constructor(readonly reason: SystemsRejection) {
@@ -83,6 +89,8 @@ const PANEL_FIELDS = {
   maxRequestsPerMinute: true,
   // Selected only to answer whether it is set; the reference never leaves.
   panelRadiusSecret: true,
+  // The CDN opt-out the edit form starts from (F-027-fa).
+  addressMayMove: true,
   retiredAt: true,
   removeRequestedAt: true,
 } satisfies Prisma.PanelSelect;
@@ -98,6 +106,9 @@ const DRIFT_FIELDS = {
   acknowledgedAt: true,
   acknowledgedByAdminId: true,
   note: true,
+  // An `address_moved` names what the panel was accepted at and what it saw (F-027-ez).
+  knownAddresses: true,
+  seenAddresses: true,
 } satisfies Prisma.PanelDriftEventSelect;
 
 /**
@@ -116,7 +127,11 @@ const DRIFT_FIELDS = {
 export class SystemsReadService {
   private readonly logger = new Logger(SystemsReadService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /** The platform owner's pool, for an acknowledgement's panel write: `network.panel` has RLS, and a platform panel's `tenantId` is null. */
+    private readonly all: CrossTenantPrismaService,
+  ) {}
 
   /**
    * Every panel in scope: its review, its health and the budget we hold
@@ -150,6 +165,7 @@ export class SystemsReadService {
         ipAddress: p.ipAddress,
         apiBaseUrl: p.apiBaseUrl,
         clientBaseUrl: p.clientBaseUrl,
+        addressMayMove: p.addressMayMove,
         ovpnProfile: p.ovpnProfile,
         // Archived (F-027-bz): kept for its records, skipped by every loop.
         retiredAt: p.retiredAt,
@@ -227,26 +243,37 @@ export class SystemsReadService {
   /**
    * Acknowledging a drift event: the decision `collect.Containment.Halted`
    * waits for. It reads `collectionHalted && acknowledgedAt IS NULL`, so this
-   * sets `acknowledgedAt` and the panel is read again on the next pass.
+   * sets `acknowledgedAt` and the panel is read again on the next pass — with
+   * the panel write the event's type asks for (`acknowledgeWrite`, F-027-fa),
+   * in the same transaction.
    *
    * **Once.** The update is conditional on `acknowledgedAt IS NULL`, so of two
    * concurrent clicks one wins and the other is `already_acknowledged`: who
-   * decided, and when, is never rewritten.
+   * decided, and when, is never rewritten, and the panel is written once.
    */
-  async acknowledge(actor: SystemsActor, eventId: string, input: { note?: string }) {
+  async acknowledge(actor: SystemsActor, eventId: string, input: { note?: string; resolution?: DriftResolution }) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: eventId, panel: scope };
+    const found = await this.prisma.panelDriftEvent.findFirst({ where, select: { ...DRIFT_FIELDS, panelId: true } });
+    if (!found) throw new SystemsRefused('not_found');
+    if (found.acknowledgedAt) throw new SystemsRefused('already_acknowledged');
+    const write = acknowledgeWrite({ eventType: found.eventType, seenAddresses: found.seenAddresses }, input.resolution);
+    if ('refused' in write) throw new SystemsRefused(write.refused);
 
-    const { count } = await this.prisma.panelDriftEvent.updateMany({
-      where: { ...where, acknowledgedAt: null },
-      data: { acknowledgedAt: new Date(), acknowledgedByAdminId: actor.adminId, ...(input.note ? { note: input.note } : {}) },
+    const acknowledgedAt = new Date();
+    await this.all.$transaction(async (tx) => {
+      const { count } = await tx.panelDriftEvent.updateMany({
+        where: { id: eventId, acknowledgedAt: null },
+        data: { acknowledgedAt, acknowledgedByAdminId: actor.adminId, ...(input.note ? { note: input.note } : {}) },
+      });
+      if (count === 0) throw new SystemsRefused('already_acknowledged');
+      if (write.panel) await tx.panel.updateMany({ where: { id: found.panelId, retiredAt: null }, data: write.panel });
     });
 
-    const event = await this.prisma.panelDriftEvent.findFirst({ where, select: DRIFT_FIELDS });
-    if (!event) throw new SystemsRefused('not_found');
-    if (count === 0) throw new SystemsRefused('already_acknowledged');
-
-    this.logger.log(`drift event ${eventId} on panel ${event.panelId} acknowledged by ${actor.adminId}`);
-    return event;
+    this.logger.log(
+      `drift event ${eventId} (${found.eventType}) on panel ${found.panelId} acknowledged by ${actor.adminId}` +
+        (input.resolution ? `: ${input.resolution}` : ''),
+    );
+    return { ...found, acknowledgedAt, acknowledgedByAdminId: actor.adminId, note: input.note ?? found.note };
   }
 }

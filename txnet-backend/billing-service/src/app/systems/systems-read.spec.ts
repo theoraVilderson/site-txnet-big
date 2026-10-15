@@ -108,7 +108,9 @@ function harness() {
       },
     },
   };
-  const service = new SystemsReadService(prisma as never);
+  // The acknowledgement writes through the platform owner's pool (F-027-fa); same rows.
+  const all = { $transaction: async <T>(fn: (tx: typeof prisma) => Promise<T>) => fn(prisma) };
+  const service = new SystemsReadService(prisma as never, all as never);
   return { service, events, selects, panels };
 }
 

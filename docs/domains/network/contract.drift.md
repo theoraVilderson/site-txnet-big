@@ -195,8 +195,9 @@ rules 11–13) lists its clients before it reads usage (`Loop.identify`,
   (`DriftEventType.Converges`), so the halted turn skips the convergence a
   restore still gets. No event store fails closed (`Containment.Raise`); a
   list that failed is the turn failing, as a failed read is. Acknowledging
-  with a choice — `rebuilt` or `address_fixed` — is F-027-fa; until then an
-  acknowledgement raises it again on the next pass. A panel with no anchor
+  takes a choice (billing `contract.systems.md` rule 9b): `rebuilt` clears the
+  anchor, so the next pass plants a new one and recreates every config;
+  `address_fixed` keeps it, and an address still wrong raises it again. A panel with no anchor
   yet is not checked: it is planted first (rule 13).
 - **Before it, the address check** (F-027-ez): a name answering none of the
   addresses the panel was accepted at halts it `address_moved`, unread and

@@ -2,8 +2,8 @@
 id: billing
 layer: domain
 status: active
-version: 49
-updated: 2026-10-06
+version: 50
+updated: 2026-10-15
 ---
 
 # Systems — the platform owner's panel routes
@@ -37,11 +37,11 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `POST /api/billing/systems/panels` | `name`, `ipAddress` (required for `push`, its NAS's allowlist entry; optional for `pull`, F-027-br, CHECK `panel_push_has_ip_address`), `apiBaseUrl` (required for `pull`), `clientBaseUrl?` (where users are served their links, F-027-bg; refused for `push`), `driverType`, `counterSemantics`, `transport`, `role`, `region`, `maxRequestsPerMinute?`, `credentials` (≤4096), `radiusSecret` (≤4096; required for `push`, refused for `pull`); `.strict()` | `201 {id, reviewState: 'pending', credentials: {configured, version, rotatedAt}, radiusSecret?}` (`radiusSecret` on a push panel, same three fields) | 400 validation; 403 `panel.manage` / `not_platform_owner`; 409 `panel_already_registered` + `facts.panelId` when in scope (rule 4a); 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/credentials` | `credentials` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, retest, credentials: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
 | `PUT /api/billing/systems/panels/:id/radius-secret` | `radiusSecret` (1–4096, untrimmed); `.strict()` | `200 {id, reviewState, radiusSecret: {configured, version, rotatedAt}}` | 400; 403; 404 `not_found`; 409 `panel_not_push` / `panel_refused`; 400/403/404 relayed from the vault seam; 502 `credentials_unavailable` |
-| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, cause, since, checkedAt, view, heldBy, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
+| `GET /api/billing/systems/panels` | — | `[{id, name, driverType, transport, role, region, ipAddress, apiBaseUrl, clientBaseUrl, addressMayMove, retiredAt, radiusSecretConfigured, review: {reviewState, connectionTestedAt, connectionTestFault, connectionTestDetail, duplicateOf: {id, name} | null}, health: {panelState, cause, since, checkedAt, view, heldBy, lastHealthyAt, lastSuccessfulCollectionAt, collectionHalted, openDriftEvents}, budget: {maxRequestsPerMinute, blockedSince}}]`, by name | 403 |
 | `PATCH /api/billing/systems/panels/:id`, `DELETE …/panels/:id`, `POST …/panels/:id/restore` | edit, delete or archive, restore — [contract.panel-lifecycle.md](contract.panel-lifecycle.md) | | |
 | `GET /api/billing/systems/panels/:id/capabilities` | — | `{id, transport, reviewState, connectionTestedAt, documentVersion, current, answeredAt, rows: [{key, scope, severity, state, detail}]}` | 400 id not a uuid; 403; 404 `not_found` |
-| `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, foreignPanel: {id, name} \| null, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
-| `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000); `.strict()` | `200` the event, acknowledged | 400; 403; 404 `not_found`; 409 `already_acknowledged` |
+| `GET /api/billing/systems/drift-events` | query `state?` (`open` \| `all`, default `all`), `after?` (event id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, panelId, panelName, eventType, foreignPanel: {id, name} \| null, affectedConfigCount, observedConfigCount, detectedAt, collectionHalted, acknowledgedAt, acknowledgedByAdminId, note, knownAddresses, seenAddresses}], next}`, newest first; `next` is the `after` of the following page, null on the last | 400; 403 |
+| `POST /api/billing/systems/drift-events/:id/acknowledge` | `note?` (1–1000), `resolution?` (`rebuilt` \| `address_fixed`, rule 9b); `.strict()` | `200` the event, acknowledged | 400; 400 `resolution_required` / `resolution_not_for_event`; 403; 404 `not_found`; 409 `already_acknowledged` |
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
@@ -123,9 +123,18 @@ both re-submits, the panel edit, delete and restore, acknowledge, release, write
    (F-027-cf, `network/contract.drift.md`): `foreignPanel` is the panel whose
    users it answered with, null when unset or outside the reader's panels.
    It stops convergence too, so acknowledging one unfixed only raises it again.
+9b. **Some events take a decision with the acknowledgement** (F-027-fa,
+   ADR-0130; `drift-resolution.ts`), written with it in one transaction on the
+   platform owner's pool. `identity_lost` requires `resolution`: `rebuilt`
+   clears the panel's anchor, so the next pass plants a new one and recreates
+   every config; `address_fixed` keeps it, to be checked again.
+   `address_moved` writes its `seenAddresses` as the panel's `knownAddresses`
+   and sends it back to `pending` (`PANEL_RETEST`). A `resolution` on any
+   other type is 400, never dropped. `knownAddresses`/`seenAddresses` are
+   listed for `address_moved` only, null otherwise.
 
 `systems-read.spec.ts` pins rules 6–9a, the scope on every route, and the
-fixture.
+fixture; `drift-resolution.spec.ts` rule 9b.
 
 ## The holds queue — the rules
 
