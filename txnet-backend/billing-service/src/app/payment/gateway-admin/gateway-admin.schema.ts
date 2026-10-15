@@ -82,6 +82,17 @@ const fields = {
   taxRatePercent: decimal('taxRatePercent', 4).nullable(),
   // Checked by `callbackAddress` in the service; the schema only bounds it.
   callbackUrl: z.string().max(600).nullable(),
+  // F-803-c: a manual_transfer gateway's own settings. The kind and the proof
+  // ids are checked against the registry in the service; this bounds the shape.
+  manual: z
+    .object({
+      kind: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+      confirmationMode: z.nativeEnum(ConfirmationMode),
+      requiredProof: z.array(z.string().max(40)).max(10),
+      windowMinutes: z.number().int(),
+    })
+    .partial()
+    .strict(),
   merchantId: secret('merchantId'),
   secretKey: secret('secretKey'),
   webhookSecret: secret('webhookSecret'),
@@ -124,6 +135,26 @@ export const listGatewaysSchema = z.object({ tenantId: uuid('tenantId').optional
 /** Who a gateway is offered to (F-102-g): the owner's groups, the whole set; `[]` = everyone. */
 export const gatewayAudienceSchema = z.object({ userGroupIds: z.array(uuid('userGroupIds')).max(50) }).strict();
 export type GatewayAudienceBody = z.infer<typeof gatewayAudienceSchema>;
+
+/**
+ * A manual gateway's destination (F-803-c): `fields` is checked by the
+ * gateway's kind in the service, so here it is only an object. The rotation
+ * columns are F-807's, stored and unread until then.
+ */
+const destinationFields = {
+  label: z.string().trim().min(1).max(100),
+  fields: z.record(z.string().max(40), z.union([z.string().max(300), z.number()])),
+  isActive: z.boolean(),
+  sortOrder: z.number().int().min(0).max(10_000),
+  weight: z.number().int().min(1).max(100),
+  dailyCapMinor: z.string().regex(/^[1-9]\d{0,17}$/, { message: 'dailyCapMinor must be a positive integer string' }).nullable(),
+};
+export const createDestinationSchema = z
+  .object({ ...destinationFields, isActive: destinationFields.isActive.optional(), sortOrder: destinationFields.sortOrder.optional(), weight: destinationFields.weight.optional(), dailyCapMinor: destinationFields.dailyCapMinor.optional() })
+  .strict();
+export const updateDestinationSchema = z.object(destinationFields).partial().strict();
+export type CreateDestinationBody = z.infer<typeof createDestinationSchema>;
+export type UpdateDestinationBody = z.infer<typeof updateDestinationSchema>;
 
 export type CreateGatewayBody = z.infer<typeof createGatewaySchema>;
 export type UpdateGatewayBody = z.infer<typeof updateGatewaySchema>;

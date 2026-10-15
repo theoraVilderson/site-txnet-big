@@ -22,6 +22,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 import type { CouponValidation } from '../coupon/coupon-validation';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
 import { OtherGatewayService } from './other-gateway';
+import { HAS_DESTINATION_IF_MANUAL } from '../manual/manual-setting';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -312,12 +313,13 @@ describe('DepositQuoteService.listGateways', () => {
 
   // F-104-ak: a tenant's gateway needs no platform approval; a platform block
   // keeps it from every payer, a manager testing it included.
+  // F-803-c: nor a manual gateway with no active destination, testing included.
   it('offers a switched-on gateway of the tenant at once, and never one the platform blocked', async () => {
     await asTenant(() => build().listGateways());
-    expect(asked).toEqual([{ isActive: true, blockedAt: null, tenantId: TENANT }]);
+    expect(asked).toEqual([{ isActive: true, blockedAt: null, ...HAS_DESTINATION_IF_MANUAL, tenantId: TENANT }]);
 
     await asTenant(() => build().listGateways({ canTest: true }));
-    expect(asked).toEqual([{ tenantId: TENANT, blockedAt: null }]);
+    expect(asked).toEqual([{ tenantId: TENANT, blockedAt: null, ...HAS_DESTINATION_IF_MANUAL }]);
   });
 
   // F-092-v: the gateway's own list, else the tenant's, never outside the range.

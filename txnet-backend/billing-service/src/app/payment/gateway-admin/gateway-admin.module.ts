@@ -3,6 +3,8 @@ import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { GatewayAdminController } from './gateway-admin.controller';
 import { GATEWAY_SECRET_WRITER, GatewayAdminService } from './gateway-admin.service';
+import { ManualDestinationController, ResellerManualDestinationController } from './manual-destination.controller';
+import { ManualDestinationService } from './manual-destination.service';
 import { ResellerGatewayController } from './reseller-gateway.controller';
 import { ResellerGatewayService } from './reseller-gateway.service';
 import { VaultSecretClient } from './vault-secret.client';
@@ -21,10 +23,11 @@ import { VaultSecretClient } from './vault-secret.client';
  * the Prisma pools.
  */
 @Module({
-  controllers: [GatewayAdminController, ResellerGatewayController],
+  controllers: [GatewayAdminController, ResellerGatewayController, ManualDestinationController, ResellerManualDestinationController],
   providers: [
     GatewayAdminService,
     ResellerGatewayService,
+    ManualDestinationService,
     ResellerAccess,
     VaultSecretClient,
     { provide: GATEWAY_SECRET_WRITER, useExisting: VaultSecretClient },

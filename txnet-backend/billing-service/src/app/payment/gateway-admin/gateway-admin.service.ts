@@ -17,6 +17,9 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { InvalidDepositPresets, normalizePresets } from '../deposit/deposit-presets';
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import { GATEWAY_SECRET_NAMES, type GatewaySecretName, PROVIDER_FIELDS } from '../gateway/provider-fields';
+import { checkManualShape, MANUAL_SETTING_SELECT, type ManualSettingInput, type ManualSettingRow, manualSettingView, saveManualSetting } from '../manual/manual-setting';
+import { GatewayAdminRefused } from './gateway-admin.refusal';
+import { gatewayView, type GatewayView, presetStrings, str } from './gateway-view';
 
 /** What the vault writer says about one secret. Never a value. */
 export type GatewaySecretState = { configured: boolean; version: number | null; rotatedAt: Date | string | null };
@@ -79,90 +82,14 @@ export type GatewayFields = {
   taxRatePercent?: string | null;
   /** The callback address sent to the provider; `null` = the tenant's panel domain (F-092-w). */
   callbackUrl?: string | null;
+  /** A `manual_transfer` gateway's kind, mode, proof and window (F-803-c); required on its create. */
+  manual?: ManualSettingInput;
 };
 export type CreateGatewayInput = GatewayFields & GatewaySecretValues & { source: GatewaySource; tenantId?: string };
 export type UpdateGatewayInput = GatewayFields & GatewaySecretValues;
 
 /** A tenant's default quick amounts (F-092-v), and what they are in (ADR-0098 part 3, F-116-h2). */
 export type DepositPresetList = { presets: string[]; currencyCode: string };
-
-export type GatewayView = {
-  source: GatewaySource;
-  id: string;
-  /** The owning tenant; `null` for a platform gateway, which is the platform owner's by definition. */
-  tenantId: string | null;
-  displayName: string;
-  providerName: string;
-  gatewayCategory: string;
-  isActive: boolean;
-  /** The platform owner's block (F-104-ak); `null` when not blocked, and always for a platform gateway. */
-  blocked: { at: Date; reason: string } | null;
-  description: string | null;
-  supportedCurrencies: unknown;
-  confirmationMode: string | null;
-  /**
-   * What its limits, fixed fee, fixed modifier and presets are in: the
-   * gateway's own, its owner's at the time (ADR-0098 part 3, F-116-h2).
-   */
-  currencyCode: string;
-  minAcceptAmount: string | null;
-  maxAcceptAmount: string | null;
-  feeCalculationMode: string;
-  feeType: string;
-  feeValue: string;
-  feeFloor: string | null;
-  feeCeiling: string | null;
-  useLiveRate: boolean;
-  staticRate: string | null;
-  percentageModifier: string | null;
-  fixedAmountModifier: string | null;
-  minRate: string | null;
-  maxRate: string | null;
-  roundingStep: string | null;
-  roundingMode: string | null;
-  /** This gateway's own quick amounts; empty means it inherits the tenant's default (F-092-v). */
-  depositPresets: string[];
-  /** This gateway's own tax rate; `null` means it inherits the tenant's default (ADR-0076). */
-  taxRatePercent: string | null;
-  /** The callback address sent to the provider, or `null` for the tenant's panel domain (F-092-w). */
-  callbackUrl: string | null;
-  /** The owner's user groups it is offered to; empty = everyone (F-102-g). */
-  userGroupIds: string[];
-  /** `null` when the vault writer could not be asked; the list still renders. */
-  credentials: GatewaySecretsState | null;
-  /**
-   * The secrets this gateway's provider needs that are not stored — the
-   * heads-up for a gateway that is saved, maybe active, and cannot take a
-   * payment yet (F-104-e). `null` when `credentials` is.
-   */
-  missingSecrets: GatewaySecretName[] | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type GatewayAdminRejection =
-  | 'not_platform_owner'
-  | 'gateway_not_found'
-  | 'tenant_not_found'
-  | 'block_is_platform_owners'
-  | 'gateway_blocked'
-  | 'provider_already_configured'
-  | 'invalid_range'
-  | 'missing_field'
-  | 'invalid_presets'
-  | 'invalid_callback'
-  | 'gateway_has_open_payments'
-  /** F-102-g: a group named for a gateway's audience is not its owner's. */
-  | 'group_not_found'
-  | 'audience_not_allowed';
-
-/** A refusal. Its message names the rule and a row id, never a value. */
-export class GatewayAdminRefused extends Error {
-  constructor(readonly reason: GatewayAdminRejection, detail?: string) {
-    super(detail ? `${reason}: ${detail}` : reason);
-    this.name = 'GatewayAdminRefused';
-  }
-}
 
 const DECIMAL_COLUMNS = [
   'minAcceptAmount',
@@ -183,6 +110,8 @@ const ENUM_COLUMNS = { providerName: PaymentProviderName, gatewayCategory: Gatew
 const PLATFORM_ONLY = ['description', 'supportedCurrencies', 'confirmationMode'] as const;
 const REQUIRED_ON_CREATE = ['displayName', 'providerName', 'gatewayCategory', 'feeCalculationMode', 'feeType', 'feeValue'] as const;
 const SECRET_KEYS = GATEWAY_SECRET_NAMES;
+/** A gateway row with its manual setting (F-803-c): every view and audit snapshot shows it. */
+const WITH_MANUAL = { manualSetting: { select: MANUAL_SETTING_SELECT } } as const;
 
 const NOT_CONFIGURED: GatewaySecretsState = {
   merchantId: { configured: false, version: null, rotatedAt: null },
@@ -195,7 +124,6 @@ type Tx = Prisma.TransactionClient;
 /** `billing.gateway_usage`: every payment and grant that names the gateway, in any tenant. */
 type GatewayUsage = { payments: number; open_payments: number; grants: number };
 
-const str = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 /**
  * A callback address as stored: trimmed, absolute, http or https — anything a
  * browser could be sent to that is not a web page (`javascript:`, `data:`) is
@@ -217,7 +145,6 @@ function callbackAddress(value: string | null): string | null {
   return trimmed;
 }
 
-const presetStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((d) => new Prisma.Decimal(String(d)).toFixed(2)) : []);
 const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefined || v === '' ? null : new Prisma.Decimal(String(v)));
 
 /**
@@ -360,10 +287,11 @@ export class GatewayAdminService {
   async list(actor: GatewayActor, filter: { tenantId?: string } = {}): Promise<GatewayView[]> {
     const owner = await this.isOwner(actor);
     const [platform, tenant] = await this.within(owner, async (db) => [
-      owner && !filter.tenantId ? await db.paymentGateway.findMany({ orderBy: { createdAt: 'asc' }, take: 200 }) : [],
+      owner && !filter.tenantId ? await db.paymentGateway.findMany({ include: WITH_MANUAL, orderBy: { createdAt: 'asc' }, take: 200 }) : [],
       await db.tenantGatewayConfig.findMany({
         // A tenant's filter is ignored rather than refused: it can only ever mean its own rows.
         where: { tenantId: owner ? filter.tenantId : actor.tenantId },
+        include: WITH_MANUAL,
         orderBy: { createdAt: 'asc' },
         take: 200,
       }),
@@ -383,11 +311,11 @@ export class GatewayAdminService {
     const out: GatewayView[] = [];
     for (const row of platform as Row[]) {
       const id = row['id'] as string;
-      out.push(this.view('platform', row, await this.stateOrNull(this.target({ source: 'platform', id }, row, actor)), groupsOf('platform', id)));
+      out.push(gatewayView('platform', row, await this.stateOrNull(this.target({ source: 'platform', id }, row, actor)), groupsOf('platform', id)));
     }
     for (const row of tenant as Row[]) {
       const id = row['id'] as string;
-      out.push(this.view('tenant', row, await this.stateOrNull(this.target({ source: 'tenant', id }, row, actor)), groupsOf('tenant', id)));
+      out.push(gatewayView('tenant', row, await this.stateOrNull(this.target({ source: 'tenant', id }, row, actor)), groupsOf('tenant', id)));
     }
     return out;
   }
@@ -408,6 +336,7 @@ export class GatewayAdminService {
     }
     if (input.blockedReason !== undefined && !owner) throw new GatewayAdminRefused('block_is_platform_owners');
     this.assertRanges(input);
+    checkManualShape(input, input.manual);
     const providerColumns = this.providerRules(input);
 
     const data = { ...this.columns(input, input.source), ...providerColumns };
@@ -440,6 +369,8 @@ export class GatewayAdminService {
       const row = (input.source === 'platform'
         ? await tx.paymentGateway.create({ data: data as Prisma.PaymentGatewayUncheckedCreateInput })
         : await tx.tenantGatewayConfig.create({ data: data as Prisma.TenantGatewayConfigUncheckedCreateInput })) as unknown as Row;
+      const ref = { source: input.source, id: row['id'] as string };
+      row['manualSetting'] = await saveManualSetting(tx, { ...ref, ownerTenantId: this.target(ref, row, actor).tenantId, providerName: row['providerName'] }, input.manual);
       await tx.adminAuditLog.create({
         data: {
           tenantId: tenantId ?? actor.tenantId,
@@ -458,7 +389,7 @@ export class GatewayAdminService {
     const ref = { source: input.source, id: created['id'] as string };
     const credentials = await this.writeSecrets(this.target(ref, created, actor), input, actor);
     this.logger.log(`gateway ${input.source}:${ref.id} created by ${actor.adminId}`);
-    return this.view(input.source, created, credentials);
+    return gatewayView(input.source, created, credentials);
   }
 
   /**
@@ -512,6 +443,7 @@ export class GatewayAdminService {
         throw new GatewayAdminRefused('block_is_platform_owners');
       }
       this.assertRanges({ ...this.snapshot(row), ...patch });
+      checkManualShape({ ...this.snapshot(row), ...patch }, patch.manual, row['providerName'] as string);
       const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
 
       if (ref.source === 'tenant' && patch.providerName !== undefined && patch.providerName !== row['providerName'] && PROVIDER_FIELDS[patch.providerName as PaymentProviderName].onePerTenant) {
@@ -532,6 +464,8 @@ export class GatewayAdminService {
           ? await tx.paymentGateway.update({ where: { id: ref.id }, data: data as Prisma.PaymentGatewayUncheckedUpdateInput })
           : await tx.tenantGatewayConfig.update({ where: { id: ref.id }, data: data as Prisma.TenantGatewayConfigUncheckedUpdateInput })) as unknown as Row;
       }
+      const owned = { ...ref, ownerTenantId: this.target(ref, row, actor).tenantId, providerName: next['providerName'] };
+      next = { ...next, manualSetting: await saveManualSetting(tx, owned, patch.manual) };
       const after = this.snapshot(next);
       const changed = Object.keys(after).filter((k) => JSON.stringify(after[k]) !== JSON.stringify(before[k]));
       await tx.adminAuditLog.create({
@@ -552,7 +486,7 @@ export class GatewayAdminService {
     const target = this.target(ref, updated.next, actor);
     const credentials = secretsChanged.length > 0 ? await this.writeSecrets(target, patch, actor) : await this.stateOrNull(target);
     this.logger.log(`gateway ${ref.source}:${ref.id} updated by ${actor.adminId}`);
-    return this.view(ref.source, updated.next, credentials, updated.userGroupIds);
+    return gatewayView(ref.source, updated.next, credentials, updated.userGroupIds);
   }
 
   /**
@@ -641,6 +575,19 @@ export class GatewayAdminService {
     return (await db.gatewayAudience.findMany({ where: { [column]: ref.id }, select: { groupId: true } })).map((a) => a.groupId);
   }
 
+  /**
+   * `work` on a gateway this caller may manage, on the pool that serves it,
+   * with the gateway's owner — the platform owner for a platform gateway. How
+   * a manual gateway's destinations (F-803-c) share this file's door.
+   */
+  async onGateway<T>(actor: GatewayActor, ref: GatewayRef, work: (tx: Tx, row: Row, ownerTenantId: string) => Promise<T>): Promise<T> {
+    const owner = await this.isOwner(actor);
+    return this.within(owner, async (tx) => {
+      const row = await this.load(tx, ref, actor, owner);
+      return work(tx, row, this.target(ref, row, actor).tenantId);
+    });
+  }
+
   private async isOwner(actor: GatewayActor): Promise<boolean> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     return isPlatformTenant(tenant?.tenantType);
@@ -650,11 +597,11 @@ export class GatewayAdminService {
   private async load(db: Tx, ref: GatewayRef, actor: GatewayActor, owner: boolean): Promise<Row> {
     if (ref.source === 'platform') {
       if (!owner) throw new GatewayAdminRefused('gateway_not_found', ref.id);
-      const row = await db.paymentGateway.findUnique({ where: { id: ref.id } });
+      const row = await db.paymentGateway.findUnique({ where: { id: ref.id }, include: WITH_MANUAL });
       if (!row) throw new GatewayAdminRefused('gateway_not_found', ref.id);
       return row as unknown as Row;
     }
-    const row = (await db.tenantGatewayConfig.findUnique({ where: { id: ref.id } })) as unknown as Row | null;
+    const row = (await db.tenantGatewayConfig.findUnique({ where: { id: ref.id }, include: WITH_MANUAL })) as unknown as Row | null;
     if (!row || (!owner && row['tenantId'] !== actor.tenantId)) throw new GatewayAdminRefused('gateway_not_found', ref.id);
     return row;
   }
@@ -748,6 +695,7 @@ export class GatewayAdminService {
     for (const k of DECIMAL_COLUMNS) if (row[k] !== undefined) out[k] = str(row[k]);
     if (row['depositPresets'] !== undefined) out['depositPresets'] = presetStrings(row['depositPresets']);
     if (row['callbackUrl'] !== undefined) out['callbackUrl'] = str(row['callbackUrl']);
+    if (row['manualSetting'] !== undefined) out['manual'] = manualSettingView(row['manualSetting'] as ManualSettingRow | null);
     return out;
   }
 
@@ -795,48 +743,4 @@ export class GatewayAdminService {
     taxRate(r['taxRatePercent']);
   }
 
-  private view(source: GatewaySource, row: Row, credentials: GatewaySecretsState | null, userGroupIds: string[] = []): GatewayView {
-    return {
-      source,
-      id: row['id'] as string,
-      tenantId: source === 'tenant' ? (row['tenantId'] as string) : null,
-      displayName: row['displayName'] as string,
-      providerName: row['providerName'] as string,
-      gatewayCategory: row['gatewayCategory'] as string,
-      isActive: Boolean(row['isActive']),
-      blocked:
-        source === 'tenant' && row['blockedAt']
-          ? { at: row['blockedAt'] as Date, reason: String(row['blockedReason'] ?? '') }
-          : null,
-      description: source === 'platform' ? str(row['description']) : null,
-      supportedCurrencies: source === 'platform' ? (row['supportedCurrencies'] ?? []) : null,
-      confirmationMode: source === 'platform' ? str(row['confirmationMode']) : null,
-      currencyCode: row['currencyCode'] as string,
-      minAcceptAmount: str(row['minAcceptAmount']),
-      maxAcceptAmount: str(row['maxAcceptAmount']),
-      feeCalculationMode: row['feeCalculationMode'] as string,
-      feeType: row['feeType'] as string,
-      feeValue: String(row['feeValue']),
-      feeFloor: str(row['feeFloor']),
-      feeCeiling: str(row['feeCeiling']),
-      useLiveRate: row['useLiveRate'] !== false,
-      staticRate: str(row['staticRate']),
-      percentageModifier: str(row['percentageModifier']),
-      fixedAmountModifier: str(row['fixedAmountModifier']),
-      minRate: str(row['minRate']),
-      maxRate: str(row['maxRate']),
-      roundingStep: str(row['roundingStep']),
-      roundingMode: str(row['roundingMode']),
-      depositPresets: presetStrings(row['depositPresets']),
-      taxRatePercent: str(row['taxRatePercent']),
-      callbackUrl: str(row['callbackUrl']),
-      userGroupIds,
-      credentials,
-      missingSecrets: credentials
-        ? (PROVIDER_FIELDS[row['providerName'] as PaymentProviderName]?.secrets ?? []).filter((k) => !credentials[k].configured)
-        : null,
-      createdAt: row['createdAt'] as Date,
-      updatedAt: row['updatedAt'] as Date,
-    };
-  }
 }

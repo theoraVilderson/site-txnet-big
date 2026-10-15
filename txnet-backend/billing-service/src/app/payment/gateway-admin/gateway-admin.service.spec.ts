@@ -32,7 +32,8 @@
 import { Prisma, TenantType } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 
-import { GatewayAdminRefused, GatewayAdminService, GatewaySecretWriter } from './gateway-admin.service';
+import { GatewayAdminRefused } from './gateway-admin.refusal';
+import { GatewayAdminService, GatewaySecretWriter } from './gateway-admin.service';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';

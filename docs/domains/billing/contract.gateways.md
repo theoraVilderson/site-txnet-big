@@ -40,7 +40,8 @@ the boundary. Linking a gateway to another tenant is the settlement grant
 
 Refusals name their `reason`: 403 `not_platform_owner`, `block_is_platform_owners`;
 404 `gateway_not_found`, `tenant_not_found`; 409 `provider_already_configured`, `gateway_has_open_payments`, `gateway_blocked`;
-400 `invalid_range`, `missing_field`, `invalid_presets`, `invalid_callback` (`callbackUrl`, F-092-w: absolute http(s), ≤500, `null` clears); 502 `secrets_unavailable`. Proof:
+400 `invalid_range`, `missing_field`, `invalid_presets`, `invalid_callback` (`callbackUrl`, F-092-w: absolute http(s), ≤500, `null` clears); 502 `secrets_unavailable`.
+A manual gateway's body and destinations add 400 `manual_setting_mismatch`, `invalid_manual_setting`, `automatic_unavailable`, `invalid_destination`; 404 `destination_not_found`; 409 `kind_in_use` — [contract.manual-transfer.md](contract.manual-transfer.md) "Gateway admin" (F-803-c). Proof:
 `gateway-admin.service.spec.ts`, `gateway-admin.schema.spec.ts`, `deposit-presets.spec.ts`, `vault-secret.client.spec.ts`, `gateway-grant-schema.int.spec.ts` (the two functions).
 
 

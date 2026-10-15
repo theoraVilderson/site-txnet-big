@@ -200,6 +200,13 @@ enum AdminAction {
   staff_seat_invite
   staff_seat_end_set
   staff_seat_remove
+  // F-803-c — a manual gateway's cards and wallets. The setting itself rides
+  // on `gateway_create` / `gateway_update` (`newValue.manual`); a destination
+  // is its own row because "who changed the card the money went to" is the
+  // question after a transfer landed somewhere unexpected.
+  gateway_manual_destination_create
+  gateway_manual_destination_update
+  gateway_manual_destination_delete
 
   @@schema("audit")
 }

@@ -1,14 +1,11 @@
 import {
-  BadGatewayException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
-  HttpException,
   HttpStatus,
   Ip,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,7 +20,6 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import type { GatewaySource } from '../gateway/gateway-merchant';
 import { GATEWAY_ADMIN_READ as READ, GATEWAY_ADMIN_WRITE as WRITE } from './gateway-admin.rate-limit';
 import {
   CreateGatewayBody,
@@ -39,33 +35,9 @@ import {
   listGatewaysSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
-import {
-  CreateGatewayInput,
-  GatewayActor,
-  GatewayAdminRefused,
-  GatewayAdminRejection,
-  GatewayAdminService,
-} from './gateway-admin.service';
+import { gatewaySource, refusing } from './gateway-admin.http';
+import { CreateGatewayInput, GatewayActor, GatewayAdminService } from './gateway-admin.service';
 import { GatewayPermissionGuard } from './gateway-permission.guard';
-import { GatewaySecretsRefused, GatewaySecretsUnavailable } from './vault-secret.client';
-import { refusalException } from '../../request/refusal-exception';
-
-/** Every refusal gets a status; a new reason does not compile until it gets one. */
-export const GATEWAY_ADMIN_REFUSAL_STATUS: Record<GatewayAdminRejection, 400 | 403 | 404 | 409> = {
-  not_platform_owner: 403,
-  block_is_platform_owners: 403,
-  gateway_blocked: 409,
-  gateway_not_found: 404,
-  tenant_not_found: 404,
-  provider_already_configured: 409,
-  gateway_has_open_payments: 409,
-  group_not_found: 404,
-  audience_not_allowed: 403,
-  invalid_range: 400,
-  missing_field: 400,
-  invalid_presets: 400,
-  invalid_callback: 400,
-};
 
 /**
  * Gateway management (F-102-c, D-31): `/api/billing/gateways`.
@@ -99,7 +71,7 @@ export class GatewayAdminController {
   @Get()
   @RateLimit(READ)
   async list(@Query(new ZodValidationPipe(listGatewaysSchema)) query: ListGatewaysQuery, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.list(this.actor(req, ip), { tenantId: query.tenantId }));
+    return refusing(() => this.gateways.list(this.actor(req, ip), { tenantId: query.tenantId }));
   }
 
   /**
@@ -109,26 +81,26 @@ export class GatewayAdminController {
   @Get('presets')
   @RateLimit(READ)
   async presets(@Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.presets(this.actor(req, ip)));
+    return refusing(() => this.gateways.presets(this.actor(req, ip)));
   }
 
   @Put('presets')
   @RateLimit(WRITE)
   async setPresets(@Body(new ZodValidationPipe(depositPresetsSchema)) body: DepositPresetsBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.setPresets(this.actor(req, ip), body.presets ?? []));
+    return refusing(() => this.gateways.setPresets(this.actor(req, ip), body.presets ?? []));
   }
 
   /** The caller's default tax on a top-up (ADR-0076, F-104-ag); a gateway's own rate overrides it, `null` is none. */
   @Get('tax')
   @RateLimit(READ)
   async tax(@Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip)) }));
+    return refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip)) }));
   }
 
   @Put('tax')
   @RateLimit(WRITE)
   async setTax(@Body(new ZodValidationPipe(depositTaxSchema)) body: DepositTaxBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), body.taxRatePercent) }));
+    return refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), body.taxRatePercent) }));
   }
 
   @Post()
@@ -137,7 +109,7 @@ export class GatewayAdminController {
   async create(@Body(new ZodValidationPipe(createGatewaySchema)) body: CreateGatewayBody, @Req() req: Request, @Ip() ip: string) {
     // The schema requires `source`; the cast is for this project's non-strict
     // tsconfig, under which zod infers every key as optional.
-    return this.refusing(() => this.gateways.create(this.actor(req, ip), body as CreateGatewayInput));
+    return refusing(() => this.gateways.create(this.actor(req, ip), body as CreateGatewayInput));
   }
 
   @Patch(':source/:id')
@@ -149,7 +121,7 @@ export class GatewayAdminController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.gateways.update(this.actor(req, ip), { source: this.source(source), id }, body));
+    return refusing(() => this.gateways.update(this.actor(req, ip), { source: gatewaySource(source), id }, body));
   }
 
   /**
@@ -167,35 +139,13 @@ export class GatewayAdminController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.gateways.setAudience(this.actor(req, ip), { source: this.source(source), id }, body.userGroupIds));
+    return refusing(() => this.gateways.setAudience(this.actor(req, ip), { source: gatewaySource(source), id }, body.userGroupIds));
   }
 
   @Delete(':source/:id')
   @HttpCode(HttpStatus.OK)
   @RateLimit(WRITE)
   async remove(@Param('source') source: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.remove(this.actor(req, ip), { source: this.source(source), id }));
-  }
-
-  private source(value: string): GatewaySource {
-    if (value !== 'platform' && value !== 'tenant') throw new NotFoundException();
-    return value;
-  }
-
-  /**
-   * One place that turns a refusal into a status. The reason travels in the
-   * body, as on the settlement surface: naming the rule is what the operator
-   * needs. A vault seam that is down is a 502 with no detail — its message is
-   * about the other process and is logged there, not shown here.
-   */
-  private async refusing<T>(run: () => Promise<T>): Promise<T> {
-    try {
-      return await run();
-    } catch (e) {
-      if (e instanceof GatewaySecretsRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
-      if (e instanceof GatewaySecretsUnavailable) throw new BadGatewayException({ reason: 'secrets_unavailable', message: 'the credential vault could not be reached' });
-      if (!(e instanceof GatewayAdminRefused)) throw e;
-      throw refusalException(GATEWAY_ADMIN_REFUSAL_STATUS[e.reason], { reason: e.reason, message: e.message });
-    }
+    return refusing(() => this.gateways.remove(this.actor(req, ip), { source: gatewaySource(source), id }));
   }
 }

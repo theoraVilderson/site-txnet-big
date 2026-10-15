@@ -1,4 +1,3 @@
-// codeshape: spec-only — the registry's first caller is gateway admin (F-803-c); the kinds' specs drive it until then
 import { CARD_TO_CARD } from './kinds/card-to-card';
 import { CRYPTO_WALLET } from './kinds/crypto-wallet';
 import type { DestinationField, DestinationFields, FieldRefusal, FieldValue, ManualField, ManualMethod } from './manual-method';
@@ -55,12 +54,14 @@ export function parseDestination(method: ManualMethod, input: unknown): FieldsPa
   return parseFields(method.destinationFields, input, (f) => !f.optional);
 }
 
+// codeshape: spec-only — its caller is the transfer start (F-803-d)
 /** What the payer is shown: the public fields only (the payment's snapshot, F-803-d). */
 export function publicDestination(method: ManualMethod, fields: DestinationFields): DestinationFields {
   const shown = new Set(method.destinationFields.filter((f) => f.public).map((f) => f.id));
   return Object.fromEntries(Object.entries(fields).filter(([id]) => shown.has(id)));
 }
 
+// codeshape: spec-only — its caller is the proof route (F-805-a)
 /** A payer's proof: every `required` field present, every given field one the kind declares (F-805-a). */
 export function parseProof(method: ManualMethod, input: unknown, required: readonly string[]): FieldsParse {
   return parseFields(method.proofFields, input, (f) => required.includes(f.id));

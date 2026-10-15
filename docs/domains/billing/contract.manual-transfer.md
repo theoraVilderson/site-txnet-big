@@ -12,7 +12,7 @@ A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
 session has nothing left to decide. Each rule names the backlog row that
-builds it; **Storage** (F-803-a) and **Method kinds** (F-803-b) exist, the rest is to be built. The pages are
+builds it; **Storage** (F-803-a), **Method kinds** (F-803-b) and **Gateway admin** (F-803-c) exist, the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -121,14 +121,36 @@ tracking code is unique across Shetab); a wallet's is its network upper-cased.
 
 ## Gateway admin (F-803-c)
 
-The gateway routes of contract.gateways.md take `category: manual` with a
-`manual` body (`kind`, `confirmationMode`, `requiredProof`, `windowMinutes`);
-destinations are `GET|POST /api/billing/gateways/:id/destinations`,
-`PATCH|DELETE …/destinations/:destId`. Same scope as `gateway.manage`; every
-write audited (`gateway_manual_*`). A manual gateway needs no vault secret, so
-F-092-u's merchant check passes it; it needs **at least one active
-destination** to be offered. `confirmationMode = automatic` is refused
-(`automatic_unavailable`) unless every active destination has a watcher.
+Built 2026-10-15: `payment/manual/manual-setting.ts` (the rules),
+`gateway-admin/manual-destination.{service,controller}.ts`. The gateway routes
+of contract.gateways.md take provider `manual_transfer` with category `manual`
+and a `manual` body (`kind`, `confirmationMode`, `requiredProof`,
+`windowMinutes`) — the three together or `manual_setting_mismatch`; the body is
+required on create, partial on update, saved in the gateway's own transaction
+and audit row (`newValue.manual`), and every view carries `manual` (with
+`destinations` / `activeDestinations` counts) or `null`.
+
+- An unknown kind, a proof id the kind does not declare, or a window outside
+  10..1440 is `invalid_manual_setting`. A gateway never changes to or from
+  `manual_transfer`; its kind is fixed once it has a destination (`kind_in_use`).
+- `confirmationMode = automatic` is `automatic_unavailable` unless every active
+  destination has a watcher (and one exists) — today always. So is
+  `feeCalculationMode = automatic`: there is no provider to quote a fee.
+- Destinations are addressed like their gateway (corrected: `:source/:id`, as
+  every gateway route — the two tables can share an id):
+  `GET|POST /api/billing/gateways/:source/:id/destinations`,
+  `PATCH|DELETE …/destinations/:destinationId`, and the same under
+  `/api/billing/tenants/:tenantId/gateways/` for a named reseller. Same door,
+  scope and budgets as the gateway; at most 50 per gateway. `fields` is checked
+  by the kind: `invalid_destination` with each refused field in `error.facts`
+  (`{cardNumber: "checksum"}`). Audited `gateway_manual_destination_create` /
+  `_update` / `_delete`. Delete is `deactivated` once a payment showed it.
+- A manual gateway needs no vault secret, so F-092-u's merchant check passes it;
+  it is **offered only with an active destination** (`HAS_DESTINATION_IF_MANUAL`
+  in every selectable-gateway read, a manager testing included).
+
+Proof: `manual-setting.spec.ts`; checked on dev 2026-10-15 (both surfaces' rules,
+audit rows, and the offer rule under RLS as the app role).
 
 ## Starting one (F-803-d; later F-804, F-807)
 

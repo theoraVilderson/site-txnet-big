@@ -1,14 +1,11 @@
 import {
-  BadGatewayException,
   Body,
   Controller,
   Delete,
   Get,
   HttpCode,
-  HttpException,
   HttpStatus,
   Ip,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -21,7 +18,6 @@ import type { Request } from 'express';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import type { GatewaySource } from '../gateway/gateway-merchant';
 import { GATEWAY_ADMIN_READ as READ, GATEWAY_ADMIN_WRITE as WRITE } from './gateway-admin.rate-limit';
 import {
   CreateResellerGatewayBody,
@@ -35,28 +31,8 @@ import {
   gatewayAudienceSchema,
   updateGatewaySchema,
 } from './gateway-admin.schema';
-import {
-  ResellerCreateGatewayInput,
-  ResellerGatewayActor,
-  ResellerGatewayRefused,
-  ResellerGatewayRejection,
-  ResellerGatewayService,
-} from './reseller-gateway.service';
-import { GATEWAY_ADMIN_REFUSAL_STATUS } from './gateway-admin.controller';
-import { GatewaySecretsRefused, GatewaySecretsUnavailable } from './vault-secret.client';
-import { refusalException } from '../../request/refusal-exception';
-
-/** Every refusal of either door gets a status; a new reason does not compile until it gets one. */
-const STATUS: Record<ResellerGatewayRejection, 400 | 403 | 404 | 409> = {
-  // ResellerAccess (invariant 21): who may configure this reseller.
-  not_allowed: 403,
-  reseller_not_found: 404,
-  reseller_suspended: 403,
-  reseller_terminated: 409,
-  // GatewayAdminService: what may be done to a gateway — the ambient surface's
-  // statuses, so one client reads both.
-  ...GATEWAY_ADMIN_REFUSAL_STATUS,
-};
+import { gatewaySource, refusing } from './gateway-admin.http';
+import { ResellerCreateGatewayInput, ResellerGatewayActor, ResellerGatewayService } from './reseller-gateway.service';
 
 /**
  * A named reseller's gateways (F-066-w3, ADR-0064):
@@ -86,14 +62,14 @@ export class ResellerGatewayController {
   @Get()
   @RateLimit(READ)
   async list(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.list(this.actor(req, ip), tenantId));
+    return refusing(() => this.gateways.list(this.actor(req, ip), tenantId));
   }
 
   /** The reseller's own default quick amounts (F-092-v). Before `:source/:id` only for reading order. */
   @Get('presets')
   @RateLimit(READ)
   async presets(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.gateways.presets(this.actor(req, ip), tenantId));
+    return refusing(() => this.gateways.presets(this.actor(req, ip), tenantId));
   }
 
   @Put('presets')
@@ -104,14 +80,14 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.gateways.setPresets(this.actor(req, ip), tenantId, body.presets ?? []));
+    return refusing(() => this.gateways.setPresets(this.actor(req, ip), tenantId, body.presets ?? []));
   }
 
   /** The reseller's own default tax on a top-up (ADR-0076, F-104-ag). */
   @Get('tax')
   @RateLimit(READ)
   async tax(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip), tenantId) }));
+    return refusing(async () => ({ taxRatePercent: await this.gateways.tax(this.actor(req, ip), tenantId) }));
   }
 
   @Put('tax')
@@ -122,7 +98,7 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), tenantId, body.taxRatePercent) }));
+    return refusing(async () => ({ taxRatePercent: await this.gateways.setTax(this.actor(req, ip), tenantId, body.taxRatePercent) }));
   }
 
   @Post()
@@ -136,7 +112,7 @@ export class ResellerGatewayController {
   ) {
     // The schema requires `source`; the cast is for this project's non-strict
     // tsconfig, under which zod infers every key as optional.
-    return this.refusing(() => this.gateways.create(this.actor(req, ip), tenantId, body as ResellerCreateGatewayInput));
+    return refusing(() => this.gateways.create(this.actor(req, ip), tenantId, body as ResellerCreateGatewayInput));
   }
 
   @Patch(':source/:id')
@@ -149,7 +125,7 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.gateways.update(this.actor(req, ip), tenantId, { source: this.source(source), id }, body));
+    return refusing(() => this.gateways.update(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }, body));
   }
 
   /** Who it is offered to (F-102-g): this reseller's user groups, replaced whole; `[]` = everyone. */
@@ -163,8 +139,8 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() =>
-      this.gateways.setAudience(this.actor(req, ip), tenantId, { source: this.source(source), id }, body.userGroupIds),
+    return refusing(() =>
+      this.gateways.setAudience(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }, body.userGroupIds),
     );
   }
 
@@ -178,29 +154,12 @@ export class ResellerGatewayController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.gateways.remove(this.actor(req, ip), tenantId, { source: this.source(source), id }));
+    return refusing(() => this.gateways.remove(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }));
   }
 
   /** Who is asking, as the gate proved them. The reseller they are asking about is the path's. */
   private actor(req: Request, ip: string): ResellerGatewayActor {
     const { userId, tenantId, permissions } = identityOf(req);
     return { userId, tenantId, permissions, ip };
-  }
-
-  private source(value: string): GatewaySource {
-    if (value !== 'platform' && value !== 'tenant') throw new NotFoundException();
-    return value;
-  }
-
-  /** One place that turns a refusal into a status — the ambient controller's, over both doors' reasons. */
-  private async refusing<T>(run: () => Promise<T>): Promise<T> {
-    try {
-      return await run();
-    } catch (e) {
-      if (e instanceof GatewaySecretsRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
-      if (e instanceof GatewaySecretsUnavailable) throw new BadGatewayException({ reason: 'secrets_unavailable', message: 'the credential vault could not be reached' });
-      if (!(e instanceof ResellerGatewayRefused)) throw e;
-      throw refusalException(STATUS[e.reason], { reason: e.reason, message: e.message });
-    }
   }
 }

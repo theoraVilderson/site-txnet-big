@@ -9,17 +9,9 @@ import {
 } from '@txnet-backend/shared-core';
 
 import type { GatewaySource } from '../gateway/gateway-merchant';
-import {
-  CreateGatewayInput,
-  DepositPresetList,
-  GatewayActor,
-  GatewayAdminRefused,
-  GatewayAdminRejection,
-  GatewayAdminService,
-  GatewayRef,
-  GatewayView,
-  UpdateGatewayInput,
-} from './gateway-admin.service';
+import { type FieldRefusalDetail, GatewayAdminRefused, GatewayAdminRejection } from './gateway-admin.refusal';
+import { CreateGatewayInput, DepositPresetList, GatewayActor, GatewayAdminService, GatewayRef, UpdateGatewayInput } from './gateway-admin.service';
+import type { GatewayView } from './gateway-view';
 
 /** The caller, as `forward-auth` proved them, plus the address a write is audited from. */
 export type ResellerGatewayActor = ResellerActor & { ip: string };
@@ -32,6 +24,8 @@ export class ResellerGatewayRefused extends Error {
   constructor(
     readonly reason: ResellerGatewayRejection,
     detail?: string,
+    /** For `invalid_destination`: every refused field (F-803-c). */
+    readonly refusals?: readonly FieldRefusalDetail[],
   ) {
     super(detail ? `${reason}: ${detail}` : reason);
     this.name = 'ResellerGatewayRefused';
@@ -127,12 +121,13 @@ export class ResellerGatewayService {
   /**
    * Admit, open the reseller's scope, then work — `ResellerAccess.run`, with
    * both doors' refusals turned into this surface's one type so the controller
-   * has a single map from reason to status.
+   * has a single map from reason to status. Public so a manual gateway's
+   * destinations (F-803-c) pass the same door, not a copy of it.
    *
    * The work `await`s inside itself, as `runWithTenant` requires: a Prisma
    * promise returned unawaited would run after the scope has closed.
    */
-  private async run<T>(
+  async run<T>(
     actor: ResellerGatewayActor,
     tenantId: string,
     capability: TenantCapabilityName,
@@ -144,7 +139,7 @@ export class ResellerGatewayService {
       );
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerGatewayRefused(e.reason, tenantId);
-      if (e instanceof GatewayAdminRefused) throw new ResellerGatewayRefused(e.reason, e.message);
+      if (e instanceof GatewayAdminRefused) throw new ResellerGatewayRefused(e.reason, e.message, e.refusals);
       throw e;
     }
   }

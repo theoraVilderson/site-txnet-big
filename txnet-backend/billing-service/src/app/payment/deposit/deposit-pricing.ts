@@ -5,6 +5,7 @@ import type { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.
 import type { GatewayMerchant, GatewaySource, MerchantGatewayRef } from '../gateway/gateway-merchant';
 import type { PaymentProvider } from '../gateway/payment-provider';
 import type { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
+import { HAS_DESTINATION_IF_MANUAL as PAYABLE } from '../manual/manual-setting';
 import type { FxRateReader } from '../pricing/fx-rate.reader';
 import {
   feeBasis,
@@ -27,20 +28,19 @@ import {
  * is the legacy version of getting it wrong: the breakdown was computed in the
  * browser and again on the server, and the two drifted.
  *
- * Nothing here writes, and nothing here is inside a transaction of its own: the
- * row read takes the caller's `tx`, and the vault and provider calls happen
- * after it has closed — a database connection is never held across a call to a
- * bank.
+ * Nothing here writes or opens a transaction of its own: the row read takes the
+ * caller's `tx`, and the vault and provider calls happen after it has closed —
+ * a database connection is never held across a call to a bank.
  */
 
 /**
  * A tenant's gateway is its own (F-104-ak): switched on, it is offered. The
  * platform owner's lever is a block, which no caller sees past — a manager
- * testing included.
+ * testing included; nor past a manual gateway with no destination (F-803-c).
  */
-const SELECTABLE = { isActive: true, blockedAt: null };
-const UNBLOCKED = { blockedAt: null };
-const PLATFORM_SELECTABLE = { isActive: true };
+const SELECTABLE = { isActive: true, blockedAt: null, ...PAYABLE };
+const UNBLOCKED = { blockedAt: null, ...PAYABLE };
+const PLATFORM_SELECTABLE = { isActive: true, ...PAYABLE };
 
 /**
  * Test mode (the user's call, 2026-09-14). A gateway cannot be tested while it
@@ -321,7 +321,7 @@ async function selectAnyGateway(
   if (source === 'platform') {
     if (await isPlatformOwner(tx, tenantId)) {
       const row = await tx.paymentGateway.findFirst({
-        where: options.canTest ? { id } : { ...PLATFORM_SELECTABLE, id },
+        where: options.canTest ? { ...PAYABLE, id } : { ...PLATFORM_SELECTABLE, id },
         select: GATEWAY_COLUMNS,
       });
       return row ? { ...row, source, grantId: null, ownerTenantId: tenantId, testing: testingOf(row) } : null;
@@ -356,7 +356,7 @@ export async function selectableGateways(
 ): Promise<GatewayOffer[]> {
   const platform = (await isPlatformOwner(tx, tenantId))
     ? await tx.paymentGateway.findMany({
-        where: options.canTest ? {} : PLATFORM_SELECTABLE,
+        where: options.canTest ? PAYABLE : PLATFORM_SELECTABLE,
         select: GATEWAY_COLUMNS,
         orderBy: { createdAt: 'asc' },
       })

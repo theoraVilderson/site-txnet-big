@@ -11,7 +11,7 @@ import {
 export type RefusalStatus = 400 | 403 | 404 | 409 | 503;
 
 /** A refusal as the exception its status answers with; the reason travels in the body for the panel to translate. */
-export function refusalException(status: RefusalStatus, payload: { reason: string; message: string }): HttpException {
+export function refusalException(status: RefusalStatus, payload: { reason: string; message: string; facts?: Record<string, string> }): HttpException {
   switch (status) {
     case 403:
       return new ForbiddenException(payload);
