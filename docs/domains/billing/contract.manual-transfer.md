@@ -12,7 +12,7 @@ A top-up the user pays by moving money themselves: to a bank card, to a
 crypto wallet, or to any method added later. Decided by the user on
 2026-10-06 (D-60); written before any of it is built, so an implementing
 session has nothing left to decide. Each rule names the backlog row that
-builds it; **Storage** exists (F-803-a), the rest is to be built. The pages are
+builds it; **Storage** (F-803-a) and **Method kinds** (F-803-b) exist, the rest is to be built. The pages are
 [panel-web/contract.manual-transfer.md](../../interfaces/panel-web/contract.manual-transfer.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -86,10 +86,23 @@ each with its row.
 
 ## Method kinds (F-803-b)
 
-`ManualMethod` descriptor: `kind`; `destinationFields` (id, type, validator,
-`public` — shown to the payer or not); `proofFields` (id, type, validator);
-`chargeCurrency(fields)` and `chargeDecimals(fields)`; `uniqueStep` (the
-smallest offset unit, F-804); `watcherFor(fields)` → a watcher id or none.
+Built 2026-10-15 in `billing-service/src/app/payment/manual/`:
+`manual-method.ts` (the descriptor), `manual-methods.ts` (the registry — the
+only file that lists the kinds), `kinds/<kind>.ts`, one spec per kind.
+
+`ManualMethod` descriptor: `kind`; `destinationFields` (id, type, check,
+`optional`, `public` — shown to the payer or not, `fallback` — derived when
+blank); `proofFields` (id, type, check); `refProofField` (the proof field kept
+in `transfer_tx_ref`) and `refNetwork(fields)` (its `network` there);
+`chargeCurrency(fields)` and `chargeDecimals(fields)`; `uniqueStep(fields)`
+(the smallest offset, minor units, F-804); `watcherFor(fields)` → a watcher id
+or null (none yet).
+
+Every read goes through the registry: `parseDestination` and
+`parseProof(method, input, requiredProof)` answer `{ok, fields}` or every
+refused field with its reason — `missing`, `invalid`, `checksum` (a Luhn or
+sheba typo), `unknown_field`; `publicDestination` is the payment's snapshot.
+Digits are folded from any script, spaces and dashes dropped (`foldDigits`).
 
 | kind | destination fields | proof fields | charges |
 |---|---|---|---|
@@ -97,8 +110,14 @@ smallest offset unit, F-804); `watcherFor(fields)` → a watcher id or none.
 | `crypto_wallet` | `asset` (`^[A-Z0-9]{2,10}$`), `network` (free text, shown verbatim), `address`, `memo` (optional), `decimals` (0..18) | `txHash`, `receiptImage`, `paidAt` | the asset, its `decimals`; priced by the gateway's rate (F-0609: static or live) |
 
 The BIN → bank table is data in `payment/manual/kinds/iran-banks.ts`
-(id, BIN prefixes, colour pair, logo id); an unknown BIN shows `bankId = other`
-and is still accepted.
+(id, BIN prefixes, colour pair; the logo asset is named by the id); an unknown
+BIN shows `bankId = other` and is still accepted. `bankId` may be overridden
+only with an id of the table or `other`.
+
+The unique step (F-804, unread until then): a card's is a toman (10 rials) —
+some banking apps take the amount in toman; a wallet's is 10^(decimals − 4)
+minor units (0.0001 USDT), at least 1. A card's `refNetwork` is `card` (a
+tracking code is unique across Shetab); a wallet's is its network upper-cased.
 
 ## Gateway admin (F-803-c)
 
