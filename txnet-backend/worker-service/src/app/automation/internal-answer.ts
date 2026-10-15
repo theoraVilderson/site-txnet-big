@@ -22,20 +22,36 @@ export function envelopeData(body: unknown): Record<string, unknown> | null {
 /** Where a job's internal call goes, and how long it may take. */
 export type InternalCall = { baseUrl: string; path: string; serviceToken: string; timeoutMs: number };
 
+/** The env names of one service's internal seam: its base URL and its call timeout. */
+type SeamEnv = { baseUrl: string; timeoutMs: string };
+
+const AUTH_SEAM: SeamEnv = { baseUrl: 'AUTH_API_BASE_URL', timeoutMs: 'AUTH_API_TIMEOUT_MS' };
+const BILLING_SEAM: SeamEnv = { baseUrl: 'BILLING_API_BASE_URL', timeoutMs: 'BILLING_API_TIMEOUT_MS' };
+
 /**
- * The auth-service route a sweep job calls (GR-1-c, F-030-a), from the env.
- * The env is checked when the call is made, not at boot, for the reason
+ * A service's internal route a sweep job calls, from the env. The env is
+ * checked when the call is made, not at boot, for the reason
  * `deposit-expiry.job.ts` gives: an unset one fails the run, not the worker.
  */
-export function authInternalCall(config: ConfigService, path: string): () => InternalCall {
-  const baseUrl = config.get<string>('AUTH_API_BASE_URL', '').replace(/\/+$/, '');
+function internalCall(config: ConfigService, seam: SeamEnv, path: string): () => InternalCall {
+  const baseUrl = config.get<string>(seam.baseUrl, '').replace(/\/+$/, '');
   const serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
-  const timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 30_000);
+  const timeoutMs = config.get<number>(seam.timeoutMs, 30_000);
   return () => {
-    if (!baseUrl) throw new Error('AUTH_API_BASE_URL is not set');
+    if (!baseUrl) throw new Error(`${seam.baseUrl} is not set`);
     if (!serviceToken) throw new Error('SERVICE_AUTH_TOKEN is not set');
     return { baseUrl, path, serviceToken, timeoutMs };
   };
+}
+
+/** The auth-service route a sweep job calls (GR-1-c, F-030-a). */
+export function authInternalCall(config: ConfigService, path: string): () => InternalCall {
+  return internalCall(config, AUTH_SEAM, path);
+}
+
+/** The billing-service route a sweep job calls (F-1001-a). */
+export function billingInternalCall(config: ConfigService, path: string): () => InternalCall {
+  return internalCall(config, BILLING_SEAM, path);
 }
 
 /**

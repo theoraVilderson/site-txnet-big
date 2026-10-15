@@ -78,8 +78,11 @@ const APP = join(__dirname, '..');
  * `SupportContextController` is support's agent sidebar (F-033-m): `SERVICE_ONLY`
  * or a 404, read-only, and already limited per agent on support-service's
  * `SUPPORT_READ` bucket before it is asked.
+ * `AnalyticsInternalController` is the analytics rollup (F-1001-a), a five-minute
+ * tick: `SERVICE_ONLY` or a 404, and throttling it would leave the analytics
+ * page's figures stale while it says "updated N min ago".
  */
-const EXEMPT = new Set(['HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController', 'SupportContextController']);
+const EXEMPT = new Set(['AnalyticsInternalController', 'HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController', 'SupportContextController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

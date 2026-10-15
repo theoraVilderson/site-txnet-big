@@ -20,6 +20,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
 import { QuotaRefusalSink } from './quota/quota-refusal.sink';
 import { RedisModule } from './redis/redis.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { CallbackTenantMiddleware } from './request/callback-tenant.middleware';
 import { IdentityMiddleware } from './request/identity.middleware';
@@ -75,6 +76,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     EntitlementModule,
     TenantBillingModule,
     RevenueModule,
+    AnalyticsModule,
     SupportContextModule,
     TrafficModule,
     UsageModule,

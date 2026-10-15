@@ -55,6 +55,7 @@ corrected, per "Decide once".
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 | `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
 | `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
+| `billing.analytics.refreshed` | `tenant:` | billing (`AnalyticsRollupService`, a pass that changed a row, F-1001-a) → live-push; body `{type, from, to}` | `/analytics` (F-1001-d, not built yet) |
 
 ## Planned — the RT-1 rows
 

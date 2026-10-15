@@ -47,6 +47,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: { audience: ['user'], fields: [] },
   /** RT-1-j: one row per tenant that lists it — the payment's and the platform owner's; the page re-reads. */
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: { audience: ['tenant'], fields: ['paymentId'] },
+  /** F-1001-a: a rollup pass changed the tenant's analytics days `from`..`to`; the analytics page re-reads. */
+  [OutboxEventType.ANALYTICS_REFRESHED]: { audience: ['tenant'], fields: ['from', 'to'] },
 };
 
 /**

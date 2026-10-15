@@ -419,7 +419,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE, OutboxEventType.GRANT_FREEZE_CHANGED, OutboxEventType.TENANT_DOMAIN_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, OutboxEventType.ACCESS_CHANGED, OutboxEventType.PAYMENT_OPEN_CHANGED]) {
+    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE, OutboxEventType.GRANT_FREEZE_CHANGED, OutboxEventType.TENANT_DOMAIN_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, OutboxEventType.ACCESS_CHANGED, OutboxEventType.PAYMENT_OPEN_CHANGED, OutboxEventType.ANALYTICS_REFRESHED]) {
       await this.channel.bindQueue(this.livePushQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-601-a: the retention notices — one queue for every type in

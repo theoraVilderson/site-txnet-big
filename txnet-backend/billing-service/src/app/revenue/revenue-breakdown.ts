@@ -38,7 +38,8 @@ const REFERS_TO: Record<WalletReasonType, 'invoice' | 'grant' | null> = {
   [WalletReasonType.currency_change]: null,
 };
 
-const referringTo = (to: 'invoice' | 'grant') => (Object.keys(REFERS_TO) as WalletReasonType[]).filter((r) => REFERS_TO[r] === to);
+/** The reasons whose `referenceId` names an invoice, or a Grant — the analytics rollup ties a sale to its product the same way (F-1001-a). */
+export const referringTo = (to: 'invoice' | 'grant') => (Object.keys(REFERS_TO) as WalletReasonType[]).filter((r) => REFERS_TO[r] === to);
 
 /**
  * One row of the aggregate: a cell's people (`perCurrency: false`) or one of

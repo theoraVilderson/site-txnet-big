@@ -10,8 +10,8 @@ updated: 2026-10-06
 
 The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
-implementing session has nothing left to decide. **Nothing below exists yet** —
-each rule names the backlog row that builds it. The page and its charts are
+implementing session has nothing left to decide. **Built: the rollup and its
+worker (F-1001-a).** Everything else is not yet — each rule names its row. The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -50,12 +50,27 @@ days) and **stocks** (what stood at the end of a day, never summed over days).
 
 | table | grain (key) | measures |
 |---|---|---|
-| `analytics_sales_day` (flow) | tenant · day · currency · product · variant · panel · kind (`package` = `product_purchase`, `usage` = `traffic_consumption`) | `gross`, `refunds`, `net`, `orders` (package purchases net of refunds), `bytesSold`, `discounts` (invoice discount taken) |
+| `analytics_sales_day` (flow) | tenant · day · currency · product · variant · panel · kind (`package` = a sale naming an invoice, `product_purchase`; `usage` = one naming a Grant, `traffic_consumption` and `usage_charge` — `REFERS_TO`) | `gross`, `refunds`, `net`, `orders` (package purchases net of refunds), `bytesSold`, `discounts` (invoice discount taken) |
 | `analytics_user_day` (flow) | tenant · day · currency · user | `net`, `orders`, `topUps`, `firstPurchase` (bool) — sparse, only users with activity |
 | `analytics_payment_day` (flow) | tenant · day · currency · gateway kind | `started`, `settled`, `failed`, `settledAmount`, `giftsCredited` (coupon/gift credits) |
 | `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
 | `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
 | `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups` — from identity's user-created event, never a cross-schema read |
+
+**As built (F-1001-a, `billing-service/src/app/analytics/`).** A grain's null
+product or panel is one cell (`NULLS NOT DISTINCT` unique). A sale's panel is
+its Grant's first config's. `bytesSold` is a package's `quotas.traffic_bytes`
+(net of a refunded one); a block's bytes are not on its ledger row, so usage
+sells 0 bytes and its traffic is `bytesUsed`. `topUps`, `started/settled/failed`
+count by the payment's `createdAt`, as `/revenue` does; `expired` is neither
+settled nor failed; `giftsCredited` is `coupon_redemption` credits under a null
+gateway kind. **A stock is a snapshot**: no ledger holds past freezes, so a
+pass writes the Grants standing now on today only (`frozenGrants` = an
+`admin_frozen` suspension), and a day keeps its last snapshot; a rebuild never
+rewrites one. `bytesUsed` comes from `network.traffic_daily_aggregate` on its
+UTC date, nightly, so a day's traffic lands a pass later.
+`analytics_rollup_state` (one row per tenant): `timeZone` the days were cut in,
+`version` (+1 on a changed pass), `refreshedAt`, `rebuildingSince`.
 
 `buyers` over any range is `count(distinct user)` on `analytics_user_day`;
 `newBuyers` counts `firstPurchase`. That is why the user grain exists: distinct
@@ -72,15 +87,22 @@ default 7 (user, 2026-10-06; F-1001-f).
 ## The worker (F-1001-a)
 
 - `rollup(tenantId, fromDay, toDay)` replaces every row of that tenant and
-  range in one transaction — idempotent; running it twice changes nothing.
-- Today and yesterday every 5 minutes; yesterday closed at 03:00 tenant time;
-  a full rebuild through an internal route (zone change, a fixed bug).
+  range in one transaction, under a per-tenant `pg_advisory_xact_lock` —
+  idempotent; running it twice changes nothing.
+- Today and yesterday every 5 minutes (`analytics_rollup` job, `*/5`), up to
+  200 tenants a tick, never-rolled then stalest first — so yesterday is closed
+  by every pass until it leaves the window. A tenant whose `tenant.timezone`
+  differs from its state's `timeZone`, or whose rebuild died mid-way, is
+  rebuilt whole by the tick: from its first ledger or payment row to today.
+- `POST /api/internal/billing/analytics/refresh` (the tick; answers `tenants`,
+  `changed`, `rebuilt`) and `…/rebuild` `{tenantId}` (a fixed bug; answers
+  `changed`), `ServiceOnlyGuard`.
 - A pass that changed a row writes `billing.analytics.refreshed`
   `{tenantId, from, to}` in the same transaction, on `tenant:` (ADR-0121, C-14;
   a row in `realtime/contract.live-events.md`). Every read answers
   `refreshedAt`.
 - Read answers are cached in Redis by tenant + query + rollup version (built
-  with `RedisKeys`, C-03); a refresh bumps the version.
+  with `RedisKeys`, C-03; F-1001-b); a changed pass bumps the version.
 
 ## Read routes — one request per tab
 

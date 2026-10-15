@@ -1360,3 +1360,104 @@ model TransferTxRef {
   @@map("transfer_tx_ref")
   @@schema("billing")
 }
+
+/// F-1001-a: what a sale was, for the analytics rollup — a catalog product
+/// bought up front, or traffic and meters paid as used.
+enum AnalyticsSaleKind {
+  package
+  usage
+
+  @@schema("billing")
+}
+
+/// F-1001-a: sales per tenant day (a flow). Written only by the rollup
+/// (`analytics/analytics-rollup.ts`); every analytics read reads this, never a
+/// ledger. The grain is a NULLS NOT DISTINCT unique index in the migration.
+model AnalyticsSalesDay {
+  id           String            @id @default(uuid()) @db.Uuid
+  tenantId     String            @db.Uuid
+  day          DateTime          @db.Date
+  currencyCode String
+  productId    String?           @db.Uuid
+  variantId    String?           @db.Uuid
+  panelId      String?           @db.Uuid
+  kind         AnalyticsSaleKind
+  gross        Decimal           @db.Decimal(18, 2)
+  refunds      Decimal           @db.Decimal(18, 2)
+  net          Decimal           @db.Decimal(18, 2)
+  orders       Int
+  bytesSold    BigInt
+  discounts    Decimal           @db.Decimal(18, 2)
+
+  @@map("analytics_sales_day")
+  @@schema("billing")
+}
+
+/// F-1001-a: per user per tenant day, only users with activity — what
+/// distinct buyers are counted from, since distinct counts do not sum.
+model AnalyticsUserDay {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  day           DateTime @db.Date
+  currencyCode  String
+  userId        String   @db.Uuid
+  net           Decimal  @db.Decimal(18, 2)
+  orders        Int
+  topUps        Decimal  @db.Decimal(18, 2)
+  firstPurchase Boolean
+
+  @@unique([tenantId, day, currencyCode, userId], map: "analytics_user_day_grain_key")
+  @@index([tenantId, userId])
+  @@map("analytics_user_day")
+  @@schema("billing")
+}
+
+/// F-1001-a: top-up attempts per tenant day and gateway kind (a flow); a null
+/// kind holds the coupon and gift credits no gateway carried.
+model AnalyticsPaymentDay {
+  id            String               @id @default(uuid()) @db.Uuid
+  tenantId      String               @db.Uuid
+  day           DateTime             @db.Date
+  currencyCode  String
+  gatewayKind   PaymentProviderName?
+  started       Int
+  settled       Int
+  failed        Int
+  settledAmount Decimal              @db.Decimal(18, 2)
+  giftsCredited Decimal              @db.Decimal(18, 2)
+
+  @@map("analytics_payment_day")
+  @@schema("billing")
+}
+
+/// F-1001-a: what stood at the end of a tenant day (a stock, never summed
+/// over days) per product and panel.
+model AnalyticsStockDay {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  day          DateTime @db.Date
+  productId    String?  @db.Uuid
+  panelId      String?  @db.Uuid
+  activeGrants Int
+  frozenGrants Int
+  activeUsers  Int
+  bytesUsed    BigInt
+
+  @@map("analytics_stock_day")
+  @@schema("billing")
+}
+
+/// F-1001-a: one row per tenant — the zone its rollup days were cut in (a
+/// change rebuilds them), the version read caches are keyed by, the last
+/// refresh, and a whole rebuild in progress.
+model AnalyticsRollupState {
+  tenantId        String    @id @db.Uuid
+  timeZone        String
+  version         Int       @default(0)
+  refreshedAt     DateTime?
+  rebuildingSince DateTime?
+  updatedAt       DateTime  @default(now()) @updatedAt
+
+  @@map("analytics_rollup_state")
+  @@schema("billing")
+}

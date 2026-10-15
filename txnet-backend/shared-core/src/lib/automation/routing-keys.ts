@@ -51,6 +51,8 @@ export const RealtimeEventType = {
   ACCESS_CHANGED: 'identity.access.changed',
   /** RT-1-j: an open payment (`pending`/`expired`) appeared, moved or settled — the manual-payments list and its badge re-read (`announceOpenPayment`). */
   PAYMENT_OPEN_CHANGED: 'billing.payment.open_changed',
+  /** F-1001-a: a rollup pass changed a tenant's analytics rows for `{from, to}` — the analytics page re-reads (`AnalyticsRollupService`). */
+  ANALYTICS_REFRESHED: 'billing.analytics.refreshed',
 } as const;
 
 /**
@@ -210,6 +212,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: 'worker-service',
+  [OutboxEventType.ANALYTICS_REFRESHED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',
