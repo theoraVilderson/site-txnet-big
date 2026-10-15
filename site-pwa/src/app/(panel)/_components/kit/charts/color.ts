@@ -65,6 +65,23 @@ export function passesBrandCheck(brand: string | null, surface: string, mode: Ch
   return l >= low && l <= high && c >= CHROMA_FLOOR && contrastOf(b, s) >= CONTRAST_FLOOR;
 }
 
+/** The theme's own accent token, and slot 1's — the two fallbacks of the main series. */
+export const THEME_ACCENT = "var(--chart-accent)";
+const FIRST_SLOT = "var(--chart-1)";
+
+/**
+ * The main series (the contract's "Colour"; user, 2026-10-15): the brand if it
+ * passes the check, else the theme's accent if *it* passes, else slot 1 — the
+ * dark theme's accent is too light for a series and ocean's too grey, and a
+ * reseller with no brand still gets a readable chart. Before the page is styled
+ * (`surface` unread) nothing can be checked, so the theme's accent is drawn.
+ */
+export function mainSeriesOf(c: { brand: string | null; accent: string; surface: string; mode: ChartMode }): string {
+  if (!rgbOf(c.surface)) return THEME_ACCENT;
+  if (c.brand && passesBrandCheck(c.brand, c.surface, c.mode)) return c.brand;
+  return passesBrandCheck(c.accent, c.surface, c.mode) ? THEME_ACCENT : FIRST_SLOT;
+}
+
 /** Steps of a sequential scale (heatmap, cohort grid): surface to full. */
 export const SEQUENTIAL_STEPS = 5;
 

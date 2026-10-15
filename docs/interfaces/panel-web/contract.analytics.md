@@ -48,10 +48,8 @@ and `--chart-grid`; `palette.ts` names them (`slotColor`, `slotsByEntity`), and
 computed surface off `<html>`. Formats come from the page (`formatValue`, x
 labels in its calendar), the compact default from `numberLocale`. Ticks are
 chosen, never d3's hint (which can give 8). `CohortGrid` is built with its
-first user (F-1004-b). **Found:** the dark accent (`#4ade80`, L 0.80) and
-ocean's (chroma 0.098) sit outside the series band, yet are the fallback this
-contract names; a brand that passes beats them, and nothing else changes until
-the user decides otherwise.
+first user (F-1004-b). The dark accent (`#4ade80`, L 0.80) and ocean's (chroma 0.098) fail the
+check themselves — see the main series rule below.
 
 ### Rules every chart obeys
 
@@ -116,7 +114,9 @@ this table.
 
 - **The main series** (sales in the hero, any one-series chart, the heatmap's
   hue) is **the tenant's brand accent if it passes the check, else the theme's
-  accent** (user, 2026-10-06). The check, per theme: OKLCH lightness inside the
+  accent** (user, 2026-10-06) **if that passes, else slot 1** (user,
+  2026-10-15: a fallback never fails the check; dark and ocean draw blue
+  without a brand). `mainSeriesOf` in `charts/color.ts`. The check, per theme: OKLCH lightness inside the
   band (light 0.43–0.77, dark 0.48–0.67), chroma ≥ 0.1, contrast ≥ 3:1 on the
   card surface. `useChartTheme` runs it once per theme and brand; a spec holds
   a pale and a red brand failing it.

@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { CalendarHeatmap, ChartCard, DeltaPill, StackedColumns, TrendChart, slotColor } from ".";
 import { barRows } from "./BarList";
 import { heatStep, weeksOf } from "./CalendarHeatmap";
-import { contrastOf, oklchOf, passesBrandCheck, rgbOf, sequentialScale } from "./color";
+import { THEME_ACCENT, contrastOf, mainSeriesOf, oklchOf, passesBrandCheck, rgbOf, sequentialScale } from "./color";
 import { CHART_OTHER, slotsByEntity } from "./palette";
 import { xTickIndexes, yScaleOf, yTicks } from "./plot";
 import { stacked } from "./StackedColumns";
@@ -83,6 +83,20 @@ describe("the brand check", () => {
     expect(passesBrandCheck("#7a0d0d", surface("dark"), "dark")).toBe(false);
     expect(passesBrandCheck(null, surface("light"), "light")).toBe(false);
     expect(passesBrandCheck("#2a78d6", "", "light")).toBe(false);
+  });
+
+  it("draws the brand, else the theme's accent, else slot 1 — never a fallback that fails the check (user, 2026-10-15)", () => {
+    const at = (theme: string, brand: string | null) =>
+      mainSeriesOf({ brand, accent: token(themeBlock(theme), "chart-accent") ?? "", surface: surface(theme), mode: theme === "light" ? "light" : "dark" });
+    expect(at("light", "#3987e5")).toBe("#3987e5");
+    expect(at("light", null)).toBe(THEME_ACCENT);
+    expect(at("light", "#f3e8ff")).toBe(THEME_ACCENT);
+    // The dark accent is too light for a series, ocean's too grey: slot 1.
+    expect(at("dark", null)).toBe(slotColor(0));
+    expect(at("ocean", "#7a0d0d")).toBe(slotColor(0));
+    expect(at("dark", "#3987e5")).toBe("#3987e5");
+    // Before the page is styled nothing can be checked.
+    expect(mainSeriesOf({ brand: "#3987e5", accent: "", surface: "", mode: "dark" })).toBe(THEME_ACCENT);
   });
 
   it("reads OKLCH as the validator does", () => {
