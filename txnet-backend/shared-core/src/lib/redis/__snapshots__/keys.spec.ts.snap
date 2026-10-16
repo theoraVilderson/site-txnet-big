@@ -18,6 +18,7 @@ exports[`the key catalogue > builds every scoped family 1`] = `
   "otpCooldown": "otp:cooldown:tenant-1:login:+989123456789",
   "otpDelivery": "otp:delivery:tenant-1:del-1",
   "otpLock": "otp:lock:tenant-1:login:+989123456789",
+  "otpResend": "otp:resend:tenant-1:login:+989123456789",
   "rateLimit": "ratelimit:tenant-1:login:1.2.3.4",
   "registerPending": "register:pending:tenant-1:+989123456789",
 }
@@ -90,6 +91,7 @@ exports[`the key catalogue > leaves nothing in the catalogue unexercised 1`] = `
   "otpCooldown",
   "otpDelivery",
   "otpLock",
+  "otpResend",
   "outboundRate",
   "outboxProcessed",
   "rateLimit",

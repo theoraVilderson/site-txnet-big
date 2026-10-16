@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { OtpChannel } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisService } from '../../redis/redis.service';
@@ -147,54 +148,72 @@ export class RegisterService {
         RedisTtl.registerPending,
       );
 
-      // 7. Send OTP on a channel this environment actually offers. SMS is no
-      // longer assumed: an operator running messengers-only must still be able
-      // to register people.
-      const channel = input.channel ?? (await this.channels.defaultChannel());
-      if (!channel) return err('otp.noChannelAvailable');
-
-      if (this.channels.requiresLink(channel)) {
-        await this.channels.assertUsable(channel);
-        const platform = channel as unknown as BotPlatform;
-        if (!(await this.botLinks.hasVerifiedLink(phoneNumber, platform))) {
-          // No code yet: the bot sends it once this person proves the number
-          // is theirs. `verify-phone` turns that proof into a linked account.
-          const started = await this.botLinks.startLink({
-            platform,
-            phoneNumber,
-            purpose: OtpPurpose.register_phone_verify,
-            lang,
-            ip: requestIp,
-          });
-          return ok(
-            { phoneNumber, requiresPhoneVerification: true, ...started },
-            'auth.botLinkRequired',
-          );
-        }
-      }
-
-      const delivery = await this.deliveries.mintHandles();
-      await this.otpService.issueOtp(
-        phoneNumber,
-        OtpPurpose.register_phone_verify,
-        channel,
-        requestIp,
-        lang,
-        delivery,
-      );
-
-      // 8. Success
-      return ok(
-        {
-          phoneNumber,
-          requiresPhoneVerification: true,
-          deliveryId: delivery.deliveryId,
-          channel: otpRealtimeChannel(delivery.channelId),
-          channelToken: delivery.channelToken,
-        },
-        'register.success',
-      );
+      // 7. Send OTP on a channel this environment actually offers.
+      return this.sendCode(phoneNumber, input.channel, requestIp, lang);
     });
+  }
+
+  /**
+   * "Resend code" (F-0201-f): the registration's code again, for as long as
+   * its pending record lives — the record, not the grant, says it is still open.
+   */
+  async resendCode(phoneNumber: string, channel: OtpChannel | undefined, requestIp: string, lang: string) {
+    return safeExecute(async () => {
+      const phone = normalizePhone(phoneNumber);
+      if (!(await this.redis.getJson(RedisKeys.registerPending(phone)))) return err('otp.resendExpired');
+      return this.sendCode(phone, channel, requestIp, lang);
+    });
+  }
+
+  /**
+   * The code (or the bot link) for a pending registration. SMS is no longer
+   * assumed: an operator running messengers-only must still be able to
+   * register people.
+   */
+  private async sendCode(phoneNumber: string, chosen: OtpChannel | undefined, requestIp: string, lang: string) {
+    const channel = chosen ?? (await this.channels.defaultChannel());
+    if (!channel) return err('otp.noChannelAvailable');
+
+    if (this.channels.requiresLink(channel)) {
+      await this.channels.assertUsable(channel);
+      const platform = channel as unknown as BotPlatform;
+      if (!(await this.botLinks.hasVerifiedLink(phoneNumber, platform))) {
+        // No code yet: the bot sends it once this person proves the number
+        // is theirs. `verify-phone` turns that proof into a linked account.
+        const started = await this.botLinks.startLink({
+          platform,
+          phoneNumber,
+          purpose: OtpPurpose.register_phone_verify,
+          lang,
+          ip: requestIp,
+        });
+        return ok(
+          { phoneNumber, requiresPhoneVerification: true, ...started },
+          'auth.botLinkRequired',
+        );
+      }
+    }
+
+    const delivery = await this.deliveries.mintHandles();
+    await this.otpService.issueOtp(
+      phoneNumber,
+      OtpPurpose.register_phone_verify,
+      channel,
+      requestIp,
+      lang,
+      delivery,
+    );
+
+    return ok(
+      {
+        phoneNumber,
+        requiresPhoneVerification: true,
+        deliveryId: delivery.deliveryId,
+        channel: otpRealtimeChannel(delivery.channelId),
+        channelToken: delivery.channelToken,
+      },
+      'register.success',
+    );
   }
 
   /**

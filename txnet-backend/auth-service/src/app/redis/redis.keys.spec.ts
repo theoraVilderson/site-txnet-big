@@ -34,6 +34,7 @@ describe('RedisKeys — key catalogue', () => {
       otpCode: RedisKeys.otpCode('login', '09123456789'),
       otpLock: RedisKeys.otpLock('login', '09123456789'),
       otpCooldown: RedisKeys.otpCooldown('login', '09123456789'),
+      otpResend: RedisKeys.otpResend('login', '09123456789'),
       rateLimit: RedisKeys.rateLimit('login:1.2.3.4'),
       rateLimitPlatform: RedisKeys.rateLimitPlatform('login:1.2.3.4'),
       registerPending: RedisKeys.registerPending('09123456789'),

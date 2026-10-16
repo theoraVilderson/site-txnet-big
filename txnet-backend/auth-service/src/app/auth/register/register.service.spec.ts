@@ -577,3 +577,21 @@ describe('RegisterService.verifyPhone', () => {
     await expect(verify()).rejects.toMatchObject({ status: 500 });
   });
 });
+
+describe('RegisterService.resendCode — "Resend code" sends one (F-0201-f)', () => {
+  it('sends the registration code again while the registration is pending', async () => {
+    const h = harness();
+    h.redis.getJson.mockResolvedValue({ phoneNumber: PHONE });
+    const res = await runWithTenant(TENANT as never, () => h.service.resendCode(PHONE, OtpChannel.sms, '1.2.3.4', 'fa'));
+    expect(res).toMatchObject({ ok: true, data: { phoneNumber: PHONE, requiresPhoneVerification: true } });
+    expect(h.otpService.issueOtp).toHaveBeenCalledWith(PHONE, OtpPurpose.register_phone_verify, OtpChannel.sms, '1.2.3.4', 'fa', expect.anything());
+  });
+
+  it('sends nothing once the pending registration is gone', async () => {
+    const h = harness();
+    h.redis.getJson.mockResolvedValue(null);
+    const res = await runWithTenant(TENANT as never, () => h.service.resendCode(PHONE, OtpChannel.sms, '1.2.3.4', 'fa'));
+    expect(res).toMatchObject({ ok: false, msg: 'otp.resendExpired' });
+    expect(h.otpService.issueOtp).not.toHaveBeenCalled();
+  });
+});

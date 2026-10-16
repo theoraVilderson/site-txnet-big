@@ -21,6 +21,8 @@ import { TokenService } from './token.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SecondFactorService } from './second-factor.service';
+import { OtpResendService } from './otp/otp-resend.service';
+import { OtpResendGrants } from './otp/otp-resend.store';
 import { SurfaceOwnerService } from './surface-owner/surface-owner.service';
 import { AuthGuard } from './auth.guard';
 import { NoActiveSessionGuard } from './guards/no-active-session.guard';
@@ -137,6 +139,8 @@ import { ConfigService } from '@nestjs/config';
     MeAccountService,
     AuthService,
     SecondFactorService,
+    OtpResendService,
+    OtpResendGrants,
     SurfaceOwnerService,
     AuthGuard,
     PermissionStateStore,

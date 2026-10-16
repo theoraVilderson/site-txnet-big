@@ -30,6 +30,8 @@ export const RedisTtl = {
   otpCode: 300,
   otpLock: 2,
   otpCooldown: 60,
+  /** == otpCode: a resend grant lives as long as the code it re-sends (F-0201-f). */
+  otpResend: 300,
   /** == otpCode: a delivery status must not outlive the code it describes. */
   otpDelivery: 300,
   /**

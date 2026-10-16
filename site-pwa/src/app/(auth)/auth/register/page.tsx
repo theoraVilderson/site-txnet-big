@@ -25,6 +25,7 @@ import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
+import { useResend } from "@auth/auth/_hooks/useResend";
 import { authApi } from "@/lib/auth-api";
 import { OTP_LENGTH } from "@/lib/otp";
 import { consumeReturnTo } from "@/lib/return-to";
@@ -67,6 +68,7 @@ export default function RegisterPage() {
     !passwordsMismatch;
 
   const submitError = useSubmitError();
+  const resend = useResend({ delivery, otpTimer, submitError });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +232,7 @@ export default function RegisterPage() {
                 onChange={setOtp}
                 timerSeconds={otpTimer.seconds}
                 timerFormatted={otpTimer.formatted}
-                onResend={() => otpTimer.start(120)}
+                onResend={() => void resend(() => authApi.resendOtp("register", phone, channels.selected))}
                 onEditPhone={() => { delivery.reset(); setStep(1); }}
                 delivery={delivery.delivery}
               />

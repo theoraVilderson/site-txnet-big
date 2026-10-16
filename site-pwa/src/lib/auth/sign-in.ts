@@ -82,6 +82,8 @@ export const signInCalls = {
   async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return loginRequest<OtpQueuedResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
   /** Where the password step's code goes (SA-1-d): a code queued under a fresh token, or the bot link to connect first. */
   async sendSecondFactor(otpToken: string, channel?: OtpChannel) { return request<(OtpDeliveryHandles & { otpToken: string; linkRequired?: undefined }) | BotLinkRequired>("/auth/login/second-factor", { method: "POST", body: JSON.stringify({ otpToken, ...(channel ? { channel } : {}) }) }); },
+  /** "Resend code" (F-0201-f): replays that step's send on the grant it wrote after its captcha. */
+  async resendOtp(purpose: "login" | "register" | "forgot", phoneNumber: string, channel?: OtpChannel) { return request<OtpQueuedResult>("/auth/otp/resend", { method: "POST", body: JSON.stringify({ purpose, phoneNumber, ...(channel ? { channel } : {}) }) }); },
   /** The code after a password: sent with the password step's `otpToken`, never by number — that is a code-only sign-in (ADR-0145). */
   async verifySecondFactor(otpToken: string, otpCode: string) { const result = await loginRequest<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ otpToken, otpCode }) }); setAccessToken(result.accessToken); return result; },
   async verifyLoginOtp(phoneNumber: string, otpCode: string) { const result = await loginRequest<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); setAccessToken(result.accessToken); return result; },

@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { RegisterService } from './register.service';
+import { OtpResendGrants } from '../otp/otp-resend.store';
 import { AuthService } from '../auth.service';
 import { registerSchema, verifyPhoneSchema } from './register.schema';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -32,6 +33,7 @@ export class RegisterController {
     private readonly registerService: RegisterService,
     private readonly authService: AuthService,
     private readonly locale: LocaleService,
+    private readonly resends: OtpResendGrants,
   ) {}
 
   // 202, not 201 (F-067-a): nothing is created here — the `user` row lands at
@@ -47,7 +49,7 @@ export class RegisterController {
     configKey: 'REGISTER_RATE_LIMIT',
     windowSec: 3600,
   })
-  register(
+  async register(
     @Body() body: ReturnType<typeof registerSchema.parse>,
     @Ip() ip: string,
     @Req() req: Request,
@@ -56,6 +58,8 @@ export class RegisterController {
     // No tenant argument: the request's tenant is ambient from here down
     // (ADR-0024). `identity` still never reads `tenant_domain` (§8) — it reads
     // the scope `TenantContextMiddleware` opened from what `tenant` resolved.
+    // F-0201-f: the captcha passed, so "Resend code" may replay this step.
+    await this.resends.grant('register', body.phoneNumber);
     return this.registerService.register(body, ip, lang);
   }
 

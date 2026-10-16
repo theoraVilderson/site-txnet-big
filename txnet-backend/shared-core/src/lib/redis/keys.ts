@@ -370,14 +370,13 @@ function noticeLane(window?: 'hour', only?: 'inbox'): string {
 export function createScopedRedisKeys(scope: RedisKeyScope) {
   return {
     /** Hashed OTP code + attempt counter for one (tenant, purpose, phone). */
-    otpCode: (purpose: string, phone: string) =>
-      `otp:code:${scope.tenant('an OTP code')}:${purpose}:${phone}`,
+    otpCode: (purpose: string, phone: string) => `otp:code:${scope.tenant('an OTP code')}:${purpose}:${phone}`,
     /** Short idempotency lock held while an OTP is being issued. */
-    otpLock: (purpose: string, phone: string) =>
-      `otp:lock:${scope.tenant('an OTP lock')}:${purpose}:${phone}`,
+    otpLock: (purpose: string, phone: string) => `otp:lock:${scope.tenant('an OTP lock')}:${purpose}:${phone}`,
     /** Per-(tenant, purpose, phone) cooldown between two OTP requests. */
-    otpCooldown: (purpose: string, phone: string) =>
-      `otp:cooldown:${scope.tenant('an OTP cooldown')}:${purpose}:${phone}`,
+    otpCooldown: (purpose: string, phone: string) => `otp:cooldown:${scope.tenant('an OTP cooldown')}:${purpose}:${phone}`,
+    /** A resend grant (F-0201-f): written by the step that sent a code once its captcha passed; "Resend code" spends a use. */
+    otpResend: (step: string, phone: string) => `otp:resend:${scope.tenant('an OTP resend grant')}:${step}:${phone}`,
 
     /**
      * What became of one OTP send (F-067-a): `queued`, then `sent` or `failed`.

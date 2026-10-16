@@ -5,3 +5,6 @@
  * fail validation before it is ever compared.
  */
 export const OTP_LENGTH = 6;
+
+/** Seconds before "Resend code" is offered again — the OTP service's cooldown is shorter, so a resend is never refused for it. */
+export const OTP_RESEND_SECONDS = 120;

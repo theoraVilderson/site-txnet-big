@@ -1,5 +1,6 @@
 {
   "otp": {
+    "resendExpired": "That code can no longer be resent. Start again to get a new one.",
     "userNotFound": "User not found",
     "invalidCode": "The entered verification code is incorrect",
     "expiredOrInvalid": "The verification code has expired or is invalid",

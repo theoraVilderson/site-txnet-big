@@ -4,6 +4,7 @@ import { strongPasswordSchema } from '../common/validation/strong-password.schem
 import { NoticeMessenger, TimeZoneSource } from '@prisma/client';
 import { isIanaZone } from '@txnet-backend/shared-core';
 import { OtpChannel } from './otp/otp.interface';
+import { RESEND_STEPS } from './otp/otp-resend.store';
 import { registerSchema } from './register/register.schema';
 
 export const passwordLoginSchema = z.object({
@@ -20,6 +21,13 @@ export const otpRequestSchema = z.object({
 /** `POST /auth/login/second-factor` (SA-1-d): the password step's token, and where the code goes. */
 export const secondFactorSendSchema = z.object({
   otpToken: z.string().min(1),
+  channel: z.nativeEnum(OtpChannel).optional(),
+});
+
+/** `POST /auth/otp/resend` (F-0201-f): which step's code, for which number, by which channel. */
+export const otpResendSchema = z.object({
+  purpose: z.enum(RESEND_STEPS),
+  phoneNumber: phoneSchema,
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
@@ -110,6 +118,7 @@ export const otpDeliveryStatusSchema = z.object({
 
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
 export type SecondFactorSendInput = z.infer<typeof secondFactorSendSchema>;
+export type OtpResendInput = z.infer<typeof otpResendSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ForgotVerifyInput = z.infer<typeof forgotVerifySchema>;

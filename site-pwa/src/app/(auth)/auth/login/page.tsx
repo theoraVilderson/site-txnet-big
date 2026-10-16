@@ -25,6 +25,7 @@ import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
+import { useResend } from "@auth/auth/_hooks/useResend";
 import { authApi, type OtpQueuedResult } from "@/lib/auth-api";
 import { consumeReturnTo } from "@/lib/return-to";
 import { OTP_LENGTH } from "@/lib/otp";
@@ -62,6 +63,7 @@ export default function LoginPage() {
   const isPhoneMethod = loginMethod === "phone";
 
   const submitError = useSubmitError();
+  const resend = useResend({ delivery, otpTimer, submitError });
 
   // A code queued, or the messenger to connect first — the phone login and the
   // password's code step answer alike.
@@ -309,7 +311,9 @@ export default function LoginPage() {
                 onChange={setOtp}
                 timerSeconds={otpTimer.seconds}
                 timerFormatted={otpTimer.formatted}
-                onResend={() => otpTimer.start(120)}
+                onResend={() => void (otpToken
+                  ? resend(() => authApi.sendSecondFactor(otpToken, channels.selected)).then((r) => r && !r.linkRequired && setOtpToken(r.otpToken))
+                  : resend(() => authApi.resendOtp("login", phone, channels.selected)))}
                 onEditPhone={() => { delivery.reset(); setOtpToken(null); setStep(1); }}
                 delivery={delivery.delivery}
               />

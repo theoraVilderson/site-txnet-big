@@ -17,6 +17,8 @@ import { Request, Response } from 'express';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuthService } from './auth.service';
 import { SecondFactorService } from './second-factor.service';
+import { OtpResendService } from './otp/otp-resend.service';
+import { OtpResendGrants } from './otp/otp-resend.store';
 import { LocaleService } from '../locale/locale.service';
 import {
   forgotPasswordSchema,
@@ -30,6 +32,8 @@ import {
   resetPasswordSchema,
   secondFactorSendSchema,
   type SecondFactorSendInput,
+  otpResendSchema,
+  type OtpResendInput,
 } from './auth.schema';
 import { ResponseType } from '../common/response/response.util';
 import { RateLimit } from './decorators/rate-limit.decorator';
@@ -51,6 +55,8 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly locale: LocaleService,
     private readonly secondFactor: SecondFactorService,
+    private readonly resender: OtpResendService,
+    private readonly resends: OtpResendGrants,
   ) {}
 
   private ua(req: Request) {
@@ -96,7 +102,9 @@ export class AuthController {
     configKey: 'LOGIN_OTP_REQUEST_RATE_LIMIT',
     windowSec: 900,
   })
-  requestOtp(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+  async requestOtp(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+    // F-0201-f: the captcha passed, so "Resend code" may replay this step.
+    await this.resends.grant('login', body.phoneNumber);
     return this.auth.requestLoginOtp(
       body.phoneNumber,
       body.channel,
@@ -119,6 +127,20 @@ export class AuthController {
   })
   sendSecondFactor(@Body() body: SecondFactorSendInput, @Ip() ip: string, @Req() req: Request) {
     return this.secondFactor.send(body, ip, requestLanguage(req, this.locale));
+  }
+
+  // "Resend code" (F-0201-f): replays login, register or forgot on the grant that
+  // step wrote after its captcha — so not gated itself, like the verify halves.
+  @Post('otp/resend')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UsePipes(new ZodValidationPipe(otpResendSchema))
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.LOGIN_OTP_REQUEST, rateLimitSubject(req)),
+    configKey: 'LOGIN_OTP_REQUEST_RATE_LIMIT',
+    windowSec: 900,
+  })
+  resendOtp(@Body() body: OtpResendInput, @Ip() ip: string, @Req() req: Request) {
+    return this.resender.resend(body, ip, requestLanguage(req, this.locale));
   }
 
   @Post('login/otp/verify')
@@ -260,7 +282,8 @@ export class AuthController {
     configKey: 'PASSWORD_FORGOT_RATE_LIMIT',
     windowSec: 900,
   })
-  forgot(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+  async forgot(@Body() body: any, @Ip() ip: string, @Req() req: Request) {
+    await this.resends.grant('forgot', body.phoneNumber);
     return this.auth.forgotPassword(body, ip, requestLanguage(req, this.locale));
   }
 

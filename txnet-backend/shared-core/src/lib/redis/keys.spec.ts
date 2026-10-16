@@ -88,6 +88,7 @@ describe('the key catalogue', () => {
       otpCode: scoped.otpCode('login', '+989123456789'),
       otpLock: scoped.otpLock('login', '+989123456789'),
       otpCooldown: scoped.otpCooldown('login', '+989123456789'),
+      otpResend: scoped.otpResend('login', '+989123456789'),
       otpDelivery: scoped.otpDelivery('del-1'),
       rateLimit: scoped.rateLimit('login:1.2.3.4'),
       registerPending: scoped.registerPending('+989123456789'),
