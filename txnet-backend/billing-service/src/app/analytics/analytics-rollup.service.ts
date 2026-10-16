@@ -18,6 +18,7 @@ import {
   writeTraffic,
   writeUsers,
 } from './analytics-rollup';
+import { writeCosts } from './analytics-rollup-cost';
 import { customersFingerprint, customersRange, writeGrantEnds, writeSignups } from './analytics-rollup-customers';
 import { renewalWindowOf } from './analytics-settings';
 
@@ -131,7 +132,8 @@ export class AnalyticsRollupService {
       this.prisma,
       async (tx) => {
         await lockTenantRollup(tx);
-        const zone = how.zone ?? (await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } })).timezone;
+        const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true, tenantType: true } });
+        const zone = how.zone ?? tenant.timezone;
         const range: RollupRange = { fromDay, toDay, zone, ...dayBounds(fromDay, toDay, zone) };
         const today = dayOf(now, zone);
 
@@ -146,6 +148,7 @@ export class AnalyticsRollupService {
         await writeMeters(tx, range);
         await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today });
         await writeSignups(tx, customers);
+        await writeCosts(tx, { ...range, tenantId }, { platform: isPlatformTenant(tenant.tenantType), across: this.all });
         const changed = (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers)) !== before;
 
         // The version is what a read cache is keyed by: a change bumps it, so

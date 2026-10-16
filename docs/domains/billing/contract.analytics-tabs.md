@@ -89,3 +89,32 @@ with no sale in either window is counted in `total`, not listed.
 4. **Cached by the sum of every rollup version**, so any reseller's changed
    pass retires the answer; the page already re-reads on
    `billing.analytics.reseller_refreshed` (F-1001-p).
+
+## Cost attribution (F-1002-b)
+
+`analytics_cost_day` (tenant · day · kind · panel · served tenant · product ·
+user · currency — `cost` to six places, `bytes`), written by every pass
+(`analytics-rollup-cost.ts`, the arithmetic pure in `analytics-cost.ts`). No
+tab reads it yet: margin is F-1001-l's.
+
+1. **The platform's rows: its panels' price.** A day of a platform panel is
+   its monthly USD price (network `contract.panel-cost.md`, `costOn`) over the
+   month's days, split over the Grants that used it that day by bytes
+   (`kind panel`) — the shares rounded to six places, the remainder on the
+   largest, so a day sums to its price exactly. A day with no bytes keeps the
+   whole day on the panel (`kind idle`). A day before a panel's first price
+   writes nothing: "no cost set" is read from `panel_cost`, never stored as 0.
+2. **Every tenant's Grants, by tenant only.** A reseller's users ride the
+   platform's panels, so the platform's pass reads their bytes through the
+   cross-tenant pool; such a row names the reseller (`servedTenantId`) and no
+   product or person (ADR-0104). The platform's own Grants name both.
+3. **A reseller's rows: what it pays the platform.** `metered_usage_charge`
+   net of `metered_usage_refund` per tenant day, split by its Grants' bytes on
+   the platform's panels per product (`kind wholesale`; a day with no bytes is
+   unallocated, product null). Each `subscription_charge` is spread over the
+   days until the next one — the last until `currentPeriodEnd` — unallocated
+   (`kind subscription`): the periods as charged, whatever the billing model.
+4. **Days.** Panel costs are cut on the UTC date, as the traffic that splits
+   them is; a reseller's charges on its tenant day, split by the bytes of the
+   same date. Cost is in USD on the platform's rows and in the billing wallet's
+   currency on a reseller's — never converted (principle 6).

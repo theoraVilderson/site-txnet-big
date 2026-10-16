@@ -69,6 +69,9 @@ export async function rollupFingerprint(tx: Prisma.TransactionClient, r: RollupR
       UNION ALL
       SELECT 'm' || row(e."day", e."productId", e."panelId", e."meterKey", e."quantity", e."grants")::text
         FROM billing.analytics_meter_day e WHERE e."tenantId" = public.current_tenant_id() AND e."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
+      UNION ALL
+      SELECT 'c' || row(c."day", c."kind", c."panelId", c."servedTenantId", c."productId", c."userId", c."currencyCode", c."cost", c."bytes")::text
+        FROM billing.analytics_cost_day c WHERE c."tenantId" = public.current_tenant_id() AND c."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
     ) q`;
   return row?.digest ?? '';
 }

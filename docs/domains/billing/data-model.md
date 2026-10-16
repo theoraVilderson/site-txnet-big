@@ -138,7 +138,9 @@ again. `20261016000200_analytics_customers` (F-1001-f) added `_grant_end`
 (unique grant · `endedOn`, enum `AnalyticsRenewalState`), `_signup_day`,
 `analytics_signup` (one row per user, written by identity's event, copied once
 from `identity.user` as `unknown`) and `analytics_setting` (CHECK 1..30, none =
-7), and flagged every tenant again. Written only by the rollup,
+7), and flagged every tenant again. `20261016000400_analytics_cost_day`
+(F-1002-b) added `_cost_day` (enum `AnalyticsCostKind`, cost to six places)
+and flagged them again. Written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n); `customers` and the renewal window (F-1001-f); `resellers` (F-1001-h).** Everything else is not yet — each rule names its row. Tabs built after F-1001-e are written up in [contract.analytics-tabs.md](contract.analytics-tabs.md). The page and its charts are
+(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n); `customers` and the renewal window (F-1001-f); `resellers` (F-1001-h); cost attribution (F-1002-b).** Everything else is not yet — each rule names its row. Tabs built after F-1001-e are written up in [contract.analytics-tabs.md](contract.analytics-tabs.md). The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -216,7 +216,7 @@ section per block, BOM, formula-leading text quoted. A rebuild answers 409
 - **A reseller's cost is what it pays the platform**: `metered_usage_charge`
   split by bytes per product; `subscription_charge` spread over its period's
   days as an unallocated fixed cost.
-- `analytics_cost_day`: tenant · day · panel · product · user? — `cost`, `bytes`.
+- `analytics_cost_day`: tenant · day · panel · product · user? — `cost`, `bytes` (*as built*: also kind, served tenant, currency — `contract.analytics-tabs.md`).
 - Margin = net − cost, and margin % = margin ÷ net (none when net is 0).
 - **F-1003**: a user whose 30-day cost exceeds their 30-day net, by more than
   the tenant's threshold, is reported once per month to the tenant's staff

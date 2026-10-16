@@ -1544,6 +1544,39 @@ model AnalyticsSetting {
   @@schema("billing")
 }
 
+/// F-1002-b: what a cost row is — a panel's day split by bytes, a panel's day
+/// with no traffic, what a reseller pays the platform per use, its subscription.
+enum AnalyticsCostKind {
+  panel
+  idle
+  wholesale
+  subscription
+
+  @@schema("billing")
+}
+
+/// F-1002-b: what each tenant day cost (a flow), per panel, served tenant,
+/// product and the platform's own user — the platform's rows a panel's
+/// monthly price split by bytes, a reseller's what it pays the platform.
+/// Written only by the rollup (`analytics-rollup-cost.ts`). The grain is a
+/// NULLS NOT DISTINCT unique index in the migration.
+model AnalyticsCostDay {
+  id             String            @id @default(uuid()) @db.Uuid
+  tenantId       String            @db.Uuid
+  day            DateTime          @db.Date
+  kind           AnalyticsCostKind
+  panelId        String?           @db.Uuid
+  servedTenantId String?           @db.Uuid
+  productId      String?           @db.Uuid
+  userId         String?           @db.Uuid
+  currencyCode   String
+  cost           Decimal           @db.Decimal(18, 6)
+  bytes          BigInt
+
+  @@map("analytics_cost_day")
+  @@schema("billing")
+}
+
 /// F-1001-a: one row per tenant — the zone its rollup days were cut in (a
 /// change rebuilds them), the version read caches are keyed by, the last
 /// refresh, and a whole rebuild in progress.
