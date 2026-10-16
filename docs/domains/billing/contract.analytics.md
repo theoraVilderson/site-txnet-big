@@ -60,6 +60,7 @@ days) and **stocks** (what stood at the end of a day, never summed over days).
 | `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
 | `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
 | `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups` — from identity's user-created event, never a cross-schema read |
+| `analytics_meter_day` (flow, F-1001-n, ADR-0148) | tenant · day · product · meter | `quantity` (the meter's unit), `grants` — from `billing.usage_event`; `vpn.traffic` from `network.traffic_daily_aggregate` only |
 
 **As built (F-1001-a, `billing-service/src/app/analytics/`).** A grain's null
 product or panel is one cell (`NULLS NOT DISTINCT` unique). A sale's panel is
@@ -122,6 +123,12 @@ All `GET /api/billing/tenants/:tenantId/analytics/<tab>` with
   when `previous` is 0 — never infinity, never a division by zero.
 
 | tab | row | answers |
+- **Every product, not only VPN (ADR-0148, F-1001-n).** Common figures for
+  every kind; usage per meter — `overview` answers `usage` (per meter: total,
+  previous, delta, series) and `names` gains `meters` (`key`, `unit`, `nameKey`)
+  and `kinds` (the `fulfilmentKind`s in the window). Filter `fulfilment`, joined
+  from `catalog.product` (fixed at creation). `bytesUsed` stays until its
+  readers move, then goes (C-39).
 |---|---|---|
 | `overview` | F-1001-b | KPIs: `net`, `gross`, `refunds`, `topUps`, `orders`, `aov` (net ÷ orders), `buyers`, `newBuyers`, `returningBuyers`, `arpu`, `renewal` `{rate, renewed, lapsed, pending}`, `activeGrants` (end of range), `bytesUsed`; `series` (`salesPackage`, `salesUsage`, `topUps`, `orders`, `newBuyers` per bucket); `byProduct` top 7 + `other`; `calendar` (net per day, last 365 days) |
 | `sales` | F-1001-b | series by kind; payments `started / settled / failed` and success rate by gateway kind; `discounts` and `giftsCredited`; refunds by product |

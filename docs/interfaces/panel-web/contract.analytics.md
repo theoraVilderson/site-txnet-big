@@ -180,6 +180,12 @@ screen through billing's `format=` (the same door and under-5 rule), saved by
 6. Owner only: the **top 5 resellers** with sparklines, linking to the tab.
 
 ### Other tabs
+**By meter, not by VPN (ADR-0148, F-1001-o).** The KPI row keeps the
+common tiles; "traffic" becomes one tile per meter in the window (its
+`nameKey`, written in its unit), and a usage card per meter joins the Overview.
+The filter bar gains the product kind when the window holds more than one;
+the panel filter and per-panel lists are drawn only when a product has a panel.
+
 
 - **Sales** (F-1001-e): package vs usage sales (`StackedColumns`), sales vs
   top-ups as two charts, payment success rate by gateway (`BarList`),
