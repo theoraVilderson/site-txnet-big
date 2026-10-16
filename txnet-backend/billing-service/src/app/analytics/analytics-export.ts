@@ -39,8 +39,8 @@ export type ExportContext = {
   jalali: boolean;
 };
 
-/** What every answer carries around its figures — the page's, not the report's. */
-const HEAD = new Set(['tab', 'query', 'refreshedAt', 'rebuilding', 'granularity', 'buckets', 'suppressed', 'names', 'currencies']);
+/** What every answer carries around its figures — the page's, not the report's (the insights are sentences the page writes from figures the file has). */
+const HEAD = new Set(['tab', 'query', 'refreshedAt', 'rebuilding', 'granularity', 'buckets', 'suppressed', 'names', 'currencies', 'insights']);
 /** A field that is a ratio, not a count: written as a percentage. */
 const RATIOS = new Set(['share', 'successRate', 'rate', 'delta']);
 /** A field that names a tenant day. */

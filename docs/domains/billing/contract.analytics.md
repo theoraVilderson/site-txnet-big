@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b); the export (F-1007-a).** Everything else is not yet — each rule names its row. The page and its charts are
+(F-1001-b); the export (F-1007-a); insights (F-1001-j).** Everything else is not yet — each rule names its row. The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -163,6 +163,16 @@ bucket) for the overview's new vs returning.
 KPI with the largest absolute delta; the product that contributed most to the
 change in `net`; a day more than 2σ off its 28-day mean. A rule with nothing
 to say says nothing.
+
+**As built (F-1001-j, `analytics-insights.ts`).** `key` names the sentence —
+`kpiMove {kpi, delta, currency}`, `productDrove {productId, change, currency}`,
+`unusualDay {day, net, mean, currency}` — and the panel's locale holds its
+words. Money is the operating currency's. A `new` delta never competes; the
+product named moved net the way net moved; a day is judged against its own
+previous 28 days, and a flat baseline (σ 0) judges nothing. Nothing compared,
+no product rule; a product filter on, no product rule; to the platform's staff
+on a reseller a hidden product is never named and the day rule is off (a day
+and its mean could describe a hidden cell). The export leaves `insights` out.
 
 ## Export (F-1007-a)
 

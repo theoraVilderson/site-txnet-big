@@ -18,6 +18,7 @@ import {
   moneyKpi,
   perUnit,
 } from './analytics-figures';
+import { Insight, insightsOf } from './analytics-insights';
 import { readBuyers, readSales } from './analytics-read';
 import { Series, seriesPair } from './analytics-series';
 import { Totals, totalsPair } from './analytics-totals';
@@ -52,6 +53,8 @@ export type Overview = {
   previousSeries: Series | null;
   byProduct: { top: ProductCell[]; other: { net: Amounts; orders: number; share: number | null } | null };
   calendar: { day: Day; net: Amounts | null }[];
+  /** Up to three "what changed" lines (F-1001-j). */
+  insights: Insight[];
 };
 
 function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[]): Overview['kpis'] {
@@ -120,11 +123,13 @@ async function calendarOf(c: TabContext, currencies: readonly string[]): Promise
 export async function overviewOf(c: TabContext): Promise<Overview> {
   const { now, before } = await totalsPair(c);
   const currencies = currenciesOf(c.operating, now.currencies, before?.currencies ?? []);
+  const kpis = kpisOf(now, before, currencies);
   return {
     currencies,
-    kpis: kpisOf(now, before, currencies),
+    kpis,
     ...(await seriesPair(c, currencies)),
     byProduct: await byProductOf(c, currencies),
     calendar: await calendarOf(c, currencies),
+    insights: await insightsOf(c, kpis),
   };
 }

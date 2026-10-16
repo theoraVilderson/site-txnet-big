@@ -165,6 +165,8 @@ describe('AnalyticsService.read', () => {
         bytesUsed: { value: '1000' },
         renewal: null,
       },
+      // Every figure equal to the previous window's: no "what changed" line (F-1001-j).
+      insights: [],
     });
   });
 
