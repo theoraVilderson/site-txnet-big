@@ -169,7 +169,7 @@ describe('AnalyticsService.read', () => {
         returningBuyers: { value: 5 },
         activeGrants: { value: 12 },
         bytesUsed: { value: '1000' },
-        renewal: null,
+        renewal: { rate: null, renewed: 0, lapsed: 0, pending: 0 },
       },
       // Every figure equal to the previous window's: no "what changed" line (F-1001-j).
       insights: [],

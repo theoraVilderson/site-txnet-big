@@ -46,7 +46,7 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     role: { findFirst: vi.fn().mockResolvedValue({ id: 'role-user' }) },
     user: {
       findFirst: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({ id: 'user-1' }),
+      create: vi.fn().mockResolvedValue({ id: 'user-1', createdAt: new Date('2026-10-16T08:00:00Z') }),
       count: vi.fn().mockResolvedValue(limits.users ?? 0),
     },
     // The reseller's limits (ADR-0106, F-019-t2); the platform's own tenant is exempt.
@@ -55,6 +55,7 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     resellerLimit: { findMany: vi.fn().mockResolvedValue(limits.endUsers === undefined ? [] : [{ key: 'end_users_max', value: limits.endUsers }]) },
     packageLimit: { findMany: vi.fn().mockResolvedValue([]) },
     resellerLimitSetting: { findMany: vi.fn().mockResolvedValue([]) },
+    outboxEvent: { create: vi.fn().mockResolvedValue({}) },
     $executeRaw: vi.fn().mockResolvedValue(0),
   };
   prisma.$transaction = vi.fn((fn: (tx: unknown) => unknown) => fn(prisma));
@@ -77,6 +78,8 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     startLink: vi.fn().mockResolvedValue({ linkUrl: 'https://t.me/bot?start=tok' }),
     promoteProvenChat: vi.fn().mockResolvedValue(undefined),
   };
+  // A parked proof of the phone over a bot: none, unless a test says otherwise.
+  const botStore = { provenChat: vi.fn().mockResolvedValue(null) };
   const deliveries = {
     mintHandles: vi.fn().mockResolvedValue({
       deliveryId: 'a'.repeat(32),
@@ -96,9 +99,10 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     botLinks as never,
     deliveries as never,
     owners as never,
+    botStore as never,
   );
 
-  return { service, prisma, redis, otpService, channels, botLinks, deliveries, owners };
+  return { service, prisma, redis, otpService, channels, botLinks, deliveries, owners, botStore };
 }
 
 const input = (over: Record<string, unknown> = {}) => ({
@@ -349,6 +353,21 @@ describe('RegisterService — a reseller full of users (F-019-t2)', () => {
     expect(res).toEqual({ ok: false, msg: 'register.closed', error: null });
     expect(h.prisma.user.create).not.toHaveBeenCalled();
     expect(h.prisma.$executeRaw).toHaveBeenCalled();
+  });
+
+  it('tells analytics of the signup in the same transaction, with where it came through (F-1001-f)', async () => {
+    const h = harness();
+    h.botStore.provenChat.mockImplementation(async (platform: string) => (platform === 'telegram' ? '991' : null));
+    h.redis.getJson.mockResolvedValue({ fullName: 'B', username: 'b', phoneNumber: PHONE, passwordHash: 'h', tenantId: 'tenant-1', roleId: 'role-user' });
+    await runWithTenant(TENANT as never, () => h.service.verifyPhone({ phoneNumber: PHONE, otpCode: '123456' } as never));
+    expect(h.prisma.outboxEvent.create).toHaveBeenCalledWith({
+      data: {
+        aggregate: 'identity.user',
+        aggregateId: 'user-1',
+        type: 'identity.user.signed_up',
+        payload: { tenantId: 'tenant-1', userId: 'user-1', signedUpAt: '2026-10-16T08:00:00.000Z', source: 'telegram' },
+      },
+    });
   });
 
   it("binds the reseller's tenant before it counts, or the count is refused", async () => {

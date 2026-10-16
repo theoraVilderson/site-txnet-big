@@ -14,10 +14,12 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
-import { otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, type ResellerLimitReader, type ResellerUsageReader } from '@txnet-backend/shared-core';
+import { OutboxEventType, otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
+import { BotLinkStore } from '../bot-link/bot-link.store';
+import { signupSourceOf } from './signup-source';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
@@ -49,6 +51,7 @@ export class RegisterService {
     private readonly botLinks: BotLinkService,
     private readonly deliveries: OtpDeliveryStore,
     private readonly owners: SurfaceOwnerService,
+    private readonly botStore: BotLinkStore,
   ) {}
 
   /**
@@ -230,10 +233,11 @@ export class RegisterService {
         // filled while this code was on its way (F-019-t2). `tenantTransaction`,
         // not `$transaction`: the limit's `User.count` is refused in a
         // transaction that bound no tenant.
+        const source = await signupSourceOf(this.botStore, phoneNumber);
         const user = await tenantTransaction(this.prisma, async (tx) => {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:end_users_max:${pending.tenantId}`}))`;
           if (await this.full(tx, pending.tenantId)) return null;
-          return tx.user.create({
+          const created = await tx.user.create({
             data: {
               fullName: pending.fullName,
               username: pending.username,
@@ -244,8 +248,12 @@ export class RegisterService {
               status: 'active',
               phoneVerifiedAt: new Date(),
             },
-            select: { id: true },
+            select: { id: true, createdAt: true },
           });
+          // Analytics counts signups from this event, never from identity's tables (F-1001-f).
+          const payload: UserSignedUpPayload = { tenantId: pending.tenantId, userId: created.id, signedUpAt: created.createdAt.toISOString(), source };
+          await tx.outboxEvent.create({ data: { aggregate: USER_SIGNED_UP_AGGREGATE, aggregateId: created.id, type: OutboxEventType.USER_SIGNED_UP, payload } });
+          return created;
         });
         if (!user) return err('register.closed');
 

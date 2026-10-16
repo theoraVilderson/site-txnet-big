@@ -26,7 +26,7 @@ const PACKAGE_REASONS = referringTo('invoice');
 const GRANT_REASONS = referringTo('grant');
 
 /** The tenant day an instant column falls on — `createdAt` is UTC without a zone (C-37). */
-const dayIn = (column: Prisma.Sql, zone: string) => Prisma.sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${zone})::date`;
+export const dayIn = (column: Prisma.Sql, zone: string) => Prisma.sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${zone})::date`;
 
 /** Sales and the refunds that undo them in the window, each with its owner and tenant day. */
 const ledger = (r: RollupRange) => Prisma.sql`
@@ -279,7 +279,10 @@ export async function firstActivity(tx: Prisma.TransactionClient): Promise<Date 
   const [row] = await tx.$queryRaw<{ at: Date | null }[]>`
     SELECT LEAST(
       (SELECT MIN(wt."createdAt") FROM billing.wallet_transaction wt WHERE wt."tenantId" = public.current_tenant_id()),
-      (SELECT MIN(p."createdAt") FROM billing.payment_transaction p WHERE p."tenantId" = public.current_tenant_id())
+      (SELECT MIN(p."createdAt") FROM billing.payment_transaction p WHERE p."tenantId" = public.current_tenant_id()),
+      -- A signup or a Grant before the first sale is a Customers figure too (F-1001-f).
+      (SELECT MIN(s."signedUpAt") FROM billing.analytics_signup s WHERE s."tenantId" = public.current_tenant_id()),
+      (SELECT MIN(g."startsAt") FROM entitlement."grant" g WHERE g."tenantId" = public.current_tenant_id())
     ) AS "at"`;
   return row?.at ?? null;
 }

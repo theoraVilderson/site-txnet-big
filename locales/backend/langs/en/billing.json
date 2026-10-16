@@ -71,7 +71,19 @@
       "giftsCredited": "Gifts credited",
       "refundsByProduct": "Refunds by product",
       "products": "Products",
-      "panels": "Panels"
+      "panels": "Panels",
+      "renewalWindowDays": "Renewal window (days)",
+      "signups": "Signups",
+      "total": "Total",
+      "count": "Count",
+      "purchased7": "Bought within 7 days",
+      "purchased30": "Bought within 30 days",
+      "bySource": "By source",
+      "source": "Source",
+      "renewalByProduct": "Renewal by product",
+      "topCustomers": "Top customers",
+      "userId": "User",
+      "name": "Name"
     }
   }
 }

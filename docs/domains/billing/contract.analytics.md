@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n).** Everything else is not yet — each rule names its row. The page and its charts are
+(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n); `customers` and the renewal window (F-1001-f).** Everything else is not yet — each rule names its row. Tabs built after F-1001-e are written up in [contract.analytics-tabs.md](contract.analytics-tabs.md). The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -58,8 +58,8 @@ days) and **stocks** (what stood at the end of a day, never summed over days).
 | `analytics_user_day` (flow) | tenant · day · currency · user · product · panel (F-1001-b: buyers per product and panel; a top-up row has neither) | `net`, `orders`, `topUps`, `firstPurchase` (bool) — sparse, only users with activity |
 | `analytics_payment_day` (flow) | tenant · day · currency · gateway kind | `started`, `settled`, `failed`, `settledAmount`, `giftsCredited` (coupon/gift credits) |
 | `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
-| `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
-| `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups` — from identity's user-created event, never a cross-schema read |
+| `analytics_grant_end` (F-1001-f) | grant · `endedOn` (*corrected*: a term, `contract.analytics-tabs.md`) | tenant, user, product, panel, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
+| `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups`, `purchased7`, `purchased30` — from `analytics_signup`, written by identity's `identity.user.signed_up`, never a cross-schema read |
 | `analytics_meter_day` (flow, F-1001-n, ADR-0148) | tenant · day · product · panel · meter | `quantity` (the meter's unit), `grants` — from `billing.usage_event`; `vpn.traffic` from `network.traffic_daily_aggregate` only |
 
 **As built (F-1001-a, `billing-service/src/app/analytics/`).** A grain's null
@@ -158,7 +158,7 @@ resolved; `calendar` defaults to `gregorian`), `refreshedAt` (read fresh, never
 cached) and `rebuilding`; while true there are no figures. A buyer is a user
 with a sale or refund in the cell (`net` or `orders` ≠ 0); `topUps` is
 `analytics_payment_day.settledAmount`, so product and panel filters leave it
-whole. `renewal` is `null` until F-1001-f. Buckets are named by their first day
+whole. `renewal` is F-1001-f's (`contract.analytics-tabs.md`). Buckets are named by their first day
 inside the window. To the platform's staff on a reseller (`suppressed`): series
 buckets, calendar days and product/panel rows under 5 buyers, with their
 complements (`hiddenCells`), and `payments.byKind` is `null` — the rollup has

@@ -134,7 +134,11 @@ DISTINCT` where a product, panel or gateway kind may be null — plus
 (F-1001-b) put product and panel on the user grain and flagged every tenant
 for a whole rebuild. `20261016000100_analytics_meter_day` (F-1001-n,
 ADR-0148) added the `_meter_day` flow, same shape, and flagged every tenant
-again. Written only by the rollup,
+again. `20261016000200_analytics_customers` (F-1001-f) added `_grant_end`
+(unique grant · `endedOn`, enum `AnalyticsRenewalState`), `_signup_day`,
+`analytics_signup` (one row per user, written by identity's event, copied once
+from `identity.user` as `unknown`) and `analytics_setting` (CHECK 1..30, none =
+7), and flagged every tenant again. Written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

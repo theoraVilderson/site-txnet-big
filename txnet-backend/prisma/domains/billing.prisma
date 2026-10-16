@@ -1469,6 +1469,81 @@ model AnalyticsMeterDay {
   @@schema("billing")
 }
 
+/// F-1001-f: where a renewal stands — renewed within the tenant's window,
+/// lapsed once it passed without one, pending while it is open.
+enum AnalyticsRenewalState {
+  renewed
+  lapsed
+  pending
+
+  @@schema("billing")
+}
+
+/// F-1001-f: one ended term of a Grant — its end now, once passed, or an end
+/// an admin moved later. `renewedOn` is the nearest renewal within 30 days
+/// (the widest window), so a window change re-states rows without a rebuild.
+/// Written only by the rollup.
+model AnalyticsGrantEnd {
+  id        String                @id @default(uuid()) @db.Uuid
+  tenantId  String                @db.Uuid
+  grantId   String                @db.Uuid
+  userId    String                @db.Uuid
+  productId String?               @db.Uuid
+  panelId   String?               @db.Uuid
+  endedOn   DateTime              @db.Date
+  renewedOn DateTime?             @db.Date
+  state     AnalyticsRenewalState
+
+  @@unique([grantId, endedOn])
+  @@index([tenantId, endedOn])
+  @@map("analytics_grant_end")
+  @@schema("billing")
+}
+
+/// F-1001-f: one row per user who signed up, from identity's
+/// `identity.user.signed_up` event (never a read of identity's tables) —
+/// what signups and signup -> first purchase are counted from.
+model AnalyticsSignup {
+  userId     String   @id @db.Uuid
+  tenantId   String   @db.Uuid
+  signedUpAt DateTime
+  /// `web`, or the bot platform the phone was proven over.
+  source     String
+
+  @@index([tenantId, signedUpAt])
+  @@map("analytics_signup")
+  @@schema("billing")
+}
+
+/// F-1001-f: signups per tenant day and source (a flow), and how many of them
+/// bought within 7 and 30 days of signing up.
+model AnalyticsSignupDay {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  day         DateTime @db.Date
+  source      String
+  signups     Int
+  purchased7  Int
+  purchased30 Int
+
+  @@unique([tenantId, day, source])
+  @@map("analytics_signup_day")
+  @@schema("billing")
+}
+
+/// F-1001-f: a tenant's analytics settings; none = the defaults in code.
+/// Changed in place.
+model AnalyticsSetting {
+  tenantId          String   @id @db.Uuid
+  /// Days before or after a term's end a renewal counts in, 1..30 (CHECK in the migration).
+  renewalWindowDays Int
+  updatedByUserId   String?  @db.Uuid
+  updatedAt         DateTime @updatedAt
+
+  @@map("analytics_setting")
+  @@schema("billing")
+}
+
 /// F-1001-a: one row per tenant — the zone its rollup days were cut in (a
 /// change rebuilds them), the version read caches are keyed by, the last
 /// refresh, and a whole rebuild in progress.

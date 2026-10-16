@@ -18,6 +18,7 @@ import {
   moneyKpi,
   perUnit,
 } from './analytics-figures';
+import { RenewalFigures, renewalFiguresOf } from './analytics-customers';
 import { Insight, insightsOf } from './analytics-insights';
 import { readBuyers, readSales } from './analytics-read';
 import { Series, seriesPair } from './analytics-series';
@@ -45,8 +46,8 @@ export type Overview = {
     buyers: CountKpi;
     newBuyers: CountKpi;
     returningBuyers: CountKpi;
-    /** F-1001-f answers it; until then `null`. */
-    renewal: null;
+    /** Terms that ended in the window and where they stand (F-1001-f). */
+    renewal: RenewalFigures;
     activeGrants: CountKpi;
     bytesUsed: { value: string; previous: string | null; delta: Delta };
   };
@@ -60,7 +61,7 @@ export type Overview = {
   usage: UsageCard[];
 };
 
-function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[]): Overview['kpis'] {
+function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[], renewal: RenewalFigures): Overview['kpis'] {
   const money = (pick: (t: Totals) => Totals['net']) => moneyKpi(pick(now), before ? pick(before) : null, currencies);
   const count = (pick: (t: Totals) => number) => countKpi(pick(now), before ? pick(before) : null);
   return {
@@ -74,7 +75,7 @@ function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[
     buyers: count((t) => t.buyers),
     newBuyers: count((t) => t.newBuyers),
     returningBuyers: count((t) => t.buyers - t.newBuyers),
-    renewal: null,
+    renewal,
     activeGrants: count((t) => t.activeGrants),
     bytesUsed: { value: now.bytesUsed.toString(), previous: before?.bytesUsed.toString() ?? null, delta: before ? deltaOf(now.bytesUsed.toString(), before.bytesUsed.toString()) : null },
   };
@@ -126,7 +127,7 @@ async function calendarOf(c: TabContext, currencies: readonly string[]): Promise
 export async function overviewOf(c: TabContext): Promise<Overview> {
   const { now, before } = await totalsPair(c);
   const currencies = currenciesOf(c.operating, now.currencies, before?.currencies ?? []);
-  const kpis = kpisOf(now, before, currencies);
+  const kpis = kpisOf(now, before, currencies, await renewalFiguresOf(c));
   const series = await seriesPair(c, currencies);
   // The buckets the series hide from the platform's staff hide usage too.
   const hidden = new Set(c.buckets.filter((_, i) => series.series.orders[i] === null));
@@ -136,7 +137,8 @@ export async function overviewOf(c: TabContext): Promise<Overview> {
     ...series,
     byProduct: await byProductOf(c, currencies),
     calendar: await calendarOf(c, currencies),
-    insights: await insightsOf(c, kpis),
+    // A rate with no previous window is no KPI move: renewal is not one of the lines.
+    insights: await insightsOf(c, { ...kpis, renewal: null }),
     usage: await usageOf(c, hidden),
   };
 }

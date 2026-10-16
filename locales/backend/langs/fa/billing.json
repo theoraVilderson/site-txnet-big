@@ -71,7 +71,19 @@
       "giftsCredited": "هدیه‌های اعتبار",
       "refundsByProduct": "بازپرداخت به تفکیک محصول",
       "products": "محصولات",
-      "panels": "پنل‌ها"
+      "panels": "پنل‌ها",
+      "renewalWindowDays": "بازهٔ تمدید (روز)",
+      "signups": "ثبت‌نام‌ها",
+      "total": "کل",
+      "count": "تعداد",
+      "purchased7": "خرید تا ۷ روز",
+      "purchased30": "خرید تا ۳۰ روز",
+      "bySource": "به تفکیک مبدأ",
+      "source": "مبدأ",
+      "renewalByProduct": "تمدید به تفکیک محصول",
+      "topCustomers": "برترین مشتریان",
+      "userId": "کاربر",
+      "name": "نام"
     }
   }
 }

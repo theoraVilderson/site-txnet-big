@@ -65,13 +65,13 @@ fingerprint: refused with `auth.permissionsChanged` once Redis holds another for
 
 ## Emits (events)
 
-An access change is an outbox row (below). Impersonation start/end write an
-`audit.admin_audit_log` row **synchronously in the same transaction**.
+An access change and a signup are outbox rows (below). Impersonation start/end write an `audit.admin_audit_log` row **synchronously in the same transaction**.
 
 | channel | when | payload | consumer |
 |---|---|---|---|
 | Postgres `NOTIFY identity_permissions_changed` (F-101-b, ADR-0043) | after commit of a `role_permission` write, a `user.roleId` change, or a `permission.key` rename — from triggers, so SQL and migrations count | JSON, ids only: `{kind:"role",roleId}`, `{kind:"user",userId,roleId}`, `{kind:"person",userId}`, `{kind:"group",groupId}` (governance's triggers), `{kind:"all"}` | auth-service `PermissionNotificationsListener`, which rewrites `role:<id>:permissions` / `user:<id>:role` and the personal holders' `user:<id>:permissions` (`contract.access.md`). Not queued: a listener that was away recomputes every role and personal holder on connect |
 | outbox `identity.access.changed` (AC-1-q, ADR-0121) | in the transaction that set a person's role (`TenantRolesService.assign`) or replaced the keys of a role they hold (`RolesService.update`, one row per holder) or gave, took or lifted one key on them (`keys_set`) or its window opened or closed (`key_window`, F-030-a; `contract.access.md`); governance writes it on a group change (`group_access`) and when a membership's end passes (`group_membership_ended`, GR-1-c); tenant when a seat is removed or restored | `{userId, tenantId, cause}` (`role_set` / `role_edited` / `keys_set` / `group_access` / `group_membership_ended` / `key_window` / `seat_removed` / `seat_restored`) + `role` (role_set: its name) or `given`/`taken` (the key causes), + `group` (group_membership_ended: the name), written with its `access_history` row by shared-core `recordAccessChange` (AC-1-p) | worker live-push -> `user:<userId>` (`{type}` only); panel-web refreshes and re-reads `me` (AC-1-r, `contract.session-guard.md`); worker `AccessNoticeConsumer` -> inbox + bot (AC-1-s, automation `contract.notices.md`) |
+| outbox `identity.user.signed_up` (F-1001-f) | in the transaction that creates the user at `verify-phone` (`RegisterService.verifyPhone`) — the only place a user is created | `{tenantId, userId, signedUpAt, source}` (shared-core `user-signed-up.ts`); `source` is `web` or the bot platform that proved the phone (`BotLinkService.signupSource`) | billing's metering-service -> one `billing.analytics_signup` row per user (`billing/contract.analytics.md`); billing never reads identity's tables for it |
 
 ## Consumes
 

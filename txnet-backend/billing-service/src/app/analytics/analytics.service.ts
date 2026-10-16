@@ -17,6 +17,7 @@ import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
 import { catalogOf } from './analytics-catalog';
+import { customersOf } from './analytics-customers';
 import { AnalyticsNames, namesOf } from './analytics-names';
 import { overviewOf } from './analytics-overview';
 import { salesOf } from './analytics-sales';
@@ -55,7 +56,7 @@ export type ReadyAnswer = Extract<AnalyticsAnswer, { rebuilding: false }>;
 export const isReady = (a: AnalyticsAnswer): a is ReadyAnswer => a.rebuilding === false;
 
 /** Each tab's builder; a tab with no row yet has none. */
-const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf };
+const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf, customers: customersOf };
 
 /**
  * The analytics tabs (F-1001-b): `overview`, `sales`, `catalog` for the tenant

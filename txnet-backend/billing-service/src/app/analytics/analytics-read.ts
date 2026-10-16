@@ -59,11 +59,12 @@ export type PaymentRow = {
   giftsCredited: Prisma.Decimal;
 };
 
-const in_ = (alias: Prisma.Sql, w: Window) =>
+/** A rollup row of the tenant in scope whose `day` is inside `w`. */
+export const in_ = (alias: Prisma.Sql, w: Window) =>
   Prisma.sql`${alias}."tenantId" = public.current_tenant_id() AND ${alias}."day" BETWEEN ${w.from}::date AND ${w.to}::date`;
 
 /** The bucket join, or nothing: a closed fragment, never caller text. */
-const bucketJoin = (alias: Prisma.Sql, map?: DayMap) =>
+export const bucketJoin = (alias: Prisma.Sql, map?: DayMap) =>
   map ? Prisma.sql`JOIN unnest(${map.days}::date[], ${map.keys}::date[]) AS m("day", "bucket") ON m."day" = ${alias}."day"` : Prisma.empty;
 
 /** One select-and-group column per split; an unasked split reads null so every row has the same shape. */
@@ -81,8 +82,8 @@ function splitColumns(alias: Prisma.Sql, splits: readonly SalesSplit[]) {
   };
 }
 
-// `catalog.product` holds the tenant's own products and the platform's (its RLS), every product a rollup row can name.
-const productPanel = (alias: Prisma.Sql, f: AnalyticsFilters) => Prisma.sql`
+/** The product, panel and kind filters on a rollup row; `catalog.product` holds the tenant's own products and the platform's (its RLS). */
+export const productPanel = (alias: Prisma.Sql, f: AnalyticsFilters) => Prisma.sql`
   ${f.product ? Prisma.sql`AND ${alias}."productId" = ${f.product}::uuid` : Prisma.empty}
   ${f.panel ? Prisma.sql`AND ${alias}."panelId" = ${f.panel}::uuid` : Prisma.empty}
   ${f.fulfilment ? Prisma.sql`AND ${alias}."productId" IN (SELECT cp."id" FROM catalog.product cp WHERE cp."fulfilmentKind" = ${f.fulfilment}::catalog."FulfilmentKind")` : Prisma.empty}`;

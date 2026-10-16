@@ -2,7 +2,9 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import type { UsageDeltaMessage, UsageEvent, UsageReleasePayload } from '@txnet-backend/shared-core';
 
 import { BrokerService } from '../broker/broker.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { MeteringService } from './metering.service';
+import { recordSignup } from './signup';
 
 /**
  * The queue end of the delta consumer (F-027-n): it subscribes, and it decides
@@ -20,15 +22,18 @@ export class DeltaConsumer implements OnApplicationBootstrap {
   constructor(
     private readonly broker: BrokerService,
     private readonly metering: MeteringService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async onApplicationBootstrap() {
-    await this.broker.consumeUsage(
-      (message) => this.handle(message),
-      (release) => this.release(release),
-      (event) => this.usage(event),
-    );
-    this.logger.log('consuming network.usage.#, released holds and usage events — every measured byte is billed, held or quarantined');
+    await this.broker.consumeUsage({
+      delta: (message) => this.handle(message),
+      release: (release) => this.release(release),
+      usage: (event) => this.usage(event),
+      // Billing's analytics count signups from identity's event (F-1001-f).
+      signup: (signup) => recordSignup(this.prisma, signup),
+    });
+    this.logger.log('consuming network.usage.#, released holds, usage events and signups — every measured byte is billed, held or quarantined');
   }
 
   private async handle(message: UsageDeltaMessage): Promise<void> {

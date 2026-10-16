@@ -115,6 +115,10 @@ nothing, and one Grant's group may mix both.
    never both. Only a `vpn.traffic` leg counts: an unlimited plan's
    `vpn.unlimited.time` leg buys days, not bytes (F-118-z).
 
+**Signups (F-1001-f).** The same queue binds `outbox.identity.user.signed_up`:
+`recordSignup` writes one `analytics_signup` row per user, a copy nothing
+([contract.analytics-tabs.md](contract.analytics-tabs.md) rule 5).
+
 ## Usage events — every meter but VPN (F-118-f)
 
 ADR-0105 decision 5: a use of a Grant's meter is a `usage_event` that advances

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import { RateLimitBucket, type RateLimitOptions, ResellerAccessRejection, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
@@ -9,6 +9,8 @@ import { RefusalStatus, refusalException } from '../request/refusal-exception';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { LocaleService } from '../locale/locale.service';
 import { AnalyticsExportService, AnalyticsRebuilding } from './analytics-export.service';
+import { RenewalWindowBody, renewalWindowSchema } from './analytics-settings';
+import { AnalyticsSettingsService } from './analytics-settings.service';
 import { AnalyticsAnswer, AnalyticsRefused, AnalyticsService } from './analytics.service';
 import { AnalyticsRequest, AnalyticsTab, analyticsRequestSchema } from './analytics.schema';
 
@@ -43,6 +45,7 @@ export class AnalyticsController {
     private readonly analytics: AnalyticsService,
     private readonly files: AnalyticsExportService,
     private readonly locale: LocaleService,
+    private readonly settings: AnalyticsSettingsService,
   ) {}
 
   /** KPIs against the previous window, the hero series, sales by product, the calendar. */
@@ -64,6 +67,26 @@ export class AnalyticsController {
   @RateLimit(READ)
   catalog(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     return this.read(req, res, tenantId, 'catalog', q);
+  }
+
+  /** New vs returning, signups -> first purchase, renewal by product, top customers (F-1001-f). */
+  @Get('customers')
+  @RateLimit(READ)
+  customers(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'customers', q);
+  }
+
+  /** The renewal window, 1..30 days (F-1001-f) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
+  @Put('settings')
+  @RateLimit(READ)
+  async setSettings(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(renewalWindowSchema)) body: RenewalWindowBody, @Req() req: Request) {
+    const { userId, tenantId: sessionTenantId, permissions } = identityOf(req);
+    try {
+      return await this.settings.setRenewalWindow({ userId, tenantId: sessionTenantId, permissions }, tenantId, body);
+    } catch (e) {
+      if (!(e instanceof AnalyticsRefused)) throw e;
+      throw refusalException(STATUS[e.reason], { reason: e.reason, message: e.message });
+    }
   }
 
   private async read(req: Request, res: Response, tenantId: string, tab: AnalyticsTab, { format, ...q }: AnalyticsRequest): Promise<AnalyticsAnswer | StreamableFile> {

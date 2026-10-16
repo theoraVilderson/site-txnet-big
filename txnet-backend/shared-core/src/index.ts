@@ -11,6 +11,7 @@ export * from './lib/ai/suggestion-copy';
 export * from './lib/automation/block-request';
 export * from './lib/automation/usage-delta';
 export * from './lib/automation/usage-release';
+export * from './lib/automation/user-signed-up';
 export * from './lib/realtime/fanout';
 export * from './lib/http/headers';
 export * from './lib/http/service-only.guard';

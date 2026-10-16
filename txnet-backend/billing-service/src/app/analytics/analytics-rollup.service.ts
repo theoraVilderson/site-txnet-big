@@ -18,6 +18,8 @@ import {
   writeTraffic,
   writeUsers,
 } from './analytics-rollup';
+import { customersFingerprint, customersRange, writeGrantEnds, writeSignups } from './analytics-rollup-customers';
+import { renewalWindowOf } from './analytics-settings';
 
 /**
  * Tenants one refresh tick passes over, oldest refresh first — so a platform
@@ -46,7 +48,7 @@ export type AnalyticsRefreshResult = { tenants: number; changed: number; rebuilt
  * workspace twins are on the platform's panel, where the owner is a platform
  * user and staff are the platform's (RT-1-e's pair). Ids and days only.
  */
-async function announce(tx: Prisma.TransactionClient, tenantId: string, from: Day, to: Day): Promise<void> {
+export async function announce(tx: Prisma.TransactionClient, tenantId: string, from: Day, to: Day): Promise<void> {
   await tx.outboxEvent.create({ data: { aggregate: 'billing.analytics', aggregateId: tenantId, type: OutboxEventType.ANALYTICS_REFRESHED, payload: { tenantId, from, to } } });
   const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { ownerUserId: true, tenantType: true } });
   // The platform has an owner too, but no workspace: its staff hear the first event.
@@ -133,7 +135,8 @@ export class AnalyticsRollupService {
         const range: RollupRange = { fromDay, toDay, zone, ...dayBounds(fromDay, toDay, zone) };
         const today = dayOf(now, zone);
 
-        const before = await rollupFingerprint(tx, range);
+        const customers = customersRange(range);
+        const before = (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers));
         await clearFlows(tx, range);
         await writeSales(tx, range);
         await writeUsers(tx, range);
@@ -141,7 +144,9 @@ export class AnalyticsRollupService {
         if (fromDay <= today && today <= toDay) await writeStockToday(tx, today);
         await writeTraffic(tx, range);
         await writeMeters(tx, range);
-        const changed = (await rollupFingerprint(tx, range)) !== before;
+        await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today });
+        await writeSignups(tx, customers);
+        const changed = (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers)) !== before;
 
         // The version is what a read cache is keyed by: a change bumps it, so
         // no answer cached before this commit is served after it.
