@@ -19,6 +19,7 @@ import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
 import { catalogOf } from './analytics-catalog';
 import { customersOf } from './analytics-customers';
+import { marginOf } from './analytics-margin';
 import { AnalyticsNames, namesOf } from './analytics-names';
 import { overviewOf } from './analytics-overview';
 import { resellersOf } from './analytics-resellers';
@@ -58,10 +59,19 @@ export type ReadyAnswer = Extract<AnalyticsAnswer, { rebuilding: false }>;
 export const isReady = (a: AnalyticsAnswer): a is ReadyAnswer => a.rebuilding === false;
 
 /** Each tab's builder; a tab with no row yet has none. */
-const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf, customers: customersOf, resellers: resellersOf };
+const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = {
+  overview: overviewOf,
+  sales: salesOf,
+  catalog: catalogOf,
+  customers: customersOf,
+  resellers: resellersOf,
+  margin: marginOf,
+};
 
 /** The tabs that read every reseller's rollup: the platform's own, and nobody else's (F-1001-h). */
 const ACROSS_TABS: ReadonlySet<AnalyticsTab> = new Set(['resellers']);
+/** Tabs every tenant has that, on the platform's own, also read every reseller's (F-1001-l: margin per reseller). */
+const ACROSS_ON_PLATFORM: ReadonlySet<AnalyticsTab> = new Set(['margin']);
 
 /**
  * The analytics tabs (F-1001-b): `overview`, `sales`, `catalog` for the tenant
@@ -90,9 +100,9 @@ export class AnalyticsService {
       const head: Head = { tab, query: q, refreshedAt: state?.refreshedAt?.toISOString() ?? null };
       if (!state || state.rebuildingSince) return { ...head, rebuilding: true };
 
-      const across = ACROSS_TABS.has(tab);
       // Another tenant's figures, to a reseller: refused, never answered empty.
-      if (across && admitted.platform !== true) throw new ResellerAccessRefused('not_allowed', tenantId);
+      if (ACROSS_TABS.has(tab) && admitted.platform !== true) throw new ResellerAccessRefused('not_allowed', tenantId);
+      const across = ACROSS_TABS.has(tab) || (ACROSS_ON_PLATFORM.has(tab) && admitted.platform === true);
       const hides = admitted.as === 'staff' && admitted.platform !== true;
       const version = across ? await this.versionAcross() : state.version;
       const key = UnscopedRedisKeys.analyticsAnswer(tenantId, version, tab, createHash('sha256').update(JSON.stringify({ q, hides })).digest('hex'));
@@ -105,7 +115,7 @@ export class AnalyticsService {
       const body = await tenantTransaction(
         this.prisma,
         async (tx) => {
-          const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides, across: across ? this.all : undefined });
+          const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides, across: across ? this.all : undefined, platform: admitted.platform === true });
           return { granularity: c.granularity, buckets: c.buckets, suppressed: hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
         },
         { timeout: READ_TIMEOUT_MS },

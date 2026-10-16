@@ -86,7 +86,20 @@
       "name": "نام",
       "resellers": "نماینده‌ها",
       "resellerId": "نماینده",
-      "sparkline": "روند کوتاه"
+      "sparkline": "روند کوتاه",
+      "totals": "جمع",
+      "cost": "هزینه",
+      "margin": "سود",
+      "marginRate": "درصد سود",
+      "previousMarginRate": "درصد سود دورهٔ قبل",
+      "costParts": "هزینه به تفکیک",
+      "attributed": "تقسیم‌شده بر اساس مصرف",
+      "idle": "پنل‌های بی‌مصرف",
+      "unallocated": "تخصیص‌نیافته",
+      "users": "کاربران",
+      "noCostPanels": "پنل‌های بدون هزینهٔ ثبت‌شده",
+      "loss": "زیان‌ده",
+      "id": "شناسه"
     }
   }
 }

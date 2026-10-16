@@ -1556,7 +1556,7 @@ enum AnalyticsCostKind {
 }
 
 /// F-1002-b: what each tenant day cost (a flow), per panel, served tenant,
-/// product and the platform's own user — the platform's rows a panel's
+/// product and the tenant's own user — the platform's rows a panel's
 /// monthly price split by bytes, a reseller's what it pays the platform.
 /// Written only by the rollup (`analytics-rollup-cost.ts`). The grain is a
 /// NULLS NOT DISTINCT unique index in the migration.
@@ -1572,6 +1572,9 @@ model AnalyticsCostDay {
   currencyCode   String
   cost           Decimal           @db.Decimal(18, 6)
   bytes          BigInt
+  /// F-1001-l (ADR-0149): the tenant's operating currency when the pass ran, and `cost` in it at the day's rate; null = no rate.
+  saleCurrencyCode String
+  saleCost       Decimal?          @db.Decimal(18, 6)
 
   @@map("analytics_cost_day")
   @@schema("billing")

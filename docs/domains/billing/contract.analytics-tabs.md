@@ -93,9 +93,10 @@ with no sale in either window is counted in `total`, not listed.
 ## Cost attribution (F-1002-b)
 
 `analytics_cost_day` (tenant · day · kind · panel · served tenant · product ·
-user · currency — `cost` to six places, `bytes`), written by every pass
-(`analytics-rollup-cost.ts`, the arithmetic pure in `analytics-cost.ts`). No
-tab reads it yet: margin is F-1001-l's.
+user · currency — `cost` to six places, `bytes`, and `saleCost` in
+`saleCurrencyCode`, rule 5), written by every pass
+(`analytics-rollup-cost.ts`, the arithmetic pure in `analytics-cost.ts`). Read
+by `margin` (below).
 
 1. **The platform's rows: its panels' price.** A day of a platform panel is
    its monthly USD price (network `contract.panel-cost.md`, `costOn`) over the
@@ -110,11 +111,49 @@ tab reads it yet: margin is F-1001-l's.
    product or person (ADR-0104). The platform's own Grants name both.
 3. **A reseller's rows: what it pays the platform.** `metered_usage_charge`
    net of `metered_usage_refund` per tenant day, split by its Grants' bytes on
-   the platform's panels per product (`kind wholesale`; a day with no bytes is
+   the platform's panels per product, panel and user (*corrected*, ADR-0149
+   (3): its own people; `kind wholesale`; a day with no bytes is
    unallocated, product null). Each `subscription_charge` is spread over the
    days until the next one — the last until `currentPeriodEnd` — unallocated
    (`kind subscription`): the periods as charged, whatever the billing model.
 4. **Days.** Panel costs are cut on the UTC date, as the traffic that splits
    them is; a reseller's charges on its tenant day, split by the bytes of the
    same date. Cost is in USD on the platform's rows and in the billing wallet's
-   currency on a reseller's — never converted (principle 6).
+   currency on a reseller's — `cost` is never converted (principle 6); rule 5
+   is its converted copy.
+5. **In the sale's currency** (ADR-0149, `analytics-fx.ts`). Each row is also
+   written in the tenant's operating currency as the pass runs, at the rate in
+   force at the end of its day — a live pin (the tenant's first), else the
+   newest discovered rate, the toman as the rial over ten. No rate: `saleCost`
+   null, and every read answers that cost in its own currency.
+
+## Margin (F-1001-l)
+
+`GET …/analytics/margin` (`analytics-margin.ts`, the arithmetic pure in
+`analytics-margin-cells.ts`). Net is the sales grain's (the user grain's per
+user); cost is `saleCost`, else `cost` in its own currency. It answers:
+
+| field | what |
+|---|---|
+| `totals` | `net`, `cost`, `margin` as money KPIs with their deltas; `marginRate` and `previousMarginRate` (margin ÷ net in the operating currency, null with no net) |
+| `costParts` | `attributed` (split by use), `idle` (a panel's day with no traffic), `unallocated` (paid for nothing a row shows: a subscription, a day with no bytes) |
+| `series` | `net`, `cost`, `margin` per bucket |
+| `products`, `panels` | a cell each — `{id, net, cost, margin, marginRate, loss}` — largest net first, then the deepest loss |
+| `users` | the 20 deepest losses; `null` to the platform's staff on a reseller |
+| `resellers` | the platform's own only: each reseller's payments to it (`net`) against its users' share of the platform's panels (`cost`), with `name` |
+| `noCostPanels` | the platform's own only: its panels with a sale or a service in the window and no monthly cost on or before its end |
+
+1. **A tenant's margin is its own.** Totals and lists count the cost of its
+   own Grants and idle panels; on the platform, serving a reseller's users is
+   `resellers`, never in the totals — its revenue is the reseller's payment,
+   which no sale row holds.
+2. **`loss`** is a margin below zero in the operating currency. A row with
+   sales and no cost has rate 1; one with cost and no sales has no rate and is
+   a loss.
+3. **Filters.** Product, panel and kind of product narrow net and cost alike;
+   `kind` (package / usage) narrows neither — a cost has no sale kind.
+4. **Tier A.** To the platform's staff on a reseller, a product or panel under
+   5 buyers reads `fewer_than_5` with its complement, and no user is listed.
+   `resellers` are whole-reseller totals (ADR-0104 (2)); on the platform's own
+   tenant the tab reads across tenants and is cached by the summed version, as
+   `resellers` is.

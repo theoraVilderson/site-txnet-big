@@ -86,7 +86,20 @@
       "name": "Name",
       "resellers": "Resellers",
       "resellerId": "Reseller",
-      "sparkline": "Trend"
+      "sparkline": "Trend",
+      "totals": "Totals",
+      "cost": "Cost",
+      "margin": "Margin",
+      "marginRate": "Margin %",
+      "previousMarginRate": "Previous margin %",
+      "costParts": "Cost by part",
+      "attributed": "Attributed by use",
+      "idle": "Idle panels",
+      "unallocated": "Unallocated",
+      "users": "Users",
+      "noCostPanels": "Panels with no cost set",
+      "loss": "Loss-making",
+      "id": "Id"
     }
   }
 }

@@ -72,7 +72,7 @@ describe('attributePanelCosts', () => {
 });
 
 describe('attributeWholesale', () => {
-  it('splits a day net of refunds by bytes per product; a day with no bytes is unallocated', () => {
+  it('splits a day net of refunds by bytes per product, panel and user; a day with no bytes is unallocated', () => {
     const rows = attributeWholesale(
       [
         { day: '2026-09-10', currencyCode: 'USD', amount: d('9.00') },
@@ -80,14 +80,14 @@ describe('attributeWholesale', () => {
         { day: '2026-09-11', currencyCode: 'USD', amount: d('2.00') },
       ],
       [
-        { day: '2026-09-10', productId: PRODUCT_A, bytes: BigInt(2) },
-        { day: '2026-09-10', productId: PRODUCT_B, bytes: BigInt(1) },
+        { day: '2026-09-10', productId: PRODUCT_A, panelId: PANEL, userId: USER, bytes: BigInt(2) },
+        { day: '2026-09-10', productId: PRODUCT_B, panelId: PANEL, userId: null, bytes: BigInt(1) },
       ],
     );
-    expect(rows.map((r) => [r.day, r.productId, r.cost.toFixed(2)])).toEqual([
-      ['2026-09-10', PRODUCT_A, '4.00'],
-      ['2026-09-10', PRODUCT_B, '2.00'],
-      ['2026-09-11', null, '2.00'],
+    expect(rows.map((r) => [r.day, r.productId, r.panelId, r.userId, r.cost.toFixed(2)])).toEqual([
+      ['2026-09-10', PRODUCT_A, PANEL, USER, '4.00'],
+      ['2026-09-10', PRODUCT_B, PANEL, null, '2.00'],
+      ['2026-09-11', null, null, null, '2.00'],
     ]);
     expect(rows.every((r) => r.kind === 'wholesale')).toBe(true);
   });

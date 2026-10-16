@@ -80,6 +80,7 @@ source:
   - txnet-backend/prisma/domains/migrations/20261016000100_analytics_meter_day/**
   - txnet-backend/prisma/domains/migrations/20261016000200_analytics_customers/**
   - txnet-backend/prisma/domains/migrations/20261016000400_analytics_cost_day/**
+  - txnet-backend/prisma/domains/migrations/20261016000500_analytics_cost_in_sale_currency/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change, manual_gateway_setting, manual_destination, payment_transfer_detail, transfer_tx_ref, analytics_sales_day, analytics_user_day, analytics_payment_day, analytics_stock_day, analytics_meter_day, analytics_grant_end, analytics_signup, analytics_signup_day, analytics_setting, analytics_cost_day, analytics_rollup_state]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
 updated: 2026-10-16

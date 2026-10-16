@@ -19,7 +19,7 @@ export type CostDayRow = {
   /** The tenant whose Grant used the bytes (a panel's cost, on the platform's rows); null otherwise. */
   servedTenantId: string | null;
   productId: string | null;
-  /** The platform's own user only: a reseller's people are never on the platform's rows (ADR-0104). */
+  /** The tenant's own user: a reseller's people are never on the platform's rows (ADR-0104), only on its own. */
   userId: string | null;
   currencyCode: string;
   cost: Prisma.Decimal;
@@ -86,13 +86,17 @@ export function attributePanelCosts<P extends CostRow & { panelId: string }>(day
 /** A reseller's ledger row with the platform, signed: a charge positive, a refund negative. */
 export type ResellerCharge = { day: Day; currencyCode: string; amount: Prisma.Decimal };
 
+/** A reseller's own use of the platform's panels on one day, per product, panel and user. */
+export type WholesaleUse = { day: Day; productId: string | null; panelId: string | null; userId: string | null; bytes: bigint };
+
 /**
  * What a reseller pays the platform per use (`metered_usage_charge` net of
- * `metered_usage_refund`), a day at a time, split over its products by the
- * bytes its Grants used that day. A day with no bytes is unallocated (product
- * null) — paid, but for nothing this day shows.
+ * `metered_usage_refund`), a day at a time, split over its products, panels
+ * and users by the bytes its Grants used that day (F-1001-l: its own people,
+ * so a user's margin and F-1003 hold for a reseller too). A day with no bytes
+ * is unallocated (product null) — paid, but for nothing this day shows.
  */
-export function attributeWholesale(charges: readonly ResellerCharge[], use: readonly { day: Day; productId: string | null; bytes: bigint }[]): CostDayRow[] {
+export function attributeWholesale(charges: readonly ResellerCharge[], use: readonly WholesaleUse[]): CostDayRow[] {
   const rows: CostDayRow[] = [];
   const keys = [...new Set(charges.map((c) => `${c.day}|${c.currencyCode}`))].sort();
   for (const key of keys) {
@@ -100,13 +104,13 @@ export function attributeWholesale(charges: readonly ResellerCharge[], use: read
     const net = charges.filter((c) => c.day === day && c.currencyCode === currencyCode).reduce((sum, c) => sum.plus(c.amount), ZERO);
     if (net.isZero()) continue;
     const used = use.filter((u) => u.day === day && u.bytes > BigInt(0));
-    const row = { day, kind: 'wholesale' as const, panelId: null, servedTenantId: null, userId: null, currencyCode };
+    const row = { day, kind: 'wholesale' as const, servedTenantId: null, currencyCode };
     if (used.length === 0) {
-      rows.push({ ...row, productId: null, cost: net, bytes: BigInt(0) });
+      rows.push({ ...row, productId: null, panelId: null, userId: null, cost: net, bytes: BigInt(0) });
       continue;
     }
     const shares = splitBy(net, used.map((u) => u.bytes));
-    used.forEach((u, i) => rows.push({ ...row, productId: u.productId, cost: shares[i], bytes: u.bytes }));
+    used.forEach((u, i) => rows.push({ ...row, productId: u.productId, panelId: u.panelId, userId: u.userId, cost: shares[i], bytes: u.bytes }));
   }
   return rows;
 }

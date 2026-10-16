@@ -1,6 +1,8 @@
 import { Prisma, TenantBillingReasonType } from '@prisma/client';
+import { operatingCurrencyOf } from '@txnet-backend/shared-core';
 
-import { CostDayRow, PanelUse, ResellerCharge, attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
+import { CostDayRow, PanelUse, ResellerCharge, WholesaleUse, attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
+import { ConvertedCost, convertCosts, rateLookup, readRates } from './analytics-fx';
 import type { CrossTenantReader } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
 import { RollupRange, dayIn } from './analytics-rollup';
@@ -70,15 +72,15 @@ function readResellerCharges(tx: Prisma.TransactionClient, r: RollupRange, reaso
 async function resellerCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<CostDayRow[]> {
   const wholesale = await readResellerCharges(tx, r, [TenantBillingReasonType.metered_usage_charge, TenantBillingReasonType.metered_usage_refund], r.from);
   const use = wholesale.length
-    ? await tx.$queryRaw<{ day: Day; productId: string | null; bytes: bigint }[]>`
-        SELECT to_char(t."date", 'YYYY-MM-DD') AS "day", v."productId", SUM(t."totalUploadBytes" + t."totalDownloadBytes")::bigint AS "bytes"
+    ? await tx.$queryRaw<WholesaleUse[]>`
+        SELECT to_char(t."date", 'YYYY-MM-DD') AS "day", v."productId", c."panelId", g."userId", SUM(t."totalUploadBytes" + t."totalDownloadBytes")::bigint AS "bytes"
         FROM network.traffic_daily_aggregate t
         JOIN network.config c ON c."id" = t."configId" AND c."tenantId" = public.current_tenant_id()
         JOIN network.panel p ON p."id" = c."panelId" AND p."ownershipType" = 'platform'
         JOIN entitlement."grant" g ON g."id" = c."grantId"
         LEFT JOIN catalog.product_variant v ON v."id" = g."variantId"
         WHERE t."date" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
-        GROUP BY 1, 2`
+        GROUP BY 1, 2, 3, 4`
     : [];
   // A charge up to a year before the window may still cover its days.
   const since = new Date(r.from.getTime() - LONGEST_PERIOD_DAYS * 86_400_000);
@@ -91,28 +93,39 @@ async function resellerCosts(tx: Prisma.TransactionClient, r: RollupRange): Prom
 }
 
 /** `rows` into `analytics_cost_day`, one statement. */
-async function insertCosts(tx: Prisma.TransactionClient, rows: readonly CostDayRow[]): Promise<void> {
+async function insertCosts(tx: Prisma.TransactionClient, rows: readonly ConvertedCost[]): Promise<void> {
   if (rows.length === 0) return;
-  const col = <T>(pick: (row: CostDayRow) => T) => rows.map(pick);
+  const col = <T>(pick: (row: ConvertedCost) => T) => rows.map(pick);
   // An array of nulls only is sent as integer[]: an id column goes through text[] to reach uuid[].
   await tx.$executeRaw`
-    INSERT INTO billing.analytics_cost_day ("tenantId", "day", "kind", "panelId", "servedTenantId", "productId", "userId", "currencyCode", "cost", "bytes")
-    SELECT public.current_tenant_id(), x."day", x."kind"::billing."AnalyticsCostKind", x."panelId", x."servedTenantId", x."productId", x."userId", x."currencyCode", x."cost", x."bytes"
+    INSERT INTO billing.analytics_cost_day ("tenantId", "day", "kind", "panelId", "servedTenantId", "productId", "userId", "currencyCode", "cost", "bytes", "saleCurrencyCode", "saleCost")
+    SELECT public.current_tenant_id(), x."day", x."kind"::billing."AnalyticsCostKind", x."panelId", x."servedTenantId", x."productId", x."userId", x."currencyCode", x."cost", x."bytes", x."saleCurrencyCode", x."saleCost"
     FROM unnest(
       ${col((x) => x.day)}::date[], ${col((x) => x.kind)}::text[], ${col((x) => x.panelId)}::text[]::uuid[], ${col((x) => x.servedTenantId)}::text[]::uuid[],
       ${col((x) => x.productId)}::text[]::uuid[], ${col((x) => x.userId)}::text[]::uuid[], ${col((x) => x.currencyCode)}::text[],
-      ${col((x) => x.cost.toFixed(6))}::numeric[], ${col((x) => x.bytes.toString())}::bigint[]
-    ) AS x("day", "kind", "panelId", "servedTenantId", "productId", "userId", "currencyCode", "cost", "bytes")`;
+      ${col((x) => x.cost.toFixed(6))}::numeric[], ${col((x) => x.bytes.toString())}::bigint[],
+      ${col((x) => x.saleCurrencyCode)}::text[], ${col((x) => x.saleCost?.toFixed(6) ?? null)}::text[]::numeric[]
+    ) AS x("day", "kind", "panelId", "servedTenantId", "productId", "userId", "currencyCode", "cost", "bytes", "saleCurrencyCode", "saleCost")`;
+}
+
+/** `rows` in the tenant's operating currency now, each at its own day's rate (ADR-0149). */
+async function inSaleCurrency(tx: Prisma.TransactionClient, tenantId: string, rows: readonly CostDayRow[]): Promise<ConvertedCost[]> {
+  if (rows.length === 0) return [];
+  const operating = await operatingCurrencyOf(tx, tenantId);
+  const foreign = rows.filter((x) => x.currencyCode !== operating);
+  const rates = await readRates(tx, [operating, ...foreign.map((x) => x.currencyCode)], [...new Set(foreign.map((x) => x.day))]);
+  return convertCosts(rows, operating, rateLookup(rates));
 }
 
 /**
  * `analytics_cost_day` for the tenant in scope (`r.tenantId`) and `r`: the
  * platform's panel costs when it is the platform — its own users and products
  * named, a reseller's Grant only by its tenant — and what it pays the
- * platform when it is a reseller. Each source is grouped to the grain already.
+ * platform when it is a reseller, down to its own users. Each source is
+ * grouped to the grain already; each row also in the operating currency.
  */
 export async function writeCosts(tx: Prisma.TransactionClient, r: RollupRange & { tenantId: string }, how: { platform: boolean; across: CrossTenantReader }): Promise<void> {
   await tx.$executeRaw`DELETE FROM billing.analytics_cost_day WHERE "tenantId" = public.current_tenant_id() AND "day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date`;
   const rows = how.platform ? await platformPanelCosts(tx, how.across, r) : await resellerCosts(tx, r);
-  await insertCosts(tx, rows);
+  await insertCosts(tx, await inSaleCurrency(tx, r.tenantId, rows));
 }

@@ -24,8 +24,10 @@ export type TabContext = {
   operating: string;
   /** The platform's staff reading a reseller: cells under 5 people are hidden (ADR-0104 (3)). */
   hides: boolean;
-  /** Every tenant's rollup, for the platform's own `resellers` tab (F-1001-h); absent on every other read. */
+  /** Every tenant's rollup, for the platform's own `resellers` and `margin` tabs (F-1001-h, F-1001-l); absent on every other read. */
   across?: CrossTenantReader;
+  /** The tenant read is the platform's own (F-1001-l: its panels' "no cost set"). */
+  platform: boolean;
 };
 
 /** What the `resellers` tab reads every reseller's rollup through: the cross-tenant pool, raw SQL only. */
@@ -43,7 +45,7 @@ export function dayMap(w: Window, keyOf: (day: Day) => Day | undefined): DayMap 
   return map;
 }
 
-export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: { operating: string; hides: boolean; across?: CrossTenantReader }): TabContext {
+export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: { operating: string; hides: boolean; across?: CrossTenantReader; platform?: boolean }): TabContext {
   const window = { from: q.from, to: q.to };
   const granularity = granularityFor(q.from, q.to);
   const current = bucketsOf(q.from, q.to, granularity, q.calendar);
@@ -69,5 +71,6 @@ export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: 
     operating: how.operating,
     hides: how.hides,
     across: how.across,
+    platform: how.platform === true,
   };
 }
