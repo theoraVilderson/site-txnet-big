@@ -99,7 +99,15 @@
       "users": "Users",
       "noCostPanels": "Panels with no cost set",
       "loss": "Loss-making",
-      "id": "Id"
+      "id": "Id",
+      "cohorts": "Cohorts",
+      "cohort": "First purchase month",
+      "cells": "Cohort months",
+      "k": "Month",
+      "netPerUser": "Net per member",
+      "ltv": "Lifetime value",
+      "channels": "Channels",
+      "channelLtv": "Lifetime value by channel"
     }
   }
 }

@@ -188,3 +188,33 @@ worker-service's `analytics_loss_alert`.
 5. **The percent is a figure readers see** (`margin` answers it): a write that
    changes it bumps the rollup version and writes `billing.analytics.refreshed`,
    as a changed renewal window does.
+
+## Cohorts (F-1004-a)
+
+`GET …/analytics/cohorts` (`analytics-cohorts.ts`, the arithmetic pure in
+`analytics-cohort-grid.ts`). It answers `months` (the window's months in the
+reader's calendar — a Jalali month in `jalali`, the first named by the window's
+first day) and four flat lists, so the export writes each as a block:
+
+| field | what |
+|---|---|
+| `cohorts` | each month with a first purchase in it: `{cohort, users}` |
+| `cells` | `{cohort, k, share, netPerUser, ltv}` for every month k a cohort has lived, up to the window's end |
+| `channels` | each signup source: `{source, users}`, most people first |
+| `channelLtv` | `{source, k, ltv}`: the source's LTV at month k |
+
+1. **A cohort is people.** A member is a user whose first purchase ever
+   (`analytics_user_day.firstPurchase`) fell in the window; their cohort is
+   its month. Product, panel and kind filters do not narrow it.
+2. **Over the cohort's size.** `share` is the members with a sale or refund in
+   month k ÷ the cohort (counted apart from money, so a member paying in two
+   currencies is one person); `netPerUser` their net that month ÷ the cohort;
+   `ltv` the running sum of `netPerUser`. Money per currency (principle 6).
+3. **A channel's curve pools only cohorts old enough**: month k sums the
+   cohorts that have lived k months, over their members — a young cohort
+   never drags a late month down.
+4. **The channel** is `analytics_signup.source` (ADR-0149 (5)); a member with
+   no signup row reads `unknown`.
+5. **Tier A.** To the platform's staff on a reseller, a cohort or a channel
+   under 5 people is `fewer_than_5` with its complement (`hiddenKeys`), and
+   its cells and curve are left out.

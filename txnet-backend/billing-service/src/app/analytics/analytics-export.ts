@@ -40,11 +40,11 @@ export type ExportContext = {
 };
 
 /** What every answer carries around its figures — the page's, not the report's (the insights are sentences the page writes from figures the file has). */
-const HEAD = new Set(['tab', 'query', 'refreshedAt', 'rebuilding', 'granularity', 'buckets', 'suppressed', 'names', 'currencies', 'insights']);
+const HEAD = new Set(['tab', 'query', 'refreshedAt', 'rebuilding', 'granularity', 'buckets', 'suppressed', 'names', 'currencies', 'insights', 'months']);
 /** A field that is a ratio, not a count: written as a percentage. */
-const RATIOS = new Set(['share', 'successRate', 'rate', 'delta']);
+const RATIOS = new Set(['share', 'successRate', 'rate', 'delta', 'marginRate', 'previousMarginRate']);
 /** A field that names a tenant day. */
-const DAYS = new Set(['day', 'bucket']);
+const DAYS = new Set(['day', 'bucket', 'cohort']);
 /** A per-row sparkline is the page's picture; the file has the series. */
 const SKIPPED = new Set(['sparkline']);
 /** Summary's currency column; a row without one is a count. */

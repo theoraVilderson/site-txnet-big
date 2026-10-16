@@ -18,6 +18,7 @@ import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
 import { catalogOf } from './analytics-catalog';
+import { cohortsOf } from './analytics-cohorts';
 import { customersOf } from './analytics-customers';
 import { marginOf } from './analytics-margin';
 import { AnalyticsNames, namesOf } from './analytics-names';
@@ -66,6 +67,7 @@ const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = {
   customers: customersOf,
   resellers: resellersOf,
   margin: marginOf,
+  cohorts: cohortsOf,
 };
 
 /** The tabs that read every reseller's rollup: the platform's own, and nobody else's (F-1001-h). */

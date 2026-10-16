@@ -90,6 +90,13 @@ export class AnalyticsController {
     return this.read(req, res, tenantId, 'margin', q);
   }
 
+  /** First buyers by the month of their first purchase: share still buying, net per member, LTV; per signup source (F-1004-a). */
+  @Get('cohorts')
+  @RateLimit(READ)
+  cohorts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'cohorts', q);
+  }
+
   /** The renewal window, 1..30 days (F-1001-f), and the loss alert's percent, 0..500 (F-1003) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
   @Put('settings')
   @RateLimit(READ)

@@ -1,6 +1,6 @@
 import type { Prisma } from '@prisma/client';
 
-import { Granularity, bucketsOf, granularityFor, previousRange } from './analytics-buckets';
+import { Calendar, Granularity, bucketsOf, granularityFor, previousRange } from './analytics-buckets';
 import { Day, addDays } from './analytics-days';
 import type { AnalyticsFilters, DayMap, Window } from './analytics-read';
 import type { AnalyticsQuery } from './analytics.schema';
@@ -17,6 +17,8 @@ export type TabContext = {
   previous: Window | null;
   filters: AnalyticsFilters;
   granularity: Granularity;
+  /** The calendar weeks and months are cut in (F-1004-a: a cohort is a month of it). */
+  calendar: Calendar;
   buckets: Day[];
   map: DayMap;
   previousMap: DayMap | null;
@@ -65,6 +67,7 @@ export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: 
     previous,
     filters: { product: q.product, panel: q.panel, kind: q.kind, fulfilment: q.fulfilment },
     granularity,
+    calendar: q.calendar,
     buckets: current.keys,
     map: dayMap(window, current.keyOf),
     previousMap,
