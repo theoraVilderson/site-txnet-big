@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import { motion } from "framer-motion";
 import { MessageCircle, Send, Smartphone } from "lucide-react";
 import { useAuthUI } from "@auth/auth/_context/AuthUIContext";
@@ -35,6 +36,8 @@ export function OtpChannelChoice({
   onSelect,
   labels,
 }: OtpChannelPickerProps & { labels: Record<OtpChannel | "title", string> }) {
+  // Per instance, so the pill never slides between two pickers on one page.
+  const pillId = `otp-channel-pill-${useId()}`;
   return (
     <div className="mt-4">
       <p className="text-text-secondary text-sm mb-2">{labels.title}</p>
@@ -55,19 +58,22 @@ export function OtpChannelChoice({
               onClick={() => onSelect(channel)}
               className={`relative flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-xl transition-colors duration-300 ${
                 isSelected
-                  ? "text-primary"
+                  ? "text-on-accent"
                   : "text-text-secondary hover:text-text-primary"
               }`}
             >
+              {/* A filled pill under the content, as the kit's SegmentedControl: a `-z-10`
+                  pill fell behind the track's own background and only the text colour changed. */}
               {isSelected && (
                 <motion.span
-                  layoutId="otp-channel-pill"
+                  layoutId={pillId}
+                  aria-hidden
                   transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute inset-0 -z-10 rounded-xl bg-card-bg border border-card-border shadow"
+                  className="absolute inset-0 rounded-xl bg-primary shadow-sm"
                 />
               )}
-              <Icon size={16} aria-hidden />
-              {labels[channel]}
+              <Icon size={16} aria-hidden className="relative" />
+              <span className="relative">{labels[channel]}</span>
             </button>
           );
         })}
