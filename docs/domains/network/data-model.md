@@ -247,4 +247,4 @@ reached through `configId` (open question, 2026-09-21).
 
 `20260921000900_the_rollup_commits_before_the_partition_drops` (F-027-o): the
 rollup's three `SECURITY DEFINER` functions, [contract.rollup.md](contract.rollup.md).
-`20261016000300_a_panel_carries_its_monthly_cost` (F-1002-a): `panel_cost`, a panel's monthly USD price as history — [contract.panel-cost.md](contract.panel-cost.md).
+`20261016000300_a_panel_carries_its_monthly_cost` (F-1002-a): `panel_cost`, a panel's monthly USD price as history; `20261016000700` its `monthlyTrafficBytes` (F-1005-a) — [contract.panel-cost.md](contract.panel-cost.md).

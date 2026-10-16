@@ -107,7 +107,21 @@
       "netPerUser": "Net per member",
       "ltv": "Lifetime value",
       "channels": "Channels",
-      "channelLtv": "Lifetime value by channel"
+      "channelLtv": "Lifetime value by channel",
+      "usedBytes": "Traffic used this month (bytes)",
+      "perDayBytes": "Traffic per day (bytes)",
+      "projectedBytes": "Traffic projected for the month (bytes)",
+      "allowanceBytes": "Monthly traffic allowance (bytes)",
+      "trafficFullOn": "Traffic full on",
+      "observedDays": "Days observed",
+      "clients": "Users now",
+      "maxClients": "User cap",
+      "clientsPerDay": "Users added per day",
+      "clientsFullOn": "Users full on",
+      "fullOn": "Full on",
+      "daysUntilFull": "Days until full",
+      "monthlyCostUsd": "Monthly cost (USD)",
+      "projectedCostUsd": "This month's cost (USD)"
     }
   }
 }

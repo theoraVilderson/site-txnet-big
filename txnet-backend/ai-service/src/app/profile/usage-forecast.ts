@@ -1,14 +1,10 @@
 import { Prisma } from '@prisma/client';
+import { FORECAST_AHEAD_DAYS, FORECAST_RATE_DAYS, forecastSpanMs } from '@txnet-backend/shared-core';
 
 import type { PredictionRow } from './predictions';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
-
-/** The rate is the last 7 days; a younger history is read over itself, from a day up. */
-export const FORECAST_RATE_DAYS = 7;
-/** What a forecast covers ahead: 30 days of use, and a top-up that lasts that long. */
-export const FORECAST_AHEAD_DAYS = 30;
 
 /** One UTC day of a reseller's wholesale spend (`metered_usage_charge` debits, `metered_usage_refund` credits). */
 export type SpendDay = { day: Date; charged: Prisma.Decimal; refunded: Prisma.Decimal; currencyCode: string };
@@ -35,8 +31,8 @@ export function walletRunOut(
   now: Date,
 ): WalletRunOut | null {
   if (!input.firstChargeAt) return null;
-  const observedMs = Math.min(FORECAST_RATE_DAYS * DAY_MS, now.getTime() - input.firstChargeAt.getTime());
-  if (observedMs < DAY_MS) return null;
+  const observedMs = forecastSpanMs(input.firstChargeAt.getTime(), now.getTime());
+  if (observedMs === null) return null;
   const since = now.getTime() - FORECAST_RATE_DAYS * DAY_MS;
   const net = input.spend
     .filter((d) => d.currencyCode === input.currencyCode && d.day.getTime() >= since && d.day.getTime() <= now.getTime())
@@ -86,8 +82,9 @@ export function usageForecast(rows: Array<{ meterKey: string; hour: Date; delta:
   }
   const out: MeterForecast[] = [];
   for (const [meterKey, m] of [...meters].sort(([a], [b]) => a.localeCompare(b))) {
-    const observedHours = Math.floor(Math.min(FORECAST_RATE_DAYS * DAY_MS, now.getTime() - m.first) / HOUR_MS);
-    if (observedHours < 24) continue;
+    const span = forecastSpanMs(m.first, now.getTime());
+    if (span === null) continue;
+    const observedHours = Math.floor(span / HOUR_MS);
     const hours = BigInt(observedHours);
     out.push({
       meterKey,

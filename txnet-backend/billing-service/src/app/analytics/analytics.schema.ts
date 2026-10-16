@@ -40,6 +40,6 @@ export const analyticsRequestSchema = z
 export type AnalyticsRequest = z.infer<typeof analyticsRequestSchema>;
 export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
 
-/** The tabs answered so far (F-1001-b, F-1001-f, F-1001-h, F-1001-l, F-1004-a); the rest arrive with their rows. */
-export const ANALYTICS_TABS = ['overview', 'sales', 'catalog', 'customers', 'resellers', 'margin', 'cohorts'] as const;
+/** The tabs answered so far (F-1001-b, F-1001-f, F-1001-h, F-1001-l, F-1004-a, F-1005-a); the rest arrive with their rows. */
+export const ANALYTICS_TABS = ['overview', 'sales', 'catalog', 'customers', 'resellers', 'margin', 'cohorts', 'capacity'] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];

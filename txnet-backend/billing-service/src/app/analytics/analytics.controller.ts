@@ -97,6 +97,13 @@ export class AnalyticsController {
     return this.read(req, res, tenantId, 'cohorts', q);
   }
 
+  /** Each owned panel this UTC month: traffic against its allowance, users against the cap, the month's cost and margin (F-1005-a). */
+  @Get('capacity')
+  @RateLimit(READ)
+  capacity(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'capacity', q);
+  }
+
   /** The renewal window, 1..30 days (F-1001-f), and the loss alert's percent, 0..500 (F-1003) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
   @Put('settings')
   @RateLimit(READ)

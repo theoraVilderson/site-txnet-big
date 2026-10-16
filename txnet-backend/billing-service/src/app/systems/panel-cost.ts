@@ -12,9 +12,15 @@ import { SystemsRefused } from './systems-read';
  * `POST /api/billing/systems/panels/:id/cost` (F-1002-a): what the panel costs
  * a month, in USD, from `effectiveFrom` (a UTC day, default today). A decimal
  * string, never a float (C-02); `0` is a free panel, not an unset one.
+ * `monthlyTrafficBytes` (F-1005-a): the month's traffic that price buys, whole
+ * bytes as a string; left out = none set.
  */
 export const panelCostSchema = z
-  .object({ monthlyCostUsd: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/), effectiveFrom: day.optional() })
+  .object({
+    monthlyCostUsd: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/),
+    monthlyTrafficBytes: z.string().regex(/^[1-9]\d{0,18}$/).optional(),
+    effectiveFrom: day.optional(),
+  })
   .strict();
 export type PanelCostBody = z.infer<typeof panelCostSchema>;
 
@@ -52,7 +58,13 @@ export class PanelCostService {
     const effectiveFrom = body.effectiveFrom ?? dayOf(now);
     if (effectiveFrom < openMonthOf(now)) throw new SystemsRefused('cost_in_closed_month');
     await this.all.panelCost.create({
-      data: { panelId, monthlyCostUsd: body.monthlyCostUsd, effectiveFrom: new Date(`${effectiveFrom}T00:00:00Z`), createdByUserId: actor.adminId },
+      data: {
+        panelId,
+        monthlyCostUsd: body.monthlyCostUsd,
+        monthlyTrafficBytes: body.monthlyTrafficBytes === undefined ? null : BigInt(body.monthlyTrafficBytes),
+        effectiveFrom: new Date(`${effectiveFrom}T00:00:00Z`),
+        createdByUserId: actor.adminId,
+      },
     });
     this.logger.log(`panel ${panelId} costs ${body.monthlyCostUsd} USD a month from ${effectiveFrom}, set by ${actor.adminId}`);
     return this.view(panelId, now);

@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { FORECAST_RATE_DAYS, runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
 
 import { refusal } from '../envelope';
 import { PrismaService } from '../prisma/prisma.service';
 import { ResellerReader } from '../profile/reseller-reader';
-import { FORECAST_RATE_DAYS, usageForecast, walletRunOut, type MeterForecast } from '../profile/usage-forecast';
+import { usageForecast, walletRunOut, type MeterForecast } from '../profile/usage-forecast';
 
 const DAY_MS = 86_400_000;
 

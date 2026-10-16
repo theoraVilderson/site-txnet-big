@@ -17,6 +17,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
+import { capacityOf } from './analytics-capacity';
 import { catalogOf } from './analytics-catalog';
 import { cohortsOf } from './analytics-cohorts';
 import { customersOf } from './analytics-customers';
@@ -68,6 +69,7 @@ const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = {
   resellers: resellersOf,
   margin: marginOf,
   cohorts: cohortsOf,
+  capacity: capacityOf,
 };
 
 /** The tabs that read every reseller's rollup: the platform's own, and nobody else's (F-1001-h). */

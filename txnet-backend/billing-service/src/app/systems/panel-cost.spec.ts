@@ -84,7 +84,7 @@ describe('PanelCostService', () => {
   it('adds a row for a change, from today unless told otherwise, and answers the history', async () => {
     const { created, service } = build();
     const answer = await service.set(platform, PANEL, { monthlyCostUsd: '60.00' }, NOW);
-    expect(created).toEqual([{ panelId: PANEL, monthlyCostUsd: '60.00', effectiveFrom: new Date('2026-10-16T00:00:00Z'), createdByUserId: ADMIN }]);
+    expect(created).toEqual([{ panelId: PANEL, monthlyCostUsd: '60.00', monthlyTrafficBytes: null, effectiveFrom: new Date('2026-10-16T00:00:00Z'), createdByUserId: ADMIN }]);
     expect(answer.current).toMatchObject({ monthlyCostUsd: '60.00', effectiveFrom: '2026-10-16' });
     expect(answer.history.map((h) => h.monthlyCostUsd)).toEqual(['60.00', '40.00']);
   });

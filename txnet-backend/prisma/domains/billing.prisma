@@ -1598,6 +1598,33 @@ model AnalyticsCostDay {
   @@schema("billing")
 }
 
+/// F-1005-a: a panel's traffic per UTC date (a flow), every tenant's users,
+/// on the rollup of the panel's owner. Written only by the rollup
+/// (`analytics-rollup-panels.ts`); the grain is a unique index in the migration.
+model AnalyticsPanelTrafficDay {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  day      DateTime @db.Date
+  panelId  String   @db.Uuid
+  bytes    BigInt
+
+  @@map("analytics_panel_traffic_day")
+  @@schema("billing")
+}
+
+/// F-1005-a: the Grants with a live config on a panel at a UTC date's last
+/// pass (a stock — a snapshot, today only), on the rollup of the panel's owner.
+model AnalyticsPanelClientsDay {
+  id       String   @id @default(uuid()) @db.Uuid
+  tenantId String   @db.Uuid
+  day      DateTime @db.Date
+  panelId  String   @db.Uuid
+  clients  Int
+
+  @@map("analytics_panel_clients_day")
+  @@schema("billing")
+}
+
 /// F-1001-a: one row per tenant — the zone its rollup days were cut in (a
 /// change rebuilds them), the version read caches are keyed by, the last
 /// refresh, and a whole rebuild in progress.

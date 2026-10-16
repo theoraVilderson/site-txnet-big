@@ -19,8 +19,8 @@ code `billing-service/src/app/systems/panel-cost*.ts`, on the systems surface.
 
 | Operation | Input | Output | Errors |
 |---|---|---|---|
-| `GET /api/billing/systems/panels/:id/cost` | — | `{current, history}`: the price in effect today (or `null`) and every row, newest first, each `{monthlyCostUsd, effectiveFrom, createdByUserId, createdAt}` | 403 `not_platform_owner`; 404 `not_found` |
-| `POST /api/billing/systems/panels/:id/cost` | `{monthlyCostUsd, effectiveFrom?}` — USD as a decimal string, ≤ 2 places, ≥ 0; a UTC day, default today | the same as `GET`, the new row in it | 400 `cost_in_closed_month`; 404 `not_found`; 409 `panel_retired` |
+| `GET /api/billing/systems/panels/:id/cost` | — | `{current, history}`: the price in effect today (or `null`) and every row, newest first, each `{monthlyCostUsd, monthlyTrafficBytes, effectiveFrom, createdByUserId, createdAt}` | 403 `not_platform_owner`; 404 `not_found` |
+| `POST /api/billing/systems/panels/:id/cost` | `{monthlyCostUsd, monthlyTrafficBytes?, effectiveFrom?}` — USD as a decimal string, ≤ 2 places, ≥ 0; the month's traffic that price buys, whole bytes as a string > 0, left out = none set (F-1005-a); a UTC day, default today | the same as `GET`, the new row in it | 400 `cost_in_closed_month`; 404 `not_found`; 409 `panel_retired` |
 
 The panel list (`GET …/systems/panels`) carries each panel's `monthlyCost` —
 the price in effect today, or `null`.
@@ -34,3 +34,4 @@ the price in effect today, or `null`.
 | 3 | **The price on a day** is the row with the latest `effectiveFrom` on or before it; two rows of one day are settled by the later written (`costOn`, `panel-cost-on.ts` — the one reading of it). No row: no cost set, which analytics says as `no cost set`, never as 0. `0` is a free panel. |
 | 4 | **The panel's owner sets it** on the systems surface: `platform.node.manage` at the guard and the panel in the actor's scope (ADR-0080 decision 2) — today the platform's own panels. Written on the platform owner's pool, as every panel write is; read on the app pool, visible exactly when its panel is (RLS through `network.panel`). |
 | 5 | USD always: a panel is bought in dollars whatever the tenant sells in. Analytics converts nothing (its principle 6) — the cost series is its own currency. |
+| 6 | **The allowance is the price's** (F-1005-a, ADR-0150): history with it, read on a day as the price is (rule 3). Analytics' capacity forecast reads it; nothing enforces it on the panel. |

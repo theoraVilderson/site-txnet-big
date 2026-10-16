@@ -20,6 +20,7 @@ import {
 } from './analytics-rollup';
 import { writeCosts } from './analytics-rollup-cost';
 import { customersFingerprint, customersRange, writeGrantEnds, writeSignups } from './analytics-rollup-customers';
+import { panelsFingerprint, writePanelClientsToday, writePanelTraffic } from './analytics-rollup-panels';
 import { renewalWindowOf } from './analytics-settings';
 
 /**
@@ -138,7 +139,9 @@ export class AnalyticsRollupService {
         const today = dayOf(now, zone);
 
         const customers = customersRange(range);
-        const before = (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers));
+        const panels = { tenantId, platform: isPlatformTenant(tenant.tenantType), across: this.all };
+        const fingerprint = async () => (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers)) + (await panelsFingerprint(tx, range));
+        const before = await fingerprint();
         await clearFlows(tx, range);
         await writeSales(tx, range);
         await writeUsers(tx, range);
@@ -148,8 +151,11 @@ export class AnalyticsRollupService {
         await writeMeters(tx, range);
         await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today });
         await writeSignups(tx, customers);
-        await writeCosts(tx, { ...range, tenantId }, { platform: isPlatformTenant(tenant.tenantType), across: this.all });
-        const changed = (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers)) !== before;
+        await writeCosts(tx, { ...range, tenantId }, panels);
+        await writePanelTraffic(tx, range, panels);
+        // A panel's snapshot is cut on the UTC date; only a pass that covers now takes one.
+        if (fromDay <= today && today <= toDay) await writePanelClientsToday(tx, dayOf(now, 'UTC'), panels);
+        const changed = (await fingerprint()) !== before;
 
         // The version is what a read cache is keyed by: a change bumps it, so
         // no answer cached before this commit is served after it.

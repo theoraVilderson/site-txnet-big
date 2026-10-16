@@ -32,11 +32,11 @@ export type MarginTab = {
 };
 
 /** The tenant's own cost: its own Grants' and its idle panels', never the cost of serving a reseller (that is `resellers`). */
-const own = (k: Prisma.Sql) => Prisma.sql`(${k}."servedTenantId" IS NULL OR ${k}."servedTenantId" = public.current_tenant_id())`;
+export const own = (k: Prisma.Sql) => Prisma.sql`(${k}."servedTenantId" IS NULL OR ${k}."servedTenantId" = public.current_tenant_id())`;
 
 /** A cost in the operating currency, or in its own where no rate converted it (ADR-0149). */
-const costAmount = (k: Prisma.Sql) => Prisma.sql`COALESCE(${k}."saleCost", ${k}."cost")`;
-const costCurrency = (k: Prisma.Sql) => Prisma.sql`CASE WHEN ${k}."saleCost" IS NULL THEN ${k}."currencyCode" ELSE ${k}."saleCurrencyCode" END`;
+export const costAmount = (k: Prisma.Sql) => Prisma.sql`COALESCE(${k}."saleCost", ${k}."cost")`;
+export const costCurrency = (k: Prisma.Sql) => Prisma.sql`CASE WHEN ${k}."saleCost" IS NULL THEN ${k}."currencyCode" ELSE ${k}."saleCurrencyCode" END`;
 
 const column: Record<Split, Prisma.Sql> = { product: Prisma.sql`"productId"`, panel: Prisma.sql`"panelId"`, user: Prisma.sql`"userId"` };
 

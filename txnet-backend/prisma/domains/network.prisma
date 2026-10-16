@@ -504,6 +504,8 @@ model PanelCost {
   id              String   @id @default(uuid()) @db.Uuid
   panelId         String   @db.Uuid
   monthlyCostUsd  Decimal  @db.Decimal(18, 2)
+  /// F-1005-a: the month's traffic this price buys, in bytes; null = none set.
+  monthlyTrafficBytes BigInt?
   effectiveFrom   DateTime @db.Date
   createdByUserId String?  @db.Uuid
   createdAt       DateTime @default(now())

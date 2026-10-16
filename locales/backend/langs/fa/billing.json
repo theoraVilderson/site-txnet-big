@@ -107,7 +107,21 @@
       "netPerUser": "خالص به ازای هر عضو",
       "ltv": "ارزش طول عمر",
       "channels": "کانال‌ها",
-      "channelLtv": "ارزش طول عمر به تفکیک کانال"
+      "channelLtv": "ارزش طول عمر به تفکیک کانال",
+      "usedBytes": "ترافیک مصرف‌شدهٔ این ماه (بایت)",
+      "perDayBytes": "ترافیک روزانه (بایت)",
+      "projectedBytes": "ترافیک پیش‌بینی‌شدهٔ ماه (بایت)",
+      "allowanceBytes": "سقف ترافیک ماهانه (بایت)",
+      "trafficFullOn": "تاریخ پر شدن ترافیک",
+      "observedDays": "روزهای بررسی‌شده",
+      "clients": "کاربران فعلی",
+      "maxClients": "سقف کاربر",
+      "clientsPerDay": "کاربر اضافه‌شده در روز",
+      "clientsFullOn": "تاریخ پر شدن کاربران",
+      "fullOn": "تاریخ پر شدن",
+      "daysUntilFull": "روز مانده تا پر شدن",
+      "monthlyCostUsd": "هزینهٔ ماهانه (دلار)",
+      "projectedCostUsd": "هزینهٔ این ماه (دلار)"
     }
   }
 }
