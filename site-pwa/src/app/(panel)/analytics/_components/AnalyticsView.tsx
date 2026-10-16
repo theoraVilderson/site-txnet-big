@@ -6,7 +6,7 @@ import { ChartColumn } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { ANALYTICS_TABS, type AnalyticsNames } from "@/lib/billing/analytics";
+import type { AnalyticsNames } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
 import { PANEL_ANALYTICS, PANEL_SYSTEMS } from "@/lib/routes";
 import { displayZone } from "@/lib/time-zone";
@@ -15,7 +15,7 @@ import { Alert, Button, PageHeader, SegmentedControl, TabLinks } from "../../_co
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatMonth, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
-import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
+import { type AnalyticsFilters, PAGE_TABS, calendarOf, filtersOf, isFigureTab, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, settingsEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
 import { resellersVisible } from "../_lib/resellers";
@@ -30,6 +30,7 @@ import { CustomersTab } from "./CustomersTab";
 import { ResellersTab } from "./ResellersTab";
 import { OverviewTab } from "./OverviewTab";
 import { ProfitTab } from "./ProfitTab";
+import { ReportsTab } from "./ReportsTab";
 import { SalesTab } from "./SalesTab";
 
 const K = FrontendI18nKeys.common.analytics;
@@ -82,13 +83,15 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   // The leaderboard is the platform's own view, for its report key (F-1001-i): anyone else asking for it lands on the Overview.
   const owner = resellersVisible(me, pathTenant);
   const filters = useMemo(() => (asked.tab === "resellers" && !owner ? { ...asked, tab: "overview" as const } : asked), [asked, owner]);
-  const tabs = ANALYTICS_TABS.filter((tab) => tab !== "resellers" || owner);
+  const tabs = PAGE_TABS.filter((tab) => tab !== "resellers" || owner);
+  // Reports reads schedules, never a figure (F-1006-b).
+  const figureTab = isFigureTab(filters.tab) ? filters.tab : null;
   const calendar = calendarOf(lang);
   // The viewer's day, read once: a page left open past midnight keeps the window it opened with.
   const [today] = useState(() => dayIn(Date.now(), displayZone()));
   const query = useMemo(() => queryOf(filters, today, calendar), [filters, today, calendar]);
   const tenantId = pathTenant ?? me?.tenant.id ?? null;
-  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId, { everyReseller: READS_EVERY_RESELLER.has(filters.tab) }));
+  const { answer, stale, error, reload } = useAnalyticsRead(figureTab ? tenantId : null, figureTab ?? "overview", query, analyticsLiveOf(me, figureTab ? tenantId : null, { everyReseller: READS_EVERY_RESELLER.has(filters.tab) }));
   // The Overview's top five (F-1001-i): the same window, read beside it and live on any reseller's pass.
   const top = useAnalyticsRead(owner && filters.tab === "overview" ? tenantId : null, "resellers", query, analyticsLiveOf(me, owner ? tenantId : null, { everyReseller: true }));
   const texts = useCatalogTexts(lang);
@@ -101,7 +104,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
 
   // The settings key's holders may change what the figures are judged by (billing's door decides).
   const setting = tenantId && settingsEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null;
-  const ready = answer && !answer.rebuilding ? answer : null;
+  const ready = figureTab && answer && !answer.rebuilding ? answer : null;
   // The hook keeps the last answer while the next loads: one for another tab is no figure of this one.
   const body = ready?.tab === filters.tab ? ready : null;
   const names = ready?.names ?? null;
@@ -120,7 +123,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
         icon={ChartColumn}
         title={t("common", K.title)}
         subtitle={answer ? updated : t("common", K.subtitle)}
-        actions={<ExportMenu tenantId={tenantId} tab={filters.tab} query={query} />}
+        actions={figureTab && <ExportMenu tenantId={tenantId} tab={figureTab} query={query} />}
       />
 
       <FilterBar filters={filters} window={windowOf(filters, today, calendar)} names={names} productName={productName} onChange={onChange} />
@@ -138,7 +141,9 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
       )}
       {ready?.suppressed && <p className="text-xs text-text-secondary">{t("common", K.hiddenCells)}</p>}
 
-      {answer?.rebuilding ? (
+      {filters.tab === "reports" ? (
+        tenantId && <ReportsTab tenantId={tenantId} calendar={calendar} tabName={(tab) => t("common", K.tabs[tab])} />
+      ) : answer?.rebuilding ? (
         <Alert tone="info" title={t("common", K.rebuilding.title)}>
           {t("common", K.rebuilding.body)}
         </Alert>

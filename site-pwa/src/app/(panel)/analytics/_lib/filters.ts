@@ -12,8 +12,14 @@ import { numberLocale } from "../../_lib/digits";
 export const RANGE_PRESETS = ["today", "7d", "30d", "thisMonth", "lastMonth", "90d", "custom"] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
+/** The page's tabs: billing's figure tabs, then Reports (F-1006-b), which reads schedules and no figure. */
+export const PAGE_TABS = [...ANALYTICS_TABS, "reports"] as const;
+export type PageTab = (typeof PAGE_TABS)[number];
+/** A figure tab, as billing reads one; Reports is none. */
+export const isFigureTab = (tab: PageTab): tab is AnalyticsTab => tab !== "reports";
+
 export interface AnalyticsFilters {
-  tab: AnalyticsTab;
+  tab: PageTab;
   range: RangePreset;
   /** Only with `custom`. */
   from: string | null;
@@ -65,7 +71,7 @@ export function filtersOf(params: { get(key: string): string | null }): Analytic
   const custom = params.get("range") === "custom" && isDay(from) && isDay(to) && from <= to;
   const range = custom ? "custom" : oneOf(RANGE_PRESETS.filter((r) => r !== "custom"), params.get("range"), DEFAULT_FILTERS.range);
   return {
-    tab: oneOf(ANALYTICS_TABS, params.get("tab"), DEFAULT_FILTERS.tab),
+    tab: oneOf(PAGE_TABS, params.get("tab"), DEFAULT_FILTERS.tab),
     range,
     from: custom ? from : null,
     to: custom ? to : null,

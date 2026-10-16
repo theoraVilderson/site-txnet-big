@@ -89,3 +89,26 @@ ADR-0150), `?tab=capacity`, offered to every reader of `/analytics`.
    reseller cannot price a panel yet.
 4. Its table view is every figure of every panel.
 
+## Reports (F-1006-b)
+
+`ReportsTab` and `ReportScheduleForm`, over billing's report schedules
+([contract.analytics-reports.md](../../domains/billing/contract.analytics-reports.md),
+ADR-0150), `?tab=reports`, offered to every reader of `/analytics`. A page tab,
+not a figure tab (`PAGE_TABS`, `isFigureTab`): it reads schedules and no
+figure, and has no export.
+
+1. **The form**: how often (`SegmentedControl`), the weekday of a weekly one
+   and the hour (`Select`, written by `Intl` in the language), the tab the
+   link opens (any but Resellers), and the channels. A channel the person
+   cannot be reached on — `reach` from billing — is offered disabled with what
+   to do; no channel says so before asking (`reportBodyOf`). The month of a
+   monthly one is the reader's calendar's (`calendarOf`). At ten, the form says
+   the limit instead of failing.
+2. **The list**: when each goes, the tab it opens, its channels and a paused
+   badge, next and last send. The owner sees everyone's, named, and may pause
+   or remove another's — never send it; the person's own have Send now.
+3. **Live** on the person's own `billing.analytics.report` (`user:`, C-14):
+   a send moves "last sent" without a poll. Billing's refusals
+   (`not_allowed`, `too_many_schedules`, `rebuilding`) are sentences
+   (`useReportError`).
+

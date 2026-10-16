@@ -6563,7 +6563,8 @@
       "resellers": "Resellers",
       "margin": "Profit",
       "cohorts": "Cohorts",
-      "capacity": "Capacity"
+      "capacity": "Capacity",
+      "reports": "Reports"
     },
     "filters": {
       "button": "Filters",
@@ -6885,6 +6886,61 @@
         "costOf": "This month's cost {{amount}}",
         "marginOf": "Projected margin {{amount}}",
         "noCost": "No cost set"
+      }
+    },
+    "reports": {
+      "title": "Your scheduled reports",
+      "subtitle": "Each goes at its hour on the business's clock, about the period that just closed.",
+      "empty": "No reports scheduled yet.",
+      "loading": "Loading reports…",
+      "loadFailed": "Reports could not be loaded",
+      "for": "for {{name}}",
+      "someone": "someone",
+      "opens": "Opens {{tab}}",
+      "paused": "Paused",
+      "next": "Next: {{at}}",
+      "last": "Last sent: {{at}}",
+      "sendNow": "Send now",
+      "sent": "Report sent.",
+      "pause": "Pause",
+      "pausedDone": "Report paused.",
+      "resume": "Resume",
+      "resumed": "Report resumed.",
+      "remove": "Remove",
+      "removed": "Report removed.",
+      "when": {
+        "daily": "Every day at {{hour}}",
+        "weekly": "Every {{day}} at {{hour}}",
+        "monthly": "On the first day of each month at {{hour}}"
+      },
+      "frequencies": {
+        "daily": "Daily",
+        "weekly": "Weekly",
+        "monthly": "Monthly"
+      },
+      "channels": {
+        "bot": "Bot",
+        "email": "Email"
+      },
+      "form": {
+        "title": "Schedule a report",
+        "subtitle": "Net sales, orders, buyers and top-ups for the closed period, each with its change, and a link to the tab you pick.",
+        "frequency": "How often",
+        "weekday": "Day",
+        "hour": "Hour",
+        "hourHint": "On the business's clock.",
+        "tab": "Link opens",
+        "botUnreachable": "Connect your account to the bot first.",
+        "emailUnreachable": "Verify your email address first.",
+        "noChannel": "Choose the bot, email, or both.",
+        "full": "You have reached the most reports one person can schedule.",
+        "add": "Schedule",
+        "added": "Report scheduled."
+      },
+      "refusals": {
+        "notAllowed": "Only people who can read these figures can receive them.",
+        "tooMany": "You have reached the most reports one person can schedule.",
+        "rebuilding": "The figures are being rebuilt; try again in a few minutes."
       }
     }
   }

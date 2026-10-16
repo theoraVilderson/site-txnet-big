@@ -78,6 +78,7 @@ export const RealtimeEvents = {
   "accessChanged": "identity.access.changed",
   "paymentOpenChanged": "billing.payment.open_changed",
   "analyticsRefreshed": "billing.analytics.refreshed",
+  "analyticsReport": "billing.analytics.report",
   "analyticsResellerRefreshed": "billing.analytics.reseller_refreshed",
   "supportInboxChanged": "support.inbox.changed",
 } as const;
