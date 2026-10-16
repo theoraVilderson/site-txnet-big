@@ -17,7 +17,7 @@ import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
 import { catalogOf } from './analytics-catalog';
-import { namesOf } from './analytics-names';
+import { AnalyticsNames, namesOf } from './analytics-names';
 import { overviewOf } from './analytics-overview';
 import { salesOf } from './analytics-sales';
 import { AnalyticsQuery, AnalyticsTab } from './analytics.schema';
@@ -46,7 +46,13 @@ const READ_TIMEOUT_MS = 30_000;
 type Head = { tab: AnalyticsTab; query: AnalyticsQuery; refreshedAt: string | null };
 
 /** While a whole rebuild runs the figures are half-built, so none are answered (principle 5). */
-export type AnalyticsAnswer = (Head & { rebuilding: true }) | (Head & { rebuilding: false; granularity: Granularity; buckets: string[]; suppressed: boolean } & Record<string, unknown>);
+export type AnalyticsAnswer =
+  | (Head & { rebuilding: true })
+  | (Head & { rebuilding: false; granularity: Granularity; buckets: string[]; suppressed: boolean; names: AnalyticsNames } & Record<string, unknown>);
+
+/** An answer with figures; `Record<string, unknown>` keeps `rebuilding` from narrowing on its own. */
+export type ReadyAnswer = Extract<AnalyticsAnswer, { rebuilding: false }>;
+export const isReady = (a: AnalyticsAnswer): a is ReadyAnswer => a.rebuilding === false;
 
 /** Each tab's builder; a tab with no row yet has none. */
 const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf };
@@ -98,7 +104,7 @@ export class AnalyticsService {
   }
 
   /** A cache read that fails is a miss, never a failed page: the rollup answers instead. */
-  private async cached(key: string): Promise<{ granularity: Granularity; buckets: string[]; suppressed: boolean } | null> {
+  private async cached(key: string): Promise<{ granularity: Granularity; buckets: string[]; suppressed: boolean; names: AnalyticsNames } | null> {
     try {
       const hit = await this.redis.get(key);
       return hit ? JSON.parse(hit) : null;

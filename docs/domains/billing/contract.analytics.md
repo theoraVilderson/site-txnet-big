@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b).** Everything else is not yet — each rule names its row. The page and its charts are
+(F-1001-b); the export (F-1007-a).** Everything else is not yet — each rule names its row. The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -163,6 +163,17 @@ block (Summary, Series, By product, …), numbers as numbers with the currency's
 decimals, dates in the tenant zone, and in `jalali` a Jalali date column beside
 the Gregorian one. File name `analytics-<tab>-<from>-<to>.<ext>`. A later report
 gets export by being a tab — it adds nothing to the exporter.
+
+**As built (F-1007-a).** `format` on the same routes; the answer is read
+through `AnalyticsService.read` (door, cache, suppression), then flattened **by
+shape** (`analytics-export.ts`): a KPI, an amount or a lone figure is a Summary
+row per currency; an object of bucket-long arrays a by-bucket block; an array
+of rows a block, a column per field and currency, `fewer_than_5` as words. A
+new field needs a `billing.analyticsExport.labels` key, else it reads as its
+name. Products by the reader's `catalog` text, panels by name; the currency's
+`decimalPlaces`; RTL sheets when `Intl` says the language is. CSV: a titled
+section per block, BOM, formula-leading text quoted. A rebuild answers 409
+`rebuilding`. The shared `ResponseInterceptor` lets a `StreamableFile` through.
 
 ## Cost and margin (F-1002-b, F-1001-l, F-1003)
 

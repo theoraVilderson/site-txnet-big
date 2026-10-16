@@ -20,6 +20,7 @@ updated: 2026-10-15
 | i18n | Go gRPC service + grpc-js / grpc-go clients | grpc 1.6x / 1.12 | single source of truth, live reload (ADR-0003) |
 | Frontend | Next.js (App Router) + React 19 + Tailwind 4 | Next 15 | `site-pwa` panel, `coinsite` landing |
 | Panel charts | visx (`@visx/scale`, `shape`, `axis`, `group`, `grid`, `responsive`, `curve`, `event`) | 4.0.0, pinned exact | the chart kit, `(panel)/_components/kit/charts/`; the only chart library (user, 2026-10-06; panel-web `contract.analytics.md`, F-1001-c) |
+| Spreadsheet export | exceljs | 4.4.0, pinned exact | billing's analytics export to XLSX, `analytics-export-write.ts`; the only spreadsheet writer — CSV needs none (user, 2026-10-16; billing `contract.analytics.md` Export, F-1007-a) |
 | Reverse proxy | Traefik | v3.7 | TLS (Let's Encrypt), routing, ForwardAuth, rate limit |
 | Broker | RabbitMQ | 4.2 | declared in compose; no code publishes/consumes yet |
 | Orchestration | docker compose (dev) / Kubernetes, k3s (prod, ADR-0147) | — | `scripts/dev.compose.sh`; prod `scripts/prod.compose.sh` until OPS-1-p |

@@ -1,14 +1,16 @@
-import { Controller, Get, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, type RateLimitOptions, ResellerAccessRejection, rateLimitBucketKey } from '@txnet-backend/shared-core';
-import type { Request } from 'express';
+import { Controller, Get, Param, ParseUUIDPipe, Query, Req, Res, StreamableFile } from '@nestjs/common';
+import { RateLimitBucket, type RateLimitOptions, ResellerAccessRejection, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
+import type { Request, Response } from 'express';
 
 import type { RateLimitConfigKey } from '../config/env.validation';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { RefusalStatus, refusalException } from '../request/refusal-exception';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { LocaleService } from '../locale/locale.service';
+import { AnalyticsExportService, AnalyticsRebuilding } from './analytics-export.service';
 import { AnalyticsAnswer, AnalyticsRefused, AnalyticsService } from './analytics.service';
-import { AnalyticsQuery, AnalyticsTab, analyticsQuerySchema } from './analytics.schema';
+import { AnalyticsRequest, AnalyticsTab, analyticsRequestSchema } from './analytics.schema';
 
 /** Every refusal of the door gets a status; a new reason does not compile until it gets one. */
 const STATUS: Record<ResellerAccessRejection, RefusalStatus> = {
@@ -33,37 +35,49 @@ const READ: RateLimitOptions<RateLimitConfigKey> = {
  * owner holds no operator key, so `ResellerAccess` with `analytics.read` is
  * the door, applied in the service with the scope the read runs in. **The
  * tenant is the path's**; `.strict()` on the query refuses a second answer.
+ * `format=csv|xlsx` answers the same figures as a file (F-1007-a, "Export").
  */
 @Controller('billing/tenants/:tenantId/analytics')
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly files: AnalyticsExportService,
+    private readonly locale: LocaleService,
+  ) {}
 
   /** KPIs against the previous window, the hero series, sales by product, the calendar. */
   @Get('overview')
   @RateLimit(READ)
-  overview(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsQuerySchema)) q: AnalyticsQuery, @Req() req: Request) {
-    return this.read(req, tenantId, 'overview', q);
+  overview(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'overview', q);
   }
 
   /** Package and usage sales, payments by gateway, discounts, gifts, refunds by product. */
   @Get('sales')
   @RateLimit(READ)
-  sales(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsQuerySchema)) q: AnalyticsQuery, @Req() req: Request) {
-    return this.read(req, tenantId, 'sales', q);
+  sales(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'sales', q);
   }
 
   /** Per product and per panel: net, orders, buyers, bytes, share and a sparkline. */
   @Get('catalog')
   @RateLimit(READ)
-  catalog(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsQuerySchema)) q: AnalyticsQuery, @Req() req: Request) {
-    return this.read(req, tenantId, 'catalog', q);
+  catalog(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'catalog', q);
   }
 
-  private async read(req: Request, tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery): Promise<AnalyticsAnswer> {
+  private async read(req: Request, res: Response, tenantId: string, tab: AnalyticsTab, { format, ...q }: AnalyticsRequest): Promise<AnalyticsAnswer | StreamableFile> {
     const { userId, tenantId: sessionTenantId, permissions } = identityOf(req);
+    const actor = { userId, tenantId: sessionTenantId, permissions };
     try {
-      return await this.analytics.read({ userId, tenantId: sessionTenantId, permissions }, tenantId, tab, q);
+      if (!format) return await this.analytics.read(actor, tenantId, tab, q);
+      const file = await this.files.file(actor, tenantId, tab, q, format, requestLanguage(req, this.locale));
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      return new StreamableFile(file.body);
     } catch (e) {
+      // Half-built figures are never a file (principle 5); the page shows its own alert instead.
+      if (e instanceof AnalyticsRebuilding) throw refusalException(409, { reason: 'rebuilding', message: e.message });
       if (!(e instanceof AnalyticsRefused)) throw e;
       throw refusalException(STATUS[e.reason], { reason: e.reason, message: e.message });
     }

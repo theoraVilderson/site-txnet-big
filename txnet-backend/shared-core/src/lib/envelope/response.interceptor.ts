@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   Injectable,
   NestInterceptor,
+  StreamableFile,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -32,6 +33,10 @@ export class ResponseInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       map((data) => {
+        // A file is its bytes (billing's analytics export, F-1007-a): wrapped,
+        // Nest would send the stream object's JSON instead of the download.
+        if (data instanceof StreamableFile) return data;
+
         // If response is already wrapped (has ok and msg), just translate msg
         if (data && typeof data === 'object' && 'ok' in data) {
           const msgKey = data.msg;
