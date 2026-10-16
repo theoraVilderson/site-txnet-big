@@ -63,6 +63,7 @@ const overview: AnalyticsOverview = {
   previousSeries: null,
   byProduct: { top: [{ productId: PRODUCT, net: { USD: "80.00" }, orders: 2, buyers: 6, share: 0.8889 }], other: null },
   calendar: [{ day: "2026-10-15", net: { USD: "65.00" } }, { day: "2026-10-16", net: { USD: "25.00" } }],
+  insights: [],
 };
 const answer = (over: object = {}) => ({
   tab: "overview" as const, query: { from: "2026-09-17", to: "2026-10-16", compare: "previous" as const, calendar: "gregorian" as const },

@@ -7,8 +7,11 @@ import { type AnalyticsNames, type AnalyticsOverview, FEWER_THAN_5 } from "@/lib
 import { formatBytes } from "../../services/_lib/service-configs";
 import { formatMoney } from "../../_lib/money";
 import { BarList, CHART_OTHER, CalendarHeatmap, ChartCard, Meter, StackedColumns, StatTile, slotColor, slotsByEntity, useChartFormat } from "../../_components/kit/charts";
+import { type AnalyticsFilters } from "../_lib/filters";
+import { insightLines } from "../_lib/insights";
 import { type HeroMetric, MONEY_METRICS, amountIn, catalogOrder } from "../_lib/overview";
 import { OverviewHero } from "./OverviewHero";
+import { OverviewInsights } from "./OverviewInsights";
 
 const K = FrontendI18nKeys.common.analytics;
 
@@ -24,6 +27,8 @@ export interface OverviewTabProps {
   calendar: keyof typeof WEEK_START;
   formatDay: (day: string) => string;
   productName: (id: string | null) => string | null;
+  /** The current view with `patch` applied — where an insight links. */
+  hrefOf: (patch: Partial<AnalyticsFilters>) => string;
   stale: boolean;
 }
 
@@ -31,12 +36,12 @@ type Bar = { id: string; label: string; value: number; display: string; color: s
 
 /**
  * The Overview tab (F-1001-d, panel-web `contract.analytics.md` "Overview"):
- * the hero, six KPI tiles, sales by product beside new vs returning buyers,
- * and the year's calendar. Insights (F-1001-j) and the owner's top resellers
- * (F-1001-i) arrive with their rows. `overview` null is the first load: every
+ * the hero, six KPI tiles, the insights strip (F-1001-k), sales by product
+ * beside new vs returning buyers, and the year's calendar. The owner's top
+ * resellers (F-1001-i) arrive with their row. `overview` null is the first load: every
  * card draws its own skeleton.
  */
-export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, stale }: OverviewTabProps) {
+export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, hrefOf, stale }: OverviewTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const [metric, setMetric] = useState<HeroMetric>("net");
@@ -56,6 +61,7 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
 
   const buyerRows = x.map((day, i) => ({ x: day, fresh: overview?.series.newBuyers[i] ?? 0, returning: overview?.series.returningBuyers[i] ?? 0 }));
   const heat = (overview?.calendar ?? []).map((c) => ({ day: c.day, value: amountIn(c.net, currency) }));
+  const insights = insightLines(overview?.insights ?? [], { t, percent: fmt.percent, money: (amount, code) => formatMoney(amount, code, { lang, t }), formatDay, productName, hrefOf });
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,6 +90,8 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
           <StatTile label={t("common", K.kpis.bytesUsed)} value={Number(kpis.bytesUsed.value)} format={(n) => formatBytes(String(Math.round(n)), lang) ?? ""} delta={kpis.bytesUsed.delta} />
         </div>
       )}
+
+      <OverviewInsights lines={insights} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ChartCard<Bar>

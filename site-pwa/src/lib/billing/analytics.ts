@@ -52,6 +52,19 @@ export type ProductCell =
 type MoneyKpiName = "net" | "gross" | "refunds" | "topUps" | "aov" | "arpu";
 type CountKpiName = "orders" | "buyers" | "newBuyers" | "returningBuyers" | "activeGrants";
 
+/** The KPIs the overview answers; an insight names one of them. */
+export const OVERVIEW_KPIS = ["net", "gross", "refunds", "topUps", "aov", "arpu", "orders", "buyers", "newBuyers", "returningBuyers", "activeGrants", "bytesUsed"] as const;
+export type OverviewKpi = (typeof OVERVIEW_KPIS)[number];
+
+/**
+ * A "what changed" line (F-1001-j): `key` names the sentence, the panel's
+ * locale holds its words. Money is the operating currency's, a decimal string.
+ */
+export type AnalyticsInsight =
+  | { key: "kpiMove"; params: { kpi: string; delta: number; currency: string | null } }
+  | { key: "productDrove"; params: { productId: string | null; change: string; currency: string } }
+  | { key: "unusualDay"; params: { day: string; net: string; mean: string; currency: string } };
+
 export interface AnalyticsOverview {
   currencies: string[];
   kpis: Record<MoneyKpiName, MoneyKpi> &
@@ -64,6 +77,8 @@ export interface AnalyticsOverview {
   previousSeries: AnalyticsSeries | null;
   byProduct: { top: ProductCell[]; other: { net: Amounts; orders: number; share: number | null } | null };
   calendar: { day: string; net: Amounts | null }[];
+  /** Up to three, in billing's order (F-1001-j). */
+  insights: AnalyticsInsight[];
 }
 
 /** Product names are catalog keys (the published `catalog` namespace); a panel's is its own. */

@@ -33,7 +33,7 @@ export interface StatTileProps {
 }
 
 /** A sparkline: the series' shape, no axis, in the main colour. Decorative — the figure beside it is the reading. */
-function Sparkline({ values }: { values: readonly (number | null)[] }) {
+export function Sparkline({ values }: { values: readonly (number | null)[] }) {
   const { main } = useChartTheme();
   const points = values.flatMap((v, i) => (v === null ? [] : [{ i, v }]));
   if (points.length < 2) return null;

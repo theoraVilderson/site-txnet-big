@@ -13,6 +13,6 @@ export { useChartFormat, type ChartFormat } from "./format";
 export { Meter, type MeterProps } from "./Meter";
 export { CHART_OTHER, CHART_SLOTS, slotColor, slotsByEntity } from "./palette";
 export { StackedColumns, type StackedColumnsProps, type StackSeries } from "./StackedColumns";
-export { StatTile, type StatTileProps } from "./StatTile";
+export { Sparkline, StatTile, type StatTileProps } from "./StatTile";
 export { TrendChart, type TrendChartProps, type TrendSeries } from "./TrendChart";
 export { useChartTheme, type ChartTheme } from "./useChartTheme";

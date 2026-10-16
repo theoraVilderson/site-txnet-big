@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { resellerUsersApi } from "@/lib/auth-api";
 import { billingApi, resellerRevenueApi } from "@/lib/billing-api";
-import { PANEL_USERS } from "@/lib/routes";
+import { readAnalytics } from "@/lib/billing/analytics";
+import { PANEL_ANALYTICS, PANEL_USERS } from "@/lib/routes";
 import { supportAgentApi } from "@/lib/support-api";
 import { WIDGETS, startOfDayIn, visibleWidgets } from "./_lib/widgets";
 
@@ -14,6 +15,8 @@ import { WIDGETS, startOfDayIn, visibleWidgets } from "./_lib/widgets";
  *
  * - revenue: the caller's own tenant's, today / 7 / 30 days, from F-311-b's
  *   endpoint — a reseller's, or the platform's own for its staff (UX-1-r2);
+ *   with `analytics.read`, a 30-day sparkline and a link to `/analytics`
+ *   (F-1001-k), whose failure never fails the totals;
  * - manual payments, the support queue (unassigned, mine, waiting), users (the
  *   total and a search that opens the users page), systems (platform only:
  *   panels by verdict).
@@ -37,6 +40,11 @@ vi.mock("./_context/PanelSessionContext", () => ({
   usePanelSession: () => ({ me, group: { current: { userId: "u-1" }, members: [] }, timeZone: { zone: "Asia/Tehran" } }),
 }));
 vi.mock("@/lib/billing-api", () => ({ billingApi: { manualPayments: vi.fn(), systemsPanels: vi.fn() }, resellerRevenueApi: { totals: vi.fn() } }));
+vi.mock("@/lib/billing/analytics", () => ({ readAnalytics: vi.fn() }));
+vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ theme: "light" }) }));
+vi.mock("@/context/BrandContext", () => ({ useBrandColor: () => null }));
+// The manual-payments widget re-reads live (RT-1-j); the socket is not under test here.
+vi.mock("./_context/PanelRealtimeContext", () => ({ usePanelRealtime: () => null }));
 vi.mock("@/lib/support-api", () => ({ supportAgentApi: { inbox: vi.fn() } }));
 vi.mock("@/lib/auth-api", () => ({ resellerUsersApi: { list: vi.fn() } }));
 
@@ -59,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   me = PLATFORM_STAFF;
+  vi.mocked(readAnalytics).mockRejectedValue(new Error("not under test"));
 });
 
 describe("the registry (D5, D6)", () => {
@@ -108,6 +117,34 @@ describe("the widgets (D5)", () => {
     expect(vi.mocked(resellerRevenueApi.totals).mock.calls.map(([id]) => id)).toEqual(["t-1", "t-1", "t-1"]);
     expect(screen.getAllByText(D.revenue.fromUsers)).toHaveLength(3);
     expect(screen.getAllByText(D.revenue.fromResellers)).toHaveLength(3);
+  });
+
+  it("revenue: with analytics.read, a 30-day net sparkline from the overview and a link to /analytics", async () => {
+    me = { ...RESELLER_STAFF, permissions: [...RESELLER_STAFF.permissions, "analytics.read"] };
+    vi.mocked(resellerRevenueApi.totals).mockResolvedValue(totals("5.00") as never);
+    const day = (usd: string) => ({ USD: usd });
+    vi.mocked(readAnalytics).mockResolvedValue({ rebuilding: false, currencies: ["USD"], series: { salesPackage: [day("4"), day("6")], salesUsage: [day("1"), day("0")] } } as never);
+    widget("revenue");
+    expect(await screen.findByRole("img", { name: D.revenue.trend })).toBeTruthy();
+    expect(vi.mocked(readAnalytics).mock.calls).toEqual([["t-9", "overview", { from: "2026-09-06", to: "2026-10-05", compare: "none", calendar: "gregorian" }]]);
+    expect(screen.getByRole("link", { name: D.revenue.seeAnalytics }).getAttribute("href")).toBe(PANEL_ANALYTICS);
+  });
+
+  it("revenue: a refused overview leaves the totals and the link, without a sparkline; no analytics.read asks nothing", async () => {
+    me = { ...RESELLER_STAFF, permissions: [...RESELLER_STAFF.permissions, "analytics.read"] };
+    vi.mocked(resellerRevenueApi.totals).mockResolvedValue(totals("5.00") as never);
+    const view = widget("revenue");
+    expect(await screen.findByRole("link", { name: D.revenue.seeAnalytics })).toBeTruthy();
+    await vi.waitFor(() => expect(readAnalytics).toHaveBeenCalled());
+    expect(screen.queryByRole("img", { name: D.revenue.trend })).toBeNull();
+    view.unmount();
+
+    vi.mocked(readAnalytics).mockClear();
+    me = RESELLER_STAFF;
+    widget("revenue");
+    await screen.findByText(D.revenue.today);
+    expect(readAnalytics).not.toHaveBeenCalled();
+    expect(screen.queryByRole("link", { name: D.revenue.seeAnalytics })).toBeNull();
   });
 
   it("revenue: a reseller's has no resellers line", async () => {

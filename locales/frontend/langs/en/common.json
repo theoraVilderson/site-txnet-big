@@ -6117,7 +6117,9 @@
       "month": "30 days",
       "sales": "{{count}} sales",
       "fromUsers": "From users",
-      "fromResellers": "From resellers"
+      "fromResellers": "From resellers",
+      "seeAnalytics": "See analytics",
+      "trend": "Net sales, last 30 days"
     },
     "manualPayments": {
       "waiting": "{{count}} waiting",
@@ -6616,6 +6618,31 @@
       "button": "Export",
       "csv": "CSV",
       "xlsx": "Excel"
+    },
+    "insights": {
+      "title": "What changed",
+      "kpiUp": "{{kpi}} is up {{delta}} on the compared period",
+      "kpiDown": "{{kpi}} is down {{delta}} on the compared period",
+      "productUp": "{{product}} added {{change}} to net sales",
+      "productDown": "{{product}} took {{change}} off net sales",
+      "dayHigh": "{{day}} sold {{net}}, well above the usual {{mean}} a day",
+      "dayLow": "{{day}} sold {{net}}, well below the usual {{mean}} a day",
+      "showProduct": "See this product",
+      "showDay": "See this day",
+      "kpis": {
+        "net": "Net sales",
+        "gross": "Gross sales",
+        "refunds": "Refunds",
+        "topUps": "Top-ups",
+        "aov": "Average order",
+        "arpu": "Revenue per buyer",
+        "orders": "Orders",
+        "buyers": "Buyers",
+        "newBuyers": "New buyers",
+        "returningBuyers": "Returning buyers",
+        "activeGrants": "Active services",
+        "bytesUsed": "Traffic used"
+      }
     }
   }
 }

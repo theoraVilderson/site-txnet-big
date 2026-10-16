@@ -124,6 +124,7 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
           calendar={calendar}
           formatDay={formatDay}
           productName={productName}
+          hrefOf={(patch) => hrefOf({ ...filters, ...patch })}
           stale={stale}
         />
       )}

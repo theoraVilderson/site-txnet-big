@@ -6117,7 +6117,9 @@
       "month": "۳۰ روز",
       "sales": "{{count}} فروش",
       "fromUsers": "از کاربران",
-      "fromResellers": "از ریسلرها"
+      "fromResellers": "از ریسلرها",
+      "seeAnalytics": "دیدن تحلیل‌ها",
+      "trend": "فروش خالص، ۳۰ روز گذشته"
     },
     "manualPayments": {
       "waiting": "{{count}} در انتظار",
@@ -6616,6 +6618,31 @@
       "button": "خروجی",
       "csv": "CSV",
       "xlsx": "اکسل"
+    },
+    "insights": {
+      "title": "چه چیزی تغییر کرد",
+      "kpiUp": "{{kpi}} نسبت به دورهٔ مقایسه {{delta}} بیشتر شد",
+      "kpiDown": "{{kpi}} نسبت به دورهٔ مقایسه {{delta}} کمتر شد",
+      "productUp": "{{product}} {{change}} به فروش خالص اضافه کرد",
+      "productDown": "{{product}} {{change}} از فروش خالص کم کرد",
+      "dayHigh": "فروش {{day}} {{net}} بود؛ خیلی بیشتر از میانگین روزانهٔ {{mean}}",
+      "dayLow": "فروش {{day}} {{net}} بود؛ خیلی کمتر از میانگین روزانهٔ {{mean}}",
+      "showProduct": "دیدن این محصول",
+      "showDay": "دیدن این روز",
+      "kpis": {
+        "net": "فروش خالص",
+        "gross": "فروش ناخالص",
+        "refunds": "بازپرداخت‌ها",
+        "topUps": "شارژ کیف پول",
+        "aov": "میانگین سفارش",
+        "arpu": "درآمد به ازای هر خریدار",
+        "orders": "سفارش‌ها",
+        "buyers": "خریداران",
+        "newBuyers": "خریداران جدید",
+        "returningBuyers": "خریداران بازگشتی",
+        "activeGrants": "سرویس‌های فعال",
+        "bytesUsed": "ترافیک مصرفی"
+      }
     }
   }
 }
