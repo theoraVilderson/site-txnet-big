@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i); Profit (F-1001-m) — tabs after Resellers in [contract.analytics-tabs.md](contract.analytics-tabs.md).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i); Profit (F-1001-m); Cohorts and `CohortGrid` (F-1004-b) — tabs after Resellers in [contract.analytics-tabs.md](contract.analytics-tabs.md).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -48,8 +48,8 @@ and `--chart-grid`; `palette.ts` names them (`slotColor`, `slotsByEntity`), and
 `charts.test.tsx` holds them to the table below. `useChartTheme` reads the
 computed surface off `<html>`. Formats come from the page (`formatValue`, x
 labels in its calendar), the compact default from `numberLocale`. Ticks are
-chosen, never d3's hint (which can give 8). `CohortGrid` is built with its
-first user (F-1004-b). The dark accent (`#4ade80`, L 0.80) and ocean's (chroma 0.098) fail the
+chosen, never d3's hint (which can give 8). `CohortGrid` was built with its
+first user (F-1004-b; `contract.analytics-tabs.md` "Cohorts"). The dark accent (`#4ade80`, L 0.80) and ocean's (chroma 0.098) fail the
 check themselves — see the main series rule below.
 
 ### Rules every chart obeys

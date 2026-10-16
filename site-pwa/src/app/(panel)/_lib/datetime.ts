@@ -58,6 +58,19 @@ export function formatInstant(
   }
 }
 
+/**
+ * A tenant day's month and year in the reader's calendar — `مهر ۱۴۰۵` reads
+ * as Mehr 1405 in Persian, `October 2026` in English — a cohort's name
+ * (F-1004-b). Read at noon UTC, so the day is that day on every wall clock.
+ */
+export function formatMonth(day: string, lang: string): string {
+  try {
+    return new Intl.DateTimeFormat(numberLocale(lang), { year: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${day}T12:00:00Z`));
+  } catch {
+    return day.slice(0, 7);
+  }
+}
+
 const RELATIVE_STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["second", 60],
   ["minute", 60],

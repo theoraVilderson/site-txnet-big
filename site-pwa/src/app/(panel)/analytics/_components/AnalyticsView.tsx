@@ -13,7 +13,7 @@ import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Alert, Button, PageHeader, SegmentedControl, TabLinks } from "../../_components/kit";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
-import { dayIn, formatInstant, formatRelative } from "../../_lib/datetime";
+import { dayIn, formatInstant, formatMonth, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, settingsEditable } from "../_lib/customers";
@@ -24,6 +24,7 @@ import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { CatalogTab } from "./CatalogTab";
+import { CohortsTab } from "./CohortsTab";
 import { CustomersTab } from "./CustomersTab";
 import { ResellersTab } from "./ResellersTab";
 import { OverviewTab } from "./OverviewTab";
@@ -156,6 +157,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           setting={setting}
           stale={stale}
         />
+      ) : filters.tab === "cohorts" ? (
+        <CohortsTab cohorts={body?.tab === "cohorts" ? body : null} currency={currency ?? ""} formatMonth={(day) => formatMonth(day, lang)} stale={stale} />
       ) : filters.tab === "margin" ? (
         <ProfitTab
           margin={body?.tab === "margin" ? body : null}

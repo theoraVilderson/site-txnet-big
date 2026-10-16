@@ -8,14 +8,13 @@ import { formatMoney } from "../../_lib/money";
 import { Card, CardHeader, DataTable, type DataColumn } from "../../_components/kit";
 import { BarList, ChartCard, Meter, StatTile, TrendChart, useChartFormat } from "../../_components/kit/charts";
 import { amountIn } from "../_lib/overview";
+import { sourceNamer } from "../_lib/sources";
 import { BuyersCard } from "./BuyersCard";
 import { AnalyticsSettingField } from "./AnalyticsSettingField";
 
 const K = FrontendI18nKeys.common.analytics;
 const C = K.customers;
 
-/** The sources billing names that have words of their own. */
-const SOURCE_KEYS: Record<string, string> = { web: C.sources.web, unknown: C.sources.unknown, telegram: C.sources.telegram, bale: C.sources.bale };
 
 export interface CustomersTabProps {
   /** Null on the first load: every card draws its own skeleton. */
@@ -51,8 +50,7 @@ export function CustomersTab({ customers, x, currency, productName, userHref, se
   const renewal = customers?.renewal;
   const signups = customers?.signups;
 
-  // A source with words of its own is said in them; any other is a bot platform, named as it is.
-  const sourceLabel = (source: string) => (SOURCE_KEYS[source] ? t("common", SOURCE_KEYS[source]) : source);
+  const sourceLabel = sourceNamer(t);
   const sources = (signups?.bySource ?? []).flatMap((s) => ("signups" in s ? [{ id: s.source, label: sourceLabel(s.source), value: s.signups, display: fmt.full(s.signups) }] : []));
   const hiddenSources = (signups?.bySource.length ?? 0) - sources.length;
 

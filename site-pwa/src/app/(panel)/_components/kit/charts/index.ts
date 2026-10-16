@@ -7,6 +7,7 @@
  */
 export { BarList, BAR_LIST_TOP, type BarItem, type BarListProps } from "./BarList";
 export { CalendarHeatmap, type CalendarHeatmapProps, type HeatDay } from "./CalendarHeatmap";
+export { CohortGrid, type CohortGridProps, type CohortGridRow } from "./CohortGrid";
 export { ChartCard, type ChartCardProps, type ChartTable, type LegendItem } from "./ChartCard";
 export { DeltaPill, type ChartDelta, type DeltaPillProps } from "./DeltaPill";
 export { useChartFormat, type ChartFormat } from "./format";

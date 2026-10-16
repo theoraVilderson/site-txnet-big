@@ -3,7 +3,7 @@ import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today, in the page's order; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers", "margin"] as const;
+export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers", "margin", "cohorts"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -179,6 +179,19 @@ export interface AnalyticsMargin {
   lossAlertPercent: number;
 }
 
+/** The Cohorts tab (billing `cohorts`, F-1004-a): flat lists the page pivots; the channel is the signup source (ADR-0149 (5)). */
+export interface AnalyticsCohorts {
+  currencies: string[];
+  /** The window's months in the reader's calendar; a cohort is one, and month k counts from it. */
+  months: string[];
+  cohorts: ({ cohort: string; users: number } | { cohort: string; people: typeof FEWER_THAN_5 })[];
+  /** One cohort's month k, for every month it has lived. */
+  cells: { cohort: string; k: number; share: number; netPerUser: Amounts; ltv: Amounts }[];
+  channels: ({ source: string; users: number } | { source: string; people: typeof FEWER_THAN_5 })[];
+  /** A channel's LTV at month k; no row where no cohort of it has lived k months. */
+  channelLtv: { source: string; k: number; ltv: Amounts }[];
+}
+
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
 export interface GatewayCell {
   gatewayKind: string | null;
@@ -239,6 +252,7 @@ export interface AnalyticsBodies {
   catalog: AnalyticsCatalog;
   resellers: AnalyticsResellers;
   margin: AnalyticsMargin;
+  cohorts: AnalyticsCohorts;
 }
 
 /** One tab's answer, its `tab` the tab asked: over the union of tabs, a union `tab` narrows. */

@@ -43,3 +43,27 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
    the percent past which a user is reported, 0–500, in `AnalyticsSettingField`
    — the one form both settings use; billing answers the current one as
    `lossAlertPercent`, and a change re-reads the tab.
+
+## Cohorts (F-1004-b)
+
+`CohortsTab`, over billing's `cohorts` (F-1004-a), `?tab=cohorts`, offered to
+every reader of `/analytics`.
+
+1. **The grid** (`CohortGrid`, the kit's): a row per cohort — its month in the
+   reader's calendar (`formatMonth`: Jalali in Persian) and its size — and a
+   column per month since. One metric at a time (`SegmentedControl`): still
+   buying (share, the scale's top at 100%), net per member, lifetime value —
+   money in the page's currency. Billing's flat cells are pivoted by
+   `_lib/cohorts.ts`.
+2. **`CohortGrid`** is a real `<table>`: every cell writes its value, the
+   sequential hue (`theme.sequential`, five steps by share of the largest)
+   only helps the eye; a month not lived is an empty cell, never a zero; a
+   cohort hidden from the platform's staff is one cell, "fewer than 5". Light
+   words on the two darkest steps in the light theme, and on every step in
+   the dark. Wider than a phone, it scrolls inside its card.
+3. **LTV by channel:** a `TrendChart` over month k for the four largest
+   channels (rule 5; every channel in the table view), each drawn only as far
+   as billing answered it. A channel is a signup source, named as the
+   Customers tab names it (`_lib/sources.ts`).
+4. Its table views are the flat lists: cohort · month · value, channel ·
+   month · LTV.

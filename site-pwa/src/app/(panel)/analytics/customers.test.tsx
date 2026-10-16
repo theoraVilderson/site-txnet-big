@@ -84,7 +84,7 @@ describe("CustomersTab", () => {
   });
 
   it("saves a renewal window from 1 to 30 days, and refuses one outside it before asking", async () => {
-    vi.mocked(setAnalyticsSettings).mockResolvedValue({ renewalWindowDays: 14 });
+    vi.mocked(setAnalyticsSettings).mockResolvedValue({ renewalWindowDays: 14, lossAlertPercent: 20 });
     const p = props();
     render(<CustomersTab {...p} />);
     const input = screen.getByLabelText("analytics.customers.window.label") as HTMLInputElement;

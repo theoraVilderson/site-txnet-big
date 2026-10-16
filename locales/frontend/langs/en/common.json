@@ -6557,7 +6557,8 @@
       "customers": "Customers",
       "catalog": "Products and panels",
       "resellers": "Resellers",
-      "margin": "Profit"
+      "margin": "Profit",
+      "cohorts": "Cohorts"
     },
     "filters": {
       "button": "Filters",
@@ -6818,6 +6819,27 @@
         "hint": "{{min}}–{{max}}. Checked daily over the last 30 days; each user is reported once a month to you and your staff.",
         "save": "Save",
         "saved": "Saved: users are reported past {{percent}}%."
+      }
+    },
+    "cohorts": {
+      "metric": "What the grid shows",
+      "metrics": {
+        "share": "Still buying",
+        "netPerUser": "Net per member",
+        "ltv": "Lifetime value"
+      },
+      "grid": {
+        "title": "Retention by first-purchase month",
+        "subtitle": "Each row is the people whose first purchase was in that month; each column a month after it",
+        "cohort": "First purchase",
+        "size": "People",
+        "month": "Month {{k}}",
+        "k": "Month"
+      },
+      "channels": {
+        "title": "Lifetime value by channel",
+        "subtitle": "Where people signed up, and what each is worth over the months after their first purchase",
+        "source": "Channel"
       }
     }
   }
