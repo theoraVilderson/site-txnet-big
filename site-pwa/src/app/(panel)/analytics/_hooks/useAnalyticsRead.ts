@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { type AnalyticsAnswer, type AnalyticsBodies, type AnalyticsQuery, type AnalyticsTab, readAnalytics } from "@/lib/billing/analytics";
+import { type AnalyticsQuery, type AnalyticsTab, type AnalyticsTabAnswer, readAnalytics } from "@/lib/billing/analytics";
 import type { AnalyticsLive } from "../_lib/live";
 
 export interface AnalyticsRead<T extends AnalyticsTab> {
-  answer: AnalyticsAnswer<AnalyticsBodies[T]> | null;
+  answer: AnalyticsTabAnswer<T> | null;
   /** The figures on screen are for an older query: the new ones are on their way (rule 11). */
   stale: boolean;
   error: unknown;
@@ -22,7 +22,7 @@ export interface AnalyticsRead<T extends AnalyticsTab> {
  * memoized object: a new one is a new read.
  */
 export function useAnalyticsRead<T extends AnalyticsTab>(tenantId: string | null, tab: T, query: AnalyticsQuery, live: AnalyticsLive): AnalyticsRead<T> {
-  const [answer, setAnswer] = useState<AnalyticsAnswer<AnalyticsBodies[T]> | null>(null);
+  const [answer, setAnswer] = useState<AnalyticsTabAnswer<T> | null>(null);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   // A live event or a retry asks for the same query again.

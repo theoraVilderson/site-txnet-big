@@ -6534,7 +6534,9 @@
       "body": "The time zone changed, so every day is being recounted. The numbers return when it finishes."
     },
     "tabs": {
-      "overview": "Overview"
+      "overview": "Overview",
+      "sales": "Sales",
+      "catalog": "Products and panels"
     },
     "filters": {
       "button": "Filters",
@@ -6658,6 +6660,53 @@
       "external_order": "External orders",
       "feature_access": "Features",
       "wallet_topup": "Wallet top-ups"
+    },
+    "sales": {
+      "byKind": {
+        "title": "Package and usage sales",
+        "subtitle": "Net sales per period",
+        "package": "Packages",
+        "usage": "Pay as you go"
+      },
+      "net": {
+        "title": "Net sales",
+        "subtitle": "Per period"
+      },
+      "topUps": {
+        "title": "Top-ups",
+        "subtitle": "Settled wallet top-ups per period, never added to sales"
+      },
+      "gateways": {
+        "title": "Payment success by gateway",
+        "subtitle": "{{settled}} of {{started}} settled",
+        "hidden": "A reseller's split by gateway is not shown: it could describe fewer than 5 people.",
+        "empty": "No top-up was started in this period."
+      },
+      "kpis": {
+        "successRate": "Payment success",
+        "discounts": "Discounts given",
+        "gifts": "Gift credits",
+        "refunds": "Refunds"
+      },
+      "refunds": {
+        "title": "Refunds by product",
+        "subtitle": "Refunded in this period",
+        "empty": "Nothing was refunded in this period."
+      }
+    },
+    "catalog": {
+      "products": "Products",
+      "panels": "Panels",
+      "net": "Net sales",
+      "orders": "Orders",
+      "buyers": "Buyers",
+      "share": "Share",
+      "bytesSold": "Traffic sold",
+      "bytesUsed": "Traffic used",
+      "trend": "Trend",
+      "fewerThan5": "Fewer than 5 buyers",
+      "empty": "Nothing was sold in this period.",
+      "unnamedPanel": "Without a panel"
     }
   }
 }

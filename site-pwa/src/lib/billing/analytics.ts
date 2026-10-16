@@ -2,8 +2,8 @@
 import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
-/** The tabs billing answers today; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview"] as const;
+/** The tabs billing answers today, in the page's order; a later row adds its own. */
+export const ANALYTICS_TABS = ["overview", "sales", "catalog"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -102,6 +102,41 @@ export interface AnalyticsOverview {
   usage: AnalyticsUsageCard[];
 }
 
+/** Top-ups through one gateway kind — its provider's name, shown as it is. */
+export interface GatewayCell {
+  gatewayKind: string | null;
+  started: number;
+  settled: number;
+  failed: number;
+  successRate: number | null;
+  settledAmount: Amounts;
+}
+
+/** The Sales tab (billing `sales`, F-1001-b). */
+export interface AnalyticsSales {
+  currencies: string[];
+  series: AnalyticsSeries;
+  previousSeries: AnalyticsSeries | null;
+  /** `byKind` is null to the platform's staff on a reseller: no payer per gateway to judge a cell by (ADR-0104). */
+  payments: { started: number; settled: number; failed: number; successRate: number | null; byKind: GatewayCell[] | null };
+  refunds: MoneyKpi;
+  discounts: MoneyKpi;
+  giftsCredited: MoneyKpi;
+  refundsByProduct: ({ productId: string | null; refunds: Amounts } | { productId: string | null; people: typeof FEWER_THAN_5 })[];
+}
+
+/** One product or panel row of the Products and panels tab, or one hidden from the platform's staff. */
+export type CatalogCell =
+  | { id: string | null; net: Amounts; orders: number; buyers: number; bytesSold: string; bytesUsed: string; share: number | null; sparkline: Amounts[] }
+  | { id: string | null; people: typeof FEWER_THAN_5 };
+
+/** The Products and panels tab (billing `catalog`, F-1001-b). */
+export interface AnalyticsCatalog {
+  currencies: string[];
+  products: CatalogCell[];
+  panels: CatalogCell[];
+}
+
 /** Product names are catalog keys (the published `catalog` namespace); a panel's is its own. */
 export interface AnalyticsNames {
   products: { id: string; nameKey: string }[];
@@ -122,7 +157,12 @@ export type AnalyticsAnswer<Body> =
 /** The body each tab answers. */
 export interface AnalyticsBodies {
   overview: AnalyticsOverview;
+  sales: AnalyticsSales;
+  catalog: AnalyticsCatalog;
 }
+
+/** One tab's answer, its `tab` the tab asked: over the union of tabs, a union `tab` narrows. */
+export type AnalyticsTabAnswer<T extends AnalyticsTab> = T extends AnalyticsTab ? AnalyticsAnswer<AnalyticsBodies[T]> & { tab: T } : never;
 
 const tabPath = (tenantId: string, tab: AnalyticsTab) => `/tenants/${encodeURIComponent(tenantId)}/analytics/${tab}`;
 
@@ -134,8 +174,8 @@ export function analyticsSearch(q: AnalyticsQuery): string {
 }
 
 /** One tab of the path's tenant. No permission is judged here: billing's door is `analytics.read`. */
-export function readAnalytics<T extends AnalyticsTab>(tenantId: string, tab: T, q: AnalyticsQuery): Promise<AnalyticsAnswer<AnalyticsBodies[T]>> {
-  return call<AnalyticsAnswer<AnalyticsBodies[T]>>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}`);
+export function readAnalytics<T extends AnalyticsTab>(tenantId: string, tab: T, q: AnalyticsQuery): Promise<AnalyticsTabAnswer<T>> {
+  return call<AnalyticsTabAnswer<T>>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}`);
 }
 
 /** The formats billing's export writes — its `EXPORT_FORMATS` (F-1007-a). */

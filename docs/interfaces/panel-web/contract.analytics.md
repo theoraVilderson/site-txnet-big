@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -201,6 +201,14 @@ filter already draws only when `names.panels` has one.
   discounts and gifts, refunds by product.
 - **Products and panels** (F-1001-e): one `DataTable` each, every row with its
   sparkline and share; a row click filters the whole page to it.
+- **As built (F-1001-e, `SalesTab`, `CatalogTab`).** Sales adds a tile row
+  (payment success with its `Meter`, discounts, gifts, refunds — down is good);
+  a gateway is its provider's name as billing answers it, and to the platform's
+  staff on a reseller the card says why it is empty. Products and panels: a
+  row's name opens the Overview filtered to it; the panel table only with a
+  panel, the traffic columns only when a row moved a byte (ADR-0148 (4)); a row
+  under 5 buyers reads "fewer than 5" in every figure. An answer is drawn only
+  by the tab it is for (`AnalyticsTabAnswer`): the last tab's stays off screen.
 - **Customers** (F-1001-g): new vs returning, the signup → first-purchase
   funnel, renewal by product, top customers (a reseller's own only); the
   renewal window setting (1–30 days, default 7) sits here for `tenant.manage`.

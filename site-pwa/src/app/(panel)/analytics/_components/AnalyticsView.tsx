@@ -21,7 +21,9 @@ import { currencyOf, productNamer } from "../_lib/overview";
 import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
+import { CatalogTab } from "./CatalogTab";
 import { OverviewTab } from "./OverviewTab";
+import { SalesTab } from "./SalesTab";
 
 const K = FrontendI18nKeys.common.analytics;
 
@@ -81,11 +83,16 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
   const onChange = (next: Partial<AnalyticsFilters>) => router.replace(hrefOf({ ...filters, ...next }), { scroll: false });
 
   const ready = answer && !answer.rebuilding ? answer : null;
+  // The hook keeps the last answer while the next loads: one for another tab is no figure of this one.
+  const body = ready?.tab === filters.tab ? ready : null;
   const names = ready?.names ?? null;
   const productName = useMemo(() => productNamer(names ?? NO_NAMES, texts), [names, texts]);
   const meterName = useMemo(() => meterNamer(names ?? NO_NAMES, texts, t), [names, texts, t]);
+  const panelName = (id: string | null) => names?.panels.find((p) => p.id === id)?.name ?? null;
+  const viewOf = (patch: Partial<AnalyticsFilters>) => hrefOf({ ...filters, ...patch });
   const currency = ready ? currencyOf(ready.currencies, filters.currency) : null;
   const formatDay = (day: string) => formatInstant(noonOf(day), lang, { withTime: false }) ?? day;
+  const x = (body?.buckets ?? []).map(formatDay);
   const updated = answer?.refreshedAt ? t("common", K.updated, { ago: formatRelative(answer.refreshedAt, lang) ?? "" }) : t("common", K.notYetRolled);
 
   return (
@@ -120,17 +127,21 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
         <Alert tone="error" title={t("common", K.loadFailed)} action={<Button size="sm" variant="secondary" onClick={reload}>{t("common", FrontendI18nKeys.common.kit.chart.retry)}</Button>}>
           {errorText(error)}
         </Alert>
+      ) : filters.tab === "sales" ? (
+        <SalesTab sales={body?.tab === "sales" ? body : null} x={x} currency={currency ?? ""} productName={productName} stale={stale} />
+      ) : filters.tab === "catalog" ? (
+        <CatalogTab catalog={body?.tab === "catalog" ? body : null} currency={currency ?? ""} productName={productName} panelName={panelName} hrefOf={viewOf} />
       ) : (
         <OverviewTab
-          overview={ready}
+          overview={body?.tab === "overview" ? body : null}
           names={names}
-          x={(ready?.buckets ?? []).map(formatDay)}
+          x={x}
           currency={currency ?? ""}
           calendar={calendar}
           formatDay={formatDay}
           productName={productName}
           meterName={meterName}
-          hrefOf={(patch) => hrefOf({ ...filters, ...patch })}
+          hrefOf={viewOf}
           stale={stale}
         />
       )}

@@ -193,6 +193,71 @@ describe("the Overview by meter (F-1001-o, ADR-0148)", () => {
   });
 });
 
+describe("the Sales and the Products and panels tabs (F-1001-e)", () => {
+  const PANEL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const money = (v: string) => ({ value: { USD: v }, previous: null, delta: { USD: null } });
+  const sales = (over: object = {}) =>
+    answer({
+      tab: "sales",
+      series: overview.series,
+      previousSeries: null,
+      payments: { started: 4, settled: 3, failed: 1, successRate: 0.75, byKind: [{ gatewayKind: "zarinpal", started: 4, settled: 3, failed: 1, successRate: 0.75, settledAmount: { USD: "50.00" } }] },
+      refunds: money("10.00"), discounts: money("5.00"), giftsCredited: money("7.00"),
+      refundsByProduct: [{ productId: PRODUCT, refunds: { USD: "10.00" } }],
+      ...over,
+    });
+  const row = (id: string, bytes = "0") => ({ id, net: { USD: "80.00" }, orders: 2, buyers: 6, bytesSold: bytes, bytesUsed: bytes, share: 0.8, sparkline: [{ USD: "40.00" }, { USD: "40.00" }] });
+
+  it("reads the sales tab and draws sales by kind, sales and top-ups apart, success by gateway and refunds by product", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=sales"));
+    vi.mocked(readAnalytics).mockResolvedValue(sales() as never);
+    render(<AnalyticsView />);
+    expect(await screen.findByText("analytics.sales.byKind.title")).toBeTruthy();
+    expect(readAnalytics).toHaveBeenCalledWith(TENANT, "sales", expect.anything());
+    for (const title of ["analytics.sales.net.title", "analytics.sales.topUps.title", "analytics.sales.gateways.title", "analytics.sales.refunds.title"]) expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.getAllByText("zarinpal").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("75%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Gold plan").length).toBeGreaterThan(0);
+  });
+
+  it("says why the gateways are missing to the platform's staff on a reseller, the totals still shown", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=sales"));
+    vi.mocked(readAnalytics).mockResolvedValue(sales({ suppressed: true, payments: { started: 4, settled: 3, failed: 1, successRate: 0.75, byKind: null } }) as never);
+    render(<AnalyticsView />);
+    expect(await screen.findByText("analytics.sales.gateways.hidden")).toBeTruthy();
+  });
+
+  it("lists products with a link that filters the page to one, no panel table without panels, no bytes columns without bytes", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=catalog"));
+    vi.mocked(readAnalytics).mockResolvedValue(answer({ tab: "catalog", products: [row(PRODUCT), { id: null, people: "fewer_than_5" }], panels: [] }) as never);
+    render(<AnalyticsView />);
+    const link = (await screen.findAllByRole("link", { name: "Gold plan" }))[0];
+    expect(link.getAttribute("href")).toBe(`/analytics?product=${PRODUCT}`);
+    expect(screen.getAllByText("analytics.catalog.fewerThan5").length).toBeGreaterThan(0);
+    expect(screen.queryByText("analytics.catalog.panels")).toBeNull();
+    expect(screen.queryAllByText("analytics.catalog.bytesUsed")).toHaveLength(0);
+  });
+
+  it("adds the panel table and the bytes columns where the window has them", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=catalog"));
+    vi.mocked(readAnalytics).mockResolvedValue(answer({ tab: "catalog", names: { ...answer().names, panels: [{ id: PANEL, name: "Frankfurt 1" }] }, products: [row(PRODUCT, "2048")], panels: [row(PANEL, "2048")] }) as never);
+    render(<AnalyticsView />);
+    expect((await screen.findAllByText("analytics.catalog.panels")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Frankfurt 1").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("analytics.catalog.bytesUsed").length).toBeGreaterThan(0);
+  });
+
+  it("never draws one tab's answer as another's while the next one loads", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=sales"));
+    vi.mocked(readAnalytics).mockResolvedValue(answer() as never);
+    render(<AnalyticsView />);
+    await waitFor(() => expect(readAnalytics).toHaveBeenCalled());
+    // The overview that answered is not the tab asked for: no overview card, and no figure of it.
+    await waitFor(() => expect(screen.queryByText("analytics.byProduct.title")).toBeNull());
+    expect(screen.queryAllByText("zarinpal")).toHaveLength(0);
+  });
+});
+
 describe("the Export menu (F-1007-b)", () => {
   it("saves the tab on screen, with the URL's filters, in the format picked", async () => {
     const file = new ApiFile(new Blob(["x"]), "analytics-overview-2026-09-17-2026-10-16.xlsx");
