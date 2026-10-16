@@ -21,7 +21,6 @@ import {
   PANEL_ROLES,
   PANEL_STATE_KEYS,
   PANEL_TRANSPORTS,
-  REFUSAL_KEYS,
   REVIEW_KEYS,
   SYSTEMS_KEYS,
   canResubmit,
@@ -37,6 +36,7 @@ import {
   validateRegister,
   verdictOf,
 } from "./_lib/systems";
+import { REFUSAL_KEYS } from "./_lib/systems-refusals";
 import { canAcknowledge, haltsCollection } from "./_lib/drift-resolution";
 
 /**
@@ -214,6 +214,7 @@ const panel = (review: Partial<SystemsPanel["review"]>): SystemsPanel => ({
   id: "11111111-1111-4111-8111-111111111111",
   name: "de-1",
   driverType: "marzban",
+  monthlyCost: null,
   transport: "pull",
   role: "active",
   region: "de",

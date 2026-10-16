@@ -18,6 +18,7 @@ const panel = (over: Partial<SystemsPanel> = {}, review: Partial<SystemsPanel["r
   id: "p-1",
   name: "de-1",
   driverType: "marzban",
+  monthlyCost: null,
   transport: "pull",
   role: "active",
   region: "de",

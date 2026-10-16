@@ -7,17 +7,19 @@ import { billingApi, type CapabilityMatrix, type SystemsPanel } from "@/lib/bill
 import { formatInstant } from "../../_lib/datetime";
 import { Sheet } from "../../catalog/_components/catalog-ui";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS as K, capabilityText, refusedBecause } from "../_lib/systems";
+import { PanelCost } from "./PanelCost";
 import { PanelEditForm } from "./PanelEditForm";
 import { PanelInbounds } from "./PanelInbounds";
 import { Pill, REVIEW_TONE, STATE_TONE, useSystemsError } from "./parts";
 import { Tabs } from "../../_components/kit";
 
-type Part = "general" | "sales" | "capabilities" | "status";
-const PARTS: Part[] = ["general", "sales", "capabilities", "status"];
+type Part = "general" | "sales" | "cost" | "capabilities" | "status";
+const PARTS: Part[] = ["general", "sales", "cost", "capabilities", "status"];
 
 /**
  * Everything about one panel, in one sheet (F-027-ck): its details and
- * connection (rule 13), the inbounds it sells on (rule 12), what the
+ * connection (rule 13), the inbounds it sells on (rule 12), what it costs a
+ * month (F-1002-c), what the
  * connection test answered (rule 3) and its health. One section at a time,
  * so the card itself stays a line or two.
  */
@@ -58,6 +60,7 @@ export function PanelSheet({
             <PanelInbounds panelId={panel.id} />
           </>
         ))}
+      {part === "cost" && <PanelCost panelId={panel.id} />}
       {part === "capabilities" && <Matrix panelId={panel.id} />}
       {part === "status" && <Status panel={panel} />}
     </Sheet>

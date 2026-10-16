@@ -41,6 +41,20 @@ export type ConnectionTestFault =
   | "unopenable"
   | "invalid_answers";
 
+/** One monthly price of a panel (F-1002-a): USD as a decimal string, from a UTC day. */
+export interface PanelCostView {
+  monthlyCostUsd: string;
+  effectiveFrom: string;
+  createdByUserId: string | null;
+  createdAt: string;
+}
+
+/** The price in effect today (null before the first) and every price, newest first. */
+export interface PanelCostHistory {
+  current: PanelCostView | null;
+  history: PanelCostView[];
+}
+
 export interface SystemsPanel {
   id: string;
   name: string;
@@ -55,6 +69,8 @@ export interface SystemsPanel {
   /** The CDN opt-out (F-027-fa): dialed wherever its name resolves, never halted `address_moved`. */
   addressMayMove: boolean;
   /** Archived (F-027-bz): kept for its records, skipped by every loop. Null for a panel in service. */
+  /** What it costs a month today (F-1002-a); null until a price is set. */
+  monthlyCost: PanelCostView | null;
   retiredAt: string | null;
   /** Deleted in one step while in groups (F-027-eg): leaving them, archived once empty. */
   removeRequestedAt: string | null;
@@ -286,6 +302,16 @@ export const systemsCalls = {
   /** Restore an archived panel (F-027-bz): back to `pending`, tested before it is collected. */
   async restorePanel(id: string): Promise<{ id: string; reviewState: "pending" }> {
     return call<{ id: string; reviewState: "pending" }>(`/systems/panels/${encodeURIComponent(id)}/restore`, { method: "POST" });
+  },
+
+  /** A panel's monthly cost and its history (F-1002-a). */
+  async panelCost(id: string): Promise<PanelCostHistory> {
+    return call<PanelCostHistory>(`/systems/panels/${encodeURIComponent(id)}/cost`, { method: "GET" });
+  },
+
+  /** A new price — a row added, never one edited; 400 `cost_in_closed_month` before this month. */
+  async setPanelCost(id: string, body: { monthlyCostUsd: string; effectiveFrom: string }): Promise<PanelCostHistory> {
+    return call<PanelCostHistory>(`/systems/panels/${encodeURIComponent(id)}/cost`, { method: "POST", body: JSON.stringify(body) });
   },
 
   async systemsPanels(): Promise<SystemsPanel[]> {

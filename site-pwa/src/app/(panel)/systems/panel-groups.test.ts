@@ -22,7 +22,8 @@ import {
 } from "./_lib/panel-groups";
 import { INBOUND_PLACEMENTS, capField, inboundNote, inboundsFormOf, nothingPicked, validateInbounds } from "./_lib/panel-inbounds";
 import { memberChoiceOf, perBuyerAsked, validateMemberChoice } from "./_lib/member-settings";
-import { REFUSAL_KEYS, SYSTEMS_KEYS as K } from "./_lib/systems";
+import { SYSTEMS_KEYS as K } from "./_lib/systems";
+import { REFUSAL_KEYS } from "./_lib/systems-refusals";
 
 /**
  * Panel groups on the systems page (F-027-bx, billing rules 20–24, network

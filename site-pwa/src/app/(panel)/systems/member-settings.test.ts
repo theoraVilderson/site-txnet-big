@@ -8,7 +8,8 @@ import {
   inboundChoices,
   sellsNobody,
 } from "./_lib/member-settings";
-import { REFUSAL_KEYS, SYSTEMS_KEYS as K, refusalSentence } from "./_lib/systems";
+import { SYSTEMS_KEYS as K, refusalSentence } from "./_lib/systems";
+import { REFUSAL_KEYS } from "./_lib/systems-refusals";
 
 /**
  * A member's overrides, its inbounds, and the refusals that name a holder

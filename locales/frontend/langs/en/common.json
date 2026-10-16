@@ -3682,7 +3682,8 @@
       "inbound_assigned_elsewhere": "Another group already sells this inbound on this panel. Take it off that group's member first.",
       "inbound_has_configs": "Buyers of another group still have configs on this inbound. Drain that group's member on this panel first, so they are moved.",
       "resolution_required": "Choose what happened to the server before acknowledging.",
-      "resolution_not_for_event": "This event takes no choice. Reload the page and try again."
+      "resolution_not_for_event": "This event takes no choice. Reload the page and try again.",
+      "cost_in_closed_month": "A new price can only take effect from the first day of this month: a closed month's cost never changes."
     },
     "resubmit": {
       "open": "New login",
@@ -3986,6 +3987,7 @@
       "tabs": {
         "general": "Details & connection",
         "sales": "Inbounds & sales",
+        "cost": "Cost",
         "capabilities": "Test result",
         "status": "Status"
       },
@@ -4055,6 +4057,18 @@
       "since": "Since {{at}}",
       "checked": "Last checked {{at}}",
       "neverChecked": "Not checked yet"
+    },
+    "cost": {
+      "intro": "What this panel costs you a month, in dollars. Analytics spreads it over the month's days and splits each day by the traffic users sent; a day with no traffic is shown as idle.",
+      "current": "{{amount}} a month, since {{from}}",
+      "none": "No cost set: margins will say so.",
+      "amount": "Monthly cost (USD)",
+      "from": "From",
+      "save": "Add price",
+      "saved": "Price added.",
+      "history": "Price history",
+      "fromDay": "From {{from}}",
+      "amountInvalid": "Write the amount in dollars, at most two decimals."
     }
   },
   "shop": {
