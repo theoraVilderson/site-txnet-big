@@ -3,9 +3,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "@/context/LocaleContext";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { type AnalyticsOverview, readAnalytics } from "@/lib/billing/analytics";
+import { ApiFile, createApiClient } from "@/lib/api-request";
+import { type AnalyticsOverview, exportAnalytics, readAnalytics } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
+import { downloadBlob } from "../_lib/download";
 import { AnalyticsView } from "./_components/AnalyticsView";
 import { DEFAULT_FILTERS, calendarOf, filtersOf, searchOf, windowOf } from "./_lib/filters";
 
@@ -21,7 +23,9 @@ import { DEFAULT_FILTERS, calendarOf, filtersOf, searchOf, windowOf } from "./_l
  *    `billing.analytics.refreshed` (C-14) and on nothing else;
  *  - **half-built numbers.** While the rollup rebuilds, an alert and no figure;
  *  - **an id where a name belongs.** A product is named by its catalog key,
- *    in the reader's language.
+ *    in the reader's language;
+ *  - **an export of something else.** The Export menu (F-1007-b) saves the tab
+ *    and filters on screen, and the transport hands back the file, not JSON.
  */
 
 vi.mock("next/navigation", () => ({ useRouter: vi.fn(), usePathname: () => "/analytics", useSearchParams: vi.fn() }));
@@ -34,7 +38,8 @@ vi.mock("@/hooks/useLiveReread", () => ({ useLiveReread: vi.fn() }));
 // The picker imports its stylesheet, which the test runner does not load; the custom range is not under test here.
 vi.mock("../_components/kit/DatePicker", () => ({ DatePicker: () => null }));
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
-vi.mock("@/lib/billing/analytics", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/analytics")>()), readAnalytics: vi.fn() }));
+vi.mock("@/lib/billing/analytics", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/analytics")>()), readAnalytics: vi.fn(), exportAnalytics: vi.fn() }));
+vi.mock("../_lib/download", () => ({ downloadBlob: vi.fn() }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog-api")>()), catalogApi: { texts: vi.fn() } }));
 
 const TENANT = "11111111-1111-4111-8111-111111111111";
@@ -128,5 +133,34 @@ describe("AnalyticsView", () => {
     await screen.findAllByText("Gold plan");
     fireEvent.click(screen.getAllByRole("radio", { name: /compares\.year/ })[0]);
     expect(replace).toHaveBeenCalledWith("/analytics?compare=year", { scroll: false });
+  });
+});
+
+describe("the Export menu (F-1007-b)", () => {
+  it("saves the tab on screen, with the URL's filters, in the format picked", async () => {
+    const file = new ApiFile(new Blob(["x"]), "analytics-overview-2026-09-17-2026-10-16.xlsx");
+    vi.mocked(exportAnalytics).mockResolvedValue(file);
+    vi.mocked(useSearchParams).mockReturnValue(params(`compare=year&product=${PRODUCT}`));
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    fireEvent.click(screen.getByRole("button", { name: "analytics.export.button" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "analytics.export.xlsx" }));
+    await waitFor(() => expect(downloadBlob).toHaveBeenCalledWith(file.fileName, file.blob));
+    expect(exportAnalytics).toHaveBeenCalledWith(TENANT, "overview", expect.objectContaining({ compare: "year", product: PRODUCT }), "xlsx");
+  });
+
+  it("hands back an attachment as a file, its name from the header", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("a,b", { status: 200, headers: { "content-type": "text/csv", "content-disposition": 'attachment; filename="analytics-overview-2026-09-01-2026-09-30.csv"' } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const got = await createApiClient({ baseUrl: "https://x/api", service: "billing-service" })<ApiFile>("/f");
+      expect(got).toBeInstanceOf(ApiFile);
+      expect(got.fileName).toBe("analytics-overview-2026-09-01-2026-09-30.csv");
+      expect(await got.blob.text()).toBe("a,b");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

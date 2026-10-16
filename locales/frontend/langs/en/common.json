@@ -6611,6 +6611,11 @@
       "previous": "Previous"
     },
     "hiddenCells": "Some figures are hidden because they would describe fewer than 5 people.",
-    "loadFailed": "The analytics could not be loaded."
+    "loadFailed": "The analytics could not be loaded.",
+    "export": {
+      "button": "Export",
+      "csv": "CSV",
+      "xlsx": "Excel"
+    }
   }
 }

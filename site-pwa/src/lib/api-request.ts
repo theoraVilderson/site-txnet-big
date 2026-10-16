@@ -61,6 +61,23 @@ export const REFRESH_REASONS: ReadonlySet<string> = new Set([
   AUTHORIZATION_REQUIRED,
 ]);
 
+/**
+ * A 2xx sent as an attachment (billing's analytics export, F-1007-b): the
+ * bytes and the name the server gave them. A refusal is still the envelope.
+ */
+export class ApiFile {
+  constructor(
+    readonly blob: Blob,
+    readonly fileName: string,
+  ) {}
+}
+
+/** `attachment; filename="x.csv"` -> `x.csv`; null when the answer is not a file. */
+function fileNameOf(disposition: string | null): string | null {
+  if (!disposition || !/^\s*attachment/i.test(disposition)) return null;
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? "";
+}
+
 export type ApiCall = <T>(
   path: string,
   init?: RequestInit,
@@ -109,6 +126,9 @@ export function createApiClient({
         cause,
       );
     }
+
+    const attachment = fileNameOf(response.headers.get("content-disposition"));
+    if (response.ok && attachment !== null) return new ApiFile(await response.blob(), attachment) as T;
 
     const body = await response.json().catch(() => null);
     if (body === null || typeof body !== "object") {

@@ -60,19 +60,3 @@ export function giftBatchBody(f: GiftBatchForm, me: Me | null): GenerateGiftBatc
   if (isPlatformTenant(me?.tenant?.type) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
   return body;
 }
-
-/**
- * Hand the browser a file built from text. The CSV never touches storage or a
- * URL that outlives the click: the object URL is revoked at once.
- */
-export function downloadText(filename: string, text: string, type = "text/csv;charset=utf-8"): void {
-  // A BOM so a spreadsheet opens the file as UTF-8.
-  const url = URL.createObjectURL(new Blob(["﻿", text], { type }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}

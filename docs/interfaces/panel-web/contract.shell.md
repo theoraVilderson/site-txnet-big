@@ -138,7 +138,9 @@ about the data path rather than the bar.
 `lib/billing-api.ts` is the client, and `lib/api-request.ts` is the envelope
 both it and `auth-api` read. Both are facades since FE-1-h: the code is one
 module per domain under `lib/billing/` and `lib/auth/` (the token in
-`lib/auth/credential.ts`), and callers and `vi.mock`s still name the facade. See [contract.md](contract.md) "Client API surface"
+`lib/auth/credential.ts`), and callers and `vi.mock`s still name the facade. A 2xx sent as an
+attachment comes back as an `ApiFile` (bytes + the server's file name, F-1007-b); a refusal is
+still the envelope. See [contract.md](contract.md) "Client API surface"
 and [contract.origin.md](contract.origin.md) for why the browser calls `/api` on
 its own domain, routed by Traefik rather than a proxy in this app.
 

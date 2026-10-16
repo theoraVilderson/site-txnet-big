@@ -155,9 +155,12 @@ the figures are cut on the tenant's. **Live is the session's tenant only**: a
 and on a filter change. Names come from billing's `names` (product `nameKey`
 -> the published `catalog` texts; a panel's own name). Several currencies: an
 `Alert` with the currency picker, never one sum. Renewal reads "coming soon"
-until F-1001-f; the Export menu is F-1007-b; insights F-1001-j; the owner's
+until F-1001-f; insights F-1001-j; the owner's
 top resellers F-1001-i. Kit additions: `TabLinks` `current` (tabs that share
 a path), `BarList` `other` (billing's folded remainder, never folded twice).
+**Export (F-1007-b):** `ExportMenu` in the header saves the tab and filters on
+screen through billing's `format=` (the same door and under-5 rule), saved by
+`_lib/download.ts` (gift-code CSVs share it); a refusal is a toast in its words.
 
 ### Overview (F-1001-d)
 

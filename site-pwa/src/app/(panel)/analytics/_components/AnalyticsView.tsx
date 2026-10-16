@@ -18,6 +18,7 @@ import { dayIn, formatInstant, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { currencyOf, productNamer } from "../_lib/overview";
+import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { OverviewTab } from "./OverviewTab";
 
@@ -45,7 +46,7 @@ function useCatalogTexts(lang: string): Record<string, string> {
 
 /**
  * `/analytics` (F-1001-d, panel-web `contract.analytics.md` "The page"): the
- * header with "updated N min ago", the sticky filter bar, the tabs and the
+ * header with "updated N min ago" and the Export menu (F-1007-b), the sticky filter bar, the tabs and the
  * open tab — for the session's tenant, or the path's (`tenantId`) on a
  * reseller's workspace. Every filter is in the URL. It re-reads on
  * `billing.analytics.refreshed`, which reaches only a connection in that tenant
@@ -86,7 +87,12 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 sm:p-6">
-      <PageHeader icon={ChartColumn} title={t("common", K.title)} subtitle={answer ? updated : t("common", K.subtitle)} />
+      <PageHeader
+        icon={ChartColumn}
+        title={t("common", K.title)}
+        subtitle={answer ? updated : t("common", K.subtitle)}
+        actions={<ExportMenu tenantId={tenantId} tab={filters.tab} query={query} />}
+      />
 
       <FilterBar filters={filters} window={windowOf(filters, today, calendar)} names={names} productName={productName} onChange={onChange} />
 

@@ -1,4 +1,5 @@
 // A tenant's analytics by the path's tenant (F-1001-b, billing/contract.analytics.md "Read routes").
+import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today; a later row adds its own. */
@@ -95,4 +96,13 @@ export function analyticsSearch(q: AnalyticsQuery): string {
 /** One tab of the path's tenant. No permission is judged here: billing's door is `analytics.read`. */
 export function readAnalytics<T extends AnalyticsTab>(tenantId: string, tab: T, q: AnalyticsQuery): Promise<AnalyticsAnswer<AnalyticsBodies[T]>> {
   return call<AnalyticsAnswer<AnalyticsBodies[T]>>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}`);
+}
+
+/** The formats billing's export writes — its `EXPORT_FORMATS` (F-1007-a). */
+export const ANALYTICS_EXPORT_FORMATS = ["csv", "xlsx"] as const;
+export type AnalyticsExportFormat = (typeof ANALYTICS_EXPORT_FORMATS)[number];
+
+/** The same tab and filters as a file: the same door, scope and under-5 rule as the page. */
+export function exportAnalytics(tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery, format: AnalyticsExportFormat): Promise<ApiFile> {
+  return call<ApiFile>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}&format=${format}`);
 }

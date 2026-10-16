@@ -28,6 +28,7 @@ export function holdsEveryPermission(held: readonly string[] | null | undefined,
  * member door reads. `permissions.test.ts` fails when the two lists differ.
  */
 export const RESELLER_KEYS = [
+  "analytics.read",
   "audit.read",
   "bot.manage",
   "campaign.manage",
