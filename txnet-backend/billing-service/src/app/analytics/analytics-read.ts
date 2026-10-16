@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { FulfilmentKind, Prisma } from '@prisma/client';
 
 import type { Day } from './analytics-days';
 
@@ -13,8 +13,12 @@ import type { Day } from './analytics-days';
  * counted per bucket, never summed from days.
  */
 
-/** The filters a tab takes; `kind` narrows sales only — payments have no product. */
-export type AnalyticsFilters = { product?: string; panel?: string; kind?: 'package' | 'usage' };
+/**
+ * The filters a tab takes; `kind` narrows sales only — payments have no
+ * product. `fulfilment` is the product's kind (ADR-0148 (3)), fixed when it is
+ * created, so it is joined from the catalog and never rolled up.
+ */
+export type AnalyticsFilters = { product?: string; panel?: string; kind?: 'package' | 'usage'; fulfilment?: FulfilmentKind };
 
 /** A window of tenant days, both included. */
 export type Window = { from: Day; to: Day };
@@ -38,6 +42,9 @@ export type SalesRow = {
   bytesSold: bigint;
   discounts: Prisma.Decimal;
 };
+
+/** One meter's use per split, in the meter's unit (F-1001-n). */
+export type MeterRow = { meterKey: string; bucket: string | null; productId: string | null; quantity: bigint; grants: number };
 
 export type BuyerRow = { bucket: string | null; productId: string | null; panelId: string | null; buyers: number; newBuyers: number };
 
@@ -74,9 +81,11 @@ function splitColumns(alias: Prisma.Sql, splits: readonly SalesSplit[]) {
   };
 }
 
+// `catalog.product` holds the tenant's own products and the platform's (its RLS), every product a rollup row can name.
 const productPanel = (alias: Prisma.Sql, f: AnalyticsFilters) => Prisma.sql`
   ${f.product ? Prisma.sql`AND ${alias}."productId" = ${f.product}::uuid` : Prisma.empty}
-  ${f.panel ? Prisma.sql`AND ${alias}."panelId" = ${f.panel}::uuid` : Prisma.empty}`;
+  ${f.panel ? Prisma.sql`AND ${alias}."panelId" = ${f.panel}::uuid` : Prisma.empty}
+  ${f.fulfilment ? Prisma.sql`AND ${alias}."productId" IN (SELECT cp."id" FROM catalog.product cp WHERE cp."fulfilmentKind" = ${f.fulfilment}::catalog."FulfilmentKind")` : Prisma.empty}`;
 
 /** Sales summed per currency and the splits asked for. */
 export function readSales(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, splits: readonly SalesSplit[], map?: DayMap): Promise<SalesRow[]> {
@@ -107,6 +116,21 @@ export function readBuyers(tx: Prisma.TransactionClient, w: Window, f: Analytics
     FROM billing.analytics_user_day u ${bucketJoin(u, map)}
     WHERE ${in_(u, w)} ${productPanel(u, f)} AND (u."net" <> 0 OR u."orders" <> 0)
     ${cols.group.length ? Prisma.sql`GROUP BY ${Prisma.join(cols.group)}` : Prisma.empty}`;
+}
+
+/**
+ * Use per meter, by bucket and product when asked (F-1001-n). `grants` is the
+ * day rows' sum — a Grant using a meter on two days counts on both, so it is a
+ * measure of activity, never of distinct services. `kind` cannot narrow a use.
+ */
+export function readMeters(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, splits: readonly ('bucket' | 'product')[], map?: DayMap): Promise<MeterRow[]> {
+  const e = Prisma.sql`e`;
+  const cols = splitColumns(e, splits);
+  return tx.$queryRaw<MeterRow[]>`
+    SELECT ${cols.select}, e."meterKey", SUM(e."quantity")::bigint AS "quantity", SUM(e."grants")::int AS "grants"
+    FROM billing.analytics_meter_day e ${bucketJoin(e, map)}
+    WHERE ${in_(e, w)} ${productPanel(e, f)}
+    GROUP BY ${Prisma.join([...cols.group, Prisma.sql`e."meterKey"`])}`;
 }
 
 /** Top-up attempts and gift credits per currency, by bucket and gateway kind when asked. Unfiltered: a payment names no product. */

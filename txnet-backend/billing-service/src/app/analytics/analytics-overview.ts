@@ -22,6 +22,7 @@ import { Insight, insightsOf } from './analytics-insights';
 import { readBuyers, readSales } from './analytics-read';
 import { Series, seriesPair } from './analytics-series';
 import { Totals, totalsPair } from './analytics-totals';
+import { UsageCard, usageOf } from './analytics-usage';
 
 /** The overview's product list: this many, then everything else as one `other`. */
 const TOP_PRODUCTS = 7;
@@ -55,6 +56,8 @@ export type Overview = {
   calendar: { day: Day; net: Amounts | null }[];
   /** Up to three "what changed" lines (F-1001-j). */
   insights: Insight[];
+  /** One card per meter used in either window, in its own unit (F-1001-n, ADR-0148). */
+  usage: UsageCard[];
 };
 
 function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[]): Overview['kpis'] {
@@ -124,12 +127,16 @@ export async function overviewOf(c: TabContext): Promise<Overview> {
   const { now, before } = await totalsPair(c);
   const currencies = currenciesOf(c.operating, now.currencies, before?.currencies ?? []);
   const kpis = kpisOf(now, before, currencies);
+  const series = await seriesPair(c, currencies);
+  // The buckets the series hide from the platform's staff hide usage too.
+  const hidden = new Set(c.buckets.filter((_, i) => series.series.orders[i] === null));
   return {
     currencies,
     kpis,
-    ...(await seriesPair(c, currencies)),
+    ...series,
     byProduct: await byProductOf(c, currencies),
     calendar: await calendarOf(c, currencies),
     insights: await insightsOf(c, kpis),
+    usage: await usageOf(c, hidden),
   };
 }

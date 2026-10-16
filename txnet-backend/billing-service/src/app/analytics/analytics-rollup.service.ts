@@ -13,6 +13,7 @@ import {
   rollupFingerprint,
   writePayments,
   writeSales,
+  writeMeters,
   writeStockToday,
   writeTraffic,
   writeUsers,
@@ -139,6 +140,7 @@ export class AnalyticsRollupService {
         await writePayments(tx, range);
         if (fromDay <= today && today <= toDay) await writeStockToday(tx, today);
         await writeTraffic(tx, range);
+        await writeMeters(tx, range);
         const changed = (await rollupFingerprint(tx, range)) !== before;
 
         // The version is what a read cache is keyed by: a change bumps it, so

@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b); the export (F-1007-a); insights (F-1001-j).** Everything else is not yet — each rule names its row. The page and its charts are
+(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n).** Everything else is not yet — each rule names its row. The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 
@@ -60,7 +60,7 @@ days) and **stocks** (what stood at the end of a day, never summed over days).
 | `analytics_stock_day` (stock) | tenant · day · product · panel | `activeGrants`, `frozenGrants`, `activeUsers`, `bytesUsed` |
 | `analytics_grant_end` (F-1001-f) | grant | tenant, user, product, `endedOn`, `renewedOn?`, `state` (`renewed` / `lapsed` / `pending`) |
 | `analytics_signup_day` (flow, F-1001-f) | tenant · day · source | `signups` — from identity's user-created event, never a cross-schema read |
-| `analytics_meter_day` (flow, F-1001-n, ADR-0148) | tenant · day · product · meter | `quantity` (the meter's unit), `grants` — from `billing.usage_event`; `vpn.traffic` from `network.traffic_daily_aggregate` only |
+| `analytics_meter_day` (flow, F-1001-n, ADR-0148) | tenant · day · product · panel · meter | `quantity` (the meter's unit), `grants` — from `billing.usage_event`; `vpn.traffic` from `network.traffic_daily_aggregate` only |
 
 **As built (F-1001-a, `billing-service/src/app/analytics/`).** A grain's null
 product or panel is one cell (`NULLS NOT DISTINCT` unique). A sale's panel is
@@ -129,6 +129,17 @@ All `GET /api/billing/tenants/:tenantId/analytics/<tab>` with
   and `kinds` (the `fulfilmentKind`s in the window). Filter `fulfilment`, joined
   from `catalog.product` (fixed at creation). `bytesUsed` stays until its
   readers move, then goes (C-39).
+  **As built (F-1001-n, `analytics-usage.ts`).** *Corrected:* the meter grain
+  carries the panel too (a VPN Grant's first config's, else null), or a panel
+  filter would leave usage unfiltered. A usage event lands on its `occurredAt`
+  tenant day; `vpn.traffic` on the aggregate's UTC date, as `bytesUsed`, never
+  also from its events. `grants` sums day rows — activity, not distinct
+  services. A usage card is `{meterKey, total, previous, delta, series}`,
+  quantities as integer strings, one per meter used in either window (key
+  order); a bucket the series hide from the platform's staff is null.
+  `fulfilment` narrows every product-bearing read, never payments; `kinds` is
+  the window's products' kinds, `meters` read from `catalog.meter` by the
+  tenant's own keys. The migration flagged every tenant for a whole rebuild.
 
 | tab | row | answers |
 |---|---|---|

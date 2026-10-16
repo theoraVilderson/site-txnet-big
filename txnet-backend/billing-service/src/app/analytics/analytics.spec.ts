@@ -46,6 +46,7 @@ const sale = (r: Record<string, unknown>) => ({ bucket: null, kind: null, produc
 
 /** Answers each rollup read by the table it reads and whether it splits by product. */
 function rollupReads(sql: string) {
+  if (sql.includes('SELECT DISTINCT e."meterKey"')) return [{ meterKey: 'vpn.traffic' }];
   if (sql.includes('SELECT DISTINCT')) return [{ productId: PRODUCT_A, panelId: PANEL }, { productId: PRODUCT_B, panelId: null }];
   const byProduct = /"productId" AS "productId"/.test(sql);
   if (sql.includes('analytics_sales_day'))
@@ -56,6 +57,7 @@ function rollupReads(sql: string) {
     return byProduct ? [{ productId: PRODUCT_A, buyers: 6, newBuyers: 2 }, { productId: PRODUCT_B, buyers: 3, newBuyers: 1 }] : [{ buyers: 9, newBuyers: 4 }];
   if (sql.includes('analytics_payment_day'))
     return [{ bucket: null, gatewayKind: /"gatewayKind"::text/.test(sql) ? 'zarinpal' : null, currencyCode: 'USD', started: 4, settled: 3, failed: 1, settledAmount: d('50.00'), giftsCredited: d('7.00') }];
+  if (sql.includes('analytics_meter_day')) return [{ meterKey: 'vpn.traffic', bucket: '2026-09-02', productId: null, quantity: BigInt(4096), grants: 2 }];
   if (sql.includes('analytics_stock_day')) return [{ productId: null, panelId: null, activeGrants: 12, bytesUsed: BigInt(1000) }];
   return [];
 }
@@ -79,7 +81,11 @@ function build(state: { version: number; refreshedAt: Date | null; rebuildingSin
     },
     analyticsRollupState: { findUnique: async () => state },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
-    product: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, nameKey: `product.${id.slice(0, 1)}.name` })) },
+    product: {
+      findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+        where.id.in.map((id) => ({ id, nameKey: `product.${id.slice(0, 1)}.name`, fulfilmentKind: id === PRODUCT_A ? 'network_access' : 'feature_access' })),
+    },
+    meter: { findMany: async ({ where }: { where: { key: { in: string[] } } }) => where.key.in.map((key) => ({ key, unit: 'bytes', nameKey: `catalog.meter.${key}.name` })) },
     panel: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, name: 'Frankfurt 1' })) },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
@@ -197,6 +203,22 @@ describe('AnalyticsService.read', () => {
     expect(answer).toMatchObject({
       names: { products: [{ id: PRODUCT_A, nameKey: 'product.a.name' }, { id: PRODUCT_B, nameKey: 'product.b.name' }], panels: [{ id: PANEL, name: 'Frankfurt 1' }] },
     });
+  });
+
+  it('answers usage per meter and names each meter in use with its unit, and the product kinds in the window (F-1001-n, ADR-0148)', async () => {
+    const answer = await build().service.read(owner, RESELLER, 'overview', query());
+    expect(answer).toMatchObject({
+      names: { meters: [{ key: 'vpn.traffic', unit: 'bytes', nameKey: 'catalog.meter.vpn.traffic.name' }], kinds: ['network_access', 'feature_access'] },
+      usage: [{ meterKey: 'vpn.traffic', total: '4096', previous: '4096', delta: 0 }],
+    });
+  });
+
+  it('narrows every product-bearing read to the product kind asked for, never the payments (F-1001-n)', async () => {
+    const { reads, service } = build();
+    await service.read(owner, RESELLER, 'overview', query({ fulfilment: 'feature_access' }));
+    const kindOf = (table: string) => reads.filter((sql) => sql.includes(table) && !sql.includes('SELECT DISTINCT')).every((sql) => sql.includes('"fulfilmentKind" ='));
+    expect(['analytics_sales_day', 'analytics_user_day', 'analytics_stock_day', 'analytics_meter_day'].map(kindOf)).toEqual([true, true, true, true]);
+    expect(reads.filter((sql) => sql.includes('analytics_payment_day')).some((sql) => sql.includes('fulfilmentKind'))).toBe(false);
   });
 
   it("gives the platform's staff no per-gateway split of a reseller's payments, only the totals", async () => {

@@ -56,7 +56,7 @@ export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: 
     tx,
     window,
     previous,
-    filters: { product: q.product, panel: q.panel, kind: q.kind },
+    filters: { product: q.product, panel: q.panel, kind: q.kind, fulfilment: q.fulfilment },
     granularity,
     buckets: current.keys,
     map: dayMap(window, current.keyOf),

@@ -132,7 +132,9 @@ stock), each strict RLS on `tenantId`, the grain a unique index — `NULLS NOT
 DISTINCT` where a product, panel or gateway kind may be null — plus
 `analytics_rollup_state`, one row per tenant. `20261015001400_analytics_buyers_by_product`
 (F-1001-b) put product and panel on the user grain and flagged every tenant
-for a whole rebuild. Written only by the rollup,
+for a whole rebuild. `20261016000100_analytics_meter_day` (F-1001-n,
+ADR-0148) added the `_meter_day` flow, same shape, and flagged every tenant
+again. Written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

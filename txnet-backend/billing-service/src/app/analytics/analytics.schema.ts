@@ -1,4 +1,4 @@
-import { AnalyticsSaleKind } from '@prisma/client';
+import { AnalyticsSaleKind, FulfilmentKind } from '@prisma/client';
 import { z } from 'zod';
 
 import { CALENDARS, COMPARES, MAX_RANGE_DAYS, daysIn } from './analytics-buckets';
@@ -18,6 +18,8 @@ const queryFields = {
   product: z.string().uuid().optional(),
   panel: z.string().uuid().optional(),
   kind: z.nativeEnum(AnalyticsSaleKind).optional(),
+  /** The product's kind (ADR-0148 (3), F-1001-n). */
+  fulfilment: z.nativeEnum(FulfilmentKind).optional(),
 };
 
 function windowRule(q: { from: string; to: string }, ctx: z.RefinementCtx): void {

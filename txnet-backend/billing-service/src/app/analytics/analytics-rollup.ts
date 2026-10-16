@@ -1,4 +1,5 @@
 import { Prisma, WalletReasonType } from '@prisma/client';
+import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { ADMIN_FROZEN } from '../entitlement/suspension';
 import { REFUND_REASONS, SALE_REASONS } from '../revenue/reseller-revenue.service';
@@ -65,13 +66,17 @@ export async function rollupFingerprint(tx: Prisma.TransactionClient, r: RollupR
       UNION ALL
       SELECT 'k' || row(k."day", k."productId", k."panelId", k."activeGrants", k."frozenGrants", k."activeUsers", k."bytesUsed")::text
         FROM billing.analytics_stock_day k WHERE k."tenantId" = public.current_tenant_id() AND k."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
+      UNION ALL
+      SELECT 'm' || row(e."day", e."productId", e."panelId", e."meterKey", e."quantity", e."grants")::text
+        FROM billing.analytics_meter_day e WHERE e."tenantId" = public.current_tenant_id() AND e."day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
     ) q`;
   return row?.digest ?? '';
 }
 
-/** The three flow tables' rows in the window, gone — the pass writes them again whole. */
+/** The flow tables' rows in the window, gone — the pass writes them again whole. */
 export async function clearFlows(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
-  for (const table of [Prisma.sql`billing.analytics_sales_day`, Prisma.sql`billing.analytics_user_day`, Prisma.sql`billing.analytics_payment_day`]) {
+  const flows = [Prisma.sql`billing.analytics_sales_day`, Prisma.sql`billing.analytics_user_day`, Prisma.sql`billing.analytics_payment_day`, Prisma.sql`billing.analytics_meter_day`];
+  for (const table of flows) {
     await tx.$executeRaw`DELETE FROM ${table} WHERE "tenantId" = public.current_tenant_id() AND "day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date`;
   }
 }
@@ -235,6 +240,38 @@ export async function writeTraffic(tx: Prisma.TransactionClient, r: RollupRange)
     WHERE t."date" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
     GROUP BY t."date", v."productId", c."panelId"
     ON CONFLICT ("tenantId", "day", "productId", "panelId") DO UPDATE SET "bytesUsed" = EXCLUDED."bytesUsed"`;
+}
+
+/**
+ * `analytics_meter_day` (F-1001-n, ADR-0148 (2)): each meter's use per day,
+ * product and panel. Usage events by the tenant day they happened on; but
+ * `vpn.traffic` only from the network's daily aggregate — it covers package
+ * Grants too, and counting its events as well would count a byte twice. That
+ * aggregate is cut on UTC dates, as `bytesUsed` is. `grants` is the Grants
+ * with any use in the cell.
+ */
+export async function writeMeters(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
+  await tx.$executeRaw`
+    INSERT INTO billing.analytics_meter_day ("tenantId", "day", "productId", "panelId", "meterKey", "quantity", "grants")
+    WITH used AS (
+      SELECT ${dayIn(Prisma.sql`e."occurredAt"`, r.zone)} AS "day", e."grantId", e."meterKey", e."quantity"
+      FROM billing.usage_event e
+      WHERE e."tenantId" = public.current_tenant_id() AND e."meterKey" <> ${METER_KEYS.vpnTraffic}
+        AND e."occurredAt" >= ${r.from} AND e."occurredAt" < ${r.to}
+      UNION ALL
+      SELECT t."date", c."grantId", ${METER_KEYS.vpnTraffic}, (t."totalUploadBytes" + t."totalDownloadBytes")::bigint
+      FROM network.traffic_daily_aggregate t
+      JOIN network.config c ON c."id" = t."configId" AND c."tenantId" = public.current_tenant_id()
+      WHERE t."date" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date
+    )
+    SELECT public.current_tenant_id(), u."day", v."productId", pn."panelId", u."meterKey", SUM(u."quantity")::bigint, COUNT(DISTINCT u."grantId")::int
+    FROM used u
+    JOIN entitlement."grant" g ON g."id" = u."grantId"
+    LEFT JOIN catalog.product_variant v ON v."id" = g."variantId"
+    LEFT JOIN LATERAL (
+      SELECT c."panelId" FROM network.config c WHERE c."grantId" = g."id" ORDER BY c."createdAt" LIMIT 1
+    ) pn ON true
+    GROUP BY u."day", v."productId", pn."panelId", u."meterKey"`;
 }
 
 /** The tenant's first day with anything to roll up — where a whole rebuild starts. */
