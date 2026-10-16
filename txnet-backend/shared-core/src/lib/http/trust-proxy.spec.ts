@@ -56,3 +56,18 @@ describe('trustProxySetting', () => {
     expect(trustProxySetting('-1')).toBe(1);
   });
 });
+
+describe('the setting as Express compiles it', () => {
+  it('trusts only the subnet it names, even written as IPv4-mapped IPv6 (SEC-1-a)', async () => {
+    // proxy-addr ≤2.0.7 compiled `::ffff:10.0.0.0/8` with all-zero leading
+    // bits, so it matched every IPv4 address: any client became a trusted
+    // proxy and `req.ip` read straight from its own `X-Forwarded-For`
+    // (GHSA-jqcg-44mw-7w3h). An IP rate-limit bucket is keyed on that value.
+    const { ExpressAdapter } = await import('@nestjs/platform-express');
+    const adapter = new ExpressAdapter();
+    adapter.set('trust proxy', trustProxySetting('::ffff:10.0.0.0/8'));
+    const trusts = adapter.getInstance().get('trust proxy fn') as (addr: string, hop: number) => boolean;
+
+    expect(trusts('203.0.113.5', 0)).toBe(false);
+  });
+});

@@ -42,7 +42,7 @@
     "exceljs": "4.4.0",
     "ioredis": "^5.4.1",
     "libphonenumber-js": "^1.13.12",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.1.1",
     "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
