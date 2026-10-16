@@ -32,7 +32,7 @@ export interface StatTileProps {
   className?: string;
 }
 
-/** A sparkline: the series' shape, no axis, in the main colour. Decorative — the figure beside it is the reading. */
+/** A sparkline: the series' shape, no axis, in the main colour. Decorative — the figure above it is the reading. */
 export function Sparkline({ values }: { values: readonly (number | null)[] }) {
   const { main } = useChartTheme();
   const points = values.flatMap((v, i) => (v === null ? [] : [{ i, v }]));
@@ -41,9 +41,10 @@ export function Sparkline({ values }: { values: readonly (number | null)[] }) {
   const x = scaleLinear<number>({ domain: [0, values.length - 1], range: [1, SPARK_WIDTH - 1] });
   const y = scaleLinear<number>({ domain: [Math.min(...nums), Math.max(...nums) || 1], range: [SPARK_HEIGHT - 2, 2] });
   return (
-    // Not on a phone: two tiles a row leave no room for 96px beside the figure, and the row would push the grid past the edge.
-    <svg width={SPARK_WIDTH} height={SPARK_HEIGHT} aria-hidden className="hidden shrink-0 sm:block">
-      <LinePath data={points} x={(p) => x(p.i)} y={(p) => y(p.v)} stroke={main} strokeWidth={2} strokeLinecap="round" />
+    // Its own row under the figure, the tile's full width: beside the figure, six tiles a row on a zoomed-out page
+    // left it either spilling out of the card or squeezed to a sliver. Scaled to the width, the stroke kept at 2px.
+    <svg viewBox={`0 0 ${SPARK_WIDTH} ${SPARK_HEIGHT}`} preserveAspectRatio="none" height={SPARK_HEIGHT} aria-hidden className="mt-1.5 block w-full">
+      <LinePath data={points} x={(p) => x(p.i)} y={(p) => y(p.v)} stroke={main} strokeWidth={2} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -53,10 +54,8 @@ export function StatTile({ label, value, format, delta = null, downIsGood, spark
   const body = (
     <>
       <p className="text-xs font-semibold text-text-label">{label}</p>
-      <div className="mt-1 flex items-end justify-between gap-2">
-        <AnimatedNumber value={value} format={format} className={cn("font-black text-text-primary", size === 2 ? "text-3xl" : "text-xl")} />
-        {spark && <Sparkline values={spark} />}
-      </div>
+      <AnimatedNumber value={value} format={format} className={cn("mt-1 block font-black text-text-primary", size === 2 ? "text-3xl" : "text-xl")} />
+      {spark && <Sparkline values={spark} />}
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <DeltaPill delta={delta} downIsGood={downIsGood} bare={size === 1} />
         {footer && <span className="text-xs text-text-secondary">{footer}</span>}
