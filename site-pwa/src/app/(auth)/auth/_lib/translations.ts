@@ -95,6 +95,10 @@ export const AUTH_KEY_MAP = {
   botLinkChangeMethod: A.botLink.changeMethod,
 
   chooseCodeChannel: A.messages.chooseCodeChannel,
+  miniAppTitle: A.miniApp.title,
+  miniAppSubtitle: A.miniApp.subtitle,
+  miniAppSubmit: A.miniApp.submit,
+  miniAppOtherWay: A.miniApp.otherWay,
 } as const;
 
 /** `{ loginTitle: string; usernameTab: string; ... }` — the shape components see. */

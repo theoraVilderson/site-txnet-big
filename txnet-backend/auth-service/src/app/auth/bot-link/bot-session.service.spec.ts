@@ -53,6 +53,7 @@ function harness(over: {
       refreshToken: 'r',
       expiresIn: 900,
     }),
+    proveAccountByPassword: vi.fn().mockResolvedValue(null),
   };
   // The Mini App's proof is verified inside `messenger` (it owns the bot
   // token); what this service does with the answer is what is asserted here,
@@ -121,6 +122,7 @@ describe('BotSessionService', () => {
         null,
         expect.any(String),
         label,
+        false,
       );
     },
   );
@@ -248,6 +250,7 @@ describe('BotSessionService.authenticateWebApp', () => {
       // uses from the chat itself, so the two share one switch group.
       'bot:tenant-1:telegram:5501',
       'Telegram',
+      false,
     );
   });
 
@@ -271,6 +274,7 @@ describe('BotSessionService.authenticateWebApp', () => {
       'Mozilla/5.0',
       'bot:tenant-1:bale:5501',
       expect.anything(),
+      false,
     );
   });
 
@@ -290,6 +294,47 @@ describe('BotSessionService.authenticateWebApp', () => {
       ),
     ).toEqual({ state: 'refused', key: 'auth.invalidCredentials' });
     expect(prisma.linkedBotAccount.findFirst).not.toHaveBeenCalled();
+  });
+
+  /**
+   * ADR-0145 as amended 2026-10-16 (SA-1-e): an account the messenger alone may
+   * not sign in is asked its password inside the Mini App, and the signature
+   * plus the password are both factors — the holder of `*` included.
+   */
+  const owner = { ...linkedUser, username: 'theora', phoneNumber: '+989121234567', role: { name: 'SuperAdmin' } };
+  const device = { ip: '1.2.3.4', userAgent: 'Mozilla/5.0' };
+
+  it('still refuses a privileged account that brought no password', async () => {
+    const { service, auth } = harness({ link: { userId: 'u-1' }, user: owner });
+    expect(await inTenant(() => service.authenticateWebApp(webApp, device))).toEqual({
+      state: 'refused',
+      key: 'auth.botFactorNotAllowed',
+    });
+    expect(auth.createSessionForUser).not.toHaveBeenCalled();
+  });
+
+  it('signs a privileged account in with its password beside the signature, as both factors', async () => {
+    const { service, auth } = harness({ link: { userId: 'u-1' }, user: owner });
+    auth.proveAccountByPassword.mockResolvedValue({ id: 'u-1' });
+
+    const outcome = await inTenant(() => service.authenticateWebApp({ ...webApp, password: 'right' }, device));
+
+    expect(outcome).toMatchObject({ state: 'authenticated' });
+    expect(auth.proveAccountByPassword).toHaveBeenCalledWith('theora', 'right');
+    expect(auth.createSessionForUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u-1' }), '1.2.3.4', 'Mozilla/5.0', 'bot:tenant-1:telegram:5501', 'Telegram', true,
+    );
+  });
+
+  it('refuses a wrong password as a bad credential and opens nothing', async () => {
+    const { service, auth } = harness({ link: { userId: 'u-1' }, user: owner });
+    auth.proveAccountByPassword.mockResolvedValue(null);
+
+    expect(await inTenant(() => service.authenticateWebApp({ ...webApp, password: 'wrong' }, device))).toEqual({
+      state: 'refused',
+      key: 'auth.invalidCredentials',
+    });
+    expect(auth.createSessionForUser).not.toHaveBeenCalled();
   });
 });
 
@@ -339,6 +384,7 @@ describe("BotSessionService.authenticateWebApp — the reseller's owner", () => 
       'Mozilla/5.0',
       'bot:tenant-reseller:telegram:5501',
       'Telegram',
+      false,
     );
     expect(mintedIn).toEqual(OWNER_SCOPE);
   });

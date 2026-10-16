@@ -1763,5 +1763,7 @@ describe('AuthService — the holder of * signs in with two factors (ADR-0145, S
     await expect(h.service.switchSession('s-1', 'u-0', owner() as never, '1.2.3.4', 'jest-ua')).rejects.toMatchObject({ response: { i18nKey: 'auth.ownerNeedsBothFactors' } });
     expect(h.sessionService.createSession).not.toHaveBeenCalled();
     await expect(h.service.createSessionForUser(activeUser() as never, null, null)).resolves.toMatchObject({ accessToken: 'access-token' });
+    // SA-1-e: a door that proved both (the Mini App's signature and password) opens.
+    await expect(h.service.createSessionForUser(owner() as never, null, null, null, null, true)).resolves.toMatchObject({ accessToken: 'access-token' });
   });
 });

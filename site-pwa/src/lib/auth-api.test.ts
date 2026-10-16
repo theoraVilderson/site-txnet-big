@@ -745,6 +745,14 @@ describe('one refresh for every call, socket and tab', () => {
     authApi.releaseSessionHold();
   });
 
+  it('the Mini App sends the password beside the signature when the account needs both (SA-1-e)', async () => {
+    fetchMock.mockResolvedValueOnce(
+      envelope({ ok: true, data: { state: 'authenticated', accessToken: jwt('u-1', 'a'), expiresIn: 900 } }),
+    );
+    await authApi.webAppSession('telegram', 'init', 'pw');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ platform: 'telegram', initData: 'init', password: 'pw' });
+  });
+
   it("the password step's code goes by the chosen channel, under its token (SA-1-d)", async () => {
     fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { requiresOtp: true, otpToken: 't2', deliveryId: 'd' } }));
     await authApi.sendSecondFactor('t1', 'telegram');

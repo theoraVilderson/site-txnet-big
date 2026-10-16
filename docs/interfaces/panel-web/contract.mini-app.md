@@ -60,6 +60,14 @@ through to `AUTH_LOGIN` — the ordinary login screen, rendered inside the
 webview, not a Mini-App-specific dead end. Closing the `needsContact` gap needs
 a contact card, and the keyboard that asks for one exists only in a chat.
 
+The third answer has its own screen. `state:"needsPassword"` — an account the
+messenger alone may not sign in, the holder of `*` among them — goes to
+`AUTH_MINI_APP` (`/auth/mini-app`), which asks the password and calls
+`webAppSession(platform, initData, password)`: the signature and the password
+are the two factors (SA-1-e, ADR-0145 (6b)). Its "another way" link is the
+ordinary login screen; outside a messenger the page has no signature and goes
+there too.
+
 `initData` is passed **verbatim**: the signature covers the exact string, so a
 client that re-encodes or reorders it produces a valid-looking string that
 verifies as forged.

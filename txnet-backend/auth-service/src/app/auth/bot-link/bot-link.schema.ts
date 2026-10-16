@@ -52,6 +52,8 @@ export const botWebAppSessionSchema = z.object({
   platform: z.nativeEnum(SocialPlatform),
   /** The raw `initData` query string, verbatim. Never re-encoded by a client. */
   initData: z.string().min(1).max(4096),
+  /** SA-1-e: the second factor beside the signature, for a role the messenger alone may not sign in. */
+  password: z.string().min(1).max(256).optional(),
 });
 
 export const botLinkContactSchema = z.object({

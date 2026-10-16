@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { OrganicField } from "@auth/auth/_components/OrganicField";
 import { PhoneField } from "@auth/auth/_components/PhoneField";
-import { PasswordField } from "@auth/auth/_components/PasswordField";
+import { CurrentPasswordField } from "@auth/auth/_components/CurrentPasswordField";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OtpStep } from "@auth/auth/_components/OtpStep";
 import { OtpChannelPicker } from "@auth/auth/_components/OtpChannelPicker";
@@ -260,15 +260,7 @@ export default function LoginPage() {
                             dir="ltr"
                             autoComplete="username"
                           />
-                          <PasswordField
-                            id="password"
-                            label={t.password}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            showLabel={t.showPassword}
-                            hideLabel={t.hidePassword}
-                            autoComplete="current-password"
-                          />
+                          <CurrentPasswordField value={password} onChange={setPassword} />
                         </div>
                       )}
                     </motion.div>

@@ -1117,9 +1117,9 @@ export class AuthService {
     ip: string | null,
     userAgent: string | null,
     scopeKey?: string | null,
-    deviceLabel?: string | null,
+    deviceLabel?: string | null, /** The door proved both factors (the Mini App's password, SA-1-e), ADR-0145. */ bothFactors = false,
   ) {
-    if (needsBothFactors(await this.access.ofLoaded(user))) throw new OwnerNeedsBothFactors();
+    if (!bothFactors && needsBothFactors(await this.access.ofLoaded(user))) throw new OwnerNeedsBothFactors();
     return this.issueSession(user, ip, userAgent, scopeKey, deviceLabel);
   }
 

@@ -11,8 +11,9 @@ import type { authApi as AuthApi } from "@/lib/auth-api";
  * unmount must not release a call the first mount held.
  */
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
-vi.mock("@/lib/mini-app", () => ({ miniAppHost: vi.fn(async () => null) }));
+const nav = vi.hoisted(() => ({ replace: vi.fn(), host: null as unknown }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: nav.replace }) }));
+vi.mock("@/lib/mini-app", () => ({ miniAppHost: vi.fn(async () => nav.host) }));
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let authApi: typeof AuthApi;
@@ -35,7 +36,11 @@ beforeEach(async () => {
   ({ PanelSessionProvider } = await import("./PanelSessionContext"));
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  nav.host = null;
+  nav.replace.mockClear();
+});
 
 function SidebarEntry() {
   useEffect(() => {
@@ -60,5 +65,18 @@ describe("the panel's page load", () => {
     for (const [, init] of handoff()) {
       expect(new Headers((init as RequestInit).headers).get("authorization")).toMatch(/^Bearer /);
     }
+  });
+});
+
+describe("the Mini App, for an account the messenger alone does not sign in (SA-1-e)", () => {
+  it("goes to the Mini App's password page, not the login screen", async () => {
+    nav.host = { platform: "telegram", initData: "signed", ready: () => undefined };
+    fetchMock.mockImplementation(async (url: string) =>
+      url.endsWith("/auth/bots/webapp/session")
+        ? ok({ state: "needsPassword" })
+        : new Response(JSON.stringify({ ok: false, msg: "auth.invalidRefreshToken" }), { status: 401, headers: { "content-type": "application/json" } }),
+    );
+    render(<PanelSessionProvider>{null}</PanelSessionProvider>);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/auth/mini-app"));
   });
 });

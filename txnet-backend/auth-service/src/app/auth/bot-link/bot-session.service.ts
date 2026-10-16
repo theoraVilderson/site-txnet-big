@@ -126,7 +126,7 @@ export class BotSessionService {
    *   the session it is holding rather than re-deriving it (`AuthGuard`).
    */
   async authenticateWebApp(
-    input: { platform: BotPlatform; initData: string },
+    input: { platform: BotPlatform; initData: string; password?: string },
     observed: ObservedDevice,
   ): Promise<BotSessionOutcome> {
     const door =
@@ -145,7 +145,7 @@ export class BotSessionService {
       return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
     }
 
-    const chat = { platform: input.platform, chatId: verified.data.user.id };
+    const chat = { platform: input.platform, chatId: verified.data.user.id, password: input.password };
     const scope = botScopeKey(door.id, chat.platform, chat.chatId);
     return runWithTenant(door, async () => {
       const linked = await this.linkedUser(chat.platform, chat.chatId);
@@ -224,7 +224,7 @@ export class BotSessionService {
   /** A proven account's own conditions, then the session — in its tenant. */
   private async signIn(
     user: any,
-    input: { platform: BotPlatform; chatId: string },
+    input: { platform: BotPlatform; chatId: string; password?: string },
     observed: ObservedDevice,
     scope: SwitchScope,
   ): Promise<BotSessionOutcome> {
@@ -243,11 +243,16 @@ export class BotSessionService {
     if (!user.phoneVerifiedAt) {
       return { state: 'refused', key: BackendI18nKeys.errors.auth.phoneVerificationRequired };
     }
-    if (!BOT_SESSION_ROLES.includes(user.role?.name)) {
-      this.logger.warn(
-        `${input.platform}: chat=${input.chatId} holds role ${user.role?.name} — bot factor refused`,
-      );
+    // ADR-0145 as amended (SA-1-e): beside the Mini App's signature a password
+    // is the second factor, so a role the messenger alone may not sign in can.
+    const bothFactors = !BOT_SESSION_ROLES.includes(user.role?.name);
+    if (bothFactors && input.password === undefined) {
+      this.logger.warn(`${input.platform}: chat=${input.chatId} holds role ${user.role?.name} — bot factor refused`);
       return { state: 'refused', key: BackendI18nKeys.errors.auth.botFactorNotAllowed };
+    }
+    const proven = !bothFactors || (await this.auth.proveAccountByPassword(user.username ?? user.phoneNumber, input.password ?? ''))?.id === user.id;
+    if (!proven) {
+      return { state: 'refused', key: BackendI18nKeys.errors.auth.invalidCredentials };
     }
 
     // ADR-0034: this place may be acting as another member of its group.
@@ -262,6 +267,7 @@ export class BotSessionService {
       observed?.userAgent ?? null,
       scope,
       MESSENGER_DEVICE_LABEL[input.platform],
+      bothFactors && !acting,
     );
     return { state: 'authenticated', tokens };
   }
@@ -317,14 +323,7 @@ export class BotSessionService {
       select: { userId: true },
     });
     if (!link) return null;
-    return this.prisma.user.findUnique({
-      where: { id: link.userId },
-      include: {
-        role: {
-          include: { rolePermissions: { include: { permission: true } } },
-        },
-      },
-    });
+    return this.prisma.user.findUnique({ where: { id: link.userId }, include: WITH_ROLE });
   }
 
   /**

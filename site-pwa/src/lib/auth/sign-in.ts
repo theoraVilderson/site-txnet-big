@@ -145,12 +145,16 @@ export const signInCalls = {
    * has never shared its number with the bot, so the platform's signature says
    * who is looking but nothing yet says which account that is. It carries no
    * token, and the caller falls through to the ordinary login screen.
+   *
+   * `state: "needsPassword"` (SA-1-e): an account the messenger alone does not
+   * sign in — the holder of `*` among them. Called again with its `password`,
+   * the signature and the password are both factors.
    */
-  async webAppSession(platform: "telegram" | "bale", initData: string) {
+  async webAppSession(platform: "telegram" | "bale", initData: string, password?: string) {
     // Raw, like `/auth/refresh`: it *is* the session every held call waits for.
-    const result = await rawRequest<{ state: "authenticated" | "needsContact" } & Partial<AuthResult>>(
+    const result = await rawRequest<{ state: "authenticated" | "needsContact" | "needsPassword" } & Partial<AuthResult>>(
       "/auth/bots/webapp/session",
-      { method: "POST", body: JSON.stringify({ platform, initData }) },
+      { method: "POST", body: JSON.stringify({ platform, initData, ...(password === undefined ? {} : { password }) }) },
     );
     if (result.accessToken) setAccessToken(result.accessToken);
     return result;

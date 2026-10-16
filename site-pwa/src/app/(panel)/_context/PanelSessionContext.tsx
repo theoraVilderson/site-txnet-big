@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { authApi, type Me, type SwitchGroup } from "@/lib/auth-api";
 import { browserReport, browserZone, setDisplayZone, type ResolvedTimeZone } from "@/lib/time-zone";
 import { miniAppHost } from "@/lib/mini-app";
-import { AUTH_LOGIN } from "@/lib/routes";
+import { AUTH_LOGIN, AUTH_MINI_APP } from "@/lib/routes";
 import { currentReturnPath, rememberReturnTo } from "@/lib/return-to";
 import { impersonatedGroup } from "../_lib/impersonation";
 
@@ -140,16 +140,17 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
         }
         // After sign-in, not before: a page's own calls are not held for it.
         void syncTimeZone().then((resolved) => alive && resolved && zoneChanged(resolved));
-      } catch {
+      } catch (failure) {
         // Expired, revoked, or never signed in — all one answer. `replace`, so
-        // the panel is not reachable with Back.
+        // the panel is not reachable with Back. A Mini App account that needs
+        // its password goes to the page that asks it (SA-1-e).
         //
         // Where they were going is remembered first (F-093-i, ADR-0042): this
         // is the one place the panel discovers it has no session, so it is the
         // one place that still knows the destination. The login screen hands it
         // back; a path that is not this origin's is dropped there and here.
         rememberReturnTo(currentReturnPath());
-        router.replace(AUTH_LOGIN);
+        router.replace(failure instanceof MiniAppNeedsPassword ? AUTH_MINI_APP : AUTH_LOGIN);
       } finally {
         if (alive) setIsLoading(false);
       }
@@ -165,6 +166,9 @@ export function PanelSessionProvider({ children }: { children: ReactNode }) {
     </PanelSessionContext.Provider>
   );
 }
+
+/** The Mini App's signature named an account that signs in only with its password beside it (SA-1-e). */
+class MiniAppNeedsPassword extends Error {}
 
 /**
  * The session this page load runs on: the refresh cookie if there is one, and
@@ -183,6 +187,7 @@ async function establishSession() {
     if (!host) throw cookieFailure;
     host.ready();
     const result = await authApi.webAppSession(host.platform, host.initData);
+    if (result.state === "needsPassword") throw new MiniAppNeedsPassword();
     if (result.state !== "authenticated") throw cookieFailure;
     return result;
   }

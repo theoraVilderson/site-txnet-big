@@ -17,6 +17,8 @@ export const AUTH_HANDOFF = "/auth/handoff";
  * existed and the path was written out by hand at each call site.
  */
 export const AUTH_REGISTER = "/auth/register";
+/** The Mini App's password, for an account the messenger alone does not sign in (SA-1-e). */
+export const AUTH_MINI_APP = "/auth/mini-app";
 /** Adding another account to the switch group (F-0205 / F-0209). */
 export const PANEL_ACCOUNTS_ADD = "/accounts/add";
 /** The user's own settings; first section: their email address (F-035-j). */

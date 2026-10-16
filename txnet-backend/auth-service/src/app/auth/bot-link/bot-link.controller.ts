@@ -1,4 +1,5 @@
 import {
+  BackendI18nKeys,
   RateLimitBucket,
   rateLimitBucketKey,
   TenantCapability,
@@ -173,6 +174,10 @@ export class BotLinkController {
       ip: req.ip ?? '',
       userAgent: req.get('user-agent') ?? 'unknown',
     });
+    // SA-1-e: the role needs a second factor, and the page can ask its password.
+    if (outcome.state === 'refused' && outcome.key === BackendI18nKeys.errors.auth.botFactorNotAllowed) {
+      return ok({ state: 'needsPassword' }, 'auth.botSession');
+    }
     if (outcome.state === 'refused') {
       return err(outcome.key);
     }
