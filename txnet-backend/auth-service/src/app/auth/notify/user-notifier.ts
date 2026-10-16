@@ -1,11 +1,14 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { BotClientRegistry, BotPlatform, escapeHtml } from '@txnet-backend/messenger';
+import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
 import { suggestionCopyVerdict } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
+import { tellOnBot } from './notice-bot';
 import { noticeButton } from './notice-buttons';
+import { NoticeMailer } from './notice-mail';
 import { withCurrencyName } from './notice-currency';
+import { withReportFigures } from './analytics-notices';
 import { GROUP_NOTIFY_TEMPLATES, GROUP_TEMPLATE_TEXT } from './notice-groups';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
@@ -112,8 +115,9 @@ export type NotifyTemplate = (typeof NOTIFY_TEMPLATES)[number];
 /**
  * One call is one channel (F-067-o, ADR-0084 decision 2): the worker marks each on its own, so a redelivery repeats only the one that failed.
  * `sms` (F-601-t, ADR-0097): a security notice, and a critical one no bot reached, on the tenant's line.
+ * `email` (F-1006-a): only when a sender names it — a scheduled report — to the verified address, the inbox title as its subject.
  */
-export const NOTIFY_CHANNELS = ['inbox', 'bot', 'sms'] as const;
+export const NOTIFY_CHANNELS = ['inbox', 'bot', 'sms', 'email'] as const;
 export type NotifyChannel = (typeof NOTIFY_CHANNELS)[number];
 
 /**
@@ -139,7 +143,7 @@ export type NotifyRequest = {
   services?: NotifyService[];
 };
 /** Who was reached: the platforms messaged, or `sms`. Empty: no one, and not an error. */
-export type NotifyResult = { sent: Array<BotPlatform | 'sms'> };
+export type NotifyResult = { sent: Array<BotPlatform | 'sms' | 'email'> };
 
 type Texts = Partial<Record<string, string>>;
 /** `resellerQuotaKeys`: a registry quota key's name, by key (F-019-v8); a product's is its catalog name. */
@@ -1084,13 +1088,14 @@ export class UserNotifier {
     private readonly bots: BotClientRegistry,
     private readonly locale: LocaleService,
     @Optional() private readonly inbox?: NotificationInboxClient,
+    @Optional() private readonly mailer?: NoticeMailer,
   ) {}
 
   async notify(request: NotifyRequest): Promise<NotifyResult> {
     const tenantId = TenantContext.current('user notification').id;
     const user = await this.prisma.user.findFirst({
       where: { id: request.userId },
-      select: { languagePreference: true, phoneNumber: true, phoneVerifiedAt: true, noticeMessenger: true },
+      select: { languagePreference: true, phoneNumber: true, phoneVerifiedAt: true, noticeMessenger: true, email: true, emailVerifiedAt: true },
     });
     if (!user) return { sent: [] };
 
@@ -1098,7 +1103,8 @@ export class UserNotifier {
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
     const lang = user.languagePreference;
-    const named = this.withKeyLabels(this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, lang, ns), lang, ns), lang, ns);
+    const labelled = this.withKeyLabels(this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, lang, ns), lang, ns), lang, ns);
+    const named = withReportFigures(request.template, labelled, lang, ns);
     const told = withCurrencyName(named, this.locale.getNamespace(lang, 'bot'));
     const params = combined ? { ...told, count: String(request.count) } : told;
     const body = interpolate(spec.read(ns) ?? spec.fallback, params);
@@ -1131,38 +1137,15 @@ export class UserNotifier {
       return { sent: [] };
     }
 
-    const links = await this.prisma.linkedBotAccount.findMany({
-      where: { userId: request.userId, contactVerifiedAt: { not: null } },
-      select: { platform: true, platformUserId: true },
-      orderBy: { linkedAt: 'desc' },
-    });
-
-    const choice = user.noticeMessenger ?? 'both';
-    const every = request.every || choice === 'both';
-    // The chosen platform first; the rest keep linked-last order for the fallback.
-    const ordered = every ? links : [...links.filter((l) => l.platform === choice), ...links.filter((l) => l.platform !== choice)];
-
-    const markup = noticeButton(request.template, params, ns);
-    // A chat message is sent in HTML parse mode; these templates hold no markup, so the whole text is
-    // escaped — a subject or a title a person wrote can never fail the send. The inbox row stays as written.
-    const chatText = escapeHtml(text);
-    let lastError: unknown = null;
-    const sent: BotPlatform[] = [];
-    for (const link of ordered) {
-      const platform: BotPlatform = link.platform;
-      const client = await this.bots.primaryClient(tenantId, platform, 'identity:UserNotifier');
-      if (!client) continue;
-      try {
-        await (markup ? client.sendMessage(link.platformUserId, chatText, markup) : client.sendMessage(link.platformUserId, chatText));
-        sent.push(platform);
-        if (!every) break;
-      } catch (err) {
-        lastError = err;
-        this.logger.warn(`${request.template} to user ${request.userId} on ${platform} failed: ${(err as Error).message}`);
-      }
+    if (request.channel === 'email') {
+      if (!user.emailVerifiedAt || !user.email) return { sent: [] };
+      const subject = interpolate(spec.inbox.read(ns) ?? spec.inbox.fallback, params);
+      if (!this.mailer) throw new Error(`${request.template} by email needs the mailer, which is not wired`);
+      return { sent: (await this.mailer.send(user.email, subject, text)) ? ['email'] : [] };
     }
-    if (sent.length === 0 && lastError) throw lastError;
-    return { sent };
+
+    const to = { tenantId, userId: request.userId, template: request.template, messenger: user.noticeMessenger, every: request.every };
+    return tellOnBot({ prisma: this.prisma, bots: this.bots, logger: this.logger }, to, { text, markup: noticeButton(request.template, params, ns) });
   }
 
   /**

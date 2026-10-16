@@ -12,6 +12,7 @@
  */
 import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
 
+import { HomeNotices } from './home-notices';
 import { TenantSubscriptionNoticeConsumer } from './tenant-renewal.consumers';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -33,9 +34,10 @@ function build(homes: Record<string, string> = {}) {
   const config = { get: (_k: string, fallback?: unknown) => fallback };
   const findUnique = vi.fn(async ({ where }: { where: { id: string } }) => (homes[where.id] ? { tenantId: homes[where.id] } : null));
   const crossTenant = { user: { findUnique } };
-  const consumer = new TenantSubscriptionNoticeConsumer({} as never, {} as never, { publish: vi.fn() } as never, config as never, crossTenant as never);
+  const home = new HomeNotices({} as never, {} as never, { publish: vi.fn() } as never, config as never, crossTenant as never);
+  const consumer = new TenantSubscriptionNoticeConsumer({} as never, home);
   const send = vi.fn(async (_notice: { consumer: string; person?: { tenantId: string; userId: string; template: string; params: Record<string, string> } }) => undefined);
-  (consumer as unknown as { notices: { send: typeof send } }).notices = { send };
+  (home as unknown as { notices: { send: typeof send } }).notices = { send };
   const person = () => (send.mock.calls[0] as unknown as [{ person: { tenantId: string; userId: string; template: string; params: Record<string, string> } }])[0].person;
   return { consumer, person, send };
 }

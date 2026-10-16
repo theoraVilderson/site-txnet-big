@@ -18,7 +18,9 @@ const NOTIFY_PATH = '/api/internal/notify/user';
 const PERSON_CHANNELS = ['inbox', 'bot'] as const;
 export type PersonChannel = (typeof PERSON_CHANNELS)[number];
 /** `sms` (F-601-t) is never a burst's own channel: a flush asks for it by the notice's class. */
-type TellChannel = PersonChannel | 'sms';
+type TellChannel = PersonChannel | 'sms' | 'email';
+/** What `only` may name: the person channels, and `email` (F-1006-a) — told only when asked for, never joined to a burst. */
+export type OnlyChannel = PersonChannel | 'email';
 
 /** The marker segment of a combined notice's channels; the flush id is the "event" (F-067-p). */
 const BURST_CONSUMER = 'notice-burst';
@@ -80,7 +82,8 @@ type Entry = { params: Record<string, string>; grantId?: string; class?: NoticeC
  * the inbox now and to the bot when they end (F-601-m). With `window: 'hour'`
  * and `only: ['inbox']` — a non-urgent notice held for quiet hours — the inbox
  * row joins an hour lane of its own whose flush tells the inbox alone, so the
- * same notice of several services is one row (F-601-q).
+ * same notice of several services is one row (F-601-q). `email` (F-1006-a)
+ * is an `only` channel alone: a scheduled report names it.
  *
  * `class` (F-601-s, ADR-0097): which channels the person is told on. Absent,
  * it is the template's in shared-core's `NOTICE_CLASS_OF`; a consumer whose
@@ -92,7 +95,7 @@ export type EventNotice = {
   eventId: string;
   live?: { channel: `user:${string}` | `tenant:${string}`; body: Record<string, unknown> };
   person?: Person;
-  only?: readonly PersonChannel[];
+  only?: readonly OnlyChannel[];
   /**
    * `hour`: a non-urgent retention notice (F-601-p) — its burst waits
    * `AUTOMATION_RETENTION_WINDOW_MS` for the same notice of the user's other

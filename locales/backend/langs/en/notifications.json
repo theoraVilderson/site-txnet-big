@@ -433,6 +433,13 @@
     "userLoss": "📉 {{name}} cost more than they paid in the last 30 days: paid {{net}} {{currencyCode}}, cost {{cost}} {{currencyCode}} (over your {{percent}}% limit). The Profit tab of your analytics has the details.",
     "userLossTitle": "A user costs more than they pay",
     "userLossMany": "📉 {{count}} users cost more than they paid in the last 30 days. The Profit tab of your analytics lists them.",
-    "userLossManyTitle": "{{count}} users cost more than they pay"
+    "userLossManyTitle": "{{count}} users cost more than they pay",
+    "report": "📊 Your report: {{period}}\n\n💰 Net sales: {{net}} {{currency}}{{netChange}}\n🧾 Orders: {{orders}}{{ordersChange}}\n👥 Buyers: {{buyers}}{{buyersChange}}\n💳 Wallet top-ups: {{topUps}} {{currency}}{{topUpsChange}}{{linkLine}}",
+    "reportTitle": "Your analytics report: {{period}}",
+    "reportNew": "new",
+    "reportPeriod": "{{from}} to {{to}}",
+    "reportLink": "👉 The details: {{link}}",
+    "reportMany": "📊 {{count}} of your scheduled reports are ready. Your analytics has the figures.",
+    "reportManyTitle": "{{count}} analytics reports"
   }
 }

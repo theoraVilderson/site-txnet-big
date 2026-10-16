@@ -36,6 +36,7 @@ import { OtpDeliveryPublisher } from './otp/otp-delivery.publisher';
 import { OtpInternalController } from './otp/otp-internal.controller';
 import { UserNotifyInternalController } from './notify/user-notify-internal.controller';
 import { NotificationInboxClient } from './notify/notification-inbox.client';
+import { NoticeMailer } from './notify/notice-mail';
 import { UserNotifier } from './notify/user-notifier';
 import { RateLimiter } from '../common/rate-limit/rate-limiter';
 import { RATE_LIMIT_STORE, ResellerAccess } from '@txnet-backend/shared-core';
@@ -118,6 +119,7 @@ import { ConfigService } from '@nestjs/config';
   ],
   providers: [
     UserNotifier,
+    NoticeMailer,
     NotificationInboxClient,
     RegisterService,
     TokenService,

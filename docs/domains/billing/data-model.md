@@ -147,7 +147,7 @@ flagged them again. `20261016000600_analytics_loss_alert` (F-1003) added
 `analytics_loss_alert` (key tenant · user · month) — the claim that tells a
 loss once a month: **not** derived, never deleted by a rebuild. `20261016000700_panel_capacity` (F-1005-a) added
 `_panel_traffic_day` (a flow) and `_panel_clients_day` (a stock), unique tenant · UTC date · panel —
-[contract.analytics-capacity.md](contract.analytics-capacity.md) — and flagged every tenant again. The rest is written only by the rollup,
+[contract.analytics-capacity.md](contract.analytics-capacity.md) — and flagged every tenant again. `20261016000800_analytics_report_schedule` (F-1006-a) added `analytics_report_schedule` — a person's schedule, **not** derived ([contract.analytics-reports.md](contract.analytics-reports.md)). The rest is written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

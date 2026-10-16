@@ -92,6 +92,8 @@ export const OutboxEventType = {
   TRANSFER_PROOF_SENT: 'billing.payment.transfer_proof_sent',
   /** F-1003: a user's 30-day cost passed their net by the tenant's percent — one per staff member told, once a tenant month (`tellLosses`). */
   ANALYTICS_USER_LOSS: 'billing.analytics.user_loss',
+  /** F-1006-a: a scheduled analytics report is due (or asked now) — one per send, to the schedule's person (`AnalyticsReportService`); worker-service tells it and pushes its schedule live. */
+  ANALYTICS_REPORT: 'billing.analytics.report',
   /** F-707-m: a lottery winner was given its prize — once per winner row (`LotteryDeliveryService`). */
   LOTTERY_WON: 'engagement.lottery.won',
   /** F-707-q: a lottery was published — once per lottery, in the publish (`LotteryAdminService.publish`); worker-service tells its group's members. */
@@ -221,6 +223,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ANALYTICS_REFRESHED]: 'worker-service',
   [OutboxEventType.ANALYTICS_RESELLER_REFRESHED]: 'worker-service',
   [OutboxEventType.ANALYTICS_USER_LOSS]: 'worker-service',
+  [OutboxEventType.ANALYTICS_REPORT]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

@@ -333,3 +333,23 @@ describe('EventNoticeSender — SMS for a critical or security notice (F-601-t, 
     expect(channels(calls)).toEqual(['inbox', 'bot', 'sms']);
   });
 });
+
+describe('EventNoticeSender — a channel only a sender names (F-1006-a)', () => {
+  const report = (n: number): EventNotice => ({
+    consumer: 'analytics-report',
+    eventId: event(n),
+    person: { tenantId: TENANT, userId: USER, template: 'analyticsReport', params: { net: '10' } },
+    only: ['bot', 'email'],
+  });
+
+  it('tells email and the bot at once, each under its own marker, never joined to a burst', async () => {
+    const { sender, calls } = build();
+    await sender.send(report(1));
+    await sender.send(report(2));
+    await sender.send(report(1));
+
+    expect(calls.flushes).toEqual([]);
+    expect(calls.fetched.map((f) => f.body.channel)).toEqual(['bot', 'email', 'bot', 'email']);
+    expect(calls.fetched[1]?.body).toMatchObject({ template: 'analyticsReport', params: { net: '10' } });
+  });
+});

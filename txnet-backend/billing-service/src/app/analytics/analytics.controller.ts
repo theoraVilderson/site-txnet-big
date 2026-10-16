@@ -23,7 +23,7 @@ const STATUS: Record<ResellerAccessRejection, RefusalStatus> = {
 };
 
 /** Every tab sums the rollup over its window and the compared one: one bucket for all of them. */
-const READ: RateLimitOptions<RateLimitConfigKey> = {
+export const READ: RateLimitOptions<RateLimitConfigKey> = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.ANALYTICS_READ, identityOf(req).userId),
   configKey: 'ANALYTICS_READ_RATE_LIMIT',
   windowSec: 900,

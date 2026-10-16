@@ -8,7 +8,9 @@ import {
   ResellerAccessRejection,
   ResellerActor,
   UnscopedRedisKeys,
+  isPlatformTenant,
   operatingCurrencyOf,
+  runWithTenant,
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
@@ -100,33 +102,50 @@ export class AnalyticsService {
 
   read(actor: ResellerActor, tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery): Promise<AnalyticsAnswer> {
     return this.run(actor, tenantId, async (admitted) => {
-      const state = await tenantTransaction(this.prisma, (tx) => tx.analyticsRollupState.findUnique({ where: { tenantId } }));
-      const head: Head = { tab, query: q, refreshedAt: state?.refreshedAt?.toISOString() ?? null };
-      if (!state || state.rebuildingSince) return { ...head, rebuilding: true };
-
       // Another tenant's figures, to a reseller: refused, never answered empty.
       if (ACROSS_TABS.has(tab) && admitted.platform !== true) throw new ResellerAccessRefused('not_allowed', tenantId);
-      const across = ACROSS_TABS.has(tab) || (ACROSS_ON_PLATFORM.has(tab) && admitted.platform === true);
-      const hides = admitted.as === 'staff' && admitted.platform !== true;
-      const version = across ? await this.versionAcross() : state.version;
-      const key = UnscopedRedisKeys.analyticsAnswer(tenantId, version, tab, createHash('sha256').update(JSON.stringify({ q, hides })).digest('hex'));
-      const cached = await this.cached(key);
-      if (cached) return { ...head, rebuilding: false, ...cached };
-
-      // Redis stays outside the transaction (C-29). A pass committing between
-      // the two reads caches newer figures under the older version, which the
-      // bump has already retired — never older figures under the newer one.
-      const body = await tenantTransaction(
-        this.prisma,
-        async (tx) => {
-          const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides, across: across ? this.all : undefined, platform: admitted.platform === true });
-          return { granularity: c.granularity, buckets: c.buckets, suppressed: hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
-        },
-        { timeout: READ_TIMEOUT_MS },
-      );
-      await this.cache(key, body);
-      return { ...head, rebuilding: false, ...body };
+      return this.answer(tenantId, tab, q, { hides: admitted.as === 'staff' && admitted.platform !== true, platform: admitted.platform === true });
     });
+  }
+
+  /**
+   * A tab of the tenant's own figures for a reader the caller has already
+   * judged — a scheduled report's recipient, one of the tenant's analytics
+   * staff (F-1006-a): nothing hidden, the same cache and builders as `read`.
+   * Never a tab across resellers.
+   */
+  readTrusted(tenantId: string, tab: Exclude<AnalyticsTab, 'resellers'>, q: AnalyticsQuery): Promise<AnalyticsAnswer> {
+    return runWithTenant({ id: tenantId }, async () => {
+      const tenant = await tenantTransaction(this.prisma, (tx) => tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { tenantType: true } }));
+      return this.answer(tenantId, tab, q, { hides: false, platform: isPlatformTenant(tenant.tenantType) });
+    });
+  }
+
+  /** The answer in the tenant's scope, cached per rollup version; `refreshedAt` read fresh. */
+  private async answer(tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery, how: { hides: boolean; platform: boolean }): Promise<AnalyticsAnswer> {
+    const state = await tenantTransaction(this.prisma, (tx) => tx.analyticsRollupState.findUnique({ where: { tenantId } }));
+    const head: Head = { tab, query: q, refreshedAt: state?.refreshedAt?.toISOString() ?? null };
+    if (!state || state.rebuildingSince) return { ...head, rebuilding: true };
+
+    const across = ACROSS_TABS.has(tab) || (ACROSS_ON_PLATFORM.has(tab) && how.platform);
+    const version = across ? await this.versionAcross() : state.version;
+    const key = UnscopedRedisKeys.analyticsAnswer(tenantId, version, tab, createHash('sha256').update(JSON.stringify({ q, hides: how.hides })).digest('hex'));
+    const cached = await this.cached(key);
+    if (cached) return { ...head, rebuilding: false, ...cached };
+
+    // Redis stays outside the transaction (C-29). A pass committing between
+    // the two reads caches newer figures under the older version, which the
+    // bump has already retired — never older figures under the newer one.
+    const body = await tenantTransaction(
+      this.prisma,
+      async (tx) => {
+        const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides: how.hides, across: across ? this.all : undefined, platform: how.platform });
+        return { granularity: c.granularity, buckets: c.buckets, suppressed: how.hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
+      },
+      { timeout: READ_TIMEOUT_MS },
+    );
+    await this.cache(key, body);
+    return { ...head, rebuilding: false, ...body };
   }
 
   /**

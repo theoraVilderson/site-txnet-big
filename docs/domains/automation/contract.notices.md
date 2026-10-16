@@ -123,3 +123,18 @@ consumer `access-notice`, its own queue `AUTOMATION_ACCESS_NOTICE_QUEUE` on
 | A burst of any of them is one "your access changed N times" (`access.many`) | what is held now is the panel's to show, not a list of edits |
 | A cause with no template, a `role_set` with no `role`, or a payload without tenant or user throws and dead-letters | a producer that adds a cause (AC-1-l, AC-1-m, F-030-a, seat expiry) adds its template in the same item, or nobody is told |
 
+## A scheduled report (F-1006-a)
+
+`AnalyticsReportConsumer` (`worker-service/src/app/outbox/analytics-report.consumer.ts`),
+consumer `analytics-report`, its own queue `AUTOMATION_ANALYTICS_REPORT_QUEUE`
+on `billing.analytics.report` ([billing/contract.analytics-reports.md](../billing/contract.analytics-reports.md)),
+the live-push queue bound to the same type. User 2026-10-16 (ADR-0150).
+
+| Rule | Why |
+|---|---|
+| `person` with `only` = the payload's `channels` (`bot`, `email`), template `analyticsReport`, the payload's figures as params; told in the tenant the person lives in (F-067-q) | each channel under its own marker and never in a burst: two reports due at one hour are two messages, never "2 reports" |
+| **`email` is an `only` channel alone** (`OnlyChannel`): `EventNoticeSender` tells it when a sender names it, never by class or burst | no other notice was written to be mailed |
+| A payload without tenant, person or a known channel throws and dead-letters | where a report goes is never guessed |
+| Its own queue | a morning's reports never hold up a person notice |
+| The page's re-read is `LivePushConsumer`'s `{type, scheduleId}` on `user:` | the report itself is the notice |
+

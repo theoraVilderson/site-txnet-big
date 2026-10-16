@@ -209,6 +209,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
   private readonly tenantSubscriptionNoticeQueue: string;
   private readonly lotteryAnnouncementQueue: string;
   private readonly accessNoticeQueue: string;
+  private readonly analyticsReportQueue: string;
   private readonly grantDeliveryNoticeQueue: string;
   private readonly grantCreatedQueue: string;
   private readonly livePushQueue: string;
@@ -242,6 +243,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     this.tenantSubscriptionNoticeQueue = config.getOrThrow<string>('AUTOMATION_TENANT_SUBSCRIPTION_NOTICE_QUEUE');
     this.lotteryAnnouncementQueue = config.getOrThrow<string>('AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE');
     this.accessNoticeQueue = config.getOrThrow<string>('AUTOMATION_ACCESS_NOTICE_QUEUE');
+    this.analyticsReportQueue = config.getOrThrow<string>('AUTOMATION_ANALYTICS_REPORT_QUEUE');
     this.grantDeliveryNoticeQueue = config.getOrThrow<string>('AUTOMATION_GRANT_DELIVERY_NOTICE_QUEUE');
     this.grantCreatedQueue = config.getOrThrow<string>('AUTOMATION_GRANT_CREATED_QUEUE');
     this.livePushQueue = config.getOrThrow<string>('AUTOMATION_LIVE_PUSH_QUEUE');
@@ -297,84 +299,33 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     // The first outbox consumer (F-067-l, ADR-0045). Bound to exactly one event
     // type, so the relay's `mandatory` publish of it stops being `unroutable`
     // and every other type stays so — visibly, as before.
-    await this.channel.assertQueue(this.paymentConfirmedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(
-      this.paymentConfirmedQueue,
-      this.exchange,
-      outboxRoutingKey(OutboxEventType.PAYMENT_CONFIRMED),
-    );
+    await this.outboxQueue(this.paymentConfirmedQueue, [OutboxEventType.PAYMENT_CONFIRMED]);
     // The second (F-067-m): its own queue, so a backlog of one notice never
     // sits in front of the other and each depth is watched on its own.
-    await this.channel.assertQueue(this.paymentReversedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(this.paymentReversedQueue, this.exchange, outboxRoutingKey(OutboxEventType.PAYMENT_REVERSED));
+    await this.outboxQueue(this.paymentReversedQueue, [OutboxEventType.PAYMENT_REVERSED]);
     // The third (F-035-b): a new inbox row pushed to an open panel.
-    await this.channel.assertQueue(this.notificationCreatedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(
-      this.notificationCreatedQueue,
-      this.exchange,
-      outboxRoutingKey(OutboxEventType.NOTIFICATION_CREATED),
-    );
+    await this.outboxQueue(this.notificationCreatedQueue, [OutboxEventType.NOTIFICATION_CREATED]);
     // F-027-bs: a connection test's verdict or fault pushed to the owner's systems page.
-    await this.channel.assertQueue(this.panelTestedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
     // F-027-el, F-027-fg: a health change and a halting drift event ride the same queue and consumer, so one panel's events stay in order.
-    const panelEvents = [OutboxEventType.PANEL_TESTED, OutboxEventType.PANEL_STATE_CHANGED, OutboxEventType.PANEL_DRIFT_RAISED];
-    await Promise.all(panelEvents.map((type) => this.channel.bindQueue(this.panelTestedQueue, this.exchange, outboxRoutingKey(type))));
+    await this.outboxQueue(this.panelTestedQueue, [OutboxEventType.PANEL_TESTED, OutboxEventType.PANEL_STATE_CHANGED, OutboxEventType.PANEL_DRIFT_RAISED]);
     // F-019-c: a credited billing wallet asks auth-service to renew at once; the
     // renewal notices to a reseller's owner have their own queue, both types on it.
-    await this.channel.assertQueue(this.tenantBillingCreditedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(this.tenantBillingCreditedQueue, this.exchange, outboxRoutingKey(OutboxEventType.TENANT_BILLING_CREDITED));
-    await this.channel.assertQueue(this.tenantSubscriptionNoticeQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    for (const type of TENANT_NOTICE_TYPES) {
-      await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
-    }
+    await this.outboxQueue(this.tenantBillingCreditedQueue, [OutboxEventType.TENANT_BILLING_CREDITED]);
+    await this.outboxQueue(this.tenantSubscriptionNoticeQueue, TENANT_NOTICE_TYPES);
     // F-707-q: a published lottery told to its whole group — its own queue, so a fan-out of
     // thousands never holds up the person notices above.
-    await this.channel.assertQueue(this.lotteryAnnouncementQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(this.lotteryAnnouncementQueue, this.exchange, outboxRoutingKey(OutboxEventType.LOTTERY_PUBLISHED));
+    await this.outboxQueue(this.lotteryAnnouncementQueue, [OutboxEventType.LOTTERY_PUBLISHED]);
+    // F-1006-a: the scheduled reports — their own queue too, so a morning's reports never hold up a person notice.
+    await this.outboxQueue(this.analyticsReportQueue, [OutboxEventType.ANALYTICS_REPORT]);
     // AC-1-s: a person told their access moved — the notice half; live-push binds the same type for the page.
-    await this.channel.assertQueue(this.accessNoticeQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    await this.channel.bindQueue(this.accessNoticeQueue, this.exchange, outboxRoutingKey(OutboxEventType.ACCESS_CHANGED));
+    await this.outboxQueue(this.accessNoticeQueue, [OutboxEventType.ACCESS_CHANGED]);
     // F-111-d: a paid Grant delivered or refunded, told to its buyer — one
     // queue, because both are the end of the same purchase. F-601-i: one still
     // waiting 5 minutes on is the same purchase's news, in the same line.
     // F-027-eo: a Grant's lines replaced by a panel-side change is its buyer's
     // news too — bound here as well as to the live-push queue, which pushes it.
-    await this.channel.assertQueue(this.grantDeliveryNoticeQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    for (const type of [
-      OutboxEventType.GRANT_DELIVERED,
-      OutboxEventType.GRANT_REFUNDED,
-      OutboxEventType.GRANT_DELIVERY_DELAYED,
-      OutboxEventType.GRANT_LINKS_CAPTURED,
-    ]) {
-      await this.channel.bindQueue(this.grantDeliveryNoticeQueue, this.exchange, outboxRoutingKey(type));
-    }
+    const purchaseEnds = [OutboxEventType.GRANT_DELIVERED, OutboxEventType.GRANT_REFUNDED, OutboxEventType.GRANT_DELIVERY_DELAYED, OutboxEventType.GRANT_LINKS_CAPTURED];
+    await this.outboxQueue(this.grantDeliveryNoticeQueue, purchaseEnds);
     // F-027-eo: the settle check of a Grant's changed lines waits out its
     // window in a queue nobody consumes, then lands on the buyer-notice queue.
     await this.channel.assertQueue(this.linesSettleDelayQueue, {
@@ -391,31 +342,18 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     // F-111-n: a config confirmed on its panel is the same ask for a network
     // Grant — activate it now — so it waits in the same line. F-027-dw: a
     // Grant the lease planner closed is one more ask — suspend it now.
-    await this.channel.assertQueue(this.grantCreatedQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    for (const type of [OutboxEventType.GRANT_CREATED, OutboxEventType.CONFIG_CONFIRMED, OutboxEventType.GRANT_CLOSED]) {
-      await this.channel.bindQueue(this.grantCreatedQueue, this.exchange, outboxRoutingKey(type));
-    }
+    await this.outboxQueue(this.grantCreatedQueue, [OutboxEventType.GRANT_CREATED, OutboxEventType.CONFIG_CONFIRMED, OutboxEventType.GRANT_CLOSED]);
     // F-111-l: the events only an open page needs — one queue, because each is
     // a live push and nothing else (`LIVE_PUSH_FIELDS`).
-    await this.channel.assertQueue(this.livePushQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    for (const type of [OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE, OutboxEventType.GRANT_FREEZE_CHANGED, OutboxEventType.TENANT_DOMAIN_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, OutboxEventType.ACCESS_CHANGED, OutboxEventType.PAYMENT_OPEN_CHANGED, OutboxEventType.ANALYTICS_REFRESHED, OutboxEventType.ANALYTICS_RESELLER_REFRESHED]) {
-      await this.channel.bindQueue(this.livePushQueue, this.exchange, outboxRoutingKey(type));
-    }
+    const livePushes = [
+      OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE, OutboxEventType.GRANT_FREEZE_CHANGED, OutboxEventType.TENANT_DOMAIN_CHANGED,
+      OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, OutboxEventType.ACCESS_CHANGED,
+      OutboxEventType.PAYMENT_OPEN_CHANGED, OutboxEventType.ANALYTICS_REFRESHED, OutboxEventType.ANALYTICS_RESELLER_REFRESHED, OutboxEventType.ANALYTICS_REPORT,
+    ];
+    await this.outboxQueue(this.livePushQueue, livePushes);
     // F-601-a: the retention notices — one queue for every type in
     // `RETENTION_NOTICES`, each told once per Grant period.
-    await this.channel.assertQueue(this.retentionNoticeQueue, {
-      durable: true,
-      arguments: { 'x-dead-letter-exchange': this.deadExchange },
-    });
-    for (const type of Object.keys(RETENTION_NOTICES)) {
-      await this.channel.bindQueue(this.retentionNoticeQueue, this.exchange, outboxRoutingKey(type));
-    }
+    await this.outboxQueue(this.retentionNoticeQueue, Object.keys(RETENTION_NOTICES));
     // F-067-p: a combined notice's flush waits out its window in a queue nobody
     // consumes; the broker dead-letters it on expiry onto the flush key. A
     // durable delay: a flush survives the process that scheduled it.
@@ -687,8 +625,19 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     await this.consumeOutbox(this.lotteryAnnouncementQueue, handle);
   }
 
+  /** An outbox consumer's queue: durable, dead-lettered, bound to each of `types` — each consumer's own depth to watch. */
+  private async outboxQueue(queue: string, types: readonly string[]): Promise<void> {
+    await this.channel.assertQueue(queue, { durable: true, arguments: { 'x-dead-letter-exchange': this.deadExchange } });
+    for (const type of types) await this.channel.bindQueue(queue, this.exchange, outboxRoutingKey(type));
+  }
+
   async consumeAccessNotices(handle: OutboxHandler): Promise<void> {
     await this.consumeOutbox(this.accessNoticeQueue, handle);
+  }
+
+  /** Start consuming `billing.analytics.report` (F-1006-a), by the same rules. */
+  async consumeAnalyticsReports(handle: OutboxHandler): Promise<void> {
+    await this.consumeOutbox(this.analyticsReportQueue, handle);
   }
 
   /** Start consuming a paid Grant's delivered / refunded events (F-111-d), by the same rules. */

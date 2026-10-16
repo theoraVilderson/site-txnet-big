@@ -4,6 +4,7 @@ import { IOtpSender } from './otp-sender.interface';
 import { OtpChannel, OtpPurpose } from '../otp.interface';
 import { LocaleService } from '../../../locale/locale.service';
 import { buildOtpEmail } from './otp-message.util';
+import { mailProviderOf } from '../../../common/mail/mail-provider';
 import { BackendI18nKeys, MailProviderService } from '@txnet-backend/shared-core';
 
 /**
@@ -27,19 +28,7 @@ export class EmailOtpSender implements IOtpSender {
     config: ConfigService,
     private readonly localeService: LocaleService,
   ) {
-    const host = config.get<string>('SMTP_HOST');
-    const from = config.get<string>('MAIL_FROM');
-    this.provider =
-      host && from
-        ? new MailProviderService({
-            host,
-            port: Number(config.get<number>('SMTP_PORT', 587)),
-            secure: config.get<string>('SMTP_SECURE', 'false') === 'true',
-            user: config.get<string>('SMTP_USER'),
-            pass: config.get<string>('SMTP_PASS'),
-            from,
-          })
-        : null;
+    this.provider = mailProviderOf(config);
   }
 
   isConfigured(): boolean {

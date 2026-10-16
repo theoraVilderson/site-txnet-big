@@ -12,7 +12,7 @@ The figures behind `/analytics` for the platform owner and for every reseller.
 Decided by the user on 2026-10-06; written before any of it is built, so an
 implementing session has nothing left to decide. **Built: the rollup and its
 worker (F-1001-a); `overview`, `sales`, `catalog` and `analytics.read`
-(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n); `customers` and the renewal window (F-1001-f); `resellers` (F-1001-h); cost attribution (F-1002-b); `margin` (F-1001-l); the loss alert (F-1003); `cohorts` (F-1004-a); `capacity` (F-1005-a, [contract.analytics-capacity.md](contract.analytics-capacity.md)).** Everything else is not yet — each rule names its row. Tabs built after F-1001-e are written up in [contract.analytics-tabs.md](contract.analytics-tabs.md). The page and its charts are
+(F-1001-b); the export (F-1007-a); insights (F-1001-j); usage per meter and the product kind (F-1001-n); `customers` and the renewal window (F-1001-f); `resellers` (F-1001-h); cost attribution (F-1002-b); `margin` (F-1001-l); the loss alert (F-1003); `cohorts` (F-1004-a); `capacity` (F-1005-a, [contract.analytics-capacity.md](contract.analytics-capacity.md)); scheduled reports (F-1006-a, [contract.analytics-reports.md](contract.analytics-reports.md)).** Everything else is not yet — each rule names its row. Tabs built after F-1001-e are written up in [contract.analytics-tabs.md](contract.analytics-tabs.md). The page and its charts are
 [panel-web/contract.analytics.md](../../interfaces/panel-web/contract.analytics.md).
 A fact that turns out wrong is said in one line and the rule corrected.
 

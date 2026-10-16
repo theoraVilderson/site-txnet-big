@@ -4,10 +4,8 @@ import { ConfigService } from '@nestjs/config';
 
 import { envelopeData } from '../automation/internal-answer';
 import { BrokerService } from '../broker/broker.service';
-import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
-import { RedisService } from '../redis/redis.service';
-import { RealtimePublisher } from '../realtime/realtime.publisher';
-import { EventNoticeSender, type Person } from './event-notice';
+import { type Person } from './event-notice';
+import { HomeNotices } from './home-notices';
 
 /** This consumer's segment of its per-channel markers (ADR-0045, F-067-o). */
 const NOTICE_CONSUMER = 'tenant-subscription-notice';
@@ -132,22 +130,14 @@ const PERSON_NOTICES: Partial<Record<string, { template: string; params: readonl
 @Injectable()
 export class TenantSubscriptionNoticeConsumer implements OnApplicationBootstrap {
   private readonly logger = new Logger(TenantSubscriptionNoticeConsumer.name);
-  private readonly notices: EventNoticeSender;
-
   constructor(
     private readonly broker: BrokerService,
-    redis: RedisService,
-    realtime: RealtimePublisher,
-    config: ConfigService,
-    private readonly crossTenant: CrossTenantPrismaService,
-  ) {
-    this.notices = new EventNoticeSender(redis, realtime, config, broker);
-  }
+    private readonly home: HomeNotices,
+  ) {}
 
-  /** Tells `person` in the tenant they live in; one the users table does not know keeps the event's (F-067-q). */
-  private async tell(eventId: string, person: Person): Promise<void> {
-    const home = await this.crossTenant.user.findUnique({ where: { id: person.userId }, select: { tenantId: true } });
-    await this.notices.send({ consumer: NOTICE_CONSUMER, eventId, person: { ...person, tenantId: home?.tenantId ?? person.tenantId } });
+  /** Tells `person` in the tenant they live in (`HomeNotices`, F-067-q). */
+  private tell(eventId: string, person: Person): Promise<void> {
+    return this.home.send({ consumer: NOTICE_CONSUMER, eventId, person });
   }
 
   async onApplicationBootstrap() {

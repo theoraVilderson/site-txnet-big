@@ -1,7 +1,8 @@
-import { Prisma, UserStatus } from '@prisma/client';
-import { OutboxEventType, findKeyHolders, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { Prisma } from '@prisma/client';
+import { OutboxEventType, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { Day, addDays, dayOf } from './analytics-days';
+import { analyticsStaffOf } from './analytics-staff';
 
 /**
  * "This user costs more than they pay" (F-1003, contract.analytics-tabs.md
@@ -19,8 +20,6 @@ export const LOSS_ALERT_MAX_PERCENT = 500;
 const SHORT_ID = 8;
 /** The days a user's cost and net are summed over, ending today. */
 export const LOSS_WINDOW_DAYS = 30;
-/** The key whose holders are the tenant's staff for this notice: those who read its figures. */
-const ANALYTICS_READ = 'analytics.read';
 
 export type UserFigures = { userId: string; currencyCode: string; net: Prisma.Decimal; cost: Prisma.Decimal };
 
@@ -93,8 +92,7 @@ export async function tellLosses(tx: Prisma.TransactionClient, tenantId: string,
     RETURNING "userId"::text AS "userId"`;
   if (claimed.length === 0) return 0;
 
-  const staff = await findKeyHolders(tx, tenantId, ANALYTICS_READ, { deletedAt: null, status: UserStatus.active });
-  const recipients = [...new Set([...staff, ...(tenant.ownerUserId ? [tenant.ownerUserId] : [])])];
+  const recipients = await analyticsStaffOf(tx, { id: tenantId, ownerUserId: tenant.ownerUserId });
   const ids = claimed.map((c) => c.userId);
   const people = await tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true, username: true } });
   const nameOf = new Map(people.map((p) => [p.id, p.fullName ?? p.username ?? null]));

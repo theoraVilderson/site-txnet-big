@@ -1625,6 +1625,50 @@ model AnalyticsPanelClientsDay {
   @@schema("billing")
 }
 
+/// F-1006-a: how often a scheduled report goes (ADR-0150).
+enum AnalyticsReportFrequency {
+  daily
+  weekly
+  monthly
+
+  @@schema("billing")
+}
+
+/// F-1006-a: the calendar a report's month is cut in — the reader's, as the page's.
+enum AnalyticsReportCalendar {
+  jalali
+  gregorian
+
+  @@schema("billing")
+}
+
+/// F-1006-a: one person's scheduled analytics report (ADR-0150 (3)): the
+/// tenant whose figures, the person it goes to — who made it — when (the
+/// tenant's hour; a weekly one's weekday, 0 = Sunday), the tab its link
+/// opens and its channels. Not derived: a rebuild never touches it.
+/// CHECKs in the migration: a weekday only for weekly, an hour 0–23, a channel.
+model AnalyticsReportSchedule {
+  id         String                   @id @default(uuid()) @db.Uuid
+  tenantId   String                   @db.Uuid
+  userId     String                   @db.Uuid
+  frequency  AnalyticsReportFrequency
+  weekday    Int?                     @db.SmallInt
+  hour       Int                      @db.SmallInt
+  calendar   AnalyticsReportCalendar
+  tab        String
+  bot        Boolean
+  email      Boolean
+  pausedAt   DateTime?
+  nextRunAt  DateTime
+  lastSentAt DateTime?
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @default(now()) @updatedAt
+
+  @@index([tenantId, userId])
+  @@map("analytics_report_schedule")
+  @@schema("billing")
+}
+
 /// F-1001-a: one row per tenant — the zone its rollup days were cut in (a
 /// change rebuilds them), the version read caches are keyed by, the last
 /// refresh, and a whole rebuild in progress.

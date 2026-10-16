@@ -12,6 +12,8 @@ import { BaleOtpSender } from './bale.sender';
 import { SmsOtpSender } from './sms.sender';
 import { TelegramOtpSender } from './telegram.sender';
 import { NOTIFY_TEMPLATES, UserNotifier } from '../../notify/user-notifier';
+import { NoticeMailer } from '../../notify/notice-mail';
+import { withReportFigures } from '../../notify/analytics-notices';
 import { NotificationInboxClient } from '../../notify/notification-inbox.client';
 
 /**
@@ -1073,5 +1075,46 @@ describe('UserNotifier', () => {
     );
     await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'bot', template: 'paymentCredited', params: { amount: '19.80', reference: '900' } }));
     expect(client.sendMessage.mock.calls[0][1]).toContain('19.80');
+  });
+});
+
+/**
+ * A notice by email, and the scheduled report's words (F-1006-a). What goes
+ * wrong quietly: a report to an address nobody proved; a relay failure that
+ * is lost instead of retried; a Persian reader given Gregorian dates and
+ * Latin digits; a change with no sign.
+ */
+describe('UserNotifier by email and the scheduled report (F-1006-a)', () => {
+  const reportNs = { analytics: { report: '{{period}} | {{net}} {{currency}}{{netChange}} | {{orders}}{{ordersChange}}{{linkLine}}', reportTitle: 'Report {{period}}', reportNew: 'new' } };
+  const db = (user: Record<string, unknown>) => ({ user: { findFirst: vi.fn(async () => ({ languagePreference: 'en', ...user })) }, linkedBotAccount: { findMany: vi.fn(async () => []) } });
+  const mailer = (ok = true) => ({ send: vi.fn(async (_to: string, _subject: string, _text: string) => ok) });
+  const params = { from: '2026-10-16', to: '2026-10-22', currencyCode: 'IRT', net: '1500000', netDelta: '0.125', orders: '30', ordersDelta: 'new', buyers: '12', buyersDelta: '', topUps: '0', topUpsDelta: '', link: 'https://panel.example/analytics' };
+
+  it('mails the verified address, the inbox title as its subject', async () => {
+    const m = mailer();
+    const notifier = new UserNotifier(db({ email: 'a@example.com', emailVerifiedAt: new Date() }) as unknown as PrismaService, registry(null), localeService(reportNs), undefined, m as unknown as NoticeMailer);
+    const out = await inTenant(() => notifier.notify({ userId: 'user-1', channel: 'email', template: 'analyticsReport', params }));
+    expect(out).toEqual({ sent: ['email'] });
+    const [to, subject, text] = m.send.mock.calls[0] ?? [];
+    expect(to).toBe('a@example.com');
+    expect(subject).toBe('Report Oct 16, 2026 – Oct 22, 2026');
+    expect(text).toBe('Oct 16, 2026 – Oct 22, 2026 | 1,500,000 IRT (+12.5%) | 30 (new)\n\n👉 The details: https://panel.example/analytics');
+  });
+
+  it('mails nobody at an address not proved, and reaches nobody when the relay refuses it for good', async () => {
+    const m = mailer();
+    const unproved = new UserNotifier(db({ email: 'a@example.com', emailVerifiedAt: null }) as unknown as PrismaService, registry(null), localeService(reportNs), undefined, m as unknown as NoticeMailer);
+    expect(await inTenant(() => unproved.notify({ userId: 'user-1', channel: 'email', template: 'analyticsReport', params }))).toEqual({ sent: [] });
+    expect(m.send).not.toHaveBeenCalled();
+    const refused = new UserNotifier(db({ email: 'a@example.com', emailVerifiedAt: new Date() }) as unknown as PrismaService, registry(null), localeService(reportNs), undefined, mailer(false) as unknown as NoticeMailer);
+    expect(await inTenant(() => refused.notify({ userId: 'user-1', channel: 'email', template: 'analyticsReport', params }))).toEqual({ sent: [] });
+  });
+
+  it("writes a Persian reader's period in the Jalali calendar and Persian digits", () => {
+    const fa = withReportFigures('analyticsReport', params, 'fa', reportNs);
+    expect(fa.period).toContain('۱۴۰۵');
+    expect(fa.net).toBe('۱٬۵۰۰٬۰۰۰');
+    expect(fa.netChange).toContain('٪');
+    expect(withReportFigures('paymentCredited', params, 'fa', reportNs)).toBe(params);
   });
 });

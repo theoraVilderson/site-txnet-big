@@ -433,6 +433,13 @@
     "userLoss": "📉 هزینهٔ {{name}} در ۳۰ روز گذشته از پرداختش بیشتر بوده: پرداخت {{net}} {{currencyCode}}، هزینه {{cost}} {{currencyCode}} (بیش از حد {{percent}}٪ شما). جزئیات در تب «سود» تحلیل‌ها است.",
     "userLossTitle": "کاربری بیش از پرداختش هزینه دارد",
     "userLossMany": "📉 هزینهٔ {{count}} کاربر در ۳۰ روز گذشته از پرداختشان بیشتر بوده. فهرستشان در تب «سود» تحلیل‌ها است.",
-    "userLossManyTitle": "{{count}} کاربر بیش از پرداختشان هزینه دارند"
+    "userLossManyTitle": "{{count}} کاربر بیش از پرداختشان هزینه دارند",
+    "report": "📊 گزارش شما: {{period}}\n\n💰 فروش خالص: {{net}} {{currency}}{{netChange}}\n🧾 سفارش‌ها: {{orders}}{{ordersChange}}\n👥 خریداران: {{buyers}}{{buyersChange}}\n💳 شارژ کیف پول: {{topUps}} {{currency}}{{topUpsChange}}{{linkLine}}",
+    "reportTitle": "گزارش تحلیل‌های شما: {{period}}",
+    "reportNew": "تازه",
+    "reportPeriod": "{{from}} تا {{to}}",
+    "reportLink": "👉 جزئیات: {{link}}",
+    "reportMany": "📊 {{count}} گزارش زمان‌بندی‌شدهٔ شما آماده است. عددها در تحلیل‌ها هستند.",
+    "reportManyTitle": "{{count}} گزارش تحلیل"
   }
 }
