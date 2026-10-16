@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { type AnalyticsCustomers, type RenewalFigures } from "@/lib/billing/analytics";
+import { type AnalyticsCustomers, RENEWAL_WINDOW_DAYS, type RenewalFigures } from "@/lib/billing/analytics";
 import { formatMoney } from "../../_lib/money";
 import { Card, CardHeader, DataTable, type DataColumn } from "../../_components/kit";
 import { BarList, ChartCard, Meter, StatTile, TrendChart, useChartFormat } from "../../_components/kit/charts";
 import { amountIn } from "../_lib/overview";
 import { BuyersCard } from "./BuyersCard";
-import { RenewalWindowSetting } from "./RenewalWindowSetting";
+import { AnalyticsSettingField } from "./AnalyticsSettingField";
 
 const K = FrontendI18nKeys.common.analytics;
 const C = K.customers;
@@ -80,7 +80,21 @@ export function CustomersTab({ customers, x, currency, productName, userHref, se
       {customers && (
         <p className="text-xs text-text-secondary">{t("common", C.window.current, { days: fmt.full(customers.renewalWindowDays) })}</p>
       )}
-      {customers && setting && <RenewalWindowSetting tenantId={setting.tenantId} current={customers.renewalWindowDays} onSaved={setting.onSaved} />}
+      {customers && setting && (
+        <AnalyticsSettingField
+          tenantId={setting.tenantId}
+          field="renewalWindowDays"
+          current={customers.renewalWindowDays}
+          bounds={RENEWAL_WINDOW_DAYS}
+          words={{
+            label: t("common", K.customers.window.label),
+            hint: t("common", K.customers.window.hint, { min: RENEWAL_WINDOW_DAYS.min, max: RENEWAL_WINDOW_DAYS.max }),
+            save: t("common", K.customers.window.save),
+            saved: (days) => t("common", K.customers.window.saved, { days }),
+          }}
+          onSaved={setting.onSaved}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <BuyersCard x={x} fresh={customers?.buyers.newBuyers ?? []} returning={customers?.buyers.returningBuyers ?? []} loading={!customers} stale={stale} />

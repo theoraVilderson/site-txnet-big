@@ -140,7 +140,12 @@ again. `20261016000200_analytics_customers` (F-1001-f) added `_grant_end`
 from `identity.user` as `unknown`) and `analytics_setting` (CHECK 1..30, none =
 7), and flagged every tenant again. `20261016000400_analytics_cost_day`
 (F-1002-b) added `_cost_day` (enum `AnalyticsCostKind`, cost to six places)
-and flagged them again. Written only by the rollup,
+and flagged them again; `20261016000500_analytics_cost_in_sale_currency`
+(F-1001-l, ADR-0149) its `saleCurrencyCode` / `saleCost` (null = no rate), and
+flagged them again. `20261016000600_analytics_loss_alert` (F-1003) added
+`analytics_setting.lossAlertPercent` (CHECK 0..500, default 20) and
+`analytics_loss_alert` (key tenant · user · month) — the claim that tells a
+loss once a month: **not** derived, never deleted by a rebuild. The rest is written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

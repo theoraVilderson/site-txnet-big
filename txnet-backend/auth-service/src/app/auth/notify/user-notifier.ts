@@ -6,8 +6,7 @@ import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
 import { noticeButton } from './notice-buttons';
 import { withCurrencyName } from './notice-currency';
-import { PANEL_NOTIFY_TEMPLATES, PANEL_TEMPLATE_TEXT } from './panel-notices';
-import { TRANSFER_NOTIFY_TEMPLATES, TRANSFER_TEMPLATE_TEXT } from './transfer-notices';
+import { GROUP_NOTIFY_TEMPLATES, GROUP_TEMPLATE_TEXT } from './notice-groups';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
 
@@ -32,8 +31,7 @@ export const NOTIFY_TEMPLATES = [
   'lotteryWon',
   'lotteryOpened',
   'lotteryOpenedAutomatic',
-  ...PANEL_NOTIFY_TEMPLATES,
-  ...TRANSFER_NOTIFY_TEMPLATES,
+  ...GROUP_NOTIFY_TEMPLATES,
   'purchaseDelivered',
   'purchaseRefunded',
   'purchaseDelayed',
@@ -160,6 +158,7 @@ export type NotificationsNamespace = {
   engagement?: Texts;
   support?: Texts;
   access?: Texts;
+  analytics?: Texts;
 };
 type Text = { read: (ns: NotificationsNamespace | undefined) => string | undefined; fallback: string };
 export type Notice = Text & { inbox: Text };
@@ -406,8 +405,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
       inbox: { read: (ns) => ns?.resellerQuota?.digestManyTitle, fallback: '{{count}} quota notices' },
     },
   },
-  ...PANEL_TEMPLATE_TEXT,
-  ...TRANSFER_TEMPLATE_TEXT,
+  ...GROUP_TEMPLATE_TEXT,
   // F-111-d: a paid Grant was delivered, or could not be and was refunded in full.
   purchaseDelivered: {
     read: (ns) => ns?.purchase?.delivered,

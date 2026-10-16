@@ -210,7 +210,7 @@ filter already draws only when `names.panels` has one.
 - **Customers** (F-1001-g): new vs returning, the signup → first-purchase
   funnel, renewal by product, top customers (a reseller's own only); the
   renewal window setting (1–30 days, default 7) sits here for `tenant.manage`.
-  **As built (`CustomersTab`, `RenewalWindowSetting`, `_lib/customers.ts`).**
+  **As built (`CustomersTab`, `AnalyticsSettingField` — shared with Profit's percent since F-1003 — `_lib/customers.ts`).**
   Tiles: renewal rate (`Meter`, renewed · lapsed · still open under it), signups,
   bought within 7 and 30 days; signups per bucket and by source (a bot platform
   by its name); a top customer opens their user page. The window is always said;

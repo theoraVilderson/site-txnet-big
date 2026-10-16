@@ -5,13 +5,14 @@ import Link from "next/link";
 import { TrendingDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import type { AnalyticsMargin, MarginCell } from "@/lib/billing/analytics";
+import { type AnalyticsMargin, LOSS_ALERT_PERCENT, type MarginCell } from "@/lib/billing/analytics";
 import { PANEL_SYSTEMS } from "@/lib/routes";
 import { formatList } from "../../_lib/digits";
 import { formatMoney } from "../../_lib/money";
 import { Alert, Badge, Card, CardHeader, DataTable, type DataColumn } from "../../_components/kit";
 import { BarList, ChartCard, StatTile, TrendChart, slotColor, useChartFormat } from "../../_components/kit/charts";
 import { amountIn } from "../_lib/overview";
+import { AnalyticsSettingField } from "./AnalyticsSettingField";
 
 const K = FrontendI18nKeys.common.analytics;
 const P = K.profit;
@@ -30,6 +31,8 @@ export interface ProfitTabProps {
   panelName: (id: string | null) => string | null;
   /** Where a user's page is, for the losing users' list. */
   userHref: (userId: string) => string;
+  /** The loss alert's form (F-1003), for the settings key's holders; null hides it. */
+  setting: { tenantId: string; onSaved: () => void } | null;
   stale: boolean;
 }
 
@@ -39,9 +42,10 @@ export interface ProfitTabProps {
  * cost over time and where the cost went; then margin per product, panel and
  * losing user, and on the platform's own view per reseller. A loss says so in
  * a word beside its colour (chart rule 4); a panel with no cost set is named,
- * with the way to set it, so its perfect margin is not believed.
+ * with the way to set it, so its perfect margin is not believed. The settings
+ * key's holders set the percent past which a user is reported (F-1003).
  */
-export function ProfitTab({ margin, x, currency, productName, panelName, userHref, stale }: ProfitTabProps) {
+export function ProfitTab({ margin, x, currency, productName, panelName, userHref, setting, stale }: ProfitTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const state = margin ? "ready" : "loading";
@@ -140,6 +144,21 @@ export function ProfitTab({ margin, x, currency, productName, panelName, userHre
         <>
           <MarginTable title={t("common", P.products)} rows={margin.products} currency={currency} nameOf={(id) => productName(id) ?? t("common", K.byProduct.unnamed)} />
           {margin.panels.length > 0 && <MarginTable title={t("common", P.panels)} rows={margin.panels} currency={currency} nameOf={(id) => panelName(id) ?? t("common", K.catalog.unnamedPanel)} />}
+          {setting && (
+            <AnalyticsSettingField
+              tenantId={setting.tenantId}
+              field="lossAlertPercent"
+              current={margin.lossAlertPercent}
+              bounds={LOSS_ALERT_PERCENT}
+              words={{
+                label: t("common", P.lossAlert.label),
+                hint: t("common", P.lossAlert.hint, { min: LOSS_ALERT_PERCENT.min, max: LOSS_ALERT_PERCENT.max }),
+                save: t("common", P.lossAlert.save),
+                saved: (percent) => t("common", P.lossAlert.saved, { percent }),
+              }}
+              onSaved={setting.onSaved}
+            />
+          )}
           {margin.users && (
             <MarginTable title={t("common", P.users)} subtitle={t("common", P.usersSubtitle)} rows={margin.users} currency={currency} nameOf={(id) => margin.users?.find((u) => u.id === id)?.name ?? t("common", P.unnamedUser)} hrefOf={userHref} />
           )}

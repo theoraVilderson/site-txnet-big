@@ -1537,10 +1537,28 @@ model AnalyticsSetting {
   tenantId          String   @id @db.Uuid
   /// Days before or after a term's end a renewal counts in, 1..30 (CHECK in the migration).
   renewalWindowDays Int
+  /// F-1003 (ADR-0149 (4)): a user is reported when their 30-day cost passes their net by more than this percent, 0..500 (CHECK).
+  lossAlertPercent  Int      @default(20)
   updatedByUserId   String?  @db.Uuid
   updatedAt         DateTime @updatedAt
 
   @@map("analytics_setting")
+  @@schema("billing")
+}
+
+/// F-1003: a user reported as costing more than they pay, once per tenant
+/// month (`month` = its first day); the claim that keeps a second run silent.
+model AnalyticsLossAlert {
+  tenantId     String   @db.Uuid
+  userId       String   @db.Uuid
+  month        DateTime @db.Date
+  net          Decimal  @db.Decimal(18, 2)
+  cost         Decimal  @db.Decimal(18, 2)
+  currencyCode String
+  createdAt    DateTime @default(now())
+
+  @@id([tenantId, userId, month])
+  @@map("analytics_loss_alert")
   @@schema("billing")
 }
 

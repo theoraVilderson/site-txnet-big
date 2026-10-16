@@ -6812,7 +6812,13 @@
         "body": "Their margin counts no cost: {{panels}}",
         "action": "Set panel costs"
       },
-      "empty": "Nothing was sold or spent in this period."
+      "empty": "Nothing was sold or spent in this period.",
+      "lossAlert": {
+        "label": "Report a user when their cost passes what they paid by (%)",
+        "hint": "{{min}}–{{max}}. Checked daily over the last 30 days; each user is reported once a month to you and your staff.",
+        "save": "Save",
+        "saved": "Saved: users are reported past {{percent}}%."
+      }
     }
   }
 }

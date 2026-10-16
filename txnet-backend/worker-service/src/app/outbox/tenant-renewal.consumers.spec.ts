@@ -120,6 +120,13 @@ describe("TenantSubscriptionNoticeConsumer — the person's own tenant (F-067-q)
     expect(person()).toMatchObject({ tenantId: TENANT, userId: ADMIN, template: 'transferProofSent', params: { paymentId: 'p-1', amount: '12500000', currencyCode: 'IRR' } });
   });
 
+  it('tells each of the staff about a user who costs more than they pay, with the figures to say it (F-1003)', async () => {
+    const { consumer, person } = build({ [ADMIN]: TENANT });
+    const payload = { userId: ADMIN, lossUserId: 'u-1', name: 'Sara', net: '100.00', cost: '130.50', currencyCode: 'IRT', percent: '20' };
+    await consumer.handle(event(OutboxEventType.ANALYTICS_USER_LOSS, payload));
+    expect(person()).toMatchObject({ tenantId: TENANT, userId: ADMIN, template: 'analyticsUserLoss', params: { name: 'Sara', net: '100.00', cost: '130.50', currencyCode: 'IRT', percent: '20' } });
+  });
+
   it("keeps the event's tenant for an owner who lives in the reseller itself", async () => {
     const { consumer, person } = build({ [OWNER]: TENANT });
     await consumer.handle(event(OutboxEventType.TENANT_WHOLESALE_UNFUNDED));

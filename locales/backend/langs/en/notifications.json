@@ -428,5 +428,11 @@
     "seatRestoredTitle": "Back on the team",
     "many": "🔑 Your access changed {{count}} times. The panel shows what you can do now.",
     "manyTitle": "Your access changed"
+  },
+  "analytics": {
+    "userLoss": "📉 {{name}} cost more than they paid in the last 30 days: paid {{net}} {{currencyCode}}, cost {{cost}} {{currencyCode}} (over your {{percent}}% limit). The Profit tab of your analytics has the details.",
+    "userLossTitle": "A user costs more than they pay",
+    "userLossMany": "📉 {{count}} users cost more than they paid in the last 30 days. The Profit tab of your analytics lists them.",
+    "userLossManyTitle": "{{count}} users cost more than they pay"
   }
 }

@@ -9,7 +9,7 @@ import { RefusalStatus, refusalException } from '../request/refusal-exception';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { LocaleService } from '../locale/locale.service';
 import { AnalyticsExportService, AnalyticsRebuilding } from './analytics-export.service';
-import { RenewalWindowBody, renewalWindowSchema } from './analytics-settings';
+import { AnalyticsSettingsBody, analyticsSettingsSchema } from './analytics-settings';
 import { AnalyticsSettingsService } from './analytics-settings.service';
 import { AnalyticsAnswer, AnalyticsRefused, AnalyticsService } from './analytics.service';
 import { AnalyticsRequest, AnalyticsTab, analyticsRequestSchema } from './analytics.schema';
@@ -90,13 +90,13 @@ export class AnalyticsController {
     return this.read(req, res, tenantId, 'margin', q);
   }
 
-  /** The renewal window, 1..30 days (F-1001-f) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
+  /** The renewal window, 1..30 days (F-1001-f), and the loss alert's percent, 0..500 (F-1003) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
   @Put('settings')
   @RateLimit(READ)
-  async setSettings(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(renewalWindowSchema)) body: RenewalWindowBody, @Req() req: Request) {
+  async setSettings(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(analyticsSettingsSchema)) body: AnalyticsSettingsBody, @Req() req: Request) {
     const { userId, tenantId: sessionTenantId, permissions } = identityOf(req);
     try {
-      return await this.settings.setRenewalWindow({ userId, tenantId: sessionTenantId, permissions }, tenantId, body);
+      return await this.settings.setSettings({ userId, tenantId: sessionTenantId, permissions }, tenantId, body);
     } catch (e) {
       if (!(e instanceof AnalyticsRefused)) throw e;
       throw refusalException(STATUS[e.reason], { reason: e.reason, message: e.message });

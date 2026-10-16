@@ -8,13 +8,14 @@ export type AnalyticsViewOf = { tenantId?: string; self?: boolean };
 type Session = { permissions: readonly string[]; tenant: { type: TenantType } } | null;
 
 /**
- * Whether the reader may change the renewal window — billing's door for it
+ * Whether the reader may change the analytics settings — the renewal window
+ * and the loss alert's percent — billing's door for them
  * (`AnalyticsSettingsService`): a reseller's owner on its own workspace, the
  * platform's staff with `platform.tenant.manage` (on a reseller, or on the
  * platform's own tenant), and on a reseller's own tenant its `settings.manage`
  * holders. The form is hidden from the rest; billing still decides.
  */
-export function renewalWindowEditable(me: Session, view: AnalyticsViewOf): boolean {
+export function settingsEditable(me: Session, view: AnalyticsViewOf): boolean {
   if (!me) return false;
   if (view.tenantId) return view.self === true || holdsPermission(me.permissions, "platform.tenant.manage");
   return holdsPermission(me.permissions, isPlatformTenant(me.tenant.type) ? "platform.tenant.manage" : "settings.manage");

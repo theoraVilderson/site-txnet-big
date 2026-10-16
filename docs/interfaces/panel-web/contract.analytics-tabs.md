@@ -38,3 +38,8 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
 5. **Live:** the platform's own view re-reads on any reseller's
    `billing.analytics.reseller_refreshed` too, as the Resellers tab does — its
    per-reseller block moves with every reseller's pass (`READS_EVERY_RESELLER`).
+6. **The loss alert's percent** (F-1003): beside the losing users, the
+   settings key's holders (`settingsEditable`, the renewal window's door) set
+   the percent past which a user is reported, 0–500, in `AnalyticsSettingField`
+   — the one form both settings use; billing answers the current one as
+   `lossAlertPercent`, and a change re-reads the tab.

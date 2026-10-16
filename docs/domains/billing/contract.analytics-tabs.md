@@ -44,7 +44,8 @@ Rules, each a decision:
    the window; pending until then. `panelId` is the Grant's first config's, so
    the panel filter narrows renewal as it does sales.
 3. **The window re-states, never rebuilds.** `renewedOn` is kept for every
-   window up to 30, so `PUT …/analytics/settings` `{renewalWindowDays}` (1..30)
+   window up to 30, so `PUT …/analytics/settings` `{renewalWindowDays}` (1..30;
+   beside or instead of F-1003's `lossAlertPercent`, a write naming neither refused)
    re-states every term in one `UPDATE` under the rollup's lock, bumps the
    version and writes `billing.analytics.refreshed` when a state moved. Its
    door is `settings.manage` (the split of `tenant.manage`, ADR-0144) or
@@ -142,6 +143,7 @@ user); cost is `saleCost`, else `cost` in its own currency. It answers:
 | `users` | the 20 deepest losses, each with its `name` (F-1001-m; a label, as `topCustomers`'); `null` to the platform's staff on a reseller |
 | `resellers` | the platform's own only: each reseller's payments to it (`net`) against its users' share of the platform's panels (`cost`), with `name` |
 | `noCostPanels` | the platform's own only: its panels with a sale or a service in the window and no monthly cost on or before its end |
+| `lossAlertPercent` | the tenant's threshold for the loss alert (F-1003, below), for the form beside the users |
 
 1. **A tenant's margin is its own.** Totals and lists count the cost of its
    own Grants and idle panels; on the platform, serving a reseller's users is
@@ -157,3 +159,32 @@ user); cost is `saleCost`, else `cost` in its own currency. It answers:
    `resellers` are whole-reseller totals (ADR-0104 (2)); on the platform's own
    tenant the tab reads across tenants and is cached by the summed version, as
    `resellers` is.
+
+## Loss alert (F-1003)
+
+"This user costs more than they pay" (`analytics-loss.ts`, run by
+`analytics-loss.service.ts`): `POST /api/internal/billing/analytics/loss-alerts`
+(`ServiceOnlyGuard`; answers `tenants`, `told`, `failed`), called daily by
+worker-service's `analytics_loss_alert`.
+
+1. **The rule** (ADR-0149 (4)): over the last 30 tenant days, a user's own
+   cost (`saleCost`, the operating currency only — an unconverted cost is
+   never weighed) passed their net by more than the tenant's
+   `lossAlertPercent` (0..500, default 20; `analytics_setting`). Exactly at it
+   is not past it; a user who paid nothing and cost something always is.
+2. **Once a tenant month.** A claim (`analytics_loss_alert`, tenant · user ·
+   the month's first day, with the figures told) is inserted first; only a new
+   claim tells anyone, so a second run, a redelivered tick or a later day of
+   the same month is silent.
+3. **The staff** are every active holder of `analytics.read` in the tenant and
+   its owner: one `billing.analytics.user_loss` each — `{tenantId, userId (the
+   one told), lossUserId, name, net, cost, currencyCode, percent}`, money as
+   decimal strings — on the bot and in the panel inbox, `analyticsUserLoss`
+   (auth-api). `name` is the user's name or username, else `#` and their id's
+   first 8 characters.
+4. **Each tenant alone.** Every tenant with a finished rollup, in its own scope
+   and transaction; one failing is logged and counted in `failed`, never
+   stopping the rest.
+5. **The percent is a figure readers see** (`margin` answers it): a write that
+   changes it bumps the rollup version and writes `billing.analytics.refreshed`,
+   as a changed renewal window does.

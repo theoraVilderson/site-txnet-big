@@ -29,6 +29,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { RETENTION_NOTICES } from '../outbox/retention-notices';
+import { TENANT_NOTICE_TYPES } from '../outbox/tenant-notice-types';
 
 /** What a consumer is handed. `key` is the `<key>` of `automation.tick.<key>`. */
 export interface TickMessage {
@@ -341,23 +342,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
       durable: true,
       arguments: { 'x-dead-letter-exchange': this.deadExchange },
     });
-    // F-118-w: a reseller at zero told its platform-panel users are cut — the same owner, the same line.
-    // F-019-v8: its quotas — 80%, 100%, stopped, and the daily digest — the same owner again.
-    for (const type of [
-      OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE,
-      OutboxEventType.TENANT_SUBSCRIPTION_SUSPENDED,
-      OutboxEventType.TENANT_WHOLESALE_UNFUNDED,
-      OutboxEventType.TENANT_QUOTA_ALERT,
-      OutboxEventType.TENANT_QUOTA_DIGEST,
-      // F-117-d: the platform's staff entered in an emergency, without consent — the same owner, at entry.
-      OutboxEventType.TENANT_EMERGENCY_ENTRY,
-      // RT-1-e2: a custom domain live, failed its window, or lost its record — the same owner.
-      OutboxEventType.TENANT_DOMAIN_NOTICE,
-      // F-707-e, F-707-m, F-805-b: a person notice — to each wheel admin, a winner, each person who may confirm a transfer.
-      OutboxEventType.TENANT_WHEEL_CAP_NEARING,
-      OutboxEventType.LOTTERY_WON,
-      OutboxEventType.TRANSFER_PROOF_SENT,
-    ]) {
+    for (const type of TENANT_NOTICE_TYPES) {
       await this.channel.bindQueue(this.tenantSubscriptionNoticeQueue, this.exchange, outboxRoutingKey(type));
     }
     // F-707-q: a published lottery told to its whole group — its own queue, so a fan-out of

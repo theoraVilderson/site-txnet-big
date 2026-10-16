@@ -4,6 +4,7 @@ import { CrossTenantReader, TabContext } from './analytics-context';
 import { Amounts, FEWER_THAN, MoneyKpi, amountsOf, byCurrency, currenciesOf, hiddenKeys, moneyKpi } from './analytics-figures';
 import { MarginCell, MoneyRow, marginCellOf, marginCellsOf } from './analytics-margin-cells';
 import { AnalyticsFilters, DayMap, Window, bucketJoin, in_, productPanel, readBuyers } from './analytics-read';
+import { settingsOf } from './analytics-settings';
 
 /** The users listed: this many deepest losses (C-28). */
 export const LOSING_USERS_SHOWN = 20;
@@ -26,6 +27,8 @@ export type MarginTab = {
   resellers: ResellerMargin[] | null;
   /** The platform's own only: panels in use in the window with no monthly cost set — their margin is not a margin. */
   noCostPanels: string[] | null;
+  /** The tenant's loss alert threshold (F-1003), for the form beside the users. */
+  lossAlertPercent: number;
 };
 
 /** The tenant's own cost: its own Grants' and its idle panels', never the cost of serving a reseller (that is `resellers`). */
@@ -176,5 +179,6 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
       ? marginCellsOf(reseller.paid, reseller.served, how).map((cell) => ({ ...cell, name: reseller.nameOf.get(cell.id ?? '') ?? cell.id ?? '' }))
       : null,
     noCostPanels: c.platform ? await noCostPanels(c.tx, c.window) : null,
+    lossAlertPercent: (await settingsOf(c.tx)).lossAlertPercent,
   };
 }

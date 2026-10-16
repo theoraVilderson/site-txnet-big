@@ -175,6 +175,8 @@ export interface AnalyticsMargin {
   resellers: (MarginCell & { name: string })[] | null;
   /** The platform's own only: its panels in use with no monthly cost set. */
   noCostPanels: string[] | null;
+  /** The tenant's loss alert threshold (F-1003). */
+  lossAlertPercent: number;
 }
 
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
@@ -265,10 +267,19 @@ export function exportAnalytics(tenantId: string, tab: AnalyticsTab, q: Analytic
   return call<ApiFile>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}&format=${format}`);
 }
 
-/** The renewal window's bounds — billing's `renewalWindowSchema` (F-1001-f). */
+/** The renewal window's bounds — billing's `analyticsSettingsSchema` (F-1001-f). */
 export const RENEWAL_WINDOW_DAYS = { min: 1, max: 30 } as const;
+/** The loss alert's percent bounds — billing's `analyticsSettingsSchema` (F-1003). */
+export const LOSS_ALERT_PERCENT = { min: 0, max: 500 } as const;
 
-/** `PUT …/analytics/settings`: the tenant's renewal window. Billing's door is the settings key, not `analytics.read`. */
-export function setAnalyticsSettings(tenantId: string, body: { renewalWindowDays: number }): Promise<{ renewalWindowDays: number }> {
-  return call<{ renewalWindowDays: number }>(`/tenants/${encodeURIComponent(tenantId)}/analytics/settings`, { method: "PUT", body: JSON.stringify(body) });
+/** A tenant's analytics settings: the renewal window and the loss alert's percent. */
+export interface AnalyticsSettings {
+  renewalWindowDays: number;
+  lossAlertPercent: number;
+}
+export type AnalyticsSettingKey = keyof AnalyticsSettings;
+
+/** `PUT …/analytics/settings`: either setting, or both. Billing's door is the settings key, not `analytics.read`. */
+export function setAnalyticsSettings(tenantId: string, body: Partial<AnalyticsSettings>): Promise<AnalyticsSettings> {
+  return call<AnalyticsSettings>(`/tenants/${encodeURIComponent(tenantId)}/analytics/settings`, { method: "PUT", body: JSON.stringify(body) });
 }

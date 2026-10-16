@@ -18,7 +18,7 @@ import { Prisma } from '@prisma/client';
 
 import { contextOf } from './analytics-context';
 import { customersOf, renewalOf } from './analytics-customers';
-import { RENEWAL_WINDOW_DEFAULT_DAYS, renewalWindowSchema } from './analytics-settings';
+import { RENEWAL_WINDOW_DEFAULT_DAYS, analyticsSettingsSchema } from './analytics-settings';
 import { analyticsQuerySchema } from './analytics.schema';
 
 const PRODUCT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -65,9 +65,9 @@ describe('renewalOf', () => {
 
 describe('the renewal window setting', () => {
   it('takes a whole number of days from 1 to 30', () => {
-    expect(renewalWindowSchema.safeParse({ renewalWindowDays: 1 }).success).toBe(true);
-    expect(renewalWindowSchema.safeParse({ renewalWindowDays: 30 }).success).toBe(true);
-    for (const days of [0, 31, 7.5, '7']) expect(renewalWindowSchema.safeParse({ renewalWindowDays: days }).success).toBe(false);
+    expect(analyticsSettingsSchema.safeParse({ renewalWindowDays: 1 }).success).toBe(true);
+    expect(analyticsSettingsSchema.safeParse({ renewalWindowDays: 30 }).success).toBe(true);
+    for (const days of [0, 31, 7.5, '7']) expect(analyticsSettingsSchema.safeParse({ renewalWindowDays: days }).success).toBe(false);
   });
 });
 

@@ -16,7 +16,7 @@ import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
-import { customerHrefOf, renewalWindowEditable } from "../_lib/customers";
+import { customerHrefOf, settingsEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
 import { resellersVisible } from "../_lib/resellers";
 import { currencyOf, productNamer } from "../_lib/overview";
@@ -97,6 +97,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   };
   const onChange = (next: Partial<AnalyticsFilters>) => router.replace(hrefOf({ ...filters, ...next }), { scroll: false });
 
+  // The settings key's holders may change what the figures are judged by (billing's door decides).
+  const setting = tenantId && settingsEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null;
   const ready = answer && !answer.rebuilding ? answer : null;
   // The hook keeps the last answer while the next loads: one for another tab is no figure of this one.
   const body = ready?.tab === filters.tab ? ready : null;
@@ -151,7 +153,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           currency={currency ?? ""}
           productName={productName}
           userHref={customerHrefOf({ tenantId: pathTenant, self })}
-          setting={tenantId && renewalWindowEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null}
+          setting={setting}
           stale={stale}
         />
       ) : filters.tab === "margin" ? (
@@ -162,6 +164,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           productName={productName}
           panelName={panelName}
           userHref={customerHrefOf({ tenantId: pathTenant, self })}
+          setting={setting}
           stale={stale}
         />
       ) : filters.tab === "resellers" ? (

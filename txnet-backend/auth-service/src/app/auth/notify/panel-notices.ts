@@ -3,8 +3,8 @@ import type { Notice } from './user-notifier';
 /**
  * The notices about a panel, told to its owner (F-067-o, F-027-el, F-027-fg):
  * a connection test's verdict, a confirmed change of its health, and a halting
- * drift event. Read at `notifications.panel.*`; `user-notifier.ts` spreads
- * them into its templates.
+ * drift event. Read at `notifications.panel.*`; `notice-groups.ts` joins
+ * them to the templates.
  */
 export const PANEL_NOTIFY_TEMPLATES = [
   'panelAccepted',

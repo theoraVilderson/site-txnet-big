@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "@/context/LocaleContext";
 import { type AnalyticsCustomers, setAnalyticsSettings } from "@/lib/billing/analytics";
 import { CustomersTab } from "./_components/CustomersTab";
-import { renewalWindowEditable } from "./_lib/customers";
+import { settingsEditable } from "./_lib/customers";
 
 /**
  * The Customers tab (F-1001-g, panel-web `contract.analytics.md` "Other tabs";
@@ -107,16 +107,16 @@ describe("CustomersTab", () => {
   });
 });
 
-describe("renewalWindowEditable", () => {
+describe("settingsEditable", () => {
   const me = (permissions: string[], type: "platform_owner" | "reseller" = "reseller") => ({ permissions, tenant: { type } });
 
   it("is billing's door: settings.manage on a reseller, platform.tenant.manage on the platform or a reseller's workspace, and a reseller's owner on its own", () => {
-    expect(renewalWindowEditable(me(["settings.manage"]), {})).toBe(true);
-    expect(renewalWindowEditable(me(["analytics.read"]), {})).toBe(false);
-    expect(renewalWindowEditable(me(["settings.manage"], "platform_owner"), {})).toBe(false);
-    expect(renewalWindowEditable(me(["platform.tenant.manage"], "platform_owner"), {})).toBe(true);
-    expect(renewalWindowEditable(me([], "platform_owner"), { tenantId: TENANT, self: true })).toBe(true);
-    expect(renewalWindowEditable(me(["platform.report.read"], "platform_owner"), { tenantId: TENANT })).toBe(false);
-    expect(renewalWindowEditable(null, {})).toBe(false);
+    expect(settingsEditable(me(["settings.manage"]), {})).toBe(true);
+    expect(settingsEditable(me(["analytics.read"]), {})).toBe(false);
+    expect(settingsEditable(me(["settings.manage"], "platform_owner"), {})).toBe(false);
+    expect(settingsEditable(me(["platform.tenant.manage"], "platform_owner"), {})).toBe(true);
+    expect(settingsEditable(me([], "platform_owner"), { tenantId: TENANT, self: true })).toBe(true);
+    expect(settingsEditable(me(["platform.report.read"], "platform_owner"), { tenantId: TENANT })).toBe(false);
+    expect(settingsEditable(null, {})).toBe(false);
   });
 });

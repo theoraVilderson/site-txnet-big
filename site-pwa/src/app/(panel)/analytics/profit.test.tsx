@@ -1,9 +1,9 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "@/context/LocaleContext";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { type AnalyticsMargin, FEWER_THAN_5, readAnalytics } from "@/lib/billing/analytics";
+import { type AnalyticsMargin, FEWER_THAN_5, readAnalytics, setAnalyticsSettings } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AnalyticsView } from "./_components/AnalyticsView";
@@ -33,7 +33,7 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useLiveReread", () => ({ useLiveReread: vi.fn() }));
 vi.mock("../_components/kit/DatePicker", () => ({ DatePicker: () => null }));
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
-vi.mock("@/lib/billing/analytics", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/analytics")>()), readAnalytics: vi.fn() }));
+vi.mock("@/lib/billing/analytics", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/analytics")>()), readAnalytics: vi.fn(), setAnalyticsSettings: vi.fn() }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/catalog-api")>()), catalogApi: { texts: vi.fn() } }));
 
 const PLATFORM = "11111111-1111-4111-8111-111111111111";
@@ -56,6 +56,7 @@ const margin: AnalyticsMargin = {
   users: [{ ...cell(USER, "1.00", "9.00", "-8.00", -8, true), name: "Sara" }],
   resellers: null,
   noCostPanels: [PANEL],
+  lossAlertPercent: 20,
 };
 
 const head = {
@@ -69,7 +70,7 @@ const head = {
   names: { products: [{ id: "p1", nameKey: "catalog.p1" }], panels: [{ id: PANEL, name: "Frankfurt" }], meters: [], kinds: [] },
 };
 
-const draw = (body: Partial<AnalyticsMargin> = {}) =>
+const draw = (body: Partial<AnalyticsMargin> = {}, setting: { tenantId: string; onSaved: () => void } | null = null) =>
   render(
     <ProfitTab
       margin={{ ...margin, ...body }}
@@ -78,6 +79,7 @@ const draw = (body: Partial<AnalyticsMargin> = {}) =>
       productName={(id) => (id === "p1" ? "Gold plan" : null)}
       panelName={(id) => (id === PANEL ? "Frankfurt" : null)}
       userHref={(id) => `/users/${id}`}
+      setting={setting}
       stale={false}
     />,
   );
@@ -117,6 +119,27 @@ describe("ProfitTab", () => {
     expect(screen.getAllByRole("link", { name: "Sara" })[0].getAttribute("href")).toBe(`/users/${USER}`);
     draw({ users: null, noCostPanels: null });
     expect(screen.getAllByRole("table", { name: "analytics.profit.users" })).toHaveLength(1);
+  });
+});
+
+describe("the loss alert's percent (F-1003)", () => {
+  it("saves a whole percent from 0 to 500 for the settings key's holders, and refuses one outside it before asking", async () => {
+    vi.mocked(setAnalyticsSettings).mockResolvedValue({ renewalWindowDays: 7, lossAlertPercent: 35 });
+    const onSaved = vi.fn();
+    draw({}, { tenantId: PLATFORM, onSaved });
+    const input = screen.getByLabelText("analytics.profit.lossAlert.label") as HTMLInputElement;
+    const save = screen.getByRole("button", { name: "analytics.profit.lossAlert.save" });
+    fireEvent.change(input, { target: { value: "501" } });
+    expect((save as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(input, { target: { value: "35" } });
+    fireEvent.click(save);
+    await waitFor(() => expect(setAnalyticsSettings).toHaveBeenCalledWith(PLATFORM, { lossAlertPercent: 35 }));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it("draws no form for whom may not change it", () => {
+    draw();
+    expect(screen.queryByLabelText("analytics.profit.lossAlert.label")).toBeNull();
   });
 });
 

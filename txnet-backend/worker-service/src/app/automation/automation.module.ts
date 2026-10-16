@@ -16,6 +16,7 @@ import { GrantPurgeJob } from '../jobs/grant-purge.job';
 import { GrantBulkJobDrainJob } from '../jobs/grant-bulk-job.job';
 import { GrantUnusedNoticeJob } from '../jobs/grant-unused-notice.job';
 import { AnalyticsRollupJob } from '../jobs/analytics-rollup.job';
+import { AnalyticsLossAlertJob } from '../jobs/analytics-loss-alert.job';
 import { GrantEndNoticeJob } from '../jobs/grant-end-notice.job';
 import { GrantIdleNoticeJob } from '../jobs/grant-idle-notice.job';
 import { UsageCaptureJob } from '../jobs/usage-capture.job';
@@ -75,6 +76,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     GuideFileSweepJob,
     GrantUnusedNoticeJob,
     AnalyticsRollupJob,
+    AnalyticsLossAlertJob,
     GrantEndNoticeJob,
     GrantIdleNoticeJob,
     UsageCaptureJob,
@@ -112,7 +114,7 @@ import { FxRateSnapshotStore } from '../currency/fx-rate.snapshot';
     CatalogSeasonWriteJob,
     {
       provide: JOBS,
-      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, LotteryCloseJob, SupportAutoCloseJob, SupportRetentionJob, GuideFileSweepJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, GroupMembershipEndJob, KeyWindowJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, AutomationHousekeepingJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob, CatalogSeasonWriteJob, AnalyticsRollupJob],
+      inject: [HeartbeatJob, VaultRetentionJob, GrantPurgeJob, GrantBulkJobDrainJob, GrantGroupFulfilmentJob, GrantDeliveryJob, LotteryCloseJob, SupportAutoCloseJob, SupportRetentionJob, GuideFileSweepJob, GrantUnusedNoticeJob, GrantEndNoticeJob, GrantIdleNoticeJob, UsageCaptureJob, VpnReserveJob, RetentionHeldNoticeJob, DepositExpiryJob, InvoiceExpiryJob, GroupMembershipEndJob, KeyWindowJob, DepositReconciliationJob, DepositVerifyRetryJob, OutboxRelayJob, FxRateJob, TrafficRollupJob, AutomationHousekeepingJob, CampaignFanOutJob, CampaignDeliveryJob, TenantSubscriptionRenewalJob, TenantDomainVerificationJob, ResellerQuotaDigestJob, AiProfileRebuildJob, AiSuggestionDeliveryJob, CatalogSeasonWriteJob, AnalyticsRollupJob, AnalyticsLossAlertJob],
       useFactory: (...jobs: Job[]) => jobs,
     },
     WorkerRegistryService,

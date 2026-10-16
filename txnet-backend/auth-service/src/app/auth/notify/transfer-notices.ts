@@ -3,7 +3,7 @@ import type { Notice } from './user-notifier';
 /**
  * The notices about a manual transfer (F-805-b), told to each person of the
  * gateway's owner who may confirm it by hand. Read at `notifications.payment.*`;
- * `user-notifier.ts` spreads them into its templates, and `notice-buttons.ts`
+ * `notice-groups.ts` joins them to the templates, and `notice-buttons.ts`
  * gives the bot message its Review button.
  */
 export const TRANSFER_NOTIFY_TEMPLATES = ['transferProofSent'] as const;
