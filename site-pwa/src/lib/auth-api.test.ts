@@ -745,6 +745,13 @@ describe('one refresh for every call, socket and tab', () => {
     authApi.releaseSessionHold();
   });
 
+  it("the password step's code goes by the chosen channel, under its token (SA-1-d)", async () => {
+    fetchMock.mockResolvedValueOnce(envelope({ ok: true, data: { requiresOtp: true, otpToken: 't2', deliveryId: 'd' } }));
+    await authApi.sendSecondFactor('t1', 'telegram');
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/auth\/login\/second-factor$/);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ otpToken: 't1', channel: 'telegram' });
+  });
+
   it('holds nothing once a token is live', async () => {
     fetchMock.mockResolvedValueOnce(refreshed(jwt('u-1', 'a'))).mockResolvedValueOnce(accounts());
     await authApi.ensureSession();

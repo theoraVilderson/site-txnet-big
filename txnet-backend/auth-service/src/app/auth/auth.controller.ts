@@ -16,6 +16,7 @@ import { REFRESH_TOKEN_COOKIE } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuthService } from './auth.service';
+import { SecondFactorService } from './second-factor.service';
 import { LocaleService } from '../locale/locale.service';
 import {
   forgotPasswordSchema,
@@ -27,6 +28,8 @@ import {
   passwordLoginSchema,
   refreshSchema,
   resetPasswordSchema,
+  secondFactorSendSchema,
+  type SecondFactorSendInput,
 } from './auth.schema';
 import { ResponseType } from '../common/response/response.util';
 import { RateLimit } from './decorators/rate-limit.decorator';
@@ -47,6 +50,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly locale: LocaleService,
+    private readonly secondFactor: SecondFactorService,
   ) {}
 
   private ua(req: Request) {
@@ -99,6 +103,22 @@ export class AuthController {
       ip,
       requestLanguage(req, this.locale),
     );
+  }
+
+  // The password step's channel choice (SA-1-d). Not captcha-gated, like the
+  // verify halves: the caller holds the `otpToken` a gated password step handed
+  // out, and the send shares the code request's per-caller budget.
+  @Post('login/second-factor')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(NoActiveSessionGuard)
+  @UsePipes(new ZodValidationPipe(secondFactorSendSchema))
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.LOGIN_OTP_REQUEST, rateLimitSubject(req)),
+    configKey: 'LOGIN_OTP_REQUEST_RATE_LIMIT',
+    windowSec: 900,
+  })
+  sendSecondFactor(@Body() body: SecondFactorSendInput, @Ip() ip: string, @Req() req: Request) {
+    return this.secondFactor.send(body, ip, requestLanguage(req, this.locale));
   }
 
   @Post('login/otp/verify')

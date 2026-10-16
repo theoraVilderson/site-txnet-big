@@ -60,7 +60,7 @@ import {
   RefreshInput,
   ResetPasswordInput,
 } from './auth.schema';
-import { OWNER_NEEDS_BOTH_FACTORS, OwnerNeedsBothFactors, SECOND_FACTOR_UNAVAILABLE, needsBothFactors, roleGivesEverything } from './owner-factors';
+import { OWNER_NEEDS_BOTH_FACTORS, OwnerNeedsBothFactors, SECOND_FACTOR_UNAVAILABLE, needsBothFactors, offerSecondFactor, roleGivesEverything } from './owner-factors';
 
 /** What `LOGIN_FAILURE_LOCK_THRESHOLD` is when a deployment sets nothing. */
 const LOGIN_FAILURE_LOCK_DEFAULT = 10;
@@ -220,10 +220,7 @@ export class AuthService {
       return err('auth.invalidCredentials');
     }
 
-    const failureBucket = rateLimitBucketKey(
-    RateLimitBucket.LOGIN_FAILURES,
-    identity,
-    );
+    const failureBucket = rateLimitBucketKey(RateLimitBucket.LOGIN_FAILURES, identity);
     const attempt = await this.rateLimiter.hit(
       failureBucket,
       this.loginFailureLockThreshold,
@@ -251,16 +248,18 @@ export class AuthService {
       return err('auth.phoneVerificationRequired');
     }
 
-    if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) return this.askSecondFactor(user, ip, lang);
+    if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) return offerSecondFactor(user, this.tokens);
 
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);
     return ok(sessionData, 'auth.loginSuccess');
   }
 
-  /** The code step after a proven password (ADR-0145): to the person's number, answered with an `otp_login` token. */
-  async askSecondFactor(user: Pick<User, 'id' | 'phoneNumber' | 'preferredOtpChannel'>, ip: string, lang: string) {
+  /** The code step after a proven password (ADR-0145), by the channel chosen (SA-1-d): a code with an `otp_login` token, or the bot link. */
+  async askSecondFactor(user: Pick<User, 'id' | 'phoneNumber' | 'preferredOtpChannel'>, ip: string, lang: string, chosen?: OtpChannel) {
     if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
-    const channel = await this.resolveOtpChannel(user.phoneNumber, user);
+    const channel = await this.resolveOtpChannel(user.phoneNumber, user, chosen);
+    const link = chosen && (await this.linkIfNeeded(channel, user.phoneNumber, OtpPurpose.login, ip, lang));
+    if (link) return link;
     const delivery = await this.deliveries.mintHandles();
     await this.otp.issueOtp(user.phoneNumber, OtpPurpose.login, channel, ip, lang, delivery);
     return ok({ requiresOtp: true, otpToken: this.tokens.signOtpToken(user.id), ...deliveryHandles(delivery) }, 'auth.otpSent');

@@ -73,13 +73,15 @@ export type BotLinkStatus = {
 /** Sign-in and sign-out calls — spread into `authApi` (`lib/auth-api.ts`). */
 export const signInCalls = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
-    const result = await loginRequest<AuthResult | ({ requiresOtp: true; otpToken: string } & OtpDeliveryHandles)>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
+    const result = await loginRequest<AuthResult | { requiresOtp: true; chooseChannel: true; otpToken: string }>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
     if ("accessToken" in result) setAccessToken(result.accessToken);
     return result;
   },
   /** The delivery methods this deployment has switched on. */
   async otpChannels() { return request<{ channels: OtpChannelDescriptor[] }>("/auth/otp/channels", { method: "GET" }); },
   async requestLoginOtp(phoneNumber: string, captchaToken: string, channel?: OtpChannel) { return loginRequest<OtpQueuedResult>("/auth/login/otp/request", { method: "POST", body: JSON.stringify({ phoneNumber, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  /** Where the password step's code goes (SA-1-d): a code queued under a fresh token, or the bot link to connect first. */
+  async sendSecondFactor(otpToken: string, channel?: OtpChannel) { return request<(OtpDeliveryHandles & { otpToken: string; linkRequired?: undefined }) | BotLinkRequired>("/auth/login/second-factor", { method: "POST", body: JSON.stringify({ otpToken, ...(channel ? { channel } : {}) }) }); },
   /** The code after a password: sent with the password step's `otpToken`, never by number — that is a code-only sign-in (ADR-0145). */
   async verifySecondFactor(otpToken: string, otpCode: string) { const result = await loginRequest<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ otpToken, otpCode }) }); setAccessToken(result.accessToken); return result; },
   async verifyLoginOtp(phoneNumber: string, otpCode: string) { const result = await loginRequest<AuthResult>("/auth/login/otp/verify", { method: "POST", body: JSON.stringify({ phoneNumber, otpCode }) }); setAccessToken(result.accessToken); return result; },

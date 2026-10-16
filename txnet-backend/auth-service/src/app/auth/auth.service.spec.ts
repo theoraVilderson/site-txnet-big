@@ -454,12 +454,29 @@ describe('AuthService.loginWithPassword — two-factor', () => {
     argon2.verify.mockResolvedValue(true);
   });
 
-  it('stops at an OTP token instead of a session when 2FA is on', async () => {
+  // SA-1-d: the password step stops at a channel choice, exactly as the phone
+  // login lets the person choose; nothing is sent until they have.
+  it('stops at a channel choice instead of a session when 2FA is on, sending nothing yet', async () => {
     h.prisma.user.findFirst.mockResolvedValue(
       activeUser({ twoFactorEnabled: true }),
     );
 
     const res = await login(h);
+
+    expect(res).toEqual({
+      ok: true,
+      msg: 'auth.secondFactorChannel',
+      data: { requiresOtp: true, chooseChannel: true, otpToken: 'otp-token' },
+    });
+    expect(h.otp.issueOtp).not.toHaveBeenCalled();
+    expect(h.tokens.signOtpToken).toHaveBeenCalledWith('user-1');
+    // The half-finished login must not mint anything usable.
+    expect(h.sessionService.createSession).not.toHaveBeenCalled();
+    expect(h.tokens.signAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('sends the code by the channel the person chose', async () => {
+    const res = await h.service.askSecondFactor(activeUser() as never, '1.2.3.4', 'fa', OtpChannel.telegram);
 
     expect(res).toEqual({
       ok: true,
@@ -477,27 +494,29 @@ describe('AuthService.loginWithPassword — two-factor', () => {
     expect(h.otp.issueOtp).toHaveBeenCalledWith(
       '09123456789',
       OtpPurpose.login,
-      OtpChannel.sms,
+      OtpChannel.telegram,
       '1.2.3.4',
       'fa',
       expect.objectContaining({ deliveryId: 'a'.repeat(32) }),
     );
-    expect(h.tokens.signOtpToken).toHaveBeenCalledWith('user-1');
-    // The half-finished login must not mint anything usable.
-    expect(h.sessionService.createSession).not.toHaveBeenCalled();
-    expect(h.tokens.signAccessToken).not.toHaveBeenCalled();
+  });
+
+  it('hands over the bot link when the chosen messenger is not connected yet', async () => {
+    h.channels.requiresLink.mockReturnValue(true);
+    h.botLinks.hasVerifiedLink.mockResolvedValue(false);
+    h.botLinks.startLink.mockResolvedValue({ linkToken: 'lt', deepLink: 'https://t.me/bot?start=lt' });
+
+    const res = await h.service.askSecondFactor(activeUser() as never, '1.2.3.4', 'fa', OtpChannel.bale);
+
+    expect(res).toMatchObject({ ok: true, msg: 'auth.botLinkRequired', data: { accepted: true, linkToken: 'lt' } });
+    expect(h.botLinks.startLink).toHaveBeenCalledWith(expect.objectContaining({ platform: 'bale', purpose: OtpPurpose.login }));
+    expect(h.otp.issueOtp).not.toHaveBeenCalled();
   });
 
   it('honours a saved channel preference that is still available', async () => {
-    h.prisma.user.findFirst.mockResolvedValue(
-      activeUser({
-        twoFactorEnabled: true,
-        preferredOtpChannel: OtpChannel.telegram,
-      }),
-    );
     h.channels.isAvailable.mockReturnValue(true);
 
-    await login(h);
+    await h.service.askSecondFactor(activeUser({ preferredOtpChannel: OtpChannel.telegram }) as never, '1.2.3.4', 'fa');
 
     expect(h.otp.issueOtp).toHaveBeenCalledWith(
       '09123456789',
@@ -510,16 +529,10 @@ describe('AuthService.loginWithPassword — two-factor', () => {
   });
 
   it('falls back to the default channel when the saved preference is switched off', async () => {
-    h.prisma.user.findFirst.mockResolvedValue(
-      activeUser({
-        twoFactorEnabled: true,
-        preferredOtpChannel: OtpChannel.telegram,
-      }),
-    );
     h.channels.isAvailable.mockReturnValue(false);
     h.channels.defaultChannel.mockReturnValue(OtpChannel.bale);
 
-    await login(h);
+    await h.service.askSecondFactor(activeUser({ preferredOtpChannel: OtpChannel.telegram }) as never, '1.2.3.4', 'fa');
 
     expect(h.otp.issueOtp).toHaveBeenCalledWith(
       '09123456789',

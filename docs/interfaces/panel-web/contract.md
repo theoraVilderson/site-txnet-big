@@ -81,7 +81,7 @@ into the browser bundle. Setting only the bare name leaves the client half on
 
 ## Screens
 
-`/(auth)/auth/*` — login, register, forgot-password. `/` — the panel home (which
+`/(auth)/auth/*` — login (a password needing a code stops at the phone tab's channel picker, SA-1-d), register, forgot-password. `/` — the panel home (which
 account this browser is, plus the group). `/accounts/add` — adding an account
 to the switch group, its two tabs being the two proofs `auth-api` accepts.
 `/auth/handoff` (F-061-f) — a reseller's domain spends the single-use code in

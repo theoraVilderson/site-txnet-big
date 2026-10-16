@@ -1,7 +1,7 @@
 ---
 id: adr-0145
 status: active
-updated: 2026-10-14
+updated: 2026-10-16
 ---
 
 # ADR 0145 — The holder of `*` signs in with two factors
@@ -45,12 +45,22 @@ refuses every role but `user` (`BOT_SESSION_ROLES`).
 5. Refreshing an existing session is not a sign-in and is unchanged; nor is
    impersonation, which never reaches a holder of `*` (AC-1-h).
 
+6. **Amended 2026-10-16 (the user's, the recommended option).** (a) The code
+   after the password goes by the channel the person picks — SMS, Telegram or
+   Bale, whichever the deployment offers — exactly as on the phone login,
+   including the bot-link step for a messenger not yet connected (SA-1-d).
+   (b) Inside the Mini App, an account the messenger alone may not sign in
+   (`BOT_SESSION_ROLES`) is asked its password, and the platform's signed
+   `initData` is the second factor: possession of the contact-verified
+   messenger account, the same thing a code sent to that messenger proves
+   (SA-1-e). The chat route is unchanged: it carries no password.
+
 ## Consequences
 
 - The platform's owner cannot be signed in by a stolen phone code, a stolen
   messenger account or a handoff link alone.
-- Accepted cost: the owner does not enter the panel from the bot, the Mini App
-  or a handoff; they sign in on the panel with both factors. A holder with no
+- Accepted cost: the owner does not enter the panel from the bot chat or a
+  handoff (the Mini App asks the password, (6b)); they sign in on the panel with both factors. A holder with no
   phone number cannot sign in at all until one is added (on dev:
   `platform_owner` and `e2e_admin`).
 
@@ -58,7 +68,7 @@ refuses every role but `user` (`BOT_SESSION_ROLES`).
 
 | Option | Why rejected |
 |---|---|
-| Let the messenger count as the second factor | a stolen messenger account would then be the whole platform |
+| Let the messenger alone sign them in | a stolen messenger account would then be the whole platform; with the password beside it (6b) it is one of two |
 | Turn `twoFactorEnabled` on for the holders | a flag can be turned off again, and it does not close the other doors |
 
 ## Revisit trigger

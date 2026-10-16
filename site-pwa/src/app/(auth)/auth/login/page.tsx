@@ -25,14 +25,14 @@ import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
-import { authApi } from "@/lib/auth-api";
+import { authApi, type OtpQueuedResult } from "@/lib/auth-api";
 import { consumeReturnTo } from "@/lib/return-to";
 import { OTP_LENGTH } from "@/lib/otp";
 
 type LoginMethod = "username" | "phone";
 
-/** 1 credentials · "link" connect the messenger · 2 code */
-type Step = 1 | "link" | 2;
+/** 1 credentials · "channel" where the password's code goes (SA-1-d) · "link" connect the messenger · 2 code */
+type Step = 1 | "channel" | "link" | 2;
 
 export default function LoginPage() {
   const { t, isRtl, lang } = useAuthUI();
@@ -63,6 +63,26 @@ export default function LoginPage() {
 
   const submitError = useSubmitError();
 
+  // A code queued, or the messenger to connect first — the phone login and the
+  // password's code step answer alike.
+  const afterSend = (result: OtpQueuedResult | Awaited<ReturnType<typeof authApi.sendSecondFactor>>) => {
+    if (result.linkRequired) {
+      // The bot sends the code once the user confirms the number there.
+      botLink.start(result);
+      setStep("link");
+      return;
+    }
+    // A code was queued: from here the screen hears what became of it.
+    delivery.start(result);
+    setStep(2);
+    otpTimer.start(120);
+  };
+  const sendSecondFactor = async (token: string) => {
+    const result = await authApi.sendSecondFactor(token, channels.selected);
+    if (!result.linkRequired) setOtpToken(result.otpToken);
+    afterSend(result);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     submitError.clear();
@@ -80,16 +100,7 @@ export default function LoginPage() {
           } finally {
             captcha.spend();
           }
-          if (result.linkRequired) {
-            // The bot sends the code once the user confirms the number there.
-            botLink.start(result);
-            setStep("link");
-          } else {
-            // A code was queued: from here the screen hears what became of it.
-            delivery.start(result);
-            setStep(2);
-            otpTimer.start(120);
-          }
+          afterSend(result);
         } else {
           let result;
           try {
@@ -97,9 +108,12 @@ export default function LoginPage() {
           } finally {
             captcha.spend();
           }
-          if ("requiresOtp" in result) { setOtpToken(result.otpToken); delivery.start(result); setLoginMethod("phone"); setStep(2); otpTimer.start(120); }
+          // The password is proven; the person picks the code's channel, as on the phone tab.
+          if ("requiresOtp" in result) { setOtpToken(result.otpToken); if (channels.hasChoice) setStep("channel"); else await sendSecondFactor(result.otpToken); }
           else { setIsSuccess(true); router.replace(consumeReturnTo()); }
         }
+      } else if (step === "channel" && otpToken) {
+        await sendSecondFactor(otpToken);
       } else if (step === 2) {
         await (otpToken ? authApi.verifySecondFactor(otpToken, otp) : authApi.verifyLoginOtp(phone, otp));
         setIsSuccess(true);
@@ -116,9 +130,11 @@ export default function LoginPage() {
   const subtitle =
     step === 1
       ? t.welcomeSubtitle
-      : step === "link"
-        ? t.botLinkWaiting
-        : `${t.codeSentTo} ${phone || t.yourNumber}`;
+      : step === "channel"
+        ? t.chooseCodeChannel
+        : step === "link"
+          ? t.botLinkWaiting
+          : `${t.codeSentTo} ${phone || t.yourNumber}`;
 
   const buttonText = isLoading
     ? t.processing
@@ -126,7 +142,9 @@ export default function LoginPage() {
       ? isPhoneMethod
         ? t.getVerifyCode
         : t.loginToDashboard
-      : t.verifyAndLogin;
+      : step === "channel"
+        ? t.getVerifyCode
+        : t.verifyAndLogin;
 
   const canSubmitStep1 = isPhoneMethod
     ? captcha.verified && phone.length > 0
@@ -278,6 +296,12 @@ export default function LoginPage() {
                   />
                 )}
               </motion.div>
+            ) : step === "channel" ? (
+              <OtpChannelPicker
+                channels={channels.channels}
+                selected={channels.selected}
+                onSelect={channels.select}
+              />
             ) : step === "link" && botLink.link ? (
               <BotLinkStep
                 link={botLink.link}
@@ -303,7 +327,7 @@ export default function LoginPage() {
           {step !== "link" && (
             <SubmitButton
               isLoading={isLoading}
-              disabled={step === 1 ? !canSubmitStep1 : otp.length < OTP_LENGTH}
+              disabled={step === 1 ? !canSubmitStep1 : step === 2 && otp.length < OTP_LENGTH}
             >
               {buttonText}
             </SubmitButton>

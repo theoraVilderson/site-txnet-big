@@ -17,6 +17,12 @@ export const otpRequestSchema = z.object({
   channel: z.nativeEnum(OtpChannel).optional(),
 });
 
+/** `POST /auth/login/second-factor` (SA-1-d): the password step's token, and where the code goes. */
+export const secondFactorSendSchema = z.object({
+  otpToken: z.string().min(1),
+  channel: z.nativeEnum(OtpChannel).optional(),
+});
+
 export const otpVerifySchema = z
   .object({
     phoneNumber: phoneSchema.optional(),
@@ -103,6 +109,7 @@ export const otpDeliveryStatusSchema = z.object({
 });
 
 export type OtpVerifyInput = z.infer<typeof otpVerifySchema>;
+export type SecondFactorSendInput = z.infer<typeof secondFactorSendSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ForgotVerifyInput = z.infer<typeof forgotVerifySchema>;

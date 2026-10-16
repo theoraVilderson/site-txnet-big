@@ -93,6 +93,8 @@ export const AUTH_KEY_MAP = {
   botLinkWaiting: A.botLink.waiting,
   botLinkFailed: A.botLink.failed,
   botLinkChangeMethod: A.botLink.changeMethod,
+
+  chooseCodeChannel: A.messages.chooseCodeChannel,
 } as const;
 
 /** `{ loginTitle: string; usernameTab: string; ... }` — the shape components see. */
