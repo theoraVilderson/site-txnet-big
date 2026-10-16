@@ -165,7 +165,7 @@ paymentId}`. ManualPaymentsView and ManualPaymentsWidget re-read; useMenuBadges
 listens to it and `support.inbox.changed` on `tenant:`, `notification.created`
 on `user:`, and re-reads on tab visible; its 60 s poll is gone.
 
-**RT-1-k — the `members:` channel** (user, 2026-10-06). A change that
+**RT-1-k — the `members:` channel** (user, 2026-10-06) — built 2026-10-16. A change that
 reaches a whole tenant, staff or not, reaches **that tenant's own users
 only**, in one publish. The platform's users include its resellers' accounts
 on the platform domain; a reseller's own users are a different tenant and do

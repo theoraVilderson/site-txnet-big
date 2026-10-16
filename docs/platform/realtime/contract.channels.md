@@ -21,7 +21,7 @@ events to a stranger, with no error anywhere. `channel.spec.ts` is the spec
 that pins it.
 
 A channel name is `<family>:<id>`. The id is everything after the **first**
-colon, so extra colons cannot widen a match. Four families exist; anything
+colon, so extra colons cannot widen a match. Five families exist; anything
 else is `realtime.channelUnknown`, because an unknown prefix is not a channel
 with no rule yet.
 
@@ -31,10 +31,17 @@ with no rule yet.
 | `tenant:<tenantId>` | a connection in that tenant holding `realtime.tenant.read` |
 | `otp:<channelId>` | anyone presenting the `proof` minted with that delivery — signed in or not |
 | `support:<conversationId>` | a signed-in connection presenting the `proof` support-service minted **for that user** (F-034, ADR-0114) |
-| `members:<tenantId>` | *(RT-1-k, planned)* any signed-in connection whose tenant is that id — no permission; body is `type` + ids only ([contract.live-events.md](contract.live-events.md)) |
+| `members:<tenantId>` | any signed-in connection whose tenant is that id — no permission; body is `type` + ids only (RT-1-k, [contract.live-events.md](contract.live-events.md)) |
 
-**The first two refuse an anonymous connection by construction.** There is no
-id to compare, and "no id" must never compare equal to a channel's.
+**`user:`, `tenant:` and `members:` refuse an anonymous connection by
+construction.** There is no id to compare, and "no id" must never compare
+equal to a channel's.
+
+**`members:` asks no permission, and still matches the tenant exactly**
+(RT-1-k, user 2026-10-06). It carries what reaches a whole tenant, staff or
+not — the body says only that something changed. The platform's members
+include its resellers' accounts on the platform domain; a reseller's own users
+are another tenant and never hear the platform's channel, nor it theirs.
 
 **`otp:` is authorized by a proof, not by an identity** (F-067-j, ADR-0031).
 The three routes that issue an OTP have no session, so there is nothing to

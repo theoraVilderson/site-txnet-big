@@ -119,6 +119,22 @@ describe('channelRefusal', () => {
   });
 
   /**
+   * RT-1-k: the whole tenant's feed — "something changed", type and ids only —
+   * so membership is the claim and no permission is asked. The tenant match is
+   * still exact: a reseller's users are a different tenant from the platform's.
+   */
+  describe('members channels', () => {
+    it('allows any member of the tenant, with no permission at all', async () => {
+      await expect(refuse(identity(), 'members:tenant-1')).resolves.toBeNull();
+    });
+
+    it("refuses another tenant's members channel, however permitted the caller is", async () => {
+      const superAdmin = identity({ permissions: ['*'] });
+      await expect(refuse(superAdmin, 'members:tenant-2')).resolves.toBe('realtime.channelForbidden');
+    });
+  });
+
+  /**
    * The half ADR-0031 added. An anonymous connection is a real connection —
    * it just proved nothing at the upgrade — so every channel whose rule is
    * "compare this against who you are" has to refuse it rather than read a
@@ -128,6 +144,7 @@ describe('channelRefusal', () => {
     it.each([
       ['a user channel', 'user:user-1'],
       ['a tenant channel', 'tenant:tenant-1'],
+      ['a members channel', 'members:tenant-1'],
     ])('is refused %s', async (_label, channel) => {
       await expect(refuse(null, channel)).resolves.toBe(
         'realtime.channelForbidden',

@@ -104,10 +104,10 @@ need.
 ## Channels
 
 Who may subscribe to what, and why each family is shaped the way it is, is in
-[contract.channels.md](contract.channels.md). Four families exist —
-`user:<userId>`, `tenant:<tenantId>`, `otp:<channelId>` and
-`support:<conversationId>` (F-034) — and anything else is
-`realtime.channelUnknown`.
+[contract.channels.md](contract.channels.md). Five families exist —
+`user:<userId>`, `tenant:<tenantId>`, `members:<tenantId>` (RT-1-k),
+`otp:<channelId>` and `support:<conversationId>` (F-034) — and anything else
+is `realtime.channelUnknown`.
 
 ## Close codes
 

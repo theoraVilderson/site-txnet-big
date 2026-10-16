@@ -201,10 +201,12 @@ describe('liveChannel', () => {
     const payload = { tenantId: TENANT, userId: USER };
     expect(liveChannel('user', payload, EVENT)).toBe(`user:${USER}`);
     expect(liveChannel('tenant', payload, EVENT)).toBe(`tenant:${TENANT}`);
+    expect(liveChannel('members', payload, EVENT)).toBe(`members:${TENANT}`);
   });
 
   it('refuses a payload without the id its audience needs, never falling back to the other', () => {
     expect(() => liveChannel('tenant', { userId: USER }, EVENT)).toThrow(/tenant/);
+    expect(() => liveChannel('members', { userId: USER }, EVENT)).toThrow(/members/);
     expect(() => liveChannel('user', { tenantId: TENANT, userId: '' }, EVENT)).toThrow(/user/);
   });
 

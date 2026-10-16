@@ -106,7 +106,7 @@ export type ChannelRefusal =
  * correctly under the compiler the repo actually uses is the honest one, and
  * it matches `trySubscribe`, the only caller.
  *
- * The three families, and why each is shaped the way it is:
+ * The families, and why each is shaped the way it is:
  *
  * - `user:<userId>` — the one channel a signed-in page always wants. It is
  *   compared against the connection's own `userId` and nothing else: not the
@@ -122,6 +122,11 @@ export type ChannelRefusal =
  *   boundary (ADR-0023) and the most expensive thing on this list to get
  *   wrong.
  *
+ * - `members:<tenantId>` — what reaches a whole tenant, staff or not
+ *   (RT-1-k): the same exact tenant match, and no permission, because the
+ *   body is a type and ids. A reseller's users are another tenant and do
+ *   not hear the platform's.
+ *
  * - `otp:<channelId>` — the delivery result of one OTP send (F-067-j), and
  *   the only family authorized by a **proof rather than an identity**. It has
  *   to be: the three routes that issue an OTP are `register`, `login` and
@@ -131,7 +136,7 @@ export type ChannelRefusal =
  *   connection holding the token is as entitled as an anonymous one, and a
  *   signed-in connection without it is not entitled at all.
  *
- * The first two refuse an anonymous connection by construction: there is no
+ * `user:`, `tenant:` and `members:` refuse an anonymous connection by construction: there is no
  * id to match, and "no id" must never compare equal to a channel's.
  *
  * A name with no colon, an empty id, or an unknown prefix is
@@ -162,6 +167,12 @@ export async function channelRefusal(
         holdsPermission(identity.permissions, TENANT_CHANNEL_PERMISSION)
         ? null
         : 'realtime.channelForbidden';
+
+    case RealtimeChannelFamily.members:
+      // RT-1-k: membership is the whole claim — the body says only that
+      // something changed, nothing a member could not read for themselves.
+      if (!identity) return 'realtime.channelForbidden';
+      return id === identity.tenantId ? null : 'realtime.channelForbidden';
 
     case RealtimeChannelFamily.otp: {
       if (!proof || !OTP_CHANNEL_ID.test(id)) {

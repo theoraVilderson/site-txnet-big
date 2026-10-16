@@ -10,8 +10,8 @@ import { EventNoticeSender } from './event-notice';
 /** This consumer's segment of its per-channel markers (F-067-o). */
 const CONSUMER = 'live-push';
 
-/** Whose page re-reads (RT-1-b): one user's, or the operators' of one tenant. */
-export type LiveAudience = 'user' | 'tenant';
+/** Whose page re-reads: one user's, the operators' of one tenant (RT-1-b), or every member of it (RT-1-k). */
+export type LiveAudience = 'user' | 'tenant' | 'members';
 
 /**
  * Each live-only type: whose channels it goes to, and the payload fields its
@@ -56,8 +56,9 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
 };
 
 /**
- * `user:<userId>` or `tenant:<tenantId>`, from the id the producer put in the
- * payload. A missing id throws — never the other audience's channel instead.
+ * `user:<userId>`, `tenant:<tenantId>` or `members:<tenantId>`, from the id the
+ * producer put in the payload. A missing id throws — never another audience's
+ * channel instead.
  */
 export function liveChannel(audience: LiveAudience, payload: Record<string, unknown>, eventId: string): `${LiveAudience}:${string}` {
   const key = audience === 'user' ? 'userId' : 'tenantId';

@@ -93,7 +93,7 @@ type Entry = { params: Record<string, string>; grantId?: string; class?: NoticeC
 export type EventNotice = {
   consumer: string;
   eventId: string;
-  live?: { channel: `user:${string}` | `tenant:${string}`; body: Record<string, unknown> };
+  live?: { channel: `user:${string}` | `tenant:${string}` | `members:${string}`; body: Record<string, unknown> };
   person?: Person;
   only?: readonly OnlyChannel[];
   /**

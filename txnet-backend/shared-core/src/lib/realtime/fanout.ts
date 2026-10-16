@@ -112,7 +112,7 @@ export function otpRealtimeChannel(channelId: string): string {
 }
 
 /**
- * The three realtime channel families, declared once (ADR-0036, C-04).
+ * The realtime channel families, declared once (ADR-0036, C-04).
  *
  * A channel name crosses two process boundaries: `worker-service` and
  * `auth-service` publish into one, `gateway-service` parses it to decide who
@@ -132,6 +132,8 @@ export const RealtimeChannelFamily = {
   user: 'user',
   /** The reseller-wide feed, behind a permission. */
   tenant: 'tenant',
+  /** RT-1-k: every signed-in member of one tenant, no permission — the body is a type and ids. */
+  members: 'members',
   /** One OTP send's delivery result, authorized by a minted token. */
   otp: 'otp',
   /**

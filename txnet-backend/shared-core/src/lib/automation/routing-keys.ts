@@ -55,6 +55,8 @@ export const RealtimeEventType = {
   ANALYTICS_REFRESHED: 'billing.analytics.refreshed',
   /** The same pass, for a reseller's workspace: its owner's `user:` and the platform's `tenant:` (F-1001-p, RT-1-e's pair). */
   ANALYTICS_RESELLER_REFRESHED: 'billing.analytics.reseller_refreshed',
+  /** F-1006-a: a scheduled analytics report is due (or asked now) — one per send, to the schedule's person (`AnalyticsReportService`); worker-service tells it and pushes its schedule live. */
+  ANALYTICS_REPORT: 'billing.analytics.report',
 } as const;
 
 /**
@@ -92,8 +94,6 @@ export const OutboxEventType = {
   TRANSFER_PROOF_SENT: 'billing.payment.transfer_proof_sent',
   /** F-1003: a user's 30-day cost passed their net by the tenant's percent — one per staff member told, once a tenant month (`tellLosses`). */
   ANALYTICS_USER_LOSS: 'billing.analytics.user_loss',
-  /** F-1006-a: a scheduled analytics report is due (or asked now) — one per send, to the schedule's person (`AnalyticsReportService`); worker-service tells it and pushes its schedule live. */
-  ANALYTICS_REPORT: 'billing.analytics.report',
   /** F-707-m: a lottery winner was given its prize — once per winner row (`LotteryDeliveryService`). */
   LOTTERY_WON: 'engagement.lottery.won',
   /** F-707-q: a lottery was published — once per lottery, in the publish (`LotteryAdminService.publish`); worker-service tells its group's members. */
