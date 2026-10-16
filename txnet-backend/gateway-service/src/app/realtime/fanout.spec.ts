@@ -55,7 +55,7 @@ function fakeConnection(id: string, userId: string) {
   const sent: string[] = [];
   const connection: Connection = {
     id,
-    identity: { userId, tenantId: 'tenant-1', sessionId: `sess-${id}`, permissions: [] },
+    identity: { userId, tenantId: 'tenant-1', roleId: 'role-1', sessionId: `sess-${id}`, permissions: [] },
     address: '203.0.113.1',
     socket: { readyState: 1, send: (frame: string) => sent.push(frame) } as never,
     subscriptions: new Set<string>(),

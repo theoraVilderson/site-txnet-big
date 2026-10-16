@@ -158,24 +158,15 @@ func (h *Handler) decide(w http.ResponseWriter, r *http.Request) response.Respon
 		w.Header().Set(HeaderUserID, claims.Sub)
 		w.Header().Set(HeaderTenantID, claims.TenantID)
 		w.Header().Set(HeaderRoleID, claims.RoleID)
-		// The session this token names, forwarded so a long-lived consumer can
-		// re-ask the question this handler answered once (F-067-h).
-		//
-		// Every other identity header describes *who*; this one names the
-		// grant, and it is here because a WebSocket outlives the access token
-		// that opened it by hours. `gateway-service` re-checks
-		// `session:<id>` on a timer and closes the socket when the marker is
-		// gone, which is the same rule this handler applies per request —
-		// missing marker means revoked, never "unknown, allow"
-		// (`redis-keyspace/contract.md`). It cannot apply that rule to a
-		// session nobody told it the id of.
-		//
-		// Traefik must both forward it (`authResponseHeaders`) and strip the
-		// client-supplied copy (`strip-fake-headers`), exactly as for the
-		// headers above: a header downstream trusts is a header a caller must
-		// not be able to set.
+		// The session and the fingerprint name the *grant*, not the person: a
+		// WebSocket outlives its token by hours, so `gateway-service` re-asks
+		// this handler's session (F-067-h) and staleness (RT-1-n) questions on
+		// a timer. Traefik forwards both and strips any copy a caller sent.
 		w.Header().Set(HeaderSessionID, claims.SessionID)
 		w.Header().Set(HeaderUserPermissions, strings.Join(claims.Permissions, ","))
+		if claims.PermHash != "" { // absent, the gateway compares the role alone
+			w.Header().Set(HeaderPermHash, claims.PermHash)
+		}
 		if claims.IsImpersonated {
 			w.Header().Set(HeaderImpersonated, "true")
 			w.Header().Set(HeaderImpersonatedBy, claims.ImpersonatedBy)

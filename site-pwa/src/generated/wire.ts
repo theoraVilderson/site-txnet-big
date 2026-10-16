@@ -9,6 +9,7 @@ export const IdentityHeaders = {
   "roleId": "X-Role-Id",
   "sessionId": "X-Session-Id",
   "permissions": "X-User-Permissions",
+  "permHash": "X-Perm-Hash",
   "impersonated": "X-Impersonated",
   "impersonatedBy": "X-Impersonated-By",
   "chatPlatform": "X-Chat-Platform",

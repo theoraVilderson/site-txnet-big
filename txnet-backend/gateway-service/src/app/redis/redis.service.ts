@@ -39,6 +39,7 @@ export interface FanoutSubscriberClient {
  * replica holding a socket (F-067-i). The last needs a connection of its
  * own — see {@link subscriber}. Since F-018-r it also reads
  * `tenant:status:<id>` and hears `tenant:status-changed` on that connection.
+ * Since RT-1-n it reads the role and person fingerprints `forward-auth` reads.
  * **All of it is reads**: nothing in this process writes a key.
  */
 @Injectable()
@@ -113,5 +114,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    */
   async get(key: string): Promise<string | null> {
     return this.client.get(key);
+  }
+
+  /** Read several keys in one round trip: what the permission re-check asks (RT-1-n). */
+  async mget(...keys: string[]): Promise<(string | null)[]> {
+    return this.client.mget(...keys);
   }
 }

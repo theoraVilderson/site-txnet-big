@@ -22,7 +22,7 @@ const CONFIG: Record<string, string | number> = {
 function connection(id: string, closes: [number, string][]): Connection {
   return {
     id,
-    identity: { userId: `u-${id}`, tenantId: 't-1', sessionId: `s-${id}`, permissions: [] },
+    identity: { userId: `u-${id}`, tenantId: 't-1', roleId: 'r-1', sessionId: `s-${id}`, permissions: [] },
     address: '203.0.113.1',
     socket: { readyState: 1, close: (code: number, reason: string) => void closes.push([code, reason]) } as never,
     subscriptions: new Set<string>(),
@@ -34,7 +34,7 @@ describe('RealtimeGateway.onApplicationShutdown', () => {
   it('closes every open socket with 1012, the restart code the panel spreads its reconnect on', () => {
     const registry = new ConnectionRegistry();
     const config = { get: (key: string) => CONFIG[key] };
-    const gateway = new RealtimeGateway(registry, {} as never, {} as never, {} as never, config as never);
+    const gateway = new RealtimeGateway(registry, {} as never, {} as never, {} as never, {} as never, config as never);
     const closes: [number, string][] = [];
     registry.add(connection('a', closes));
     registry.add(connection('b', closes));

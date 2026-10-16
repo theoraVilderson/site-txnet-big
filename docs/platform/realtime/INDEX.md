@@ -9,7 +9,7 @@ source:
   - txnet-backend/shared-core/src/lib/realtime/**
 owns_tables: []
 depends_on: [identity, forward-auth, redis-keyspace, tenant]
-updated: 2026-10-06
+updated: 2026-10-16
 ---
 
 # realtime

@@ -82,6 +82,7 @@ func TestContractIdentityHeaderNames(t *testing.T) {
 		"roleId":         HeaderRoleID,
 		"sessionId":      HeaderSessionID,
 		"permissions":    HeaderUserPermissions,
+		"permHash":       HeaderPermHash,
 		"impersonated":   HeaderImpersonated,
 		"impersonatedBy": HeaderImpersonatedBy,
 		"chatPlatform":   HeaderChatPlatform,

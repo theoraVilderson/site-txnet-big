@@ -27,6 +27,10 @@ const (
 	HeaderSessionID = "X-Session-Id"
 	// HeaderUserPermissions is the claimed permission set, comma-joined.
 	HeaderUserPermissions = "X-User-Permissions"
+	// HeaderPermHash is the token's permission fingerprint (ADR-0043), written
+	// whenever the token carries one. A socket outlives its token, so
+	// gateway-service asks stalePermissions on a timer with it (RT-1-n).
+	HeaderPermHash = "X-Perm-Hash"
 	// HeaderImpersonated is "true" only while an admin is impersonating.
 	HeaderImpersonated = "X-Impersonated"
 	// HeaderImpersonatedBy names the admin behind an impersonated request.

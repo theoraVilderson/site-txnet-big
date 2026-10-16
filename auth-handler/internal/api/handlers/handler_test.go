@@ -899,6 +899,23 @@ func TestValidateSetsSessionIdHeader(t *testing.T) {
 	}
 }
 
+// RT-1-n: the gateway asks stalePermissions on its tick too, and can compare
+// only a fingerprint it was given. A token minted without one forwards none,
+// so the gateway knows it is unknown rather than reading "" as a value.
+func TestValidateForwardsPermHashWhenTheTokenHasOne(t *testing.T) {
+	h, _ := newHandler(t, sessionActive, testEngine(t))
+
+	w := call(t, h, sign(t, validClaims(map[string]any{"permHash": "fp-1"}), testSecret))
+	if got := w.Header().Get("X-Perm-Hash"); got != "fp-1" {
+		t.Errorf("X-Perm-Hash = %q, want %q", got, "fp-1")
+	}
+
+	w = call(t, h, sign(t, validClaims(nil), testSecret))
+	if _, set := w.Header()["X-Perm-Hash"]; set {
+		t.Errorf("X-Perm-Hash set for a token without permHash: %q", w.Header().Get("X-Perm-Hash"))
+	}
+}
+
 func TestValidateOmitsSessionIdOnRefusal(t *testing.T) {
 	h, _ := newHandler(t, func(string) string { return respNil }, testEngine(t))
 	w := call(t, h, sign(t, validClaims(nil), testSecret))

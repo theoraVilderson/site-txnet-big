@@ -27,6 +27,7 @@ import {
 const identity = (over: Partial<ConnectionIdentity> = {}): ConnectionIdentity => ({
   userId: 'user-1',
   tenantId: 'tenant-1',
+  roleId: 'role-1',
   sessionId: 'sess-1',
   permissions: [],
   ...over,

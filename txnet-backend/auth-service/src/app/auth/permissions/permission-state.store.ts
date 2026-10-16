@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { permissionsStale } from '@txnet-backend/shared-core';
 import { RedisService } from '../../redis/redis.service';
 import { RedisKeys } from '../../redis/redis.keys';
 import type { AuthClaims } from '../token.service';
@@ -16,24 +17,14 @@ import type { AuthClaims } from '../token.service';
 export class PermissionStateStore {
   constructor(private readonly redis: RedisService) {}
 
-  /**
-   * Whether the permissions a token was minted with are no longer true: the
-   * user holds another role now, or their answer has a new fingerprint — their
-   * own when they have one (ADR-0138), else their role's (ADR-0043).
-   *
-   * **A missing key is not a change.** Nothing refuses a token because Redis
-   * knows nothing — an empty keyspace, a flush, or a role Postgres has not yet
-   * reported. The session check is the one that fails closed.
-   */
+  /** Whether the permissions a token was minted with are no longer true (`permissionsStale`, ADR-0043). */
   async isStale(claims: Pick<AuthClaims, 'sub' | 'roleId' | 'permHash'>): Promise<boolean> {
     const [roleHash, currentRole, personHash] = await this.redis.client.mget(
       RedisKeys.rolePermissions(claims.roleId),
       RedisKeys.userRole(claims.sub),
       RedisKeys.userPermissions(claims.sub),
     );
-    if (currentRole && currentRole !== claims.roleId) return true;
-    const currentHash = personHash || roleHash;
-    return !!currentHash && currentHash !== (claims.permHash ?? '');
+    return permissionsStale(claims, { roleHash, currentRole, personHash });
   }
 
   /**

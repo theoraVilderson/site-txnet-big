@@ -266,7 +266,7 @@
  },
  "exports": {},
  "size": {
-  "auth-handler/internal/api/handlers/handler.go": 476,
+  "auth-handler/internal/api/handlers/handler.go": 467,
   "i18n-platform/clients/go/client.go": 465,
   "network-service/internal/collect/loop.go": 467,
   "network-service/internal/collect/normalise.go": 456,
@@ -345,7 +345,7 @@
   "txnet-backend/bot-service/src/app/auth-api/auth-api.client.ts": 496,
   "txnet-backend/bot-service/src/app/conversation/router.ts": 602,
   "txnet-backend/bot-service/src/app/flows/views.ts": 828,
-  "txnet-backend/gateway-service/src/app/realtime/realtime.gateway.ts": 457,
+  "txnet-backend/gateway-service/src/app/realtime/realtime.gateway.ts": 452,
   "txnet-backend/messenger/src/lib/telegram-like-bot.client.ts": 619,
   "txnet-backend/metering-service/src/app/metering/metering.service.ts": 584,
   "txnet-backend/notification-service/src/app/campaigns/campaign-admin.service.ts": 435,

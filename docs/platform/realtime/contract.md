@@ -154,16 +154,20 @@ means something a client acts on differently.
 
 ## The session outlives the token, so the session is re-checked
 
-An access token is minted for ~15 minutes; a socket is held for hours. The
-gateway re-reads `session:<sessionId>` every `REALTIME_SESSION_RECHECK_MS`
-(60s) and closes every connection whose marker is gone with `4401` — the same
-question `forward-auth` asks per request, with the same rule for the answer: a
-missing marker means revoked, never "unknown, allow"
-(`redis-keyspace/contract.md`).
+An access token is minted for ~15 minutes; a socket is held for hours. Every
+`REALTIME_SESSION_RECHECK_MS` (60s) the gateway asks `forward-auth`'s own two
+questions again, with the same rules, and closes with `4401` on either:
 
-It is one `EXISTS` per **distinct session** per tick, not per connection, so
-the cost tracks how many people are connected rather than how many tabs they
-have open.
+- **The session.** `session:<sessionId>` gone means revoked, never "unknown,
+  allow" (`redis-keyspace/contract.md`). One `EXISTS` per distinct session.
+- **The permissions (RT-1-n).** `permissionsStale` (shared-core; the gate's
+  `stalePermissions`, ADR-0043/ADR-0138) over the socket's `X-Role-Id` and
+  `X-Perm-Hash` and the role and person keys: one `MGET` per distinct person
+  and role. A key Redis lacks is no change; a socket the gate gave no
+  `X-Perm-Hash` is compared on its role alone, or it would loop every tick.
+  The panel's `recoverSession` refreshes into what is held now and reconnects.
+
+The cost tracks how many people are connected, not how many tabs.
 
 **The window is real and bounded**: up to 60s between a revocation and the
 socket closing. Closing it entirely needs Redis keyspace notifications or a

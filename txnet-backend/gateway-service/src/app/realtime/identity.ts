@@ -74,7 +74,11 @@ export function identityFrom(req: IncomingMessage): ConnectionIdentity | null {
     .map((p) => p.trim())
     .filter((p) => p !== '');
 
-  return { userId, tenantId, sessionId, permissions };
+  // Read, never required: the session decides admission. An absent
+  // fingerprint stays unknown, so the tick compares the role alone (RT-1-n).
+  const roleId = header(req, IdentityHeaders.roleId) ?? '';
+  const permHash = header(req, IdentityHeaders.permHash);
+  return { userId, tenantId, roleId, ...(permHash ? { permHash } : {}), sessionId, permissions };
 }
 
 /**

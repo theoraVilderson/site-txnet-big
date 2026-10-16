@@ -31,6 +31,9 @@ import { timingSafeEqual } from 'node:crypto';
 export interface ConnectionIdentity {
   userId: string;
   tenantId: string;
+  /** The role the token names, and its fingerprint when the gate forwarded one (RT-1-n). */
+  roleId: string;
+  permHash?: string;
   sessionId: string;
   permissions: readonly string[];
 }

@@ -52,7 +52,7 @@ class FakeRedis {
 function connection(id: string, tenantId: string | null): Connection {
   return {
     id,
-    identity: tenantId ? { userId: `u-${id}`, tenantId, sessionId: `s-${id}`, permissions: [] } : null,
+    identity: tenantId ? { userId: `u-${id}`, tenantId, roleId: 'r-1', sessionId: `s-${id}`, permissions: [] } : null,
     address: '203.0.113.1',
     socket: { readyState: 1, send: () => undefined } as never,
     subscriptions: new Set<string>(),

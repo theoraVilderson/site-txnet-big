@@ -33,6 +33,8 @@ export const IdentityHeaders = {
   roleId: 'X-Role-Id',
   sessionId: 'X-Session-Id',
   permissions: 'X-User-Permissions',
+  /** The token's `permHash` (ADR-0043), so the socket's 60 s tick asks forward-auth's staleness question (RT-1-n). Conditional. */
+  permHash: 'X-Perm-Hash',
   impersonated: 'X-Impersonated',
   impersonatedBy: 'X-Impersonated-By',
   /** The messenger whose chat the session was minted in — the bot or its Mini App (F-104-q). Conditional. */

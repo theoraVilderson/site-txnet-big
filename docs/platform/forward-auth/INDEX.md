@@ -12,7 +12,7 @@ source:
   - txnet-backend/shared-core/src/lib/http/**
 owns_tables: []
 depends_on: [identity, i18n, redis-keyspace]
-updated: 2026-10-14
+updated: 2026-10-16
 ---
 
 # forward-auth

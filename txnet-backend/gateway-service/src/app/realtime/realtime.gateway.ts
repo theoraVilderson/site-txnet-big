@@ -13,6 +13,7 @@ import { RedisKeys } from '../redis/redis.keys';
 import { channelRefusal, type ChannelProofs } from './channel';
 import { RealtimeFanout } from './fanout';
 import { admissionFrom, clientAddressOf, type Admission } from './identity';
+import { PermissionSocketWatch } from './permission-watch';
 import { TenantSocketWatch } from './tenant-status';
 import {
   CloseCode,
@@ -77,6 +78,7 @@ export class RealtimeGateway implements OnApplicationShutdown {
     private readonly fanout: RealtimeFanout,
     private readonly redis: RedisService,
     private readonly tenants: TenantSocketWatch,
+    private readonly permissions: PermissionSocketWatch,
     config: ConfigService,
   ) {
     this.path = config.get<string>('REALTIME_PATH')!;
@@ -128,7 +130,7 @@ export class RealtimeGateway implements OnApplicationShutdown {
     this.fanout.listen();
     // And every tenant status change, so a terminated tenant's sockets close
     // the moment it happens rather than at the next re-check (F-018-r).
-    void this.tenants.listen((closing) => this.closeTenant(closing));
+    void this.tenants.listen((closing) => this.closeWith(closing, CloseCode.TenantClosed, 'tenant closed'));
 
     this.heartbeatTimer = setInterval(() => this.beat(), this.heartbeatMs);
     this.recheckTimer = setInterval(
@@ -381,7 +383,9 @@ export class RealtimeGateway implements OnApplicationShutdown {
     if (sessions.size === 0) return;
 
     // The backstop for a tenant status change pub/sub dropped (F-018-r).
-    this.closeTenant(await this.tenants.sweep());
+    this.closeWith(await this.tenants.sweep(), CloseCode.TenantClosed, 'tenant closed');
+    // RT-1-n: 4401 again, so the panel refreshes into what is held now.
+    this.closeWith(await this.permissions.sweep(), CloseCode.SessionRevoked, 'permissions changed');
 
     for (const sessionId of sessions) {
       let live: boolean;
@@ -393,25 +397,16 @@ export class RealtimeGateway implements OnApplicationShutdown {
         );
         continue;
       }
-      if (live) continue;
-
-      for (const connection of this.registry.bySession(sessionId)) {
-        this.logger.log(
-          `closing ${connection.id}: session ${sessionId} is no longer live`,
-        );
-        connection.socket.close(CloseCode.SessionRevoked, 'session revoked');
-        this.drop(connection);
-      }
+      if (!live) this.closeWith(this.registry.bySession(sessionId), CloseCode.SessionRevoked, 'session revoked');
     }
   }
 
-  /** Close every connection whose tenant no longer allows `read` (F-018-r). */
-  private closeTenant(closing: Connection[]): void {
+  /** Close each connection with one code: a session gone, a tenant closed (F-018-r), permissions moved (RT-1-n). */
+  private closeWith(closing: Connection[], code: number, reason: string): void {
     for (const connection of closing) {
-      this.logger.log(
-        `closing ${connection.id}: tenant ${connection.identity.tenantId} no longer reads`,
-      );
-      connection.socket.close(CloseCode.TenantClosed, 'tenant closed');
+      const { userId, tenantId, sessionId } = connection.identity;
+      this.logger.log(`closing ${connection.id} (user ${userId}, tenant ${tenantId}, session ${sessionId}): ${reason}`);
+      connection.socket.close(code, reason);
       this.drop(connection);
     }
   }

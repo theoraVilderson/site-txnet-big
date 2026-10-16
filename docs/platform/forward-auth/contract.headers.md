@@ -32,6 +32,7 @@ and has no toolchain that could consume generated Go or TypeScript.
 | `X-Role-Id` | `roleId` | every success |
 | `X-Session-Id` | `sessionId` | every success |
 | `X-User-Permissions` | claimed permissions, comma-joined | every success |
+| `X-Perm-Hash` | `permHash` | every success whose token carries one (RT-1-n) |
 | `X-Impersonated` | `true` | only while impersonating |
 | `X-Impersonated-By` | the acting admin | only while impersonating |
 | `X-Chat-Platform` | `telegram` / `bale` | only when the session's `scopeKey` is a chat's: `bot:<tenantId>:<platform>:<chatId>` (F-061-g), or `bot:<platform>:<chatId>` minted before it (F-104-q) |
@@ -82,7 +83,8 @@ question this handler answered once — and it can only ask about a session it
 was told the id of. `realtime` is its only consumer today; it re-reads
 `session:<id>` on a timer and closes the socket when the marker is gone,
 applying this gateway's own rule (a missing marker is *revoked*, never
-"unknown, allow"). Adding it to `authResponseHeaders` **and** to
+"unknown, allow"). `X-Perm-Hash` (RT-1-n) is the same reason for the
+staleness question: absent, the gateway compares the role alone. Adding it to `authResponseHeaders` **and** to
 `strip-fake-headers` is both halves of one change: forwarded but not stripped
 is a header a client can forge.
 
