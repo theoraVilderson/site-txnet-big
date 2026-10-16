@@ -26,10 +26,11 @@ export function isActiveLink(pathname: string, href: string, exact = false): boo
  * survives a reload; the one for this page is `aria-current="page"`. When two
  * links match, the longest wins — `…/catalog/translations` is the catalog's.
  */
-export function TabLinks({ ariaLabel, links, className }: { ariaLabel: string; links: readonly TabLink[]; className?: string }) {
+export function TabLinks({ ariaLabel, links, current, className }: { ariaLabel: string; links: readonly TabLink[]; current?: string; className?: string }) {
   const pathname = usePathname() ?? "";
   const matching = links.filter((l) => isActiveLink(pathname, l.href, l.exact));
-  const active = matching.sort((a, b) => b.href.length - a.href.length)[0]?.href;
+  // `current`: tabs that share one path and differ in the query (`/analytics?tab=`), which the path cannot tell apart.
+  const active = current ?? matching.sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <nav aria-label={ariaLabel} className={cn("flex gap-1 overflow-x-auto pb-1 [scrollbar-width:none]", className)}>
       {links.map((link) => {

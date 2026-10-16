@@ -84,6 +84,12 @@ export const PANEL_COUPONS = "/coupons";
  */
 export const PANEL_AI = "/ai";
 /**
+ * A tenant's analytics (F-1001-d, panel-web `contract.analytics.md`): the
+ * session's tenant here — the platform's for its staff, a reseller's for its
+ * seats; filters and tab live in the query, so a view is a link.
+ */
+export const PANEL_ANALYTICS = "/analytics";
+/**
  * Catalog management (F-026-f). One route for every audience: billing answers
  * the platform owner every item, a tenant its own (D-34).
  */
@@ -181,6 +187,8 @@ export const myResellerBotPath = (id: string, self = false) => `${resellerWorksp
  * never the session tenant's — the platform's, for the visitor this is for.
  */
 export const myResellerCatalogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/catalog`;
+/** A reseller's analytics by the path (F-1001-d): its owner's, who signs in to the platform's tenant, and the platform's staff's at tier A. */
+export const myResellerAnalyticsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/analytics`;
 /** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
 export const myResellerBrandingPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/branding`;
 /**

@@ -32,6 +32,7 @@ const STRANGER = '55555555-5555-4555-8555-555555555555';
 const STAFF_USER = '66666666-6666-4666-8666-666666666666';
 const PRODUCT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const PRODUCT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const PANEL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
 const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[] };
 const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as string[] };
@@ -45,6 +46,7 @@ const sale = (r: Record<string, unknown>) => ({ bucket: null, kind: null, produc
 
 /** Answers each rollup read by the table it reads and whether it splits by product. */
 function rollupReads(sql: string) {
+  if (sql.includes('SELECT DISTINCT')) return [{ productId: PRODUCT_A, panelId: PANEL }, { productId: PRODUCT_B, panelId: null }];
   const byProduct = /"productId" AS "productId"/.test(sql);
   if (sql.includes('analytics_sales_day'))
     return byProduct
@@ -77,6 +79,8 @@ function build(state: { version: number; refreshedAt: Date | null; rebuildingSin
     },
     analyticsRollupState: { findUnique: async () => state },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
+    product: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, nameKey: `product.${id.slice(0, 1)}.name` })) },
+    panel: { findMany: async ({ where }: { where: { id: { in: string[] } } }) => where.id.in.map((id) => ({ id, name: 'Frankfurt 1' })) },
   };
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
   const store = new Map<string, string>();
@@ -183,6 +187,13 @@ describe('AnalyticsService.read', () => {
     const asOwner = await build().service.read(owner, RESELLER, 'overview', query());
     expect(asOwner).toMatchObject({
       byProduct: { top: [{ productId: PRODUCT_A, net: { USD: '80.00' }, buyers: 6, share: 0.8889 }, { productId: PRODUCT_B, net: { USD: '10.00' }, buyers: 3 }] },
+    });
+  });
+
+  it('names every product and panel with a row in the window — catalog keys, never text — for the filter bar and the labels (F-1001-d)', async () => {
+    const answer = await build().service.read(owner, RESELLER, 'overview', query({ product: PRODUCT_A }));
+    expect(answer).toMatchObject({
+      names: { products: [{ id: PRODUCT_A, nameKey: 'product.a.name' }, { id: PRODUCT_B, nameKey: 'product.b.name' }], panels: [{ id: PANEL, name: 'Frankfurt 1' }] },
     });
   });
 

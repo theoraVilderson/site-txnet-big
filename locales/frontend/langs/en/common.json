@@ -38,7 +38,8 @@
       "wallet": "Wallet",
       "resellerList": "Reseller list",
       "resellerPackages": "Reseller packages",
-      "resellerLimits": "Reseller limits"
+      "resellerLimits": "Reseller limits",
+      "analytics": "Analytics"
     },
     "paymentCredited": {
       "title": "Payment confirmed",
@@ -2069,7 +2070,8 @@
       "branding": "Reseller brand",
       "setup": "Reseller setup",
       "groups": "Groups",
-      "accessLog": "Access log"
+      "accessLog": "Access log",
+      "analytics": "Analytics"
     },
     "scope": "Reseller",
     "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
@@ -2085,7 +2087,8 @@
       "domains": "Domains",
       "bot": "Bot",
       "groups": "Groups",
-      "accessLog": "Access log"
+      "accessLog": "Access log",
+      "analytics": "Analytics"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -6518,5 +6521,96 @@
       "copy": "Copy",
       "copied": "Copied"
     }
+  },
+  "analytics": {
+    "title": "Analytics",
+    "subtitle": "Sales, buyers and services over time",
+    "updated": "Updated {{ago}}",
+    "notYetRolled": "Figures are being prepared for the first time",
+    "rebuilding": {
+      "title": "Figures are rebuilding",
+      "body": "The time zone changed, so every day is being recounted. The numbers return when it finishes."
+    },
+    "tabs": {
+      "overview": "Overview"
+    },
+    "filters": {
+      "button": "Filters",
+      "title": "Filters",
+      "range": "Period",
+      "compare": "Compare with",
+      "product": "Product",
+      "panel": "Panel",
+      "currency": "Currency",
+      "allProducts": "All products",
+      "allPanels": "All panels",
+      "from": "From",
+      "to": "To",
+      "done": "Done",
+      "clear": "Clear filters"
+    },
+    "ranges": {
+      "today": "Today",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "thisMonth": "This month",
+      "lastMonth": "Last month",
+      "90d": "Last 90 days",
+      "custom": "Custom"
+    },
+    "compares": {
+      "previous": "Previous period",
+      "year": "Same period last year",
+      "none": "No comparison"
+    },
+    "severalCurrencies": "This period has figures in more than one currency. They are never added together: pick the one to show.",
+    "hero": {
+      "title": "Performance",
+      "metric": "Metric",
+      "metrics": {
+        "net": "Net sales",
+        "topUps": "Top-ups",
+        "orders": "Orders",
+        "newBuyers": "New buyers"
+      },
+      "current": "This period",
+      "previous": "Previous period"
+    },
+    "kpis": {
+      "orders": "Orders",
+      "aov": "Average order",
+      "buyers": "Buyers",
+      "buyersSplit": "{{new}} new · {{returning}} returning",
+      "renewal": "Renewal rate",
+      "renewalSoon": "Coming soon",
+      "activeGrants": "Active services",
+      "bytesUsed": "Traffic used"
+    },
+    "byProduct": {
+      "title": "Sales by product",
+      "subtitle": "Net sales in this period",
+      "other": "Other",
+      "unnamed": "Without a product",
+      "hidden": "{{count}} products with fewer than 5 buyers are not shown"
+    },
+    "buyers": {
+      "title": "New and returning buyers",
+      "subtitle": "Per period",
+      "new": "New",
+      "returning": "Returning"
+    },
+    "calendar": {
+      "title": "Sales by day",
+      "subtitle": "Net sales, last 12 months"
+    },
+    "table": {
+      "date": "Date",
+      "value": "Value",
+      "product": "Product",
+      "share": "Share",
+      "previous": "Previous"
+    },
+    "hiddenCells": "Some figures are hidden because they would describe fewer than 5 people.",
+    "loadFailed": "The analytics could not be loaded."
   }
 }

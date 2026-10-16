@@ -28,25 +28,28 @@ export interface BarListProps {
   items: readonly BarItem[];
   /** How Other's folded value is written. Default: the reader's number format. */
   formatValue?: (n: number) => string;
+  /** Other already folded by the server (billing's top 7 + `other`): drawn as Other, nothing folded again. */
+  other?: number | null;
 }
 
-/** Largest first, the first seven, then everything else as one neutral Other. */
-export function barRows(items: readonly BarItem[], otherLabel: string): (BarItem & { other?: true })[] {
+/** Largest first, the first seven, then everything else — and any `folded` remainder — as one neutral Other. */
+export function barRows(items: readonly BarItem[], otherLabel: string, folded: number | null = null): (BarItem & { other?: true })[] {
   const sorted = [...items].sort((a, b) => b.value - a.value);
   const rest = sorted.slice(BAR_LIST_TOP);
-  if (rest.length === 0) return sorted;
-  return [...sorted.slice(0, BAR_LIST_TOP), { id: "other", label: otherLabel, value: rest.reduce((n, r) => n + r.value, 0), color: CHART_OTHER, other: true }];
+  if (rest.length === 0 && folded === null) return sorted;
+  const value = rest.reduce((n, r) => n + r.value, folded ?? 0);
+  return [...sorted.slice(0, BAR_LIST_TOP), { id: "other", label: otherLabel, value, color: CHART_OTHER, other: true }];
 }
 
 /**
  * Horizontal bars, sorted, top 7 + Other, each with its value and share as
  * labels (F-1001-c) — the share is of the whole list, Other included.
  */
-export function BarList({ label, items, formatValue }: BarListProps) {
+export function BarList({ label, items, formatValue, other = null }: BarListProps) {
   const { t } = useLocale();
   const { main } = useChartTheme();
   const fmt = useChartFormat();
-  const rows = barRows(items, t("common", K.other));
+  const rows = barRows(items, t("common", K.other), other);
   const total = rows.reduce((n, r) => n + Math.max(0, r.value), 0);
   const max = Math.max(0, ...rows.map((r) => r.value));
 

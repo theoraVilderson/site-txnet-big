@@ -116,6 +116,7 @@ describe("the reseller's links", () => {
     expect(byId).toMatchObject({ id: "reseller", section: "account" });
     expect(byId.children.map((l) => l.href)).toEqual([
       "/my-resellers/r-9",
+      "/my-resellers/r-9/analytics",
       "/my-resellers/r-9/catalog",
       "/my-resellers/r-9/gateways",
       "/my-resellers/r-9/users",

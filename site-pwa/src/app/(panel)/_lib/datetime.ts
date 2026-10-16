@@ -89,7 +89,7 @@ export function formatRelative(instant: string | null | undefined, lang: string,
 }
 
 /** The locale whose short date is `YYYY-MM-DD` — a sortable day key, never shown to a person (C-17). */
-const DAY_KEY_LOCALE = "en-CA";
+export const DAY_KEY_LOCALE = "en-CA";
 
 /** `YYYY-MM-DD` of an instant on `zone`'s wall clock; this browser's when no zone is given or `Intl` refuses it. */
 export function dayIn(instant: string | number | Date, zone?: string | null): string {

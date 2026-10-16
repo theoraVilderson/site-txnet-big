@@ -17,6 +17,7 @@ import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
 import { TabContext, contextOf } from './analytics-context';
 import { catalogOf } from './analytics-catalog';
+import { namesOf } from './analytics-names';
 import { overviewOf } from './analytics-overview';
 import { salesOf } from './analytics-sales';
 import { AnalyticsQuery, AnalyticsTab } from './analytics.schema';
@@ -87,7 +88,7 @@ export class AnalyticsService {
         this.prisma,
         async (tx) => {
           const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides });
-          return { granularity: c.granularity, buckets: c.buckets, suppressed: hides, ...(await TABS[tab](c)) };
+          return { granularity: c.granularity, buckets: c.buckets, suppressed: hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
         },
         { timeout: READ_TIMEOUT_MS },
       );

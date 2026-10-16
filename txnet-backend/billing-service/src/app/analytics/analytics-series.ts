@@ -15,6 +15,8 @@ export type Series = {
   topUps: (Amounts | null)[];
   orders: (number | null)[];
   newBuyers: (number | null)[];
+  /** Buyers of the bucket whose first purchase came before it — the overview's new vs returning (F-1001-d). */
+  returningBuyers: (number | null)[];
 };
 
 const add = (into: ByCurrency, code: string, v: Prisma.Decimal) => into.set(code, (into.get(code) ?? new Prisma.Decimal(0)).plus(v));
@@ -63,6 +65,7 @@ export function seriesOf(keys: readonly Day[], figures: Map<Day, Bucket>, curren
     topUps: each((b) => amountsOf(b.topUps, currencies)),
     orders: each((b) => b.orders),
     newBuyers: each((b) => b.newBuyers),
+    returningBuyers: each((b) => b.buyers - b.newBuyers),
   };
 }
 

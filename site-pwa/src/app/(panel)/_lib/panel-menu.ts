@@ -23,6 +23,7 @@ import {
   Store,
   ShoppingCart,
   Sparkles,
+  ChartColumn,
   Ticket,
   TicketPercent,
   UserCog,
@@ -32,6 +33,7 @@ import {
 } from "lucide-react";
 import {
   PANEL_AI,
+  PANEL_ANALYTICS,
   PANEL_CATALOG,
   PANEL_COUPONS,
   PANEL_DEPOSIT,
@@ -241,8 +243,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
       },
     ],
   },
-  // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel
-  // runs today and why this user may not spin it.
+  // F-707-g. Every signed-in user: billing's `GET /wheel` says whether a wheel runs today and why this user may not spin it.
   {
     section: "account",
     id: "wheel",
@@ -266,11 +267,9 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     icon: Headphones,
     href: PANEL_SUPPORT,
   },
-  // F-019-i. The other side of the reseller product: any user of the platform
-  // owner's tenant may buy a reseller, so this one names no permission key —
-  // only the tenant type, which is the service's own `not_platform_user`.
-  // F-114-c: not the platform's own account, and not a user who already owns
-  // one — the sidebar's "my reseller panel" is their way in.
+  // F-019-i. Any user of the platform owner's tenant may buy a reseller, so no permission key — only the tenant
+  // type, the service's own `not_platform_user`. F-114-c: not the platform's own account, nor a user who already
+  // owns one — the sidebar's "my reseller panel" is their way in.
   {
     section: "account",
     id: "buy-reseller",
@@ -290,6 +289,8 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
   },
 
   // ── sales ──
+  // F-1001-d. The key hides it, billing's `analytics.read` door decides; a reseller's owner reads its own on the workspace.
+  { section: "sales", id: "analytics", label: M.analytics, icon: ChartColumn, href: PANEL_ANALYTICS, requires: ["analytics.read"] },
   // F-026-f. The permission hides it, billing scopes what it lists (D-34).
   {
     section: "sales",
@@ -308,8 +309,7 @@ export const PANEL_MENU: readonly PanelMenuEntry[] = [
     href: PANEL_COUPONS,
     requires: ["coupon.manage"],
   },
-  // F-038-j2. Every tenant has its own AI: the permission hides it, and ai
-  // answers each tenant its own (F-038-j1).
+  // F-038-j2. Every tenant has its own AI: the permission hides it, and ai answers each tenant its own (F-038-j1).
   {
     section: "sales",
     id: "ai",

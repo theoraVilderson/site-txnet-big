@@ -12,8 +12,8 @@ The analytics page for the platform owner and every reseller, and the chart
 kit it is built on. Decided by the user on 2026-10-06; written before any of it
 is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
-this file never redefines one. **Built: the chart kit (F-1001-c).** The page
-and its tabs are not yet.
+this file never redefines one. **Built: the chart kit (F-1001-c); the page,
+its filter bar and the Overview (F-1001-d).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -141,6 +141,23 @@ page for the owner and a reseller; the owner also gets the Resellers tab.
 - **Live:** the page re-reads on `billing.analytics.refreshed` with
   `useLiveReread` (C-14) — never a poll.
 - **Rebuilding** (zone change) shows an `Alert` instead of half-built numbers.
+
+**As built (F-1001-d, `(panel)/analytics/`).** One `AnalyticsView`, three
+addresses: `/analytics` reads the session's tenant; `/reseller/analytics` and
+`/my-resellers/:id/analytics` hand it the reseller (workspace rule 4) — its
+owner signs in to the platform's tenant, so it reads its own there, and the
+menu row is the workspace's (`analytics.read`). The URL holds `tab`, `range`
+(a preset, or `custom` with `from`/`to`), `compare`, `product`, `panel` and
+`currency`, defaults left off (`_lib/filters.ts`). Presets are cut on the
+viewer's day, months in the language's calendar (`Intl`: Jalali for Persian);
+the figures are cut on the tenant's. **Live is the session's tenant only**: a
+`tenant:` channel needs an exact tenant match, so a workspace view reads on load
+and on a filter change. Names come from billing's `names` (product `nameKey`
+-> the published `catalog` texts; a panel's own name). Several currencies: an
+`Alert` with the currency picker, never one sum. Renewal reads "coming soon"
+until F-1001-f; the Export menu is F-1007-b; insights F-1001-j; the owner's
+top resellers F-1001-i. Kit additions: `TabLinks` `current` (tabs that share
+a path), `BarList` `other` (billing's folded remainder, never folded twice).
 
 ### Overview (F-1001-d)
 

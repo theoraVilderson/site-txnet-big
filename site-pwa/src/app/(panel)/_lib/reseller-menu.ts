@@ -1,4 +1,4 @@
-import { Bot, Globe, History, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, UsersRound, type LucideIcon } from "lucide-react";
+import { Bot, ChartColumn, Globe, History, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, UsersRound, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -10,6 +10,7 @@ import {
   resellerWorkspaceRoot,
   myResellerBotPath,
   myResellerBrandingPath,
+  myResellerAnalyticsPath,
   myResellerCatalogPath,
   myResellerConsolePath,
   myResellerDomainsPath,
@@ -51,6 +52,7 @@ interface ResellerMenuLink extends PanelMenuLink {
  */
 export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-home", label: R.menu.home, short: R.short.home, icon: Store, href: myResellerConsolePath },
+  { id: "reseller-analytics", label: R.menu.analytics, short: R.short.analytics, icon: ChartColumn, href: myResellerAnalyticsPath, key: "analytics.read" },
   { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath, key: "catalog.manage" },
   { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath, key: "gateway.manage" },
   { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath, key: "user.read" },

@@ -143,7 +143,11 @@ inside the window. To the platform's staff on a reseller (`suppressed`): series
 buckets, calendar days and product/panel rows under 5 buyers, with their
 complements (`hiddenCells`), and `payments.byKind` is `null` — the rollup has
 no payer per gateway. Cache: `analytics:<tenant>:v<version>:<tab>:<hash>`, 1 h,
-bucket `ANALYTICS_READ`.
+bucket `ANALYTICS_READ`. **F-1001-d added (C-37, additive):** every tab answers
+`names` — each product (`nameKey`, catalog order) and panel (`name`) with a
+sales or stock row in the window, unfiltered, so a filter that is on stays a
+choice (`analytics-names.ts`); and `series.returningBuyers` (buyers − new, per
+bucket) for the overview's new vs returning.
 
 **Insights** (F-1001-j): `overview` also answers up to three `insights`, each
 `{key, params}` rendered from locale keys — no language model. In order: the

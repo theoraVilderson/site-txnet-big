@@ -84,7 +84,7 @@ describe("the menu's sections (N1)", () => {
 
   it.each([
     ["account", ["dashboard", "buy", "my-services", "wallet", "wheel", "lotteries", "support", "buy-reseller"]],
-    ["sales", ["catalog", "coupons", "ai", "wheel-settings", "lottery-settings"]],
+    ["sales", ["analytics", "catalog", "coupons", "ai", "wheel-settings", "lottery-settings"]],
     ["finance", ["gateways", "manual-payments", "tenant-billing"]],
     ["people", ["users", "groups", "resellers"]],
     ["infra", ["systems"]],
