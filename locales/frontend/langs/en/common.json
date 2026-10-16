@@ -4072,7 +4072,11 @@
       "saved": "Price added.",
       "history": "Price history",
       "fromDay": "From {{from}}",
-      "amountInvalid": "Write the amount in dollars, at most two decimals."
+      "amountInvalid": "Write the amount in dollars, at most two decimals.",
+      "traffic": "Monthly traffic (GB)",
+      "trafficHint": "What this price buys; leave blank if none.",
+      "trafficInvalid": "Write the traffic in whole gigabytes, or leave it blank.",
+      "trafficCurrent": "Includes {{traffic}} of traffic a month"
     }
   },
   "shop": {
@@ -6558,7 +6562,8 @@
       "catalog": "Products and panels",
       "resellers": "Resellers",
       "margin": "Profit",
-      "cohorts": "Cohorts"
+      "cohorts": "Cohorts",
+      "capacity": "Capacity"
     },
     "filters": {
       "button": "Filters",
@@ -6840,6 +6845,46 @@
         "title": "Lifetime value by channel",
         "subtitle": "Where people signed up, and what each is worth over the months after their first purchase",
         "source": "Channel"
+      }
+    },
+    "capacity": {
+      "title": "Panels this month",
+      "subtitle": "Traffic against the month's allowance and users against the cap, forecast from the last 7 days.",
+      "intro": "Each panel you own this month: when it fills, and what it will cost.",
+      "asOf": "This month (UTC) as of {{day}}. The date range and comparison do not apply here.",
+      "panel": "Panel",
+      "noPrice": {
+        "title": "Some panels have no price",
+        "body": "No monthly cost or traffic is set for {{panels}}, so their traffic has no limit to fill and their margin is not shown.",
+        "action": "Set it in Systems"
+      },
+      "traffic": {
+        "title": "Traffic",
+        "used": "Used this month",
+        "projected": "Projected for the month",
+        "allowance": "Monthly allowance",
+        "ofAllowance": "{{used}} used, {{projected}} projected of {{allowance}}",
+        "noAllowance": "{{used}} used, {{projected}} projected. No monthly traffic set."
+      },
+      "users": {
+        "title": "Users",
+        "cap": "User cap",
+        "ofCap": "{{clients}} of {{cap}}",
+        "noCap": "{{clients}}, no cap",
+        "perDay": "{{count}} a day"
+      },
+      "full": {
+        "title": "Full",
+        "now": "Full now",
+        "on": "Full on {{day}} (in {{days}} days)",
+        "none": "Not full this month"
+      },
+      "money": {
+        "cost": "This month's cost",
+        "margin": "Projected margin",
+        "costOf": "This month's cost {{amount}}",
+        "marginOf": "Projected margin {{amount}}",
+        "noCost": "No cost set"
       }
     }
   }

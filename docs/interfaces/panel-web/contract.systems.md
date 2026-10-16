@@ -229,7 +229,7 @@ The *why* is **ADR-0080**.
    in an `Alert`); `not_checked` is `notChecked`; a down, degraded or refusing
    panel names its cause and fix (`CAUSE_KEYS`), since when and the last
    check. The page re-reads on `network.panel.state_changed` too (`PANEL_EVENTS`).
-19. **A panel's monthly cost** (F-1002-c, network `contract.panel-cost.md`): the sheet's Cost section (`PanelCost.tsx`) shows the price in effect or "no cost set", adds one (USD as typed, ≤ 2 places; from today, never before this UTC month — `_lib/panel-cost.ts` refuses first, in billing's own sentence) and lists every price; a save adds, never edits. Refusal words: `_lib/systems-refusals.ts`.
+19. **A panel's monthly cost** (F-1002-c, network `contract.panel-cost.md`): the sheet's Cost section (`PanelCost.tsx`) shows the price in effect or "no cost set", adds one (USD as typed, ≤ 2 places; from today, never before this UTC month — `_lib/panel-cost.ts` refuses first, in billing's own sentence) and lists every price; a save adds, never edits. The month's traffic the price buys rides with it (F-1005-b): optional whole GB, sent as bytes 1024-based as sizes are shown, kept in the history line. Refusal words: `_lib/systems-refusals.ts`.
 ## Proof
 
 `systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
@@ -243,7 +243,7 @@ RADIUS secret's predicates and limits, the hold
 and drift predicates, `validateNote`, the menu entry, every key in `en` and `fa`.
 `systems/member-settings.test.ts` — rules 16–17: `LAYER_KEYS` against billing's `SellingLayer`, `inboundChoices`, `sellsNobody`, `refusalSentence` named and plain.
 `systems/systems-guide.test.ts` — rules 16 and 18: `guideOf`, `panelStatusOf`, `attentionOf`; `memberChoiceOf` / `validateMemberChoice` ("same as the panel" as null, an own cap, own inbounds needing one, only what changed).
-`systems/panel-cost.test.tsx` — rule 19: the body as typed, a closed month refused before billing, the history kept on a save.
+`systems/panel-cost.test.tsx` — rule 19: the body as typed, a closed month refused before billing, the history kept on a save; the traffic as bytes or none.
 `systems/drift-resolution.test.ts` — rules 6 and 13 (F-027-fb): the choices against billing's `DRIFT_RESOLUTIONS`, asked only of `identity_lost`, the move's addresses, `addressMayMove` sent only when changed; `DRIFT_EVENTS` against `events.json` (F-027-fh).
 `systems/panel-lifecycle.test.ts` — rules 13–15: only what changed is sent, the untouched form refused, the address warning, a push panel's fields, `groupsHolding`, both delete outcomes, `groupDeleteBlock`, `visiblePanels`.
 `systems/panel-groups.test.ts` — rule 11: `ConfigProtocol` and `PanelGroupMemberRole` read out of `network.prisma`; rule 12: `InboundPlacement` and the two inbound refusals from their homes, `validateInbounds` (only what changed, caps, never an unsellable tick), `inboundNote`, `nothingPicked`; the drain multiple out of `group-drain.ts`, `validateGroup` (create, limits, an edit sending only what changed), `memberPlaceable`, `groupHealth`, `addablePanels`, `canDrain` / `canRemove` / `isLastToServe` / `canEvict`, `drainEarliestAt`, `waitOf`.

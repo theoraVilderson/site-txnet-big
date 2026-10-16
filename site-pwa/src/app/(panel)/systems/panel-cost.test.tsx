@@ -26,7 +26,7 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
 
 const PANEL = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
-const price = (usd: string, from: string) => ({ monthlyCostUsd: usd, effectiveFrom: from, createdByUserId: null, createdAt: `${from}T08:00:00.000Z` });
+const price = (usd: string, from: string) => ({ monthlyCostUsd: usd, monthlyTrafficBytes: null, effectiveFrom: from, createdByUserId: null, createdAt: `${from}T08:00:00.000Z` });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -42,6 +42,14 @@ describe("panelCostBodyOf", () => {
     expect(panelCostBodyOf({ amount: "", from: "2026-10-16" }, "2026-10-16")).toEqual({ error: "amount" });
     expect(panelCostBodyOf({ amount: "10", from: "2026-09-30" }, "2026-10-16")).toEqual({ error: "closedMonth" });
     expect(panelCostBodyOf({ amount: "10", from: "2026-10-01" }, "2026-10-16")).toEqual({ body: { monthlyCostUsd: "10", effectiveFrom: "2026-10-01" } });
+  });
+
+  it("sends the month's traffic as whole bytes, 1024-based as sizes are shown, or none when blank (F-1005-b)", () => {
+    expect(panelCostBodyOf({ amount: "31", trafficGb: "1000", from: "2026-10-16" }, "2026-10-16")).toEqual({
+      body: { monthlyCostUsd: "31", monthlyTrafficBytes: "1073741824000", effectiveFrom: "2026-10-16" },
+    });
+    expect(panelCostBodyOf({ amount: "31", trafficGb: " ", from: "2026-10-16" }, "2026-10-16")).toEqual({ body: { monthlyCostUsd: "31", effectiveFrom: "2026-10-16" } });
+    for (const trafficGb of ["0", "1.5", "-1", "12345678"]) expect(panelCostBodyOf({ amount: "31", trafficGb, from: "2026-10-16" }, "2026-10-16")).toEqual({ error: "traffic" });
   });
 
   it("opens on the first day of the reader's UTC month", () => {

@@ -8,7 +8,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ANALYTICS_TABS, type AnalyticsNames } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
-import { PANEL_ANALYTICS } from "@/lib/routes";
+import { PANEL_ANALYTICS, PANEL_SYSTEMS } from "@/lib/routes";
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Alert, Button, PageHeader, SegmentedControl, TabLinks } from "../../_components/kit";
@@ -23,6 +23,7 @@ import { currencyOf, productNamer } from "../_lib/overview";
 import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
+import { CapacityTab } from "./CapacityTab";
 import { CatalogTab } from "./CatalogTab";
 import { CohortsTab } from "./CohortsTab";
 import { CustomersTab } from "./CustomersTab";
@@ -159,6 +160,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
         />
       ) : filters.tab === "cohorts" ? (
         <CohortsTab cohorts={body?.tab === "cohorts" ? body : null} currency={currency ?? ""} formatMonth={(day) => formatMonth(day, lang)} stale={stale} />
+      ) : filters.tab === "capacity" ? (
+        <CapacityTab capacity={body?.tab === "capacity" ? body : null} currency={currency ?? ""} formatDay={formatDay} systemsHref={owner ? PANEL_SYSTEMS : null} stale={stale} />
       ) : filters.tab === "margin" ? (
         <ProfitTab
           margin={body?.tab === "margin" ? body : null}

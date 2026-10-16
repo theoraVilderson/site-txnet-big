@@ -67,3 +67,25 @@ every reader of `/analytics`.
    Customers tab names it (`_lib/sources.ts`).
 4. Its table views are the flat lists: cohort · month · value, channel ·
    month · LTV.
+
+## Capacity (F-1005-b)
+
+`CapacityTab`, over billing's `capacity` (F-1005-a,
+[contract.analytics-capacity.md](../../domains/billing/contract.analytics-capacity.md),
+ADR-0150), `?tab=capacity`, offered to every reader of `/analytics`.
+
+1. **This month, today:** the tab says its figures are the UTC month as of
+   today, and that the range and comparison do not apply — the filter bar
+   stays, so the other tabs keep their window.
+2. **A card per panel**, soonest full first (billing's order): its full date
+   as a `Badge` with an icon and words — full now, within 7 days
+   (`SOON_DAYS`, warning), later, or not this month; traffic as a `Meter` of
+   projected over allowance with used / projected / allowance in words; users
+   as a `Meter` of users over the cap; the month's cost and projected margin,
+   a loss with Profit's badge. Bytes are written by `formatBytes`.
+3. **No price:** an `Alert` names the panels with none — no allowance to
+   fill and no margin, each card saying "no cost set". The link to
+   `/systems` only on the platform's own view (`resellersVisible`): a
+   reseller cannot price a panel yet.
+4. Its table view is every figure of every panel.
+

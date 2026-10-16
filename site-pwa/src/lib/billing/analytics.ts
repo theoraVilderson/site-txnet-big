@@ -3,7 +3,7 @@ import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today, in the page's order; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers", "margin", "cohorts"] as const;
+export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers", "margin", "cohorts", "capacity"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -192,6 +192,41 @@ export interface AnalyticsCohorts {
   channelLtv: { source: string; k: number; ltv: Amounts }[];
 }
 
+/** One panel this month (billing `capacity`, F-1005-a): bytes as decimal strings, days as `YYYY-MM-DD` (UTC). */
+export interface CapacityPanel {
+  panelId: string;
+  name: string;
+  usedBytes: string;
+  perDayBytes: string | null;
+  projectedBytes: string | null;
+  allowanceBytes: string | null;
+  trafficFullOn: string | null;
+  observedDays: number | null;
+  clients: number | null;
+  maxClients: number | null;
+  clientsPerDay: number | null;
+  clientsFullOn: string | null;
+  /** The sooner of the two; `daysUntilFull` 0 is today. */
+  fullOn: string | null;
+  daysUntilFull: number | null;
+  monthlyCostUsd: string | null;
+  projectedCostUsd: string | null;
+  /** The month projected to its end; null with no cost set — no cost, no margin. */
+  net: Amounts | null;
+  cost: Amounts | null;
+  margin: Amounts | null;
+  marginRate: number | null;
+  loss: boolean;
+}
+
+/** The Capacity tab (billing `capacity`, F-1005-a): the UTC month as of today — the window does not apply. */
+export interface AnalyticsCapacity {
+  currencies: string[];
+  month: string;
+  today: string;
+  panels: CapacityPanel[];
+}
+
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
 export interface GatewayCell {
   gatewayKind: string | null;
@@ -253,6 +288,7 @@ export interface AnalyticsBodies {
   resellers: AnalyticsResellers;
   margin: AnalyticsMargin;
   cohorts: AnalyticsCohorts;
+  capacity: AnalyticsCapacity;
 }
 
 /** One tab's answer, its `tab` the tab asked: over the union of tabs, a union `tab` narrows. */

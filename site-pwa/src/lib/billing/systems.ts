@@ -44,6 +44,8 @@ export type ConnectionTestFault =
 /** One monthly price of a panel (F-1002-a): USD as a decimal string, from a UTC day. */
 export interface PanelCostView {
   monthlyCostUsd: string;
+  /** The month's traffic that price buys, whole bytes as a string; null = none set (F-1005-a). */
+  monthlyTrafficBytes: string | null;
   effectiveFrom: string;
   createdByUserId: string | null;
   createdAt: string;
@@ -310,7 +312,7 @@ export const systemsCalls = {
   },
 
   /** A new price — a row added, never one edited; 400 `cost_in_closed_month` before this month. */
-  async setPanelCost(id: string, body: { monthlyCostUsd: string; effectiveFrom: string }): Promise<PanelCostHistory> {
+  async setPanelCost(id: string, body: { monthlyCostUsd: string; monthlyTrafficBytes?: string; effectiveFrom: string }): Promise<PanelCostHistory> {
     return call<PanelCostHistory>(`/systems/panels/${encodeURIComponent(id)}/cost`, { method: "POST", body: JSON.stringify(body) });
   },
 
