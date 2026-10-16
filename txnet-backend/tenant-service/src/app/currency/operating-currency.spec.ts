@@ -61,7 +61,9 @@ describe('TenantOperatingCurrencyService', () => {
       tenant: { findUnique: appPrisma.tenant.findUnique },
       currency: { findMany: vi.fn(async () => CURRENCIES) },
     };
-    all['$transaction'] = vi.fn(async (fn: (tx: unknown) => unknown) => fn(all));
+    // Its own client, so a write made outside the callback is not mistaken for one inside it.
+    const tx = { outboxEvent: { create: vi.fn(async (_args: { data: Record<string, unknown> }) => ({ id: 'e1' })) } };
+    all['$transaction'] = vi.fn(async (fn: (tx: unknown) => unknown) => fn(tx));
     // The conversion itself runs against Postgres in currency-change.int.spec.ts; here it moves the label.
     vi.mocked(readFxPair).mockImplementation(async (_db, _cache, fromCode, toCode) => ({ fromCode, toCode, rate: new Prisma.Decimal(600000), from: null, to: null }));
     vi.mocked(convertOperatingCurrency).mockImplementation(async (_tx, input) => {
@@ -70,7 +72,7 @@ describe('TenantOperatingCurrencyService', () => {
     });
     const access = new ResellerAccess(appPrisma as never);
     const service = new TenantOperatingCurrencyService(access, all as never, { get: vi.fn(async () => null) } as never);
-    return { service, all, tenants };
+    return { service, all, tx, tenants };
   };
 
   const refusal = async (p: Promise<unknown>) => {
@@ -98,6 +100,25 @@ describe('TenantOperatingCurrencyService', () => {
     expect(vi.mocked(readFxPair).mock.calls.at(-1)?.slice(2, 4)).toEqual(['USD', 'IRR']);
     expect((await service.set(staff, RESELLER, 'USD', '10.0.0.1')).code).toBe('USD');
     expect(vi.mocked(readFxPair).mock.calls.at(-1)?.slice(2, 4)).toEqual(['IRR', 'USD']);
+  });
+
+  // RT-1-l: every member's money pages re-read on it (contract.live-events.md).
+  it("writes tenant.currency.changed for the tenant's members in the conversion's own transaction, after it", async () => {
+    const { service, tx } = build();
+    await service.set(owner, RESELLER, 'IRR', '10.0.0.1');
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
+    expect(tx.outboxEvent.create.mock.calls[0][0]).toMatchObject({
+      data: { aggregate: 'tenant.currency', aggregateId: RESELLER, type: 'tenant.currency.changed', payload: { tenantId: RESELLER } },
+    });
+    expect(vi.mocked(convertOperatingCurrency).mock.invocationCallOrder.at(-1)).toBeLessThan(tx.outboxEvent.create.mock.invocationCallOrder[0]);
+  });
+
+  it('a retry that found the change already made converts nothing, and writes no event', async () => {
+    const { service, tx } = build();
+    vi.mocked(convertOperatingCurrency).mockResolvedValueOnce({ changeId: null, fromCode: 'IRR', toCode: 'IRR', rate: '1', summary: null });
+    const retried = await service.set(owner, RESELLER, 'IRR', '10.0.0.1');
+    expect(retried.conversion).toBeNull();
+    expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
   it('refuses a currency with no rate, an inactive one, one with three decimals and an unknown code', async () => {

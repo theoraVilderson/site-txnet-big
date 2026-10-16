@@ -8,6 +8,7 @@ import {
   ResellerAccessRejection,
   ResellerActor,
   DERIVED_CURRENCIES,
+  OutboxEventType,
   convertOperatingCurrency,
   holdsPermission,
   readFxPair,
@@ -106,7 +107,17 @@ export class TenantOperatingCurrencyService {
     let outcome;
     try {
       outcome = await this.all.$transaction(
-        (tx) => convertOperatingCurrency(tx, { tenantId: target.id, toCode: code, pair, actorUserId: actor.userId, actorIp: ip }),
+        async (tx) => {
+          const converted = await convertOperatingCurrency(tx, { tenantId: target.id, toCode: code, pair, actorUserId: actor.userId, actorIp: ip });
+          // RT-1-l: every member's money pages re-read — only for a change made here; a retry converted nothing.
+          if (converted.changeId) {
+            await tx.outboxEvent.create({
+              data: { aggregate: 'tenant.currency', aggregateId: target.id, type: OutboxEventType.TENANT_CURRENCY_CHANGED, payload: { tenantId: target.id } },
+              select: { id: true },
+            });
+          }
+          return converted;
+        },
         { timeout: CHANGE_TIMEOUT_MS },
       );
     } catch (e) {

@@ -153,6 +153,22 @@ describe('billing.analytics.reseller_refreshed (F-1001-p)', () => {
   });
 });
 
+describe('tenant.currency.changed (RT-1-l)', () => {
+  it("reaches every member of the tenant on one channel, naming only the tenant", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'tenant.currency',
+      aggregateId: TENANT,
+      type: OutboxEventType.TENANT_CURRENCY_CHANGED,
+      payload: { tenantId: TENANT },
+    });
+
+    expect(published).toEqual([{ channel: `members:${TENANT}`, payload: { type: 'tenant.currency.changed', tenantId: TENANT } }]);
+  });
+});
+
 describe('tenant.subscription.renewed (F-019-c1)', () => {
   it("reaches the reseller owner's channel only, naming nothing", async () => {
     const { consumer, published } = build();

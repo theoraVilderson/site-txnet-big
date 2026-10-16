@@ -49,6 +49,8 @@ export const RealtimeEventType = {
   TENANT_SUBSCRIPTION_GRACE_EXTENDED: 'tenant.subscription.grace_extended',
   /** AC-1-q: what a person may do moved — a role set or edited, a seat removed (`recordAccessChange`, shared-core). */
   ACCESS_CHANGED: 'identity.access.changed',
+  /** RT-1-l: a tenant's operating currency changed — every member's money pages re-read (`TenantOperatingCurrencyService.set`). */
+  TENANT_CURRENCY_CHANGED: 'tenant.currency.changed',
   /** RT-1-j: an open payment (`pending`/`expired`) appeared, moved or settled — the manual-payments list and its badge re-read (`announceOpenPayment`). */
   PAYMENT_OPEN_CHANGED: 'billing.payment.open_changed',
   /** F-1001-a: a rollup pass changed a tenant's analytics rows for `{from, to}` — the analytics page re-reads (`AnalyticsRollupService`). */
@@ -220,6 +222,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: 'worker-service',
+  [OutboxEventType.TENANT_CURRENCY_CHANGED]: 'worker-service',
   [OutboxEventType.ANALYTICS_REFRESHED]: 'worker-service',
   [OutboxEventType.ANALYTICS_RESELLER_REFRESHED]: 'worker-service',
   [OutboxEventType.ANALYTICS_USER_LOSS]: 'worker-service',

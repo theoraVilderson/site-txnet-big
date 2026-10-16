@@ -179,7 +179,7 @@ and a row in [contract.channels.md](contract.channels.md). Live push gains
 `channel.spec.ts`: a member hears it, another tenant's member and an
 anonymous connection are refused.
 
-**RT-1-l — the operating currency changed.** Type `tenant.currency.changed`,
+**RT-1-l — the operating currency changed** — built 2026-10-16. Type `tenant.currency.changed`,
 `members:`, body `{type, tenantId}`. Written in `OperatingCurrencyService.set`
 (`tenant-service/src/app/currency/operating-currency.service.ts`) inside the
 `$transaction` callback, after `convertOperatingCurrency`, and only when it
