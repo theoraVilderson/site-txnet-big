@@ -28,6 +28,7 @@ function FilterFields({ filters, window, names, productName, onChange }: FilterB
     onChange(range === "custom" ? { range, from: window.from, to: window.to } : { range, from: null, to: null });
   const products = names?.products ?? [];
   const panels = names?.panels ?? [];
+  const kinds = names?.kinds ?? [];
 
   return (
     <>
@@ -51,6 +52,16 @@ function FilterFields({ filters, window, names, productName, onChange }: FilterB
         onChange={(compare) => onChange({ compare })}
         options={ANALYTICS_COMPARES.map((c) => ({ value: c, label: t("common", K.compares[c]) }))}
       />
+      {/* One kind is no choice (ADR-0148 (3)); a kind that is on stays offered while the window holds two. */}
+      {(kinds.length > 1 || filters.fulfilment) && (
+        <Select
+          ariaLabel={t("common", K.filters.kind)}
+          value={filters.fulfilment ?? ""}
+          onChange={(v) => onChange({ fulfilment: kinds.find((k) => k === v) ?? null })}
+          options={[{ value: "", label: t("common", K.filters.allKinds) }, ...kinds.map((k) => ({ value: k, label: t("common", K.kinds[k]) }))]}
+          className="md:w-44"
+        />
+      )}
       {products.length > 0 && (
         <Select
           ariaLabel={t("common", K.filters.product)}

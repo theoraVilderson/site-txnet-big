@@ -15,6 +15,14 @@ export type AnalyticsCalendar = "jalali" | "gregorian";
 
 export type Granularity = "day" | "week" | "month";
 
+/** A product's kind — catalog's `FulfilmentKind`, fixed when the product is created (ADR-0148). */
+export const FULFILMENT_KINDS = ["network_access", "external_order", "feature_access", "wallet_topup"] as const;
+export type FulfilmentKind = (typeof FULFILMENT_KINDS)[number];
+
+/** The unit a meter's figures are in — catalog's `MeterUnit`. */
+export const METER_UNITS = ["bytes", "count", "seconds", "tokens"] as const;
+export type MeterUnit = (typeof METER_UNITS)[number];
+
 /** A tab's query as billing reads it: tenant days, both included. */
 export interface AnalyticsQuery {
   from: string;
@@ -23,6 +31,7 @@ export interface AnalyticsQuery {
   calendar: AnalyticsCalendar;
   product?: string;
   panel?: string;
+  fulfilment?: FulfilmentKind;
 }
 
 /** Money per currency, as decimal strings (C-02): `{ "USD": "41.25" }`. */
@@ -65,6 +74,16 @@ export type AnalyticsInsight =
   | { key: "productDrove"; params: { productId: string | null; change: string; currency: string } }
   | { key: "unusualDay"; params: { day: string; net: string; mean: string; currency: string } };
 
+/** One meter's use (F-1001-n): integers as decimal strings, in the meter's unit; never added to another meter. */
+export interface AnalyticsUsageCard {
+  meterKey: string;
+  total: string;
+  previous: string | null;
+  delta: Delta;
+  /** Aligned with `buckets`; a bucket hidden from the platform's staff is null. */
+  series: (string | null)[];
+}
+
 export interface AnalyticsOverview {
   currencies: string[];
   kpis: Record<MoneyKpiName, MoneyKpi> &
@@ -79,12 +98,18 @@ export interface AnalyticsOverview {
   calendar: { day: string; net: Amounts | null }[];
   /** Up to three, in billing's order (F-1001-j). */
   insights: AnalyticsInsight[];
+  /** One per meter used in either window (F-1001-n). */
+  usage: AnalyticsUsageCard[];
 }
 
 /** Product names are catalog keys (the published `catalog` namespace); a panel's is its own. */
 export interface AnalyticsNames {
   products: { id: string; nameKey: string }[];
   panels: { id: string; name: string }[];
+  /** Each meter used in the window, its unit and its `catalog` name key (F-1001-n). */
+  meters: { key: string; unit: MeterUnit; nameKey: string }[];
+  /** The product kinds in the window; the kind filter is a choice only with two. */
+  kinds: FulfilmentKind[];
 }
 
 type Head = { tab: AnalyticsTab; query: AnalyticsQuery; refreshedAt: string | null };

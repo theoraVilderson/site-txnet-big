@@ -64,11 +64,12 @@ const overview: AnalyticsOverview = {
   byProduct: { top: [{ productId: PRODUCT, net: { USD: "80.00" }, orders: 2, buyers: 6, share: 0.8889 }], other: null },
   calendar: [{ day: "2026-10-15", net: { USD: "65.00" } }, { day: "2026-10-16", net: { USD: "25.00" } }],
   insights: [],
+  usage: [],
 };
 const answer = (over: object = {}) => ({
   tab: "overview" as const, query: { from: "2026-09-17", to: "2026-10-16", compare: "previous" as const, calendar: "gregorian" as const },
   refreshedAt: new Date(Date.now() - 3 * 60_000).toISOString(), rebuilding: false as const, granularity: "day" as const, buckets: ["2026-10-15", "2026-10-16"], suppressed: false,
-  names: { products: [{ id: PRODUCT, nameKey: "catalog.products.gold.name" }], panels: [] },
+  names: { products: [{ id: PRODUCT, nameKey: "catalog.products.gold.name" }], panels: [], meters: [], kinds: ["network_access"] },
   ...overview, ...over,
 });
 
@@ -78,7 +79,7 @@ beforeEach(() => {
   vi.mocked(useSearchParams).mockReturnValue(params(""));
   vi.mocked(useLocale).mockReturnValue({ lang: "en", isRtl: false, t } as unknown as ReturnType<typeof useLocale>);
   vi.mocked(usePanelSession).mockReturnValue({ me: { userId: OWNER, tenant: { id: TENANT }, permissions: ["*"] }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
-  vi.mocked(catalogApi.texts).mockResolvedValue({ products: { gold: { name: "Gold plan" } } });
+  vi.mocked(catalogApi.texts).mockResolvedValue({ products: { gold: { name: "Gold plan" } }, meter: { vpn: { traffic: { name: "VPN traffic" } } } });
   vi.mocked(readAnalytics).mockResolvedValue(answer() as never);
 });
 
@@ -152,6 +153,43 @@ describe("AnalyticsView", () => {
     await screen.findAllByText("Gold plan");
     fireEvent.click(screen.getAllByRole("radio", { name: /compares\.year/ })[0]);
     expect(replace).toHaveBeenCalledWith("/analytics?compare=year", { scroll: false });
+  });
+});
+
+describe("the Overview by meter (F-1001-o, ADR-0148)", () => {
+  const traffic = { key: "vpn.traffic", unit: "bytes" as const, nameKey: "catalog.meter.vpn.traffic.name" };
+  const card = { meterKey: "vpn.traffic", total: "2048", previous: "1024", delta: 1, series: ["1024", "1024"] };
+
+  it("draws a tile and a card per meter, named by its catalog text and written in its unit — no traffic tile of its own", async () => {
+    vi.mocked(readAnalytics).mockResolvedValue(answer({ usage: [card], names: { ...answer().names, meters: [traffic] } }) as never);
+    render(<AnalyticsView />);
+    await screen.findAllByText("VPN traffic");
+    expect(screen.getAllByText("VPN traffic").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("2 KB").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("analytics.kpis.bytesUsed")).toBeNull();
+  });
+
+  it("draws no usage at all when no meter was used — a shop that sells no VPN sees no traffic", async () => {
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    expect(screen.queryByText("VPN traffic")).toBeNull();
+    expect(screen.queryByText("analytics.kpis.bytesUsed")).toBeNull();
+  });
+
+  it("offers the product kind only when the window holds two, and keeps it in the URL and the query", async () => {
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    expect(screen.queryAllByLabelText(/^analytics\.filters\.kind:/)).toHaveLength(0);
+
+    vi.mocked(readAnalytics).mockResolvedValue(answer({ names: { ...answer().names, kinds: ["network_access", "feature_access"] } }) as never);
+    vi.mocked(useSearchParams).mockReturnValue(params("fulfilment=feature_access"));
+    render(<AnalyticsView />);
+    await waitFor(() => expect(screen.queryAllByLabelText(/^analytics\.filters\.kind:/).length).toBeGreaterThan(0));
+    expect(readAnalytics).toHaveBeenLastCalledWith(TENANT, "overview", expect.objectContaining({ fulfilment: "feature_access" }));
+    const f = filtersOf(params("fulfilment=feature_access"));
+    expect(f.fulfilment).toBe("feature_access");
+    expect(searchOf(f)).toBe("fulfilment=feature_access");
+    expect(filtersOf(params("fulfilment=spaceships")).fulfilment).toBeNull();
   });
 });
 

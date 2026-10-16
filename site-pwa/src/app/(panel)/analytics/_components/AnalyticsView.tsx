@@ -6,7 +6,7 @@ import { ChartColumn } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { ANALYTICS_TABS } from "@/lib/billing/analytics";
+import { ANALYTICS_TABS, type AnalyticsNames } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
 import { PANEL_ANALYTICS } from "@/lib/routes";
 import { displayZone } from "@/lib/time-zone";
@@ -18,11 +18,15 @@ import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { analyticsLiveOf } from "../_lib/live";
 import { currencyOf, productNamer } from "../_lib/overview";
+import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { OverviewTab } from "./OverviewTab";
 
 const K = FrontendI18nKeys.common.analytics;
+
+/** Before the first answer: nothing to name. */
+const NO_NAMES: AnalyticsNames = { products: [], panels: [], meters: [], kinds: [] };
 
 /** A tenant day at noon UTC, so the label is that day on every wall clock from UTC-11 to UTC+11. */
 const noonOf = (day: string) => `${day}T12:00:00Z`;
@@ -78,7 +82,8 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
 
   const ready = answer && !answer.rebuilding ? answer : null;
   const names = ready?.names ?? null;
-  const productName = useMemo(() => productNamer(names ?? { products: [], panels: [] }, texts), [names, texts]);
+  const productName = useMemo(() => productNamer(names ?? NO_NAMES, texts), [names, texts]);
+  const meterName = useMemo(() => meterNamer(names ?? NO_NAMES, texts, t), [names, texts, t]);
   const currency = ready ? currencyOf(ready.currencies, filters.currency) : null;
   const formatDay = (day: string) => formatInstant(noonOf(day), lang, { withTime: false }) ?? day;
   const updated = answer?.refreshedAt ? t("common", K.updated, { ago: formatRelative(answer.refreshedAt, lang) ?? "" }) : t("common", K.notYetRolled);
@@ -124,6 +129,7 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
           calendar={calendar}
           formatDay={formatDay}
           productName={productName}
+          meterName={meterName}
           hrefOf={(patch) => hrefOf({ ...filters, ...patch })}
           stale={stale}
         />

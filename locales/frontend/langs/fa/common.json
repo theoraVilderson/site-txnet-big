@@ -6549,7 +6549,9 @@
       "from": "از",
       "to": "تا",
       "done": "تأیید",
-      "clear": "پاک کردن فیلترها"
+      "clear": "پاک کردن فیلترها",
+      "kind": "نوع محصول",
+      "allKinds": "همهٔ انواع"
     },
     "ranges": {
       "today": "امروز",
@@ -6643,6 +6645,19 @@
         "activeGrants": "سرویس‌های فعال",
         "bytesUsed": "ترافیک مصرفی"
       }
+    },
+    "units": {
+      "tokens": "{{count}} توکن"
+    },
+    "usage": {
+      "unnamed": "مصرف",
+      "subtitle": "مصرف در این دوره"
+    },
+    "kinds": {
+      "network_access": "دسترسی VPN",
+      "external_order": "سفارش‌های بیرونی",
+      "feature_access": "قابلیت‌ها",
+      "wallet_topup": "شارژ کیف پول"
     }
   }
 }

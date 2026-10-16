@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -186,6 +186,13 @@ common tiles; "traffic" becomes one tile per meter in the window (its
 `nameKey`, written in its unit), and a usage card per meter joins the Overview.
 The filter bar gains the product kind when the window holds more than one;
 the panel filter and per-panel lists are drawn only when a product has a panel.
+**As built (F-1001-o, `_lib/usage.ts`, `UsageCards`).** A tile and a card per
+`usage` card billing answers, named by the meter's `nameKey` in the catalog
+texts ("usage" without one) and written by `UNIT_FORMATS` — bytes as a size,
+seconds as hours, tokens with their word; a unit without a format fails the
+spec. No meter used: no tile, no card. The kind filter (`?fulfilment=`) is a
+`Select` when `names.kinds` holds two, and stays while one is on; the panel
+filter already draws only when `names.panels` has one.
 
 ### Other tabs
 

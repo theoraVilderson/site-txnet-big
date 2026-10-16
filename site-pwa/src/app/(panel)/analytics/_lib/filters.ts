@@ -1,4 +1,4 @@
-import { ANALYTICS_COMPARES, ANALYTICS_TABS, type AnalyticsCalendar, type AnalyticsCompare, type AnalyticsQuery, type AnalyticsTab } from "@/lib/billing/analytics";
+import { ANALYTICS_COMPARES, ANALYTICS_TABS, FULFILMENT_KINDS, type AnalyticsCalendar, type AnalyticsCompare, type AnalyticsQuery, type AnalyticsTab, type FulfilmentKind } from "@/lib/billing/analytics";
 import { DAY_KEY_LOCALE } from "../../_lib/datetime";
 import { numberLocale } from "../../_lib/digits";
 
@@ -21,6 +21,8 @@ export interface AnalyticsFilters {
   compare: AnalyticsCompare;
   product: string | null;
   panel: string | null;
+  /** The product kind (ADR-0148); offered only when the window holds two. */
+  fulfilment: FulfilmentKind | null;
   /** Which currency the figures are drawn in when the window holds several; null = the operating one. */
   currency: string | null;
 }
@@ -33,6 +35,7 @@ export const DEFAULT_FILTERS: AnalyticsFilters = {
   compare: "previous",
   product: null,
   panel: null,
+  fulfilment: null,
   currency: null,
 };
 
@@ -53,6 +56,7 @@ const CURRENCY_RE = /^[A-Z]{3}$/;
 const isDay = (v: string | null): v is string => v !== null && DAY_RE.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 const oneOf = <T extends string>(set: readonly T[], v: string | null, fallback: T): T => (v !== null && (set as readonly string[]).includes(v) ? (v as T) : fallback);
 const matching = (re: RegExp, v: string | null) => (v !== null && re.test(v) ? v : null);
+const kindOf = (v: string | null): FulfilmentKind | null => FULFILMENT_KINDS.find((k) => k === v) ?? null;
 
 /** The filters a URL holds; anything unreadable is the default. */
 export function filtersOf(params: { get(key: string): string | null }): AnalyticsFilters {
@@ -68,6 +72,7 @@ export function filtersOf(params: { get(key: string): string | null }): Analytic
     compare: oneOf(ANALYTICS_COMPARES, params.get("compare"), DEFAULT_FILTERS.compare),
     product: matching(UUID_RE, params.get("product")),
     panel: matching(UUID_RE, params.get("panel")),
+    fulfilment: kindOf(params.get("fulfilment")),
     currency: matching(CURRENCY_RE, params.get("currency")),
   };
 }
@@ -84,7 +89,7 @@ export function searchOf(f: AnalyticsFilters): string {
 
 /** How many filters differ from the default — the phone's Filters button shows it. */
 export function activeFilterCount(f: AnalyticsFilters): number {
-  return (["range", "compare", "product", "panel"] as const).filter((key) => f[key] !== DEFAULT_FILTERS[key]).length;
+  return (["range", "compare", "product", "panel", "fulfilment"] as const).filter((key) => f[key] !== DEFAULT_FILTERS[key]).length;
 }
 
 /** The calendar of the reader's language, as `Intl` resolves it — no table of languages here (C-17). */
@@ -119,5 +124,5 @@ export function windowOf(f: AnalyticsFilters, today: string, calendar: Analytics
 
 /** What billing is asked for these filters. */
 export function queryOf(f: AnalyticsFilters, today: string, calendar: AnalyticsCalendar): AnalyticsQuery {
-  return { ...windowOf(f, today, calendar), compare: f.compare, calendar, product: f.product ?? undefined, panel: f.panel ?? undefined };
+  return { ...windowOf(f, today, calendar), compare: f.compare, calendar, product: f.product ?? undefined, panel: f.panel ?? undefined, fulfilment: f.fulfilment ?? undefined };
 }

@@ -4,14 +4,15 @@ import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { type AnalyticsNames, type AnalyticsOverview, FEWER_THAN_5 } from "@/lib/billing/analytics";
-import { formatBytes } from "../../services/_lib/service-configs";
 import { formatMoney } from "../../_lib/money";
 import { BarList, CHART_OTHER, CalendarHeatmap, ChartCard, Meter, StackedColumns, StatTile, slotColor, slotsByEntity, useChartFormat } from "../../_components/kit/charts";
 import { type AnalyticsFilters } from "../_lib/filters";
 import { insightLines } from "../_lib/insights";
 import { type HeroMetric, MONEY_METRICS, amountIn, catalogOrder } from "../_lib/overview";
+import { usageFormat } from "../_lib/usage";
 import { OverviewHero } from "./OverviewHero";
 import { OverviewInsights } from "./OverviewInsights";
+import { UsageCards, usagePoints } from "./UsageCards";
 
 const K = FrontendI18nKeys.common.analytics;
 
@@ -27,6 +28,8 @@ export interface OverviewTabProps {
   calendar: keyof typeof WEEK_START;
   formatDay: (day: string) => string;
   productName: (id: string | null) => string | null;
+  /** A meter's name in the reader's language (F-1001-o). */
+  meterName: (key: string) => string;
   /** The current view with `patch` applied — where an insight links. */
   hrefOf: (patch: Partial<AnalyticsFilters>) => string;
   stale: boolean;
@@ -41,7 +44,7 @@ type Bar = { id: string; label: string; value: number; display: string; color: s
  * resellers (F-1001-i) arrive with their row. `overview` null is the first load: every
  * card draws its own skeleton.
  */
-export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, hrefOf, stale }: OverviewTabProps) {
+export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, meterName, hrefOf, stale }: OverviewTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const [metric, setMetric] = useState<HeroMetric>("net");
@@ -49,6 +52,9 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
   const money = (n: number) => formatMoney(n, currency, { lang, t });
   const formatOf = (m: HeroMetric) => (MONEY_METRICS.has(m) ? money : fmt.full);
   const kpis = overview?.kpis;
+  // A meter's unit is billing's word for it; one the names do not list is written as a count.
+  const units = new Map((names?.meters ?? []).map((m) => [m.key, m.unit]));
+  const formatOfMeter = (key: string) => usageFormat(units.get(key) ?? "count", { lang, t, fmt });
 
   const slotOf = slotsByEntity(names ? catalogOrder(names) : []);
   const shown = (overview?.byProduct.top ?? []).flatMap((p) => ("people" in p && p.people === FEWER_THAN_5 ? [] : [p]));
@@ -87,7 +93,10 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
             footer={<Meter value={kpis.renewal?.rate ?? null} label={t("common", K.kpis.renewal)} />}
           />
           <StatTile label={t("common", K.kpis.activeGrants)} value={kpis.activeGrants.value} format={fmt.full} delta={kpis.activeGrants.delta} />
-          <StatTile label={t("common", K.kpis.bytesUsed)} value={Number(kpis.bytesUsed.value)} format={(n) => formatBytes(String(Math.round(n)), lang) ?? ""} delta={kpis.bytesUsed.delta} />
+          {/* One tile per meter used (ADR-0148 (5)), in its own unit — no "traffic" tile for a shop that sells no VPN. */}
+          {(overview?.usage ?? []).map((u) => (
+            <StatTile key={u.meterKey} label={meterName(u.meterKey)} value={Number(u.total)} format={formatOfMeter(u.meterKey)} delta={u.delta} spark={usagePoints(u.series)} />
+          ))}
         </div>
       )}
 
@@ -140,6 +149,8 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
           />
         </ChartCard>
       </div>
+
+      <UsageCards usage={overview?.usage ?? []} x={x} meterName={meterName} formatOf={formatOfMeter} stale={stale} />
 
       <ChartCard<(typeof heat)[number]>
         title={t("common", K.calendar.title)}
