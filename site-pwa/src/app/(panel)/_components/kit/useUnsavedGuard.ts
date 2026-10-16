@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { useHoldsUnsavedEdits } from "../../_hooks/useHoldsUnsavedEdits";
 import { useConfirm } from "./confirm";
 
 const K = FrontendI18nKeys.common.kit.unsaved;
@@ -17,6 +18,8 @@ const K = FrontendI18nKeys.common.kit.unsaved;
  * Links are caught at the document in the capture phase, before Next's `Link`
  * sees the click. A `router.push` from code is not a link: the code that
  * pushes while a form is dirty asks with `confirmLeave()` first.
+ *
+ * It also holds the page against a live remount (RT-1-m, `useHoldsUnsavedEdits`).
  */
 export function useUnsavedGuard(dirty: boolean): { confirmLeave: () => Promise<boolean> } {
   const { t } = useLocale();
@@ -24,6 +27,7 @@ export function useUnsavedGuard(dirty: boolean): { confirmLeave: () => Promise<b
   const router = useRouter();
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  useHoldsUnsavedEdits(dirty);
 
   const confirmLeave = useCallback(async () => {
     if (!dirtyRef.current) return true;

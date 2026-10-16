@@ -21,6 +21,7 @@ import {
 } from "../../_lib/packages";
 import { useMeterNames } from "../../../catalog/_lib/meter-names";
 import { Button, Input } from "../../../_components/kit";
+import { useHoldsUnsavedEdits } from "../../../_hooks/useHoldsUnsavedEdits";
 
 /**
  * Creating or editing one package (F-018-d, F-118-n5): name, the two prices,
@@ -50,6 +51,8 @@ export function PackageSheet({
   const set = (patch: Partial<PackageForm>) => setForm((f) => ({ ...f, ...patch }));
   const code = pkg?.currencyCode ?? currency;
   const others = pkg ? otherRates(pkg) : [];
+  // A live remount would close the sheet on what was typed (RT-1-m).
+  useHoldsUnsavedEdits(pkg ? updatePackageBody(pkg, form) !== null : JSON.stringify(form) !== JSON.stringify(emptyPackageForm()));
 
   const toggle = (key: string) =>
     set({ featureKeys: form.featureKeys.includes(key) ? form.featureKeys.filter((k) => k !== key) : [...form.featureKeys, key] });

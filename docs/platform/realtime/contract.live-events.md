@@ -58,6 +58,7 @@ corrected, per "Decide once".
 | `billing.analytics.refreshed` | `tenant:` | billing (`AnalyticsRollupService`, a pass that changed a row, F-1001-a) → live-push; body `{type, from, to}` | `/analytics` (F-1001-d, `useAnalyticsRead`; the session's tenant only) |
 | `billing.analytics.report` | `user:` | billing (`AnalyticsReportSender`, a scheduled report sent, F-1006-a) → live-push; body `{type, scheduleId}` | `/analytics?tab=reports` (F-1006-b), the person's own schedules |
 | `billing.analytics.reseller_refreshed` | `user:` + `tenant:` | billing (the same pass, for a reseller with an owner, F-1001-p) → live-push; body `{type, resellerId, from, to}`; payload `tenantId` = the platform's, `userId` = the owner | the workspace twins `/reseller/analytics`, `/my-resellers/:id/analytics`, filtered by `resellerId` (`analyticsLiveOf`) |
+| `tenant.currency.changed` | `members:` | tenant (`OperatingCurrencyService.set`, RT-1-l) → live-push; body `{type, tenantId}` | `(panel)/template.tsx` remounts the page (RT-1-m), `useWalletBalance` |
 
 ## Planned — the RT-1 rows
 
@@ -187,16 +188,19 @@ returned a `changeId` (a retry that converted nothing writes nothing), with
 `aggregate: 'tenant.currency'`, `aggregateId` = the target tenant. Its spec
 gains "writes the row in the same transaction" and "a retry writes none".
 
-**RT-1-m — the panel re-reads every money surface.** One listener, not one
-per page: `useLiveReread(members:<session tenantId>, ['tenant.currency.changed'], …)`
-in `(panel)/template.tsx`, whose reread bumps a `key` on `{children}`. The
-page remounts and re-reads on mount (C-14 already makes every page do so),
-which covers wallet, buy, gateways, catalog, packages, deposit, coupons and
-the currency cards without touching them. `useWalletBalance` (top bar, outside
-`children`) adds the type to its own subscription. **A page with unsaved
-edits is not remounted:** a form calls `useHoldsUnsavedEdits(dirty)`
-(`(panel)/_hooks/`, a counter in the same template); while it is above zero
-the remount waits and a kit banner says the currency changed with a reload
-button. GatewayForm, ProductWizard and the PackagesView editor register.
-Spec: template test — remounts on the type, ignores others, waits while a
-form holds edits.
+**RT-1-m — the panel re-reads every money surface** — built 2026-10-16. One
+listener, not one per page: `(panel)/template.tsx` hears
+`tenant.currency.changed` on `members:<me.tenant.id>` (`membersChannel`,
+`lib/realtime-channels.ts`) and bumps a `key` on `{children}`; the page
+remounts and re-reads on mount (C-14) — wallet, shop, deposit, gateways,
+catalog, packages, coupons, analytics, the dashboard widgets and the currency
+cards, untouched. Only an `'event'` remounts: a reconnect is not news, and
+each page re-reads its own channels on one. `useWalletBalance` (top bar,
+outside `children`) subscribes to the type itself. **A page with unsaved edits
+is not remounted:** `useHoldsUnsavedEdits(dirty)` (`(panel)/_hooks/`) takes a
+hold in the template's counter; while one is held the template shows a kit
+`Alert` (`shell.currencyChanged`) whose button remounts. Correction to the
+plan: the hold is called by `useUnsavedGuard` (so `SaveBar`) and the kit
+`Wizard`, so every form that already asks before leaving holds —
+ProductWizard, GatewayWizard among them; GatewayEditor and PackageSheet call
+it directly. Proof `(panel)/template.test.tsx`, `useWalletBalance.test.ts`.

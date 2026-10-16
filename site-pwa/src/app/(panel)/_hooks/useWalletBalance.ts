@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { billingApi } from "@/lib/billing-api";
-import { userChannel } from "@/lib/realtime";
+import { RealtimeEvents } from "@/generated/wire";
+import { membersChannel, userChannel } from "@/lib/realtime";
 import { useLiveReread } from "@/hooks/useLiveReread";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
@@ -49,8 +50,9 @@ export interface WalletBalanceState {
  * guess was wrong. This one only needs the event to arrive.
  */
 export function useWalletBalance(): WalletBalanceState {
-  const { group } = usePanelSession();
+  const { group, me } = usePanelSession();
   const userId = group?.current.userId ?? null;
+  const tenantId = me?.tenant?.id ?? null;
 
   const [balance, setBalance] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
@@ -101,6 +103,9 @@ export function useWalletBalance(): WalletBalanceState {
   // credited while the socket was down was told to nobody, so a reconnect
   // asks again (F-070-d) — the same read an event would cost.
   useLiveReread(userId ? userChannel(userId) : null, "any", refresh);
+  // The top bar sits outside the page the template remounts (RT-1-m): a new
+  // operating currency converted the balance, so it asks again on its own.
+  useLiveReread(tenantId ? membersChannel(tenantId) : null, [RealtimeEvents.tenantCurrencyChanged], refresh);
 
   return { balance, held, available, currencyCode, isLoading, failed, refresh };
 }

@@ -10,6 +10,7 @@ import { useMotionLevel } from "@/hooks/useMotionLevel";
 import { DURATION, EASE } from "@/lib/motion";
 import { Button, IconButton } from "./Button";
 import { cn } from "./cn";
+import { useHoldsUnsavedEdits } from "../../_hooks/useHoldsUnsavedEdits";
 import { useConfirm } from "./confirm";
 import { useOverlayLayer } from "./overlay";
 
@@ -143,6 +144,7 @@ function WizardLayer({
   const reduced = level === "reduced";
 
   const finished = done !== undefined && done !== null && done !== false;
+  useHoldsUnsavedEdits(dirty && !finished);
   const requestClose = async () => {
     if (dirty && !finished) {
       const leave = await confirm({ title: closeQuestion, confirmLabel: t("common", K.wizard.leave) });

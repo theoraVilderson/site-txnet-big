@@ -1,3 +1,4 @@
+import { RealtimeEvents } from "@/generated/wire";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { useWalletBalance } from "./useWalletBalance";
@@ -109,6 +110,18 @@ describe("useWalletBalance", () => {
 
     await waitFor(() => expect(result.current.balance).toBe("62.34"));
     expect(walletBalance).toHaveBeenCalledTimes(2);
+  });
+
+  it("re-reads when the tenant's operating currency changed (RT-1-m)", async () => {
+    session.mockReturnValue({ me: { tenant: { id: "t-1" } }, group: { current: { userId: "u-1" } } } as never);
+    const { result } = renderHook(() => useWalletBalance());
+    await waitFor(() => expect(result.current.balance).toBe("12.34"));
+    expect(client.channels).toEqual([userChannel("u-1"), "members:t-1"]);
+
+    walletBalance.mockResolvedValue({ balance: "500000", held: "0", available: "500000", currencyCode: "IRT" });
+    await act(async () => client.listeners[1]!({ type: RealtimeEvents.tenantCurrencyChanged, tenantId: "t-1" }));
+
+    await waitFor(() => expect(result.current.currencyCode).toBe("IRT"));
   });
 
   it("re-reads after a reconnect, since a payment told while the socket was down reached nobody", async () => {

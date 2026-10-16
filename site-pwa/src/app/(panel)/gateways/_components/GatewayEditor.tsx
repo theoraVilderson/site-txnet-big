@@ -47,6 +47,7 @@ import {
 import { PROVIDER_DEFAULTS, type Provider } from "../_lib/gateway-wizard";
 import { Button, IconButton, useConfirm } from "../../_components/kit";
 import { useOverlayLayer } from "../../_components/kit/overlay";
+import { useHoldsUnsavedEdits } from "../../_hooks/useHoldsUnsavedEdits";
 import { isPlatformTenant } from "@/lib/tenant-type";
 
 const G = FrontendI18nKeys.common.gateways;
@@ -54,12 +55,7 @@ const F = G.form;
 const W = G.wizard;
 const E = G.editor;
 
-const SECTION_ICONS: Record<EditorSectionId, LucideIcon> = {
-  general: Building2,
-  amounts: Wallet,
-  fee: Percent,
-  connection: KeyRound,
-};
+const SECTION_ICONS: Record<EditorSectionId, LucideIcon> = { general: Building2, amounts: Wallet, fee: Percent, connection: KeyRound };
 
 /** A bound worth putting into words: empty (no limit) or a plain decimal. */
 const AMOUNT = /^\s*(\d{1,16}(\.\d{1,8})?)?\s*$/;
@@ -109,6 +105,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
 
   const changed = changedFields(gateway, form, me);
   const dirty = changed.length > 0;
+  useHoldsUnsavedEdits(dirty);
   const changedSections = new Set(changed.map(sectionOf));
   const invalid = (Object.keys(errors) as (keyof GatewayForm)[]).filter((k) => errors[k]);
   const errorSections = new Set(invalid.map(sectionOf));

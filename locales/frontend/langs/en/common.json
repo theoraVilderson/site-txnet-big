@@ -130,6 +130,11 @@
         "close": "to close"
       },
       "searching": "Searching…"
+    },
+    "currencyChanged": {
+      "title": "The currency changed",
+      "body": "Prices on this page were in the old currency. Save or discard your changes, then reload.",
+      "reload": "Reload"
     }
   },
   "gateways": {
