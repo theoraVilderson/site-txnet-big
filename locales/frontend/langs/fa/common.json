@@ -6536,6 +6536,7 @@
     "tabs": {
       "overview": "نمای کلی",
       "sales": "فروش",
+      "customers": "مشتریان",
       "catalog": "محصولات و پنل‌ها"
     },
     "filters": {
@@ -6588,7 +6589,6 @@
       "buyers": "خریداران",
       "buyersSplit": "{{new}} جدید · {{returning}} بازگشتی",
       "renewal": "نرخ تمدید",
-      "renewalSoon": "به‌زودی",
       "activeGrants": "سرویس‌های فعال",
       "bytesUsed": "ترافیک مصرفی"
     },
@@ -6707,6 +6707,41 @@
       "fewerThan5": "کمتر از ۵ خریدار",
       "empty": "در این دوره چیزی فروخته نشد.",
       "unnamedPanel": "بدون پنل"
+    },
+    "customers": {
+      "renewalRate": "نرخ تمدید",
+      "renewalSplit": "{{renewed}} تمدید · {{lapsed}} بدون تمدید · {{pending}} هنوز باز",
+      "signups": "ثبت‌نام‌ها",
+      "purchased7": "خرید تا ۷ روز",
+      "purchased30": "خرید تا ۳۰ روز",
+      "signupsTrend": "ثبت‌نام‌ها",
+      "signupsSubtitle": "کسانی که ثبت‌نام کردند، در هر بازه",
+      "bySource": "محل ثبت‌نام",
+      "bySourceSubtitle": "ثبت‌نام‌ها به تفکیک راه ورود",
+      "source": "راه ورود",
+      "sources": {
+        "web": "وب‌سایت",
+        "unknown": "پیش از ثبت آمار",
+        "telegram": "تلگرام",
+        "bale": "بله"
+      },
+      "renewalByProduct": "تمدید به تفکیک محصول",
+      "renewed": "تمدیدشده",
+      "lapsed": "تمدیدنشده",
+      "pending": "هنوز باز",
+      "noEnded": "در این بازه هیچ سرویسی تمام نشد.",
+      "top": {
+        "title": "برترین مشتریان",
+        "customer": "مشتری",
+        "unnamed": "بی‌نام"
+      },
+      "window": {
+        "current": "تمدید تا {{days}} روز پیش یا پس از پایان سرویس حساب می‌شود.",
+        "label": "بازهٔ تمدید (روز)",
+        "hint": "از {{min}} تا {{max}} روز.",
+        "save": "ذخیره",
+        "saved": "بازهٔ تمدید روی {{days}} روز گذاشته شد."
+      }
     }
   }
 }

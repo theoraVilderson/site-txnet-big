@@ -3,7 +3,7 @@ import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today, in the page's order; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview", "sales", "catalog"] as const;
+export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -88,8 +88,7 @@ export interface AnalyticsOverview {
   currencies: string[];
   kpis: Record<MoneyKpiName, MoneyKpi> &
     Record<CountKpiName, CountKpi> & {
-      /** `null` until F-1001-f answers it. */
-      renewal: { rate: number | null; renewed: number; lapsed: number; pending: number } | null;
+      renewal: RenewalFigures;
       bytesUsed: { value: string; previous: string | null; delta: Delta };
     };
   series: AnalyticsSeries;
@@ -100,6 +99,35 @@ export interface AnalyticsOverview {
   insights: AnalyticsInsight[];
   /** One per meter used in either window (F-1001-n). */
   usage: AnalyticsUsageCard[];
+}
+
+/** Terms that ended in a window and where they stand (F-1001-f); `rate` leaves `pending` out. */
+export type RenewalFigures = { rate: number | null; renewed: number; lapsed: number; pending: number };
+
+/** A cell billing hid from the platform's staff, by the field that names it. */
+type Hidden<K extends string> = { [k in K]: string | null } & { people: typeof FEWER_THAN_5 };
+
+/** How many signed up, and how many of them bought within 7 and 30 days (`rate` of the total). */
+export interface SignupFigures {
+  total: number;
+  purchased7: { count: number; rate: number | null };
+  purchased30: { count: number; rate: number | null };
+  /** Aligned with `buckets`; a bucket hidden from the platform's staff is null. */
+  series: (number | null)[];
+  bySource: ({ source: string; signups: number } | Hidden<"source">)[];
+}
+
+/** The Customers tab (billing `customers`, F-1001-f). */
+export interface AnalyticsCustomers {
+  currencies: string[];
+  /** The window renewal was judged by, 1..30 days. */
+  renewalWindowDays: number;
+  buyers: { newBuyers: (number | null)[]; returningBuyers: (number | null)[] };
+  signups: SignupFigures;
+  renewal: RenewalFigures;
+  renewalByProduct: (({ productId: string | null } & RenewalFigures) | Hidden<"productId">)[];
+  /** A reseller's own people, to itself; null to the platform's staff (ADR-0104). */
+  topCustomers: { userId: string; name: string | null; net: Amounts; orders: number }[] | null;
 }
 
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
@@ -158,6 +186,7 @@ export type AnalyticsAnswer<Body> =
 export interface AnalyticsBodies {
   overview: AnalyticsOverview;
   sales: AnalyticsSales;
+  customers: AnalyticsCustomers;
   catalog: AnalyticsCatalog;
 }
 
@@ -185,4 +214,12 @@ export type AnalyticsExportFormat = (typeof ANALYTICS_EXPORT_FORMATS)[number];
 /** The same tab and filters as a file: the same door, scope and under-5 rule as the page. */
 export function exportAnalytics(tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery, format: AnalyticsExportFormat): Promise<ApiFile> {
   return call<ApiFile>(`${tabPath(tenantId, tab)}?${analyticsSearch(q)}&format=${format}`);
+}
+
+/** The renewal window's bounds — billing's `renewalWindowSchema` (F-1001-f). */
+export const RENEWAL_WINDOW_DAYS = { min: 1, max: 30 } as const;
+
+/** `PUT …/analytics/settings`: the tenant's renewal window. Billing's door is the settings key, not `analytics.read`. */
+export function setAnalyticsSettings(tenantId: string, body: { renewalWindowDays: number }): Promise<{ renewalWindowDays: number }> {
+  return call<{ renewalWindowDays: number }>(`/tenants/${encodeURIComponent(tenantId)}/analytics/settings`, { method: "PUT", body: JSON.stringify(body) });
 }

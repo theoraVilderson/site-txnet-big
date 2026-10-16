@@ -5,13 +5,14 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { type AnalyticsNames, type AnalyticsOverview, FEWER_THAN_5 } from "@/lib/billing/analytics";
 import { formatMoney } from "../../_lib/money";
-import { BarList, CHART_OTHER, CalendarHeatmap, ChartCard, Meter, StackedColumns, StatTile, slotColor, slotsByEntity, useChartFormat } from "../../_components/kit/charts";
+import { BarList, CHART_OTHER, CalendarHeatmap, ChartCard, Meter, StatTile, slotsByEntity, useChartFormat } from "../../_components/kit/charts";
 import { type AnalyticsFilters } from "../_lib/filters";
 import { insightLines } from "../_lib/insights";
 import { type HeroMetric, MONEY_METRICS, amountIn, catalogOrder } from "../_lib/overview";
 import { usageFormat } from "../_lib/usage";
 import { OverviewHero } from "./OverviewHero";
 import { OverviewInsights } from "./OverviewInsights";
+import { BuyersCard } from "./BuyersCard";
 import { UsageCards, usagePoints } from "./UsageCards";
 
 const K = FrontendI18nKeys.common.analytics;
@@ -65,7 +66,6 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
   });
   const other = overview?.byProduct.other ? amountIn(overview.byProduct.other.net, currency) : null;
 
-  const buyerRows = x.map((day, i) => ({ x: day, fresh: overview?.series.newBuyers[i] ?? 0, returning: overview?.series.returningBuyers[i] ?? 0 }));
   const heat = (overview?.calendar ?? []).map((c) => ({ day: c.day, value: amountIn(c.net, currency) }));
   const insights = insightLines(overview?.insights ?? [], { t, percent: fmt.percent, money: (amount, code) => formatMoney(amount, code, { lang, t }), formatDay, productName, hrefOf });
 
@@ -88,9 +88,10 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
           />
           <StatTile
             label={t("common", K.kpis.renewal)}
-            value={kpis.renewal?.rate ?? 0}
-            format={kpis.renewal ? fmt.percent : () => t("common", K.kpis.renewalSoon)}
-            footer={<Meter value={kpis.renewal?.rate ?? null} label={t("common", K.kpis.renewal)} />}
+            value={kpis.renewal.rate ?? 0}
+            // No ended service yet is no rate: a dash, never 0%.
+            format={(n) => (kpis.renewal.rate === null ? "—" : fmt.percent(n))}
+            footer={<Meter value={kpis.renewal.rate} label={t("common", K.kpis.renewal)} />}
           />
           <StatTile label={t("common", K.kpis.activeGrants)} value={kpis.activeGrants.value} format={fmt.full} delta={kpis.activeGrants.delta} />
           {/* One tile per meter used (ADR-0148 (5)), in its own unit — no "traffic" tile for a shop that sells no VPN. */}
@@ -120,34 +121,7 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
           <BarList label={t("common", K.byProduct.title)} items={bars} other={other} formatValue={money} />
         </ChartCard>
 
-        <ChartCard<(typeof buyerRows)[number]>
-          title={t("common", K.buyers.title)}
-          subtitle={t("common", K.buyers.subtitle)}
-          state={state}
-          stale={stale}
-          legend={[
-            { id: "new", label: t("common", K.buyers.new), color: slotColor(0) },
-            { id: "returning", label: t("common", K.buyers.returning), color: slotColor(1) },
-          ]}
-          table={{
-            columns: [
-              { id: "x", header: t("common", K.table.date), cell: (r) => r.x },
-              { id: "new", header: t("common", K.buyers.new), cell: (r) => fmt.full(r.fresh), dir: "ltr" },
-              { id: "returning", header: t("common", K.buyers.returning), cell: (r) => fmt.full(r.returning), dir: "ltr" },
-            ],
-            rows: buyerRows,
-            rowKey: (r) => r.x,
-          }}
-        >
-          <StackedColumns
-            label={t("common", K.buyers.title)}
-            x={x}
-            series={[
-              { id: "new", label: t("common", K.buyers.new), values: buyerRows.map((r) => r.fresh), color: slotColor(0) },
-              { id: "returning", label: t("common", K.buyers.returning), values: buyerRows.map((r) => r.returning), color: slotColor(1) },
-            ]}
-          />
-        </ChartCard>
+        <BuyersCard x={x} fresh={overview?.series.newBuyers ?? []} returning={overview?.series.returningBuyers ?? []} loading={!overview} stale={stale} />
       </div>
 
       <UsageCards usage={overview?.usage ?? []} x={x} meterName={meterName} formatOf={formatOfMeter} stale={stale} />

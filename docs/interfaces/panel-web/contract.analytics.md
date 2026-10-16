@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 1
-updated: 2026-10-06
+updated: 2026-10-16
 ---
 
 # Contract — panel-web: `/analytics` and the chart kit (F-1001…F-1007)
@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -156,8 +156,7 @@ session's tenant on its `tenant:` channel; a workspace view on its owner's
 `user:` and the platform's `tenant:`, re-reading only for its own reseller
 (F-1001-p, RT-1-e's pair). Names come from billing's `names` (product `nameKey`
 -> the published `catalog` texts; a panel's own name). Several currencies: an
-`Alert` with the currency picker, never one sum. Renewal reads "coming soon"
-until F-1001-f; the owner's
+`Alert` with the currency picker, never one sum. The owner's
 top resellers F-1001-i. Kit additions: `TabLinks` `current` (tabs that share
 a path), `BarList` `other` (billing's folded remainder, never folded twice).
 **Export (F-1007-b):** `ExportMenu` in the header saves the tab and filters on
@@ -212,6 +211,13 @@ filter already draws only when `names.panels` has one.
 - **Customers** (F-1001-g): new vs returning, the signup → first-purchase
   funnel, renewal by product, top customers (a reseller's own only); the
   renewal window setting (1–30 days, default 7) sits here for `tenant.manage`.
+  **As built (`CustomersTab`, `RenewalWindowSetting`, `_lib/customers.ts`).**
+  Tiles: renewal rate (`Meter`, renewed · lapsed · still open under it), signups,
+  bought within 7 and 30 days; signups per bucket and by source (a bot platform
+  by its name); a top customer opens their user page. The window is always said;
+  the form shows to billing's door (*corrected*: `settings.manage`, the split of
+  `tenant.manage`; `platform.tenant.manage`; a reseller's owner on `/reseller`).
+  The Overview's renewal tile reads billing's rate, a dash before any end.
 - **Resellers** (F-1001-i): the tier-A leaderboard; a cell under 5 people
   reads "fewer than 5", never a figure.
 - **Profit** (F-1001-m), **Cohorts** (F-1004-b), **Capacity** (F-1005-b),

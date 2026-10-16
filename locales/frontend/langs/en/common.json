@@ -6536,6 +6536,7 @@
     "tabs": {
       "overview": "Overview",
       "sales": "Sales",
+      "customers": "Customers",
       "catalog": "Products and panels"
     },
     "filters": {
@@ -6588,7 +6589,6 @@
       "buyers": "Buyers",
       "buyersSplit": "{{new}} new · {{returning}} returning",
       "renewal": "Renewal rate",
-      "renewalSoon": "Coming soon",
       "activeGrants": "Active services",
       "bytesUsed": "Traffic used"
     },
@@ -6707,6 +6707,41 @@
       "fewerThan5": "Fewer than 5 buyers",
       "empty": "Nothing was sold in this period.",
       "unnamedPanel": "Without a panel"
+    },
+    "customers": {
+      "renewalRate": "Renewal rate",
+      "renewalSplit": "{{renewed}} renewed · {{lapsed}} lapsed · {{pending}} still open",
+      "signups": "Signups",
+      "purchased7": "Bought within 7 days",
+      "purchased30": "Bought within 30 days",
+      "signupsTrend": "Signups",
+      "signupsSubtitle": "People who signed up, per period",
+      "bySource": "Where they signed up",
+      "bySourceSubtitle": "Signups by where they came through",
+      "source": "Source",
+      "sources": {
+        "web": "Website",
+        "unknown": "Before tracking",
+        "telegram": "Telegram",
+        "bale": "Bale"
+      },
+      "renewalByProduct": "Renewal by product",
+      "renewed": "Renewed",
+      "lapsed": "Lapsed",
+      "pending": "Still open",
+      "noEnded": "No service ended in this period.",
+      "top": {
+        "title": "Top customers",
+        "customer": "Customer",
+        "unnamed": "Unnamed"
+      },
+      "window": {
+        "current": "A renewal counts within {{days}} days before or after a service ends.",
+        "label": "Renewal window (days)",
+        "hint": "From {{min}} to {{max}} days.",
+        "save": "Save",
+        "saved": "Renewal window set to {{days}} days."
+      }
     }
   }
 }

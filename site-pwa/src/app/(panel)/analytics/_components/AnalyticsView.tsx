@@ -16,12 +16,14 @@ import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
+import { customerHrefOf, renewalWindowEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
 import { currencyOf, productNamer } from "../_lib/overview";
 import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { CatalogTab } from "./CatalogTab";
+import { CustomersTab } from "./CustomersTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab } from "./SalesTab";
 
@@ -56,10 +58,11 @@ function useCatalogTexts(lang: string): Record<string, string> {
  * open tab — for the session's tenant, or the path's (`tenantId`) on a
  * reseller's workspace. Every filter is in the URL. It re-reads live on its
  * tenant's rollup event, on the channels `analyticsLiveOf` names — a
- * workspace view on its owner's and the platform's (F-1001-p). Billing decides who may read
+ * workspace view on its owner's and the platform's (F-1001-p); `self` is a reseller's
+ * owner on its own workspace (F-1001-g, who may set its renewal window). Billing decides who may read
  * (`analytics.read`); a refusal is shown as its sentence.
  */
-export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = {}) {
+export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: string; self?: boolean } = {}) {
   const { t, lang } = useLocale();
   const errorText = useApiErrorMessage();
   const { me } = usePanelSession();
@@ -129,6 +132,16 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
         </Alert>
       ) : filters.tab === "sales" ? (
         <SalesTab sales={body?.tab === "sales" ? body : null} x={x} currency={currency ?? ""} productName={productName} stale={stale} />
+      ) : filters.tab === "customers" ? (
+        <CustomersTab
+          customers={body?.tab === "customers" ? body : null}
+          x={x}
+          currency={currency ?? ""}
+          productName={productName}
+          userHref={customerHrefOf({ tenantId: pathTenant, self })}
+          setting={tenantId && renewalWindowEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null}
+          stale={stale}
+        />
       ) : filters.tab === "catalog" ? (
         <CatalogTab catalog={body?.tab === "catalog" ? body : null} currency={currency ?? ""} productName={productName} panelName={panelName} hrefOf={viewOf} />
       ) : (

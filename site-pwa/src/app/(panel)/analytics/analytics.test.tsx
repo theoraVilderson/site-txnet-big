@@ -56,7 +56,7 @@ const overview: AnalyticsOverview = {
   currencies: ["USD"],
   kpis: {
     net: money("90.00"), gross: money("100.00"), refunds: money("10.00"), topUps: money("50.00"), aov: money("30.00"), arpu: money("10.00"),
-    orders: kpi(3), buyers: kpi(9), newBuyers: kpi(4), returningBuyers: kpi(5), renewal: null, activeGrants: kpi(12),
+    orders: kpi(3), buyers: kpi(9), newBuyers: kpi(4), returningBuyers: kpi(5), renewal: { rate: null, renewed: 0, lapsed: 0, pending: 0 }, activeGrants: kpi(12),
     bytesUsed: { value: "1000", previous: null, delta: null },
   },
   series: { salesPackage: [{ USD: "60.00" }, { USD: "20.00" }], salesUsage: [{ USD: "5.00" }, { USD: "5.00" }], topUps: [{ USD: "30.00" }, { USD: "20.00" }], orders: [2, 1], newBuyers: [3, 1], returningBuyers: [2, 3] },
