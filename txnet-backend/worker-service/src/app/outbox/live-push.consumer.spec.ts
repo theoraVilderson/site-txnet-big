@@ -167,6 +167,24 @@ describe('tenant.currency.changed (RT-1-l)', () => {
 
     expect(published).toEqual([{ channel: `members:${TENANT}`, payload: { type: 'tenant.currency.changed', tenantId: TENANT } }]);
   });
+
+  // RT-1-m2: `tenantId` is the platform's — the workspace is on the platform's panel.
+  it("a reseller's reaches its owner and the platform's staff, naming the reseller", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'tenant.currency',
+      type: OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED,
+      payload: { tenantId: TENANT, userId: USER, resellerId: 'r-1' },
+    });
+
+    const body = { type: 'tenant.currency.reseller_changed', resellerId: 'r-1' };
+    expect(published).toEqual([
+      { channel: `user:${USER}`, payload: body },
+      { channel: `tenant:${TENANT}`, payload: body },
+    ]);
+  });
 });
 
 describe('tenant.subscription.renewed (F-019-c1)', () => {

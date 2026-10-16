@@ -37,7 +37,7 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 | 5. **No rate, no change** (`rate_unavailable`): nothing is converted at a guessed rate. A change that finds the tenant no longer in the currency its rate was read from is refused (`currency_changed`), not converted | part 5: one snapshot, and the right one |
 | 6. The platform's own tenant is not a reseller, so `ResellerAccess` does not admit it: the caller must be signed in to it and hold `settings.manage` (AC-1-e; was `tenant.manage`). A reseller's `settings.manage` is its own tenant's, never the platform's | the platform's currency prices every reseller's billing (part 4) |
 | 7. **The pair is read in the tenant's own books** (F-116-j): `readFxPair(…, { tenantId: target.id })`, so its own live pin converts before the platform's | ADR-0098 part 9: a tenant's rate prices its own currency change, and only that tenant's |
-| 8. **A change is announced to every member** (RT-1-l): `tenant.currency.changed` `{tenantId}` (`aggregate: 'tenant.currency'`) is written in the conversion's own transaction, after it, and only when it returned a `changeId` — a retry that converted nothing writes nothing. live push sends it on `members:<tenantId>` | every money page a member has open is now in the old currency; a reseller's users are another tenant and are not told (`realtime/contract.live-events.md`) |
+| 8. **A change is announced to every member** (RT-1-l): `tenant.currency.changed` `{tenantId}` (`aggregate: 'tenant.currency'`) is written in the conversion's own transaction, after it, and only when it returned a `changeId` — a retry that converted nothing writes nothing. live push sends it on `members:<tenantId>`. A reseller's also writes `tenant.currency.reseller_changed` `{tenantId: the platform's, userId: its owner, resellerId}` (RT-1-m2), for its workspace on the platform's panel | every money page a member has open is now in the old currency; a reseller's users are another tenant and are not told (`realtime/contract.live-events.md`) |
 
 ## Consumers
 
@@ -45,5 +45,5 @@ Refusals: `not_allowed` 403, `reseller_suspended` 403, `reseller_not_found`
 |---|---|
 | panel-web | the two routes: a reseller's on its workspace `/my-resellers/:id`, the platform's on `/settings` (F-116-h, built; `panel-web/contract.currency.md`) |
 | billing | `tenant.operatingCurrencyCode` through shared-core `operatingCurrencyOf` / `platformCurrencyOf`, stamped on every new money row (F-116-b, built); a change runs billing's `convertOperatingCurrency` (F-116-f, built) |
-| automation | `tenant.currency.changed`, pushed live on `members:` (RT-1-l) |
+| automation | `tenant.currency.changed`, pushed live on `members:` (RT-1-l); `tenant.currency.reseller_changed` on the owner's `user:` and the platform's `tenant:` (RT-1-m2) |
 | catalog | the same, for `Price` and `MeteredRate`; a reader offers only prices in it (F-116-d, built) |

@@ -58,7 +58,10 @@ describe('TenantOperatingCurrencyService', () => {
       },
     };
     const all: Record<string, unknown> = {
-      tenant: { findUnique: appPrisma.tenant.findUnique },
+      tenant: {
+        findUnique: appPrisma.tenant.findUnique,
+        findFirst: vi.fn(async ({ where }: { where: { tenantType?: string } }) => Object.values(tenants).find((t) => t.tenantType === where.tenantType) ?? null),
+      },
       currency: { findMany: vi.fn(async () => CURRENCIES) },
     };
     // Its own client, so a write made outside the callback is not mistaken for one inside it.
@@ -106,11 +109,31 @@ describe('TenantOperatingCurrencyService', () => {
   it("writes tenant.currency.changed for the tenant's members in the conversion's own transaction, after it", async () => {
     const { service, tx } = build();
     await service.set(owner, RESELLER, 'IRR', '10.0.0.1');
-    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(1);
     expect(tx.outboxEvent.create.mock.calls[0][0]).toMatchObject({
       data: { aggregate: 'tenant.currency', aggregateId: RESELLER, type: 'tenant.currency.changed', payload: { tenantId: RESELLER } },
     });
     expect(vi.mocked(convertOperatingCurrency).mock.invocationCallOrder.at(-1)).toBeLessThan(tx.outboxEvent.create.mock.invocationCallOrder[0]);
+  });
+
+  // RT-1-m2: the owner and the platform's staff look at a reseller's workspace on the platform's panel.
+  it("tells a reseller's owner and the platform's staff too, in the same transaction", async () => {
+    const { service, tx } = build();
+    await service.set(owner, RESELLER, 'IRR', '10.0.0.1');
+    expect(tx.outboxEvent.create).toHaveBeenCalledTimes(2);
+    expect(tx.outboxEvent.create.mock.calls[1][0]).toMatchObject({
+      data: {
+        aggregate: 'tenant.currency',
+        aggregateId: RESELLER,
+        type: 'tenant.currency.reseller_changed',
+        payload: { tenantId: PLATFORM, userId: OWNER, resellerId: RESELLER },
+      },
+    });
+  });
+
+  it("writes only the members' event for the platform's own change: it has no workspace", async () => {
+    const { service, tx } = build();
+    await service.set(staff, PLATFORM, 'IRR', '10.0.0.1');
+    expect(tx.outboxEvent.create.mock.calls.map(([a]) => a.data.type)).toEqual(['tenant.currency.changed']);
   });
 
   it('a retry that found the change already made converts nothing, and writes no event', async () => {

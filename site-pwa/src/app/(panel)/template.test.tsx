@@ -6,6 +6,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
 import { usePanelRealtime } from "./_context/PanelRealtimeContext";
 import { usePanelSession } from "./_context/PanelSessionContext";
+import { useResellerWorkspace } from "./_context/ResellerWorkspaceContext";
 import { useHoldsUnsavedEdits } from "./_hooks/useHoldsUnsavedEdits";
 import PanelTemplate from "./template";
 
@@ -15,10 +16,15 @@ import PanelTemplate from "./template";
  * page is in the old currency. The template remounts the page, which re-reads
  * on mount — unless a form on it holds unsaved edits: then the page stays and a
  * banner offers the reload.
+ *
+ * RT-1-m2: a reseller's workspace is on the platform's panel, so its own change
+ * (`tenant.currency.reseller_changed`) reaches the owner on `user:` and the
+ * platform's staff on `tenant:` — and remounts only that reseller's pages.
  */
 
 vi.mock("./_context/PanelRealtimeContext", () => ({ usePanelRealtime: vi.fn() }));
 vi.mock("./_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }));
+vi.mock("./_context/ResellerWorkspaceContext", () => ({ useResellerWorkspace: vi.fn() }));
 vi.mock("@/context/LocaleContext", () => ({ useLocale: vi.fn() }));
 vi.mock("@/hooks/useMotionLevel", () => ({ useMotionLevel: () => "reduced" }));
 
@@ -27,10 +33,10 @@ const K = FrontendI18nKeys.common.shell.currencyChanged;
 function fakeClient() {
   const fake = {
     channels: [] as string[],
-    onMessage: null as ((payload: unknown) => void) | null,
+    on: {} as Record<string, (payload: unknown) => void>,
     subscribe: vi.fn((channel: string, options: { onMessage: (p: unknown) => void }) => {
       fake.channels.push(channel);
-      fake.onMessage = options.onMessage;
+      fake.on[channel] = options.onMessage;
       return () => {};
     }),
   };
@@ -47,8 +53,8 @@ function Page({ dirty = false }: { dirty?: boolean }) {
   return <p>page</p>;
 }
 
-function send(type: string) {
-  act(() => client.onMessage!({ type, tenantId: "t-1" }));
+function send(type: string, channel = "members:t-1", body: Record<string, unknown> = { tenantId: "t-1" }) {
+  act(() => client.on[channel]!({ type, ...body }));
 }
 
 beforeEach(() => {
@@ -56,7 +62,8 @@ beforeEach(() => {
   mounts = 0;
   client = fakeClient();
   vi.mocked(usePanelRealtime).mockReturnValue(client as never);
-  vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: "t-1" } } } as never);
+  vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: "t-1" }, permissions: ["*"] }, group: { current: { userId: "u-1" } } } as never);
+  vi.mocked(useResellerWorkspace).mockReturnValue({ workspace: null, inPath: false } as never);
   vi.mocked(useLocale).mockReturnValue({ t: (_ns: string, key: string) => key } as unknown as ReturnType<typeof useLocale>);
 });
 
@@ -98,5 +105,31 @@ describe("PanelTemplate on a currency change", () => {
     vi.mocked(usePanelSession).mockReturnValue({ me: null } as never);
     render(<PanelTemplate><Page /></PanelTemplate>);
     expect(client.channels).toEqual([]);
+  });
+});
+
+describe("PanelTemplate on a reseller's currency change (RT-1-m2)", () => {
+  const RESELLER = RealtimeEvents.tenantResellerCurrencyChanged;
+
+  it("hears it on the owner's and the platform's channels while that workspace is open", () => {
+    vi.mocked(useResellerWorkspace).mockReturnValue({ workspace: { id: "r-1", self: false }, inPath: true } as never);
+    render(<PanelTemplate><Page /></PanelTemplate>);
+    expect(client.channels).toEqual(["members:t-1", "user:u-1", "tenant:t-1"]);
+
+    send(RESELLER, "user:u-1", { resellerId: "r-1" });
+    expect(mounts).toBe(2);
+  });
+
+  it("leaves another reseller's workspace alone", () => {
+    vi.mocked(useResellerWorkspace).mockReturnValue({ workspace: { id: "r-1", self: false }, inPath: true } as never);
+    render(<PanelTemplate><Page /></PanelTemplate>);
+    send(RESELLER, "tenant:t-1", { resellerId: "r-2" });
+    expect(mounts).toBe(1);
+  });
+
+  it("listens for no reseller on a page outside a workspace", () => {
+    vi.mocked(useResellerWorkspace).mockReturnValue({ workspace: { id: "r-1", self: true }, inPath: false } as never);
+    render(<PanelTemplate><Page /></PanelTemplate>);
+    expect(client.channels).toEqual(["members:t-1"]);
   });
 });

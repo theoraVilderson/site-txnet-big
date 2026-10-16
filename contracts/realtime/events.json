@@ -20,6 +20,7 @@
     "tenantSubscriptionGraceExtended": "tenant.subscription.grace_extended",
     "accessChanged": "identity.access.changed",
     "tenantCurrencyChanged": "tenant.currency.changed",
+    "tenantResellerCurrencyChanged": "tenant.currency.reseller_changed",
     "paymentOpenChanged": "billing.payment.open_changed",
     "analyticsRefreshed": "billing.analytics.refreshed",
     "analyticsReport": "billing.analytics.report",

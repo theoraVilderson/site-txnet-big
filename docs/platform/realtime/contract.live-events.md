@@ -59,6 +59,7 @@ corrected, per "Decide once".
 | `billing.analytics.report` | `user:` | billing (`AnalyticsReportSender`, a scheduled report sent, F-1006-a) → live-push; body `{type, scheduleId}` | `/analytics?tab=reports` (F-1006-b), the person's own schedules |
 | `billing.analytics.reseller_refreshed` | `user:` + `tenant:` | billing (the same pass, for a reseller with an owner, F-1001-p) → live-push; body `{type, resellerId, from, to}`; payload `tenantId` = the platform's, `userId` = the owner | the workspace twins `/reseller/analytics`, `/my-resellers/:id/analytics`, filtered by `resellerId` (`analyticsLiveOf`) |
 | `tenant.currency.changed` | `members:` | tenant (`OperatingCurrencyService.set`, RT-1-l) → live-push; body `{type, tenantId}` | `(panel)/template.tsx` remounts the page (RT-1-m), `useWalletBalance` |
+| `tenant.currency.reseller_changed` | `user:` + `tenant:` | tenant (the same `set`, a reseller's only, RT-1-m2) → live-push; body `{type, resellerId}`; payload `tenantId` = the platform's, `userId` = the owner | `(panel)/template.tsx` via `useCurrencyChanged`, the open workspace's reseller only |
 
 ## Planned — the RT-1 rows
 
@@ -204,3 +205,13 @@ plan: the hold is called by `useUnsavedGuard` (so `SaveBar`) and the kit
 `Wizard`, so every form that already asks before leaving holds —
 ProductWizard, GatewayWizard among them; GatewayEditor and PackageSheet call
 it directly. Proof `(panel)/template.test.tsx`, `useWalletBalance.test.ts`.
+
+**RT-1-m2 — a reseller's workspace hears its own change** — built 2026-10-16.
+A workspace page is on the platform's panel: the owner signs in to the
+platform and the platform's staff are its members, so the reseller's
+`members:` reaches neither. `set` writes a second row for a reseller (never
+the platform), `tenant.currency.reseller_changed`, payload `{tenantId: the
+platform's, userId: the owner, resellerId}`, `user` + `tenant` like RT-1-e.
+`useCurrencyChanged` (`(panel)/_hooks/`) hears it while `inPath` and remounts
+only when `resellerId` is the open workspace's. Proof `operating-currency.spec.ts`,
+`live-push.consumer.spec.ts`, `(panel)/template.test.tsx`.

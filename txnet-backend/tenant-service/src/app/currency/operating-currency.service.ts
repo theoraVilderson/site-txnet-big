@@ -13,6 +13,7 @@ import {
   holdsPermission,
   readFxPair,
   isPlatformTenant,
+  platformTenantIdOf,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -79,7 +80,8 @@ const MAX_DECIMALS = 2;
  */
 const CHANGE_TIMEOUT_MS = 120_000;
 
-type Target = { id: string; code: string };
+/** `ownerUserId`: a reseller's, whose workspace is on the platform's panel (RT-1-m2); null for the platform's own. */
+type Target = { id: string; code: string; ownerUserId: string | null };
 
 @Injectable()
 export class TenantOperatingCurrencyService {
@@ -104,6 +106,7 @@ export class TenantOperatingCurrencyService {
     // Its own change is inside its own books: its own pin converts (F-116-j, ADR-0098 part 9).
     const pair = await readFxPair(this.all, this.redis, target.code, code, this.logger, { tenantId: target.id });
     if (!pair) throw new OperatingCurrencyRefused('rate_unavailable', `${target.code} -> ${code}`);
+    const platformId = target.ownerUserId ? await platformTenantIdOf(this.all) : null;
     let outcome;
     try {
       outcome = await this.all.$transaction(
@@ -115,6 +118,18 @@ export class TenantOperatingCurrencyService {
               data: { aggregate: 'tenant.currency', aggregateId: target.id, type: OutboxEventType.TENANT_CURRENCY_CHANGED, payload: { tenantId: target.id } },
               select: { id: true },
             });
+            // RT-1-m2: the owner signs in to the platform, so the reseller's `members:` misses them.
+            if (target.ownerUserId && platformId) {
+              await tx.outboxEvent.create({
+                data: {
+                  aggregate: 'tenant.currency',
+                  aggregateId: target.id,
+                  type: OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED,
+                  payload: { tenantId: platformId, userId: target.ownerUserId, resellerId: target.id },
+                },
+                select: { id: true },
+              });
+            }
           }
           return converted;
         },
@@ -160,17 +175,17 @@ export class TenantOperatingCurrencyService {
   private async admit(actor: OperatingCurrencyActor, tenantId: string, capability: TenantCapabilityName): Promise<Target> {
     const tenant = await this.all.tenant.findUnique({
       where: { id: tenantId },
-      select: { tenantType: true, deletedAt: true, operatingCurrencyCode: true },
+      select: { tenantType: true, deletedAt: true, operatingCurrencyCode: true, ownerUserId: true },
     });
     if (isPlatformTenant(tenant?.tenantType) && !tenant.deletedAt) {
       if (actor.tenantId !== tenantId || !holdsPermission(actor.permissions, 'settings.manage')) {
         throw new OperatingCurrencyRefused('not_allowed', tenantId);
       }
-      return { id: tenantId, code: tenant.operatingCurrencyCode };
+      return { id: tenantId, code: tenant.operatingCurrencyCode, ownerUserId: null };
     }
     try {
       const reseller = await this.resellerAccess.for('settings.manage').admit(actor, tenantId, capability);
-      return { id: reseller.id, code: tenant?.operatingCurrencyCode ?? 'USD' };
+      return { id: reseller.id, code: tenant?.operatingCurrencyCode ?? 'USD', ownerUserId: tenant?.ownerUserId ?? null };
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new OperatingCurrencyRefused(e.reason, tenantId);
       throw e;
