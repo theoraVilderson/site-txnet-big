@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -156,8 +156,7 @@ session's tenant on its `tenant:` channel; a workspace view on its owner's
 `user:` and the platform's `tenant:`, re-reading only for its own reseller
 (F-1001-p, RT-1-e's pair). Names come from billing's `names` (product `nameKey`
 -> the published `catalog` texts; a panel's own name). Several currencies: an
-`Alert` with the currency picker, never one sum. The owner's
-top resellers F-1001-i. Kit additions: `TabLinks` `current` (tabs that share
+`Alert` with the currency picker, never one sum. Kit additions: `TabLinks` `current` (tabs that share
 a path), `BarList` `other` (billing's folded remainder, never folded twice).
 **Export (F-1007-b):** `ExportMenu` in the header saves the tab and filters on
 screen through billing's `format=` (the same door and under-5 rule), saved by
@@ -219,7 +218,13 @@ filter already draws only when `names.panels` has one.
   `tenant.manage`; `platform.tenant.manage`; a reseller's owner on `/reseller`).
   The Overview's renewal tile reads billing's rate, a dash before any end.
 - **Resellers** (F-1001-i): the tier-A leaderboard; a cell under 5 people
-  reads "fewer than 5", never a figure.
+  reads "fewer than 5", never a figure. **As built (`ResellersTab`,
+  `TopResellers`, `_lib/resellers.ts`).** Offered, and read, only on the
+  platform's own view to `platform.report.read` (billing's door); anyone else
+  asking lands on the Overview. A row: name (to its analytics), net with its
+  `DeltaPill`, top-ups, buyers, services, sparkline (a hidden point is a gap).
+  The Overview's top five read the tab beside it; both re-read on any
+  reseller's `billing.analytics.reseller_refreshed` on the platform's channel.
 - **Profit** (F-1001-m), **Cohorts** (F-1004-b), **Capacity** (F-1005-b),
   **Reports** (F-1006-b): each in its row, on the same kit and rules.
 

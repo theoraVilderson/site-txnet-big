@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { type AnalyticsNames, type AnalyticsOverview, FEWER_THAN_5 } from "@/lib/billing/analytics";
+import { type AnalyticsNames, type AnalyticsOverview, type AnalyticsResellers, FEWER_THAN_5 } from "@/lib/billing/analytics";
 import { formatMoney } from "../../_lib/money";
 import { BarList, CHART_OTHER, CalendarHeatmap, ChartCard, Meter, StatTile, slotsByEntity, useChartFormat } from "../../_components/kit/charts";
 import { type AnalyticsFilters } from "../_lib/filters";
@@ -13,6 +13,7 @@ import { usageFormat } from "../_lib/usage";
 import { OverviewHero } from "./OverviewHero";
 import { OverviewInsights } from "./OverviewInsights";
 import { BuyersCard } from "./BuyersCard";
+import { TopResellers } from "./TopResellers";
 import { UsageCards, usagePoints } from "./UsageCards";
 
 const K = FrontendI18nKeys.common.analytics;
@@ -33,6 +34,8 @@ export interface OverviewTabProps {
   meterName: (key: string) => string;
   /** The current view with `patch` applied — where an insight links. */
   hrefOf: (patch: Partial<AnalyticsFilters>) => string;
+  /** The platform's leaderboard, for its staff (F-1001-i); absent for everyone else. */
+  topResellers?: AnalyticsResellers | null;
   stale: boolean;
 }
 
@@ -41,11 +44,11 @@ type Bar = { id: string; label: string; value: number; display: string; color: s
 /**
  * The Overview tab (F-1001-d, panel-web `contract.analytics.md` "Overview"):
  * the hero, six KPI tiles, the insights strip (F-1001-k), sales by product
- * beside new vs returning buyers, and the year's calendar. The owner's top
- * resellers (F-1001-i) arrive with their row. `overview` null is the first load: every
+ * beside new vs returning buyers, the year's calendar, and for the platform's
+ * staff its top five resellers (F-1001-i). `overview` null is the first load: every
  * card draws its own skeleton.
  */
-export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, meterName, hrefOf, stale }: OverviewTabProps) {
+export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, meterName, hrefOf, topResellers, stale }: OverviewTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const [metric, setMetric] = useState<HeroMetric>("net");
@@ -142,6 +145,7 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
       >
         <CalendarHeatmap label={t("common", K.calendar.title)} days={heat} weekStartsOn={WEEK_START[calendar]} formatDay={formatDay} formatValue={money} />
       </ChartCard>
+      {topResellers && <TopResellers resellers={topResellers} currency={currency} allHref={hrefOf({ tab: "resellers" })} />}
     </div>
   );
 }

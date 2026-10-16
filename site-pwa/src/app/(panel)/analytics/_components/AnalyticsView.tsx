@@ -18,12 +18,14 @@ import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, renewalWindowEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
+import { resellersVisible } from "../_lib/resellers";
 import { currencyOf, productNamer } from "../_lib/overview";
 import { meterNamer } from "../_lib/usage";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { CatalogTab } from "./CatalogTab";
 import { CustomersTab } from "./CustomersTab";
+import { ResellersTab } from "./ResellersTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab } from "./SalesTab";
 
@@ -70,13 +72,19 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   const pathname = usePathname() ?? PANEL_ANALYTICS;
   const search = useSearchParams()?.toString() ?? "";
 
-  const filters = useMemo(() => filtersOf(new URLSearchParams(search)), [search]);
+  const asked = useMemo(() => filtersOf(new URLSearchParams(search)), [search]);
+  // The leaderboard is the platform's own view, for its report key (F-1001-i): anyone else asking for it lands on the Overview.
+  const owner = resellersVisible(me, pathTenant);
+  const filters = useMemo(() => (asked.tab === "resellers" && !owner ? { ...asked, tab: "overview" as const } : asked), [asked, owner]);
+  const tabs = ANALYTICS_TABS.filter((tab) => tab !== "resellers" || owner);
   const calendar = calendarOf(lang);
   // The viewer's day, read once: a page left open past midnight keeps the window it opened with.
   const [today] = useState(() => dayIn(Date.now(), displayZone()));
   const query = useMemo(() => queryOf(filters, today, calendar), [filters, today, calendar]);
   const tenantId = pathTenant ?? me?.tenant.id ?? null;
-  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId));
+  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId, { everyReseller: filters.tab === "resellers" }));
+  // The Overview's top five (F-1001-i): the same window, read beside it and live on any reseller's pass.
+  const top = useAnalyticsRead(owner && filters.tab === "overview" ? tenantId : null, "resellers", query, analyticsLiveOf(me, owner ? tenantId : null, { everyReseller: true }));
   const texts = useCatalogTexts(lang);
 
   const hrefOf = (next: AnalyticsFilters) => {
@@ -112,7 +120,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
       <TabLinks
         ariaLabel={t("common", K.title)}
         current={hrefOf(filters)}
-        links={ANALYTICS_TABS.map((tab) => ({ href: hrefOf({ ...filters, tab }), label: t("common", K.tabs[tab]) }))}
+        links={tabs.map((tab) => ({ href: hrefOf({ ...filters, tab }), label: t("common", K.tabs[tab]) }))}
       />
 
       {ready && ready.currencies.length > 1 && currency && (
@@ -142,6 +150,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           setting={tenantId && renewalWindowEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null}
           stale={stale}
         />
+      ) : filters.tab === "resellers" ? (
+        <ResellersTab resellers={body?.tab === "resellers" ? body : null} currency={currency ?? ""} />
       ) : filters.tab === "catalog" ? (
         <CatalogTab catalog={body?.tab === "catalog" ? body : null} currency={currency ?? ""} productName={productName} panelName={panelName} hrefOf={viewOf} />
       ) : (
@@ -155,6 +165,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           productName={productName}
           meterName={meterName}
           hrefOf={viewOf}
+          topResellers={top.answer && !top.answer.rebuilding ? top.answer : null}
           stale={stale}
         />
       )}

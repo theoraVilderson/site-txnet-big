@@ -6537,7 +6537,8 @@
       "overview": "Overview",
       "sales": "Sales",
       "customers": "Customers",
-      "catalog": "Products and panels"
+      "catalog": "Products and panels",
+      "resellers": "Resellers"
     },
     "filters": {
       "button": "Filters",
@@ -6741,6 +6742,18 @@
         "hint": "From {{min}} to {{max}} days.",
         "save": "Save",
         "saved": "Renewal window set to {{days}} days."
+      }
+    },
+    "resellers": {
+      "title": "Resellers",
+      "reseller": "Reseller",
+      "topUps": "Top-ups",
+      "activeGrants": "Active services",
+      "count": "The {{shown}} largest of {{total}} resellers",
+      "empty": "No reseller sold in this period.",
+      "top": {
+        "title": "Top resellers",
+        "all": "All resellers"
       }
     }
   }

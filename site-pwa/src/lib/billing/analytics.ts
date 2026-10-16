@@ -3,7 +3,7 @@ import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today, in the page's order; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog"] as const;
+export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -130,6 +130,26 @@ export interface AnalyticsCustomers {
   topCustomers: { userId: string; name: string | null; net: Amounts; orders: number }[] | null;
 }
 
+/** One reseller on the platform's leaderboard (billing `resellers`, F-1001-h): its whole-business figures, tier A. */
+export interface ResellerRow {
+  resellerId: string;
+  /** Its brand name, else its slug. */
+  name: string;
+  net: MoneyKpi;
+  topUps: Amounts;
+  buyers: number;
+  activeGrants: number;
+  /** Net per point; a point under 5 buyers is null (ADR-0104). */
+  sparkline: (Amounts | null)[];
+}
+
+/** The Resellers tab: the largest resellers by net, and how many there are in all. */
+export interface AnalyticsResellers {
+  currencies: string[];
+  total: number;
+  resellers: ResellerRow[];
+}
+
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
 export interface GatewayCell {
   gatewayKind: string | null;
@@ -188,6 +208,7 @@ export interface AnalyticsBodies {
   sales: AnalyticsSales;
   customers: AnalyticsCustomers;
   catalog: AnalyticsCatalog;
+  resellers: AnalyticsResellers;
 }
 
 /** One tab's answer, its `tab` the tab asked: over the union of tabs, a union `tab` narrows. */
