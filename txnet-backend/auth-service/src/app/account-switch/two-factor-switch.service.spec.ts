@@ -53,8 +53,14 @@ describe('TwoFactorSwitchService (ADR-0145)', () => {
     const result = await begin(h);
 
     expect(h.auth.proveAccountByPassword).toHaveBeenCalledWith('theora', 'right');
-    expect(h.auth.askSecondFactor).toHaveBeenCalledWith(target, '1.2.3.4', 'fa');
+    expect(h.auth.askSecondFactor).toHaveBeenCalledWith(target, '1.2.3.4', 'fa', undefined);
     expect(result).toMatchObject({ ok: true, data: { otpToken: 'tok' } });
+  });
+
+  it('sends the code by the channel picked beside the password (SA-1-f)', async () => {
+    const h = build();
+    await h.service.begin(scope, 'u-me', { userId: 'u-star', password: 'right', channel: 'telegram' } as never, '1.2.3.4', 'fa');
+    expect(h.auth.askSecondFactor).toHaveBeenCalledWith(target, '1.2.3.4', 'fa', 'telegram');
   });
 
   it('does nothing for an account outside the caller\'s group', async () => {

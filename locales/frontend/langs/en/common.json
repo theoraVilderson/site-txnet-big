@@ -764,9 +764,13 @@
     "twoFactor": {
       "title": "Sign in to {{name}}",
       "body": "This account runs the whole platform: it opens only with its own password and then a code.",
-      "codeSent": "A code went to this account's own number.",
+      "codeSent": "The verification code was sent.",
       "codePlaceholder": "6-digit code",
-      "badge": "Password and code"
+      "badge": "Password and code",
+      "channelLabel": "Where should the code go?",
+      "linkBody": "This messenger is not connected to the account yet. Open the bot and confirm the number; the code arrives there.",
+      "openBot": "Open the bot",
+      "sendAgain": "Send again or another way"
     },
     "groupTitle": "Your other accounts",
     "groupEmpty": "You have not added another account yet.",

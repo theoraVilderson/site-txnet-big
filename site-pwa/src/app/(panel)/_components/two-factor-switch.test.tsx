@@ -20,6 +20,15 @@ vi.mock("@auth/auth/_hooks/useCaptcha", () => ({
   useCaptcha: () => ({ verified: true, token: "pass", complete: vi.fn(), spend: vi.fn() }),
 }));
 vi.mock("@auth/auth/_components/NatureCaptchaUI", () => ({ NatureCaptchaUI: () => null }));
+// SA-1-f: the deployment offers sms and telegram, and the person picks.
+vi.mock("@auth/auth/_hooks/useOtpChannels", () => ({
+  useOtpChannels: () => ({
+    channels: [{ channel: "sms", requiresLink: false }, { channel: "telegram", requiresLink: true }],
+    selected: "telegram",
+    select: vi.fn(),
+    hasChoice: true,
+  }),
+}));
 
 const assign = vi.fn();
 
@@ -40,7 +49,7 @@ describe("TwoFactorSwitchDialog", () => {
 
     fireEvent.change(screen.getByPlaceholderText(C.passwordPlaceholder), { target: { value: "s3cret" } });
     fireEvent.click(screen.getByRole("button", { name: C.sendCode }));
-    await waitFor(() => expect(api.switchByPassword).toHaveBeenCalledWith("u-star", "s3cret", "pass"));
+    await waitFor(() => expect(api.switchByPassword).toHaveBeenCalledWith("u-star", "s3cret", "pass", "telegram"));
 
     fireEvent.change(await screen.findByPlaceholderText(C.twoFactor.codePlaceholder), { target: { value: "123456" } });
     fireEvent.click(screen.getByRole("button", { name: C.confirm }));
@@ -59,5 +68,17 @@ describe("TwoFactorSwitchDialog", () => {
 
     expect(await screen.findByText("wrong password")).toBeTruthy();
     expect(screen.queryByPlaceholderText(C.twoFactor.codePlaceholder)).toBeNull();
+  });
+
+  it("hands over the bot link for a messenger not yet connected, and still takes the code (SA-1-f)", async () => {
+    api.switchByPassword.mockResolvedValueOnce({ accepted: true, linkRequired: true, deepLink: "https://t.me/bot?start=x", otpToken: "tok" });
+    render(<TwoFactorSwitchDialog member={member} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText(C.passwordPlaceholder), { target: { value: "s3cret" } });
+    fireEvent.click(screen.getByRole("button", { name: C.sendCode }));
+
+    expect((await screen.findByRole("link", { name: C.twoFactor.openBot })).getAttribute("href")).toBe("https://t.me/bot?start=x");
+    fireEvent.click(screen.getByRole("button", { name: C.twoFactor.sendAgain }));
+    expect(await screen.findByPlaceholderText(C.passwordPlaceholder)).toBeTruthy();
   });
 });

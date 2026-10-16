@@ -17,29 +17,30 @@ const ICONS: Record<OtpChannel, typeof Send> = {
   bale: MessageCircle,
 };
 
+/** The auth screens' picker, in their own translations. */
+export function OtpChannelPicker(props: OtpChannelPickerProps) {
+  const { t } = useAuthUI();
+  const labels = { title: t.otpChannelLabel, sms: t.otpChannelSms, telegram: t.otpChannelTelegram, bale: t.otpChannelBale };
+  return <OtpChannelChoice {...props} labels={labels} />;
+}
+
 /**
  * Where the code should be sent. Renders only what the server actually
- * offers — see `useOtpChannels`.
+ * offers — see `useOtpChannels`. The labels come from the caller, so the
+ * panel's two-factor switch (SA-1-f) shows the same control outside `(auth)`.
  */
-export function OtpChannelPicker({
+export function OtpChannelChoice({
   channels,
   selected,
   onSelect,
-}: OtpChannelPickerProps) {
-  const { t } = useAuthUI();
-
-  const label: Record<OtpChannel, string> = {
-    sms: t.otpChannelSms,
-    telegram: t.otpChannelTelegram,
-    bale: t.otpChannelBale,
-  };
-
+  labels,
+}: OtpChannelPickerProps & { labels: Record<OtpChannel | "title", string> }) {
   return (
     <div className="mt-4">
-      <p className="text-text-secondary text-sm mb-2">{t.otpChannelLabel}</p>
+      <p className="text-text-secondary text-sm mb-2">{labels.title}</p>
       <div
         role="radiogroup"
-        aria-label={t.otpChannelLabel}
+        aria-label={labels.title}
         className="flex bg-tab-bg rounded-2xl p-1.5 border border-card-border shadow-inner gap-1"
       >
         {channels.map(({ channel }) => {
@@ -66,7 +67,7 @@ export function OtpChannelPicker({
                 />
               )}
               <Icon size={16} aria-hidden />
-              {label[channel]}
+              {labels[channel]}
             </button>
           );
         })}

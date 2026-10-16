@@ -47,6 +47,8 @@ export const removeAccountSchema = z.object({
 export const twoFactorSwitchPasswordSchema = z.object({
   userId: z.string().uuid(),
   password: z.string().min(1),
+  /** Where the code goes (SA-1-f); without it, the member's preference, then the default. */
+  channel: z.nativeEnum(OtpChannel).optional(),
 });
 
 /** Step 2: the code, with the token step 1 answered. */

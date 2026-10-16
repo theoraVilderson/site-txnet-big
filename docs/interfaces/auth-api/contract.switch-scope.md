@@ -42,7 +42,7 @@ reached by two calls that prove both factors at the moment of the switch:
 
 | Route | Body | Answer | Limit | Captcha |
 |---|---|---|---|---|
-| POST `/auth/accounts/switch/password` | userId, password | 200 `{requiresOtp, otpToken}` + delivery handles; a code goes to that member's number. `accountSwitch.notAMember` for anyone outside the caller's group (nothing proven, nothing sent), `accountSwitch.proofFailed` on a wrong password, `auth.secondFactorUnavailable` with no number | `ACCOUNTS_ADD_PASSWORD`, and the password's own `login-failures` bucket | required |
+| POST `/auth/accounts/switch/password` | userId, password, channel? | 200 `{requiresOtp, otpToken}` + delivery handles; a code goes to that member's number by `channel` (SA-1-f), or, for a messenger not yet connected, `login/otp/request`'s bot-link answer plus `otpToken` — the bot sends the code. `accountSwitch.notAMember` for anyone outside the caller's group (nothing proven, nothing sent), `accountSwitch.proofFailed` on a wrong password, `auth.secondFactorUnavailable` with no number | `ACCOUNTS_ADD_PASSWORD`, and the password's own `login-failures` bucket | required |
 | POST `/auth/accounts/switch/code` | otpToken, otpCode(6) | as `switch`: tokens + `refresh_token` cookie, the whole place moves (ADR-0034). `auth.invalidOtpToken` for a token not minted for the code step | `ACCOUNTS_ADD_OTP_VERIFY` | — |
 
 The browser's other accounts stay signed in; nothing here joins a group.

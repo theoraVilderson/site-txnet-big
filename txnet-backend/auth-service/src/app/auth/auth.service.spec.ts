@@ -508,7 +508,8 @@ describe('AuthService.loginWithPassword — two-factor', () => {
 
     const res = await h.service.askSecondFactor(activeUser() as never, '1.2.3.4', 'fa', OtpChannel.bale);
 
-    expect(res).toMatchObject({ ok: true, msg: 'auth.botLinkRequired', data: { accepted: true, linkToken: 'lt' } });
+    // The token rides with the link, so a caller with no earlier one (the switch, SA-1-f) can verify the code the bot sends.
+    expect(res).toMatchObject({ ok: true, msg: 'auth.botLinkRequired', data: { accepted: true, linkToken: 'lt', otpToken: 'otp-token' } });
     expect(h.botLinks.startLink).toHaveBeenCalledWith(expect.objectContaining({ platform: 'bale', purpose: OtpPurpose.login }));
     expect(h.otp.issueOtp).not.toHaveBeenCalled();
   });

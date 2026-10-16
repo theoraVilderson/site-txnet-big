@@ -259,7 +259,7 @@ export class AuthService {
     if (!user.phoneNumber) return err(SECOND_FACTOR_UNAVAILABLE);
     const channel = await this.resolveOtpChannel(user.phoneNumber, user, chosen);
     const link = chosen && (await this.linkIfNeeded(channel, user.phoneNumber, OtpPurpose.login, ip, lang));
-    if (link) return link;
+    if (link) return ok({ ...link.data, otpToken: this.tokens.signOtpToken(user.id) }, link.msg);
     const delivery = await this.deliveries.mintHandles();
     await this.otp.issueOtp(user.phoneNumber, OtpPurpose.login, channel, ip, lang, delivery);
     return ok({ requiresOtp: true, otpToken: this.tokens.signOtpToken(user.id), ...deliveryHandles(delivery) }, 'auth.otpSent');

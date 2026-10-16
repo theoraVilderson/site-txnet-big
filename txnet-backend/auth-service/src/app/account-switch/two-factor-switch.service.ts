@@ -48,7 +48,7 @@ export class TwoFactorSwitchService {
       const identifier = target.username ?? target.phoneNumber;
       const proven = identifier ? await this.auth.proveAccountByPassword(identifier, input.password) : null;
       if (proven?.id !== target.id) return err('accountSwitch.proofFailed');
-      return this.auth.askSecondFactor(target, ip, lang);
+      return this.auth.askSecondFactor(target, ip, lang, input.channel);
     });
   }
 
