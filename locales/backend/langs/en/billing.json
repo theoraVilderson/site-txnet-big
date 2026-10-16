@@ -83,7 +83,10 @@
       "renewalByProduct": "Renewal by product",
       "topCustomers": "Top customers",
       "userId": "User",
-      "name": "Name"
+      "name": "Name",
+      "resellers": "Resellers",
+      "resellerId": "Reseller",
+      "sparkline": "Trend"
     }
   }
 }

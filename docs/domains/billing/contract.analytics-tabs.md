@@ -64,3 +64,28 @@ Rules, each a decision:
    count is answered, so the cells are judged as one whole. The tenant totals
    stay. A name is a label read from identity's `user`, as the lottery report
    reads one; never a figure.
+
+## Resellers (F-1001-h)
+
+`GET …/analytics/resellers` on the **platform's** tenant (`analytics-resellers.ts`)
+— the door is the figures door, so the platform's staff with
+`platform.report.read`; on a reseller's tenant it is refused `not_allowed`, even
+to its owner, never answered empty. It answers `total` (every live reseller)
+and `resellers`, the 100 largest by net in the platform's operating currency,
+each `{resellerId, name, net, topUps, buyers, activeGrants, sparkline}`; one
+with no sale in either window is counted in `total`, not listed.
+
+1. **Whole-reseller totals are tier A** (ADR-0104 (2)): net as a money KPI
+   with its delta, top-ups, distinct buyers and the services standing at its
+   own last snapshot are shown whatever their size, as `overview` shows them
+   to staff. `name` is its brand name, else its slug — a business, not a person.
+2. **A sparkline point is a cell**: 12 points of whole days, net per
+   currency; a point under 5 buyers is `null` with its complement
+   (`hiddenKeys`), judged within that reseller — its net total is answered.
+   A point with no sale is a zero, not a cell.
+3. **Read across tenants**, through the cross-tenant pool, narrowed to live
+   resellers so the platform's own rollup is never summed in. Product, panel
+   and kind filters do not apply: a reseller's catalog is its own.
+4. **Cached by the sum of every rollup version**, so any reseller's changed
+   pass retires the answer; the page already re-reads on
+   `billing.analytics.reseller_refreshed` (F-1001-p).

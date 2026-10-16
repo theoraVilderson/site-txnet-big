@@ -12,6 +12,7 @@ import {
   tenantTransaction,
 } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import type { Granularity } from './analytics-buckets';
@@ -20,6 +21,7 @@ import { catalogOf } from './analytics-catalog';
 import { customersOf } from './analytics-customers';
 import { AnalyticsNames, namesOf } from './analytics-names';
 import { overviewOf } from './analytics-overview';
+import { resellersOf } from './analytics-resellers';
 import { salesOf } from './analytics-sales';
 import { AnalyticsQuery, AnalyticsTab } from './analytics.schema';
 
@@ -56,7 +58,10 @@ export type ReadyAnswer = Extract<AnalyticsAnswer, { rebuilding: false }>;
 export const isReady = (a: AnalyticsAnswer): a is ReadyAnswer => a.rebuilding === false;
 
 /** Each tab's builder; a tab with no row yet has none. */
-const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf, customers: customersOf };
+const TABS: Record<AnalyticsTab, (c: TabContext) => Promise<object>> = { overview: overviewOf, sales: salesOf, catalog: catalogOf, customers: customersOf, resellers: resellersOf };
+
+/** The tabs that read every reseller's rollup: the platform's own, and nobody else's (F-1001-h). */
+const ACROSS_TABS: ReadonlySet<AnalyticsTab> = new Set(['resellers']);
 
 /**
  * The analytics tabs (F-1001-b): `overview`, `sales`, `catalog` for the tenant
@@ -75,6 +80,8 @@ export class AnalyticsService {
     private readonly prisma: PrismaService,
     private readonly access: ResellerAccess,
     private readonly redis: RedisService,
+    /** Every reseller's rollup, read only by the platform's `resellers` tab. */
+    private readonly all: CrossTenantPrismaService,
   ) {}
 
   read(actor: ResellerActor, tenantId: string, tab: AnalyticsTab, q: AnalyticsQuery): Promise<AnalyticsAnswer> {
@@ -83,8 +90,12 @@ export class AnalyticsService {
       const head: Head = { tab, query: q, refreshedAt: state?.refreshedAt?.toISOString() ?? null };
       if (!state || state.rebuildingSince) return { ...head, rebuilding: true };
 
+      const across = ACROSS_TABS.has(tab);
+      // Another tenant's figures, to a reseller: refused, never answered empty.
+      if (across && admitted.platform !== true) throw new ResellerAccessRefused('not_allowed', tenantId);
       const hides = admitted.as === 'staff' && admitted.platform !== true;
-      const key = UnscopedRedisKeys.analyticsAnswer(tenantId, state.version, tab, createHash('sha256').update(JSON.stringify({ q, hides })).digest('hex'));
+      const version = across ? await this.versionAcross() : state.version;
+      const key = UnscopedRedisKeys.analyticsAnswer(tenantId, version, tab, createHash('sha256').update(JSON.stringify({ q, hides })).digest('hex'));
       const cached = await this.cached(key);
       if (cached) return { ...head, rebuilding: false, ...cached };
 
@@ -94,7 +105,7 @@ export class AnalyticsService {
       const body = await tenantTransaction(
         this.prisma,
         async (tx) => {
-          const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides });
+          const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides, across: across ? this.all : undefined });
           return { granularity: c.granularity, buckets: c.buckets, suppressed: hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
         },
         { timeout: READ_TIMEOUT_MS },
@@ -102,6 +113,15 @@ export class AnalyticsService {
       await this.cache(key, body);
       return { ...head, rebuilding: false, ...body };
     });
+  }
+
+  /**
+   * The cache version of a tab that reads every reseller: the sum of every
+   * tenant's rollup version, so any reseller's changed pass retires it.
+   */
+  private async versionAcross(): Promise<number> {
+    const [row] = await this.all.$queryRaw<{ version: number }[]>`SELECT COALESCE(SUM("version"), 0)::int AS "version" FROM billing.analytics_rollup_state`;
+    return row?.version ?? 0;
   }
 
   /** A cache read that fails is a miss, never a failed page: the rollup answers instead. */

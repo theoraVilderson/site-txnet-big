@@ -83,7 +83,10 @@
       "renewalByProduct": "تمدید به تفکیک محصول",
       "topCustomers": "برترین مشتریان",
       "userId": "کاربر",
-      "name": "نام"
+      "name": "نام",
+      "resellers": "نماینده‌ها",
+      "resellerId": "نماینده",
+      "sparkline": "روند کوتاه"
     }
   }
 }

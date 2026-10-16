@@ -76,6 +76,13 @@ export class AnalyticsController {
     return this.read(req, res, tenantId, 'customers', q);
   }
 
+  /** The platform's own: every reseller's net, delta, top-ups, buyers, services and sparkline, tier A (F-1001-h). */
+  @Get('resellers')
+  @RateLimit(READ)
+  resellers(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(analyticsRequestSchema)) q: AnalyticsRequest, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.read(req, res, tenantId, 'resellers', q);
+  }
+
   /** The renewal window, 1..30 days (F-1001-f) — the settings key's, not `analytics.read`'s. Rare: the read bucket bounds it. */
   @Put('settings')
   @RateLimit(READ)

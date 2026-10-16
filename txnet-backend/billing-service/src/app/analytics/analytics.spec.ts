@@ -91,7 +91,8 @@ function build(state: { version: number; refreshedAt: Date | null; rebuildingSin
   const prisma = { $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(tx) };
   const store = new Map<string, string>();
   const redis = { get: async (k: string) => store.get(k) ?? null, setWithTtl: async (k: string, v: string) => void store.set(k, v) };
-  return { reads, store, service: new AnalyticsService(prisma as never, access, redis as never) };
+  const all = { $queryRaw: async () => [] };
+  return { reads, store, service: new AnalyticsService(prisma as never, access, redis as never, all as never) };
 }
 
 describe('the analytics query', () => {
@@ -146,6 +147,12 @@ describe('AnalyticsService.read', () => {
   it('refuses a stranger before the rollup is read', async () => {
     const { reads, service } = build();
     await expect(service.read(stranger, RESELLER, 'overview', query())).rejects.toBeInstanceOf(AnalyticsRefused);
+    expect(reads).toEqual([]);
+  });
+
+  it('refuses the resellers tab on a reseller, even to its owner — it is the platform\'s alone (F-1001-h)', async () => {
+    const { reads, service } = build();
+    await expect(service.read(owner, RESELLER, 'resellers', query())).rejects.toMatchObject({ reason: 'not_allowed' });
     expect(reads).toEqual([]);
   });
 
