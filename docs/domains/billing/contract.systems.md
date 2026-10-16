@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 50
-updated: 2026-10-15
+updated: 2026-10-16
 ---
 
 # Systems — the platform owner's panel routes
@@ -16,6 +16,8 @@ registered panel is `network/contract.registration.md`.
 Nothing here calls `network-service`. Every route writes desired state or
 reads observations in the database (ADR-0071: the Go service has no route);
 a hold's release goes to `metering-service` through the outbox.
+A panel's monthly cost (`…/panels/:id/cost`, `PanelCostController`, F-1002-a)
+is on this surface with this door: [network/contract.panel-cost.md](../network/contract.panel-cost.md).
 
 ## Who may call
 

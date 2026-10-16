@@ -92,13 +92,13 @@ export class PanelPermissionGuard implements CanActivate {
   }
 }
 
-const SYSTEMS_ADMIN_WRITE = {
+export const SYSTEMS_ADMIN_WRITE = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SYSTEMS_ADMIN_WRITE, identityOf(req).userId),
   configKey: 'SYSTEMS_ADMIN_WRITE_RATE_LIMIT' as const,
   windowSec: 900,
 };
 
-const SYSTEMS_ADMIN_READ = {
+export const SYSTEMS_ADMIN_READ = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SYSTEMS_ADMIN_READ, identityOf(req).userId),
   configKey: 'SYSTEMS_ADMIN_READ_RATE_LIMIT' as const,
   windowSec: 900,
@@ -460,7 +460,7 @@ async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-function actorOf(req: Request): SystemsActor {
+export function actorOf(req: Request): SystemsActor {
   const { userId, tenantId } = identityOf(req);
   return { adminId: userId, tenantId };
 }

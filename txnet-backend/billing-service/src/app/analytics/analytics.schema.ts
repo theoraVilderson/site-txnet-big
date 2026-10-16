@@ -1,14 +1,9 @@
 import { AnalyticsSaleKind, FulfilmentKind } from '@prisma/client';
 import { z } from 'zod';
 
+import { calendarDaySchema as day } from '../request/calendar-day.schema';
 import { CALENDARS, COMPARES, MAX_RANGE_DAYS, daysIn } from './analytics-buckets';
 import { EXPORT_FORMATS } from './analytics-export';
-
-/** A calendar date as `YYYY-MM-DD` that names a real day. */
-const day = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/)
-  .refine((d) => new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d, 'not_a_day');
 
 const queryFields = {
   from: day,

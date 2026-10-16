@@ -4,6 +4,8 @@ import { PanelCredentialClient } from './panel-credential.client';
 import { PanelGroupsService } from './panel-groups';
 import { MemberInboundsService } from './member-inbounds';
 import { PanelInboundsService } from './panel-inbounds';
+import { PanelCostController } from './panel-cost.controller';
+import { PanelCostService } from './panel-cost';
 import { PanelLifecycleService } from './panel-lifecycle';
 import { PANEL_CREDENTIAL_WRITER, PanelRegistrationService } from './panel-registration';
 import { SystemsReadService } from './systems-read';
@@ -21,7 +23,7 @@ import { UsageHoldsService } from './usage-holds';
  * `tenant-service` — this service loads no vault writer (ADR-0039).
  */
 @Module({
-  controllers: [SystemsController],
+  controllers: [SystemsController, PanelCostController],
   providers: [
     PanelRegistrationService,
     SystemsReadService,
@@ -30,6 +32,7 @@ import { UsageHoldsService } from './usage-holds';
     PanelInboundsService,
     MemberInboundsService,
     PanelLifecycleService,
+    PanelCostService,
     PanelPermissionGuard,
     PanelCredentialClient,
     { provide: PANEL_CREDENTIAL_WRITER, useExisting: PanelCredentialClient },

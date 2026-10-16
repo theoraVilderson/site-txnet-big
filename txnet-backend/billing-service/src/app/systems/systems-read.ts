@@ -7,6 +7,7 @@ import { capabilityMatrix } from './capabilities';
 import { acknowledgeWrite } from './drift-resolution';
 import { DriftResolution } from './panel-registration.schema';
 import { judgePanelHealth } from './panel-health';
+import { costOn, dayOf, viewOf } from './panel-cost-on';
 import { inScope, panelScopeOf, SystemsActor } from './panel-scope';
 
 export type SystemsRejection =
@@ -40,6 +41,8 @@ export type SystemsRejection =
   // An inbound is the pool's or one group's (F-027-ch).
   | 'inbound_assigned_elsewhere'
   | 'inbound_has_configs'
+  // A panel's monthly cost (F-1002-a): a price never lands in a closed month.
+  | 'cost_in_closed_month'
   // Acknowledging with a choice (F-027-fa).
   | 'resolution_required'
   | 'resolution_not_for_event';
@@ -152,9 +155,12 @@ export class SystemsReadService {
       select: { passAt: true, egress: true, egressSince: true },
     });
     const now = new Date();
+    // Every price of the listed panels: a handful each, history kept whole (F-1002-a).
+    const costs = await this.prisma.panelCost.findMany({ where: { panelId: { in: panels.map((p) => p.id) } } });
 
     return panels.map((p) => {
       const mine = open.filter((e) => e.panelId === p.id);
+      const cost = costOn(costs.filter((c) => c.panelId === p.id), dayOf(now));
       return {
         id: p.id,
         name: p.name,
@@ -167,6 +173,8 @@ export class SystemsReadService {
         clientBaseUrl: p.clientBaseUrl,
         addressMayMove: p.addressMayMove,
         ovpnProfile: p.ovpnProfile,
+        // What it costs a month today (F-1002-a); null until one is set.
+        monthlyCost: cost && viewOf(cost),
         // Archived (F-027-bz): kept for its records, skipped by every loop.
         retiredAt: p.retiredAt,
         // Deleted in one step (F-027-eg): leaving its groups, archived once empty.

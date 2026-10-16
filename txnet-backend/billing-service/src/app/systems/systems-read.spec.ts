@@ -14,7 +14,7 @@
  *    reads (`acknowledgedAt`), once. A second click must not rewrite who
  *    decided, and an event on a panel outside the scope is not found.
  */
-import { PanelReviewState, PanelState, PanelTransport, TenantType } from '@prisma/client';
+import { PanelReviewState, PanelState, PanelTransport, Prisma, TenantType } from '@prisma/client';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -97,6 +97,13 @@ function harness() {
     },
     // F-027-em: no collector ever ran in this fixture, so every accepted panel is on hold.
     collectorHeartbeat: { findFirst: async () => null },
+    // F-1002-a: one price, set before the fixture's day; a later one not yet in effect.
+    panelCost: {
+      findMany: async () => [
+        { panelId: PLATFORM_PANEL, monthlyCostUsd: new Prisma.Decimal('40'), effectiveFrom: new Date('2026-01-01T00:00:00Z'), createdByUserId: null, createdAt: new Date('2026-01-01T00:00:00Z') },
+        { panelId: PLATFORM_PANEL, monthlyCostUsd: new Prisma.Decimal('99'), effectiveFrom: new Date('2999-01-01T00:00:00Z'), createdByUserId: null, createdAt: new Date('2026-01-02T00:00:00Z') },
+      ],
+    },
     panelDriftEvent: {
       findMany: async ({ where, select }: { where: Row; select?: Record<string, boolean> }) =>
         events.filter((e) => matches(e, where, panels)).map((e) => pick(e, select)),
@@ -127,6 +134,7 @@ describe('SystemsReadService', () => {
     // Nothing has judged it, so what it stores is not shown as current (F-027-em).
     expect(list[0].health).toMatchObject({ view: 'on_hold', heldBy: { reason: 'collector_never_ran', since: null } });
     expect(list[0].budget).toMatchObject({ maxRequestsPerMinute: 60 });
+    expect(list[0].monthlyCost).toMatchObject({ monthlyCostUsd: '40.00', effectiveFrom: '2026-01-01' });
     expect(JSON.stringify(list)).not.toContain('vault:');
     for (const s of selects) expect(s).not.toHaveProperty('panelApiCredentials');
   });

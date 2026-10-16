@@ -487,9 +487,31 @@ model Panel {
   radiusSessions    RadiusSession[]
   groupMemberships  PanelGroupMember[]
   inbounds          PanelInbound[]
+  costs             PanelCost[]
 
   @@index([tenantId])
   @@map("panel")
+  @@schema("network")
+}
+
+/// F-1002-a: what a panel costs a month, in USD, from `effectiveFrom` (a UTC
+/// day). History, not a setting: a change adds a row and a trigger refuses an
+/// update, so a past month's margin never moves; the rows go only with their
+/// panel. Set by the panel's owner on the systems surface (`panel-cost.ts`);
+/// read by analytics' cost attribution (F-1002-b). Visible exactly when its
+/// panel is (RLS through `network.panel`).
+model PanelCost {
+  id              String   @id @default(uuid()) @db.Uuid
+  panelId         String   @db.Uuid
+  monthlyCostUsd  Decimal  @db.Decimal(18, 2)
+  effectiveFrom   DateTime @db.Date
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  panel Panel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  @@index([panelId, effectiveFrom])
+  @@map("panel_cost")
   @@schema("network")
 }
 
