@@ -3,7 +3,7 @@ import type { ApiFile } from "../api-request";
 import { call } from "./client";
 
 /** The tabs billing answers today, in the page's order; a later row adds its own. */
-export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers"] as const;
+export const ANALYTICS_TABS = ["overview", "sales", "customers", "catalog", "resellers", "margin"] as const;
 export type AnalyticsTab = (typeof ANALYTICS_TABS)[number];
 
 /** What a window is compared with — billing's `COMPARES`. */
@@ -150,6 +150,33 @@ export interface AnalyticsResellers {
   resellers: ResellerRow[];
 }
 
+/** One row of the Profit tab (billing `margin`, F-1001-l): net − cost per currency, the rate and the loss in the operating one. */
+export interface MarginCell {
+  id: string | null;
+  net: Amounts;
+  cost: Amounts;
+  margin: Amounts;
+  /** Margin ÷ net; null where nothing was sold. */
+  marginRate: number | null;
+  loss: boolean;
+}
+
+/** The Profit tab (billing `margin`, F-1001-l; cost in the sale's currency, ADR-0149). */
+export interface AnalyticsMargin {
+  currencies: string[];
+  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null };
+  costParts: { attributed: Amounts; idle: Amounts; unallocated: Amounts };
+  series: { net: Amounts[]; cost: Amounts[]; margin: Amounts[] };
+  products: (MarginCell | Hidden<"id">)[];
+  panels: (MarginCell | Hidden<"id">)[];
+  /** The deepest losses, each named; null to the platform's staff on a reseller (ADR-0104). */
+  users: (MarginCell & { name: string | null })[] | null;
+  /** The platform's own only: each reseller's payments against its users' share of the platform's panels. */
+  resellers: (MarginCell & { name: string })[] | null;
+  /** The platform's own only: its panels in use with no monthly cost set. */
+  noCostPanels: string[] | null;
+}
+
 /** Top-ups through one gateway kind — its provider's name, shown as it is. */
 export interface GatewayCell {
   gatewayKind: string | null;
@@ -209,6 +236,7 @@ export interface AnalyticsBodies {
   customers: AnalyticsCustomers;
   catalog: AnalyticsCatalog;
   resellers: AnalyticsResellers;
+  margin: AnalyticsMargin;
 }
 
 /** One tab's answer, its `tab` the tab asked: over the union of tabs, a union `tab` narrows. */

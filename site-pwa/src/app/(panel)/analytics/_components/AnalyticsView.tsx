@@ -27,9 +27,13 @@ import { CatalogTab } from "./CatalogTab";
 import { CustomersTab } from "./CustomersTab";
 import { ResellersTab } from "./ResellersTab";
 import { OverviewTab } from "./OverviewTab";
+import { ProfitTab } from "./ProfitTab";
 import { SalesTab } from "./SalesTab";
 
 const K = FrontendI18nKeys.common.analytics;
+
+/** The tabs whose answer on the platform's own view moves with any reseller's pass: the leaderboard, and margin per reseller (F-1001-m). */
+const READS_EVERY_RESELLER: ReadonlySet<string> = new Set(["resellers", "margin"]);
 
 /** Before the first answer: nothing to name. */
 const NO_NAMES: AnalyticsNames = { products: [], panels: [], meters: [], kinds: [] };
@@ -82,7 +86,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   const [today] = useState(() => dayIn(Date.now(), displayZone()));
   const query = useMemo(() => queryOf(filters, today, calendar), [filters, today, calendar]);
   const tenantId = pathTenant ?? me?.tenant.id ?? null;
-  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId, { everyReseller: filters.tab === "resellers" }));
+  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId, { everyReseller: READS_EVERY_RESELLER.has(filters.tab) }));
   // The Overview's top five (F-1001-i): the same window, read beside it and live on any reseller's pass.
   const top = useAnalyticsRead(owner && filters.tab === "overview" ? tenantId : null, "resellers", query, analyticsLiveOf(me, owner ? tenantId : null, { everyReseller: true }));
   const texts = useCatalogTexts(lang);
@@ -148,6 +152,16 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           productName={productName}
           userHref={customerHrefOf({ tenantId: pathTenant, self })}
           setting={tenantId && renewalWindowEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null}
+          stale={stale}
+        />
+      ) : filters.tab === "margin" ? (
+        <ProfitTab
+          margin={body?.tab === "margin" ? body : null}
+          x={x}
+          currency={currency ?? ""}
+          productName={productName}
+          panelName={panelName}
+          userHref={customerHrefOf({ tenantId: pathTenant, self })}
           stale={stale}
         />
       ) : filters.tab === "resellers" ? (

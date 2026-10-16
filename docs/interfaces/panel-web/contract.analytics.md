@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i); Profit (F-1001-m) — tabs after Resellers in [contract.analytics-tabs.md](contract.analytics-tabs.md).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,

@@ -6556,7 +6556,8 @@
       "sales": "Sales",
       "customers": "Customers",
       "catalog": "Products and panels",
-      "resellers": "Resellers"
+      "resellers": "Resellers",
+      "margin": "Profit"
     },
     "filters": {
       "button": "Filters",
@@ -6773,6 +6774,45 @@
         "title": "Top resellers",
         "all": "All resellers"
       }
+    },
+    "profit": {
+      "kpis": {
+        "net": "Net sales",
+        "cost": "Cost",
+        "margin": "Margin",
+        "marginRate": "Margin rate"
+      },
+      "trend": {
+        "title": "Sales and cost",
+        "subtitle": "Net sales against what serving them cost, per period",
+        "net": "Net sales",
+        "cost": "Cost"
+      },
+      "parts": {
+        "title": "Where the cost went",
+        "subtitle": "Split by use, idle panels, and charges for nothing a row shows",
+        "attributed": "Split by use",
+        "idle": "Idle panels",
+        "unallocated": "Unallocated"
+      },
+      "products": "Products",
+      "panels": "Panels",
+      "users": "Users costing the most",
+      "usersSubtitle": "The deepest losses first",
+      "resellers": "Resellers",
+      "resellersSubtitle": "What each reseller paid against what its users cost on your panels",
+      "net": "Net",
+      "cost": "Cost",
+      "margin": "Margin",
+      "marginRate": "Margin %",
+      "loss": "Loss",
+      "unnamedUser": "A user",
+      "noCost": {
+        "title": "Some panels have no monthly cost set",
+        "body": "Their margin counts no cost: {{panels}}",
+        "action": "Set panel costs"
+      },
+      "empty": "Nothing was sold or spent in this period."
     }
   }
 }

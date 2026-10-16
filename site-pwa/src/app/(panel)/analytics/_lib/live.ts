@@ -17,7 +17,7 @@ export interface AnalyticsLive {
  * owner's `user:` and the platform staff's `tenant:` carry
  * `billing.analytics.reseller_refreshed` for every reseller, so only this
  * one's re-reads (F-1001-p, realtime `contract.live-events.md`). `everyReseller`:
- * the platform's own Resellers read, which any reseller's pass changes.
+ * the platform's own Resellers or Profit read, which any reseller's pass changes.
  */
 export function analyticsLiveOf(
   me: { userId: string; tenant: { id: string }; permissions: readonly string[] } | null,

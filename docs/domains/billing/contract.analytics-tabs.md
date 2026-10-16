@@ -139,7 +139,7 @@ user); cost is `saleCost`, else `cost` in its own currency. It answers:
 | `costParts` | `attributed` (split by use), `idle` (a panel's day with no traffic), `unallocated` (paid for nothing a row shows: a subscription, a day with no bytes) |
 | `series` | `net`, `cost`, `margin` per bucket |
 | `products`, `panels` | a cell each — `{id, net, cost, margin, marginRate, loss}` — largest net first, then the deepest loss |
-| `users` | the 20 deepest losses; `null` to the platform's staff on a reseller |
+| `users` | the 20 deepest losses, each with its `name` (F-1001-m; a label, as `topCustomers`'); `null` to the platform's staff on a reseller |
 | `resellers` | the platform's own only: each reseller's payments to it (`net`) against its users' share of the platform's panels (`cost`), with `name` |
 | `noCostPanels` | the platform's own only: its panels with a sale or a service in the window and no monthly cost on or before its end |
 

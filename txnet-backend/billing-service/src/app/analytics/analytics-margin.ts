@@ -20,8 +20,8 @@ export type MarginTab = {
   series: { net: Amounts[]; cost: Amounts[]; margin: Amounts[] };
   products: (MarginCell | Hidden)[];
   panels: (MarginCell | Hidden)[];
-  /** The deepest losses first; `null` to the platform's staff on a reseller — no person is listed (ADR-0104). */
-  users: MarginCell[] | null;
+  /** The deepest losses first, each with its name (a label, read where it lives); `null` to the platform's staff on a reseller — no person is listed (ADR-0104). */
+  users: (MarginCell & { name: string | null })[] | null;
   /** The platform's own only: what each reseller paid against what serving its users cost. */
   resellers: ResellerMargin[] | null;
   /** The platform's own only: panels in use in the window with no monthly cost set — their margin is not a margin. */
@@ -103,6 +103,14 @@ async function noCostPanels(tx: Prisma.TransactionClient, w: Window): Promise<st
   return rows.map((r) => r.id);
 }
 
+/** Each listed user named, as the Customers tab names its top customers. */
+async function named(tx: Prisma.TransactionClient, cells: MarginCell[]): Promise<(MarginCell & { name: string | null })[]> {
+  const ids = cells.flatMap((cell) => (cell.id ? [cell.id] : []));
+  const people = ids.length ? await tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true, username: true } }) : [];
+  const names = new Map(people.map((p) => [p.id, p.fullName ?? p.username ?? null]));
+  return cells.map((cell) => ({ ...cell, name: names.get(cell.id ?? '') ?? null }));
+}
+
 /** A product or panel list, a cell under 5 buyers hidden from the platform's staff with its complement (ADR-0104 (3)). */
 async function cellsBy(c: TabContext, split: 'product' | 'panel', currencies: string[]): Promise<(MarginCell | Hidden)[]> {
   const f = { ...c.filters, kind: undefined };
@@ -148,6 +156,7 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
         .filter((cell) => cell.id !== null)
         .sort((a, b) => new Prisma.Decimal(a.margin[c.operating]).comparedTo(new Prisma.Decimal(b.margin[c.operating])) || String(a.id).localeCompare(String(b.id)))
         .slice(0, LOSING_USERS_SHOWN);
+  const namedUsers = users ? await named(c.tx, users) : null;
 
   return {
     currencies,
@@ -162,7 +171,7 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
     series: { net: buckets.map((b) => b.net), cost: buckets.map((b) => b.cost), margin: buckets.map((b) => b.margin) },
     products: await cellsBy(c, 'product', currencies),
     panels: await cellsBy(c, 'panel', currencies),
-    users,
+    users: namedUsers,
     resellers: reseller
       ? marginCellsOf(reseller.paid, reseller.served, how).map((cell) => ({ ...cell, name: reseller.nameOf.get(cell.id ?? '') ?? cell.id ?? '' }))
       : null,
