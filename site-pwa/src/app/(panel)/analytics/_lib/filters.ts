@@ -18,6 +18,25 @@ export type PageTab = (typeof PAGE_TABS)[number];
 /** A figure tab, as billing reads one; Reports is none. */
 export const isFigureTab = (tab: PageTab): tab is AnalyticsTab => tab !== "reports";
 
+/**
+ * The tab row groups questions about one thing: Retention is a view of
+ * Customers, Capacity one of Products and panels — nine tabs did not fit a
+ * phone, and a new view joins a group, not the row. Each view keeps its own
+ * `?tab=` (one read, one export, one report link).
+ */
+export const TAB_VIEWS: Readonly<Partial<Record<PageTab, readonly PageTab[]>>> = {
+  customers: ["customers", "cohorts"],
+  catalog: ["catalog", "capacity"],
+};
+
+/** The tab in the row a view sits under — itself when it is no view. */
+export function groupOf(tab: PageTab): PageTab {
+  return PAGE_TABS.find((group) => TAB_VIEWS[group]?.includes(tab)) ?? tab;
+}
+
+/** The tabs the row shows, in the page's order. */
+export const ROW_TABS = PAGE_TABS.filter((tab) => groupOf(tab) === tab);
+
 export interface AnalyticsFilters {
   tab: PageTab;
   range: RangePreset;

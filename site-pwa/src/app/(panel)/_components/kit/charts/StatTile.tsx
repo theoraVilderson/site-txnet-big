@@ -41,7 +41,8 @@ export function Sparkline({ values }: { values: readonly (number | null)[] }) {
   const x = scaleLinear<number>({ domain: [0, values.length - 1], range: [1, SPARK_WIDTH - 1] });
   const y = scaleLinear<number>({ domain: [Math.min(...nums), Math.max(...nums) || 1], range: [SPARK_HEIGHT - 2, 2] });
   return (
-    <svg width={SPARK_WIDTH} height={SPARK_HEIGHT} aria-hidden className="shrink-0">
+    // Not on a phone: two tiles a row leave no room for 96px beside the figure, and the row would push the grid past the edge.
+    <svg width={SPARK_WIDTH} height={SPARK_HEIGHT} aria-hidden className="hidden shrink-0 sm:block">
       <LinePath data={points} x={(p) => x(p.i)} y={(p) => y(p.v)} stroke={main} strokeWidth={2} strokeLinecap="round" />
     </svg>
   );

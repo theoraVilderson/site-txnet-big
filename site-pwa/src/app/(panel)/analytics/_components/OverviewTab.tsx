@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { type AnalyticsNames, type AnalyticsOverview, type AnalyticsResellers, FEWER_THAN_5 } from "@/lib/billing/analytics";
@@ -12,7 +13,6 @@ import { type HeroMetric, MONEY_METRICS, amountIn, catalogOrder } from "../_lib/
 import { usageFormat } from "../_lib/usage";
 import { OverviewHero } from "./OverviewHero";
 import { OverviewInsights } from "./OverviewInsights";
-import { BuyersCard } from "./BuyersCard";
 import { TopResellers } from "./TopResellers";
 import { UsageCards, usagePoints } from "./UsageCards";
 
@@ -43,10 +43,11 @@ type Bar = { id: string; label: string; value: number; display: string; color: s
 
 /**
  * The Overview tab (F-1001-d, panel-web `contract.analytics.md` "Overview"):
- * the hero, six KPI tiles, the insights strip (F-1001-k), sales by product
- * beside new vs returning buyers, the year's calendar, and for the platform's
- * staff its top five resellers (F-1001-i). `overview` null is the first load: every
- * card draws its own skeleton.
+ * the hero, the KPI tiles, the insights strip (F-1001-k), sales by product,
+ * for the platform's staff its top five resellers (F-1001-i), and folded under
+ * "more details" the usage cards and the year's calendar: the answer first, the
+ * detail a click away. New vs returning buyers is the Customers tab's.
+ * `overview` null is the first load: every card draws its own skeleton.
  */
 export function OverviewTab({ overview, names, x, currency, calendar, formatDay, productName, meterName, hrefOf, topResellers, stale }: OverviewTabProps) {
   const { t, lang } = useLocale();
@@ -106,46 +107,49 @@ export function OverviewTab({ overview, names, x, currency, calendar, formatDay,
 
       <OverviewInsights lines={insights} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <ChartCard<Bar>
-          title={t("common", K.byProduct.title)}
-          subtitle={hiddenCount > 0 ? t("common", K.byProduct.hidden, { count: fmt.full(hiddenCount) }) : t("common", K.byProduct.subtitle)}
-          state={overview && bars.length === 0 && other === null ? "empty" : state}
-          stale={stale}
-          table={{
-            columns: [
-              { id: "product", header: t("common", K.table.product), cell: (r) => r.label },
-              { id: "value", header: t("common", K.table.value), cell: (r) => r.display, dir: "ltr" },
-            ],
-            rows: bars,
-            rowKey: (r) => r.id,
-          }}
-        >
-          <BarList label={t("common", K.byProduct.title)} items={bars} other={other} formatValue={money} />
-        </ChartCard>
-
-        <BuyersCard x={x} fresh={overview?.series.newBuyers ?? []} returning={overview?.series.returningBuyers ?? []} loading={!overview} stale={stale} />
-      </div>
-
-      <UsageCards usage={overview?.usage ?? []} x={x} meterName={meterName} formatOf={formatOfMeter} stale={stale} />
-
-      <ChartCard<(typeof heat)[number]>
-        title={t("common", K.calendar.title)}
-        subtitle={t("common", K.calendar.subtitle)}
-        state={state}
+      <ChartCard<Bar>
+        title={t("common", K.byProduct.title)}
+        subtitle={hiddenCount > 0 ? t("common", K.byProduct.hidden, { count: fmt.full(hiddenCount) }) : t("common", K.byProduct.subtitle)}
+        state={overview && bars.length === 0 && other === null ? "empty" : state}
         stale={stale}
         table={{
           columns: [
-            { id: "day", header: t("common", K.table.date), cell: (r) => formatDay(r.day) },
-            { id: "value", header: t("common", K.table.value), cell: (r) => (r.value === null ? "—" : money(r.value)), dir: "ltr" },
+            { id: "product", header: t("common", K.table.product), cell: (r) => r.label },
+            { id: "value", header: t("common", K.table.value), cell: (r) => r.display, dir: "ltr" },
           ],
-          rows: heat,
-          rowKey: (r) => r.day,
+          rows: bars,
+          rowKey: (r) => r.id,
         }}
       >
-        <CalendarHeatmap label={t("common", K.calendar.title)} days={heat} weekStartsOn={WEEK_START[calendar]} formatDay={formatDay} formatValue={money} />
+        <BarList label={t("common", K.byProduct.title)} items={bars} other={other} formatValue={money} />
       </ChartCard>
       {topResellers && <TopResellers resellers={topResellers} currency={currency} allHref={hrefOf({ tab: "resellers" })} />}
+
+      <details className="group">
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg text-sm font-bold text-primary [&::-webkit-details-marker]:hidden">
+          {t("common", K.moreDetails)}
+          <ChevronDown size={16} aria-hidden className="transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-4 flex flex-col gap-4">
+          <UsageCards usage={overview?.usage ?? []} x={x} meterName={meterName} formatOf={formatOfMeter} stale={stale} />
+          <ChartCard<(typeof heat)[number]>
+            title={t("common", K.calendar.title)}
+            subtitle={t("common", K.calendar.subtitle)}
+            state={state}
+            stale={stale}
+            table={{
+              columns: [
+                { id: "day", header: t("common", K.table.date), cell: (r) => formatDay(r.day) },
+                { id: "value", header: t("common", K.table.value), cell: (r) => (r.value === null ? "—" : money(r.value)), dir: "ltr" },
+              ],
+              rows: heat,
+              rowKey: (r) => r.day,
+            }}
+          >
+            <CalendarHeatmap label={t("common", K.calendar.title)} days={heat} weekStartsOn={WEEK_START[calendar]} formatDay={formatDay} formatValue={money} />
+          </ChartCard>
+        </div>
+      </details>
     </div>
   );
 }

@@ -31,7 +31,7 @@ const extraDevOrigins = (process.env.DEV_ALLOWED_ORIGINS ?? "")
 const nextConfig: NextConfig = {
   allowedDevOrigins: [domainName, `*.${domainName}`, ...extraDevOrigins],
   output: "standalone",
-
+  devIndicators: false,
   serverExternalPackages: [
     "@txnet/locale-client",
     "@grpc/grpc-js",

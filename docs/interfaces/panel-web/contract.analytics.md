@@ -135,10 +135,13 @@ page for the owner and a reseller; the owner also gets the Resellers tab.
   7 days, 30 days, this month, last month, 90 days, custom with `DatePicker`);
   compare (previous period / same period last year / none); product; panel;
   reseller (owner). Everything lives in the URL, so a view can be shared and
-  survives a reload. Below `md` it is one Filters button opening a `Sheet`,
-  showing how many filters are on.
+  survives a reload. Below `md` the bar is the button opening a `Sheet`: what
+  is on in one line under "Filters", how many as a badge.
 - **Tabs** (`TabLinks`, `?tab=`): Overview, Sales, Customers, Products and
   panels, Resellers (owner), Profit (after F-1002), Cohorts, Capacity, Reports.
+  Cohorts ("Retention") and Capacity are views under Customers and Products
+  and panels (`TAB_VIEWS`, own `?tab=`). The row wraps from `md`; below it one
+  `Select` (`AnalyticsTabs`). 3+ long labels are a `Select`, never a segment.
 - **Live:** the page re-reads on `billing.analytics.refreshed` with
   `useLiveReread` (C-14) — never a poll.
 - **Rebuilding** (zone change) shows an `Alert` instead of half-built numbers.
@@ -166,18 +169,17 @@ screen through billing's `format=` (the same door and under-5 rule), saved by
 
 1. **Hero card** (full width): net sales as a large `AnimatedNumber`, its
    `DeltaPill`, and a `TrendChart` area with the previous period behind it. A
-   `SegmentedControl` switches the hero between net sales, top-ups, orders and
-   new buyers — one chart, one axis.
+   `Select` switches the hero between net sales, top-ups, orders and new
+   buyers — one chart, one axis.
 2. **KPI row** of six `StatTile`s: orders, average order, buyers (new /
    returning under it), renewal rate (`Meter`), active services, traffic. A
    tile click moves the hero to that metric.
 3. **Insights strip**: up to three sentences (F-1001-j), each with an icon and
    a link to the tab that explains it.
-4. **Sales by product** (`BarList`) beside **new vs returning buyers**
-   (`StackedColumns`).
-5. **Calendar heatmap** of daily net sales for the last year — the
-   "when do we sell" picture at a glance.
-6. Owner only: the **top 5 resellers** with sparklines, linking to the tab.
+4. **Sales by product** (`BarList`); new vs returning buyers is Customers'.
+5. Owner only: the **top 5 resellers** with sparklines, linking to the tab.
+6. Folded under **more details** (`<details>`, closed): the usage cards and the
+   **calendar heatmap** of daily net sales for the last year.
 
 **By meter, not by VPN (ADR-0148, F-1001-o).** The KPI row keeps the
 common tiles; "traffic" becomes one tile per meter in the window (its

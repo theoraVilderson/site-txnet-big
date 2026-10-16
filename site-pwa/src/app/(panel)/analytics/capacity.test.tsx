@@ -150,7 +150,10 @@ describe("AnalyticsView on Capacity", () => {
       ...capacity,
     } as never);
     render(<AnalyticsView />);
-    expect(screen.getByRole("link", { name: "analytics.tabs.capacity" })).toBeTruthy();
+    // A view of Products and panels, not a tab of its own: that tab is the one marked, Capacity the view picked under it.
+    expect(screen.queryByRole("link", { name: "analytics.tabs.capacity" })).toBeNull();
+    expect(screen.getByRole("link", { name: "analytics.tabs.catalog" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("radio", { name: "analytics.tabs.capacity" }).getAttribute("aria-checked")).toBe("true");
     await waitFor(() => expect(readAnalytics).toHaveBeenCalledWith(TENANT, "capacity", expect.anything()));
     expect(await screen.findByText("Frankfurt")).toBeTruthy();
   });

@@ -3,7 +3,7 @@
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { AnalyticsOverview } from "@/lib/billing/analytics";
-import { AnimatedNumber, SegmentedControl } from "../../_components/kit";
+import { AnimatedNumber, Select } from "../../_components/kit";
 import { ChartCard, DeltaPill, TrendChart, useChartFormat, useChartTheme } from "../../_components/kit/charts";
 import { HERO_METRICS, type HeroMetric, heroFigure, heroSeries } from "../_lib/overview";
 
@@ -28,7 +28,7 @@ type Row = { x: string; value: number | null; previous: number | null };
 /**
  * The hero (Overview 1): one metric as a large figure, its change, and its
  * trend with the compared window muted behind it — one chart, one axis
- * (rule 1). The control, or a KPI tile, switches the metric.
+ * (rule 1). The picker, or a KPI tile, switches the metric.
  */
 export function OverviewHero({ overview, x, currency, metric, onMetric, formatOf, state, stale }: OverviewHeroProps) {
   const { t } = useLocale();
@@ -49,13 +49,15 @@ export function OverviewHero({ overview, x, currency, metric, onMetric, formatOf
       height={HERO_HEIGHT}
       legend={previous ? [{ id: "current", label: t("common", K.hero.current), color: main }, { id: "previous", label: t("common", K.hero.previous), color: muted, dashed: true }] : undefined}
       actions={
-        <SegmentedControl<HeroMetric>
-          size="sm"
-          ariaLabel={t("common", K.hero.metric)}
-          value={metric}
-          onChange={onMetric}
-          options={HERO_METRICS.map((m) => ({ value: m, label: t("common", K.hero.metrics[m]) }))}
-        />
+        // A picker, not four buttons: those were wider than a phone and pushed the page off its edge.
+        <div className="w-44">
+          <Select
+            ariaLabel={t("common", K.hero.metric)}
+            value={metric}
+            onChange={(v) => onMetric(HERO_METRICS.find((m) => m === v) ?? metric)}
+            options={HERO_METRICS.map((m) => ({ value: m, label: t("common", K.hero.metrics[m]) }))}
+          />
+        </div>
       }
       table={{
         columns: [

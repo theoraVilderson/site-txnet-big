@@ -6562,10 +6562,11 @@
       "catalog": "Products and panels",
       "resellers": "Resellers",
       "margin": "Profit",
-      "cohorts": "Cohorts",
+      "cohorts": "Retention",
       "capacity": "Capacity",
       "reports": "Reports"
     },
+    "section": "Section",
     "filters": {
       "button": "Filters",
       "title": "Filters",
@@ -6636,6 +6637,7 @@
       "title": "Sales by day",
       "subtitle": "Net sales, last 12 months"
     },
+    "moreDetails": "More details",
     "table": {
       "date": "Date",
       "value": "Value",
@@ -6646,9 +6648,9 @@
     "hiddenCells": "Some figures are hidden because they would describe fewer than 5 people.",
     "loadFailed": "The analytics could not be loaded.",
     "export": {
-      "button": "Export",
-      "csv": "CSV",
-      "xlsx": "Excel"
+      "button": "Download",
+      "csv": "CSV file",
+      "xlsx": "Excel file"
     },
     "insights": {
       "title": "What changed",

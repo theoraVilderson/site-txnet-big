@@ -49,6 +49,7 @@ const RESELLER = "22222222-2222-4222-8222-222222222222";
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
 const params = (query: string) => new URLSearchParams(query) as unknown as ReturnType<typeof useSearchParams>;
 const replace = vi.fn();
+const push = vi.fn();
 
 const kpi = (value: number, previous: number | null = null) => ({ value, previous, delta: null });
 const money = (v: string) => ({ value: { USD: v }, previous: null, delta: { USD: null } });
@@ -75,7 +76,7 @@ const answer = (over: object = {}) => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(useRouter).mockReturnValue({ replace } as unknown as ReturnType<typeof useRouter>);
+  vi.mocked(useRouter).mockReturnValue({ replace, push } as unknown as ReturnType<typeof useRouter>);
   vi.mocked(useSearchParams).mockReturnValue(params(""));
   vi.mocked(useLocale).mockReturnValue({ lang: "en", isRtl: false, t } as unknown as ReturnType<typeof useLocale>);
   vi.mocked(usePanelSession).mockReturnValue({ me: { userId: OWNER, tenant: { id: TENANT }, permissions: ["*"] }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
@@ -151,8 +152,62 @@ describe("AnalyticsView", () => {
   it("puts a filter change in the URL, not in state", async () => {
     render(<AnalyticsView />);
     await screen.findAllByText("Gold plan");
-    fireEvent.click(screen.getAllByRole("radio", { name: /compares\.year/ })[0]);
+    // A picker, not a row of three long buttons: "same period last year" alone is wider than a phone's sheet.
+    fireEvent.click(screen.getAllByRole("button", { name: /analytics\.filters\.compare/ })[0]);
+    fireEvent.click(screen.getByRole("option", { name: "analytics.compares.year" }));
     expect(replace).toHaveBeenCalledWith("/analytics?compare=year", { scroll: false });
+  });
+
+  it("offers the tabs as one picker on a phone, which opens the tab with the filters kept", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("compare=year"));
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    // Nine tabs do not fit 360px: a row that scrolls hides the rest past the edge, so below `md` it is a picker.
+    fireEvent.click(screen.getByRole("button", { name: /analytics\.section/ }));
+    fireEvent.click(screen.getByRole("option", { name: "analytics.tabs.sales" }));
+    expect(push).toHaveBeenCalledWith("/analytics?tab=sales&compare=year", { scroll: false });
+  });
+
+  it("groups the nine questions into six tabs: Retention under Customers, Capacity under Products and panels", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=customers&compare=year"));
+    render(<AnalyticsView />);
+    const tabs = screen.getByRole("navigation", { name: "analytics.title" });
+    expect(Array.from(tabs.querySelectorAll("a")).map((a) => a.textContent)).toEqual(
+      ["overview", "sales", "customers", "catalog", "margin", "reports"].map((tab) => `analytics.tabs.${tab}`),
+    );
+    // The view keeps the filters, as a tab does.
+    fireEvent.click(screen.getByRole("radio", { name: "analytics.tabs.cohorts" }));
+    expect(push).toHaveBeenCalledWith("/analytics?tab=cohorts&compare=year", { scroll: false });
+  });
+
+  it("keeps the Overview to the answer: the buyers chart is the Customers tab's, the calendar and usage folded away", async () => {
+    vi.mocked(readAnalytics).mockResolvedValue(answer({ usage: [{ meterKey: "vpn.traffic", total: "2048", previous: "1024", delta: 1, series: ["1024", "1024"] }] }) as never);
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    expect(screen.queryByText("analytics.buyers.title")).toBeNull();
+    const more = screen.getByText("analytics.moreDetails").closest("details");
+    expect(more?.open).toBe(false);
+    expect(more?.textContent).toContain("analytics.calendar.title");
+  });
+
+  it("names on the phone's Filters button what is on, so the sheet need not be opened to know", async () => {
+    vi.mocked(useSearchParams).mockReturnValue(params(`range=7d&product=${PRODUCT}`));
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    const button = screen.getByRole("button", { name: /analytics\.filters\.button/ });
+    expect(button.textContent).toContain("analytics.ranges.7d");
+    expect(button.textContent).toContain("Gold plan");
+    // The count is a badge, not "(2)" glued to the word.
+    expect(button.querySelector("[data-count]")?.textContent).toBe("2");
+  });
+
+  it("switches the hero's metric from a picker, so the card's header fits a phone", async () => {
+    render(<AnalyticsView />);
+    await screen.findAllByText("Gold plan");
+    expect(screen.queryByRole("radio", { name: "analytics.hero.metrics.orders" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /analytics\.hero\.metric/ }));
+    fireEvent.click(screen.getByRole("option", { name: "analytics.hero.metrics.orders" }));
+    expect(screen.getByRole("heading", { name: "analytics.hero.metrics.orders" })).toBeTruthy();
   });
 });
 

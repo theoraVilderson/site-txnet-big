@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { ChevronDown, Download } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -40,8 +40,8 @@ export function ExportMenu({ tenantId, tab, query }: { tenantId: string | null; 
     <Menu
       label={t("common", K.button)}
       trigger={
-        <Button variant="secondary" size="sm" disabled={!tenantId || busy}>
-          <Download className="size-4" aria-hidden />
+        // The kit's icon slots, so the icon is sized and spaced as every button's; the chevron says it opens a menu.
+        <Button variant="secondary" size="md" loading={busy} disabled={!tenantId} icon={<Download size={16} aria-hidden />} iconEnd={<ChevronDown size={14} aria-hidden className="text-text-secondary" />}>
           {t("common", K.button)}
         </Button>
       }

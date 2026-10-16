@@ -7,8 +7,8 @@ import { ChartCard, StackedColumns, slotColor, useChartFormat } from "../../_com
 const K = FrontendI18nKeys.common.analytics;
 
 /**
- * New vs returning buyers per bucket (F-1001-d), one card: the Overview's and
- * the Customers tab's (F-1001-g). A bucket hidden from the platform's staff
+ * New vs returning buyers per bucket (F-1001-d), on the Customers tab
+ * (F-1001-g) — the Overview leaves it there. A bucket hidden from the platform's staff
  * arrives null and is drawn as nobody.
  */
 export function BuyersCard({ x, fresh, returning, loading, stale }: { x: readonly string[]; fresh: readonly (number | null)[]; returning: readonly (number | null)[]; loading: boolean; stale: boolean }) {

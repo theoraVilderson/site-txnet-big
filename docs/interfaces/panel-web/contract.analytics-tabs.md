@@ -47,7 +47,8 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
 ## Cohorts (F-1004-b)
 
 `CohortsTab`, over billing's `cohorts` (F-1004-a), `?tab=cohorts`, offered to
-every reader of `/analytics`.
+every reader of `/analytics` — a view under Customers, named "Retention"
+(`TAB_VIEWS`, `contract.analytics.md` "Tabs").
 
 1. **The grid** (`CohortGrid`, the kit's): a row per cohort — its month in the
    reader's calendar (`formatMonth`: Jalali in Persian) and its size — and a
@@ -72,7 +73,8 @@ every reader of `/analytics`.
 
 `CapacityTab`, over billing's `capacity` (F-1005-a,
 [contract.analytics-capacity.md](../../domains/billing/contract.analytics-capacity.md),
-ADR-0150), `?tab=capacity`, offered to every reader of `/analytics`.
+ADR-0150), `?tab=capacity`, offered to every reader of `/analytics` — a view
+under Products and panels (`TAB_VIEWS`).
 
 1. **This month, today:** the tab says its figures are the UTC month as of
    today, and that the range and comparison do not apply — the filter bar

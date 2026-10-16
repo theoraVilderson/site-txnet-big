@@ -11,16 +11,17 @@ import { catalogApi } from "@/lib/catalog-api";
 import { PANEL_ANALYTICS, PANEL_SYSTEMS } from "@/lib/routes";
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { Alert, Button, PageHeader, SegmentedControl, TabLinks } from "../../_components/kit";
+import { Alert, Button, PageHeader, SegmentedControl } from "../../_components/kit";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatMonth, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
-import { type AnalyticsFilters, PAGE_TABS, calendarOf, filtersOf, isFigureTab, queryOf, searchOf, windowOf } from "../_lib/filters";
+import { type AnalyticsFilters, type PageTab, ROW_TABS, calendarOf, filtersOf, isFigureTab, queryOf, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, settingsEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
 import { resellersVisible } from "../_lib/resellers";
 import { currencyOf, productNamer } from "../_lib/overview";
 import { meterNamer } from "../_lib/usage";
+import { AnalyticsTabs } from "./AnalyticsTabs";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
 import { CapacityTab } from "./CapacityTab";
@@ -83,7 +84,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   // The leaderboard is the platform's own view, for its report key (F-1001-i): anyone else asking for it lands on the Overview.
   const owner = resellersVisible(me, pathTenant);
   const filters = useMemo(() => (asked.tab === "resellers" && !owner ? { ...asked, tab: "overview" as const } : asked), [asked, owner]);
-  const tabs = PAGE_TABS.filter((tab) => tab !== "resellers" || owner);
+  const tabs = ROW_TABS.filter((tab) => tab !== "resellers" || owner);
   // Reports reads schedules, never a figure (F-1006-b).
   const figureTab = isFigureTab(filters.tab) ? filters.tab : null;
   const calendar = calendarOf(lang);
@@ -101,6 +102,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
     return s ? `${pathname}?${s}` : pathname;
   };
   const onChange = (next: Partial<AnalyticsFilters>) => router.replace(hrefOf({ ...filters, ...next }), { scroll: false });
+  // A tab is a place to go back to, as a link is: pushed, where a filter replaces.
+  const openTab = (tab: PageTab) => router.push(hrefOf({ ...filters, tab }), { scroll: false });
 
   // The settings key's holders may change what the figures are judged by (billing's door decides).
   const setting = tenantId && settingsEditable(me, { tenantId: pathTenant, self }) ? { tenantId, onSaved: reload } : null;
@@ -128,11 +131,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
 
       <FilterBar filters={filters} window={windowOf(filters, today, calendar)} names={names} productName={productName} onChange={onChange} />
 
-      <TabLinks
-        ariaLabel={t("common", K.title)}
-        current={hrefOf(filters)}
-        links={tabs.map((tab) => ({ href: hrefOf({ ...filters, tab }), label: t("common", K.tabs[tab]) }))}
-      />
+      <AnalyticsTabs filters={filters} tabs={tabs} hrefOf={hrefOf} onOpen={openTab} />
 
       {ready && ready.currencies.length > 1 && currency && (
         <Alert tone="info" title={t("common", K.severalCurrencies)}>

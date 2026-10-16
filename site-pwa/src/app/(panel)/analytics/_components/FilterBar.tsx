@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { ANALYTICS_COMPARES, type AnalyticsNames } from "@/lib/billing/analytics";
-import { Button, SegmentedControl, Select, Sheet } from "../../_components/kit";
+import { Button, Select, Sheet } from "../../_components/kit";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { type AnalyticsFilters, RANGE_PRESETS, type RangePreset, activeFilterCount } from "../_lib/filters";
 
@@ -45,12 +45,13 @@ function FilterFields({ filters, window, names, productName, onChange }: FilterB
           <DatePicker label={t("common", K.filters.to)} value={filters.to} onChange={(to) => to && onChange({ to })} />
         </div>
       )}
-      <SegmentedControl
-        size="sm"
+      {/* A picker like the range: three long labels in a row are wider than a phone's sheet. */}
+      <Select
         ariaLabel={t("common", K.filters.compare)}
         value={filters.compare}
-        onChange={(compare) => onChange({ compare })}
+        onChange={(v) => onChange({ compare: ANALYTICS_COMPARES.find((c) => c === v) ?? filters.compare })}
         options={ANALYTICS_COMPARES.map((c) => ({ value: c, label: t("common", K.compares[c]) }))}
+        className="md:w-56"
       />
       {/* One kind is no choice (ADR-0148 (3)); a kind that is on stays offered while the window holds two. */}
       {(kinds.length > 1 || filters.fulfilment) && (
@@ -84,16 +85,31 @@ function FilterFields({ filters, window, names, productName, onChange }: FilterB
   );
 }
 
+/** What the filters on screen are, in a few words: the range, then any product, panel or kind picked. */
+function useFilterSummary({ filters, names, productName }: FilterBarProps): string {
+  const { t } = useLocale();
+  const panel = names?.panels.find((p) => p.id === filters.panel)?.name;
+  return [
+    t("common", K.ranges[filters.range]),
+    filters.product && productName(filters.product),
+    panel,
+    filters.fulfilment && t("common", K.kinds[filters.fulfilment]),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /**
  * The filter bar (F-1001-d, panel-web `contract.analytics.md` "Filter bar"):
  * sticky under the top bar, every value in the URL through `onChange`. Below
- * `md` it is one Filters button that opens a sheet and says how many are on.
+ * `md` the bar is itself the button that opens the sheet: what is on in one
+ * line under its name, and how many beside it as a badge.
  */
 export function FilterBar(props: FilterBarProps) {
   const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const count = activeFilterCount(props.filters);
-  const label = count > 0 ? `${t("common", K.filters.button)} (${count})` : t("common", K.filters.button);
+  const summary = useFilterSummary(props);
 
   return (
     <div className="sticky top-24 z-10 -mx-1 rounded-2xl border border-card-border bg-card-bg/95 p-2 backdrop-blur-xl">
@@ -101,10 +117,26 @@ export function FilterBar(props: FilterBarProps) {
         <FilterFields {...props} />
       </div>
       <div className="md:hidden">
-        <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-          <SlidersHorizontal className="size-4" aria-hidden />
-          {label}
-        </Button>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          className="flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-start transition-colors hover:bg-leaf-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          <span aria-hidden className="grid size-9 shrink-0 place-items-center rounded-xl bg-leaf-bg text-primary">
+            <SlidersHorizontal size={18} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-text-primary">{t("common", K.filters.button)}</span>
+            <span className="block truncate text-xs text-text-secondary">{summary}</span>
+          </span>
+          {count > 0 && (
+            <span data-count className="grid size-6 shrink-0 place-items-center rounded-full bg-primary text-xs font-bold text-on-accent">
+              {count}
+            </span>
+          )}
+          <ChevronDown size={16} aria-hidden className="shrink-0 text-text-secondary" />
+        </button>
         <Sheet open={open} onClose={() => setOpen(false)} title={t("common", K.filters.title)} footer={<Button onClick={() => setOpen(false)}>{t("common", K.filters.done)}</Button>}>
           <div className="flex flex-col gap-3">
             <FilterFields {...props} />
