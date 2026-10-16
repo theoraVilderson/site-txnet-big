@@ -150,9 +150,10 @@ menu row is the workspace's (`analytics.read`). The URL holds `tab`, `range`
 (a preset, or `custom` with `from`/`to`), `compare`, `product`, `panel` and
 `currency`, defaults left off (`_lib/filters.ts`). Presets are cut on the
 viewer's day, months in the language's calendar (`Intl`: Jalali for Persian);
-the figures are cut on the tenant's. **Live is the session's tenant only**: a
-`tenant:` channel needs an exact tenant match, so a workspace view reads on load
-and on a filter change. Names come from billing's `names` (product `nameKey`
+the figures are cut on the tenant's. **Live everywhere** (`_lib/live.ts`): the
+session's tenant on its `tenant:` channel; a workspace view on its owner's
+`user:` and the platform's `tenant:`, re-reading only for its own reseller
+(F-1001-p, RT-1-e's pair). Names come from billing's `names` (product `nameKey`
 -> the published `catalog` texts; a panel's own name). Several currencies: an
 `Alert` with the currency picker, never one sum. Renewal reads "coming soon"
 until F-1001-f; insights F-1001-j; the owner's
@@ -179,13 +180,13 @@ screen through billing's `format=` (the same door and under-5 rule), saved by
    "when do we sell" picture at a glance.
 6. Owner only: the **top 5 resellers** with sparklines, linking to the tab.
 
-### Other tabs
 **By meter, not by VPN (ADR-0148, F-1001-o).** The KPI row keeps the
 common tiles; "traffic" becomes one tile per meter in the window (its
 `nameKey`, written in its unit), and a usage card per meter joins the Overview.
 The filter bar gains the product kind when the window holds more than one;
 the panel filter and per-panel lists are drawn only when a product has a panel.
 
+### Other tabs
 
 - **Sales** (F-1001-e): package vs usage sales (`StackedColumns`), sales vs
   top-ups as two charts, payment success rate by gateway (`BarList`),

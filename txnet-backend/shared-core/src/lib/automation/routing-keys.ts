@@ -53,6 +53,8 @@ export const RealtimeEventType = {
   PAYMENT_OPEN_CHANGED: 'billing.payment.open_changed',
   /** F-1001-a: a rollup pass changed a tenant's analytics rows for `{from, to}` — the analytics page re-reads (`AnalyticsRollupService`). */
   ANALYTICS_REFRESHED: 'billing.analytics.refreshed',
+  /** The same pass, for a reseller's workspace: its owner's `user:` and the platform's `tenant:` (F-1001-p, RT-1-e's pair). */
+  ANALYTICS_RESELLER_REFRESHED: 'billing.analytics.reseller_refreshed',
 } as const;
 
 /**
@@ -213,6 +215,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: 'worker-service',
   [OutboxEventType.ANALYTICS_REFRESHED]: 'worker-service',
+  [OutboxEventType.ANALYTICS_RESELLER_REFRESHED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

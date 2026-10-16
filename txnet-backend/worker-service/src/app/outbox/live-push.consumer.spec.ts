@@ -134,6 +134,25 @@ describe('tenant.domain.changed (RT-1-e)', () => {
   });
 });
 
+describe('billing.analytics.reseller_refreshed (F-1001-p)', () => {
+  it("reaches the reseller's owner and the platform's staff, naming the reseller and the days", async () => {
+    const { consumer, published } = build();
+
+    await consumer.handle({
+      ...event(),
+      aggregate: 'billing.analytics',
+      type: OutboxEventType.ANALYTICS_RESELLER_REFRESHED,
+      payload: { tenantId: TENANT, userId: USER, resellerId: 'r-1', from: '2026-10-15', to: '2026-10-16' },
+    });
+
+    const body = { type: OutboxEventType.ANALYTICS_RESELLER_REFRESHED, resellerId: 'r-1', from: '2026-10-15', to: '2026-10-16' };
+    expect(published).toEqual([
+      { channel: `user:${USER}`, payload: body },
+      { channel: `tenant:${TENANT}`, payload: body },
+    ]);
+  });
+});
+
 describe('tenant.subscription.renewed (F-019-c1)', () => {
   it("reaches the reseller owner's channel only, naming nothing", async () => {
     const { consumer, published } = build();

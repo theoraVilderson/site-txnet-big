@@ -56,6 +56,7 @@ corrected, per "Decide once".
 | `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
 | `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
 | `billing.analytics.refreshed` | `tenant:` | billing (`AnalyticsRollupService`, a pass that changed a row, F-1001-a) → live-push; body `{type, from, to}` | `/analytics` (F-1001-d, `useAnalyticsRead`; the session's tenant only) |
+| `billing.analytics.reseller_refreshed` | `user:` + `tenant:` | billing (the same pass, for a reseller with an owner, F-1001-p) → live-push; body `{type, resellerId, from, to}`; payload `tenantId` = the platform's, `userId` = the owner | the workspace twins `/reseller/analytics`, `/my-resellers/:id/analytics`, filtered by `resellerId` (`analyticsLiveOf`) |
 
 ## Planned — the RT-1 rows
 

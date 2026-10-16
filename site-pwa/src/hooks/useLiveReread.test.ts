@@ -56,6 +56,15 @@ describe("useLiveReread", () => {
     expect(reread).toHaveBeenCalledWith("event");
   });
 
+  it("narrows a shared channel to the subject on screen with `accepts` (F-1001-p)", () => {
+    const reread = vi.fn();
+    renderHook(() => useLiveReread("tenant:p-1", ["billing.analytics.reseller_refreshed"], reread, (p) => p.resellerId === "r-1"));
+    client.onMessage!({ type: "billing.analytics.reseller_refreshed", resellerId: "r-2" });
+    expect(reread).not.toHaveBeenCalled();
+    client.onMessage!({ type: "billing.analytics.reseller_refreshed", resellerId: "r-1" });
+    expect(reread).toHaveBeenCalledTimes(1);
+  });
+
   it("a burst of five makes two reads: one now, one at the end of the window", () => {
     const reread = vi.fn();
     renderHook(() => useLiveReread("tenant:t-1", ["x"], reread));

@@ -104,7 +104,9 @@ default 7 (user, 2026-10-06; F-1001-f).
   `changed`), `ServiceOnlyGuard`.
 - A pass that changed a row writes `billing.analytics.refreshed`
   `{tenantId, from, to}` in the same transaction, on `tenant:` (ADR-0121, C-14;
-  a row in `realtime/contract.live-events.md`). Every read answers
+  a row in `realtime/contract.live-events.md`); for a reseller with an owner,
+  also `billing.analytics.reseller_refreshed` to the owner's `user:` and the
+  platform's `tenant:` (F-1001-p). Every read answers
   `refreshedAt`.
 - Read answers are cached in Redis by tenant + query + rollup version (built
   with `RedisKeys`, C-03; F-1001-b); a changed pass bumps the version.
@@ -121,14 +123,14 @@ All `GET /api/billing/tenants/:tenantId/analytics/<tab>` with
   `jalali`). The answer names it; `previousSeries` is aligned by index.
 - **Every KPI** is `{value, previous, delta}`; `delta` is a ratio, or `new`
   when `previous` is 0 — never infinity, never a division by zero.
-
-| tab | row | answers |
 - **Every product, not only VPN (ADR-0148, F-1001-n).** Common figures for
   every kind; usage per meter — `overview` answers `usage` (per meter: total,
   previous, delta, series) and `names` gains `meters` (`key`, `unit`, `nameKey`)
   and `kinds` (the `fulfilmentKind`s in the window). Filter `fulfilment`, joined
   from `catalog.product` (fixed at creation). `bytesUsed` stays until its
   readers move, then goes (C-39).
+
+| tab | row | answers |
 |---|---|---|
 | `overview` | F-1001-b | KPIs: `net`, `gross`, `refunds`, `topUps`, `orders`, `aov` (net ÷ orders), `buyers`, `newBuyers`, `returningBuyers`, `arpu`, `renewal` `{rate, renewed, lapsed, pending}`, `activeGrants` (end of range), `bytesUsed`; `series` (`salesPackage`, `salesUsage`, `topUps`, `orders`, `newBuyers` per bucket); `byProduct` top 7 + `other`; `calendar` (net per day, last 365 days) |
 | `sales` | F-1001-b | series by kind; payments `started / settled / failed` and success rate by gateway kind; `discounts` and `giftsCredited`; refunds by product |

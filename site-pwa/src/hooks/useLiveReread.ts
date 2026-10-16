@@ -23,19 +23,25 @@ export type LiveRereadCause = "event" | "missed";
  * - `reread` is held in a ref, so a caller need not memoize it and changing it
  *   never resubscribes — a channel dropped and re-declared is a window where an
  *   event is lost.
+ * - `accepts`, when given, narrows by the body's ids: a channel that carries
+ *   many subjects (the platform's `tenant:` hears every reseller's analytics,
+ *   F-1001-p) re-reads only for the one on screen. Held in a ref too.
  */
 export function useLiveReread(
   channel: string | null,
   types: readonly string[] | "any",
   reread: (cause: LiveRereadCause) => void,
+  accepts?: (payload: Record<string, unknown>) => boolean,
 ): void {
   const client = usePanelRealtime();
 
   const rereadRef = useRef(reread);
   const typesRef = useRef(types);
+  const acceptsRef = useRef(accepts);
   useEffect(() => {
     rereadRef.current = reread;
     typesRef.current = types;
+    acceptsRef.current = accepts;
   });
 
   useEffect(() => {
@@ -63,8 +69,10 @@ export function useLiveReread(
       onMessage: (payload) => {
         if (!payload || typeof payload !== "object") return;
         const listed = typesRef.current;
-        const type = (payload as Record<string, unknown>).type;
-        if (listed === "any" || (typeof type === "string" && listed.includes(type))) call("event");
+        const body = payload as Record<string, unknown>;
+        const type = body.type;
+        const listedType = listed === "any" || (typeof type === "string" && listed.includes(type));
+        if (listedType && (acceptsRef.current?.(body) ?? true)) call("event");
       },
       onMissed: () => call("missed"),
     });

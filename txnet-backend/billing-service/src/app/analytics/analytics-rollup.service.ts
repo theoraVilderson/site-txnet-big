@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OutboxEventType, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import type { Prisma } from '@prisma/client';
+import { OutboxEventType, isPlatformTenant, platformTenantIdOf, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,6 +38,29 @@ export type AnalyticsRefreshResult = { tenants: number; changed: number; rebuilt
  * `refresh` is the 5-minute tick over today and yesterday; a tenant whose zone
  * changed since its days were cut is rebuilt whole instead (principle 5).
  */
+/**
+ * A changed pass, told to whoever has the page open: the tenant's own
+ * `tenant:` channel (its seats, `/analytics`), and — for a reseller (never the
+ * platform, which has an owner but no workspace) — that owner's `user:` and the platform's `tenant:` (F-1001-p): the
+ * workspace twins are on the platform's panel, where the owner is a platform
+ * user and staff are the platform's (RT-1-e's pair). Ids and days only.
+ */
+async function announce(tx: Prisma.TransactionClient, tenantId: string, from: Day, to: Day): Promise<void> {
+  await tx.outboxEvent.create({ data: { aggregate: 'billing.analytics', aggregateId: tenantId, type: OutboxEventType.ANALYTICS_REFRESHED, payload: { tenantId, from, to } } });
+  const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { ownerUserId: true, tenantType: true } });
+  // The platform has an owner too, but no workspace: its staff hear the first event.
+  if (isPlatformTenant(tenant.tenantType) || !tenant.ownerUserId) return;
+  const owner = tenant.ownerUserId;
+  await tx.outboxEvent.create({
+    data: {
+      aggregate: 'billing.analytics',
+      aggregateId: tenantId,
+      type: OutboxEventType.ANALYTICS_RESELLER_REFRESHED,
+      payload: { tenantId: await platformTenantIdOf(tx), userId: owner, resellerId: tenantId, from, to },
+    },
+  });
+}
+
 @Injectable()
 export class AnalyticsRollupService {
   private readonly logger = new Logger(AnalyticsRollupService.name);
@@ -128,11 +152,7 @@ export class AnalyticsRollupService {
             ...(how.rebuilt ? { timeZone: zone, rebuildingSince: null } : {}),
           },
         });
-        if (changed) {
-          await tx.outboxEvent.create({
-            data: { aggregate: 'billing.analytics', aggregateId: tenantId, type: OutboxEventType.ANALYTICS_REFRESHED, payload: { tenantId, from: fromDay, to: toDay } },
-          });
-        }
+        if (changed) await announce(tx, tenantId, fromDay, toDay);
         return changed;
       },
       how.rebuilt ? { timeout: REBUILD_TIMEOUT_MS } : undefined,

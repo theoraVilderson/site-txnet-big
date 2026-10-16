@@ -9,7 +9,6 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ANALYTICS_TABS } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
 import { PANEL_ANALYTICS } from "@/lib/routes";
-import { tenantChannelOf } from "@/lib/tenant-channel";
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Alert, Button, PageHeader, SegmentedControl, TabLinks } from "../../_components/kit";
@@ -17,6 +16,7 @@ import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, calendarOf, filtersOf, queryOf, searchOf, windowOf } from "../_lib/filters";
+import { analyticsLiveOf } from "../_lib/live";
 import { currencyOf, productNamer } from "../_lib/overview";
 import { ExportMenu } from "./ExportMenu";
 import { FilterBar } from "./FilterBar";
@@ -48,10 +48,9 @@ function useCatalogTexts(lang: string): Record<string, string> {
  * `/analytics` (F-1001-d, panel-web `contract.analytics.md` "The page"): the
  * header with "updated N min ago" and the Export menu (F-1007-b), the sticky filter bar, the tabs and the
  * open tab — for the session's tenant, or the path's (`tenantId`) on a
- * reseller's workspace. Every filter is in the URL. It re-reads on
- * `billing.analytics.refreshed`, which reaches only a connection in that tenant
- * (realtime `contract.channels.md`), so a workspace view of another tenant
- * reads on load and on a filter change. Billing decides who may read
+ * reseller's workspace. Every filter is in the URL. It re-reads live on its
+ * tenant's rollup event, on the channels `analyticsLiveOf` names — a
+ * workspace view on its owner's and the platform's (F-1001-p). Billing decides who may read
  * (`analytics.read`); a refusal is shown as its sentence.
  */
 export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = {}) {
@@ -68,8 +67,7 @@ export function AnalyticsView({ tenantId: pathTenant }: { tenantId?: string } = 
   const [today] = useState(() => dayIn(Date.now(), displayZone()));
   const query = useMemo(() => queryOf(filters, today, calendar), [filters, today, calendar]);
   const tenantId = pathTenant ?? me?.tenant.id ?? null;
-  const channel = me && tenantId === me.tenant.id ? tenantChannelOf(me) : null;
-  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, channel);
+  const { answer, stale, error, reload } = useAnalyticsRead(tenantId, filters.tab, query, analyticsLiveOf(me, tenantId));
   const texts = useCatalogTexts(lang);
 
   const hrefOf = (next: AnalyticsFilters) => {

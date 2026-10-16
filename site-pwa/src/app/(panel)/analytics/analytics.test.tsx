@@ -44,6 +44,8 @@ vi.mock("@/lib/catalog-api", async (importOriginal) => ({ ...(await importOrigin
 
 const TENANT = "11111111-1111-4111-8111-111111111111";
 const PRODUCT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const OWNER = "44444444-4444-4444-8444-444444444444";
+const RESELLER = "22222222-2222-4222-8222-222222222222";
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
 const params = (query: string) => new URLSearchParams(query) as unknown as ReturnType<typeof useSearchParams>;
 const replace = vi.fn();
@@ -74,7 +76,7 @@ beforeEach(() => {
   vi.mocked(useRouter).mockReturnValue({ replace } as unknown as ReturnType<typeof useRouter>);
   vi.mocked(useSearchParams).mockReturnValue(params(""));
   vi.mocked(useLocale).mockReturnValue({ lang: "en", isRtl: false, t } as unknown as ReturnType<typeof useLocale>);
-  vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT }, permissions: ["*"] }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
+  vi.mocked(usePanelSession).mockReturnValue({ me: { userId: OWNER, tenant: { id: TENANT }, permissions: ["*"] }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
   vi.mocked(catalogApi.texts).mockResolvedValue({ products: { gold: { name: "Gold plan" } } });
   vi.mocked(readAnalytics).mockResolvedValue(answer() as never);
 });
@@ -114,10 +116,26 @@ describe("AnalyticsView", () => {
   it("re-reads on the rollup's event on its tenant channel, never on a timer", async () => {
     render(<AnalyticsView />);
     await screen.findAllByText("Gold plan");
-    const [channel, types, reread] = vi.mocked(useLiveReread).mock.calls.at(-1)!;
+    const [channel, types, reread] = vi.mocked(useLiveReread).mock.calls.filter((c) => c[0] !== null).at(-1)!;
     expect(channel).toBe(`tenant:${TENANT}`);
     expect(types).toEqual(["billing.analytics.refreshed"]);
     act(() => reread("event"));
+    await waitFor(() => expect(readAnalytics).toHaveBeenCalledTimes(2));
+  });
+
+  it("on a reseller's workspace, re-reads live on the owner's channel and the platform's, for that reseller only (F-1001-p)", async () => {
+    render(<AnalyticsView tenantId={RESELLER} />);
+    await screen.findAllByText("Gold plan");
+    const calls = vi.mocked(useLiveReread).mock.calls;
+    const on = (channel: string) => calls.filter((c) => c[0] === channel).at(-1);
+    for (const channel of [`user:${OWNER}`, `tenant:${TENANT}`]) {
+      const call = on(channel);
+      expect(call?.[1]).toEqual(["billing.analytics.reseller_refreshed"]);
+      const accepts = call?.[3];
+      expect(accepts?.({ resellerId: RESELLER })).toBe(true);
+      expect(accepts?.({ resellerId: "99999999-9999-4999-8999-999999999999" })).toBe(false);
+    }
+    act(() => on(`user:${OWNER}`)?.[2]("event"));
     await waitFor(() => expect(readAnalytics).toHaveBeenCalledTimes(2));
   });
 
