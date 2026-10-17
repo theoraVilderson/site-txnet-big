@@ -29,7 +29,13 @@ export type ResellerGatewayRefusal =
   | "invalid_presets"
   | "invalid_callback"
   | "group_not_found"
-  | "audience_not_allowed";
+  | "audience_not_allowed"
+  | "manual_setting_mismatch"
+  | "invalid_manual_setting"
+  | "automatic_unavailable"
+  | "kind_in_use"
+  | "invalid_destination"
+  | "destination_not_found";
 
 export const GATEWAY_REFUSAL_KEYS: Record<ResellerGatewayRefusal, string> = { ...K.refusals, audience_not_allowed: FrontendI18nKeys.common.audience.notAllowed };
 

@@ -142,11 +142,13 @@ describe("a bulk by filter", () => {
 
   it("reaches billing's job routes, the panels read before the job id that would swallow it", () => {
     const c = controller();
-    expect(c).toMatch(/@Controller\('billing\/tenants\/:tenantId\/grants\/bulk-jobs'\)/);
-    for (const route of ["@Get('panels')", "@Post('count')", "@Post()", "@Get()", "@Get(':jobId')", "@Get(':jobId/outcomes')", "@Post(':jobId/cancel')"]) {
-      expect(c, route).toContain(route);
-    }
-    expect(c.indexOf("@Get('panels')")).toBeLessThan(c.indexOf("@Get(':jobId')"));
+    // The list, one job, its outcomes and its cancel are the shared base's (F-311-ad).
+    const base = source(`${GIFT}/reseller-job-routes.ts`);
+    expect(c).toMatch(/@Controller\('billing\/tenants\/:tenantId\/grants\/bulk-jobs'\)\s*export class \w+ extends ResellerJobRoutes/);
+    for (const route of ["@Get('panels')", "@Post('count')", "@Post()"]) expect(c, route).toContain(route);
+    for (const route of ["@Get()", "@Get(':jobId')", "@Get(':jobId/outcomes')", "@Post(':jobId/cancel')"]) expect(base, route).toContain(route);
+    // Nest registers a subclass's own routes before the inherited ones, so `panels` is never read as a `:jobId`.
+    expect(c).not.toContain("@Get(':jobId')");
   });
 
   it("names only the keys billing's filter takes, with the statuses the act applies to", () => {

@@ -2781,7 +2781,13 @@
       "missing_field": "a field this provider requires is empty.",
       "invalid_presets": "the quick amounts are not valid: positive, no repeats, ascending, at most eight.",
       "invalid_callback": "the callback must be a full http or https address.",
-      "group_not_found": "That group is not this gateway owner's."
+      "group_not_found": "That group is not this gateway owner's.",
+      "manual_setting_mismatch": "a card-to-card gateway keeps its provider and category; it cannot become another kind of gateway, or the other way round.",
+      "invalid_manual_setting": "the card-to-card settings are not valid: check the kind, the proof asked for and the payment window (10 to 1440 minutes).",
+      "automatic_unavailable": "this is not available automatically here: every active account needs a watcher, and a card-to-card gateway cannot quote its own fee.",
+      "kind_in_use": "this gateway already has accounts, so its kind cannot change. Remove the accounts first.",
+      "invalid_destination": "one of the account's fields is not valid for this kind.",
+      "destination_not_found": "that account was not found on this gateway."
     }
   },
   "resellerCatalog": {
