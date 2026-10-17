@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { InboundAudience, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -28,9 +28,11 @@ const INBOUND_FIELDS = {
   sold: true,
   maxClients: true,
   audience: true,
-  // The groups a `listed` one is sold by (F-027-ep); none on an `every_group` one.
-  listings: { select: { member: { select: { group: { select: { id: true, name: true } } } } } },
+  // The groups a `listed` one is sold by (F-027-ep), each with its share (F-027-eq); none on an `every_group` one.
+  listings: { select: { maxClients: true, member: { select: { group: { select: { id: true, name: true } } } } } },
 } satisfies Prisma.PanelInboundSelect;
+
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
 
 const PANEL_FIELDS = { id: true, inboundPlacement: true, maxClients: true, priority: true, weight: true, inboundsPerBuyer: true, inboundsReadAt: true } satisfies Prisma.PanelSelect;
 
@@ -62,23 +64,39 @@ export class PanelInboundsService {
    * The panel's selling settings as stored (null = the platform's) and
    * `effective` — each value with its layer, `panel` or `platform` (F-027-cg);
    * its inbounds by id, how full each is, its `audience` and `listedTo` — the
-   * groups a `listed` one is sold by (F-027-ep).
+   * groups a `listed` one is sold by (F-027-ep) — and `sellers`, every group in
+   * scope selling it now with its share, live count and running release
+   * (F-027-eu); `members` the panel's groups in scope, the audience's choices.
    */
   async inbounds(actor: SystemsActor, panelId: string) {
-    const panel = await this.panelInScope(actor, panelId);
-    const [rows, load] = await Promise.all([
+    const { panel, scope } = await this.panelInScope(actor, panelId);
+    const [rows, load, memberRows, releases, groupLoad] = await Promise.all([
       this.crossTenant.panelInbound.findMany({ where: { panelId: panel.id }, select: INBOUND_FIELDS }),
       this.load(panel.id),
+      this.crossTenant.panelGroupMember.findMany({ where: { panelId: panel.id, group: { tenantId: scope.tenantId } }, select: { group: { select: { id: true, name: true } } } }),
+      this.crossTenant.inboundRelease.findMany({ where: { panelId: panel.id }, select: { groupId: true, inboundRemoteId: true, jobId: true } }),
+      this.groupLoad(panel.id),
     ]);
+    const members = memberRows.map((m) => m.group).sort(byName);
     const inbounds = rows
       .sort((a, b) => a.remoteId.localeCompare(b.remoteId, 'en', { numeric: true }))
       .map(({ listings, ...i }) => {
-        const listedTo = listings.map((l) => l.member.group).sort((a, b) => a.name.localeCompare(b.name));
-        // `assignedTo` is F-027-ch's one holder, kept for the page until F-027-eu reads `listedTo`.
-        return { ...i, listedTo, assignedTo: listedTo[0] ?? null, clients: load.byInbound.get(i.remoteId) ?? 0 };
+        const listedTo = listings.map((l) => l.member.group).sort(byName);
+        // Who sells it now (F-027-eu): every member of an `every_group` one, else its listings — each with its share, live count and running release.
+        const selling = i.audience === InboundAudience.every_group ? members.map((g) => ({ ...g, share: null })) : listings.map((l) => ({ ...l.member.group, share: l.maxClients })).sort(byName);
+        const sellers = selling
+          .filter((g) => members.some((m) => m.id === g.id))
+          .map((g) => ({
+            groupId: g.id,
+            name: g.name,
+            share: g.share,
+            clients: groupLoad.get(`${i.remoteId}|${g.id}`) ?? 0,
+            releaseJobId: releases.find((r) => r.groupId === g.id && r.inboundRemoteId === i.remoteId)?.jobId ?? null,
+          }));
+        return { ...i, listedTo, sellers, clients: load.byInbound.get(i.remoteId) ?? 0 };
       });
     const { id, inboundsReadAt, ...settings } = panel;
-    return { panelId: id, ...settings, effective: effectiveSellingSettings(null, settings), inboundsReadAt, users: load.users, inbounds };
+    return { panelId: id, ...settings, effective: effectiveSellingSettings(null, settings), inboundsReadAt, users: load.users, members, inbounds };
   }
 
   /**
@@ -88,7 +106,7 @@ export class PanelInboundsService {
    * (`inbound_not_sellable`). Unselling is always allowed.
    */
   async update(actor: SystemsActor, panelId: string, input: PanelInboundsInput) {
-    const panel = await this.panelInScope(actor, panelId);
+    const { panel } = await this.panelInScope(actor, panelId);
     const picks = input.inbounds ?? [];
     await this.crossTenant.$transaction(async (tx) => {
       if (picks.length > 0) {
@@ -118,7 +136,7 @@ export class PanelInboundsService {
 
   /** Ask for a fresh read: the panel's next pass reads its inbounds (`inboundsReadAt` null). */
   async refresh(actor: SystemsActor, panelId: string) {
-    const panel = await this.panelInScope(actor, panelId);
+    const { panel } = await this.panelInScope(actor, panelId);
     await this.crossTenant.panel.update({ where: { id: panel.id }, data: { inboundsReadAt: null } });
     return { panelId: panel.id, refreshRequested: true as const };
   }
@@ -127,7 +145,19 @@ export class PanelInboundsService {
     const scope = await panelScopeOf(this.prisma, actor);
     const panel = await this.crossTenant.panel.findFirst({ where: { id: panelId, ...scope }, select: PANEL_FIELDS });
     if (!panel) throw new SystemsRefused('panel_not_found');
-    return panel;
+    return { panel, scope };
+  }
+
+  /** Live configs per inbound and Grant group, keyed `remoteId|groupId` — what a group's share counts (F-027-eq). */
+  private async groupLoad(panelId: string): Promise<Map<string, number>> {
+    const rows = await this.crossTenant.$queryRaw<{ inboundRemoteId: string; groupId: string; clients: bigint }[]>`
+      SELECT c."inboundRemoteId", g."panelGroupId"::text AS "groupId", count(*) AS clients
+        FROM "network"."config" c
+        JOIN "entitlement"."grant" g ON g."id" = c."grantId"
+       WHERE c."panelId" = ${panelId}::uuid AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
+         AND c."inboundRemoteId" IS NOT NULL AND g."panelGroupId" IS NOT NULL
+       GROUP BY 1, 2`;
+    return new Map(rows.map((r) => [`${r.inboundRemoteId}|${r.groupId}`, Number(r.clients)]));
   }
 
   /** Live configs per inbound and users on the panel — what fulfilment counts against the caps (rule 4). */

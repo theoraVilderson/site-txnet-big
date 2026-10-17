@@ -1,5 +1,6 @@
 // Panel groups and a panel's inbounds on the systems page (F-027-bx, F-114-b).
 import { call } from "./client";
+import type { JobProgress } from "./reseller-grants";
 import type { PanelReviewState, PanelState } from "./systems";
 
 /** `network.ConfigProtocol`: what a panel's inbound serves, and so a config placed on it. */
@@ -90,8 +91,26 @@ export interface PanelInbound {
   sold: boolean;
   maxClients: number | null;
   clients: number;
-  /** The group whose membership holds it (F-027-ch); null = the panel's pool. */
-  assignedTo: { id: string; name: string } | null;
+  /** Sold by every group of the panel, or only by the groups listing it (F-027-ep, ADR-0127). */
+  audience: InboundAudience;
+  /** The groups a `listed` one is sold by, by name; none on an `every_group` one. */
+  listedTo: { id: string; name: string }[];
+  /** Every group in scope selling it now, with its share, its own live configs there and a running release (F-027-eu). */
+  sellers: InboundSeller[];
+}
+
+/** `network.InboundAudience` (F-027-ep). */
+export type InboundAudience = "every_group" | "listed";
+
+/** One group selling an inbound: `share` is its listing's cap over its own Grants (F-027-eq), null on none or an every-group one. */
+export interface InboundSeller {
+  groupId: string;
+  name: string;
+  share: number | null;
+  /** Live configs of this group's Grants on the inbound. */
+  clients: number;
+  /** A release job taking this group off it, while it runs (F-027-es). */
+  releaseJobId: string | null;
 }
 
 /** `GET /systems/panels/:id/inbounds` (billing `panel-inbounds.ts`). */
@@ -109,7 +128,26 @@ export interface PanelInbounds {
   inboundsReadAt: string | null;
   /** Grants with a live config on the panel — what `maxClients` caps. */
   users: number;
+  /** The panel's groups in scope, by name: whom an inbound's audience can name. */
+  members: { id: string; name: string }[];
   inbounds: PanelInbound[];
+}
+
+/** `PUT …/inbounds/:remoteId/audience`: every group, or exactly the groups named. */
+export type InboundAudienceBody = { audience: "every_group" } | { audience: "listed"; groups: string[] };
+
+/** How a release takes groups off an inbound (F-027-es): their users to the group's next placement, or their configs there removed. */
+export type ReleaseMode = "move" | "empty";
+
+export type InboundReleaseBody = { requestId: string; groups: string[]; mode: ReleaseMode; orphans?: EvictOrphans; reason: string };
+
+/** A release job (billing `ConfigMoveJobView`): `total` frozen at the start, the listing changes when it ends. */
+export interface InboundReleaseJob extends JobProgress {
+  id: string;
+  kind: "release_move" | "release_empty";
+  source: { panelId: string; remoteId: string; groupIds: string[] };
+  orphans: EvictOrphans | null;
+  reason: string;
 }
 
 /** `updatePanelInboundsSchema`: what is left out keeps its value; null hands a setting to the platform default. */
@@ -154,6 +192,33 @@ export const panelGroupCalls = {
     return call<{ panelId: string; refreshRequested: true }>(`/systems/panels/${encodeURIComponent(id)}/inbounds/refresh`, { method: "POST" });
   },
 
+  // Who sells one inbound, each group's share, and releasing it (F-027-eu -> billing F-027-ep/eq/es).
+
+  /** 409 `inbound_has_configs` when a group would lose it with users there: release it first. */
+  async setInboundAudience(panelId: string, remoteId: string, body: InboundAudienceBody): Promise<{ panelId: string; remoteId: string; audience: InboundAudience; groups: string[] }> {
+    return call(`/systems/panels/${encodeURIComponent(panelId)}/inbounds/${encodeURIComponent(remoteId)}/audience`, { method: "PUT", body: JSON.stringify(body) });
+  },
+
+  /** A listing's share; null clears it. 404 `listing_not_found` on an every-group inbound. */
+  async setListingShare(groupId: string, panelId: string, remoteId: string, maxClients: number | null): Promise<{ groupId: string; panelId: string; remoteId: string; maxClients: number | null }> {
+    const path = `/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/inbounds/${encodeURIComponent(remoteId)}/share`;
+    return call(path, { method: "PUT", body: JSON.stringify({ maxClients }) });
+  },
+
+  /** 202 a job; 409 `not_a_seller` / `already_releasing` / `request_reused`. */
+  async releaseInbound(panelId: string, remoteId: string, body: InboundReleaseBody): Promise<InboundReleaseJob> {
+    return call<InboundReleaseJob>(`/systems/panels/${encodeURIComponent(panelId)}/inbounds/${encodeURIComponent(remoteId)}/release`, { method: "POST", body: JSON.stringify(body) });
+  },
+
+  async inboundReleaseJob(jobId: string): Promise<InboundReleaseJob> {
+    return call<InboundReleaseJob>(`/systems/inbound-releases/${encodeURIComponent(jobId)}`, { method: "GET" });
+  },
+
+  /** What moved stays moved; the listing stays as it was. */
+  async cancelInboundRelease(jobId: string): Promise<InboundReleaseJob> {
+    return call<InboundReleaseJob>(`/systems/inbound-releases/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  },
+
   // Panel groups (F-027-bx -> billing F-027-bw): the platform's, always `mirror`.
 
   async panelGroups(): Promise<PanelGroup[]> {
@@ -186,8 +251,8 @@ export const panelGroupCalls = {
   },
 
   /**
-   * The membership's whole inbound set (F-027-ch); `[]` sells the pool again.
-   * 409 `inbound_assigned_elsewhere` (`facts.groupId`) / `inbound_has_configs` (`facts.configs`).
+   * The membership's whole set of listings (F-027-ep); `[]` lists none and sells the every-group ones.
+   * 409 `inbound_has_configs` (`facts.configs`) when another group would lose one with users there.
    */
   async setPanelGroupMemberInbounds(groupId: string, panelId: string, inbounds: string[]): Promise<{ groupId: string; panelId: string; inbounds: string[] }> {
     return call(`/systems/panel-groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(panelId)}/inbounds`, {

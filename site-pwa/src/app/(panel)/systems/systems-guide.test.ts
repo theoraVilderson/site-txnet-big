@@ -102,7 +102,7 @@ const inbound = (remoteId: string): PanelInbound => ({
   sold: true,
   maxClients: null,
   clients: 0,
-  assignedTo: null,
+  audience: "every_group", listedTo: [], sellers: [],
 });
 
 const view = (over: Partial<PanelInbounds> = {}): PanelInbounds => ({
@@ -121,6 +121,7 @@ const view = (over: Partial<PanelInbounds> = {}): PanelInbounds => ({
   },
   inboundsReadAt: "2026-09-25T10:00:00.000Z",
   users: 0,
+  members: [],
   inbounds: [inbound("1"), inbound("2")],
   ...over,
 });

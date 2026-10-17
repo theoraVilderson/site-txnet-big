@@ -219,10 +219,10 @@ describe("adding and draining a member", () => {
 describe("a panel's inbounds (F-114-b)", () => {
   const inbound = (remoteId: string, over: Partial<PanelInbound> = {}): PanelInbound => ({
     remoteId, tag: "", protocol: "vless", port: 443, host: "", enabled: true, goneAt: null,
-    seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, assignedTo: null, ...over,
+    seenAt: "2026-09-25T10:00:00.000Z", sold: false, maxClients: null, clients: 0, audience: "every_group", listedTo: [], sellers: [], ...over,
   });
   const view = (inbounds: PanelInbound[], over: Partial<PanelInbounds> = {}): PanelInbounds => ({
-    panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsPerBuyer: null, inboundsReadAt: null, users: 0, inbounds,
+    panelId: "p-1", inboundPlacement: null, maxClients: null, priority: null, weight: null, inboundsPerBuyer: null, inboundsReadAt: null, users: 0, members: [], inbounds,
     effective: {
       inboundPlacement: { value: over.inboundPlacement ?? "all", layer: over.inboundPlacement ? "panel" : "platform" },
       maxClients: { value: over.maxClients ?? null, layer: over.maxClients ? "panel" : "platform" },

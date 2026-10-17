@@ -596,7 +596,7 @@ function MemberSheet({
   onSaved: () => Promise<void>;
   onChanged: () => Promise<void>;
 }) {
-  const { t } = useLocale();
+  const { lang, t } = useLocale();
   const message = useSystemsError();
   const M = SYSTEMS_KEYS.member;
   const [view, setView] = useState<PanelInbounds | null>(null);
@@ -751,13 +751,12 @@ function MemberSheet({
             >
               <span className="text-2xs leading-5 text-text-secondary">{t("common", M.ownInboundsHint)}</span>
               <ul className="divide-y divide-card-border">
-                {inboundChoices(view, group.id).map(({ inbound: i, heldBy, takesNobody }) => (
+                {inboundChoices(view, group.id, lang).map(({ inbound: i, sharedWith, everyGroup, takesNobody }) => (
                   <li key={i.remoteId} className="flex flex-wrap items-center gap-2 py-2 text-xs">
                     <label className="flex min-w-0 flex-1 items-center gap-2">
                       <input
                         type="checkbox"
                         checked={form.picked.includes(i.remoteId)}
-                        disabled={heldBy !== null}
                         onChange={(e) => set({ picked: e.target.checked ? [...form.picked, i.remoteId] : form.picked.filter((id) => id !== i.remoteId) })}
                         className="accent-primary"
                       />
@@ -766,8 +765,9 @@ function MemberSheet({
                         {i.tag && ` · ${i.tag}`}
                       </span>
                     </label>
-                    {heldBy && <Pill tone={QUIET}>{t("common", K.settings.heldBy, { group: heldBy.name })}</Pill>}
-                    {!heldBy && takesNobody && <Pill tone={BAD}>{t("common", K.settings.takesNobody)}</Pill>}
+                    {sharedWith && <Pill tone={QUIET}>{t("common", K.settings.sharedWith, { groups: sharedWith })}</Pill>}
+                    {everyGroup && <Pill tone={QUIET}>{t("common", K.settings.everyGroup)}</Pill>}
+                    {takesNobody && <Pill tone={BAD}>{t("common", K.settings.takesNobody)}</Pill>}
                   </li>
                 ))}
               </ul>

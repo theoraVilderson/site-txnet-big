@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 34
-updated: 2026-09-26
+updated: 2026-10-17
 ---
 
 # Contract — panel-web: the systems page (F-027-ad)
@@ -161,7 +161,7 @@ The *why* is **ADR-0080**.
    again" is `refresh`, answered in a sentence: the list is re-read within a
    minute. The placement and cap are **the panel's defaults**, each beside the
    layer in force — this panel or the platform (`LAYER_KEYS`, F-027-ci) — and
-   an inbound a group has taken names it (`assignedTo`): only it sells there.
+   each inbound names who sells it: [contract.inbound-audience.md](contract.inbound-audience.md).
 
 13. **A panel is edited in one sheet** (F-027-cb -> billing F-027-by,
    `PanelSheet.tsx` -> `PanelEditForm.tsx`, rules `_lib/panel-lifecycle.ts`).
@@ -204,7 +204,7 @@ The *why* is **ADR-0080**.
    group's own, at least one ticked, which takes each out of the pool.
    `validateMemberChoice` sends the settings `PATCH` only for what differs,
    then the inbounds `PUT` only when the set changed. One
-   another group holds is shown with that group and never offered, a gone one
+   other groups list is offered as shared (inbound-audience rule 6), a gone one
    only while held (to let it go), and one not on sale or disabled on the
    panel is marked as taking nobody (`inboundChoices`); a choice whose set —
    or pool — has nothing live says it places nobody (`sellsNobody`), as the

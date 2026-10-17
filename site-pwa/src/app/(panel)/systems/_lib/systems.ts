@@ -207,10 +207,6 @@ export function refusalSentence(e: unknown, names: HolderNames): { key: string; 
     const panel = typeof facts.panelId === "string" ? names.panel(facts.panelId) : null;
     if (panel) return { key: K.refusalsNamed.panel_already_registered, vars: { panel } };
   }
-  if (reason === "inbound_assigned_elsewhere") {
-    const group = typeof facts.groupId === "string" ? names.group(facts.groupId) : null;
-    if (group && inbound) return { key: K.refusalsNamed.inbound_assigned_elsewhere, vars: { group, inbound } };
-  }
   if (reason === "inbound_has_configs") {
     const configs = text(facts.configs);
     if (configs && inbound) return { key: K.refusalsNamed.inbound_has_configs, vars: { inbound, configs } };

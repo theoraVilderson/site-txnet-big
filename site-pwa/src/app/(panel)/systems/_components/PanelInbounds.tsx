@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { Loader2, RefreshCw, TriangleAlert, Users } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { billingApi, type PanelInbounds as View } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
+import { formatList } from "../../_lib/digits";
+import { soldBy } from "../_lib/inbound-audience";
 import {
   INBOUND_PLACEMENTS,
   PLACEMENT_KEYS,
@@ -18,6 +20,7 @@ import {
 } from "../_lib/panel-inbounds";
 import { LAYER_KEYS } from "../_lib/member-settings";
 import { SYSTEMS_KEYS } from "../_lib/systems";
+import { InboundAudience } from "./InboundAudience";
 import { BAD, QUIET, useSystemsError } from "./parts";
 import { Button, Input, RadioCards } from "../../_components/kit";
 
@@ -28,8 +31,9 @@ const K = SYSTEMS_KEYS.inbounds;
  * placed on, how, and the caps. The list is what `network-service` last read;
  * "read again" asks the panel's next pass to read it (a minute), and the list
  * is fetched again once the admin asks for it. The placement and cap are the
- * panel's defaults, each with the layer in force (F-027-ci); an inbound a
- * group has taken names that group — only it sells there (F-027-ch).
+ * panel's defaults, each with the layer in force (F-027-ci). Each inbound
+ * says who sells it — every group, or the groups chosen — and opens that
+ * choice, the groups' shares and taking a group off it (F-027-eu, ADR-0127).
  */
 export function PanelInbounds({ panelId }: { panelId: string }) {
   const { lang, t } = useLocale();
@@ -40,6 +44,8 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The inbound whose sellers are open (F-027-eu); one at a time.
+  const [opened, setOpened] = useState<string | null>(null);
 
   const show = (v: View) => {
     setView(v);
@@ -59,6 +65,13 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
   }, [panelId]);
 
   useEffect(load, [load]);
+
+  // After an audience, share or release write: who sells each inbound changed; the picks being edited did not.
+  const reread = () =>
+    billingApi.panelInbounds(panelId).then(
+      (v) => setView(v),
+      (e: unknown) => setError(e),
+    );
 
   if (error && !view) {
     return (
@@ -171,7 +184,7 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
         {errors.panelMax && <span className="text-error">{t("common", errors.panelMax)}</span>}
       </label>
 
-      {view.inbounds.some((i) => i.assignedTo) && <p className="text-xs leading-5 text-text-secondary">{t("common", K.poolHint)}</p>}
+      <p className="text-xs leading-5 text-text-secondary">{t("common", K.audienceHint)}</p>
       {view.inbounds.length === 0 ? (
         <p className="text-xs text-text-secondary">{t("common", K.empty)}</p>
       ) : (
@@ -180,6 +193,7 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
             const note = inboundNote(i);
             const p = form.picks[i.remoteId];
             const canSell = sellable(i) || i.sold;
+            const sellers = soldBy(i);
             return (
               <li key={i.remoteId} className="flex flex-wrap items-center gap-3 py-2 text-xs">
                 <label className="flex min-w-0 flex-1 items-center gap-2">
@@ -197,7 +211,9 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
                   </span>
                 </label>
                 {note && <span className={`rounded-lg border px-2 py-0.5 ${note === K.disabled ? QUIET : BAD}`}>{t("common", note)}</span>}
-                {i.assignedTo && <span className={`rounded-lg border px-2 py-0.5 ${QUIET}`}>{t("common", K.assignedTo, { group: i.assignedTo.name })}</span>}
+                <span className={`rounded-lg border px-2 py-0.5 ${QUIET}`}>
+                  {t("common", K.soldBy, { groups: sellers.every ? t("common", K.everyGroup) : formatList(sellers.names, lang) || t("common", K.nobody) })}
+                </span>
                 <span className="text-text-secondary">{t("common", K.clients, { count: String(i.clients) })}</span>
                 <label className="flex items-center gap-1 text-text-secondary">
                   {t("common", K.cap)}
@@ -210,7 +226,15 @@ export function PanelInbounds({ panelId }: { panelId: string }) {
                     className="w-24"
                   />
                 </label>
+                <Button variant="quiet" size="sm" onClick={() => setOpened(opened === i.remoteId ? null : i.remoteId)} icon={<Users size={12} aria-hidden />} aria-expanded={opened === i.remoteId}>
+                  {t("common", SYSTEMS_KEYS.audience.open)}
+                </Button>
                 {errors[capField(i.remoteId)] && <span className="w-full text-error">{t("common", errors[capField(i.remoteId)])}</span>}
+                {opened === i.remoteId && (
+                  <div className="w-full">
+                    <InboundAudience panelId={panelId} view={view} inbound={i} onChanged={() => void reread()} />
+                  </div>
+                )}
               </li>
             );
           })}

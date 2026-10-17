@@ -316,13 +316,8 @@ export interface BulkPanel {
   grants: number;
 }
 
-/** A bulk act by a filter, run by the worker (F-311-u2); `total` was frozen at the confirm. */
-export interface BulkJob {
-  id: string;
-  requestId: string;
-  action: string;
-  command: Record<string, unknown>;
-  filter: { panelId?: string; productId?: string; variantId?: string; statuses: string[] };
+/** Where a worker's job stands — billing's `jobProgress`, shared by every job kind: `total` frozen at the confirm. */
+export interface JobProgress {
   status: "running" | "done" | "cancelled";
   total: number;
   processed: number;
@@ -332,6 +327,15 @@ export interface BulkJob {
   createdAt: string;
   finishedAt: string | null;
   purgedAt: string | null;
+}
+
+/** A bulk act by a filter, run by the worker (F-311-u2). */
+export interface BulkJob extends JobProgress {
+  id: string;
+  requestId: string;
+  action: string;
+  command: Record<string, unknown>;
+  filter: { panelId?: string; productId?: string; variantId?: string; statuses: string[] };
 }
 
 /** One Grant's outcome of a bulk request; `result` is the single act's answer. */

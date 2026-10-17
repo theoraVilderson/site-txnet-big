@@ -3688,11 +3688,16 @@
       "panel_not_retired": "This panel is not archived.",
       "group_has_members": "The group still has members. Remove or drain them first.",
       "group_in_use": "A variant still sells on this group. Move it to another group in the catalog first.",
-      "inbound_assigned_elsewhere": "Another group already sells this inbound on this panel. Take it off that group's member first.",
       "inbound_has_configs": "Buyers of another group still have configs on this inbound. Drain that group's member on this panel first, so they are moved.",
       "resolution_required": "Choose what happened to the server before acknowledging.",
       "resolution_not_for_event": "This event takes no choice. Reload the page and try again.",
-      "cost_in_closed_month": "A new price can only take effect from the first day of this month: a closed month's cost never changes."
+      "cost_in_closed_month": "A new price can only take effect from the first day of this month: a closed month's cost never changes.",
+      "listing_not_found": "That group does not list this inbound, so it has no share to set.",
+      "not_a_seller": "That group does not sell this inbound now.",
+      "already_releasing": "That group is already being taken off this inbound.",
+      "request_reused": "This request was already sent with different choices. Open it again and start once more.",
+      "selection_too_large": "Too many configs for one job.",
+      "job_not_found": "That job was not found."
     },
     "resubmit": {
       "open": "New login",
@@ -3791,10 +3796,11 @@
       },
       "settings": {
         "action": "Selling settings",
-        "heldBy": "held by {{group}}",
         "takesNobody": "not on sale on the panel, or disabled there — takes nobody",
         "sellsNobody": "Nothing this group sells here is on sale and enabled: it places nobody on this panel.",
-        "loading": "Reading the panel's inbounds…"
+        "loading": "Reading the panel's inbounds…",
+        "sharedWith": "shared with {{groups}}",
+        "everyGroup": "every group sells it — ticking makes it this group's alone"
       }
     },
     "inbounds": {
@@ -3833,10 +3839,12 @@
         "perBuyer": "A whole number from 1 to 16, or empty for the platform's default."
       },
       "from": "In force: {{layer}}",
-      "assignedTo": "sold only by {{group}}",
-      "poolHint": "An inbound a group has taken is sold only by that group; the rest are the pool every other group on this panel shares.",
       "perBuyer": "Inbounds per buyer (K)",
-      "perBuyerHint": "1 to 16. Empty = the platform's default (2). With fewer ticked inbounds than K, a buyer gets one on each."
+      "perBuyerHint": "1 to 16. Empty = the platform's default (2). With fewer ticked inbounds than K, a buyer gets one on each.",
+      "soldBy": "Sold by: {{groups}}",
+      "everyGroup": "every group on this panel",
+      "nobody": "no group",
+      "audienceHint": "An inbound is sold by every group on this panel, or only by the groups chosen for it. Open “Which groups sell it” on an inbound to change that, set a group's share, or take a group off it."
     },
     "edit": {
       "basics": "Name and region",
@@ -3884,7 +3892,6 @@
     },
     "refusalsNamed": {
       "panel_already_registered": "This address (an API address, or a push panel's IP) is already held by “{{panel}}”. Edit or restore that panel, or give this one another address.",
-      "inbound_assigned_elsewhere": "Inbound #{{inbound}} is already sold only by group “{{group}}”. Take it off that group's member first.",
       "inbound_has_configs": "Buyers of another group still have {{configs}} configs on inbound #{{inbound}}. Drain that group's member on this panel first, so they are moved."
     },
     "guide": {
@@ -4016,9 +4023,9 @@
       "noCap": "No cap",
       "capHint": "This group's cap cannot go above the panel's own.",
       "pool": "The panel's shared inbounds",
-      "poolHint": "The inbounds ticked for sale in the panel's settings, except those another group has taken as dedicated.",
-      "ownInbounds": "Inbounds dedicated to this group",
-      "ownInboundsHint": "The inbounds you tick belong to this group alone; other groups stop selling on them.",
+      "poolHint": "The inbounds every group on this panel sells. An inbound chosen for some groups is sold only by them.",
+      "ownInbounds": "These inbounds as well",
+      "ownInboundsHint": "This group sells the inbounds you tick, beside the ones every group sells. Ticking one another group sells shares it with that group; ticking one every group sells makes it this group's alone.",
       "save": "Save",
       "saved": "Saved. This group's next buyer is created with these settings.",
       "summary": {
@@ -4082,6 +4089,55 @@
       "trafficHint": "What this price buys; leave blank if none.",
       "trafficInvalid": "Write the traffic in whole gigabytes, or leave it blank.",
       "trafficCurrent": "Includes {{traffic}} of traffic a month"
+    },
+    "audience": {
+      "open": "Which groups sell it",
+      "title": "Which groups sell this inbound",
+      "everyGroup": "Every group on this panel",
+      "everyGroupHint": "A group that joins this panel later sells it too.",
+      "listed": "Only the groups chosen",
+      "listedHint": "Only the ticked groups sell it; a group that joins later does not.",
+      "noMembers": "No group holds this panel yet.",
+      "nobody": "No group is ticked: nobody new is placed on this inbound.",
+      "clients": "{{count}} user(s) of this group on it",
+      "share": "Share",
+      "shareHint": "Most users of this group on this inbound. Empty = none; the inbound's own cap still holds.",
+      "shareLater": "A share is set for a group that is chosen and saved.",
+      "releasing": "being taken off",
+      "save": "Save",
+      "saved": "Saved. The next buyer is placed this way.",
+      "invalid": {
+        "share": "A whole number from 1 to 1,000,000, or empty for none."
+      },
+      "back": "Back"
+    },
+    "release": {
+      "title": "Some of these groups have users on this inbound",
+      "intro": "They would stop selling it, but their users have a config there. Choose what happens to those users. The change is made only once this finishes; stopping it leaves the inbound as it is.",
+      "group": "“{{group}}”: {{count}} user(s)",
+      "mode": "What happens to their users",
+      "move": "Move them to another inbound of their group",
+      "moveHint": "Each user gets a config on their group's next placement. A user with nowhere to go is reported and keeps this one.",
+      "empty": "Remove their config on this inbound",
+      "emptyHint": "Their config here is deleted. A user left with no config at all is handled as you choose below.",
+      "orphans": "A user left with no config",
+      "reason": "Reason (kept in each user's history)",
+      "start": "Start",
+      "status": {
+        "running": "Running",
+        "done": "Finished",
+        "cancelled": "Stopped"
+      },
+      "progress": "{{processed}} of {{total}}",
+      "counts": "{{ok}} done · {{refused}} refused · {{failed}} failed",
+      "cancel": "Stop",
+      "cancelConfirm": "Stop this? Users already moved stay where they are, and these groups keep selling the inbound.",
+      "doneNote": "Finished: these groups no longer sell this inbound.",
+      "cancelledNote": "Stopped: these groups still sell this inbound.",
+      "invalid": {
+        "reason": "Write a reason, up to 500 characters.",
+        "orphans": "Choose what happens to a user left with no config."
+      }
     }
   },
   "shop": {

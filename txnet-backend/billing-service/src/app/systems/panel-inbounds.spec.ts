@@ -9,7 +9,10 @@
  *  - **the scope**: a reseller's own panel is not reachable, and neither is
  *    the surface for anyone but the platform owner;
  *  - **the figures an admin picks by are fulfilment's**: live configs per
- *    inbound, and distinct Grants on the panel.
+ *    inbound, and distinct Grants on the panel;
+ *  - **who sells an inbound** (F-027-eu): every member of an `every_group`
+ *    one, only the listed groups of a `listed` one, each with its share, its
+ *    own live count and a running release — never a group outside the scope.
  */
 import { ConfigProtocol, InboundPlacement, TenantType } from '@prisma/client';
 
@@ -38,7 +41,7 @@ function harness() {
     inbound('2', { protocol: ConfigProtocol.trojan, sold: true }),
     inbound('3', { protocol: null }),
     // Shared: listed to two groups (F-027-ep).
-    inbound('5', { audience: 'listed', listings: [{ member: { group: { id: 'g-2', name: 'Gaming' } } }, { member: { group: { id: 'g-1', name: 'EU' } } }] }),
+    inbound('5', { audience: 'listed', listings: [{ maxClients: 30, member: { group: { id: 'g-2', name: 'Gaming' } } }, { maxClients: null, member: { group: { id: 'g-1', name: 'EU' } } }] }),
     inbound('4', { goneAt: new Date() }),
   ];
   const panelMatch = (p: Row, where: Row) => Object.entries(where).every(([k, v]) => (p[k] ?? null) === v);
@@ -57,12 +60,23 @@ function harness() {
       update: async ({ where, data }: { where: { panelId_remoteId: { panelId: string; remoteId: string } }; data: Row }) =>
         Object.assign(inbounds.find((i) => i.panelId === where.panelId_remoteId.panelId && i.remoteId === where.panelId_remoteId.remoteId)!, data),
     },
-    // Two buyers on 10 (one of them also on 2), one on 2: three users.
-    $queryRaw: async () => [
-      { inboundRemoteId: '10', total: 0, clients: BigInt(2), users: BigInt(2) },
-      { inboundRemoteId: '2', total: 0, clients: BigInt(2), users: BigInt(2) },
-      { inboundRemoteId: null, total: 1, clients: BigInt(4), users: BigInt(3) },
-    ],
+    // The owner's two groups on the panel; a reseller's group there is outside the scope.
+    panelGroupMember: {
+      findMany: async ({ where }: { where: { group: { tenantId: string | null } } }) =>
+        [{ group: { id: 'g-2', name: 'Gaming' }, tenantId: null }, { group: { id: 'g-1', name: 'EU' }, tenantId: null }, { group: { id: 'g-r', name: 'Reseller' }, tenantId: RESELLER }]
+          .filter((m) => m.tenantId === where.group.tenantId),
+    },
+    // Gaming is being released from 5 by a running job (F-027-es).
+    inboundRelease: { findMany: async () => [{ groupId: 'g-2', inboundRemoteId: '5', jobId: 'job-1' }] },
+    // Two buyers on 10 (one of them also on 2), one on 2: three users. Per group: EU has both on 2, Gaming one on 5.
+    $queryRaw: async (sql: TemplateStringsArray) =>
+      sql.join('').includes('panelGroupId')
+        ? [{ inboundRemoteId: '2', groupId: 'g-1', clients: BigInt(2) }, { inboundRemoteId: '5', groupId: 'g-2', clients: BigInt(1) }]
+        : [
+            { inboundRemoteId: '10', total: 0, clients: BigInt(2), users: BigInt(2) },
+            { inboundRemoteId: '2', total: 0, clients: BigInt(2), users: BigInt(2) },
+            { inboundRemoteId: null, total: 1, clients: BigInt(4), users: BigInt(3) },
+          ],
   };
   const crossTenant = { ...db, $transaction: async (work: (tx: typeof db) => Promise<unknown>) => work(db) };
   return { service: new PanelInboundsService(prisma as never, crossTenant as never), panels, inbounds };
@@ -78,8 +92,23 @@ describe('PanelInboundsService', () => {
     expect(view.inbounds.map((i) => [i.remoteId, i.sold, i.clients])).toEqual([['2', true, 2], ['3', false, 0], ['4', false, 0], ['5', false, 0], ['10', false, 2]]);
     const shared = view.inbounds.find((i) => i.remoteId === '5');
     expect(shared).toMatchObject({ audience: 'listed', listedTo: [{ id: 'g-1', name: 'EU' }, { id: 'g-2', name: 'Gaming' }] });
-    expect(view.inbounds.find((i) => i.remoteId === '2')).toMatchObject({ audience: 'every_group', listedTo: [], assignedTo: null });
+    expect(view.inbounds.find((i) => i.remoteId === '2')).toMatchObject({ audience: 'every_group', listedTo: [] });
     expect(view).toMatchObject({ panelId: PANEL, inboundPlacement: 'all', maxClients: null, users: 3 });
+  });
+
+  it('names who sells each inbound: every member of an every-group one, the listed groups of a listed one', async () => {
+    const { service } = harness();
+    const view = await service.inbounds(owner, PANEL);
+
+    expect(view.members).toEqual([{ id: 'g-1', name: 'EU' }, { id: 'g-2', name: 'Gaming' }]);
+    expect(view.inbounds.find((i) => i.remoteId === '2')?.sellers).toEqual([
+      { groupId: 'g-1', name: 'EU', share: null, clients: 2, releaseJobId: null },
+      { groupId: 'g-2', name: 'Gaming', share: null, clients: 0, releaseJobId: null },
+    ]);
+    expect(view.inbounds.find((i) => i.remoteId === '5')?.sellers).toEqual([
+      { groupId: 'g-1', name: 'EU', share: null, clients: 0, releaseJobId: null },
+      { groupId: 'g-2', name: 'Gaming', share: 30, clients: 1, releaseJobId: 'job-1' },
+    ]);
   });
 
   it('writes the picks and the placement together, and a field left out keeps its value', async () => {

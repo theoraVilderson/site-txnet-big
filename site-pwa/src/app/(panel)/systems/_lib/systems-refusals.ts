@@ -32,9 +32,16 @@ export type SystemsRefusal =
   | "panel_not_retired"
   | "group_has_members"
   | "group_in_use"
-  // An inbound is the pool's or one group's (F-027-ch).
-  | "inbound_assigned_elsewhere"
+  // An inbound is sold by every group or the groups it lists (F-027-ep).
   | "inbound_has_configs"
+  // A group's share of an inbound is a listing's (F-027-eq).
+  | "listing_not_found"
+  // Releasing an inbound from groups, as a job (F-027-es).
+  | "not_a_seller"
+  | "already_releasing"
+  | "request_reused"
+  | "selection_too_large"
+  | "job_not_found"
   // A panel's monthly cost never lands in a closed month (F-1002-a).
   | "cost_in_closed_month"
   | "resolution_required"
@@ -65,8 +72,13 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   panel_not_retired: K.refusals.panel_not_retired,
   group_has_members: K.refusals.group_has_members,
   group_in_use: K.refusals.group_in_use,
-  inbound_assigned_elsewhere: K.refusals.inbound_assigned_elsewhere,
   inbound_has_configs: K.refusals.inbound_has_configs,
+  listing_not_found: K.refusals.listing_not_found,
+  not_a_seller: K.refusals.not_a_seller,
+  already_releasing: K.refusals.already_releasing,
+  request_reused: K.refusals.request_reused,
+  selection_too_large: K.refusals.selection_too_large,
+  job_not_found: K.refusals.job_not_found,
   cost_in_closed_month: K.refusals.cost_in_closed_month,
   resolution_required: K.refusals.resolution_required,
   resolution_not_for_event: K.refusals.resolution_not_for_event,

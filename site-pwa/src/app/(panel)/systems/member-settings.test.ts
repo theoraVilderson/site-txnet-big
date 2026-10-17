@@ -68,9 +68,14 @@ const inbound = (remoteId: string, over: Partial<PanelInbound> = {}): PanelInbou
   sold: true,
   maxClients: null,
   clients: 0,
-  assignedTo: null,
+  audience: "every_group",
+  listedTo: [],
+  sellers: [],
   ...over,
 });
+
+/** Listed to the groups named (F-027-ep). */
+const listed = (...groups: { id: string; name: string }[]): Partial<PanelInbound> => ({ audience: "listed", listedTo: groups });
 
 const view = (inbounds: PanelInbound[]): PanelInbounds => ({
   panelId: "p-1",
@@ -82,6 +87,7 @@ const view = (inbounds: PanelInbound[]): PanelInbounds => ({
   effective: member().effective,
   inboundsReadAt: "2026-09-25T10:00:00.000Z",
   users: 0,
+  members: [],
   inbounds,
 });
 
@@ -96,29 +102,30 @@ describe("the layer a value comes from", () => {
 
 describe("the inbounds a membership sells", () => {
   it("offers what a buyer can be placed on, and what it holds even once gone, so it can be let go", () => {
-    const v = view([inbound("1"), inbound("2", { goneAt: "2026-09-25T11:00:00.000Z" }), inbound("3", { protocol: null }), inbound("4", { goneAt: "2026-09-25T11:00:00.000Z", assignedTo: { id: "g-1", name: "Germany" } })]);
-    expect(inboundChoices(v, "g-1").map((c) => c.inbound.remoteId)).toEqual(["1", "4"]);
+    const v = view([inbound("1"), inbound("2", { goneAt: "2026-09-25T11:00:00.000Z" }), inbound("3", { protocol: null }), inbound("4", { goneAt: "2026-09-25T11:00:00.000Z", ...listed({ id: "g-1", name: "Germany" }) })]);
+    expect(inboundChoices(v, "g-1", "en").map((c) => c.inbound.remoteId)).toEqual(["1", "4"]);
   });
 
-  it("names the group holding one elsewhere, and never offers it", () => {
-    const v = view([inbound("1", { assignedTo: { id: "g-2", name: "Gaming" } }), inbound("2", { assignedTo: { id: "g-1", name: "Germany" } })]);
-    const [held, mine] = inboundChoices(v, "g-1");
-    expect(held).toMatchObject({ heldBy: { id: "g-2", name: "Gaming" } });
-    expect(mine).toMatchObject({ heldBy: null });
+  it("offers one another group lists, naming whom it is shared with (ADR-0127)", () => {
+    const v = view([inbound("1", listed({ id: "g-2", name: "Gaming" })), inbound("2", listed({ id: "g-1", name: "Germany" }))]);
+    const [shared, mine] = inboundChoices(v, "g-1", "en");
+    expect(shared).toMatchObject({ sharedWith: "Gaming", everyGroup: false });
+    expect(mine).toMatchObject({ sharedWith: "" });
   });
 
   it("marks one fulfilment will not place on: not ticked for sale on the panel, or disabled there", () => {
     const v = view([inbound("1"), inbound("2", { sold: false }), inbound("3", { enabled: false })]);
-    expect(inboundChoices(v, "g-1").map((c) => c.takesNobody)).toEqual([false, true, true]);
+    expect(inboundChoices(v, "g-1", "en").map((c) => c.takesNobody)).toEqual([false, true, true]);
   });
 
-  it("says when a membership places nobody on the panel: its own set, or the pool, has nothing live", () => {
-    const pool = view([inbound("1", { assignedTo: { id: "g-2", name: "Gaming" } }), inbound("2", { sold: false })]);
+  it("says when a membership places nobody on the panel: its listings plus the every-group ones have nothing live", () => {
+    const pool = view([inbound("1", listed({ id: "g-2", name: "Gaming" })), inbound("2", { sold: false })]);
     expect(sellsNobody(pool, member())).toBe(true);
     expect(sellsNobody(view([inbound("1")]), member())).toBe(false);
-    // An assignment replaces the pool, never adds to it.
-    const own = view([inbound("1"), inbound("2", { enabled: false, assignedTo: { id: "g-1", name: "Germany" } })]);
+    // A listing adds to the every-group inbounds (F-027-ep): a live one of either sells.
+    const own = view([inbound("1", { sold: false }), inbound("2", { enabled: false, ...listed({ id: "g-1", name: "Germany" }) })]);
     expect(sellsNobody(own, member({ inbounds: ["2"] }))).toBe(true);
+    expect(sellsNobody(view([inbound("1"), inbound("2", listed({ id: "g-1", name: "Germany" }))]), member({ inbounds: ["2"] }))).toBe(false);
   });
 });
 
@@ -129,8 +136,7 @@ describe("a refusal that names its holder", () => {
   };
   const refused = (reason: string, facts: Record<string, string | number> = {}) => new ApiError("x", { status: 409, reason, facts });
 
-  it("has a sentence for the two refusals of an inbound's assignment", () => {
-    expect(REFUSAL_KEYS).toHaveProperty("inbound_assigned_elsewhere");
+  it("has a sentence for an inbound a group would lose with users there", () => {
     expect(REFUSAL_KEYS).toHaveProperty("inbound_has_configs");
   });
 
@@ -141,11 +147,7 @@ describe("a refusal that names its holder", () => {
     });
   });
 
-  it("names the group holding the inbound, and counts another group's configs on it", () => {
-    expect(refusalSentence(refused("inbound_assigned_elsewhere", { remoteId: "3", groupId: "g-2" }), names)).toEqual({
-      key: K.refusalsNamed.inbound_assigned_elsewhere,
-      vars: { group: "Gaming", inbound: "3" },
-    });
+  it("counts the configs on an inbound a group would lose", () => {
     expect(refusalSentence(refused("inbound_has_configs", { remoteId: "1", configs: 4 }), names)).toEqual({
       key: K.refusalsNamed.inbound_has_configs,
       vars: { inbound: "1", configs: "4" },
@@ -154,7 +156,6 @@ describe("a refusal that names its holder", () => {
 
   it("falls back to the plain sentence for a holder the reader cannot see, or none sent (F-027-cj, a lost race)", () => {
     expect(refusalSentence(refused("panel_already_registered", { panelId: "p-other" }), names)).toEqual({ key: K.refusals.panel_already_registered });
-    expect(refusalSentence(refused("inbound_assigned_elsewhere"), names)).toEqual({ key: K.refusals.inbound_assigned_elsewhere });
     expect(refusalSentence(refused("inbound_has_configs", { configs: 2 }), names)).toEqual({ key: K.refusals.inbound_has_configs });
     expect(refusalSentence(refused("not_found"), names)).toEqual({ key: K.refusals.not_found });
     expect(refusalSentence(new Error("boom"), names)).toBeNull();

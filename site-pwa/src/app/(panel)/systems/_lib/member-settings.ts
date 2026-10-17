@@ -1,4 +1,5 @@
 import type { InboundPlacement, MemberSellingBody, PanelGroupMember, PanelInbound, PanelInbounds, SellingLayer } from "@/lib/billing-api";
+import { formatList } from "../../_lib/digits";
 import { perBuyerOf, sellable } from "./panel-inbounds";
 import { SYSTEMS_KEYS } from "./systems";
 
@@ -108,34 +109,39 @@ export function validateMemberChoice(form: MemberChoice, member: PanelGroupMembe
 
 export type InboundChoice = {
   inbound: PanelInbound;
-  /** Another group holding it: shown, never offered (billing `inbound_assigned_elsewhere`). */
-  heldBy: { id: string; name: string } | null;
+  /** The other groups listing it, as one list in the reader's language; ticking it here shares it with them (F-027-ep, «مشترک با …»). Empty: none. */
+  sharedWith: string;
+  /** Every group sells it: ticking it here makes it this group's alone, so the others lose it. */
+  everyGroup: boolean;
   /** Fulfilment loads only `sold`, enabled inbounds (network rule 2): ticking this one sells nothing yet. */
   takesNobody: boolean;
 };
 
+const listsIt = (i: PanelInbound, groupId: string) => i.listedTo.some((g) => g.id === groupId);
+
 /**
- * What a membership can be given: every sellable inbound, plus any it holds
- * that stopped being sellable, so it can still be let go. Billing refuses to
- * assign an unsellable one (`inbound_not_sellable`).
+ * What a membership can list (F-027-ep, ADR-0127): every sellable inbound —
+ * one other groups list is shared with them, an every-group one becomes this
+ * group's alone — plus any it lists that stopped being sellable, so it can
+ * still be let go. Billing refuses to list an unsellable one (`inbound_not_sellable`).
  */
-export function inboundChoices(view: PanelInbounds, groupId: string): InboundChoice[] {
+export function inboundChoices(view: PanelInbounds, groupId: string, lang: string): InboundChoice[] {
   return view.inbounds
-    .filter((i) => sellable(i) || i.assignedTo?.id === groupId)
+    .filter((i) => sellable(i) || listsIt(i, groupId))
     .map((i) => ({
       inbound: i,
-      heldBy: i.assignedTo && i.assignedTo.id !== groupId ? i.assignedTo : null,
+      sharedWith: formatList(i.listedTo.filter((g) => g.id !== groupId).map((g) => g.name), lang),
+      everyGroup: i.audience === "every_group",
       takesNobody: !i.sold || !i.enabled || !sellable(i),
     }));
 }
 
 /**
  * The membership places nobody on this panel: nothing it sells is live — its
- * own set when it has one (an assignment replaces the pool), else the pool,
- * the `sold` inbounds no group holds (network rule 3a).
+ * listings **plus** the panel's every-group inbounds (network rule 3a, F-027-ep).
  */
 export function sellsNobody(view: PanelInbounds, member: PanelGroupMember): boolean {
   const own = new Set(member.inbounds);
-  const sells = (i: PanelInbound) => (own.size > 0 ? own.has(i.remoteId) : i.assignedTo === null);
+  const sells = (i: PanelInbound) => own.has(i.remoteId) || i.audience === "every_group";
   return !view.inbounds.some((i) => sells(i) && i.sold && i.enabled && sellable(i));
 }
