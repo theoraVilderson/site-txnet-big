@@ -7006,5 +7006,59 @@
         "rebuilding": "The figures are being rebuilt; try again in a few minutes."
       }
     }
+  },
+  "groupMove": {
+    "open": "Move to another group",
+    "title": "Move to another group",
+    "intro": "The services go to another panel group. Their money, data and end date stay the same. A config on an inbound the target group also sells keeps its link; the rest are placed on the target group's panels and get a new link.",
+    "ticked": "{{count}} services selected",
+    "whole": "Every service of the group “{{group}}”",
+    "target": "Target group",
+    "targetPick": "Choose a group",
+    "noTargets": "There is no other group to move to.",
+    "loading": "Loading…",
+    "counting": "Counting…",
+    "preview": "{{grants}} services will move. {{keep}} configs keep their link and {{move}} configs get a new one.",
+    "previewEmpty": "Nothing in this selection can be moved.",
+    "reason": "Reason (the user is told, and it stays in the service's history)",
+    "start": "Move",
+    "confirm": "Move {{grants}} services to “{{group}}”? {{move}} configs get a new link.",
+    "status": {
+      "running": "Moving",
+      "done": "Done",
+      "cancelled": "Stopped"
+    },
+    "progress": "{{processed}} of {{total}}",
+    "counts": "{{ok}} moved · {{refused}} refused · {{failed}} failed",
+    "cancel": "Stop",
+    "cancelConfirm": "Stop it? Services already moved stay in the new group; the rest stay where they are.",
+    "doneNote": "Done. Refused services stayed in their old group and keep working.",
+    "cancelledNote": "Stopped. Services moved so far stay in the new group.",
+    "problems": "Services that were not moved",
+    "problemLine": "Service {{id}}: {{reason}}",
+    "problemsEmpty": "No service was refused.",
+    "purged": "This job's details are no longer kept.",
+    "close": "Close",
+    "invalid": {
+      "source": "Choose at least one service and at most 500.",
+      "toGroupId": "Choose a target group other than the current one.",
+      "reason": "Write a reason, up to 500 characters."
+    },
+    "refusal": {
+      "grant_not_found": "This service was not found.",
+      "grant_not_movable": "This service is not active or has no group, so it cannot be moved.",
+      "same_group": "This service is already in the target group.",
+      "group_not_found": "This group was not found, or you do not sell it.",
+      "group_not_for_grant": "This service cannot go to this group.",
+      "target_not_deliverable": "The target group cannot deliver a service right now.",
+      "target_full": "The target group is full.",
+      "no_target": "The target group's panels had no room for this service; it stayed in its old group.",
+      "reseller_limit_reached": "The reseller's limit of services or monthly traffic on the platform's panels is reached.",
+      "failed": "This service could not be moved; it stayed in its old group.",
+      "request_reused": "This request was already sent with another selection; close the window and open it again.",
+      "selection_empty": "Nothing in this selection can be moved.",
+      "selection_too_large": "This selection is larger than allowed.",
+      "job_not_found": "This job was not found."
+    }
   }
 }

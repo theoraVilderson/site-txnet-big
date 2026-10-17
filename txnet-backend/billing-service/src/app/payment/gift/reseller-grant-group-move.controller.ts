@@ -1,4 +1,4 @@
-import { Body, ConflictException, Controller, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, HttpCode, HttpStatus, Ip, NotFoundException, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
@@ -26,6 +26,7 @@ function refusal(e: unknown): unknown {
  * counts (Grants, configs kept, configs moved), then starts; the page hears
  * each batch (`network.config_move_job.progress`) and re-reads the job.
  *
+ * - `GET …/grant-group-moves/groups` -> `{groups: [{id, name}]}`, the targets it may name (`read`, F-027-ev)
  * - `POST …/grant-group-moves/count` `{source, toGroupId}` -> `{grants, keep, move}` (`read`)
  * - `POST …/grant-group-moves` `{requestId, source, toGroupId, reason}` -> **202** the job (`staffWrite`)
  * - the list, one job, its outcomes and cancel: `ResellerJobRoutes`'
@@ -38,6 +39,13 @@ export class ResellerGrantGroupMoveController extends ResellerJobRoutes {
 
   protected refusal(e: unknown): unknown {
     return refusal(e);
+  }
+
+  /** `{groups: [{id, name}]}` — the groups its tenant sells, the only targets it may name. Literal, so declared before `:jobId`. */
+  @Get('groups')
+  @RateLimit(bulkReadLimit)
+  groups(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.answer(() => this.jobs.targets(actorOf(req), tenantId));
   }
 
   @Post('count')

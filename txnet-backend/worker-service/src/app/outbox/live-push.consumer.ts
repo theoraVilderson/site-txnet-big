@@ -57,8 +57,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.ANALYTICS_RESELLER_REFRESHED]: { audience: ['user', 'tenant'], fields: ['resellerId', 'from', 'to'] },
   /** F-1006-a: a scheduled report was sent — its person's Reports tab re-reads the schedule's last send; the report itself is the notice's. */
   [OutboxEventType.ANALYTICS_REPORT]: { audience: ['user'], fields: ['scheduleId'] },
-  /** F-311-ad: a config move job moved a batch or ended — its tenant's open job page re-reads the job's counts. */
-  [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: { audience: ['tenant'], fields: ['jobId'] },
+  /** F-311-ad: a config move job moved a batch or ended — its tenant's and its starter's (F-027-ev) open job page re-reads the job's counts. */
+  [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: { audience: ['user', 'tenant'], fields: ['jobId'] },
 };
 
 /**

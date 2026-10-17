@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2, Search, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { resellerGrantsApi, type BulkOutcomeRow, type ResellerGrantRow } from "@/lib/billing-api";
+import { resellerGrantsApi, resellerGroupMovesApi, type BulkOutcomeRow, type ResellerGrantRow } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { Pagination } from "../../../../_components/kit/Pagination";
@@ -16,6 +16,8 @@ import { BULK_ACTIONS, BULK_KEYS as B, BULK_MAX_GRANTS, FIND_KEYS as F, bulkBody
 import { USER_KEYS, userPagePath } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
+import { GroupMoveButton } from "../../../../_components/group-move/GroupMoveDialog";
+import { GROUP_MOVE_KEYS } from "../../../../_lib/group-move";
 import { Alert, Button, buttonClass, Field, Input, Textarea } from "../../../../_components/kit";
 
 const PAGE_SIZE = 20;
@@ -199,6 +201,7 @@ export function FindByLink({ id, own = false }: { id: string; own?: boolean }) {
 
       {ticked.length > 0 && (
         <BulkBar
+          tenantId={id}
           ticked={ticked}
           nameOf={(grantId) => (seen[grantId] ? nameOf(seen[grantId]) : grantId.slice(0, 8))}
           send={api.bulk}
@@ -216,12 +219,14 @@ export function FindByLink({ id, own = false }: { id: string; own?: boolean }) {
 
 /** The ticked services' one act: its fields, a required reason, and each Grant's outcome. */
 function BulkBar({
+  tenantId,
   ticked,
   nameOf,
   send,
   onUntick,
   onActed,
 }: {
+  tenantId: string;
   ticked: string[];
   nameOf: (grantId: string) => string;
   send: (body: Record<string, unknown>) => Promise<{ results: BulkOutcomeRow[] }>;
@@ -236,6 +241,7 @@ function BulkBar({
   const [outcomes, setOutcomes] = useState<BulkOutcomeRow[] | null>(null);
   const [error, setError] = useState<unknown>(null);
 
+  const moves = useMemo(() => resellerGroupMovesApi(tenantId), [tenantId]);
   const body = open ? bulkBody(open, ticked, draft) : null;
   const count = ticked.length;
 
@@ -285,6 +291,16 @@ function BulkBar({
             {t("common", G.label[action])}
           </Button>
         ))}
+        {/* F-027-ev: to another panel group, as a job — its own sheet, not one of the bulk acts. */}
+        <GroupMoveButton
+          disabled={busy}
+          api={moves}
+          source={{ grantIds: ticked }}
+          sourceLabel={t("common", GROUP_MOVE_KEYS.ticked, { count })}
+          nameOf={nameOf}
+          message={message}
+          onEnded={onActed}
+        />
       </div>
 
       {open && (

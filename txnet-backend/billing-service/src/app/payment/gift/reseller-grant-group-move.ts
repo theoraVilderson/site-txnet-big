@@ -18,6 +18,9 @@ import { AdminActor, ResellerUserGrantsRefused } from './reseller-user-grants.se
  * its own groups or the platform's. Moving a user into a group it does not
  * sell would serve them from panels it never offered.
  */
+/** A picker's bound (C-28): a tenant sells from a handful of groups; past this the list is cut, never unbounded. */
+const MAX_TARGET_GROUPS = 200;
+
 const soldBy = (tenantId: string): Prisma.PanelGroupWhereInput => ({ variants: { some: { tenantId, isActive: true } } });
 
 /**
@@ -45,6 +48,15 @@ export class ResellerGrantGroupMoveService implements ResellerJobs {
         if (!sold) throw new GrantRegroupRefused('group_not_found', body.toGroupId);
         return this.acts.regroup(tx, { grantId, toGroupId: body.toGroupId, actor, reason: body.reason, bounded: admitted.as !== 'staff' });
       }),
+    );
+  }
+
+  /** The groups its Grants may move into — those its tenant sells — by name: the page's target picker (F-027-ev). */
+  targets(actor: ResellerActor, tenantId: string): Promise<{ groups: { id: string; name: string }[] }> {
+    return this.admitted(actor, tenantId, 'read', () =>
+      tenantTransaction(this.prisma, async (tx) => ({
+        groups: await tx.panelGroup.findMany({ where: soldBy(tenantId), select: { id: true, name: true }, orderBy: { name: 'asc' }, take: MAX_TARGET_GROUPS }),
+      })),
     );
   }
 

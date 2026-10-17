@@ -192,6 +192,7 @@ The *why* is **ADR-0080**.
    and a group no variant names says so, linking to the catalog;
    delete is offered with its blocker said first (`groupDeleteBlock`:
    members, then variants), and the button only on an empty, unsold group.
+   Its menu moves every Grant of it to another group: [contract.group-move.md](contract.group-move.md).
 16. **How one group sells on one panel** (F-027-ci -> billing rules 24b–24c,
    `_lib/member-settings.ts`). Every member says whether it sells as its
    panel does or has its own settings. "Selling settings" is one sheet with

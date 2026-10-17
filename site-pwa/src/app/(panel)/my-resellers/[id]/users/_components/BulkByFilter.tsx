@@ -6,6 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { resellerGrantsApi, type BulkJob, type BulkOutcomeRow, type BulkPanel } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { Pagination } from "../../../../_components/kit/Pagination";
+import { JobProblemsPager } from "../../../../_components/JobProblemsPager";
 import { formatInstant } from "../../../../_lib/datetime";
 import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
 import { GRANT_KEYS as G, emptyDraft, type GrantActionDraft } from "../../../_lib/grant-actions";
@@ -445,15 +446,7 @@ function JobRow({ job, api, label, onChanged }: { job: BulkJob; api: ReturnType<
               ),
             )
           )}
-          {!problems.purgedAt && problemCount > OUTCOMES_PAGE_SIZE && (
-            <Pagination
-              page={problems.page}
-              totalPages={Math.ceil(problemCount / OUTCOMES_PAGE_SIZE)}
-              totalItems={problemCount}
-              pageSize={OUTCOMES_PAGE_SIZE}
-              onPageChange={(page) => void readProblems(page)}
-            />
-          )}
+          <JobProblemsPager page={problems.page} count={problemCount} pageSize={OUTCOMES_PAGE_SIZE} purged={problems.purgedAt !== null} onPage={(page) => void readProblems(page)} />
         </div>
       )}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}

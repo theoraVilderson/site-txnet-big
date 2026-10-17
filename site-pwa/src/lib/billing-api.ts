@@ -17,6 +17,7 @@ export type { CursorPage, Paged } from "./billing/client";
 export * from "./billing/coupons";
 export * from "./billing/deposit";
 export * from "./billing/gateways";
+export * from "./billing/grant-group-moves";
 export * from "./billing/grants";
 export * from "./billing/manual-payments";
 export * from "./billing/manual-transfer";

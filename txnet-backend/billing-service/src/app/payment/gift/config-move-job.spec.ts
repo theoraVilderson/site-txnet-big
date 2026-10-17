@@ -245,7 +245,7 @@ describe('ConfigMoveJobDrainService.drain — each config once, as the job\'s ad
     expect(moves[0].actor).toEqual({ actorType: ActorType.admin, actorId: OWNER });
     expect(audits.map((a) => [a.action, a.reason, a.tenantId])).toEqual(Array(3).fill(['config_move', 'de-2 is down', RESELLER]));
     expect(items.map((i) => [i.ok, i.movedTo])).toEqual([c(1), c(2), c(3)].map((id) => [true, `new-${id}`]));
-    expect(outbox).toEqual([{ aggregate: 'network.config_move_job', aggregateId: job.id, type: OutboxEventType.CONFIG_MOVE_JOB_PROGRESS, payload: { tenantId: RESELLER, jobId: job.id } }]);
+    expect(outbox).toEqual([{ aggregate: 'network.config_move_job', aggregateId: job.id, type: OutboxEventType.CONFIG_MOVE_JOB_PROGRESS, payload: { tenantId: RESELLER, userId: OWNER, jobId: job.id } }]);
     expect(await service.job(owner, RESELLER, job.id)).toMatchObject({ status: 'done', processed: 3, ok: 3 });
     expect(await drainer.drain()).toEqual({ jobs: 0, moved: 0, finished: 0 });
   });
@@ -295,7 +295,7 @@ describe('ResellerConfigMoveJobService.cancel', () => {
     expect(await drainer.drain()).toEqual({ jobs: 0, moved: 0, finished: 0 });
     expect(moves).toHaveLength(0);
     expect(jobAudits.map((a) => a.action)).toEqual(['config_move_start', 'config_move_cancel']);
-    expect(outbox.map((e) => e.payload)).toEqual([{ tenantId: RESELLER, jobId: job.id }]);
+    expect(outbox.map((e) => e.payload)).toEqual([{ tenantId: RESELLER, userId: OWNER, jobId: job.id }]);
   });
 
   it('answers another reseller\'s job as job_not_found', async () => {

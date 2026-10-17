@@ -2,13 +2,14 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, Layers, Loader2, LogOut, Pencil, Plus, SlidersHorizontal, Trash2, TriangleAlert } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Layers, Loader2, LogOut, Pencil, Plus, SlidersHorizontal, Trash2, TriangleAlert } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { PANEL_CATALOG } from "@/lib/routes";
-import { billingApi, type EvictOrphans, type EvictPreview, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
+import { billingApi, systemsGroupMovesApi, type EvictOrphans, type EvictPreview, type PanelGroup, type PanelGroupMember, type PanelInbounds, type SystemsPanel } from "@/lib/billing-api";
 import { formatInstant } from "../../_lib/datetime";
+import { GROUP_MOVE_KEYS } from "../../_lib/group-move";
+import { GroupMoveDialog } from "../../_components/group-move/GroupMoveDialog";
 import { Field, Sheet } from "../../catalog/_components/catalog-ui";
-import { groupDeleteBlock } from "../_lib/panel-lifecycle";
 import { INBOUND_PLACEMENTS, PLACEMENT_KEYS } from "../_lib/panel-inbounds";
 import { inboundChoices, memberChoiceOf, perBuyerAsked, sellsNobody, validateMemberChoice, type MemberChoice, type MemberChoiceErrors } from "../_lib/member-settings";
 import {
@@ -30,11 +31,14 @@ import {
   type GroupForm,
 } from "../_lib/panel-groups";
 import { PANEL_STATE_KEYS, REVIEW_KEYS, SYSTEMS_KEYS } from "../_lib/systems";
+import { DeleteGroupSheet } from "./DeleteGroupSheet";
 import { OrphanChoice } from "./OrphanChoice";
 import { ActionsMenu, BAD, CardButton, GOOD, ListState, Notice, Pill, QUIET, REVIEW_TONE, STATE_TONE, Section, useSystemsError } from "./parts";
 import { Alert, Button, Input, NativeSelect, RadioCards } from "../../_components/kit";
 
 const K = SYSTEMS_KEYS.groups;
+/** The owner's door for a group move (F-027-ev): any group, any tenant's Grants. */
+const MOVES = systemsGroupMovesApi();
 
 
 /** "2 h", "3 days" — a wait as the sweep counts it, never rounded down. */
@@ -178,63 +182,6 @@ function GroupEditor({
   );
 }
 
-/**
- * Delete a group (F-027-ca, billing rule 24a). The button is offered only on
- * an empty group no variant names; otherwise the sheet says what to do first.
- */
-function DeleteGroupSheet({ group, onClose, onDone }: { group: PanelGroup; onClose: () => void; onDone: () => Promise<void> }) {
-  const { t } = useLocale();
-  const message = useSystemsError();
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const block = groupDeleteBlock(group);
-
-  const remove = async () => {
-    setBusy(true);
-    setFailure(null);
-    try {
-      await billingApi.deletePanelGroup(group.id);
-      await onDone();
-    } catch (e) {
-      setFailure(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Sheet
-      title={t("common", SYSTEMS_KEYS.groupsRemove.title, { group: group.name })}
-      onClose={onClose}
-      footer={
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <Button variant="quiet" size="sm" onClick={onClose}>
-            {t("common", K.cancel)}
-          </Button>
-          {!block && (
-            <Button
-              size="sm"
-              disabled={busy}
-              onClick={() => void remove()}
-              icon={<Trash2 size={14} aria-hidden />}
-              className="text-error hover:text-error hover:bg-error-bg"
-            >
-              {t("common", SYSTEMS_KEYS.groupsRemove.submit)}
-            </Button>
-          )}
-        </div>
-      }
-    >
-      {block ? (
-        <Notice tone="bad">{t("common", block.key, { n: String(block.n) })}</Notice>
-      ) : (
-        <p className="text-sm leading-6 text-text-secondary">{t("common", SYSTEMS_KEYS.groupsRemove.hint)}</p>
-      )}
-      {failure && <Notice tone="bad">{failure}</Notice>}
-    </Sheet>
-  );
-}
-
 function GroupCard({
   group,
   panels,
@@ -248,7 +195,8 @@ function GroupCard({
 }) {
   const { t } = useLocale();
   const wait = useWait();
-  const [sheet, setSheet] = useState<"edit" | "delete" | null>(null);
+  const message = useSystemsError();
+  const [sheet, setSheet] = useState<"edit" | "delete" | "move" | null>(null);
   const health = groupHealth(group);
 
   return (
@@ -273,7 +221,10 @@ function GroupCard({
           </CardButton>
           <ActionsMenu
             label={t("common", SYSTEMS_KEYS.panels.more)}
-            items={[{ label: t("common", SYSTEMS_KEYS.groupsRemove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => setSheet("delete") }]}
+            items={[
+              { label: t("common", GROUP_MOVE_KEYS.open), icon: <ArrowRightLeft size={14} aria-hidden />, onSelect: () => setSheet("move") },
+              { label: t("common", SYSTEMS_KEYS.groupsRemove.action), icon: <Trash2 size={14} aria-hidden />, tone: "error", onSelect: () => setSheet("delete") },
+            ]}
           />
         </div>
       </div>
@@ -313,6 +264,18 @@ function GroupCard({
             onNotice(SYSTEMS_KEYS.groupsRemove.deleted);
             await onChanged();
           }}
+        />
+      )}
+
+      {sheet === "move" && (
+        <GroupMoveDialog
+          open
+          onClose={() => setSheet(null)}
+          api={MOVES}
+          source={{ fromGroupId: group.id }}
+          sourceLabel={t("common", GROUP_MOVE_KEYS.whole, { group: group.name })}
+          message={message}
+          onEnded={() => void onChanged()}
         />
       )}
 

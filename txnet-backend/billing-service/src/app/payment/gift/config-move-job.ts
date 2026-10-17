@@ -78,10 +78,15 @@ const auditState = (j: ConfigMoveJob) => ({ source: j.source, toPanelId: j.toPan
 
 const isDuplicate = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 
-/** The job's tenant re-reads its open page (C-14): a batch moved, the job ended or was cancelled. */
-export function announceProgress(tx: Prisma.TransactionClient, job: Pick<ConfigMoveJob, 'id' | 'tenantId'>) {
+/**
+ * The job's open page re-reads (C-14): a batch moved, the job ended or was
+ * cancelled. To its tenant, and to the admin who started it — a reseller's
+ * admin on the platform's panel is on the platform tenant, so the reseller's
+ * `tenant:` channel never reaches them (F-027-ev, as RT-1-m2).
+ */
+export function announceProgress(tx: Prisma.TransactionClient, job: Pick<ConfigMoveJob, 'id' | 'tenantId' | 'actorUserId'>) {
   return tx.outboxEvent.create({
-    data: { aggregate: 'network.config_move_job', aggregateId: job.id, type: OutboxEventType.CONFIG_MOVE_JOB_PROGRESS, payload: { tenantId: job.tenantId, jobId: job.id } },
+    data: { aggregate: 'network.config_move_job', aggregateId: job.id, type: OutboxEventType.CONFIG_MOVE_JOB_PROGRESS, payload: { tenantId: job.tenantId, userId: job.actorUserId, jobId: job.id } },
   });
 }
 

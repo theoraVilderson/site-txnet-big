@@ -61,7 +61,7 @@ Tenant RLS on both; the drain reads through `txnet_cross_tenant`
 | **Each config is `ConfigActions.move`, in the job's tenant, as the job's admin** (`actorType admin`), audited as the single move is — `config_move` with the job's reason, the user told (`auditedConfigAct`) — at most `CONFIG_MOVE_BATCH_SIZE` (50) a drain, oldest job first | a config's history and the user's message read the same as one move |
 | **An item's outcome commits with its move**: marked done inside the move's transaction, only where it was not; another drain's mark rolls this one back | two drains move a config once, and a retry never reads its own finished move as `config_retired` |
 | A refusal — `ConfigActions`' own, or `already_on_target` (the Grant already has a live config of that protocol on the target) — is kept at once; any other throw is tried on 3 drains, then `failed` | a broken config does not stall the job; a Grant never gets a second line on one panel |
-| **Progress by outbox event** (C-14): each job's batch, its end and a cancel write `network.config_move_job.progress` `{tenantId, jobId}`, pushed live to `tenant:` (`LIVE_PUSH_FIELDS`) | the page re-reads the job; it never polls |
+| **Progress by outbox event** (C-14): each job's batch, its end and a cancel write `network.config_move_job.progress` `{tenantId, userId, jobId}`, pushed live to `tenant:` and to the starter's `user:` (`LIVE_PUSH_FIELDS`; F-027-ev — a reseller's admin on the platform's panel holds no reseller `tenant:`) | the page re-reads the job; it never polls |
 | A cancel stops the configs not yet reached; those moved stay moved. Start and cancel are one admin row each (`config_move_start`, `config_move_cancel`, target `config_move_job`) | the wrong panel can be stopped, not undone; "who moved 3 000 users" is one row |
 | A started job finishes whatever its tenant's status; starting and cancelling are the `staffWrite` | a suspension must not strand half a panel's users mid-move |
 | 30 days after a job ended (`CONFIG_MOVE_RETENTION_DAYS`) the drain deletes its items and sets `purgedAt`, 5 jobs a call; the job row and counts stay | the per-config rows are the bulk; the summary is what is asked later |
@@ -106,7 +106,7 @@ outcomes answer `{grantId, ok, reason?}` (migration `20261017000600_a_grant_move
 | Route (`{toGroupId, reason}` one; `{requestId, source, toGroupId, reason}` a job) | Who |
 |---|---|
 | `POST /api/billing/systems/grants/:grantId/group`, `…/systems/grant-group-moves` + `/count`, `/:jobId`, `/:jobId/outcomes`, `/:jobId/cancel` | the owner (`panelScopeOf`): any tenant's Grants, any group; never bounded |
-| `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/group`, `…/tenants/:tenantId/grant-group-moves` + `/count`, and `ResellerJobRoutes`' four | a reseller's admin, `grant.assign`: its own Grants, into **a group its tenant sells** (a variant of its catalog for sale names it), else 404 `group_not_found` |
+| `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/group`, `…/tenants/:tenantId/grant-group-moves` + `/count`, `GET …/groups` (`{groups: [{id, name}]}`, the targets it may name, F-027-ev), and `ResellerJobRoutes`' four | a reseller's admin, `grant.assign`: its own Grants, into **a group its tenant sells** (a variant of its catalog for sale names it), else 404 `group_not_found` |
 
 One answers `{grantId, fromGroupId, toGroupId, kept, moved}`; `count` answers
 `{grants, keep, move}` — configs that keep their link and that get a new one.
