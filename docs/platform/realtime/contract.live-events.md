@@ -87,18 +87,26 @@ role held it — `seed.js`, migration `20261007000300`). It joins the set a
 tenant-made role may grant (F-018-n2): hearing your own tenant's refreshes is
 not a power.
 
-**RT-1-c — payment pending.** No new type: PaymentPendingView re-reads on
-`billing.payment.confirmed` / `reversed` on `user:`, matching `paymentId`.
-It also re-reads when the tab becomes visible: a pending payment that closes
-without credit (expiry, rejection) has no event, and inventing one only for
-this page buys a few seconds on a page that says "your money is safe".
+**RT-1-c — payment pending.** No new type: PaymentPendingView re-reads its
+payment on `billing.wallet.changed` on `user:`. **Corrected 2026-10-17:** not
+on `billing.payment.confirmed` / `reversed` — those go to the payment
+consumers, not to live push, so the page would never hear them. Every credit
+and every reversal already writes `wallet.changed` (body empty), so no backend
+change. It also re-reads when the tab becomes visible: a pending payment that
+closes without credit (expiry, rejection) has no event, and inventing one only
+for this page buys a few seconds on a page that says "your money is safe".
 `setInterval` goes.
 
 **RT-1-d — bulk-by-filter progress.** Type `billing.grant_bulk.progressed`,
-`tenant:`, body `{type, jobId}`. Written by `GrantBulkJobService`
+body `{type, jobId}`. **Corrected 2026-10-17:** on `user:<reseller owner>` and
+`tenant:<platform>`, not the job's `tenant:` — BulkByFilter is on
+`/my-resellers/[id]`, the platform's panel, as in RT-1-e. Payload `{tenantId:
+the platform's (`platformTenantIdOf`), userId: the owner, resellerId, jobId}`.
+Written by `GrantBulkJobService`
 (`billing-service/src/app/payment/gift/grant-bulk-job.ts`) in `drainJob`'s
 transaction after each batch, in the one that sets `done`, and in `cancel`.
-BulkByFilter re-reads its job list; `JOB_POLL_MS` goes from `grant-bulk.ts`.
+BulkByFilter re-reads its job list on the reseller it shows; `JOB_POLL_MS`
+goes from `grant-bulk.ts`.
 
 **RT-1-e — reseller domain status** — producer built 2026-10-07 with
 EDGE-1-e. Type `tenant.domain.changed`, body `{type, domainId}`, written by
