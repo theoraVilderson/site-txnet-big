@@ -65,6 +65,7 @@ export const RealtimeEvents = {
   "panelTested": "network.panel.tested",
   "panelStateChanged": "network.panel.state_changed",
   "panelDriftRaised": "network.panel.drift_raised",
+  "panelDrained": "network.panel.drained",
   "grantDelivered": "entitlement.grant.delivered",
   "grantRefunded": "entitlement.grant.refunded",
   "grantLinksCaptured": "network.grant.linksCaptured",

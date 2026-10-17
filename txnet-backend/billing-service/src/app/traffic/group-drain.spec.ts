@@ -94,8 +94,10 @@ describe('planDrain', () => {
 });
 
 describe('GroupDrainService.drainDue', () => {
-  function build(configs: DrainConfig[], opts: { failRetire?: string; evicted?: boolean; orphans?: 'pause' | 'refund'; failOrphan?: string; waiting?: { id: string; tenantId: string }[] } = {}) {
+  function build(configs: DrainConfig[], opts: { failRetire?: string; evicted?: boolean; orphans?: 'pause' | 'refund'; failOrphan?: string; waiting?: { id: string; tenantId: string }[]; memberTenant?: string } = {}) {
     const statements: string[] = [];
+    // Each outbox row with what had been removed when it was written: the removal's own transaction carries it (RT-1-f).
+    const announced: { payload: unknown; afterRemove: boolean }[] = [];
     const retired: string[] = [];
     const crossTenant = {
       $queryRaw: async (sql: TemplateStringsArray) => {
@@ -104,7 +106,7 @@ describe('GroupDrainService.drainDue', () => {
         if (text.includes('"awaitingPanel"')) return opts.waiting ?? [];
         if (text.includes('"drainingSince" +')) {
           const evicted = opts.evicted ?? false;
-          return [{ groupId: 'group-1', panelId: 'panel-d', drainingSince: SINCE, subscriptionTtlSeconds: TTL, evicted,
+          return [{ groupId: 'group-1', panelId: 'panel-d', tenantId: opts.memberTenant ?? null, drainingSince: SINCE, subscriptionTtlSeconds: TTL, evicted,
             evictOrphans: evicted ? (opts.orphans ?? 'pause') : null, evictedBy: evicted ? 'admin-1' : null }];
         }
         return configs;
@@ -115,6 +117,15 @@ describe('GroupDrainService.drainDue', () => {
         // No panel here was deleted in one step: the archive finds none.
         return text.includes('"removeRequestedAt"') ? 0 : 1;
       },
+      tenant: { findFirst: async () => ({ id: 'platform-1' }) },
+      outboxEvent: {
+        create: async ({ data }: { data: { type: string; payload: unknown } }) => {
+          if (data.type !== 'network.panel.drained') throw new Error(`unexpected outbox type ${data.type}`);
+          announced.push({ payload: data.payload, afterRemove: statements.some((t) => t.startsWith('DELETE')) });
+          return {};
+        },
+      },
+      $transaction: async (fn: (t: unknown) => Promise<unknown>) => fn(crossTenant),
     };
     const rows = new Map(configs.map((c) => [c.configId, { id: c.configId, tenantId: c.tenantId, userId: 'u', grantId: c.grantId, panelId: 'panel-d', protocol: 'vless', status: ConfigStatus.active }]));
     const tx = {
@@ -149,7 +160,7 @@ describe('GroupDrainService.drainDue', () => {
         resumed.push(grantId);
       },
     };
-    return { service, statements, retired, orphaned, resumed, tx: tx as unknown as Prisma.TransactionClient };
+    return { service, statements, retired, orphaned, resumed, announced, tx: tx as unknown as Prisma.TransactionClient };
   }
 
   it('retires the due configs, then removes the member only while it is still draining and bare', async () => {
@@ -228,5 +239,21 @@ describe('GroupDrainService.drainDue', () => {
     expect(archive).toContain(`c."status" <> 'retired'`);
     expect(archive).toContain('c."remoteId" IS NOT NULL');
     expect(archive).toContain("interval '1 hour'");
+  });
+
+  it('tells the member\'s tenant\'s open systems page once per pass that retired or removed, in the removal\'s transaction (RT-1-f)', async () => {
+    const removed = build([drainConfig('c1'), drainConfig('c2')], { memberTenant: 'reseller-1' });
+    await removed.service.drainDue();
+    expect(removed.announced).toEqual([{ payload: { tenantId: 'reseller-1', panelId: 'panel-d', groupId: 'group-1' }, afterRemove: true }]);
+
+    // A platform group's member names no tenant: the platform's page hears it.
+    const partial = build([drainConfig('c1', { replacementSince: null }), drainConfig('c2')]);
+    await partial.service.drainDue();
+    expect(partial.announced).toEqual([{ payload: { tenantId: 'platform-1', panelId: 'panel-d', groupId: 'group-1' }, afterRemove: false }]);
+
+    // Nothing moved — every Grant held: the page has nothing to re-read.
+    const held = build([drainConfig('c1', { replacementSince: null })]);
+    await held.service.drainDue();
+    expect(held.announced).toEqual([]);
   });
 });

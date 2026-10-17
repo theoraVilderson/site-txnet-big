@@ -189,6 +189,9 @@ The sweep is `POST /api/internal/billing/network/drain-due`
 (`ServiceOnlyGuard`), asked by the same `grant_group_fulfilment` tick after
 `fulfil-due`, so a replacement is placed before the drain reads. Answer:
 `scanned`, `configsRetired`, `grantsHeld`, `membersRemoved`, `failed`.
+A pass that retired or removed anything of a member writes one
+`network.panel.drained` for the member's tenant (realtime `contract.live-events.md`
+RT-1-f); the open systems page re-reads on it.
 
 ## Not decided here
 

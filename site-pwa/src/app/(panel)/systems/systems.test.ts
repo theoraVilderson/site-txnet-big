@@ -423,8 +423,8 @@ describe("a connection test's answer arrives without a reload (F-027-bs)", () =>
     expect(tenantChannelOf(null)).toBeNull();
   });
 
-  it("re-reads on a panel's test result, health change or halt, and on nothing else the channel carries", () => {
-    // F-027-em: a confirmed health change (ADR-0122) as well as a test result; F-027-fh: a halting drift event.
-    expect([...PANEL_EVENTS].sort()).toEqual(["network.panel.drift_raised", "network.panel.state_changed", "network.panel.tested"]);
+  it("re-reads on a panel's test result, health change, halt or drain progress, and on nothing else the channel carries", () => {
+    // F-027-em: a confirmed health change (ADR-0122) as well as a test result; F-027-fh: a halting drift event; RT-1-f: a drain sweep's progress.
+    expect([...PANEL_EVENTS].sort()).toEqual(["network.panel.drained", "network.panel.drift_raised", "network.panel.state_changed", "network.panel.tested"]);
   });
 });

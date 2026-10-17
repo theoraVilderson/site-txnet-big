@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, EvictOrphans, GrantStatus, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, platformTenantIdOf, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { deleteGrant } from '../entitlement/delete';
 import { ADMIN_FROZEN, freezeGrant, unfreezeGrant } from '../entitlement/freeze';
@@ -109,6 +109,8 @@ const RESUME_BATCH_SIZE = 200;
 type DueMember = {
   groupId: string;
   panelId: string;
+  /** The member's tenant; null for a platform group's. */
+  tenantId: string | null;
   drainingSince: Date;
   subscriptionTtlSeconds: number;
   evicted: boolean;
@@ -168,7 +170,7 @@ export class GroupDrainService {
   async drainDue(): Promise<DrainDueResult> {
     const grantsResumed = await this.resumeWaiting();
     const due = await this.crossTenant.$queryRaw<DueMember[]>`
-      SELECT m."groupId", m."panelId", m."drainingSince", pg."subscriptionTtlSeconds", m."evictedAt" IS NOT NULL AS "evicted",
+      SELECT m."groupId", m."panelId", m."tenantId", m."drainingSince", pg."subscriptionTtlSeconds", m."evictedAt" IS NOT NULL AS "evicted",
              m."evictOrphans", m."evictedBy"
         FROM "network"."panel_group_member" m
         JOIN "network"."panel_group" pg ON pg."id" = m."groupId"
@@ -183,6 +185,7 @@ export class GroupDrainService {
       const plan = planDrain({ drainingSince: member.drainingSince, subscriptionTtlSeconds: member.subscriptionTtlSeconds, evicted: member.evicted, configs }, this.now());
       result.grantsHeld += plan.held.length;
 
+      const retiredBefore = result.configsRetired;
       // An evict's orphans: each Grant's lines go with its pause or refund, in one transaction.
       const orphans = member.evicted && member.evictOrphans ? orphanLines(plan.retire) : new Map<string, DrainConfig[]>();
       let failed = 0;
@@ -209,7 +212,12 @@ export class GroupDrainService {
         }
       }
       result.failed += failed;
-      if (plan.removeMember && failed === 0) result.membersRemoved += await this.removeMember(member);
+      const removed = plan.removeMember && failed === 0 ? await this.removeMember(member) : 0;
+      result.membersRemoved += removed;
+      // The open systems page re-reads once per member per pass (RT-1-f), not once per
+      // config: an evict retires hundreds. A removal carries the row; a pass that only
+      // retired writes it after its retires, each of which was its Grant's own transaction.
+      if (removed === 0 && result.configsRetired > retiredBefore) await announceDrained(this.crossTenant, member);
     }
     result.panelsArchived = await this.archiveRemoved();
     if (result.configsRetired > 0 || result.membersRemoved > 0) {
@@ -292,14 +300,30 @@ export class GroupDrainService {
    * shared-read to `txnet_app`.
    */
   private removeMember(member: DueMember): Promise<number> {
-    return this.crossTenant.$executeRaw`DELETE FROM "network"."panel_group_member" m
+    return this.crossTenant.$transaction(async (tx) => {
+      const removed = await tx.$executeRaw`DELETE FROM "network"."panel_group_member" m
        WHERE m."groupId" = ${member.groupId}::uuid AND m."panelId" = ${member.panelId}::uuid
          AND m."role" = 'drain'
          AND NOT EXISTS (
                SELECT 1 FROM "network"."config" c
                  JOIN "entitlement"."grant" g ON g."id" = c."grantId"
                 WHERE c."panelId" = m."panelId" AND g."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
+      if (removed > 0) await announceDrained(tx, member);
+      return removed;
+    });
   }
+}
+
+/**
+ * A drain sweep moved a member (RT-1-f): the member tenant's open systems page
+ * re-reads its groups — the platform's for a platform group. Body is ids only
+ * (ADR-0121 point 3).
+ */
+async function announceDrained(db: Pick<Prisma.TransactionClient, 'outboxEvent' | 'tenant'>, member: Pick<DueMember, 'groupId' | 'panelId' | 'tenantId'>): Promise<void> {
+  const tenantId = member.tenantId ?? (await platformTenantIdOf(db));
+  await db.outboxEvent.create({
+    data: { aggregate: 'network.panel_group_member', aggregateId: member.panelId, type: OutboxEventType.PANEL_DRAINED, payload: { tenantId, panelId: member.panelId, groupId: member.groupId } },
+  });
 }
 
 /**

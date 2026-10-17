@@ -27,6 +27,8 @@ export const RealtimeEventType = {
   PANEL_STATE_CHANGED: 'network.panel.state_changed',
   /** F-027-fg (ADR-0130): a halting drift event was raised on a panel (`collect.PostgresDriftEvents.Raise`). */
   PANEL_DRIFT_RAISED: 'network.panel.drift_raised',
+  /** RT-1-f: a drain sweep retired configs of a draining group member, or removed it (`GroupDrainService.drainDue`). */
+  PANEL_DRAINED: 'network.panel.drained',
   /** F-111-d: a paid Grant was delivered — `pending` -> `active` (spec §5.8 step 3). */
   GRANT_DELIVERED: 'entitlement.grant.delivered',
   /** F-111-d: a paid Grant could not be delivered — cancelled, its invoice refunded in full. */
@@ -235,6 +237,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ANALYTICS_REPORT]: 'worker-service',
   [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: 'worker-service',
   [OutboxEventType.GRANT_BULK_PROGRESSED]: 'worker-service',
+  [OutboxEventType.PANEL_DRAINED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

@@ -51,6 +51,7 @@ corrected, per "Decide once".
 | `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
 | `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
 | `network.panel.drift_raised` | `tenant:` | network → panel-tested consumer (F-027-fg) | SystemsView (F-027-fh) |
+| `network.panel.drained` | `tenant:` | billing (`GroupDrainService.drainDue`, RT-1-f) → live-push; body `{type, panelId, groupId}` | SystemsView |
 | OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 | `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
@@ -139,12 +140,15 @@ status changed or not; the section's deadline moved. Also written by a
 `renewalGraceDays` edit, once per reseller in grace whose deadline it moved
 (F-019-c4).
 
-**RT-1-f — panel drain and removal.** Type `network.panel.drained`,
-`tenant:`, body `{type, panelId, groupId}`. Written by `GroupDrainService.drainDue`
-(`billing-service/src/app/traffic/group-drain.ts`) when a pass retired at
-least one config or removed the member, in that write's transaction; the
-tenant is the member's. No Go change. SystemsView adds the type to the
-`useLiveReread` it got in RT-1-a.
+**RT-1-f — panel drain and removal** — built 2026-10-17. Type
+`network.panel.drained`, `tenant:`, body `{type, panelId, groupId}`. Written
+by `GroupDrainService.drainDue` (`billing-service/src/app/traffic/group-drain.ts`)
+once per member per pass that retired at least one config or removed it — not
+once per config, since an evict retires hundreds. A removal writes it in the
+removal's transaction; a pass that only retired writes it after its retires,
+each of which is its Grant's own tenant transaction. The tenant is the
+member's, the platform's for a platform group. No Go change. SystemsView
+re-reads panels and groups on it (`PANEL_EVENTS`).
 
 **RT-1-g — support inbox** — built 2026-10-15. Type `support.inbox.changed`,
 `tenant:`, body `{type, conversationId}`, published directly by
