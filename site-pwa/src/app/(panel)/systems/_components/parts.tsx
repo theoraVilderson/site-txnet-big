@@ -4,6 +4,7 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { Loader2, MoreHorizontal, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { waitOf } from "../_lib/panel-groups";
 import { SYSTEMS_KEYS as K, refusalSentence, validateNote, type HolderNames } from "../_lib/systems";
 import { Button, Field, IconButton, Menu, SegmentedControl, Textarea } from "../../_components/kit";
 
@@ -228,4 +229,13 @@ export function NoteForm({
       </div>
     </form>
   );
+}
+
+/** "2 h", "3 days" — a wait as the sweep counts it, never rounded down. */
+export function useWait(): (seconds: number) => string {
+  const { t } = useLocale();
+  return (seconds) => {
+    const { key, n } = waitOf(seconds);
+    return t("common", key, { n: String(n) });
+  };
 }
