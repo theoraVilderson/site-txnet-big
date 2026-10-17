@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
 
+import { TrafficModule } from '../traffic/traffic.module';
+import { GrantGroupMoveController } from './grant-group-move.controller';
+import { GrantGroupMoveService } from './grant-group-move';
 import { PanelCredentialClient } from './panel-credential.client';
 import { InboundAudienceController } from './inbound-audience.controller';
 import { PanelGroupsService } from './panel-groups';
@@ -20,13 +23,16 @@ import { UsageHoldsService } from './usage-holds';
  * observations in the database; nothing here calls `network-service`, which
  * has no route to call (ADR-0071).
  *
- * No imports: `PrismaModule` is `@Global()` and `ConfigModule` is global. A
+ * `TrafficModule` for moving a Grant to another group (F-027-et), which
+ * fulfils it; `PrismaModule` is `@Global()` and `ConfigModule` is global. A
  * panel's login is written through `PanelCredentialClient`, a call to
  * `tenant-service` — this service loads no vault writer (ADR-0039).
  */
 @Module({
-  controllers: [SystemsController, PanelCostController, InboundAudienceController],
+  imports: [TrafficModule],
+  controllers: [SystemsController, PanelCostController, InboundAudienceController, GrantGroupMoveController],
   providers: [
+    GrantGroupMoveService,
     PanelRegistrationService,
     SystemsReadService,
     UsageHoldsService,

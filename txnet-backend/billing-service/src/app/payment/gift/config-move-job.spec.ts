@@ -195,7 +195,7 @@ function build() {
     },
   };
   const service = new ResellerConfigMoveJobService(prisma as never, access);
-  const drainer = new ConfigMoveJobDrainService(prisma as never, crossTenant as never, actions as never, {} as never);
+  const drainer = new ConfigMoveJobDrainService(prisma as never, crossTenant as never, actions as never, {} as never, {} as never);
   return { service, drainer, jobs, items, outbox, moves, throwing, refusing };
 }
 

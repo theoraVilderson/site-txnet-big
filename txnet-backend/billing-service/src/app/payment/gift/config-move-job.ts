@@ -38,19 +38,26 @@ export class ConfigMoveJobRefused extends Error {
   }
 }
 
-/** `source` is the selection a reseller named, or a release's `{panelId, remoteId, groupIds}` (F-027-es). */
+/**
+ * `source` is the selection a reseller named, a release's `{panelId, remoteId,
+ * groupIds}` (F-027-es), or a group move's `{grantIds}` / `{fromGroupId}` (F-027-et).
+ */
 export type ConfigMoveJobView = {
   id: string;
   requestId: string;
   kind: ConfigMoveJobKind;
   source: ConfigMoveSource | Record<string, unknown>;
   toPanelId: string | null;
+  toGroupId: string | null;
   orphans: EvictOrphans | null;
   reason: string;
 } & JobProgress<ConfigMoveJobStatus>;
 
 /** `movedTo` is the new config of a move to a panel; null where the next placement chose (a release). */
 export type ConfigMoveOutcome = { configId: string; ok: true; movedTo: string | null } | { configId: string; ok: false; reason: string };
+
+/** A group move's item is a Grant (F-027-et): named as one, never as a config. */
+export type GrantMoveOutcome = { grantId: string; ok: true } | { grantId: string; ok: false; reason: string };
 
 /** A move job as its page reads it, whichever kind. */
 export const moveJobView = (j: ConfigMoveJob): ConfigMoveJobView => ({
@@ -59,6 +66,7 @@ export const moveJobView = (j: ConfigMoveJob): ConfigMoveJobView => ({
   kind: j.kind,
   source: j.source as ConfigMoveJobView['source'],
   toPanelId: j.toPanelId,
+  toGroupId: j.toGroupId,
   orphans: j.orphans,
   reason: j.reason,
   ...jobProgress(j),
@@ -66,7 +74,7 @@ export const moveJobView = (j: ConfigMoveJob): ConfigMoveJobView => ({
 const view = moveJobView;
 
 /** What a job's audit rows say it was and where it stood: never its configs, which have rows of their own. */
-const auditState = (j: ConfigMoveJob) => ({ source: j.source, toPanelId: j.toPanelId, status: j.status, total: j.total, ok: j.okCount, refused: j.refusedCount, failed: j.failedCount });
+const auditState = (j: ConfigMoveJob) => ({ source: j.source, toPanelId: j.toPanelId, toGroupId: j.toGroupId, status: j.status, total: j.total, ok: j.okCount, refused: j.refusedCount, failed: j.failedCount });
 
 const isDuplicate = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
 
@@ -113,7 +121,7 @@ export class ResellerConfigMoveJobService {
     const { page: p = 1, pageSize = 20 } = page;
     return this.admitted(actor, tenantId, 'read', () =>
       tenantTransaction(this.prisma, async (tx) => {
-        const where = { tenantId };
+        const where = { tenantId, kind: ConfigMoveJobKind.to_panel };
         const [rows, total] = await Promise.all([
           tx.configMoveJob.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (p - 1) * pageSize, take: pageSize }),
           tx.configMoveJob.count({ where }),
@@ -169,9 +177,9 @@ export class ResellerConfigMoveJobService {
     }
   }
 
-  /** The job, only if it is this reseller's: the query says the tenant (C-15), as RLS does. */
+  /** The job, only if it is this reseller's move to a panel: the query says the tenant (C-15), as RLS does. */
   private async find(tx: Prisma.TransactionClient, tenantId: string, jobId: string): Promise<ConfigMoveJob> {
-    const job = await tx.configMoveJob.findFirst({ where: { id: jobId, tenantId } });
+    const job = await tx.configMoveJob.findFirst({ where: { id: jobId, tenantId, kind: ConfigMoveJobKind.to_panel } });
     if (!job) throw new ConfigMoveJobRefused('job_not_found', jobId);
     return job;
   }
@@ -192,7 +200,7 @@ function sameOrReused(prior: ConfigMoveJob, fingerprint: string): ConfigMoveJobV
 }
 
 /**
- * The configs a job has reached, in the order reached, either kind; `problems`
+ * The items a job has reached, in the order reached, any kind; `problems`
  * keeps the refused and failed — "who did not move". No rows once purged.
  */
 export async function jobOutcomes(tx: Prisma.TransactionClient, job: ConfigMoveJob, page: GrantBulkPage) {
@@ -203,7 +211,11 @@ export async function jobOutcomes(tx: Prisma.TransactionClient, job: ConfigMoveJ
     skip: (p - 1) * pageSize,
     take: pageSize,
   });
-  const rows = items.map((i): ConfigMoveOutcome => (i.ok ? { configId: i.configId, ok: true, movedTo: i.movedTo } : { configId: i.configId, ok: false, reason: i.reason ?? CONFIG_MOVE_FAILED }));
+  const rows = items.map((i): ConfigMoveOutcome | GrantMoveOutcome => {
+    const reason = i.reason ?? CONFIG_MOVE_FAILED;
+    if (job.kind === ConfigMoveJobKind.to_group) return i.ok ? { grantId: i.configId, ok: true } : { grantId: i.configId, ok: false, reason };
+    return i.ok ? { configId: i.configId, ok: true, movedTo: i.movedTo } : { configId: i.configId, ok: false, reason };
+  });
   return { rows, page: p, pageSize, purgedAt: job.purgedAt?.toISOString() ?? null };
 }
 

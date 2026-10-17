@@ -1,12 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ActorType, ConfigMoveJob, ConfigMoveJobKind, ConfigMoveJobStatus, ConfigStatus, DesiredRemote, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { auditedConfigAct } from '../../grant-audit/grant-audit';
 import { errorLine } from '../../log-line';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService } from '../../traffic/config-actions';
+import { GrantRegroupActs, GrantRegroupRefused } from '../../traffic/grant-regroup';
 import { applyRelease, InboundReleaseActs, MoveItemRefused } from '../../traffic/inbound-release';
 import { announceProgress, CONFIG_MOVE_BATCH_SIZE, CONFIG_MOVE_FAILED, CONFIG_MOVE_JOB_ATTEMPTS, CONFIG_MOVE_RETENTION_DAYS } from './config-move-job';
 
@@ -20,6 +21,13 @@ type ItemWhere = { jobId: string; configId: string; doneAt: null };
 const PURGE_JOBS_PER_CALL = 5;
 const DAY_MS = 86_400_000;
 
+/** The kinds that release an inbound (F-027-es): their end applies the release. */
+const RELEASE_KINDS: ReadonlySet<ConfigMoveJobKind> = new Set([ConfigMoveJobKind.release_move, ConfigMoveJobKind.release_empty]);
+
+/** A refusal of one item, kept as its outcome at once: the act's own, the job's, a group move's, or the reseller's limit (F-027-et). */
+const refusalOf = (e: unknown): string | null =>
+  e instanceof ConfigActionRefused || e instanceof MoveItemRefused || e instanceof GrantRegroupRefused || e instanceof ResellerLimitReached ? e.reason : null;
+
 /** Thrown inside a move's transaction when another drain already gave the item its outcome: the move rolls back. */
 class ItemAlreadyDone extends Error {}
 
@@ -28,8 +36,9 @@ class ItemAlreadyDone extends Error {}
  * `config_move_job_drain` tick over the internal seam (ADR-0027): at most
  * `CONFIG_MOVE_BATCH_SIZE` pending items, oldest job first, each acted on
  * **in its config's tenant, as the job's admin**, by its kind: a move to a
- * panel (`ConfigActions.move`, audited as the single move), or one of a
- * release's two ways out (`InboundReleaseActs`, F-027-es).
+ * panel (`ConfigActions.move`, audited as the single move), one of a
+ * release's two ways out (`InboundReleaseActs`, F-027-es), or one Grant to
+ * another group (`GrantRegroupActs`, F-027-et; the item is the Grant).
  *
  * **An item's outcome commits with its act**: marking it done is in the act's
  * transaction, conditional on not done, so two drains racing on one item act
@@ -48,6 +57,7 @@ export class ConfigMoveJobDrainService {
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly actions: ConfigActionsService,
     private readonly release: InboundReleaseActs,
+    private readonly regroup: GrantRegroupActs,
   ) {}
 
   async drain(now: Date = new Date()): Promise<ConfigMoveDrainResult> {
@@ -105,7 +115,7 @@ export class ConfigMoveJobDrainService {
       await tx.configMoveJob.update({ where: { id: job.id }, data: { okCount: { increment: counts.okCount }, refusedCount: { increment: counts.refusedCount }, failedCount: { increment: counts.failedCount } } });
       const left = await tx.configMoveJobItem.count({ where: { jobId: job.id, doneAt: null } });
       const ended = left === 0 && (await tx.configMoveJob.updateMany({ where: { id: job.id, status: ConfigMoveJobStatus.running }, data: { status: ConfigMoveJobStatus.done, finishedAt: now } })).count > 0;
-      if (ended && job.kind !== ConfigMoveJobKind.to_panel) await applyRelease(tx, job);
+      if (ended && RELEASE_KINDS.has(job.kind)) await applyRelease(tx, job);
       await announceProgress(tx, job);
       return { moved: counts.okCount, finished: ended };
     });
@@ -117,14 +127,15 @@ export class ConfigMoveJobDrainService {
     const inTenant = <T>(work: (tx: Prisma.TransactionClient) => Promise<T>) => runWithTenant({ id: item.tenantId }, () => tenantTransaction(this.prisma, work));
     try {
       await inTenant(async (tx) => {
-        const movedTo = await this.act(tx, job, item.configId);
+        const movedTo = await this.act(tx, job, item);
         const { count } = await tx.configMoveJobItem.updateMany({ where, data: { attempts: { increment: 1 }, doneAt: now, ok: true, movedTo } });
         if (count === 0) throw new ItemAlreadyDone();
       });
       return 'ok';
     } catch (e) {
       if (e instanceof ItemAlreadyDone) return 'skipped';
-      if (e instanceof ConfigActionRefused || e instanceof MoveItemRefused) return this.mark(inTenant, where, now, e.reason, 'refused');
+      const refused = refusalOf(e);
+      if (refused) return this.mark(inTenant, where, now, refused, 'refused');
       if (item.attempts + 1 < CONFIG_MOVE_JOB_ATTEMPTS) {
         this.logger.warn(`config ${item.configId} of move job ${job.id} threw, tried again next drain: ${errorLine(e)}`);
         await inTenant((tx) => tx.configMoveJobItem.updateMany({ where, data: { attempts: { increment: 1 } } }));
@@ -135,16 +146,29 @@ export class ConfigMoveJobDrainService {
     }
   }
 
-  /** The job's act on one config; answers the new config of a move to a panel, else null. */
-  private act(tx: Prisma.TransactionClient, job: ConfigMoveJob, configId: string): Promise<string | null> {
+  /** The job's act on one item; answers the new config of a move to a panel, else null. */
+  private async act(tx: Prisma.TransactionClient, job: ConfigMoveJob, item: Item): Promise<string | null> {
     switch (job.kind) {
       case ConfigMoveJobKind.to_panel:
-        return this.moveToPanel(tx, job, configId, job.toPanelId ?? '');
+        return this.moveToPanel(tx, job, item.configId, job.toPanelId ?? '');
       case ConfigMoveJobKind.release_move:
-        return this.release.move(tx, job, configId);
+        return this.release.move(tx, job, item.configId);
       case ConfigMoveJobKind.release_empty:
-        return this.release.empty(tx, job, configId);
+        return this.release.empty(tx, job, item.configId);
+      case ConfigMoveJobKind.to_group:
+        await this.regroupOne(tx, job, item);
+        return null;
     }
+  }
+
+  /**
+   * One Grant of a group move (F-027-et). A reseller's job — its own tenant's
+   * Grants — is held to its platform-panel room; the owner's, started in the
+   * platform's tenant over resellers' Grants, is not.
+   */
+  private regroupOne(tx: Prisma.TransactionClient, job: ConfigMoveJob, item: Item) {
+    const actor = { userId: job.actorUserId, ip: job.actorIp };
+    return this.regroup.regroup(tx, { grantId: item.configId, toGroupId: job.toGroupId ?? '', actor, reason: job.reason, bounded: job.tenantId === item.tenantId });
   }
 
   private async moveToPanel(tx: Prisma.TransactionClient, job: ConfigMoveJob, configId: string, toPanelId: string): Promise<string> {

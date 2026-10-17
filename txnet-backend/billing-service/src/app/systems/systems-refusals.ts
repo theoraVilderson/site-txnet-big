@@ -1,5 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
+import { ConfigMoveJobRefused } from '../payment/gift/config-move-job';
+import { moveJobRefusal } from '../payment/gift/reseller-config-move-job.controller';
+import { GRANT_REGROUP_STATUS, GrantRegroupRefused } from '../traffic/grant-regroup';
 import { InboundHeldElsewhere } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
 import { PanelScopeRefused } from './panel-scope';
@@ -43,6 +46,12 @@ export async function refusing<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
+    // A Grant moved to another group, and its job (F-027-et): the reseller surface's statuses.
+    if (e instanceof GrantRegroupRefused) {
+      const Exception = GRANT_REGROUP_STATUS[e.reason] === 404 ? NotFoundException : ConflictException;
+      throw new Exception({ reason: e.reason, message: e.message });
+    }
+    if (e instanceof ConfigMoveJobRefused) throw moveJobRefusal(e);
     if (e instanceof SystemsRefused) {
       if (e instanceof PanelAlreadyRegistered) {
         throw new ConflictException({ reason: e.reason, message: e.message, facts: e.panel ? { panelId: e.panel.id } : undefined });

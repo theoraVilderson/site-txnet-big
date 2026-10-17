@@ -20,7 +20,7 @@ the key decides only for the tenant's own members.
 | `grant.read` | a user's Grants, a Grant's configs, its 30-day usage, its `/sub` link, its history; the search by a pasted line (`grants/by-lines`) | `ResellerUserGrantsService`: `grants`, `configs`, `usage`, `subscriptionLink`, `history`, `findByLines` |
 | `grant.repair` | a new `/sub` link (`rotate-token`); config actions `regenerate`, `disable`, `enable`, `move`, and the move targets | `rotateLink`, `act` (not `retire`), `moveTargets` |
 | `grant.compensate` | days or traffic onto a user's Grant, within the tenant's cap (below); reading that cap | `compensate`; `GrantLimitsService.compensationCap` (or `grant.assign`) |
-| `grant.assign` | everything else: config `retire` (a retired config is not given back), freeze, unfreeze, days, traffic, reset, gift, speed, devices, delete, issue, renew, the users catalog, bulk work and jobs, the issuing caps | the rest of the service, `GrantBulkJob`, `GrantLimitsService` (setting the compensation cap included) |
+| `grant.assign` | everything else: config `retire` (a retired config is not given back), freeze, unfreeze, days, traffic, reset, gift, speed, devices, delete, issue, renew, a move to another group (F-027-et), the users catalog, bulk work and jobs, the issuing caps | the rest of the service, `GrantBulkJob`, `GrantLimitsService` (setting the compensation cap included) |
 
 Rules:
 

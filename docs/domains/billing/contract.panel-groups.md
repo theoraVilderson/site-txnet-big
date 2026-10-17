@@ -31,6 +31,7 @@ desired state; nothing calls `network-service` (ADR-0071).
 | `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` | `{audience: 'every_group'}` or `{audience: 'listed', groups: [groupId]}` (≤100, each once, each a member of the panel; `[]` = nobody); `.strict()` | `200 {panelId, remoteId, audience, groups}` | 400; 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `inbound_not_sellable` (listing a gone or unsold-protocol one), `inbound_has_configs` `facts: {remoteId, groupId, configs, groups}` (rule 24g) |
 | `POST /api/billing/systems/panels/:id/inbounds/:remoteId/release` | `{requestId, groups: [groupId] (1–100, each once), mode: 'move' \| 'empty', orphans?: 'pause' \| 'refund' (an empty's, required there), reason}`; `.strict()` | **202** the job (rule 24g) | 400 (`selection_too_large` too); 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `not_a_seller` / `already_releasing` / `request_reused` |
 | `GET …/systems/inbound-releases/:jobId`, `…/:jobId/outcomes?page&pageSize&problems`, `POST …/:jobId/cancel` | — | the job (`kind`, `source`, `orphans`, counts) / its outcomes / the job, `cancelled` | 403; 404 `job_not_found` |
+| `POST /api/billing/systems/grants/:grantId/group`, `…/systems/grant-group-moves` (`/count`, `/:jobId`, `/outcomes`, `/cancel`) | `{toGroupId, reason}`; a job `{requestId, source: {grantIds} \| {fromGroupId}, toGroupId, reason}` | one: `200 {grantId, fromGroupId, toGroupId, kept, moved}`; a job: **202** (rule 24h) | 403; 404 `grant_not_found` / `group_not_found` / `job_not_found`; 409 the Grant's or target's state, `request_reused`; 422 `selection_empty` / `selection_too_large` |
 | `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds/:remoteId/share` | `{maxClients: 1–1000000 \| null}`; `.strict()` | `200 {groupId, panelId, remoteId, maxClients}` | 400; 403; 404 `not_found` / `listing_not_found` (rule 24f) |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
 | `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
@@ -105,5 +106,11 @@ desired state; nothing calls `network-service` (ADR-0071).
     progress event (network [contract.config-move.md](../network/contract.config-move.md)). The
     listing changes when the job ends; a cancel leaves it. The job is the actor's tenant's
     (`InboundReleaseService`, on `InboundAudienceController`); `inbound-release.spec.ts` pins it.
+
+24h. **A Grant moves to another group, the owner's choice** (F-027-et, ADR-0127 decision 5). Any
+    group, any tenant's Grant: only `panelGroupId` changes; a config the target also sells
+    there keeps its link, the rest are placed by the target's fulfilment; a target that cannot
+    deliver or is full refuses that Grant. One now, or many as a `to_group` move job — network
+    [contract.config-move.md](../network/contract.config-move.md) (`GrantGroupMoveController`).
 
 `panel-groups.spec.ts` pins rules 20–24e; `member-inbounds.spec.ts` 24c and 24f.

@@ -83,6 +83,20 @@ export async function auditedGrantAct<T>(
 /** The acts that freeze, lift or re-mode a Grant: its owner's My services re-reads on each (C-14, F-0401-d). */
 const FREEZE_ACTIONS: ReadonlySet<GrantAuditAction> = new Set(['grant_freeze', 'grant_unfreeze', 'grant_freeze_mode_set']);
 
+/**
+ * A Grant moved to another panel group (F-027-et), written down against the
+ * Grant: its group before and after, what was kept and moved as the outcome.
+ * No notice of its own — each config moved tells the user (`config_move`),
+ * and a config kept changes nothing they see.
+ */
+export async function auditedGrantRegroup<T>(tx: Prisma.TransactionClient, actor: AuditActor, tenantId: string, grantId: string, reason: string | null, act: () => Promise<T>): Promise<T> {
+  const before = await tx.grant.findUnique({ where: { id: grantId }, select: { panelGroupId: true } });
+  const result = await act();
+  const after = await tx.grant.findUnique({ where: { id: grantId }, select: { panelGroupId: true } });
+  await write(tx, actor, tenantId, 'grant_group_move', AuditTargetType.grant, grantId, before, { ...after, outcome: result }, reason);
+  return result;
+}
+
 /** One config's act (F-311-g), written down against the config; a move's new config is its outcome. */
 export async function auditedConfigAct<T extends string | void>(
   tx: Prisma.TransactionClient,

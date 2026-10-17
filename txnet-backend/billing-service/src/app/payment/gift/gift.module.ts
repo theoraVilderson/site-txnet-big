@@ -22,6 +22,8 @@ import { ResellerUsersCatalogController } from './reseller-users-catalog.control
 import { GrantLimitsController } from './grant-limits.controller';
 import { GrantLimitsService } from './grant-limits.service';
 import { ResellerGrantFreezeController } from './reseller-grant-freeze.controller';
+import { ResellerGrantGroupMoveService } from './reseller-grant-group-move';
+import { ResellerGrantGroupMoveController, ResellerGrantRegroupController } from './reseller-grant-group-move.controller';
 import { ResellerUserGrantsController } from './reseller-user-grants.controller';
 import { ResellerUserGrantsService } from './reseller-user-grants.service';
 import { SubscriptionLinkService } from './subscription-link.service';
@@ -42,8 +44,8 @@ import { SubscriptionLinkService } from './subscription-link.service';
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule, UsageModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, OwnFreezeController, ResellerUserGrantsController, ResellerGrantFreezeController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerConfigMoveJobController, ConfigMoveJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
-  providers: [OwnFreezeService, GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerConfigMoveJobService, ConfigMoveJobDrainService, ResellerAccess],
+  controllers: [GiftController, GrantTokenController, GrantListController, OwnFreezeController, ResellerUserGrantsController, ResellerGrantFreezeController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerConfigMoveJobController, ResellerGrantGroupMoveController, ResellerGrantRegroupController, ConfigMoveJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
+  providers: [OwnFreezeService, GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerConfigMoveJobService, ResellerGrantGroupMoveService, ConfigMoveJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
 export class GiftModule {}

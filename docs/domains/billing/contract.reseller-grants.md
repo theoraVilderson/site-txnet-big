@@ -30,6 +30,7 @@ which asks the four owner reads of [contract.gift.md](contract.gift.md) — `Gra
 | `GET …/grants/:grantId/subscription-link` | — | `{grantId, subscriptionUrl}`; its two 409s as there |
 | `GET …/configs/move-targets` (F-311-v1) | — | `{panels[{id, name, region, own}]}`: shared or this reseller's own, accepted by review, not retired — a subset of what a move accepts. `network.panel` has no RLS, so the path's tenant is in the filter; no address or credential |
 | `POST /api/billing/tenants/:tenantId/configs/move-jobs` (F-311-ad; not under one user) | `{requestId, source: {panelId} \| {userIds}, toPanelId, reason}` | **202** a job moving every live config there to the target, in batches by the worker — network [contract.config-move.md](../network/contract.config-move.md) |
+| `POST …/users/:userId/grants/:grantId/group`; `…/tenants/:tenantId/grant-group-moves` (F-027-et) | `{toGroupId, reason}`; a job `{requestId, source: {grantIds} \| {fromGroupId}, toGroupId, reason}` | a Grant to a group the tenant sells, now or as a job — network [contract.config-move.md](../network/contract.config-move.md) |
 | `GET …/grants/:grantId/history` (F-311-r) | `page`, `pageSize` (≤100, default 20) | `{grantId, rows[], page, pageSize, total}` — audit `contract.md` "a Grant's history" |
 
 | Rule | Why |

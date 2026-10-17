@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ActorType, ConfigMoveJob, ConfigStatus, DesiredRemote, EvictOrphans, GrantStatus, InboundAudience, Prisma } from '@prisma/client';
+import { ActorType, ConfigMoveJob, EvictOrphans, GrantStatus, InboundAudience, Prisma } from '@prisma/client';
 
 import { auditedConfigAct } from '../grant-audit/grant-audit';
 import { ConfigActionsService } from './config-actions';
 import { GroupDrainService } from './group-drain';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from './group-fulfilment';
+import { LIVE_CONFIG } from './group-plan';
 
 /** What a release job names (F-027-es): one inbound of one panel, and the groups that stop selling it. */
 export type ReleaseSource = { panelId: string; remoteId: string; groupIds: string[] };
@@ -16,9 +17,6 @@ export class MoveItemRefused extends Error {
     this.name = 'MoveItemRefused';
   }
 }
-
-/** A config fulfilment and `/sub` still count: placed, not retired, not emptied by the platform. */
-const LIVE_CONFIG = { status: { not: ConfigStatus.retired }, desiredRemote: DesiredRemote.present, drainedAt: null } satisfies Prisma.ConfigWhereInput;
 
 /**
  * The live configs of the released groups' Grants on the inbound, as one

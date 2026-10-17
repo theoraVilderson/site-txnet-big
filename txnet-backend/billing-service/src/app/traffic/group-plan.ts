@@ -1,4 +1,4 @@
-import { ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState } from '@prisma/client';
+import { ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 
 import { InboundPlacementTarget } from './config-actions';
 import { hrwPick } from './hrw';
@@ -43,6 +43,9 @@ type PanelFacts = {
 };
 
 export type MemberFacts = { panelId: string; role: PanelGroupMemberRole; panel: PanelFacts };
+
+/** A config fulfilment and `/sub` still count: placed, not retired, not emptied by the platform. */
+export const LIVE_CONFIG = { status: { not: ConfigStatus.retired }, desiredRemote: DesiredRemote.present, drainedAt: null } satisfies Prisma.ConfigWhereInput;
 
 type SellingLayer = { inboundPlacement?: InboundPlacement | null; maxClients?: number | null; inboundsPerBuyer?: number | null };
 
@@ -102,6 +105,13 @@ const under = (cap: number | null, count: number) => cap === null || count < cap
 const hasRoom = (i: InboundFacts) => under(i.maxClients, i.clients) && under(i.share, i.groupClients);
 /** The panel takes no new user at either cap: its own over every Grant, the member's over the group's (F-027-eq). */
 const panelFull = (p: PanelFacts) => !under(p.maxClients, p.users) || !under(p.groupMaxClients, p.groupUsers);
+
+/**
+ * A Grant joining this group with a config already on the panel (F-027-et)
+ * takes one of the group's own seats there: its member cap over the group's
+ * Grants and, on a listed inbound, its share. The physical caps already count it.
+ */
+export const groupHasRoom = (p: PanelFacts, i: InboundFacts | null) => under(p.groupMaxClients, p.groupUsers) && (i === null || under(i.share, i.groupClients));
 
 /**
  * The inbounds one member owes this Grant now (network `contract.inbounds.md`).

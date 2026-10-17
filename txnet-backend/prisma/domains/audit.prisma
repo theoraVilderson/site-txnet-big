@@ -219,6 +219,9 @@ enum AdminAction {
   gateway_manual_destination_create
   gateway_manual_destination_update
   gateway_manual_destination_delete
+  // F-027-et (ADR-0127 decision 5). A Grant moved to another panel group:
+  // `oldValue`/`newValue` {panelGroupId}, `newValue.outcome` {kept, moved}.
+  grant_group_move
 
   @@schema("audit")
 }

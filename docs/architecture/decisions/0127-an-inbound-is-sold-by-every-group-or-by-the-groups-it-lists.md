@@ -6,7 +6,7 @@ updated: 2026-10-17
 
 # ADR 0127 — an inbound is sold by every group, or by the groups it lists
 
-- **Status:** accepted (rows F-027-ep..F-027-ev; decisions 1-2 and 4 built 2026-10-17, F-027-ep and F-027-er; decision 3 built 2026-10-17, F-027-eq; decision 6 built 2026-10-17, F-027-es)
+- **Status:** accepted (rows F-027-ep..F-027-ev; decisions 1-2 and 4 built 2026-10-17, F-027-ep and F-027-er; decision 3 built 2026-10-17, F-027-eq; decision 6 built 2026-10-17, F-027-es; decision 5 built 2026-10-17, F-027-et)
 - **Date:** 2026-10-06
 - **Affects units:** billing (systems routes, group fulfilment, drain), entitlement (Grant), network (`panel_inbound` schema), panel-web (systems page, users)
 - **Decision row:** D-64 (the agent's recommendations, accepted by the user)
@@ -62,7 +62,10 @@ shared inbound changes who may be **placed** on it, not how traffic is counted.
 5. **Moving a Grant to another group** changes `panelGroupId` only: money,
    quota and end date stay as they are. A config on an inbound the target group
    also sells on that panel stays where it is: same client, same link, no write
-   to the panel. Every other config is moved by `ConfigActions.move`. A target
+   to the panel. Every other config is moved (built, F-027-et: drained, then
+   placed by the target's fulfilment in the same transaction — as a release's
+   `move` — since `ConfigActions.move` names a panel, not the target's inbound
+   picks and shares). A target
    that cannot deliver (F-111-i) or whose share is full refuses that Grant, with
    the reason. Single, or bulk as a move job.
 6. **Releasing an inbound is the admin's choice, never a side effect.**

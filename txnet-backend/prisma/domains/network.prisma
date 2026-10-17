@@ -1200,6 +1200,8 @@ enum ConfigMoveJobKind {
   to_panel
   release_move
   release_empty
+  /// F-027-et: Grants to another panel group; an item's `configId` is a Grant's id.
+  to_group
 
   @@schema("network")
 }
@@ -1228,10 +1230,13 @@ model ConfigMoveJob {
   reason       String
   kind         ConfigMoveJobKind   @default(to_panel)
   /// What the admin named: `{panelId}` (its live configs there) or `{userIds}`;
-  /// for a release, `{panelId, remoteId, groupIds}` (F-027-es).
+  /// for a release, `{panelId, remoteId, groupIds}` (F-027-es); for a group
+  /// move, `{grantIds}` or `{fromGroupId}` (F-027-et).
   source       Json
   /// The target of a `to_panel` job; null for a release.
   toPanelId    String?             @db.Uuid
+  /// The target of a `to_group` job (F-027-et); null for every other kind.
+  toGroupId    String?             @db.Uuid
   /// A `release_empty` job's choice for a Grant left with no line (F-027-eg's).
   orphans      EvictOrphans?
   status       ConfigMoveJobStatus @default(running)
@@ -1254,7 +1259,7 @@ model ConfigMoveJob {
   @@schema("network")
 }
 
-/// One config of a `ConfigMoveJob`. `doneAt` is set with its outcome, in the
+/// One config of a `ConfigMoveJob` — of a `to_group` job, one Grant (`configId` holds its id). `doneAt` is set with its outcome, in the
 /// move's own transaction when it moved: `ok` and the new config `movedTo`, or
 /// the refusal's `reason`, or `failed` after the last attempt.
 model ConfigMoveJobItem {

@@ -35,7 +35,8 @@ const STATUS: Record<ConfigMoveJobRejection, 404 | 409 | 422> = {
   panel_not_found: 404,
 };
 
-function refusal(e: unknown): unknown {
+/** A move job's refusal, or the reseller door's, as HTTP; anything else unchanged (shared with the group move, F-027-et). */
+export function moveJobRefusal(e: unknown): unknown {
   if (e instanceof ResellerUserGrantsRefused) return resellerRefusal(e);
   if (!(e instanceof ConfigMoveJobRefused)) return e;
   const Exception: new (p: object) => HttpException = { 404: NotFoundException, 409: ConflictException, 422: UnprocessableEntityException }[STATUS[e.reason]];
@@ -66,7 +67,7 @@ export class ResellerConfigMoveJobController extends ResellerJobRoutes {
   }
 
   protected refusal(e: unknown): unknown {
-    return refusal(e);
+    return moveJobRefusal(e);
   }
 
   @Post('count')

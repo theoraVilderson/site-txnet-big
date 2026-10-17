@@ -6,7 +6,7 @@ version: 2
 updated: 2026-10-17
 ---
 
-# Moving many configs as a job (F-311-ad), and releasing an inbound (F-027-es)
+# Moving many configs as a job (F-311-ad), releasing an inbound (F-027-es), and Grants to another group (F-027-et)
 
 A topic file of `contract.md` (§10), beside [contract.provisioning.md](contract.provisioning.md),
 whose `ConfigActions.move` is the one act every move here runs. A reseller's
@@ -93,3 +93,31 @@ groupIds}`, `toPanelId` null, `orphans` an `empty`'s (CHECK
 | Each act is audited on its config with the job's reason, in the config's tenant (`config_move` / `config_retire`); the job's start and cancel as above; progress by the same event to the job's tenant | one config's history reads the same whoever moved it |
 
 `inbound-release.spec.ts` pins these.
+
+## Moving Grants to another group (F-027-et)
+
+ADR-0127 decision 5. **Only `grant.panelGroupId` changes**: money, quota and end
+stay. The act is `GrantRegroupActs.regroup` (`traffic/grant-regroup.ts`), one
+Grant in its tenant's transaction; many are a job of this table, `kind`
+`to_group`, `toGroupId` the target, `source` `{grantIds}` (1–500) or
+`{fromGroupId}` — and **an item names a Grant** (`configId` holds its id);
+outcomes answer `{grantId, ok, reason?}` (migration `20261017000600_a_grant_moves_to_another_group`).
+
+| Route (`{toGroupId, reason}` one; `{requestId, source, toGroupId, reason}` a job) | Who |
+|---|---|
+| `POST /api/billing/systems/grants/:grantId/group`, `…/systems/grant-group-moves` + `/count`, `/:jobId`, `/:jobId/outcomes`, `/:jobId/cancel` | the owner (`panelScopeOf`): any tenant's Grants, any group; never bounded |
+| `POST /api/billing/tenants/:tenantId/users/:userId/grants/:grantId/group`, `…/tenants/:tenantId/grant-group-moves` + `/count`, and `ResellerJobRoutes`' four | a reseller's admin, `grant.assign`: its own Grants, into **a group its tenant sells** (a variant of its catalog for sale names it), else 404 `group_not_found` |
+
+One answers `{grantId, fromGroupId, toGroupId, kept, moved}`; `count` answers
+`{grants, keep, move}` — configs that keep their link and that get a new one.
+
+| Rule | Why |
+|---|---|
+| **A config on an inbound the target sells on that panel stays** — a non-`drain` member, the inbound listed to it or `every_group`, not being released; a row with no inbound, on any member. Same client, same link | the point of a shared inbound: users moved between groups keep their line |
+| Every other live config is drained, audited `config_move` with the reason (the user told), and the target's fulfilment places the Grant **in the same transaction**, under its panels' locks, against every cap | moved, never cut off; nobody takes a seat twice |
+| Refused before any write: no group or not `pending`/`active` (`grant_not_movable`), `same_group`, a group it may not use (`group_not_for_grant`: not the platform's or its tenant's), one that cannot deliver a sale (`target_not_deliverable`, F-111-i), or a kept config over the target's share or member cap (`target_full`, F-027-eq). 404 `grant_not_found` / `group_not_found`, the rest 409 | the move is the target's to carry or not |
+| A Grant that held a line and would be left with none is `no_target`, and the whole move rolls back | the target's panels cannot place it now; it stays serving where it was |
+| A reseller's own people (a reseller's job, or `as !== 'staff'`) spend its `platform_open_grants_max` / month's traffic room only when the move takes the Grant onto a platform panel it was not on (`reseller_limit_reached`) | ADR-0106: one more Grant on the platform's panels |
+| Written down against the Grant, `grant_group_move` (`{panelGroupId}` before and after, `{kept, moved}`), no notice of its own; a job's start and cancel as above; its list is `to_group` jobs only, as a move job's is `to_panel` only | "who put this user on that group" is one row |
+
+`grant-regroup.spec.ts` pins the act; the selection is `grant-regroup-selection.ts`.

@@ -183,6 +183,16 @@ export class GroupFulfilmentService {
   }
 
   /**
+   * A group's members as fulfilment reads them, with their load and under the
+   * same panel locks (`withLoad`): where a Grant moved into it from another
+   * group may keep a config, and whether the group has a seat for it (F-027-et).
+   */
+  async membersOf(tx: Prisma.TransactionClient, groupId: string): Promise<MemberFacts[]> {
+    const members = await tx.panelGroupMember.findMany({ where: { groupId }, select: MEMBER_FIELDS });
+    return this.withLoad(tx, groupId, members);
+  }
+
+  /**
    * Each member's picked inbounds with how full they are (`contract.inbounds.md`
    * rule 5): every config and Grant, and `groupId`'s own among them, for the
    * group's shares (F-027-eq). The count is every tenant's, so it is read on the cross-tenant
