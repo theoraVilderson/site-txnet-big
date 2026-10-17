@@ -29,15 +29,19 @@ const WINDOWS = [
   { key: D.revenue.month, from: (now: Date) => new Date(now.getTime() - 30 * DAY_MS) },
 ] as const;
 
-/** One labelled figure of the platform's two (UX-1-r3): users, then resellers. */
+/**
+ * One labelled figure of the platform's two (UX-1-r3): users, then resellers.
+ * The label sits above the amount, never beside it — beside it, a phone's
+ * third of a card left the amount a few pixels and it truncated to "$ 6…".
+ */
 function Line({ label, amount }: { label: string; amount: string }) {
   return (
-    <dd className="mt-1 flex items-baseline justify-between gap-2">
-      <span className="text-2xs text-text-secondary">{label}</span>
-      <span className="truncate text-sm font-black tabular-nums text-text-primary" dir="ltr">
+    <div className="min-w-0 @md:mt-2">
+      <span className="block text-2xs text-text-secondary">{label}</span>
+      <span className="inline-block whitespace-nowrap text-sm font-black tabular-nums text-text-primary" dir="ltr">
         {amount}
       </span>
-    </dd>
+    </div>
   );
 }
 
@@ -95,26 +99,34 @@ export default function RevenueWidget() {
     <WidgetBody source={source}>
       {(answers) => (
         <>
-          <dl className="grid grid-cols-3 gap-3">
-            {answers.map((a, i) => (
-              <div key={WINDOWS[i].key} className="min-w-0 rounded-2xl bg-bg-inner p-3">
-                <dt className="text-xs text-text-secondary">{t("common", WINDOWS[i].key)}</dt>
-                {a.fromResellers ? (
-                  <>
-                    <Line label={t("common", D.revenue.fromUsers)} amount={show(a.sales.total, a.currencyCode)} />
-                    <Line label={t("common", D.revenue.fromResellers)} amount={show(a.fromResellers.charged.total, a.currencyCode)} />
-                  </>
-                ) : (
-                  <>
-                    <dd className="mt-1 truncate text-lg font-black tabular-nums text-text-primary" dir="ltr">
-                      {show(a.sales.total, a.currencyCode)}
+          {/* By the card's own width, not the screen's (a narrow grid column on a
+              desktop is the same problem): a row per window until there is room
+              for three columns side by side. */}
+          <div className="@container">
+            <dl className="grid grid-cols-1 gap-2 @md:grid-cols-3 @md:gap-3">
+              {answers.map((a, i) => (
+                <div
+                  key={WINDOWS[i].key}
+                  className="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-bg-inner p-3 @md:block"
+                >
+                  <dt className="text-xs text-text-secondary">{t("common", WINDOWS[i].key)}</dt>
+                  {a.fromResellers ? (
+                    <dd className="flex gap-4 text-end @md:block @md:text-start">
+                      <Line label={t("common", D.revenue.fromUsers)} amount={show(a.sales.total, a.currencyCode)} />
+                      <Line label={t("common", D.revenue.fromResellers)} amount={show(a.fromResellers.charged.total, a.currencyCode)} />
                     </dd>
-                    <dd className="text-2xs text-text-secondary">{t("common", D.revenue.sales, { count: a.sales.count })}</dd>
-                  </>
-                )}
-              </div>
-            ))}
-          </dl>
+                  ) : (
+                    <dd className="min-w-0 text-end @md:mt-1 @md:text-start">
+                      <span className="inline-block whitespace-nowrap text-lg font-black tabular-nums text-text-primary" dir="ltr">
+                        {show(a.sales.total, a.currencyCode)}
+                      </span>
+                      <span className="block text-2xs text-text-secondary">{t("common", D.revenue.sales, { count: a.sales.count })}</span>
+                    </dd>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </div>
           {canAnalyse && (
             <div className="flex flex-wrap items-end justify-between gap-2">
               {trend && (
