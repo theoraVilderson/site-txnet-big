@@ -9,6 +9,10 @@
  *  - **an LTV that is not cumulative,** or a channel's curve that averages in
  *    cohorts too young to have reached month k, which drags it down the
  *    further right it goes;
+ *  - **a tail drawn from one or two old cohorts.** Late months pool fewer
+ *    cohorts, so a curve that is cumulative per point still falls to the
+ *    right; a point from under 3 of the channel's cohorts (and not all of
+ *    them) is left out;
  *  - **two currencies added.** Each is its own figure (principle 6);
  *  - **a small cohort shown to the platform's staff.** Under 5 people it is
  *    hidden, as every other cell is (ADR-0104 (3)).
@@ -17,7 +21,7 @@ import { Prisma } from '@prisma/client';
 
 import { CohortInput, cohortGridOf } from './analytics-cohort-grid';
 
-const [SEP, OCT, NOV] = ['2026-09-01', '2026-10-01', '2026-11-01'];
+const [JUN, JUL, AUG, SEP, OCT, NOV] = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01'];
 const d = (v: string) => new Prisma.Decimal(v);
 
 const input = (over: Partial<CohortInput> = {}): CohortInput => ({
@@ -65,11 +69,27 @@ describe('cohortGridOf', () => {
       { source: 'telegram', users: 4 },
     ]);
     expect(channelLtv).toEqual([
+      // web at k 1 pools September alone, one of its two cohorts: left out.
       { source: 'web', k: 0, ltv: { USD: '10.00' } },
-      { source: 'web', k: 1, ltv: { USD: '16.67' } },
       { source: 'telegram', k: 0, ltv: { USD: '10.00' } },
       { source: 'telegram', k: 1, ltv: { USD: '10.00' } },
     ]);
+  });
+
+  it("leaves out a channel's point pooled from under 3 of its cohorts, never its first months", () => {
+    // Five monthly cohorts of 5 web buyers, each paying 10 in its first month only.
+    const months = [JUN, JUL, AUG, SEP, OCT];
+    const { channelLtv } = cohortGridOf(
+      {
+        months,
+        sizes: months.map((cohort) => ({ cohort, source: 'web', users: 5 })),
+        active: months.map((cohort) => ({ cohort, month: cohort, source: 'web', users: 5 })),
+        net: months.map((cohort) => ({ cohort, month: cohort, source: 'web', currencyCode: 'USD', net: d('50') })),
+      },
+      how,
+    );
+    // k 0..2 pool 5, 4 and 3 cohorts; k 3 and 4 only 2 and 1 — the tail that would mislead.
+    expect(channelLtv.map((p) => p.k)).toEqual([0, 1, 2]);
   });
 
   it('keeps each currency its own figure', () => {

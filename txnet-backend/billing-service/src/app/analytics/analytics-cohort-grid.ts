@@ -29,6 +29,13 @@ export type ChannelSize = { source: string; users: number } | { source: string; 
 export type ChannelPoint = { source: string; k: number; ltv: Amounts };
 export type CohortGrid = { cohorts: CohortSize[]; cells: CohortCell[]; channels: ChannelSize[]; channelLtv: ChannelPoint[] };
 
+/**
+ * The fewest of a channel's cohorts a curve point is pooled from, unless it is
+ * all of them: the late months pool only the oldest cohorts, and a point from
+ * one or two of them can fall below its left neighbour though the LTV is
+ * cumulative (user, 2026-10-17).
+ */
+export const CHANNEL_POINT_MIN_COHORTS = 3;
 /** A share is answered to four places, as a delta is. */
 const SHARE_PLACES = 4;
 /** Money per member to the cent, as every amount. */
@@ -60,9 +67,11 @@ export function cohortGridOf(input: CohortInput, how: { currencies: readonly str
 
   const sources = [...new Set(input.sizes.map((s) => s.source))].sort();
   const channels = sources.map((source) => {
+    const own = cohortKeys.filter((c) => input.sizes.some((s) => s.cohort === c && s.source === source && s.users > 0));
     const ltv = input.months.map((_, k) => {
       // Only the cohorts that have lived k months count towards month k.
-      const old = cohortKeys.filter((c) => (index.get(c) ?? 0) + k <= last);
+      const old = own.filter((c) => (index.get(c) ?? 0) + k <= last);
+      if (old.length < Math.min(CHANNEL_POINT_MIN_COHORTS, own.length)) return null;
       const users = sizeOf((s) => s.source === source && old.includes(s.cohort));
       if (users === 0) return null;
       const sums = byCurrency(input.net.filter((r) => r.source === source && old.includes(r.cohort) && kOf(r.cohort, r.month) <= k), (r) => r.net);

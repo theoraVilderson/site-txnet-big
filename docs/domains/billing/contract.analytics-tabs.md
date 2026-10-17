@@ -212,7 +212,9 @@ first day) and four flat lists, so the export writes each as a block:
    `ltv` the running sum of `netPerUser`. Money per currency (principle 6).
 3. **A channel's curve pools only cohorts old enough**: month k sums the
    cohorts that have lived k months, over their members — a young cohort
-   never drags a late month down.
+   never drags a late month down. A point pooled from fewer than 3 of the
+   channel's cohorts, and not all of them, is left out: a tail of one or two
+   old cohorts falls below its neighbour (user, 2026-10-17).
 4. **The channel** is `analytics_signup.source` (ADR-0149 (5)); a member with
    no signup row reads `unknown`.
 5. **Tier A.** To the platform's staff on a reseller, a cohort or a channel
