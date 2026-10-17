@@ -20,6 +20,9 @@ import { ProfitTab } from "./_components/ProfitTab";
  *  - **a figure where billing hid one.** A row under 5 buyers reads "fewer
  *    than 5"; no user list is drawn where billing answers none;
  *  - **a margin rate from nothing.** No net is a dash, not 0% or -100%;
+ *  - **a product with no cost read as 100% margin** (F-1002-h, ADR-0151). It
+ *    says "no cost set" in its row, and a notice names it with a link to the
+ *    catalog where it is set; an answer cached before the field existed draws;
  *  - **a stale platform view.** Its per-reseller block moves with any
  *    reseller's pass, so it re-reads on that event too.
  */
@@ -79,6 +82,7 @@ const draw = (body: Partial<AnalyticsMargin> = {}, setting: { tenantId: string; 
       productName={(id) => (id === "p1" ? "Gold plan" : null)}
       panelName={(id) => (id === PANEL ? "Frankfurt" : null)}
       userHref={(id) => `/users/${id}`}
+      catalogHref="/catalog"
       setting={setting}
       stale={false}
     />,
@@ -119,6 +123,25 @@ describe("ProfitTab", () => {
     expect(screen.getAllByRole("link", { name: "Sara" })[0].getAttribute("href")).toBe(`/users/${USER}`);
     draw({ users: null, noCostPanels: null });
     expect(screen.getAllByRole("table", { name: "analytics.profit.users" })).toHaveLength(1);
+  });
+});
+
+describe("ProfitTab, a product with no cost (F-1002-h)", () => {
+  const priced = { ...cell("p1", "100.00", "30.00", "70.00", 0.7, false), noCost: false };
+  const unpriced = { ...cell("p3", "40.00", "0.00", "40.00", 1, false), noCost: true };
+
+  it("says no cost set in its row, its rate a dash, and names it in a notice that links to the catalog", () => {
+    draw({ products: [priced, unpriced], noCostProducts: ["p3"] });
+    const products = screen.getByRole("table", { name: "analytics.profit.products" });
+    expect(within(products).getAllByText("analytics.profit.noCostSet").length).toBeGreaterThan(0);
+    const alert = screen.getByText(/analytics\.profit\.noCostProducts\.title/).closest("[role=alert], [role=status]") as HTMLElement;
+    expect(within(alert).getByRole("link").getAttribute("href")).toBe("/catalog");
+  });
+
+  it("draws an answer cached before the field existed, with no notice", () => {
+    const { noCostProducts: _gone, ...old } = { ...margin, noCostProducts: [] };
+    draw(old);
+    expect(screen.queryByText(/analytics\.profit\.noCostProducts\.title/)).toBeNull();
   });
 });
 

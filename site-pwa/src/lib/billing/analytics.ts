@@ -159,6 +159,8 @@ export interface MarginCell {
   /** Margin ÷ net; null where nothing was sold. */
   marginRate: number | null;
   loss: boolean;
+  /** It sold and no cost row names it (F-1002-f): its margin is not a margin. Absent in an answer cached before it existed. */
+  noCost?: boolean;
 }
 
 /** The Profit tab (billing `margin`, F-1001-l; cost in the sale's currency, ADR-0149). */
@@ -175,6 +177,8 @@ export interface AnalyticsMargin {
   resellers: (MarginCell & { name: string })[] | null;
   /** The platform's own only: its panels in use with no monthly cost set. */
   noCostPanels: string[] | null;
+  /** Products sold in the window with no cost row (F-1002-f); absent in an answer cached before it existed. */
+  noCostProducts?: string[];
   /** The tenant's loss alert threshold (F-1003). */
   lossAlertPercent: number;
 }

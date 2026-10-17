@@ -31,6 +31,8 @@ export interface ProfitTabProps {
   panelName: (id: string | null) => string | null;
   /** Where a user's page is, for the losing users' list. */
   userHref: (userId: string) => string;
+  /** Where this tenant's products are costed — its catalog (F-1002-h). */
+  catalogHref: string;
   /** The loss alert's form (F-1003), for the settings key's holders; null hides it. */
   setting: { tenantId: string; onSaved: () => void } | null;
   stale: boolean;
@@ -45,7 +47,7 @@ export interface ProfitTabProps {
  * with the way to set it, so its perfect margin is not believed. The settings
  * key's holders set the percent past which a user is reported (F-1003).
  */
-export function ProfitTab({ margin, x, currency, productName, panelName, userHref, setting, stale }: ProfitTabProps) {
+export function ProfitTab({ margin, x, currency, productName, panelName, userHref, catalogHref, setting, stale }: ProfitTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const state = margin ? "ready" : "loading";
@@ -61,6 +63,7 @@ export function ProfitTab({ margin, x, currency, productName, panelName, userHre
     return { id: part, label: t("common", P.parts[part]), value, display: money(value), color: slotColor(i) };
   });
   const noCost = margin?.noCostPanels ?? [];
+  const noCostProducts = margin?.noCostProducts ?? [];
 
   return (
     <div className="flex flex-col gap-4">
@@ -84,6 +87,20 @@ export function ProfitTab({ margin, x, currency, productName, panelName, userHre
           }
         >
           {t("common", P.noCost.body, { panels: formatList(noCost.map((id) => panelName(id) ?? t("common", K.catalog.unnamedPanel)), lang) })}
+        </Alert>
+      )}
+
+      {noCostProducts.length > 0 && (
+        <Alert
+          tone="warning"
+          title={t("common", P.noCostProducts.title)}
+          action={
+            <Link href={catalogHref} className="text-sm font-semibold text-primary hover:underline">
+              {t("common", P.noCostProducts.action)}
+            </Link>
+          }
+        >
+          {t("common", P.noCostProducts.body, { products: formatList(noCostProducts.map((id) => productName(id) ?? t("common", K.byProduct.unnamed)), lang) })}
         </Alert>
       )}
 
@@ -209,7 +226,13 @@ function MarginTable({ title, subtitle, rows, currency, nameOf, hrefOf }: Margin
         ),
     },
     { id: "net", header: t("common", K.profit.net), cell: figure((r) => money(r.net[currency])), dir: "ltr" },
-    { id: "cost", header: t("common", K.profit.cost), cell: figure((r) => money(r.cost[currency])), dir: "ltr" },
+    {
+      id: "cost",
+      header: t("common", K.profit.cost),
+      // No cost row is not a cost of 0 (ADR-0151 (5)): said in words, so the margin beside it is not believed.
+      cell: figure((r) => (r.noCost ? <Badge tone="warning">{t("common", K.profit.noCostSet)}</Badge> : money(r.cost[currency]))),
+      dir: "ltr",
+    },
     {
       id: "margin",
       header: t("common", K.profit.margin),
@@ -225,7 +248,7 @@ function MarginTable({ title, subtitle, rows, currency, nameOf, hrefOf }: Margin
       )),
       dir: "ltr",
     },
-    { id: "rate", header: t("common", K.profit.marginRate), cell: figure((r) => (r.marginRate === null ? "—" : fmt.percent(r.marginRate))), dir: "ltr", hideOnCard: true },
+    { id: "rate", header: t("common", K.profit.marginRate), cell: figure((r) => (r.marginRate === null || r.noCost ? "—" : fmt.percent(r.marginRate))), dir: "ltr", hideOnCard: true },
   ];
 
   return (

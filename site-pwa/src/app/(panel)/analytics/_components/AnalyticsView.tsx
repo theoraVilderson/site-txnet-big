@@ -8,7 +8,7 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { AnalyticsNames } from "@/lib/billing/analytics";
 import { catalogApi } from "@/lib/catalog-api";
-import { PANEL_ANALYTICS, PANEL_SYSTEMS } from "@/lib/routes";
+import { PANEL_ANALYTICS, PANEL_CATALOG, PANEL_SYSTEMS, myResellerCatalogPath } from "@/lib/routes";
 import { displayZone } from "@/lib/time-zone";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { Alert, Button, PageHeader, SegmentedControl } from "../../_components/kit";
@@ -174,6 +174,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           productName={productName}
           panelName={panelName}
           userHref={customerHrefOf({ tenantId: pathTenant, self })}
+          catalogHref={pathTenant ? myResellerCatalogPath(pathTenant, self) : PANEL_CATALOG}
           setting={setting}
           stale={stale}
         />

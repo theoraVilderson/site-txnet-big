@@ -26,6 +26,11 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
    use with no monthly cost (`formatList`, the reader's conjunction) and links
    to `/systems`, where a panel's cost is set — a margin with no cost is not
    believed.
+   **A product with no cost** (every view, F-1002-h, ADR-0151): its row's cost
+   is a warning `Badge` "no cost set" and its rate a dash, and an `Alert` names
+   each of billing's `noCostProducts` with a link to the catalog that costs it
+   (`/catalog`, or the reseller's `…/catalog`). An answer without the field —
+   cached before it existed — draws as one with none.
 3. **Charts:** sales and cost as two series on one money axis (`TrendChart`,
    slots 1 and 2, legend); where the cost went (`BarList`: split by use, idle
    panels, unallocated). Each with its table view.

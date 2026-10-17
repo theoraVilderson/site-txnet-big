@@ -6925,6 +6925,12 @@
         "body": "Their margin counts no cost: {{panels}}",
         "action": "Set panel costs"
       },
+      "noCostSet": "No cost set",
+      "noCostProducts": {
+        "title": "Some products have no cost set",
+        "body": "These products are counted as costing nothing, so their profit is not real: {{products}}",
+        "action": "Set their cost in the catalog"
+      },
       "empty": "Nothing was sold or spent in this period.",
       "lossAlert": {
         "label": "Report a user when their cost passes what they paid by (%)",
