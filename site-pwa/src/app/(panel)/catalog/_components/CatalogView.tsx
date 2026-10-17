@@ -11,6 +11,7 @@ import { CATALOG_KEYS as K, afterWizard, catalogText, categoryPath, categoryTree
 import { useCatalogData, type CatalogData } from "../_hooks/useCatalogData";
 import { useIdSelection } from "../_hooks/useIdSelection";
 import { CapabilitiesTab } from "./CapabilitiesTab";
+import { MeterCostsTab } from "./MeterCostsTab";
 import { CatalogGuide } from "./CatalogGuide";
 import { CatalogSheets, type CatalogSheet } from "./CatalogSheets";
 import { CategoryList } from "./CategoryList";
@@ -29,7 +30,7 @@ const writeGuideClosed = (closed: boolean) => writeStored(StorageKeys.catalogGui
 // Storage is read once per render and never announces a change, so there is nothing to subscribe to.
 const noSubscription = () => () => {};
 
-type Tab = "products" | "categories" | "capabilities";
+type Tab = "products" | "categories" | "capabilities" | "costs";
 type Feedback = { notice: string | null; error: string | null; report: { key: string; count: number }[] };
 const NO_FEEDBACK: Feedback = { notice: null, error: null, report: [] };
 const NO_FILTERS = { categoryId: "", platformOnly: false, showArchived: false };
@@ -222,6 +223,7 @@ export function CatalogView() {
             { value: "products", label: t("common", K.tabs.products), badge: data ? String(products.length) : undefined },
             { value: "categories", label: t("common", K.tabs.categories), badge: String(categories.length) },
             { value: "capabilities", label: t("common", K.tabs.capabilities), badge: String(capabilities.length) },
+            { value: "costs", label: t("common", K.cost.meters.tab) },
           ]}
         />
         {tab === "products" ? (
@@ -260,7 +262,7 @@ export function CatalogView() {
               </Button>
             )}
           </div>
-        ) : tab === "capabilities" ? (
+        ) : tab === "costs" ? null : tab === "capabilities" ? (
           <Button variant="quiet" size="sm" onClick={() => setSheet({ kind: "create", what: "capability" })} icon={<Plus size={14} aria-hidden />}>
             {t("common", K.capabilities.new)}
           </Button>
@@ -335,6 +337,8 @@ export function CatalogView() {
           onRemove={() => void removeSelected()}
           api={api}
         />
+      ) : tab === "costs" ? (
+        <MeterCostsTab />
       ) : tab === "capabilities" ? (
         <CapabilitiesTab
           capabilities={capabilities}

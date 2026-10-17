@@ -1510,6 +1510,42 @@
     }
   },
   "catalog": {
+    "cost": {
+      "title": "Cost per sale",
+      "none": "No cost set — this product's profit in analytics is not real",
+      "amount": "Cost per sale",
+      "hint": "What each sale of this variant costs you, such as buying it from a supplier. 0 means it costs nothing.",
+      "from": "Counts from",
+      "fromNow": "Now",
+      "fromMonthStart": "The start of this month",
+      "fromHint": "\"The start of this month\" also costs this month's sales. Closed months never change.",
+      "save": "Save cost",
+      "history": "Cost history",
+      "effectiveFrom": "From {time}",
+      "current": "In effect",
+      "scheduled": "Scheduled",
+      "loadFailed": "Costs could not be read.",
+      "meters": {
+        "tab": "Usage costs",
+        "intro": "For products charged by use (API calls, for example), say what a number of units costs you. VPN traffic is costed from your panels' monthly cost, not here.",
+        "empty": "There is no meter to cost.",
+        "unitSize": "Units",
+        "unitCost": "Cost of these units",
+        "perUnits": "{cost} per {size} {unit}",
+        "none": "No cost set"
+      },
+      "units": {
+        "bytes": "bytes",
+        "count": "units",
+        "seconds": "seconds",
+        "tokens": "tokens"
+      },
+      "errors": {
+        "amount": "A number of 0 or more, at most two decimal places",
+        "unitCost": "A number of 0 or more, at most eight decimal places",
+        "unitSize": "A whole number above 0"
+      }
+    },
     "title": "Catalog",
     "subtitle": "Categories, products, their variants and each variant's price history.",
     "loading": "Loading the catalog…",

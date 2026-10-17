@@ -8,7 +8,7 @@ import { authApi } from "./auth-api";
 
 const API_URL = `${API_BASE}/catalog`;
 
-const call = createApiClient({
+export const call = createApiClient({
   baseUrl: API_URL,
   service: "billing-service",
   credential: () => authApi.getAccessToken(),
@@ -317,8 +317,8 @@ export interface SetPriceBody {
   effectiveFrom?: string;
 }
 
-const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
-const id = (v: string) => encodeURIComponent(v);
+export const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
+export const id = (v: string) => encodeURIComponent(v);
 
 /**
  * Which tenant's catalog a call is about: `""` for the caller's own

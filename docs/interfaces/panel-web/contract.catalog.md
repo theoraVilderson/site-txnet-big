@@ -158,6 +158,8 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    would only repeat the review. Only a failed variant opens the sheet, with
    `wizard.partial`, because adding it is the work left.
 
+A variant's cost per sale and the usage costs tab: [contract.catalog-cost.md](contract.catalog-cost.md) (F-1002-g).
+
 ## Who can buy a product (PT-1-b)
 
 The product sheet's "who can buy this product" section (`ProductAudienceSection.tsx`): the shared audience
