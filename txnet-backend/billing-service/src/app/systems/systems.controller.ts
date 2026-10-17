@@ -204,10 +204,9 @@ export class SystemsController {
   }
 
   /**
-   * The inbounds this membership sells instead of the panel's pool (F-027-ch):
-   * the whole set, `[]` = the pool again. `409 inbound_assigned_elsewhere`
-   * names the group holding one, `409 inbound_has_configs` counts another
-   * group's live configs on one.
+   * The inbounds this membership lists (F-027-ep), beside the every-group
+   * ones: the whole set. `409 inbound_has_configs` names a group that would
+   * lose an inbound with live configs there, with the count.
    */
   @Put('panel-groups/:id/members/:panelId/inbounds')
   @RateLimit(SYSTEMS_ADMIN_WRITE)

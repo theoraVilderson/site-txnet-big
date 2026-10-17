@@ -284,14 +284,14 @@ describe('InvoiceService.create', () => {
     const q = calls.groupQueries[0] as { where: unknown; select: { members: { where: Record<string, unknown> } } };
     expect(q.where).toEqual({ id: { in: [GROUP] } });
     const members = q.select.members.where;
-    // Selling one: an assigned inbound, or with none assigned one of the pool (F-027-ch).
+    // Selling one: a listed inbound, or one every group's (F-027-ep).
     const placeable = { enabled: true, goneAt: null, protocol: { not: null } };
     expect(members).toEqual({
       role: { not: 'drain' },
       panel: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] }, driftEvents: { none: { collectionHalted: true, acknowledgedAt: null } } },
       OR: [
         { inbounds: { some: { inbound: placeable } } },
-        { inbounds: { none: {} }, panel: { inbounds: { some: { sold: true, ...placeable, assignment: { is: null } } } } },
+        { panel: { inbounds: { some: { sold: true, ...placeable, audience: 'every_group' } } } },
       ],
     });
     expect(JSON.stringify(members)).not.toContain('panelState');

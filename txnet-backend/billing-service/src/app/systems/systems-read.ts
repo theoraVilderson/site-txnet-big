@@ -39,7 +39,6 @@ export type SystemsRejection =
   | 'group_has_members'
   | 'group_in_use'
   // An inbound is the pool's or one group's (F-027-ch).
-  | 'inbound_assigned_elsewhere'
   | 'inbound_has_configs'
   // A panel's monthly cost (F-1002-a): a price never lands in a closed month.
   | 'cost_in_closed_month'

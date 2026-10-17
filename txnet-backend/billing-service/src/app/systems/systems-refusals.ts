@@ -23,7 +23,6 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'panel_not_retired',
   'group_has_members',
   'group_in_use',
-  'inbound_assigned_elsewhere',
   'inbound_has_configs',
 ]);
 
@@ -46,7 +45,7 @@ export async function refusing<T>(work: () => Promise<T>): Promise<T> {
         throw new ConflictException({ reason: e.reason, message: e.message, facts: e.panel ? { panelId: e.panel.id } : undefined });
       }
       if (e instanceof InboundHeldElsewhere) {
-        const facts = { remoteId: e.remoteId ?? undefined, groupId: e.group?.id, configs: e.configs ?? undefined };
+        const facts = { remoteId: e.remoteId, groupId: e.group.id, configs: e.configs };
         throw new ConflictException({ reason: e.reason, message: e.message, facts });
       }
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });

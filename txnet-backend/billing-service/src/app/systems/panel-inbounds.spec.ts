@@ -31,12 +31,14 @@ function harness() {
     { id: RESELLER_PANEL, tenantId: RESELLER, ownershipType: 'tenant', inboundPlacement: InboundPlacement.all, maxClients: null, inboundsReadAt: null },
   ];
   const inbound = (remoteId: string, extra: Row = {}): Row => ({
-    panelId: PANEL, remoteId, tag: `in-${remoteId}`, protocol: ConfigProtocol.vless, port: 443, host: '', enabled: true, goneAt: null, seenAt: new Date(), sold: false, maxClients: null, ...extra,
+    panelId: PANEL, remoteId, tag: `in-${remoteId}`, protocol: ConfigProtocol.vless, port: 443, host: '', enabled: true, goneAt: null, seenAt: new Date(), sold: false, maxClients: null, audience: 'every_group', listings: [], ...extra,
   });
   const inbounds: Row[] = [
     inbound('10'),
     inbound('2', { protocol: ConfigProtocol.trojan, sold: true }),
     inbound('3', { protocol: null }),
+    // Shared: listed to two groups (F-027-ep).
+    inbound('5', { audience: 'listed', listings: [{ member: { group: { id: 'g-2', name: 'Gaming' } } }, { member: { group: { id: 'g-1', name: 'EU' } } }] }),
     inbound('4', { goneAt: new Date() }),
   ];
   const panelMatch = (p: Row, where: Row) => Object.entries(where).every(([k, v]) => (p[k] ?? null) === v);
@@ -73,7 +75,10 @@ describe('PanelInboundsService', () => {
     const { service } = harness();
     const view = await service.inbounds(owner, PANEL);
 
-    expect(view.inbounds.map((i) => [i.remoteId, i.sold, i.clients])).toEqual([['2', true, 2], ['3', false, 0], ['4', false, 0], ['10', false, 2]]);
+    expect(view.inbounds.map((i) => [i.remoteId, i.sold, i.clients])).toEqual([['2', true, 2], ['3', false, 0], ['4', false, 0], ['5', false, 0], ['10', false, 2]]);
+    const shared = view.inbounds.find((i) => i.remoteId === '5');
+    expect(shared).toMatchObject({ audience: 'listed', listedTo: [{ id: 'g-1', name: 'EU' }, { id: 'g-2', name: 'Gaming' }] });
+    expect(view.inbounds.find((i) => i.remoteId === '2')).toMatchObject({ audience: 'every_group', listedTo: [], assignedTo: null });
     expect(view).toMatchObject({ panelId: PANEL, inboundPlacement: 'all', maxClients: null, users: 3 });
   });
 

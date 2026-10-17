@@ -122,9 +122,9 @@ func TestDesiredForReadsTheRowAsTheProvisioningPassNeedsIt(t *testing.T) {
 	if !strings.Contains(f.sql[0], `i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol`) {
 		t.Error("a config with no inbound of its own is not held to the panel's picks")
 	}
-	// F-027-ch: and never one a group holds — that inbound left the pool.
-	if !strings.Contains(f.sql[0], `NOT EXISTS (SELECT 1 FROM network.panel_group_member_inbound a`) {
-		t.Error("a config with no inbound of its own can be created on an inbound a group holds")
+	// F-027-ep: and only an every-group one — a listed inbound is sold by the groups listing it.
+	if !strings.Contains(f.sql[0], `AND i.audience = 'every_group'`) {
+		t.Error("a config with no inbound of its own can be created on an inbound only listed groups sell")
 	}
 	second := got[1]
 	if first.InboundResolved || !second.InboundResolved {

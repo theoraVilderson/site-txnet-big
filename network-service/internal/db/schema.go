@@ -78,9 +78,9 @@ var RequiredColumns = map[string][]string{
 	"panel_inbound": {
 		"panelId", "remoteId", "tenantId", "tag", "protocol", "port", "host",
 		"enabled", "goneAt", "seenAt", "sold", "fingerprint",
+		// Who sells it: a guessed inbound is only an every-group one (F-027-ep).
+		"audience",
 	},
-	// An inbound a group holds is out of the pool (F-027-ch).
-	"panel_group_member_inbound": {"panelId", "inboundRemoteId"},
 	// The client we meter, its desired state and its ceiling (ADR-0072).
 	"config": {
 		"id", "tenantId", "userId", "panelId", "grantId", "uuid", "protocol", "status",

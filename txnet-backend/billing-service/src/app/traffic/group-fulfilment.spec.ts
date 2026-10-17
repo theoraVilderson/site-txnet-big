@@ -45,7 +45,7 @@ type Member = {
   inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
   inboundsPerBuyer?: number | null;
-  /** Assigned inbounds (F-027-ch); none = the panel's pool, `panel.inbounds`. */
+  /** Listed inbounds (F-027-ep), sold beside the every-group ones, `panel.inbounds`. */
   inbounds: { inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
   panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inboundsPerBuyer: number | null; inbounds: Inbound[]; driftEvents: { id: string }[] };
 };
@@ -272,12 +272,12 @@ describe('placement on the picked inbounds (F-114-b)', () => {
     expect(configs[3]).toMatchObject({ inboundRemoteId: '11', protocol: 'trojan' });
   });
 
-  it('a member with assigned inbounds is placed on those, never on the pool (F-027-ch)', async () => {
+  it('a member with a listed inbound is placed on it and on the every-group ones (F-027-ep)', async () => {
     const own = { ...inbound('7', ConfigProtocol.trojan), enabled: true, goneAt: null };
     const { service, tx, configs } = build({ members: [{ ...on(A, { inbounds: [inbound('1')] }), inbounds: [{ inbound: own }] }] });
 
     await service.fulfil(tx, GRANT);
-    expect(configs.map((c) => [c.inboundRemoteId, c.protocol])).toEqual([['7', 'trojan']]);
+    expect(configs.map((c) => [c.inboundRemoteId, c.protocol]).sort()).toEqual([['1', 'vless'], ['7', 'trojan']]);
   });
 
   it('under `spread`, one config, on the emptiest pick with a seat', async () => {

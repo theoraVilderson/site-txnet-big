@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 49
-updated: 2026-10-06
+updated: 2026-10-17
 ---
 
 # Systems — panel groups
@@ -20,14 +20,15 @@ desired state; nothing calls `network-service` (ADR-0071).
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inbounds, role, drainingSince, evictedAt, heldGrants, createdAt}]}]`, by name; members by effective `priority`. The five are the member's own (null = inherited); `inbounds` its assigned remote ids, `[]` = the pool (rule 24c); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b); `heldGrants` (rule 24d) | 403 |
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inbounds, role, drainingSince, evictedAt, heldGrants, createdAt}]}]`, by name; members by effective `priority`. The five are the member's own (null = inherited); `inbounds` its listed remote ids, sold beside the every-group ones (rule 24c); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b); `heldGrants` (rule 24d) | 403 |
 | `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
 | `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id` | — | `200 {id, removed: true}` | 400; 403; 404 `not_found`; 409 `group_has_members` / `group_in_use` |
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, and any of `inboundPlacement`, `maxClients` (1–1000000), `priority` (0–1000), `weight` (1–1000), `inboundsPerBuyer` (1–16, K under `hrw`), each nullable; `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `PATCH /api/billing/systems/panel-groups/:id/members/:panelId` | any of those four, at least one; null inherits; `.strict()` — a server fact is refused | `200` the member | 400; 403; 404 `not_found` / `member_not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
-| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = the pool again); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_assigned_elsewhere` `facts: {remoteId, groupId}` (none after a race on the unique index), `inbound_has_configs` `facts: {remoteId, configs}` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = lists none, sells the every-group ones); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_has_configs` `facts: {remoteId, groupId, configs}` (rule 24c) |
+| `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` | `{audience: 'every_group'}` or `{audience: 'listed', groups: [groupId]}` (≤100, each once, each a member of the panel; `[]` = nobody); `.strict()` | `200 {panelId, remoteId, audience, groups}` | 400; 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `inbound_not_sellable` (listing a gone or unsold-protocol one), `inbound_has_configs` `facts: {remoteId, groupId, configs}` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
 | `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/evict` | `orphans: 'pause' \| 'refund'`; `.strict()` | `200` the member, `drain`, with `evictedAt`, `evictOrphans`, `evictedBy` and `soleLineGrants` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
@@ -66,8 +67,10 @@ desired state; nothing calls `network-service` (ADR-0071).
     member -> panel -> platform default, each read naming the layer (network
     `contract.inbounds.md` rule 4a). `selling-settings.spec.ts` pins it.
 
-24c. **An inbound is the pool's or one group's** (F-027-ch, ADR-0090 decision 3): the `PUT` sets a
-    member's whole set — network `contract.inbounds.md` rule 3a. `member-inbounds.spec.ts` pins it.
+24c. **An inbound is sold by every group or by the groups it lists** (F-027-ep, ADR-0127): the
+    member `PUT` sets its whole set of listings, the `audience` `PUT` one inbound's sellers; a
+    group losing an inbound under its live configs is 409 — network `contract.inbounds.md` rule 3a.
+    `InboundAudienceController`, beside `SystemsController`. `member-inbounds.spec.ts` pins it.
 
 24d. **A held drain says so.** A `drain` member answers `heldGrants`: its
     active Grants with a line on it and none served elsewhere (groups rule 14,

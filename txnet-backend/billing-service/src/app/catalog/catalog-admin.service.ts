@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   ConfigProtocol,
   FulfilmentKind,
+  InboundAudience,
   PanelGroupStrategy,
   Prisma,
   QualityTier,
@@ -629,8 +630,7 @@ export class CatalogAdminService {
    * tenant's, as {@link usableGroup} admits. `healthyMembers` counts what
    * fulfilment would place on now (`placeableMember`); `strategy` is shown,
    * because only `mirror` is fulfilled (network `contract.groups.md` rule 7);
-   * `protocols` is what its members' inbounds sell — each its own, else the
-   * panel's pool (F-114-b, F-027-ch).
+   * `protocols` is what its members sell, by `sellingInbounds` (F-114-b, F-027-ep).
    */
   async listPanelGroups(actor: CatalogActor): Promise<PanelGroupOption[]> {
     const { owner } = await this.access(actor);
@@ -645,13 +645,13 @@ export class CatalogAdminService {
           members: {
             select: {
               role: true,
-              // Its own inbounds replace the pool (F-027-ch): `sellingInbounds` picks which it sells.
+              // Its listed inbounds, sold beside the every-group ones (F-027-ep): `sellingInbounds` resolves both.
               inbounds: { select: { inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
               panel: {
                 select: {
                   ...PLACEABLE_PANEL_FIELDS,
                   inbounds: {
-                    where: { sold: true, enabled: true, goneAt: null, protocol: { not: null }, assignment: { is: null } },
+                    where: { sold: true, enabled: true, goneAt: null, protocol: { not: null }, audience: InboundAudience.every_group },
                     select: { remoteId: true, protocol: true, maxClients: true },
                   },
                 },

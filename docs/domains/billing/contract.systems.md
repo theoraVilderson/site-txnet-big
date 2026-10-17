@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 50
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 
 # Systems — the platform owner's panel routes
@@ -47,7 +47,7 @@ would dial an address a tenant chose (`network/open-questions.md`).
 | `GET /api/billing/systems/holds` | query `state?` (`pending` \| `all`, default `all`), `after?` (hold id), `limit?` (1–100, default 50); `.strict()` | `{items: [{id, configId, panelId, panelName, upBytes, downBytes, reason, state, heldFrom, heldAt, resolvedAt, resolvedByAdminId, resolutionNote}], next}`, newest first; bytes are decimal strings | 400; 403 |
 | `POST /api/billing/systems/holds/:id/release` | `note?` (1–1000); `.strict()` | `202 {id, state: 'pending', release: 'queued'}` | 400; 403; 404 `not_found`; 409 `already_resolved` |
 | `POST /api/billing/systems/holds/:id/write-off` | `note` (1–1000, required); `.strict()` | `200` the hold, `written_off` | 400; 403; 404 `not_found`; 409 `already_resolved` |
-| `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, assignedTo, clients}]}`, by id; `assignedTo` `{id, name}` of the group holding it, null = the pool (rule 24c) | 400; 403; 404 `panel_not_found` |
+| `GET /api/billing/systems/panels/:id/inbounds` | — | `{panelId, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inboundsReadAt, users, inbounds: [{remoteId, tag, protocol, port, host, enabled, goneAt, seenAt, sold, maxClients, audience, listedTo, assignedTo, clients}]}`, by id; `listedTo` the `{id, name}` groups a `listed` one is sold by, by name (panel-groups rule 24c); `assignedTo` is the first of them or null, F-027-ch's field kept until the page reads `listedTo` (F-027-eu) | 400; 403; 404 `panel_not_found` |
 | `PUT /api/billing/systems/panels/:id/inbounds` | any of the five selling settings as on a member (null = platform default), `inbounds: [{remoteId, sold, maxClients?}]` (≤500, each once); `.strict()` | `200` as the `GET` | 400; 403; 404 `panel_not_found` / `inbound_not_found`; 409 `inbound_not_sellable` |
 | `POST /api/billing/systems/panels/:id/inbounds/refresh` | — | `202 {panelId, refreshRequested: true}` | 400; 403; 404 `panel_not_found` |
 

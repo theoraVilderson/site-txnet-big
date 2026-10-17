@@ -1,4 +1,4 @@
-import { CounterSemantics, DriverType, EvictOrphans, InboundPlacement, PanelRole, PanelTransport } from '@prisma/client';
+import { CounterSemantics, DriverType, EvictOrphans, InboundAudience, InboundPlacement, PanelRole, PanelTransport } from '@prisma/client';
 import { z } from 'zod';
 
 /**
@@ -293,10 +293,10 @@ export const updatePanelInboundsSchema = z
 export type UpdatePanelInboundsBody = z.infer<typeof updatePanelInboundsSchema>;
 
 /**
- * The inbounds one group membership sells instead of the panel's pool
- * (F-027-ch, ADR-0090 decision 3): the whole set, by the panel's own ids; `[]`
- * gives the membership back to the pool. `.strict()`: `sold` and `maxClients`
- * are the inbound's, on the panel's route.
+ * The inbounds one group membership lists (F-027-ep, ADR-0127 decision 1): the
+ * whole set, by the panel's own ids, sold beside the panel's `every_group`
+ * ones; `[]` lists none. `.strict()`: `sold` and `maxClients` are the
+ * inbound's, on the panel's route.
  */
 export const assignMemberInboundsSchema = z
   .object({ inbounds: z.array(z.string().min(1).max(200)).max(500) })
@@ -304,3 +304,21 @@ export const assignMemberInboundsSchema = z
   .refine((body) => new Set(body.inbounds).size === body.inbounds.length, { message: 'an inbound is named twice', path: ['inbounds'] });
 
 export type AssignMemberInboundsBody = z.infer<typeof assignMemberInboundsSchema>;
+
+/** At most this many groups listed on one inbound — a panel's members, with room. */
+const MAX_LISTED_GROUPS = 100;
+
+/**
+ * Who sells one inbound (F-027-ep, ADR-0127 decision 1): every group of the
+ * panel, or exactly the groups named — each once, each a member of it;
+ * `groups: []` is sold by nobody. `.strict()` on both shapes.
+ */
+export const setInboundAudienceSchema = z.union([
+  z.object({ audience: z.literal(InboundAudience.every_group) }).strict(),
+  z
+    .object({ audience: z.literal(InboundAudience.listed), groups: z.array(z.string().uuid()).max(MAX_LISTED_GROUPS) })
+    .strict()
+    .refine((body) => new Set(body.groups).size === body.groups.length, { message: 'a group is named twice', path: ['groups'] }),
+]);
+
+export type SetInboundAudienceBody = z.infer<typeof setInboundAudienceSchema>;

@@ -9,7 +9,7 @@ import { ConfigProtocol, InboundPlacement } from '@prisma/client';
  * Only *selling* choices resolve this way. Server facts — addresses,
  * credentials, `maxRequestsPerMinute`, `maxLineRateBps` — are the panel's and
  * no group overrides them. Which inbounds a member sells is
- * {@link sellingInbounds} (F-027-ch).
+ * {@link sellingInbounds} (F-027-ep).
  */
 export type SellingValues = {
   inboundPlacement: InboundPlacement;
@@ -65,21 +65,23 @@ export function effectiveSellingSettings(member: SellingLayerValues | null, pane
 /** An inbound a buyer may be placed on: of a protocol we sell, with its cap (null = none). */
 export type SellingInbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
 
-type AssignedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null; enabled: boolean; goneAt: Date | null };
+type ListedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null; enabled: boolean; goneAt: Date | null };
 
 /**
- * Which inbounds one group sells on one panel (F-027-ch, ADR-0090 decision 3):
- * the membership's own assignments when it has any, else the panel's default
- * pool — `sold` inbounds no membership holds, as the caller loaded them.
- * An assignment **replaces** the pool: a member whose every assigned inbound is
- * disabled or gone sells nothing, never the pool, so an admin's split between
- * groups is not undone by an inbound going down.
+ * Which inbounds one group sells on one panel (F-027-ep, ADR-0127 decision 1):
+ * the membership's own listings — enabled, not gone, of a protocol we sell —
+ * **plus** the panel's `every_group` inbounds, as the caller loaded them
+ * (`sold`, placeable). A listing on a disabled inbound sells nothing and never
+ * falls back to anything else. The two never name one inbound (a trigger
+ * keeps them apart); should they, the listing is kept and the inbound is
+ * named once.
  */
 export function sellingInbounds(member: {
-  inbounds: { inbound: AssignedInbound }[];
+  inbounds: { inbound: ListedInbound }[];
   panel: { inbounds: { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null }[] };
 }): SellingInbound[] {
-  const own = member.inbounds.length > 0;
-  const rows = own ? member.inbounds.map((a) => a.inbound).filter((i) => i.enabled && i.goneAt === null) : member.panel.inbounds;
+  const listed = member.inbounds.map((l) => l.inbound).filter((i) => i.enabled && i.goneAt === null);
+  const names = new Set(listed.map((i) => i.remoteId));
+  const rows = [...listed, ...member.panel.inbounds.filter((i) => !names.has(i.remoteId))];
   return rows.flatMap((i) => (i.protocol === null ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients }]));
 }

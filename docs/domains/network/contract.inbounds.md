@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 19
-updated: 2026-10-14
+updated: 2026-10-17
 ---
 
 # Inbounds: which ones a buyer is placed on (F-114-b)
@@ -26,7 +26,8 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
 | `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread` \| `hrw`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`), `inboundsPerBuyer` (`>= 1`, K under `hrw`); null = the platform default | the admin |
 | `panel_group_member` | the member's layer: the same five, null = the panel's | the admin |
-| `panel_group_member_inbound` | key `(groupId, panelId, inboundRemoteId)`, unique `(panelId, inboundRemoteId)`; `tenantId` = its member's (trigger); both FKs cascade (rule 3a) | the admin |
+| `panel_inbound` | `audience` — `every_group` (default) or `listed` (rule 3a) | the admin |
+| `panel_group_member_inbound` | a `listed` inbound's sellers: key `(groupId, panelId, inboundRemoteId)`, an inbound listed to any number of memberships; only on a `listed` inbound (trigger `panel_group_member_inbound_is_listed`); `tenantId` = its member's (trigger); both FKs cascade (rule 3a) | the admin |
 | `panel` | `inboundsReadAt` — null = read on the next pass | the read sets it; the admin's refresh clears it |
 | `config` | `inboundRemoteId` — the inbound fulfilment placed it on | `ConfigActionsService.provisionForGroup` |
 
@@ -51,25 +52,30 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 3. **Nothing picked, nobody placed.** A member with no loaded inbound is
    `waiting` (`no_inbound`), never given the first enabled inbound. A group's
    protocols are its members' picks'; `panel_group.protocol` is dropped.
-3a. **An inbound is the pool's or one group's** (F-027-ch, ADR-0090 decision 3).
-   An inbound assigned to a membership (`panel_group_member_inbound`) leaves
-   the panel's **default pool** — `sold` inbounds no membership holds — and
-   only that group places on it. A membership with an assignment sells its
-   own inbounds and never the pool, even when all of them are disabled; one
-   with none sells the pool, which is shared on purpose. The unique
-   `(panelId, inboundRemoteId)` holds "one group at most" against a race. The
-   write is billing's (`contract.panel-groups.md` rule 24c), the whole set at once
-   under the panel's fulfilment lock (rule 5): a named inbound held by another
-   membership is 409 `inbound_assigned_elsewhere` naming that group, one with
-   live configs (`present`, not drained) of another group's Grants is 409
-   `inbound_has_configs` with their count — a client whose row does not yet
-   name its inbound (rule 7) counts on every inbound of its protocol. Unassigning is always allowed and
-   moves nobody (rule 6). `sold` and the inbound's `maxClients` stay the
-   inbound's: the cap binds whichever group sells it. Before F-027-ch every
-   group sold the pool, and that is the table empty, so nothing moved.
-   `sellingInbounds` (billing `traffic/selling-settings.ts`) is the one
-   resolution; fulfilment, the due scan and catalog's `protocols` read by it.
-   `member-inbounds.spec.ts` pins it.
+3a. **An inbound is sold by every group, or by the groups it lists** (F-027-ep,
+   ADR-0127 decisions 1-2; F-027-ch before it). `audience = every_group` is
+   sold by every membership of its panel while `sold`, a group that joins later
+   included; `audience = listed` is sold by exactly the memberships listing it
+   (`panel_group_member_inbound`) — none, one or several, so one router's
+   OpenVPN serves the groups chosen. A membership sells its listings (enabled,
+   not gone; `sold` is not asked of a listed one) **plus** every `every_group`
+   one. The two never mix: a listing only on a `listed` inbound, and
+   `every_group` only once nobody lists it (triggers). The writes are billing's
+   (`contract.panel-groups.md` rule 24c) under the panel's fulfilment lock
+   (rule 5): one membership's whole set of listings — naming an `every_group`
+   inbound lists it to that group alone — and one inbound's audience. Adding a
+   seller is always allowed; a group that would **lose** an inbound while
+   live configs (`present`, not drained) of its Grants are on it is 409
+   `inbound_has_configs`, with the group and the count — a client whose row
+   does not yet name its inbound (rule 7) counts on every inbound of its
+   protocol. Losing the last listing leaves it `listed` to nobody, never every
+   group's by itself. The migration moved nobody: an assigned inbound became
+   `listed` to its group, and on a panel with any assignment the pool became
+   `listed` to the members without one. `sold` and the inbound's `maxClients`
+   stay the inbound's. `sellingInbounds` (billing `traffic/selling-settings.ts`)
+   is the one resolution; fulfilment, the due scan and catalog's `protocols`
+   read by it. `member-inbounds.spec.ts` pins it, a router listed to two groups
+   included.
 4. **The placement.** `all`: the Grant gets a config on every picked inbound
    it is not yet on — one link each, the bag split across them
    (`contract.ceiling.md`). `spread`: one config, on the picked inbound with
@@ -117,14 +123,14 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    `inboundRemoteId` only if the panel still lists it enabled with the
    config's protocol, else `no_inbound`. A row placed before F-114-b has none:
    to create its client the pass reads the lowest picked inbound of its
-   protocol **in the pool** — never one a group holds (rule 3a) — and with none
+   protocol that is **`every_group`** — never a listed one (rule 3a) — and with none
    it too is `no_inbound`. Such a row covers its whole panel only until the
    pass **writes down the inbound its client is on** (found, or just created;
    only over null, and not where another live row of the Grant holds it —
    `config_group_panel_once`). From then it is an ordinary row: under `all`
    the Grant is given the panel's other picks, as any buyer (user,
    2026-09-26). Which group such a row is for lives outside `network.*`
-   (ADR-0071), so its own group's assigned inbounds are not offered to it.
+   (ADR-0071), so its own group's listed inbounds are not offered to it.
 8. **Activation counts panels.** `minHealthyPanels` is met by distinct panels
    with a confirmed config, never by configs — `all` puts several on one.
 

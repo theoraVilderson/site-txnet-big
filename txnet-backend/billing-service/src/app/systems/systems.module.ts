@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { PanelCredentialClient } from './panel-credential.client';
+import { InboundAudienceController } from './inbound-audience.controller';
 import { PanelGroupsService } from './panel-groups';
 import { MemberInboundsService } from './member-inbounds';
 import { PanelInboundsService } from './panel-inbounds';
@@ -23,7 +24,7 @@ import { UsageHoldsService } from './usage-holds';
  * `tenant-service` — this service loads no vault writer (ADR-0039).
  */
 @Module({
-  controllers: [SystemsController, PanelCostController],
+  controllers: [SystemsController, PanelCostController, InboundAudienceController],
   providers: [
     PanelRegistrationService,
     SystemsReadService,

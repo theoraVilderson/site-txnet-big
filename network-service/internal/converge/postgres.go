@@ -44,9 +44,9 @@ var _ Desired = PostgresDesired{}
 // The inbound is the config's own (F-114-b). A row placed before it names
 // none, and takes the lowest picked inbound of its protocol on the panel —
 // still only a picked one: with nothing picked it is ” and `no_inbound` —
-// and only one in the pool: never an inbound a group holds (F-027-ch). Which
-// group the row is for lives outside `network.*` (ADR-0071), so it is never
-// placed on its own group's either; the pass writes down where its client is
+// and only an `every_group` one: never an inbound groups are listed for
+// (F-027-ep). Which group the row is for lives outside `network.*`
+// (ADR-0071), so it is never placed on its own group's listed ones either; the pass writes down where its client is
 // (recordSQL), and such a row is a guess only until then.
 //
 // The fingerprint is the row's own inbound's as the inventory last read it,
@@ -61,8 +61,7 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(c."inboundRemoteId",
                 (SELECT i."remoteId" FROM network.panel_inbound i
                   WHERE i."panelId" = c."panelId" AND i.sold AND i."goneAt" IS NULL AND i.protocol = c.protocol
-                    AND NOT EXISTS (SELECT 1 FROM network.panel_group_member_inbound a
-                                     WHERE a."panelId" = i."panelId" AND a."inboundRemoteId" = i."remoteId")
+                    AND i.audience = 'every_group'
                   ORDER BY length(i."remoteId"), i."remoteId" LIMIT 1),
                 ''),
        c."desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = c."grantId"),
