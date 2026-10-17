@@ -6,12 +6,13 @@ import { useLocale } from "@/context/LocaleContext";
 import { catalogCostApi, type CostRow } from "@/lib/catalog-cost-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { CATALOG_KEYS as K } from "../_lib/catalog-form";
-import { COST_FROM, costFrom, currentCost, validateVariantCost, type CostFrom } from "../_lib/cost-form";
+import { COST_FROM, currentCost, isCostSet, validateVariantCost, type CostFrom } from "../_lib/cost-form";
 import { DataTable } from "../../_components/kit/DataTable";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { Button, Input, SegmentedControl } from "../../_components/kit";
-import { Alert, Field, useMessage } from "./catalog-ui";
+import { Alert, Field } from "./catalog-ui";
+import { UnsetCostAction, useCostWrite } from "./CostWrite";
 
 const C = K.cost;
 
@@ -20,11 +21,12 @@ const C = K.cost;
  * in effect — or "no cost set", which is what makes a product read as 100%
  * margin — a new one from now or the 1st of this month, and the history. A
  * cost is never edited; a new row replaces it from its day. Private to the
- * tenant: billing answers this surface's own variants only.
+ * tenant: billing answers this surface's own variants only. A cost in effect
+ * can be taken back from the same starts (F-1002-j): "no cost set" again, the
+ * history keeping both rows.
  */
 export function VariantCostSection({ variantId, now = new Date() }: { variantId: string; now?: Date }) {
   const { t, lang } = useLocale();
-  const message = useMessage();
   const { tenantId } = useCatalogSurface();
   const api = useMemo(() => catalogCostApi(tenantId), [tenantId]);
   const [rows, setRows] = useState<CostRow[] | null>(null);
@@ -32,7 +34,6 @@ export function VariantCostSection({ variantId, now = new Date() }: { variantId:
   const [amount, setAmount] = useState("");
   const [from, setFrom] = useState<CostFrom>("now");
   const [invalid, setInvalid] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
 
   const load = useCallback(
@@ -46,28 +47,22 @@ export function VariantCostSection({ variantId, now = new Date() }: { variantId:
   useEffect(() => void load(), [load]);
 
   const current = rows ? currentCost(rows, now) : null;
-  const money = (r: CostRow) => formatMoney(r.amount, r.currencyCode, { lang, t });
+  const money = (r: CostRow) => (r.amount === null ? t("common", C.notSet) : formatMoney(r.amount, r.currencyCode, { lang, t }));
+
+  const { error, write } = useCostWrite(from, load, now);
 
   const save = async () => {
     const found = validateVariantCost(amount);
     setInvalid(found);
     if (found) return;
-    setError(null);
-    const effectiveFrom = costFrom(from, now);
-    try {
-      await api.setVariantCost(variantId, { amount: amount.trim(), ...(effectiveFrom ? { effectiveFrom } : {}) });
-      setAmount("");
-      await load();
-    } catch (e) {
-      setError(message(e));
-    }
+    await write((start) => api.setVariantCost(variantId, { amount: amount.trim(), ...start }).then(() => setAmount("")));
   };
 
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-bg-inner p-2">
       <p className="text-xs font-bold text-text-primary">
         {t("common", C.title)}:{" "}
-        {rows === null ? null : current ? <span dir="auto">{money(current)}</span> : <span className="text-error">{t("common", C.none)}</span>}
+        {rows === null ? null : isCostSet(current) ? <span dir="auto">{money(current)}</span> : <span className="text-error">{t("common", C.none)}</span>}
       </p>
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-end">
@@ -87,6 +82,8 @@ export function VariantCostSection({ variantId, now = new Date() }: { variantId:
           {t("common", C.save)}
         </Button>
       </div>
+
+      {isCostSet(current) && <UnsetCostAction id={variantId} onUnset={() => void write((start) => api.unsetVariantCost(variantId, start))} />}
 
       {rows && rows.length > 0 && (
         <Button variant="quiet" size="sm" className="self-start" aria-expanded={history} onClick={() => setHistory((h) => !h)} icon={<ChevronDown size={14} className={history ? "rotate-180" : ""} aria-hidden />}>

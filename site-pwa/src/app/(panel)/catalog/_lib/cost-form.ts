@@ -36,7 +36,12 @@ export function costFrom(from: CostFrom, now: Date = new Date()): string | undef
   return from === "now" ? undefined : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
 }
 
-/** The newest cost already in effect at `now`, or none. */
+/** Is there a cost in effect — a row, and not a take-back (F-1002-j)? 0 is a cost; a `null` amount or no row is "no cost set". */
+export function isCostSet<R extends CostRow>(row: R | null): row is R & { amount: string } {
+  return row !== null && row.amount !== null;
+}
+
+/** The newest cost row already in effect at `now` — a take-back included — or none. */
 export function currentCost<R extends CostRow>(rows: readonly R[], now: Date = new Date()): R | null {
   let best: R | null = null;
   for (const r of rows) {

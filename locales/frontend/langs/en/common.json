@@ -1525,6 +1525,9 @@
       "current": "In effect",
       "scheduled": "Scheduled",
       "loadFailed": "Costs could not be read.",
+      "unset": "Remove cost",
+      "unsetHint": "From the chosen start, this product has no cost set again — its profit in analytics is not real until a new cost is saved. The history is kept.",
+      "notSet": "Not set",
       "meters": {
         "tab": "Usage costs",
         "intro": "For products charged by use (API calls, for example), say what a number of units costs you. VPN traffic is costed from your panels' monthly cost, not here.",

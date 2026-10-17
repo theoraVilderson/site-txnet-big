@@ -31,9 +31,16 @@ reading a product with no panel as 100% margin. Over catalog
    sale 0 or more to the cent, a unit cost to 8 places, a unit size a whole
    number ≥ 1. A refusal is the catalog's (`useMessage`).
 5. **0 is a cost** and shows as one; only no row is "no cost set".
+6. **A cost taken back** (F-1002-j, catalog [contract.cost.md](../../domains/catalog/contract.cost.md)
+   rule 6): "Remove cost" beside a cost in effect — a variant's and a
+   meter's, from the same two starts, its hint saying the history is kept. A
+   take-back in effect reads "no cost set"; in the history, "not set"
+   (`isCostSet`, `_lib/cost-form.ts`) — never `null`, never 0. The write and
+   the action are one home for both, `CostWrite.tsx`.
 
 ## Proof
 
 `catalog/cost.test.tsx`: the form's rules, the two starts, the cost in
 effect; the section says "no cost set", writes one from the 1st of the month
-and reads it back.
+and reads it back; a take-back in effect is "no cost set", and "Remove cost"
+calls it and shows "not set" in the history.

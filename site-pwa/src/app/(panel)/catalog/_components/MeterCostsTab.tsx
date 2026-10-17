@@ -7,11 +7,12 @@ import { catalogCostApi, type MeterCostLine, type MeterCostRow } from "@/lib/cat
 import { useCatalogSurface } from "../_lib/surface";
 import { useMeterNames } from "../_lib/meter-names";
 import { CATALOG_KEYS as K, rateDecimals } from "../_lib/catalog-form";
-import { COST_FROM, costFrom, currentCost, validateMeterCost, type CostFrom } from "../_lib/cost-form";
+import { COST_FROM, currentCost, isCostSet, validateMeterCost, type CostFrom } from "../_lib/cost-form";
 import { currencyDecimals, formatMoney } from "../../_lib/money";
 import { numberLocale } from "../../_lib/digits";
 import { Button, Card, EmptyState, Input, SegmentedControl } from "../../_components/kit";
-import { Alert, Field, useMessage } from "./catalog-ui";
+import { Alert, Field } from "./catalog-ui";
+import { UnsetCostAction, useCostWrite } from "./CostWrite";
 
 const C = K.cost;
 /** A form's first unit size, by the meter's unit: what a cost is usually quoted per. */
@@ -21,7 +22,8 @@ const DEFAULT_UNIT_SIZE: Record<MeterCostLine["unit"], string> = { count: "1000"
  * What a unit of each meter costs the tenant (F-1002-g, ADR-0151): API calls
  * bought from a supplier, seconds of a service. `vpn.traffic` is never here —
  * billing leaves it out, its cost is its panels'. One row per meter: the cost
- * in effect, and a new one from now or the 1st of this month.
+ * in effect, and a new one from now or the 1st of this month — or the one in
+ * effect taken back from the same starts (F-1002-j).
  */
 export function MeterCostsTab() {
   const { t } = useLocale();
@@ -45,39 +47,35 @@ export function MeterCostsTab() {
 
 function MeterCostCard({ line, name, onSaved }: { line: MeterCostLine; name: string; onSaved: () => Promise<unknown> }) {
   const { t, lang } = useLocale();
-  const message = useMessage();
   const { tenantId } = useCatalogSurface();
   const [form, setForm] = useState({ unitSize: DEFAULT_UNIT_SIZE[line.unit], unitCost: "", from: "now" as CostFrom });
   const [invalid, setInvalid] = useState<ReturnType<typeof validateMeterCost>>({});
-  const [error, setError] = useState<string | null>(null);
   const current = currentCost(line.costs);
-  const shown = (c: MeterCostRow) =>
+  const shown = (c: MeterCostRow & { amount: string }) =>
     t("common", C.meters.perUnits, {
       cost: formatMoney(c.amount, c.currencyCode, { lang, t }, { decimals: rateDecimals(c.amount, currencyDecimals(c.currencyCode)) }),
       size: Number(c.unitSize).toLocaleString(numberLocale(lang)),
       unit: t("common", C.units[line.unit]),
     });
 
+  const { error, write } = useCostWrite(form.from, onSaved);
+
   const save = async () => {
     const found = validateMeterCost(form);
     setInvalid(found);
     if (Object.keys(found).length) return;
-    setError(null);
-    const effectiveFrom = costFrom(form.from);
-    try {
-      await catalogCostApi(tenantId).setMeterCost({ meterKey: line.meterKey, unitSize: form.unitSize.trim(), unitCost: form.unitCost.trim(), ...(effectiveFrom ? { effectiveFrom } : {}) });
-      setForm((f) => ({ ...f, unitCost: "" }));
-      await onSaved();
-    } catch (e) {
-      setError(message(e));
-    }
+    await write((start) =>
+      catalogCostApi(tenantId)
+        .setMeterCost({ meterKey: line.meterKey, unitSize: form.unitSize.trim(), unitCost: form.unitCost.trim(), ...start })
+        .then(() => setForm((f) => ({ ...f, unitCost: "" }))),
+    );
   };
 
   return (
     <Card className="flex flex-col gap-2 p-3">
       <p className="text-sm font-bold text-text-primary">
         {name}:{" "}
-        {current ? <span dir="auto">{shown(current)}</span> : <span className="text-error">{t("common", C.meters.none)}</span>}
+        {isCostSet(current) ? <span dir="auto">{shown(current)}</span> : <span className="text-error">{t("common", C.meters.none)}</span>}
       </p>
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
         <Field label={t("common", C.meters.unitSize)} error={invalid.unitSize}>
@@ -99,6 +97,7 @@ function MeterCostCard({ line, name, onSaved }: { line: MeterCostLine; name: str
           {t("common", C.save)}
         </Button>
       </div>
+      {isCostSet(current) && <UnsetCostAction id={line.meterKey} onUnset={() => void write((start) => catalogCostApi(tenantId).unsetMeterCost(line.meterKey, start))} />}
       {error && <Alert>{error}</Alert>}
     </Card>
   );
