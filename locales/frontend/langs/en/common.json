@@ -1521,7 +1521,7 @@
       "fromHint": "\"The start of this month\" also costs this month's sales. Closed months never change.",
       "save": "Save cost",
       "history": "Cost history",
-      "effectiveFrom": "From {time}",
+      "effectiveFrom": "From {{time}}",
       "current": "In effect",
       "scheduled": "Scheduled",
       "loadFailed": "Costs could not be read.",
@@ -1531,7 +1531,7 @@
         "empty": "There is no meter to cost.",
         "unitSize": "Units",
         "unitCost": "Cost of these units",
-        "perUnits": "{cost} per {size} {unit}",
+        "perUnits": "{{cost}} per {{size}} {{unit}}",
         "none": "No cost set"
       },
       "units": {
