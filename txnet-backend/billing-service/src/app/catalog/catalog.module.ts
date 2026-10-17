@@ -5,6 +5,8 @@ import { LocaleModule } from '../locale/locale.module';
 import { LocaleService } from '../locale/locale.service';
 import { CatalogAdminController } from './catalog-admin.controller';
 import { CatalogAdminService } from './catalog-admin.service';
+import { CatalogCostController, ResellerCatalogCostController } from './catalog-cost.controller';
+import { CatalogCostService } from './catalog-cost.service';
 import { CatalogReadService } from './catalog-reads';
 import { CATALOG_TEXT_STORE, CatalogTextService } from './catalog-texts';
 import { ResellerCatalogController } from './reseller-catalog.controller';
@@ -24,10 +26,11 @@ import { SeasonInternalController } from './season-internal.controller';
  */
 @Module({
   imports: [LocaleModule],
-  controllers: [CatalogAdminController, ResellerCatalogController, SeasonInternalController],
+  controllers: [CatalogAdminController, ResellerCatalogController, CatalogCostController, ResellerCatalogCostController, SeasonInternalController],
   providers: [
     CatalogReadService,
     CatalogAdminService,
+    CatalogCostService,
     ResellerCatalogService,
     ResellerAccess,
     CatalogTextService,

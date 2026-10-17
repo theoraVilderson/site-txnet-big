@@ -282,7 +282,7 @@ export class ResellerCatalogService {
    * The work `await`s inside itself, as `runWithTenant` requires: a Prisma
    * promise returned unawaited would run after the scope has closed.
    */
-  private async run<T>(
+  async run<T>(
     actor: ResellerCatalogActor,
     tenantId: string,
     capability: TenantCapabilityName,

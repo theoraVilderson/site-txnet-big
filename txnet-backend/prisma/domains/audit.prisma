@@ -77,6 +77,9 @@ enum AdminAction {
   // F-118-m. A rate card is history, as a price is.
   catalog_rate_card_set
   catalog_rate_card_deactivate
+  // F-1002-d. A cost is history, as a price is.
+  catalog_variant_cost_set
+  catalog_meter_cost_set
   // F-503-a. A campaign is two price rows; cancelling it switches both off.
   catalog_campaign_create
   catalog_campaign_cancel
@@ -255,6 +258,9 @@ enum AuditTargetType {
   season
   // F-118-m.
   rate_card
+  // F-1002-d.
+  variant_cost
+  meter_cost
   notification_campaign
   // F-311-u3. A bulk job by filter, not any one Grant it acted on.
   grant_bulk_job

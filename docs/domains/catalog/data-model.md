@@ -24,6 +24,8 @@ Source of truth: `txnet-backend/prisma/domains/catalog.prisma` (Postgres schema
 | season | a tenant's recurring window (F-505-a, `20261002002100`): `kind` dated (Jalali `month`/`day`) or weekly (`weekday`) — CHECK by kind; `startMinute`, `durationMinutes`, `isActive`; never deleted (its campaigns name it, `Restrict`) | shared-read | permanent |
 | season_price | a season's price for one of its tenant's variants (PK season, variant) | `tenantId` = its variant's, shared-read | as long as its season and variant |
 | rate_card | what a variant charges for one meter (F-118-d, ADR-0105): `meterKey` (FK `meter.key`, RESTRICT), `unitSize` (BIGINT, in the meter's unit), `unitPrice` `Decimal(18,8)`, `currencyCode`, `mode` `prepaid \| postpaid`, `includedQuantity` (BIGINT), `afterIncluded` `stop \| metered`, from `effectiveFrom`; append-only (`rate_card_is_history`) | `tenantId` = its variant's, shared-read | as long as its variant (FK `ON DELETE CASCADE`) |
+| variant_cost | what one sale of a variant costs its tenant (F-1002-d, ADR-0151): `amount` `Decimal(18,2)` ≥ 0, `currencyCode`, from `effectiveFrom`; never changed (`cost_is_history`) | `tenantId` = its variant's, **strict** (no shared read) | as long as its variant (CASCADE) |
+| meter_cost | what `unitSize` units of a meter cost a tenant (F-1002-d): `meterKey` (FK `meter.key`, RESTRICT; never `vpn.traffic`), `unitCost` `Decimal(18,8)` ≥ 0, `currencyCode`, from `effectiveFrom`; never changed or deleted | `tenantId`, **strict** | permanent |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

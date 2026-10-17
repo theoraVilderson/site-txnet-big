@@ -138,6 +138,8 @@ model Meter {
   grantMeters GrantMeter[]
   /// F-118-n1: what the platform charges a reseller for it.
   packageRates TenantPackageMeterRate[]
+  /// F-1002-d: what a unit of it costs each tenant (ADR-0151).
+  costs        MeterCost[]
 
   @@map("meter")
   @@schema("catalog")
@@ -256,6 +258,8 @@ model ProductVariant {
   panelGroup          PanelGroup?          @relation(fields: [panelGroupId], references: [id], onDelete: Restrict)
   prices              Price[]
   rateCards           RateCard[]
+  /// F-1002-d: what one sale of it costs its tenant (ADR-0151).
+  costs               VariantCost[]
   campaigns           PriceCampaign[]
   seasonPrices        SeasonPrice[]
   couponServiceScopes CouponServiceScope[]
@@ -447,6 +451,52 @@ model RateCard {
   @@index([variantId, meterKey, effectiveFrom(sort: Desc)])
   @@index([tenantId])
   @@map("rate_card")
+  @@schema("catalog")
+}
+
+/// F-1002-d (ADR-0151): what one sale of a variant costs its tenant — a
+/// supplier's order, a licence. History like `price`: a change is a new row
+/// from `effectiveFrom`, never an edit. Private to its tenant (RLS, no
+/// shared read): a reseller never reads the platform's costs.
+model VariantCost {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  variantId        String   @db.Uuid
+  /// Per sale, in `currencyCode`; 0 is a cost (ADR-0151 (5)).
+  amount           Decimal  @db.Decimal(18, 2)
+  /// The tenant's pricing currency when written, as a price's (F-116-d).
+  currencyCode     String
+  effectiveFrom    DateTime
+  createdByAdminId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, effectiveFrom(sort: Desc)])
+  @@index([tenantId])
+  @@map("variant_cost")
+  @@schema("catalog")
+}
+
+/// F-1002-d (ADR-0151): what `unitSize` units of a meter cost a tenant —
+/// API calls bought from a supplier. Never `vpn.traffic`: its cost is its
+/// panels' (`network.panel_cost`). History, private to its tenant.
+model MeterCost {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  meterKey         String
+  unitSize         BigInt
+  /// For `unitSize` units, in `currencyCode`; `Decimal(18, 8)` as a rate card's.
+  unitCost         Decimal  @db.Decimal(18, 8)
+  currencyCode     String
+  effectiveFrom    DateTime
+  createdByAdminId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  meter Meter @relation(fields: [meterKey], references: [key], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, meterKey, effectiveFrom(sort: Desc)])
+  @@map("meter_cost")
   @@schema("catalog")
 }
 

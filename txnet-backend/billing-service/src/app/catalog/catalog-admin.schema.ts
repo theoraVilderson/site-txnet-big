@@ -42,9 +42,9 @@ const FEATURE_KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 /** A SKU travels in a link (`?start=buy_<sku>`, F-314). */
 const SKU = /^[A-Z0-9][A-Z0-9_-]{1,39}$/;
 
-const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(DECIMAL, { message: `${what} must be a decimal string` });
-const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
-const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
+export const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(DECIMAL, { message: `${what} must be a decimal string` });
+export const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
+export const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
 const i18nKey = (what: string) => z.string().regex(I18N_KEY, { message: `${what} must be an i18n key` });
 /** A language code as locale-service names it: `de`, `pt-BR`. Which exist is locale-service's answer, not a list here (§1.1). */
 const LANG = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/;
@@ -192,10 +192,10 @@ const variantFields = {
 };
 
 /** `Decimal(18, 8)`: at most 10 whole digits and 8 places — a GiB can cost a fraction of a cent. */
-const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
+export const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 /** A quantity in the meter's unit, as a string: bytes pass 2^53. */
 const QUANTITY = /^(0|[1-9]\d{0,18})$/;
-const quantity = (what: string) => z.string({ message: `${what} must be a whole number string` }).regex(QUANTITY, { message: `${what} must be a whole number string` });
+export const quantity = (what: string) => z.string({ message: `${what} must be a whole number string` }).regex(QUANTITY, { message: `${what} must be a whole number string` });
 
 /**
  * A rate card's terms (F-118-m, ADR-0105 decision 3). The database's CHECKs,

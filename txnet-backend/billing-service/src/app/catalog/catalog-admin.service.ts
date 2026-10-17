@@ -591,7 +591,7 @@ export class CatalogAdminService {
     if (!group || (group.tenantId !== null && group.tenantId !== tenantId)) throw new CatalogAdminRefused('panel_group_not_found', id);
   }
 
-  private within<T>(owner: boolean, fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+  within<T>(owner: boolean, fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return owner ? this.all.$transaction(fn) : tenantTransaction(this.prisma, fn);
   }
 
@@ -1844,7 +1844,7 @@ export class CatalogAdminService {
   }
 
   /** A row the caller may manage, or the table's own *not found* — another tenant's and the platform's alike. */
-  private async managed(
+  async managed(
     db: Prisma.TransactionClient,
     model: 'productCategory' | 'product' | 'productCapability' | 'productVariant' | 'price' | 'rateCard' | 'priceCampaign' | 'season',
     missing: CatalogAdminRejection,
@@ -1883,7 +1883,7 @@ export class CatalogAdminService {
     }
   }
 
-  private async audit(
+  async audit(
     tx: Prisma.TransactionClient,
     actor: CatalogActor,
     tenantId: string | null,

@@ -89,7 +89,7 @@ import {
 } from './reseller-catalog.service';
 
 /** Every refusal of either door gets a status; a new reason does not compile until it gets one. */
-const STATUS: Record<ResellerCatalogRejection, CatalogRefusalStatus> = {
+export const STATUS: Record<ResellerCatalogRejection, CatalogRefusalStatus> = {
   // ResellerAccess (invariant 21): who may configure this reseller.
   not_allowed: 403,
   reseller_not_found: 404,
