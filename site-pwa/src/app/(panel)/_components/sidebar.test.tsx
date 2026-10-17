@@ -165,6 +165,23 @@ describe("PanelSidebar", () => {
     expect(within(flyout).getByRole("link", { name: S.menu.deposit })).toBeInTheDocument();
   });
 
+  it("collapsed, still scrolls, so settings and logout stay on a short screen", () => {
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: true, closedSections: [] } } });
+    render(<PanelSidebar />);
+    const nav = screen.getByRole("navigation", { name: S.navigation });
+    expect(nav.className).toContain("overflow-y-auto");
+    expect(nav.className).not.toContain("overflow-visible");
+
+    // The tooltip is drawn outside the scroll box, so scrolling cannot clip it.
+    const link = within(nav).getAllByRole("link")[0];
+    fireEvent.pointerEnter(link);
+    const tip = screen.getAllByText(link.textContent ?? "").find((el) => el.getAttribute("aria-hidden") !== null);
+    expect(tip).toBeDefined();
+    expect(nav.contains(tip ?? null)).toBe(false);
+    fireEvent.pointerLeave(link);
+    expect(tip).not.toBeInTheDocument();
+  });
+
   it("counts unread support, the unassigned queue and open manual payments, 9+ past nine", async () => {
     me = STAFF;
     vi.mocked(supportApi.list).mockResolvedValue({ items: [{ unread: 2 }, { unread: 1 }, { unread: 0 }], nextBefore: null } as never);

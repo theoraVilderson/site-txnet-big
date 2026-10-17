@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { LogoutButton } from "./LogoutButton";
 
 /**
@@ -52,9 +52,10 @@ describe("the logout button", () => {
 
   it("goes icon-only on the collapsed rail without losing its name", () => {
     render(<LogoutButton collapsed />);
+    fireEvent.pointerEnter(screen.getByRole("button", { name: "logout" }));
 
-    // The word is in the tree twice on a collapsed rail — the label and the
-    // hover tooltip beside it — which is exactly why the tooltip is
+    // The word is in the tree twice on a hovered collapsed rail — the label
+    // and the tooltip beside it — which is exactly why the tooltip is
     // `aria-hidden`: without that, a screen reader would say it twice.
     const both = screen.getAllByText("logout");
     expect(both).toHaveLength(2);

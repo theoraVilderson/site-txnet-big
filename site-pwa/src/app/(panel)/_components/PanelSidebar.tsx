@@ -422,7 +422,9 @@ export function PanelSidebar() {
   ) =>
     list.map((section) => {
       const foldId = section.id;
-      const folded = withHeadings && closedSections.includes(foldId);
+      // On the rail a heading is a plain line, never a fold: a line that hid icons
+      // read as a broken control (2026-10-16). Saved folds return when wide.
+      const folded = withHeadings && !railCollapsed && closedSections.includes(foldId);
       const listId = `${PANEL_SIDEBAR_ID}-section-${foldId}`;
       const body = (
         <div className="space-y-1 pb-2">
@@ -431,28 +433,26 @@ export function PanelSidebar() {
         </div>
       );
       if (!withHeadings) return <div key={foldId}>{body}</div>;
+      const rail = railCollapsed ? { role: "group", "aria-label": t("common", section.label) } : {};
       return (
-        <div key={foldId} className="mt-2 first:mt-0">
-          <button
+        <div key={foldId} {...rail} className="mt-2 first:mt-0">
+          {railCollapsed ? <span aria-hidden className="mx-auto mb-2 block h-px w-6 bg-card-border" /> : <button
             type="button"
             aria-expanded={!folded}
             aria-controls={listId}
             onClick={() => toggleSidebarSection(foldId)}
-            className={`flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-2xs font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary ${whenCollapsed(
-              "lg:justify-center lg:px-0",
-            )}`}
+            className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-2xs font-bold uppercase tracking-wide text-text-secondary transition-colors hover:text-text-primary"
           >
-            <span className={whenCollapsed("lg:sr-only")}>{t("common", section.label)}</span>
+            <span>{t("common", section.label)}</span>
             <ChevronDown
               size={14}
               aria-hidden
-              className={`transition-transform duration-200 ${folded ? "-rotate-90 rtl:rotate-90" : ""} ${whenCollapsed("lg:hidden")}`}
+              className={`transition-transform duration-200 ${folded ? "-rotate-90 rtl:rotate-90" : ""}`}
             />
-            {collapsed && <span aria-hidden className="hidden h-px w-6 bg-card-border lg:block" />}
-          </button>
+          </button>}
           <AnimatePresence initial={false}>
             {!folded && (
-              <motion.div key="list" id={listId} {...FOLD} className={`overflow-hidden ${whenCollapsed("lg:overflow-visible")}`}>
+              <motion.div key="list" id={listId} {...FOLD} className="overflow-hidden">
                 {body}
               </motion.div>
             )}
@@ -518,9 +518,9 @@ export function PanelSidebar() {
 
         <nav
           aria-label={t("common", S.navigation)}
-          // A collapsed tooltip is drawn outside the rail, which a scroll
-          // container would clip — so the rail does not scroll while collapsed.
-          className={`isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4 ${whenCollapsed("lg:overflow-visible")}`}
+          // Scrolls collapsed too: a rail that did not pushed settings and
+          // logout off a short screen. Its tooltips portal out (CollapsedTooltip).
+          className="isolate flex-1 overflow-y-auto overflow-x-hidden px-3 py-4"
         >
           {pinned.length > 0 && (
             <div className="mb-2 border-b border-card-border pb-2">

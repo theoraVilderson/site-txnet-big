@@ -149,10 +149,20 @@ describe("pins (N5)", () => {
 describe("folded sections (N2)", () => {
   it("are the person's ui.sidebar.closedSections, written beside the collapse", () => {
     me = STAFF;
-    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: true, closedSections: [] } } });
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: false, closedSections: [] } } });
     render(<PanelSidebar />);
     fireEvent.click(screen.getByRole("button", { name: S.sections.sales }));
-    expect(useUiPreferences.getState().prefs["ui.sidebar"]).toEqual({ collapsed: true, closedSections: ["sales"] });
+    expect(useUiPreferences.getState().prefs["ui.sidebar"]).toEqual({ collapsed: false, closedSections: ["sales"] });
+  });
+
+  it("do not fold on the collapsed rail, where a heading is only a divider", () => {
+    // A bare line that opened a section on click read as a broken control (user, 2026-10-16).
+    me = STAFF;
+    useUiPreferences.setState({ prefs: { ...DEFAULT_UI_PREFERENCES, "ui.sidebar": { collapsed: true, closedSections: ["sales"] } } });
+    render(<PanelSidebar />);
+    expect(screen.queryByRole("button", { name: S.sections.sales })).toBeNull();
+    expect(screen.getByRole("link", { name: S.menu.catalog })).toBeInTheDocument();
+    expect(useUiPreferences.getState().prefs["ui.sidebar"].closedSections).toEqual(["sales"]);
   });
 
   it("render folded from the saved preference, with nothing on this device", () => {
