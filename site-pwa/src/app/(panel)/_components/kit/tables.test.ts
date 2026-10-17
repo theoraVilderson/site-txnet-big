@@ -5,12 +5,14 @@ import { describe, expect, it } from "vitest";
 /**
  * Every table in the panel is a kit `DataTable` (UX-1-h, `contract.ux.md`
  * K13), so every one has its phone layout: a `<table>` written by hand shows a
- * phone a strip it has to scroll sideways. The kit's own file is the one place
- * a `<table>` element is drawn.
+ * phone a strip it has to scroll sideways. The kit draws `<table>` in two
+ * places only: `DataTable`, and the cohort heatmap — a grid read across and
+ * down, which a card per row would break; it scrolls inside its card and says
+ * every cell in words (F-1004-b, panel-web `contract.analytics.md` rule 12).
  */
 
 const PANEL = join(__dirname, "..", "..");
-const KIT_TABLE = join(__dirname, "DataTable.tsx");
+const KIT_TABLES = [join(__dirname, "DataTable.tsx"), join(__dirname, "charts", "CohortGrid.tsx")];
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -23,7 +25,7 @@ function sources(dir: string): string[] {
 describe("panel tables", () => {
   it("are all drawn by the kit DataTable", () => {
     const raw = sources(PANEL)
-      .filter((path) => path !== KIT_TABLE)
+      .filter((path) => !KIT_TABLES.includes(path))
       .filter((path) => /<table[\s>]/.test(readFileSync(path, "utf8")))
       .map((path) => relative(PANEL, path));
     expect(raw).toEqual([]);
