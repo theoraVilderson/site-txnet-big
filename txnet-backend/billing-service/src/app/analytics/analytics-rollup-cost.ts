@@ -2,7 +2,7 @@ import { Prisma, TenantBillingReasonType } from '@prisma/client';
 import { operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CostDayRow, PanelUse, ResellerCharge, WholesaleUse, attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
-import { ConvertedCost, convertCosts, currencyOnDay, rateLookup, readCurrencyChanges, readRates, saleCurrencyOf } from './analytics-fx';
+import { ConvertedCost, convertCosts, currencyAt, currencyOnDay, rateLookup, readCurrencyChanges, readRates, saleCurrencyOf } from './analytics-fx';
 import type { CrossTenantReader } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
 import { RollupRange, dayIn } from './analytics-rollup';
@@ -74,7 +74,7 @@ type ChargeRow = Omit<ResellerCharge, 'grant'> & { grantId: string | null; produ
 async function readResellerCharges(tx: Prisma.TransactionClient, r: RollupRange, reasons: readonly TenantBillingReasonType[], from: Date): Promise<ResellerCharge[]> {
   const rows = await tx.$queryRaw<ChargeRow[]>`
     SELECT to_char(${dayIn(Prisma.sql`b."createdAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", b."currencyCode",
-           CASE WHEN b."direction" = 'debit' THEN b."amount" ELSE -b."amount" END AS "amount",
+           CASE WHEN b."direction" = 'debit' THEN b."amount" ELSE -b."amount" END AS "amount", ${currencyAt(Prisma.sql`b."createdAt"`)} AS "soldIn",
            g."id" AS "grantId", v."productId", g."userId",
            (SELECT c."panelId" FROM network.config c WHERE c."grantId" = g."id" ORDER BY c."createdAt" LIMIT 1) AS "panelId"
     FROM tenant.tenant_billing_transaction b

@@ -98,6 +98,38 @@ describe('attributeWholesale', () => {
   });
 });
 
+describe('attributeWholesale, a currency change between two charges of one day (F-1001-r)', () => {
+  it('keeps each charge in the currency its tenant sold in when it was made, split or whole', () => {
+    const grant = { productId: PRODUCT_B, panelId: null, userId: USER };
+    const rows = attributeWholesale(
+      [
+        { day: '2026-10-01', currencyCode: 'EUR', amount: d('1.00'), soldIn: 'USD' },
+        { day: '2026-10-01', currencyCode: 'EUR', amount: d('3.00'), soldIn: 'IRT' },
+        { day: '2026-10-01', currencyCode: 'EUR', amount: d('2.00'), soldIn: 'USD', grant },
+        { day: '2026-10-01', currencyCode: 'EUR', amount: d('5.00'), soldIn: 'IRT', grant },
+      ],
+      [{ day: '2026-10-01', productId: PRODUCT_A, panelId: PANEL, userId: USER, bytes: BigInt(10) }],
+    );
+    expect(rows.map((r) => [r.productId, r.soldIn, r.cost.toFixed(2)])).toEqual([
+      [PRODUCT_B, 'USD', '2.00'],
+      [PRODUCT_B, 'IRT', '5.00'],
+      [PRODUCT_A, 'IRT', '3.00'],
+      [PRODUCT_A, 'USD', '1.00'],
+    ]);
+  });
+});
+
+describe('ownCosts, a use on the day of a currency change (F-1001-r)', () => {
+  it('keeps each use in the currency sold in when it happened', () => {
+    const use = { day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD', quantity: BigInt(1000), unitSize: BigInt(1000), unitCost: d('0.50') };
+    const rows = ownCosts([], [{ ...use, soldIn: 'USD' }, { ...use, soldIn: 'IRT' }]);
+    expect(rows.map((r) => [r.soldIn, r.cost.toFixed(2)])).toEqual([
+      ['USD', '0.50'],
+      ['IRT', '0.50'],
+    ]);
+  });
+});
+
 describe('spreadSubscriptions', () => {
   it('spreads each charge over the days until the next one, the last until the period end, inside the window only', () => {
     const rows = spreadSubscriptions(

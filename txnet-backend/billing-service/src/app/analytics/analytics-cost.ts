@@ -96,7 +96,7 @@ export type CostOwner = { productId: string | null; panelId: string | null; user
  * A reseller's ledger row with the platform, signed: a charge positive, a
  * refund negative; `grant` when the row names a Grant (ADR-0151 (4)).
  */
-export type ResellerCharge = { day: Day; currencyCode: string; amount: Prisma.Decimal; grant?: CostOwner | null };
+export type ResellerCharge = { day: Day; currencyCode: string; amount: Prisma.Decimal; grant?: CostOwner | null; soldIn?: string };
 
 /** A reseller's own use of the platform's panels on one day, per product, panel and user. */
 export type WholesaleUse = { day: Day; productId: string | null; panelId: string | null; userId: string | null; bytes: bigint };
@@ -111,16 +111,18 @@ export type WholesaleUse = { day: Day; productId: string | null; panelId: string
 export function attributeWholesale(all: readonly ResellerCharge[], use: readonly WholesaleUse[]): CostDayRow[] {
   // A charge that names a Grant is that Grant's, whole (ADR-0151 (4)); only the rest is split.
   const rows: CostDayRow[] = sumByCell(
-    all.filter((c) => c.grant).map((c) => ({ ...(c.grant as CostOwner), day: c.day, kind: 'wholesale' as const, currencyCode: c.currencyCode, cost: c.amount })),
+    all.filter((c) => c.grant).map((c) => ({ ...(c.grant as CostOwner), day: c.day, kind: 'wholesale' as const, currencyCode: c.currencyCode, cost: c.amount, soldIn: c.soldIn })),
   );
   const charges = all.filter((c) => !c.grant);
-  const keys = [...new Set(charges.map((c) => `${c.day}|${c.currencyCode}`))].sort();
-  for (const key of keys) {
-    const [day, currencyCode] = key.split('|');
-    const net = charges.filter((c) => c.day === day && c.currencyCode === currencyCode).reduce((sum, c) => sum.plus(c.amount), ZERO);
+  // A day is split per currency paid and per currency sold in when paid (F-1001-r): a change between two charges keeps them apart.
+  const groupOf = (c: ResellerCharge) => [c.day, c.currencyCode, c.soldIn ?? ''].join('|');
+  for (const key of [...new Set(charges.map(groupOf))].sort()) {
+    const group = charges.filter((c) => groupOf(c) === key);
+    const { day, currencyCode, soldIn } = group[0];
+    const net = group.reduce((sum, c) => sum.plus(c.amount), ZERO);
     if (net.isZero()) continue;
     const used = use.filter((u) => u.day === day && u.bytes > BigInt(0));
-    const row = { day, kind: 'wholesale' as const, servedTenantId: null, currencyCode };
+    const row = { day, kind: 'wholesale' as const, servedTenantId: null, currencyCode, soldIn };
     if (used.length === 0) {
       rows.push({ ...row, productId: null, panelId: null, userId: null, cost: net, bytes: BigInt(0) });
       continue;
@@ -169,7 +171,7 @@ function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; curr
 /** A sale or the refund that undoes it, priced at the variant's cost in effect when it was sold. */
 export type SaleCost = CostOwner & { day: Day; currencyCode: string; cost: Prisma.Decimal; sale: boolean; soldIn: string };
 /** A Grant's use of a meter on a day, and the meter's unit cost in effect then. */
-export type UsageCost = CostOwner & { day: Day; currencyCode: string; quantity: bigint; unitSize: bigint; unitCost: Prisma.Decimal };
+export type UsageCost = CostOwner & { day: Day; currencyCode: string; quantity: bigint; unitSize: bigint; unitCost: Prisma.Decimal; soldIn?: string };
 
 /**
  * The tenant's own costs (F-1002-e, ADR-0151 (1)): each sale its variant's

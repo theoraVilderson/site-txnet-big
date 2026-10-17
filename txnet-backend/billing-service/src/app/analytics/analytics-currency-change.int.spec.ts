@@ -104,11 +104,11 @@ function purchase(invoice: string, amount: string, currency: string, n: number) 
     VALUES (gen_random_uuid(), '${BUYER}', '${RESELLER}', ${amount}, 'debit', 'product_purchase', '${invoice}', 0, '${currency}', '${AT(n)}')`));
 }
 
-/** What the reseller pays the platform for use on day `n`, in the billing wallet's currency then. */
-function wholesale(amount: string, currency: string, n: number) {
+/** What the reseller pays the platform for use on day `n` (at `at`, else 11:30 Tehran), in the billing wallet's currency then. */
+function wholesale(amount: string, currency: string, n: number, at = AT(n)) {
   return sql(`
     INSERT INTO tenant.tenant_billing_transaction (id, "walletId", amount, direction, "reasonType", "balanceAfter", "currencyCode", "createdAt")
-    SELECT gen_random_uuid(), w.id, ${amount}, 'debit', 'metered_usage_charge', 0, '${currency}', '${AT(n)}'
+    SELECT gen_random_uuid(), w.id, ${amount}, 'debit', 'metered_usage_charge', 0, '${currency}', '${at}'
     FROM tenant.tenant_billing_wallet w WHERE w."tenantId" = '${RESELLER}'`);
 }
 
@@ -135,6 +135,8 @@ async function story() {
   await wholesale('2.00', 'USD', 2);
   await change(PLATFORM, pair('EUR', EUR_PER_USD, EUR), 3);
   await wholesale('1.00', 'EUR', 4);
+  // 05:30 in Tehran on day 5: before the reseller's change at 06:30 the same day (F-1001-r).
+  await wholesale('1.00', 'EUR', 5, `${DAY(5)}T02:00:00Z`);
   await change(RESELLER, pair('IRR', IRR_PER_USD, IRR), 5);
   await purchase(SECOND_SALE, '10500000', 'IRR', 5);
   await wholesale('1.00', 'EUR', 6);
@@ -164,6 +166,8 @@ describe('a reseller and its platform each change currency mid-story (F-1001-q)'
       // The platform is in euros by day 4, the reseller still in dollars: 1 / 0.92.
       [DAY(4), 'wholesale', 'EUR', 'USD', '1.086957'],
       [DAY(5), 'sale', 'USD', 'IRR', '4200000.000000'],
+      // Paid before the change that morning: the dollars sold in then, not the day's last money (F-1001-r).
+      [DAY(5), 'wholesale', 'EUR', 'USD', '1.086957'],
       [DAY(6), 'sale', 'USD', 'IRR', '4200000.000000'],
       // The day-1 sale's refund takes its cost back in dollars, beside a new sale in rials.
       [DAY(6), 'sale', 'USD', 'USD', '-4.000000'],
@@ -192,7 +196,7 @@ describe('a reseller and its platform each change currency mid-story (F-1001-q)'
     });
     expect(m.users?.[0]).toMatchObject({ id: BUYER, cost: { IRR: '8400000.00', USD: '0.00' }, loss: false });
     // What the reseller paid the platform before its own change stays in dollars; after it, in rials.
-    expect(m.costParts.unallocated).toEqual({ IRR: '1141304.35', USD: '3.09' });
+    expect(m.costParts.unallocated).toEqual({ IRR: '1141304.35', USD: '4.17' });
     expect(m.totals.net.value).toEqual({ IRR: '21000000.00', USD: '0.00' });
   });
 

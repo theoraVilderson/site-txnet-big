@@ -3,6 +3,7 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { addDays, dayOf, type Day } from './analytics-days';
 import { CostDayRow, SaleCost, UsageCost, ownCosts } from './analytics-cost';
+import { currencyAt } from './analytics-fx';
 import { RollupRange, dayIn } from './analytics-rollup';
 
 /**
@@ -47,7 +48,7 @@ function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<Sa
 function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<UsageCost[]> {
   return tx.$queryRaw`
     SELECT to_char(${dayIn(Prisma.sql`e."occurredAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", mc."currencyCode", SUM(e."quantity")::bigint AS "quantity",
-           mc."unitSize", mc."unitCost", v."productId", g."userId", ${panelOf(Prisma.sql`g."id"`)} AS "panelId"
+           mc."unitSize", mc."unitCost", v."productId", g."userId", ${panelOf(Prisma.sql`g."id"`)} AS "panelId", ${currencyAt(Prisma.sql`e."occurredAt"`)} AS "soldIn"
     FROM billing.usage_event e
     JOIN entitlement."grant" g ON g."id" = e."grantId"
     LEFT JOIN catalog.product_variant v ON v."id" = g."variantId"
@@ -62,7 +63,7 @@ function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<U
         SELECT 1 FROM entitlement.grant_meter gm
         WHERE gm."grantId" = e."grantId" AND gm."meterKey" = e."meterKey" AND gm."wholesalePayerTenantId" IS NOT NULL
       )
-    GROUP BY 1, 2, 4, 5, 6, 7, 8`;
+    GROUP BY 1, 2, 4, 5, 6, 7, 8, 9`;
 }
 
 /** The tenant's sale and usage costs in `r`, as cost rows. */

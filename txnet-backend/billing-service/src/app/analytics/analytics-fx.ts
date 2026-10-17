@@ -61,6 +61,16 @@ export function currencyOnDay(operating: string, changes: readonly CurrencyChang
   return (day) => changes.find((c) => c.day > day)?.fromCode ?? operating;
 }
 
+/**
+ * The currency the tenant in scope sold in at `instant` (F-1001-r): the one
+ * the first change after it left, else its operating currency now. For a cost
+ * that has an instant of its own; a whole day's cost takes `currencyOnDay`.
+ */
+export const currencyAt = (instant: Prisma.Sql) => Prisma.sql`COALESCE(
+  (SELECT c."fromCode" FROM billing.currency_change c
+   WHERE c."tenantId" = public.current_tenant_id() AND c."createdAt" > ${instant} ORDER BY c."createdAt" LIMIT 1),
+  (SELECT t."operatingCurrencyCode" FROM tenant.tenant t WHERE t."id" = public.current_tenant_id()))`;
+
 /** A tenant's currency changes in the order made, each on its day in `zone` (the tenant in scope; RLS). */
 export function readCurrencyChanges(tx: Prisma.TransactionClient, zone: string): Promise<CurrencyChangeDay[]> {
   return tx.$queryRaw<CurrencyChangeDay[]>`
