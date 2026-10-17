@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client';
 
 import { CrossTenantReader, TabContext } from './analytics-context';
+import { daysBetween } from './analytics-days';
 import { Amounts, FEWER_THAN, MoneyKpi, amountsOf, byCurrency, currenciesOf, hiddenKeys, moneyKpi } from './analytics-figures';
+import { fxAmount, fxCurrency, fxJoin, readFx } from './analytics-fx';
 import { MarginCell, MoneyRow, marginCellOf, marginCellsOf } from './analytics-margin-cells';
 import { AnalyticsFilters, DayMap, Window, bucketJoin, in_, productPanel, readBuyers } from './analytics-read';
 import { settingsOf } from './analytics-settings';
@@ -69,16 +71,22 @@ function readCost(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, 
 
 /**
  * Per reseller: what it paid the platform (its own wholesale and subscription
- * rows, in the currency charged) against what its users' traffic on the
+ * rows, in the currency charged, converted at each day's rate into the
+ * platform's now — ADR-0152 (6)) against what its users' traffic on the
  * platform's panels cost (the platform's rows naming it). Whole-reseller
  * totals, tier A (ADR-0104 (2)); read across tenants, the platform's own tab only.
  */
-async function readResellers(across: CrossTenantReader, w: Window): Promise<{ paid: MoneyRow[]; served: MoneyRow[]; nameOf: Map<string, string> }> {
-  const k = Prisma.sql`k`;
+async function readResellers(c: TabContext, across: CrossTenantReader): Promise<{ paid: MoneyRow[]; served: MoneyRow[]; nameOf: Map<string, string> }> {
+  const w = c.window;
+  const [k, f] = [Prisma.sql`k`, Prisma.sql`f`];
   const span = Prisma.sql`k."day" BETWEEN ${w.from}::date AND ${w.to}::date`;
+  const codes = await across.$queryRaw<{ code: string }[]>`
+    SELECT DISTINCT k."currencyCode" AS "code" FROM billing.analytics_cost_day k WHERE ${span} AND k."kind" IN ('wholesale', 'subscription')`;
+  const fx = await readFx(c.tx, c.operating, codes.map((r) => r.code), daysBetween(w.from, w.to));
   const paid = await across.$queryRaw<MoneyRow[]>`
-    SELECT k."tenantId"::text AS "key", k."currencyCode", SUM(k."cost") AS "amount"
-    FROM billing.analytics_cost_day k JOIN tenant.tenant t ON t."id" = k."tenantId" AND t."tenantType" = 'reseller' AND t."deletedAt" IS NULL
+    SELECT k."tenantId"::text AS "key", ${fxCurrency(fx, Prisma.sql`k."currencyCode"`, f)} AS "currencyCode", SUM(${fxAmount(Prisma.sql`k."cost"`, f)}) AS "amount"
+    FROM billing.analytics_cost_day k ${fxJoin(fx, f, Prisma.sql`k."currencyCode"`, Prisma.sql`k."day"`)}
+    JOIN tenant.tenant t ON t."id" = k."tenantId" AND t."tenantType" = 'reseller' AND t."deletedAt" IS NULL
     WHERE ${span} AND k."kind" IN ('wholesale', 'subscription')
     GROUP BY 1, 2`;
   const served = await across.$queryRaw<MoneyRow[]>`
@@ -140,7 +148,7 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
   const f = { ...c.filters, kind: undefined };
   const [net, cost] = [await readNet(c.tx, c.window, f, null), await readCost(c.tx, c.window, f, null)];
   const prev = c.previous ? { net: await readNet(c.tx, c.previous, f, null), cost: await readCost(c.tx, c.previous, f, null) } : null;
-  const reseller = c.across ? await readResellers(c.across, c.window) : null;
+  const reseller = c.across ? await readResellers(c, c.across) : null;
   const currencies = currenciesOf(c.operating, [...net, ...cost, ...(prev?.net ?? []), ...(prev?.cost ?? []), ...(reseller ? [...reseller.paid, ...reseller.served] : [])].map((r) => r.currencyCode));
   const how = { currencies, operating: c.operating };
 

@@ -1,13 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
-import { OutboxEventType, isPlatformTenant, platformTenantIdOf, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, isPlatformTenant, operatingCurrencyOf, platformTenantIdOf, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { Day, addDays, dayBounds, dayOf } from './analytics-days';
+import { Day, addDays, dayBounds, dayOf, daysBetween } from './analytics-days';
+import { readFx } from './analytics-fx';
 import {
   RollupRange,
   clearFlows,
+  currenciesIn,
   firstActivity,
   lockTenantRollup,
   rollupFingerprint,
@@ -41,7 +43,8 @@ export type AnalyticsRefreshResult = { tenants: number; changed: number; rebuilt
  * transaction — idempotent, so a redelivered tick (ADR-0027) changes nothing —
  * and writes `billing.analytics.refreshed` only when a row did change.
  * `refresh` is the 5-minute tick over today and yesterday; a tenant whose zone
- * changed since its days were cut is rebuilt whole instead (principle 5).
+ * changed since its days were cut (principle 5), or whose currency changed
+ * since its money was converted (ADR-0152 (4)), is rebuilt whole instead.
  */
 /**
  * A changed pass, told to whoever has the page open: the tenant's own
@@ -79,8 +82,9 @@ export class AnalyticsRollupService {
   /** One tick: today and yesterday of each tenant due, or the whole history of one whose zone moved. */
   async refresh(now = new Date()): Promise<AnalyticsRefreshResult> {
     // Never-rolled tenants first, then the stalest: one bounded page per tick.
-    const tenants = await this.all.$queryRaw<{ id: string; timezone: string; rolledIn: string | null; rebuilding: boolean }[]>`
-      SELECT t."id", t."timezone", s."timeZone" AS "rolledIn", s."rebuildingSince" IS NOT NULL AS "rebuilding"
+    const tenants = await this.all.$queryRaw<{ id: string; timezone: string; rolledIn: string | null; currency: string; rolledInCurrency: string | null; rebuilding: boolean }[]>`
+      SELECT t."id", t."timezone", s."timeZone" AS "rolledIn", t."operatingCurrencyCode" AS "currency", s."currencyCode" AS "rolledInCurrency",
+             s."rebuildingSince" IS NOT NULL AS "rebuilding"
       FROM tenant.tenant t
       LEFT JOIN billing.analytics_rollup_state s ON s."tenantId" = t."id"
       ORDER BY s."refreshedAt" ASC NULLS FIRST, t."id"
@@ -89,7 +93,7 @@ export class AnalyticsRollupService {
     const result: AnalyticsRefreshResult = { tenants: tenants.length, changed: 0, rebuilt: 0 };
     for (const tenant of tenants) {
       // A rebuild that died mid-way left its flag up: it is run again, never trusted.
-      if (tenant.rolledIn !== tenant.timezone || tenant.rebuilding) {
+      if (tenant.rolledIn !== tenant.timezone || tenant.rolledInCurrency !== tenant.currency || tenant.rebuilding) {
         result.rebuilt++;
         if (await this.rebuild(tenant.id, now)) result.changed++;
         continue;
@@ -137,15 +141,18 @@ export class AnalyticsRollupService {
         const zone = how.zone ?? tenant.timezone;
         const range: RollupRange = { fromDay, toDay, zone, ...dayBounds(fromDay, toDay, zone) };
         const today = dayOf(now, zone);
+        // Every money row in the tenant's currency now, each at its own day's rate (ADR-0152).
+        const currency = await operatingCurrencyOf(tx, tenantId);
+        const fx = await readFx(tx, currency, await currenciesIn(tx, range), daysBetween(fromDay, toDay));
 
         const customers = customersRange(range);
         const panels = { tenantId, platform: isPlatformTenant(tenant.tenantType), across: this.all };
         const fingerprint = async () => (await rollupFingerprint(tx, range)) + (await customersFingerprint(tx, customers)) + (await panelsFingerprint(tx, range));
         const before = await fingerprint();
         await clearFlows(tx, range);
-        await writeSales(tx, range);
-        await writeUsers(tx, range);
-        await writePayments(tx, range);
+        await writeSales(tx, range, fx);
+        await writeUsers(tx, range, fx);
+        await writePayments(tx, range, fx);
         if (fromDay <= today && today <= toDay) await writeStockToday(tx, today);
         await writeTraffic(tx, range);
         await writeMeters(tx, range);
@@ -166,11 +173,11 @@ export class AnalyticsRollupService {
         // no answer cached before this commit is served after it.
         await tx.analyticsRollupState.upsert({
           where: { tenantId },
-          create: { tenantId, timeZone: zone, version: 1, refreshedAt: now },
+          create: { tenantId, timeZone: zone, currencyCode: currency, version: 1, refreshedAt: now },
           update: {
             refreshedAt: now,
             ...(changed ? { version: { increment: 1 } } : {}),
-            ...(how.rebuilt ? { timeZone: zone, rebuildingSince: null } : {}),
+            ...(how.rebuilt ? { timeZone: zone, currencyCode: currency, rebuildingSince: null } : {}),
           },
         });
         // Cleared only if no cost was written since it was read: a later ask is the next pass's.

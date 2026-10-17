@@ -24,3 +24,10 @@ export function dayBounds(fromDay: Day, toDay: Day, zone: string): { from: Date;
   const [ty, tm, td] = toDay.split('-').map(Number);
   return { from: zonedMidnight(fy, fm, fd, zone), to: zonedMidnight(ty, tm, td + 1, zone) };
 }
+
+/** Every day `fromDay`..`toDay`, both included, in order. */
+export function daysBetween(fromDay: Day, toDay: Day): Day[] {
+  const days: Day[] = [];
+  for (let day = fromDay; day <= toDay; day = addDays(day, 1)) days.push(day);
+  return days;
+}

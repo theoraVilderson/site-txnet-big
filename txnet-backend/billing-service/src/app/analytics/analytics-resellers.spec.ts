@@ -9,8 +9,11 @@
  *  - **a person through a sparkline.** A reseller's total is tier A, but a
  *    point of its sparkline under 5 buyers is a cell — hidden, and with it the
  *    point it would be the difference of;
- *  - **currencies summed.** A reseller selling in two currencies answers two
- *    amounts; the order is by the platform's operating currency.
+ *  - **a reseller's money read in its own currency** (ADR-0152 (6)). Each
+ *    reseller's rows are in its currency; the platform's page converts every
+ *    row at its day's rate into the platform's before summing — in the query,
+ *    joined by currency and day. Money no rate converts stays apart, never
+ *    summed in; the order is by the platform's currency.
  */
 import { Prisma } from '@prisma/client';
 
@@ -25,11 +28,16 @@ const d = (v: string) => new Prisma.Decimal(v);
 /** The cross-tenant reads, answered by the table each names. */
 function across() {
   const reads: string[] = [];
+  const factors: string[] = [];
   return {
     reads,
+    factors,
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      const sql = Prisma.sql(strings, ...(values as Prisma.Sql[])).sql;
+      const query = Prisma.sql(strings, ...(values as Prisma.Sql[]));
+      const sql = query.sql;
       reads.push(sql);
+      factors.push(...query.values.filter((v): v is string[] => Array.isArray(v) && v.some((x) => /^\d+(\.\d+)?$/.test(String(x)))).flat());
+      if (sql.includes('AS "code"')) return [{ code: 'USD' }, { code: 'EUR' }];
       if (sql.includes('brandName'))
         return [
           { id: ACME, name: 'Acme VPN' },
@@ -59,8 +67,11 @@ function across() {
   };
 }
 
-const ctx = (reader = across()) =>
-  contextOf({} as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false, across: reader as never });
+/** The platform's own transaction: the rates it reads (its pins) — EUR on the window's first day only. */
+const platformTx = (rates: { code: string; day: string; rate: Prisma.Decimal }[] = []) => ({ $queryRaw: async () => rates });
+
+const ctx = (reader = across(), tx = platformTx()) =>
+  contextOf(tx as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false, across: reader as never });
 
 describe('resellersOf', () => {
   it('answers every reseller with sales, largest net first, each with its totals and delta', async () => {
@@ -82,6 +93,16 @@ describe('resellersOf', () => {
   it('hides a sparkline point under 5 buyers, and the one it would be the difference of', async () => {
     const tab = await resellersOf(ctx());
     expect(tab.resellers[0].sparkline.every((p) => p === null)).toBe(true);
+  });
+
+  it("converts each reseller's money in the query, by currency and day, at that day's rate (ADR-0152 (6))", async () => {
+    const reader = across();
+    await resellersOf(ctx(reader, platformTx([{ code: 'EUR', day: '2026-09-01', rate: d('0.8') }])));
+    const sales = reader.reads.find((sql) => sql.includes('analytics_sales_day') && sql.includes('"previous"')) ?? '';
+    expect(sales).toMatch(/unnest\([\s\S]*\) AS f\("code", "day", "factor"\)/);
+    expect(sales).toContain('COALESCE(f."factor", 1)');
+    // One EUR = 1.25 USD on 09-01; 09-02 has no rate, so its EUR stays apart.
+    expect(reader.factors).toContain('1.25');
   });
 
   it('reads every reseller across tenants, bounded', async () => {

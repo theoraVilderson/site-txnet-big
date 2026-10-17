@@ -160,8 +160,8 @@ the figures are cut on the tenant's. **Live everywhere** (`_lib/live.ts`): the
 session's tenant on its `tenant:` channel; a workspace view on its owner's
 `user:` and the platform's `tenant:`, re-reading only for its own reseller
 (F-1001-p, RT-1-e's pair). Names come from billing's `names` (product `nameKey`
--> the published `catalog` texts; a panel's own name). Several currencies: an
-`Alert` with the currency picker, never one sum. Kit additions: `TabLinks` `current` (tabs that share
+-> the published `catalog` texts; a panel's own name). Money is the tenant's currency (ADR-0152); one no rate
+converts: an `Alert` and the picker, never one sum. Kit additions: `TabLinks` `current` (tabs that share
 a path), `BarList` `other` (billing's folded remainder, never folded twice).
 **Export (F-1007-b):** `ExportMenu` in the header saves the tab and filters on
 screen through billing's `format=` (the same door and under-5 rule), saved by

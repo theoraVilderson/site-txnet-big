@@ -121,17 +121,10 @@ by `margin` (below).
 4. **Days.** Panel costs are cut on the UTC date, as the traffic that splits
    them is; a reseller's charges on its tenant day, split by the bytes of the
    same date. Cost is in USD on the platform's rows and in the billing wallet's
-   currency on a reseller's — `cost` is never converted (principle 6); rule 5
-   is its converted copy.
-5. **In the sale's currency** (ADR-0149, `analytics-fx.ts`). Each row is also
-   written in the currency its sale was made in — a sale's cost and its
-   refund's carry it (a refund after a change: its `sourceCurrencyCode`); a
-   cost with an instant of its own — a per-use charge to the platform, a
-   meter's use — in the one sold in at that instant (`currencyAt`, F-1001-r);
-   a whole day's (a panel's, a spread subscription) in the one at its day's
-   end: the `fromCode` of its first later `currency_change`, else today's. No pass after a change
-   moves an earlier day's cost into the new money (F-1001-q) —
-   at the rate in force at the end of its day — a live pin (the tenant's first), else the
+   currency on a reseller's — `cost` stays as charged; rule 5 is its
+   converted copy.
+5. **In the tenant's currency now** (ADR-0149, ADR-0152, `analytics-fx.ts`).
+   Each row is also written converted into it at the rate in force at the end of its day — a live pin (the tenant's first), else the
    newest discovered rate, the toman as the rial over ten. No rate: `saleCost`
    null, and every read answers that cost in its own currency.
 6. **Every tenant's own costs** (F-1002-e, ADR-0151, catalog

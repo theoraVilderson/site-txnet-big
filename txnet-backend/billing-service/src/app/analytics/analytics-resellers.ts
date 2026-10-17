@@ -2,7 +2,9 @@ import { Prisma } from '@prisma/client';
 
 import { sparkPoints } from './analytics-buckets';
 import { CrossTenantReader, TabContext, dayMap } from './analytics-context';
+import { daysBetween } from './analytics-days';
 import { Amounts, ByCurrency, MoneyKpi, amountsOf, byCurrency, currenciesOf, hiddenKeys, moneyKpi } from './analytics-figures';
+import { FxTable, fxAmount, fxCurrency, fxJoin, readFx } from './analytics-fx';
 import type { DayMap, Window } from './analytics-read';
 
 /** The leaderboard's length: the largest resellers, the rest counted in `total` (C-28). */
@@ -33,25 +35,46 @@ const ids = (list: readonly string[]) => Prisma.sql`ARRAY[${Prisma.join(list.map
 
 type SalesRow = { tenantId: string; currencyCode: string; net: Prisma.Decimal; previous: Prisma.Decimal | null };
 
+const [S, P, F] = [Prisma.sql`s`, Prisma.sql`p`, Prisma.sql`f`];
+/** A reseller row's amount in the platform's currency, at its day's rate (ADR-0152 (6)). */
+const converted = (column: Prisma.Sql) => fxAmount(column, F);
+const convertedCurrency = (fx: FxTable, alias: Prisma.Sql) => fxCurrency(fx, Prisma.sql`${alias}."currencyCode"`, F);
+const joined = (fx: FxTable, alias: Prisma.Sql) => fxJoin(fx, F, Prisma.sql`${alias}."currencyCode"`, Prisma.sql`${alias}."day"`);
+
+/**
+ * The factors that take every reseller's money in `span` into the platform's
+ * currency: each reseller's rows are in its own (ADR-0152 (1)), the page in
+ * the platform's — read with the platform's pins.
+ */
+async function resellersFx(c: TabContext, across: CrossTenantReader, span: Window): Promise<FxTable> {
+  const codes = await across.$queryRaw<{ code: string }[]>`
+    SELECT DISTINCT s."currencyCode" AS "code" FROM billing.analytics_sales_day s WHERE ${within(S, span)}
+    UNION SELECT DISTINCT p."currencyCode" FROM billing.analytics_payment_day p WHERE ${within(P, span)}`;
+  return readFx(c.tx, c.operating, codes.map((r) => r.code), daysBetween(span.from, span.to));
+}
+
+/** The window and the compared one together: what one read covers. */
+const spanOf = (w: Window, previous: Window | null): Window => (previous ? { from: previous.from < w.from ? previous.from : w.from, to: w.to } : w);
+
 /** Net per reseller and currency over the window and the compared one: what the board is ordered by. */
-function readNet(across: CrossTenantReader, w: Window, previous: Window | null): Promise<SalesRow[]> {
-  const s = Prisma.sql`s`;
-  const span = previous ? { from: previous.from < w.from ? previous.from : w.from, to: w.to } : w;
+function readNet(across: CrossTenantReader, w: Window, previous: Window | null, fx: FxTable): Promise<SalesRow[]> {
+  const net = converted(Prisma.sql`s."net"`);
   return across.$queryRaw<SalesRow[]>`
-    SELECT s."tenantId", s."currencyCode",
-           COALESCE(SUM(s."net") FILTER (WHERE s."day" BETWEEN ${w.from}::date AND ${w.to}::date), 0) AS "net",
-           ${previous ? Prisma.sql`COALESCE(SUM(s."net") FILTER (WHERE s."day" BETWEEN ${previous.from}::date AND ${previous.to}::date), 0)` : Prisma.sql`NULL`} AS "previous"
-    FROM billing.analytics_sales_day s
-    WHERE ${within(s, span)}
-    GROUP BY s."tenantId", s."currencyCode"`;
+    SELECT s."tenantId", ${convertedCurrency(fx, S)} AS "currencyCode",
+           COALESCE(SUM(${net}) FILTER (WHERE s."day" BETWEEN ${w.from}::date AND ${w.to}::date), 0) AS "net",
+           ${previous ? Prisma.sql`COALESCE(SUM(${net}) FILTER (WHERE s."day" BETWEEN ${previous.from}::date AND ${previous.to}::date), 0)` : Prisma.sql`NULL`} AS "previous"
+    FROM billing.analytics_sales_day s ${joined(fx, S)}
+    WHERE ${within(S, spanOf(w, previous))}
+    GROUP BY 1, 2`;
 }
 
 /** The other whole-reseller figures, for the resellers shown only. */
-async function readTotals(across: CrossTenantReader, w: Window, shown: readonly string[]) {
-  const [p, u, k] = [Prisma.sql`p`, Prisma.sql`u`, Prisma.sql`k`];
+async function readTotals(across: CrossTenantReader, w: Window, shown: readonly string[], fx: FxTable) {
+  const [u, k] = [Prisma.sql`u`, Prisma.sql`k`];
   const topUps = await across.$queryRaw<{ tenantId: string; currencyCode: string; topUps: Prisma.Decimal }[]>`
-    SELECT p."tenantId", p."currencyCode", SUM(p."settledAmount") AS "topUps" FROM billing.analytics_payment_day p
-    WHERE ${within(p, w)} AND p."tenantId" = ANY(${ids(shown)}) GROUP BY p."tenantId", p."currencyCode"`;
+    SELECT p."tenantId", ${convertedCurrency(fx, P)} AS "currencyCode", SUM(${converted(Prisma.sql`p."settledAmount"`)}) AS "topUps"
+    FROM billing.analytics_payment_day p ${joined(fx, P)}
+    WHERE ${within(P, w)} AND p."tenantId" = ANY(${ids(shown)}) GROUP BY 1, 2`;
   const buyers = await across.$queryRaw<{ tenantId: string; buyers: number }[]>`
     SELECT u."tenantId", COUNT(DISTINCT u."userId")::int AS "buyers" FROM billing.analytics_user_day u
     WHERE ${within(u, w)} AND u."tenantId" = ANY(${ids(shown)}) AND (u."net" <> 0 OR u."orders" <> 0) GROUP BY u."tenantId"`;
@@ -65,13 +88,13 @@ async function readTotals(across: CrossTenantReader, w: Window, shown: readonly 
 }
 
 /** Net and buyers per reseller per sparkline point, for the resellers shown only. */
-async function readSpark(across: CrossTenantReader, w: Window, map: DayMap, shown: readonly string[]) {
-  const [s, u] = [Prisma.sql`s`, Prisma.sql`u`];
+async function readSpark(across: CrossTenantReader, w: Window, map: DayMap, shown: readonly string[], fx: FxTable) {
+  const u = Prisma.sql`u`;
   const join = (alias: Prisma.Sql) => Prisma.sql`JOIN unnest(${map.days}::date[], ${map.keys}::date[]) AS m("day", "bucket") ON m."day" = ${alias}."day"`;
   const net = await across.$queryRaw<{ tenantId: string; bucket: string; currencyCode: string; net: Prisma.Decimal }[]>`
-    SELECT s."tenantId", to_char(m."bucket", 'YYYY-MM-DD') AS "bucket", s."currencyCode", SUM(s."net") AS "net"
-    FROM billing.analytics_sales_day s ${join(s)}
-    WHERE ${within(s, w)} AND s."tenantId" = ANY(${ids(shown)}) GROUP BY s."tenantId", m."bucket", s."currencyCode"`;
+    SELECT s."tenantId", to_char(m."bucket", 'YYYY-MM-DD') AS "bucket", ${convertedCurrency(fx, S)} AS "currencyCode", SUM(${converted(Prisma.sql`s."net"`)}) AS "net"
+    FROM billing.analytics_sales_day s ${join(S)} ${joined(fx, S)}
+    WHERE ${within(S, w)} AND s."tenantId" = ANY(${ids(shown)}) GROUP BY 1, 2, 3`;
   const buyers = await across.$queryRaw<{ tenantId: string; bucket: string; buyers: number }[]>`
     SELECT u."tenantId", to_char(m."bucket", 'YYYY-MM-DD') AS "bucket", COUNT(DISTINCT u."userId")::int AS "buyers"
     FROM billing.analytics_user_day u ${join(u)}
@@ -106,7 +129,8 @@ export async function resellersOf(c: TabContext): Promise<ResellersTab> {
     SELECT t."id", COALESCE(b."brandName", t."slug") AS "name" FROM tenant.tenant t
     LEFT JOIN tenant.tenant_branding b ON b."tenantId" = t."id"
     WHERE t."tenantType" = 'reseller' AND t."deletedAt" IS NULL`;
-  const sales = await readNet(across, c.window, c.previous);
+  const fx = await resellersFx(c, across, spanOf(c.window, c.previous));
+  const sales = await readNet(across, c.window, c.previous, fx);
   const net = (id: string, pick: (r: SalesRow) => Prisma.Decimal | null): ByCurrency => byCurrency(sales.filter((r) => r.tenantId === id), (r) => pick(r) ?? 0);
   const zero = new Prisma.Decimal(0);
   const ranked = [...new Set(sales.map((r) => r.tenantId))].sort(
@@ -114,8 +138,8 @@ export async function resellersOf(c: TabContext): Promise<ResellersTab> {
   );
   const shown = ranked.slice(0, RESELLERS_SHOWN);
   const points = sparkPoints(c.window.from, c.window.to, SPARK_POINTS);
-  const totals = shown.length ? await readTotals(across, c.window, shown) : null;
-  const spark = shown.length ? await readSpark(across, c.window, dayMap(c.window, points.keyOf), shown) : null;
+  const totals = shown.length ? await readTotals(across, c.window, shown, fx) : null;
+  const spark = shown.length ? await readSpark(across, c.window, dayMap(c.window, points.keyOf), shown, fx) : null;
   const currencies = currenciesOf(c.operating, sales.map((r) => r.currencyCode), totals?.topUps.map((r) => r.currencyCode) ?? []);
   const nameOf = new Map(names.map((n) => [n.id, n.name]));
   return {

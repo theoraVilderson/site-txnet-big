@@ -130,7 +130,7 @@ Proof: `shared-core/src/lib/prisma/billing-top-up-tax.spec.ts`.
 `analytics_sales_day`, `_user_day`, `_payment_day` (flows) and `_stock_day` (a
 stock), each strict RLS on `tenantId`, the grain a unique index — `NULLS NOT
 DISTINCT` where a product, panel or gateway kind may be null — plus
-`analytics_rollup_state`, one row per tenant. `20261015001400_analytics_buyers_by_product`
+`analytics_rollup_state`, one row per tenant — `currencyCode` the currency its rows were converted into (ADR-0152; another than the tenant's rebuilds it; null on every row when `20261017001300` added it, so each was rebuilt once). `20261015001400_analytics_buyers_by_product`
 (F-1001-b) put product and panel on the user grain and flagged every tenant
 for a whole rebuild. `20261016000100_analytics_meter_day` (F-1001-n,
 ADR-0148) added the `_meter_day` flow, same shape, and flagged every tenant

@@ -1678,6 +1678,8 @@ model AnalyticsReportSchedule {
 model AnalyticsRollupState {
   tenantId        String    @id @db.Uuid
   timeZone        String
+  /// The currency the rows were converted into (ADR-0152): the tenant's now, or the next tick rebuilds it. Null: never converted.
+  currencyCode    String?
   version         Int       @default(0)
   refreshedAt     DateTime?
   rebuildingSince DateTime?

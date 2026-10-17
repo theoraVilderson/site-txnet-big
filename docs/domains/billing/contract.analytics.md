@@ -36,12 +36,13 @@ A fact that turns out wrong is said in one line and the rule corrected.
 5. **A day is the tenant's day.** `day` is the calendar date of the event in
    the tenant's resolved zone (TZ-1). Changing the zone rebuilds that tenant's
    whole rollup; until it finishes, reads say `rebuilding`.
-6. **A sum never crosses currencies.** Every money row carries
-   `currencyCode`. A range that spans a currency change (F-116) answers one
-   series per currency, and the page says so; nothing is converted here —
-   **except cost**, converted at its own day's rate when written (ADR-0149).
-   A refund credited after the change counts in its sale's currency, its
-   `sourceAmount` (F-1001-q), so it comes off the sale it undoes.
+6. **One currency: the tenant's now** (ADR-0152, *reversed* the old "never
+   converted"). Every flow row — sales, refunds, top-ups, gifts, cost — is
+   written converted at **its own day's rate** (`analytics-fx.ts`), summed
+   only after, net exactly gross less refunds. A currency change rebuilds the
+   tenant (`analytics_rollup_state.currencyCode`), as a zone change does. Money
+   no rate converts keeps its own currency, shown apart, never summed in. The
+   platform reads its resellers converted into its own currency the same way.
 7. **Money is a decimal string** end to end (C-02); counts are ints.
 8. **Permission `analytics.read`**, so a reseller can give a staff seat its
    numbers and nothing else (`ResellerAccess.for('analytics.read')`).

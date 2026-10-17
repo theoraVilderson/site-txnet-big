@@ -1,23 +1,21 @@
 /**
- * Analytics across currency changes, against a real Postgres (F-1001-q,
- * billing/contract.analytics.md principle 6, contract.analytics-tabs.md rule 5).
+ * Analytics across currency changes, against a real Postgres (F-1001-q..s,
+ * ADR-0152: the tenant's currency now, each figure at its own day's rate).
  *
  * One story, written with the code that runs in production: the platform
- * moves USD -> EUR on day 3 and the reseller USD -> IRR on day 5, each through
- * `convertOperatingCurrency`; a sale, the reseller's wholesale charges and a
- * refund land on either side; then both tenants are rebuilt whole — the pass
- * that used to move every earlier cost into today's money.
+ * moves USD -> EUR and the reseller USD -> IRR, each through
+ * `convertOperatingCurrency`; sales, the reseller's wholesale charges and a
+ * refund land on either side; then both tenants are rebuilt whole.
  *
  * The ways this goes wrong quietly:
  *
- *  - **a day's cost in the money of the pass.** Day 1's cost read in IRR
- *    beside day 1's USD sales: a USD margin of 100% and an IRR loss;
- *  - **the platform's money in the reseller's margin.** A wholesale charge is
- *    in the platform's currency of its day, and is the reseller's cost in the
- *    reseller's currency of that day;
- *  - **a refund split across two currencies.** The refund of a USD sale paid
- *    back in IRR comes off the USD net, and its cost comes off the USD cost;
- *  - **two currencies added.** Each figure stays in its own.
+ *  - **two currencies on one page.** Every row — a dollar sale of day 1, a
+ *    euro charge of day 4 — is the reseller's rials, at its own day's rate;
+ *  - **a total a cent off.** Net is gross less refunds exactly, rounded once;
+ *  - **a margin from mismatched money.** Sales and costs in one currency, so
+ *    the product's rate is its rate;
+ *  - **an old currency left behind.** A later change rebuilds the history in
+ *    the new money on the next tick.
  *
  *   npm run test:int
  */
@@ -89,10 +87,9 @@ afterAll(async () => {
   await pg?.stop();
 });
 
-/** A currency change as the route makes it, then dated to the morning of day `n` (before that day's events). */
-async function change(tenantId: string, fx: FxPair, n: number) {
+/** A currency change as the route makes it. */
+async function change(tenantId: string, fx: FxPair) {
   await cross.$transaction((tx) => convertOperatingCurrency(tx, { tenantId, toCode: fx.toCode, pair: fx, actorUserId: ADMIN, actorIp: '127.0.0.1' }));
-  await sql(`UPDATE billing.currency_change SET "createdAt" = '${DAY(n)}T03:00:00Z' WHERE "tenantId" = '${tenantId}'`);
 }
 
 function purchase(invoice: string, amount: string, currency: string, n: number) {
@@ -133,11 +130,10 @@ async function story() {
 
   await purchase(FIRST_SALE, '10.00', 'USD', 1);
   await wholesale('2.00', 'USD', 2);
-  await change(PLATFORM, pair('EUR', EUR_PER_USD, EUR), 3);
+  await change(PLATFORM, pair('EUR', EUR_PER_USD, EUR));
   await wholesale('1.00', 'EUR', 4);
-  // 05:30 in Tehran on day 5: before the reseller's change at 06:30 the same day (F-1001-r).
   await wholesale('1.00', 'EUR', 5, `${DAY(5)}T02:00:00Z`);
-  await change(RESELLER, pair('IRR', IRR_PER_USD, IRR), 5);
+  await change(RESELLER, pair('IRR', IRR_PER_USD, IRR));
   await purchase(SECOND_SALE, '10500000', 'IRR', 5);
   await wholesale('1.00', 'EUR', 6);
   // The same buyer buys again on the day the first sale is refunded: one cell, two sale currencies.
@@ -158,51 +154,55 @@ const costRows = () =>
     SELECT to_char(day, 'YYYY-MM-DD') AS day, kind::text, "currencyCode", "saleCurrencyCode", "saleCost"::text AS "saleCost"
     FROM billing.analytics_cost_day WHERE "tenantId" = '${RESELLER}' ORDER BY day, kind, "saleCurrencyCode"`);
 
-describe('a reseller and its platform each change currency mid-story (F-1001-q)', () => {
-  it("keeps each day's cost in the money the reseller sold in that day, a wholesale charge in either of the platform's", async () => {
+describe('a reseller and its platform each change currency mid-story (ADR-0152)', () => {
+  it("writes every day's cost in the reseller's rials at that day's rate, the platform's euros included", async () => {
     expect((await costRows()).map((r) => [r.day, r.kind, r.currencyCode, r.saleCurrencyCode, r.saleCost])).toEqual([
-      [DAY(1), 'sale', 'USD', 'USD', '4.000000'],
-      [DAY(2), 'wholesale', 'USD', 'USD', '2.000000'],
-      // The platform is in euros by day 4, the reseller still in dollars: 1 / 0.92.
-      [DAY(4), 'wholesale', 'EUR', 'USD', '1.086957'],
+      [DAY(1), 'sale', 'USD', 'IRR', '4200000.000000'],
+      [DAY(2), 'wholesale', 'USD', 'IRR', '2100000.000000'],
+      // 1 EUR = 1 / 0.92 USD = 1,141,304.347826 IRR.
+      [DAY(4), 'wholesale', 'EUR', 'IRR', '1141304.347826'],
       [DAY(5), 'sale', 'USD', 'IRR', '4200000.000000'],
-      // Paid before the change that morning: the dollars sold in then, not the day's last money (F-1001-r).
-      [DAY(5), 'wholesale', 'EUR', 'USD', '1.086957'],
-      [DAY(6), 'sale', 'USD', 'IRR', '4200000.000000'],
-      // The day-1 sale's refund takes its cost back in dollars, beside a new sale in rials.
-      [DAY(6), 'sale', 'USD', 'USD', '-4.000000'],
+      [DAY(5), 'wholesale', 'EUR', 'IRR', '1141304.347826'],
+      // A new sale and the day-1 sale's refund: their costs cancel in one cell.
+      [DAY(6), 'sale', 'USD', 'IRR', '0.000000'],
       [DAY(6), 'wholesale', 'EUR', 'IRR', '1141304.347826'],
     ]);
   });
 
-  it('takes the refund off the dollars it was sold in, and sells in rials beside it', async () => {
-    const sales = await owner.analyticsSalesDay.findMany({ where: { tenantId: RESELLER }, orderBy: [{ day: 'asc' }, { currencyCode: 'asc' }] });
-    expect(sales.map((r) => [r.day.toISOString().slice(0, 10), r.currencyCode, r.refunds.toFixed(2), r.net.toFixed(2), r.orders])).toEqual([
-      [DAY(1), 'USD', '0.00', '10.00', 1],
-      [DAY(5), 'IRR', '0.00', '10500000.00', 1],
-      [DAY(6), 'IRR', '0.00', '10500000.00', 1],
-      [DAY(6), 'USD', '10.00', '-10.00', -1],
+  it('writes every sale and refund in rials, net exactly gross less refunds', async () => {
+    const sales = await owner.analyticsSalesDay.findMany({ where: { tenantId: RESELLER }, orderBy: [{ day: 'asc' }] });
+    expect(sales.map((r) => [r.day.toISOString().slice(0, 10), r.currencyCode, r.gross.toFixed(2), r.refunds.toFixed(2), r.net.toFixed(2), r.orders])).toEqual([
+      [DAY(1), 'IRR', '10500000.00', '0.00', '10500000.00', 1],
+      [DAY(5), 'IRR', '10500000.00', '0.00', '10500000.00', 1],
+      [DAY(6), 'IRR', '10500000.00', '10500000.00', '0.00', 0],
     ]);
   });
 
-  it('answers a margin per currency: the refunded dollars at nothing, the rials at their cost, no two added', async () => {
+  it('answers the margin in one currency: a total, a rate, nothing apart', async () => {
     const m = await marginOver(1, 6);
-    const product = m.products.find((p) => p.id === PRODUCT);
-    expect(product).toMatchObject({
-      net: { IRR: '21000000.00', USD: '0.00' },
-      cost: { IRR: '8400000.00', USD: '0.00' },
-      marginRate: 0.6,
-      loss: false,
-    });
-    expect(m.users?.[0]).toMatchObject({ id: BUYER, cost: { IRR: '8400000.00', USD: '0.00' }, loss: false });
-    // What the reseller paid the platform before its own change stays in dollars; after it, in rials.
-    expect(m.costParts.unallocated).toEqual({ IRR: '1141304.35', USD: '4.17' });
-    expect(m.totals.net.value).toEqual({ IRR: '21000000.00', USD: '0.00' });
+    expect(m.currencies).toEqual(['IRR']);
+    expect(m.products.find((p) => p.id === PRODUCT)).toMatchObject({ net: { IRR: '21000000.00' }, cost: { IRR: '8400000.00' }, marginRate: 0.6, loss: false });
+    expect(m.users?.[0]).toMatchObject({ id: BUYER, cost: { IRR: '8400000.00' }, loss: false });
+    expect(m.costParts.unallocated).toEqual({ IRR: '5523913.04' });
+    expect(m.totals.net.value).toEqual({ IRR: '21000000.00' });
   });
 
-  it('a second rebuild after both changes writes the same rows', async () => {
+  it('a second rebuild writes the same rows', async () => {
     const before = await costRows();
     await rollup.rebuild(RESELLER, NOW);
     expect(await costRows()).toEqual(before);
+  });
+
+  it("rebuilds on the next tick when the currency changes again, every figure in the new money", async () => {
+    await change(RESELLER, { fromCode: 'IRR', toCode: 'USD', rate: new Prisma.Decimal(1).div(IRR_PER_USD), from: { snapshotId: IRR, currencyCode: 'IRR', rate: IRR_PER_USD, effectiveAt: new Date('2026-01-01') }, to: null });
+    const tick = await rollup.refresh(NOW);
+    expect(tick.rebuilt).toBe(1);
+    expect(await owner.analyticsRollupState.findUniqueOrThrow({ where: { tenantId: RESELLER } })).toMatchObject({ currencyCode: 'USD', rebuildingSince: null });
+    const sales = await owner.analyticsSalesDay.findMany({ where: { tenantId: RESELLER }, orderBy: [{ day: 'asc' }] });
+    expect(sales.map((r) => [r.currencyCode, r.gross.toFixed(2), r.net.toFixed(2)])).toEqual([
+      ['USD', '10.00', '10.00'],
+      ['USD', '10.00', '10.00'],
+      ['USD', '10.00', '0.00'],
+    ]);
   });
 });

@@ -3,7 +3,6 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { addDays, dayOf, type Day } from './analytics-days';
 import { CostDayRow, SaleCost, UsageCost, ownCosts } from './analytics-cost';
-import { currencyAt } from './analytics-fx';
 import { RollupRange, dayIn } from './analytics-rollup';
 
 /**
@@ -19,13 +18,12 @@ const panelOf = (grant: Prisma.Sql) => Prisma.sql`(SELECT c."panelId" FROM netwo
 /**
  * Each purchase and the refund that undoes it in `r`, at its variant's cost in
  * effect when the invoice was made — none where that cost was taken back
- * (F-1002-i) — with the money it was sold in, a refund paid back after a
- * currency change its sale's (`sourceCurrencyCode`, F-1001-q).
+ * (F-1002-i).
  */
 function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<SaleCost[]> {
   return tx.$queryRaw`
     SELECT to_char(${dayIn(Prisma.sql`wt."createdAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", vc."currencyCode", vc."amount" AS "cost",
-           wt."direction" = 'debit' AS "sale", COALESCE(wt."sourceCurrencyCode", wt."currencyCode") AS "soldIn", v."productId", w."ownerUserId" AS "userId",
+           wt."direction" = 'debit' AS "sale", v."productId", w."ownerUserId" AS "userId",
            ${panelOf(Prisma.sql`(SELECT g."id" FROM entitlement."grant" g WHERE g."sourceReferenceId" = i."id" ORDER BY g."createdAt" LIMIT 1)`)} AS "panelId"
     FROM billing.wallet_transaction wt
     JOIN billing.wallet w ON w."id" = wt."walletId"
@@ -49,7 +47,7 @@ function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<Sa
 function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<UsageCost[]> {
   return tx.$queryRaw`
     SELECT to_char(${dayIn(Prisma.sql`e."occurredAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", mc."currencyCode", SUM(e."quantity")::bigint AS "quantity",
-           mc."unitSize", mc."unitCost", v."productId", g."userId", ${panelOf(Prisma.sql`g."id"`)} AS "panelId", ${currencyAt(Prisma.sql`e."occurredAt"`)} AS "soldIn"
+           mc."unitSize", mc."unitCost", v."productId", g."userId", ${panelOf(Prisma.sql`g."id"`)} AS "panelId"
     FROM billing.usage_event e
     JOIN entitlement."grant" g ON g."id" = e."grantId"
     LEFT JOIN catalog.product_variant v ON v."id" = g."variantId"
@@ -64,7 +62,7 @@ function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<U
         SELECT 1 FROM entitlement.grant_meter gm
         WHERE gm."grantId" = e."grantId" AND gm."meterKey" = e."meterKey" AND gm."wholesalePayerTenantId" IS NOT NULL
       )
-    GROUP BY 1, 2, 4, 5, 6, 7, 8, 9`;
+    GROUP BY 1, 2, 4, 5, 6, 7, 8`;
 }
 
 /** The tenant's sale and usage costs in `r`, as cost rows. */

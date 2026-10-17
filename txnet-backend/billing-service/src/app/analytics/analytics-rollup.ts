@@ -5,6 +5,7 @@ import { ADMIN_FROZEN } from '../entitlement/suspension';
 import { REFUND_REASONS, SALE_REASONS } from '../revenue/reseller-revenue.service';
 import { referringTo } from '../revenue/revenue-breakdown';
 import type { Day } from './analytics-days';
+import { FxTable, fxAmount, fxCurrency, fxJoin } from './analytics-fx';
 
 /**
  * The SQL of the analytics rollup (F-1001-a, billing/contract.analytics.md
@@ -30,11 +31,10 @@ export const dayIn = (column: Prisma.Sql, zone: string) => Prisma.sql`((${column
 
 /**
  * Sales and the refunds that undo them in the window, each with its owner and
- * tenant day — a refund credited after a currency change in the money it was
- * sold in (`sourceAmount`, F-116-f rule 5), so it comes off its own sale (F-1001-q).
+ * tenant day, in the money that moved (`rawAmount` in `rawCurrency`).
  */
 const ledger = (r: RollupRange) => Prisma.sql`
-  SELECT COALESCE(wt."sourceAmount", wt."amount") AS "amount", COALESCE(wt."sourceCurrencyCode", wt."currencyCode") AS "currencyCode", wt."referenceId",
+  SELECT wt."amount" AS "rawAmount", wt."currencyCode" AS "rawCurrency", wt."referenceId",
          wt."reasonType"::text = ANY(${PACKAGE_REASONS}) AS "package",
          wt."reasonType"::text AS "reason",
          wt."direction" = 'debit' AS "sale",
@@ -46,6 +46,17 @@ const ledger = (r: RollupRange) => Prisma.sql`
     AND wt."createdAt" >= ${r.from} AND wt."createdAt" < ${r.to}
     AND ((wt."direction" = 'debit' AND wt."reasonType"::text = ANY(${SALE_REASONS}))
       OR (wt."direction" = 'credit' AND wt."reasonType"::text = ANY(${REFUND_REASONS})))`;
+
+/** Every currency the window's money moved in — sales, refunds, gifts, top-ups — what `fx` must cover (ADR-0152). */
+export async function currenciesIn(tx: Prisma.TransactionClient, r: RollupRange): Promise<string[]> {
+  const rows = await tx.$queryRaw<{ code: string }[]>`
+    SELECT DISTINCT wt."currencyCode" AS "code" FROM billing.wallet_transaction wt
+    WHERE wt."tenantId" = public.current_tenant_id() AND wt."createdAt" >= ${r.from} AND wt."createdAt" < ${r.to}
+    UNION
+    SELECT DISTINCT p."currencyCode" FROM billing.payment_transaction p
+    WHERE p."tenantId" = public.current_tenant_id() AND p."createdAt" >= ${r.from} AND p."createdAt" < ${r.to}`;
+  return rows.map((row) => row.code);
+}
 
 /** Serialises passes over one tenant: two overlapping ticks would otherwise both insert the same grain. */
 export async function lockTenantRollup(tx: Prisma.TransactionClient): Promise<void> {
@@ -95,15 +106,21 @@ export async function clearFlows(tx: Prisma.TransactionClient, r: RollupRange): 
  * (`quotas.traffic_bytes`) — a block's bytes are not on its ledger row.
  * `discount` is the invoice's whole discount: it already holds the rule's
  * share (`ruleDiscount` <= `discount`, `invoice.service.ts`), so adding
- * `ruleDiscount` again would count a rule discount twice.
+ * `ruleDiscount` again would count a rule discount twice. Every amount is in
+ * the tenant's currency now at its day's rate (`fx`, ADR-0152), the discount
+ * by the same factor as its sale.
  */
-const withTied = (r: RollupRange) => Prisma.sql`
-  WITH led AS (${ledger(r)}),
+const withTied = (r: RollupRange, fx: FxTable) => Prisma.sql`
+  WITH led AS (
+    SELECT l.*, ${fxAmount(Prisma.sql`l."rawAmount"`, Prisma.sql`f`)} AS "amount", ${fxCurrency(fx, Prisma.sql`l."rawCurrency"`, Prisma.sql`f`)} AS "currencyCode",
+           COALESCE(f."factor", 1) AS "factor"
+    FROM (${ledger(r)}) l ${fxJoin(fx, Prisma.sql`f`, Prisma.sql`l."rawCurrency"`, Prisma.sql`l."day"`)}
+  ),
   tied AS (
     SELECT led.*, v."productId", sold."variantId", pn."panelId",
            CASE WHEN jsonb_typeof(gi."quotas"->'traffic_bytes'->'limit') = 'number'
                 THEN (gi."quotas"->'traffic_bytes'->>'limit')::numeric::bigint ELSE 0 END AS "bytes",
-           COALESCE(i."discount", 0) AS "discount"
+           COALESCE(i."discount", 0) * led."factor" AS "discount"
     FROM led
     LEFT JOIN billing.invoice i ON i."id" = led."referenceId" AND led."package"
     LEFT JOIN entitlement."grant" g ON g."id" = led."referenceId" AND led."reason" = ANY(${GRANT_REASONS})
@@ -117,28 +134,35 @@ const withTied = (r: RollupRange) => Prisma.sql`
     ) pn ON sold."grantId" IS NOT NULL
   )`;
 
+/** A rollup money column's places: `DECIMAL(18,2)`. */
+const MONEY_PLACES = 2;
+
 /** Package orders net of the package refunds that undo them. */
 const NET_ORDERS = Prisma.sql`(COUNT(*) FILTER (WHERE t."package" AND t."sale") - COUNT(*) FILTER (WHERE t."package" AND NOT t."sale"))::int`;
 
 /**
  * `analytics_sales_day`: per day, currency, product, variant, panel and kind.
  * `bytesSold` is net of a refunded package; usage sells 0 bytes here, and its
- * traffic is `bytesUsed`.
+ * traffic is `bytesUsed`. Gross and refunds are rounded once each, at the sum,
+ * and net is their difference — so converted amounts never leave net a cent
+ * off gross less refunds.
  */
-export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
+export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange, fx: FxTable): Promise<void> {
   await tx.$executeRaw`
     INSERT INTO billing.analytics_sales_day ("tenantId", "day", "currencyCode", "productId", "variantId", "panelId", "kind", "gross", "refunds", "net", "orders", "bytesSold", "discounts")
-    ${withTied(r)}
-    SELECT public.current_tenant_id(), t."day", t."currencyCode", t."productId", t."variantId", t."panelId",
-           (CASE WHEN t."package" THEN 'package' ELSE 'usage' END)::billing."AnalyticsSaleKind",
-           COALESCE(SUM(t."amount") FILTER (WHERE t."sale"), 0),
-           COALESCE(SUM(t."amount") FILTER (WHERE NOT t."sale"), 0),
-           SUM(CASE WHEN t."sale" THEN t."amount" ELSE -t."amount" END),
-           ${NET_ORDERS},
-           SUM(CASE WHEN NOT t."package" THEN 0 WHEN t."sale" THEN t."bytes" ELSE -t."bytes" END)::bigint,
-           COALESCE(SUM(t."discount") FILTER (WHERE t."sale"), 0)
-    FROM tied t
-    GROUP BY t."day", t."currencyCode", t."productId", t."variantId", t."panelId", t."package"`;
+    ${withTied(r, fx)}
+    SELECT public.current_tenant_id(), x."day", x."currencyCode", x."productId", x."variantId", x."panelId", x."kind", x."gross", x."refunds", x."gross" - x."refunds", x."orders", x."bytesSold", x."discounts"
+    FROM (
+      SELECT t."day", t."currencyCode", t."productId", t."variantId", t."panelId",
+             (CASE WHEN t."package" THEN 'package' ELSE 'usage' END)::billing."AnalyticsSaleKind" AS "kind",
+             round(COALESCE(SUM(t."amount") FILTER (WHERE t."sale"), 0), ${MONEY_PLACES}::int) AS "gross",
+             round(COALESCE(SUM(t."amount") FILTER (WHERE NOT t."sale"), 0), ${MONEY_PLACES}::int) AS "refunds",
+             ${NET_ORDERS} AS "orders",
+             SUM(CASE WHEN NOT t."package" THEN 0 WHEN t."sale" THEN t."bytes" ELSE -t."bytes" END)::bigint AS "bytesSold",
+             COALESCE(SUM(t."discount") FILTER (WHERE t."sale"), 0) AS "discounts"
+      FROM tied t
+      GROUP BY t."day", t."currencyCode", t."productId", t."variantId", t."panelId", t."package"
+    ) x`;
 }
 
 /**
@@ -148,27 +172,31 @@ export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange): 
  * sale ever in this tenant, read over all time. Top-ups are `/revenue`'s:
  * settled, and never a reseller's own payment to the platform.
  */
-export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
+export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange, fx: FxTable): Promise<void> {
+  const [f, p] = [Prisma.sql`f`, Prisma.sql`p`];
+  const paidDay = dayIn(Prisma.sql`p."createdAt"`, r.zone);
+  const firstDay = dayIn(Prisma.sql`wt."createdAt"`, r.zone);
   await tx.$executeRaw`
     INSERT INTO billing.analytics_user_day ("tenantId", "day", "currencyCode", "userId", "productId", "panelId", "net", "orders", "topUps", "firstPurchase")
-    ${withTied(r)},
+    ${withTied(r, fx)},
     sold AS (
       SELECT t."day", t."currencyCode", t."owner" AS "userId", t."productId", t."panelId",
              SUM(CASE WHEN t."sale" THEN t."amount" ELSE -t."amount" END) AS "net", ${NET_ORDERS} AS "orders", 0::numeric AS "topUps"
       FROM tied t GROUP BY 1, 2, 3, 4, 5
     ),
     paid AS (
-      SELECT ${dayIn(Prisma.sql`p."createdAt"`, r.zone)} AS "day", p."currencyCode", p."userId", NULL::uuid AS "productId", NULL::uuid AS "panelId",
-             0::numeric AS "net", 0 AS "orders", SUM(p."amountCredited") AS "topUps"
-      FROM billing.payment_transaction p
+      SELECT ${paidDay} AS "day", ${fxCurrency(fx, Prisma.sql`${p}."currencyCode"`, f)} AS "currencyCode", p."userId", NULL::uuid AS "productId", NULL::uuid AS "panelId",
+             0::numeric AS "net", 0 AS "orders", SUM(${fxAmount(Prisma.sql`p."amountCredited"`, f)}) AS "topUps"
+      FROM billing.payment_transaction p ${fxJoin(fx, f, Prisma.sql`p."currencyCode"`, paidDay)}
       WHERE p."tenantId" = public.current_tenant_id() AND p."status" = 'success' AND p."billingTenantId" IS NULL
         AND p."createdAt" >= ${r.from} AND p."createdAt" < ${r.to}
       GROUP BY 1, 2, 3
     ),
     firsts AS (
-      SELECT DISTINCT ON (w."ownerUserId") w."ownerUserId" AS "userId", ${dayIn(Prisma.sql`wt."createdAt"`, r.zone)} AS "day", wt."currencyCode"
+      SELECT DISTINCT ON (w."ownerUserId") w."ownerUserId" AS "userId", ${firstDay} AS "day", ${fxCurrency(fx, Prisma.sql`wt."currencyCode"`, f)} AS "currencyCode"
       FROM billing.wallet_transaction wt
       JOIN billing.wallet w ON w."id" = wt."walletId"
+      ${fxJoin(fx, f, Prisma.sql`wt."currencyCode"`, firstDay)}
       WHERE wt."tenantId" = public.current_tenant_id() AND wt."direction" = 'debit' AND wt."reasonType"::text = ANY(${SALE_REASONS})
         AND w."ownerUserId" IN (SELECT "userId" FROM sold)
       ORDER BY w."ownerUserId", wt."createdAt", wt."id"
@@ -184,22 +212,26 @@ export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange): 
  * gateway's provider — started, settled, failed (an expired attempt is
  * neither) — and, under a null kind, coupon and gift credits.
  */
-export async function writePayments(tx: Prisma.TransactionClient, r: RollupRange): Promise<void> {
+export async function writePayments(tx: Prisma.TransactionClient, r: RollupRange, fx: FxTable): Promise<void> {
+  const f = Prisma.sql`f`;
+  const paidDay = dayIn(Prisma.sql`p."createdAt"`, r.zone);
+  const giftDay = dayIn(Prisma.sql`wt."createdAt"`, r.zone);
   await tx.$executeRaw`
     INSERT INTO billing.analytics_payment_day ("tenantId", "day", "currencyCode", "gatewayKind", "started", "settled", "failed", "settledAmount", "giftsCredited")
     WITH att AS (
-      SELECT ${dayIn(Prisma.sql`p."createdAt"`, r.zone)} AS "day", p."currencyCode",
+      SELECT ${paidDay} AS "day", ${fxCurrency(fx, Prisma.sql`p."currencyCode"`, f)} AS "currencyCode",
              COALESCE(pg."providerName", tg."providerName") AS "kind",
              1 AS "started", (p."status" = 'success')::int AS "settled", (p."status" = 'failed')::int AS "failed",
-             CASE WHEN p."status" = 'success' THEN p."amountCredited" ELSE 0 END AS "amount", 0::numeric AS "gift"
+             CASE WHEN p."status" = 'success' THEN ${fxAmount(Prisma.sql`p."amountCredited"`, f)} ELSE 0 END AS "amount", 0::numeric AS "gift"
       FROM billing.payment_transaction p
       LEFT JOIN billing.payment_gateway pg ON pg."id" = p."gatewayId"
       LEFT JOIN tenant.tenant_gateway_config tg ON tg."id" = p."tenantGatewayConfigId"
+      ${fxJoin(fx, f, Prisma.sql`p."currencyCode"`, paidDay)}
       WHERE p."tenantId" = public.current_tenant_id() AND p."billingTenantId" IS NULL
         AND p."createdAt" >= ${r.from} AND p."createdAt" < ${r.to}
       UNION ALL
-      SELECT ${dayIn(Prisma.sql`wt."createdAt"`, r.zone)}, wt."currencyCode", NULL, 0, 0, 0, 0, wt."amount"
-      FROM billing.wallet_transaction wt
+      SELECT ${giftDay}, ${fxCurrency(fx, Prisma.sql`wt."currencyCode"`, f)}, NULL, 0, 0, 0, 0, ${fxAmount(Prisma.sql`wt."amount"`, f)}
+      FROM billing.wallet_transaction wt ${fxJoin(fx, f, Prisma.sql`wt."currencyCode"`, giftDay)}
       WHERE wt."tenantId" = public.current_tenant_id() AND wt."direction" = 'credit'
         AND wt."reasonType"::text = ${WalletReasonType.coupon_redemption}
         AND wt."createdAt" >= ${r.from} AND wt."createdAt" < ${r.to}

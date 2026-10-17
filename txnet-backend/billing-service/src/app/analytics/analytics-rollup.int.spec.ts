@@ -9,10 +9,8 @@
  *    principle 2 exists for; both are read here, through the real service;
  *  - **a refund comes off the sale it undoes**, and a top-up, a gift and a
  *    transfer are never a sale;
- *  - **a refund after a currency change comes off its sale's currency**
- *    (F-1001-q): the ledger row is in the wallet's new money, its
- *    `sourceAmount` in the sale's — the old currency nets to zero, the new
- *    one never goes negative;
+ *  - **money no rate converts is never summed in** (ADR-0152 (5)): a sale in
+ *    a currency with no rate on record stays in its own, beside the tenant's;
  *  - **another tenant's ledger is never summed in** — the scope is
  *    `current_tenant_id()`, bound by `tenantTransaction`;
  *  - **a second pass changes nothing**: no second event, no version bump —
@@ -168,8 +166,8 @@ describe('the analytics rollup (F-1001-a)', () => {
     expect(await sumNet()).toBe('43.25');
   });
 
-  it('takes a refund off the sale it undoes in that sale\'s currency, across a currency change (F-1001-q)', async () => {
-    // Sold in tomans on day 1; the tenant moved to dollars (the wallet relabelled); the refund on day 2 was credited in dollars.
+  it('keeps money no rate converts in its own currency, apart — never summed in at a guess (ADR-0152 (5))', async () => {
+    // Sold in tomans on day 1 (no rate on record for them); the tenant moved to dollars; the refund on day 2 was credited in dollars.
     const relabel = (code: string) => owner.$executeRawUnsafe(`UPDATE billing.wallet SET "currencyCode" = '${code}' WHERE id = '${USER_B}'`);
     await relabel('IRT');
     await owner.$executeRawUnsafe(`
@@ -185,7 +183,8 @@ describe('the analytics rollup (F-1001-a)', () => {
     expect(rows.map((r) => [r.day.toISOString().slice(0, 10), r.currencyCode, r.refunds.toFixed(2), r.net.toFixed(2), r.orders])).toEqual([
       [DAY_1, 'IRT', '0.00', '100000.00', 1],
       [DAY_1, 'USD', '0.00', '99.00', 1],
-      [DAY_2, 'IRT', '100000.00', '-100000.00', -1],
+      [DAY_2, 'USD', '2.00', '-2.00', -1],
     ]);
   });
+
 });
