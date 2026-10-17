@@ -40,7 +40,8 @@ vi.mock("./_context/PanelSessionContext", () => ({
   usePanelSession: () => ({ me, group: { current: { userId: "u-1" }, members: [] }, timeZone: { zone: "Asia/Tehran" } }),
 }));
 vi.mock("@/lib/billing-api", () => ({ billingApi: { manualPayments: vi.fn(), systemsPanels: vi.fn() }, resellerRevenueApi: { totals: vi.fn() } }));
-vi.mock("@/lib/billing/analytics", () => ({ readAnalytics: vi.fn() }));
+// Only the call is faked: the module's constants (ANALYTICS_TABS, …) stay real, so a new export never breaks this spec again.
+vi.mock("@/lib/billing/analytics", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/billing/analytics")>()), readAnalytics: vi.fn() }));
 vi.mock("@/context/ThemeContext", () => ({ useTheme: () => ({ theme: "light" }) }));
 vi.mock("@/context/BrandContext", () => ({ useBrandColor: () => null }));
 // The manual-payments widget re-reads live (RT-1-j); the socket is not under test here.
