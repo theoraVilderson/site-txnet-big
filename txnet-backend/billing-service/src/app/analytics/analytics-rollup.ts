@@ -89,6 +89,9 @@ export async function clearFlows(tx: Prisma.TransactionClient, r: RollupRange): 
  * its invoice, a block or a meter's charge through its Grant (`REFERS_TO`);
  * the panel is the Grant's first config's. `bytes` is a package's traffic bag
  * (`quotas.traffic_bytes`) — a block's bytes are not on its ledger row.
+ * `discount` is the invoice's whole discount: it already holds the rule's
+ * share (`ruleDiscount` <= `discount`, `invoice.service.ts`), so adding
+ * `ruleDiscount` again would count a rule discount twice.
  */
 const withTied = (r: RollupRange) => Prisma.sql`
   WITH led AS (${ledger(r)}),
@@ -96,7 +99,7 @@ const withTied = (r: RollupRange) => Prisma.sql`
     SELECT led.*, v."productId", sold."variantId", pn."panelId",
            CASE WHEN jsonb_typeof(gi."quotas"->'traffic_bytes'->'limit') = 'number'
                 THEN (gi."quotas"->'traffic_bytes'->>'limit')::numeric::bigint ELSE 0 END AS "bytes",
-           COALESCE(i."discount" + i."ruleDiscount", 0) AS "discount"
+           COALESCE(i."discount", 0) AS "discount"
     FROM led
     LEFT JOIN billing.invoice i ON i."id" = led."referenceId" AND led."package"
     LEFT JOIN entitlement."grant" g ON g."id" = led."referenceId" AND led."reason" = ANY(${GRANT_REASONS})
