@@ -24,10 +24,13 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
   'group_has_members',
   'group_in_use',
   'inbound_has_configs',
+  'not_a_seller',
+  'already_releasing',
+  'request_reused',
 ]);
 
 /** The refusals that are a body the event cannot take (F-027-fa): 400. */
-const BAD_REQUESTS: ReadonlySet<SystemsRejection> = new Set(['resolution_required', 'resolution_not_for_event', 'cost_in_closed_month']);
+const BAD_REQUESTS: ReadonlySet<SystemsRejection> = new Set(['resolution_required', 'resolution_not_for_event', 'cost_in_closed_month', 'selection_too_large']);
 
 /**
  * The service's refusals as HTTP: the scope is a 403, a panel, group or event
@@ -45,7 +48,8 @@ export async function refusing<T>(work: () => Promise<T>): Promise<T> {
         throw new ConflictException({ reason: e.reason, message: e.message, facts: e.panel ? { panelId: e.panel.id } : undefined });
       }
       if (e instanceof InboundHeldElsewhere) {
-        const facts = { remoteId: e.remoteId, groupId: e.group.id, configs: e.configs };
+        // `groups`: every group losing it, each a release job's to move or empty (F-027-es).
+        const facts = { remoteId: e.remoteId, groupId: e.group.id, configs: e.configs, groups: e.groups };
         throw new ConflictException({ reason: e.reason, message: e.message, facts });
       }
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });

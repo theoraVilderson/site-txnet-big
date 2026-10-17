@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: active
-version: 20
+version: 21
 updated: 2026-10-17
 ---
 
@@ -66,9 +66,12 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    inbound lists it to that group alone — and one inbound's audience. Adding a
    seller is always allowed; a group that would **lose** an inbound while
    live configs (`present`, not drained) of its Grants are on it is 409
-   `inbound_has_configs`, with the group and the count — a client whose row
-   does not yet name its inbound (rule 7) counts on every inbound of its
-   protocol. Losing the last listing leaves it `listed` to nobody, never every
+   `inbound_has_configs`, with the group and the count, and `groups`, every
+   group losing it with its own — a client whose row does not yet name its
+   inbound (rule 7) counts on every inbound of its protocol. The way out is a
+   release job, `move` or `empty`, that changes the listing when it ends; while
+   it runs, `inbound_release` holds those groups off the inbound
+   ([contract.config-move.md](contract.config-move.md), F-027-es). Losing the last listing leaves it `listed` to nobody, never every
    group's by itself. The migration moved nobody: an assigned inbound became
    `listed` to its group, and on a panel with any assignment the pool became
    `listed` to the members without one. `sold` and the inbound's `maxClients`

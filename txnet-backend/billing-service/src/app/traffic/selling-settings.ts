@@ -85,14 +85,18 @@ type ListedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxCli
  * (`sold`, placeable). A listing on a disabled inbound sells nothing and never
  * falls back to anything else. The two never name one inbound (a trigger
  * keeps them apart); should they, the listing is kept and the inbound is
- * named once.
+ * named once. An inbound a running job is releasing the group from
+ * (`releases`, F-027-es) is sold to nobody new; a caller that loads none
+ * (catalog's protocols) still names it.
  */
 export function sellingInbounds(member: {
   inbounds: { maxClients?: number | null; inbound: ListedInbound }[];
+  releases?: { inboundRemoteId: string }[];
   panel: { inbounds: { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null }[] };
 }): SellingInbound[] {
+  const releasing = new Set((member.releases ?? []).map((r) => r.inboundRemoteId));
   const listed = member.inbounds.filter((l) => l.inbound.enabled && l.inbound.goneAt === null).map((l) => ({ ...l.inbound, share: l.maxClients ?? null }));
   const names = new Set(listed.map((i) => i.remoteId));
   const rows = [...listed, ...member.panel.inbounds.filter((i) => !names.has(i.remoteId)).map((i) => ({ ...i, share: null }))];
-  return rows.flatMap((i) => (i.protocol === null ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients, share: i.share }]));
+  return rows.flatMap((i) => (i.protocol === null || releasing.has(i.remoteId) ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients, share: i.share }]));
 }

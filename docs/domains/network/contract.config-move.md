@@ -2,11 +2,11 @@
 id: network
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-10-17
 ---
 
-# Moving many configs to one panel, as a job (F-311-ad)
+# Moving many configs as a job (F-311-ad), and releasing an inbound (F-027-es)
 
 A topic file of `contract.md` (§10), beside [contract.provisioning.md](contract.provisioning.md),
 whose `ConfigActions.move` is the one act every move here runs. A reseller's
@@ -66,4 +66,30 @@ Tenant RLS on both; the drain reads through `txnet_cross_tenant`
 | A started job finishes whatever its tenant's status; starting and cancelling are the `staffWrite` | a suspension must not strand half a panel's users mid-move |
 | 30 days after a job ended (`CONFIG_MOVE_RETENTION_DAYS`) the drain deletes its items and sets `purgedAt`, 5 jobs a call; the job row and counts stay | the per-config rows are the bulk; the summary is what is asked later |
 
-`config-move-job.spec.ts` pins the rules above.
+`config-move-job.spec.ts` pins the rules above. The drain is `config-move-drain.ts`.
+
+## Releasing an inbound from groups (F-027-es)
+
+The way out of `inbound_has_configs` ([contract.inbounds.md](contract.inbounds.md)
+rule 3a, ADR-0127 decision 6): a job of this table, `kind` `release_move` or
+`release_empty` (`to_panel` is the reseller's move above), started from the
+systems routes (billing [contract.panel-groups.md](../billing/contract.panel-groups.md)
+rule 24g, `systems/inbound-release.ts`). `source` is `{panelId, remoteId,
+groupIds}`, `toPanelId` null, `orphans` an `empty`'s (CHECK
+`config_move_job_kind_fits`); migration `20261017000500_an_inbound_is_released_by_a_job`.
+`network.inbound_release` — key `(groupId, panelId, inboundRemoteId)`,
+`tenantId` the group's (null = the platform's, policied as
+`panel_group_member_inbound`), `jobId` — is the hold while it runs.
+
+| Rule | Why |
+|---|---|
+| **The admin chooses, never a side effect**: each group named is a member that sells the inbound now (every member of an `every_group` one, else its listings) and none is already being released (`not_a_seller`, `already_releasing`, 409) | one wrong click must not change hundreds of links |
+| At the start, under the panel's fulfilment lock: the live configs of those groups' Grants **naming** that inbound — every tenant's, each item its config's tenant — are the items, and one `inbound_release` row per group is written. A row that names no inbound yet (rule 7) is left out | a platform group serves resellers' users; a row with no inbound may be on another one |
+| **While the job runs, fulfilment places none of those groups' Grants there** (`sellingInbounds` and the due scan read the hold) | a buyer placed mid-release would be left on an inbound its group no longer sells |
+| `move`: each config is drained and its Grant's group fulfilled in the same transaction — the hold keeps it off this inbound, so it lands on the next placement. A Grant left with no live line is `no_target` and rolls back: reported, left serving | the user is moved, never cut off |
+| `empty`: each config is retired there; an active Grant left with no live line is paused or refunded as `orphans` says (`GroupDrainService.orphans`, as an evict, F-027-eg) | a paid Grant is never left with nothing and nothing said |
+| **The listing changes only when the job ends**, in the drain's transaction that ends it (`applyRelease`): an `every_group` inbound becomes `listed` to every other member; a `listed` one loses those groups' listings; the hold goes. Nothing to move ends the job at once | a cancel leaves the listing exactly as it was |
+| A cancel removes the hold and changes nothing else; the configs moved or emptied stay so | it stops the job, it does not undo it |
+| Each act is audited on its config with the job's reason, in the config's tenant (`config_move` / `config_retire`); the job's start and cancel as above; progress by the same event to the job's tenant | one config's history reads the same whoever moved it |
+
+`inbound-release.spec.ts` pins these.

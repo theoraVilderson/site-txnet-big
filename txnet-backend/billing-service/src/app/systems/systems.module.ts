@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { PanelCredentialClient } from './panel-credential.client';
 import { InboundAudienceController } from './inbound-audience.controller';
 import { PanelGroupsService } from './panel-groups';
+import { InboundReleaseService } from './inbound-release';
 import { MemberInboundsService } from './member-inbounds';
 import { PanelInboundsService } from './panel-inbounds';
 import { PanelCostController } from './panel-cost.controller';
@@ -32,6 +33,7 @@ import { UsageHoldsService } from './usage-holds';
     PanelGroupsService,
     PanelInboundsService,
     MemberInboundsService,
+    InboundReleaseService,
     PanelLifecycleService,
     PanelCostService,
     PanelPermissionGuard,

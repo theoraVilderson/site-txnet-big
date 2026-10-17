@@ -19,7 +19,8 @@ import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
-import { ConfigMoveDrainResult, ConfigMoveJobDrainService, ConfigMoveJobRefused, ConfigMoveJobRejection, ResellerConfigMoveJobService } from './config-move-job';
+import { ConfigMoveDrainResult, ConfigMoveJobDrainService } from './config-move-drain';
+import { ConfigMoveJobRefused, ConfigMoveJobRejection, ResellerConfigMoveJobService } from './config-move-job';
 import { ConfigMoveJobBody, configMoveJobSchema, ConfigMoveSelection, configMoveSelectionSchema } from './config-move-job.schema';
 import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from './reseller-job-routes';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';

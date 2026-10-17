@@ -1,22 +1,28 @@
-import { Body, Controller, Param, ParseUUIDPipe, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { GrantBulkPage, grantBulkPageSchema } from '../payment/gift/grant-bulk-job.schema';
+import { InboundReleaseInput, InboundReleaseService } from './inbound-release';
 import { InboundAudienceInput, MemberInboundsService } from './member-inbounds';
-import { SetInboundAudienceBody, setInboundAudienceSchema, SetListingShareBody, setListingShareSchema } from './panel-registration.schema';
-import { PanelPermissionGuard, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
+import { ReleaseInboundBody, releaseInboundSchema, SetInboundAudienceBody, setInboundAudienceSchema, SetListingShareBody, setListingShareSchema } from './panel-registration.schema';
+import { PanelPermissionGuard, SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
 import { refusing } from './systems-refusals';
 
 /**
- * Who sells one inbound, and how much of it each group may take (F-027-ep,
- * F-027-eq, ADR-0127 decisions 1 and 3). Beside `SystemsController` rather
- * than in it, which is past its size.
+ * Who sells one inbound, how much of it each group may take, and releasing it
+ * from groups with live configs there (F-027-ep, F-027-eq, F-027-es; ADR-0127
+ * decisions 1, 3 and 6). Beside `SystemsController` rather than in it, which
+ * is past its size.
  */
 @Controller('billing/systems')
 @UseGuards(PanelPermissionGuard)
 export class InboundAudienceController {
-  constructor(private readonly memberInbounds: MemberInboundsService) {}
+  constructor(
+    private readonly memberInbounds: MemberInboundsService,
+    private readonly releases: InboundReleaseService,
+  ) {}
 
   /** Every group of the panel, or the groups listed. `409 inbound_has_configs` names a group that would lose it with live configs there. */
   @Put('panels/:id/inbounds/:remoteId/audience')
@@ -41,5 +47,39 @@ export class InboundAudienceController {
     @Req() req: Request,
   ) {
     return refusing(() => this.memberInbounds.setShare(actorOf(req), id, panelId, remoteId, body.maxClients));
+  }
+
+  /** The way out of `inbound_has_configs`: **202** a release job, `move` or `empty`; the listing changes when it ends. */
+  @Post('panels/:id/inbounds/:remoteId/release')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  release(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('remoteId') remoteId: string,
+    @Body(new ZodValidationPipe(releaseInboundSchema)) body: ReleaseInboundBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return refusing(() => this.releases.start({ ...actorOf(req), ip }, id, remoteId, body as InboundReleaseInput));
+  }
+
+  @Get('inbound-releases/:jobId')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  releaseJob(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request) {
+    return refusing(() => this.releases.job(actorOf(req), jobId));
+  }
+
+  @Get('inbound-releases/:jobId/outcomes')
+  @RateLimit(SYSTEMS_ADMIN_READ)
+  releaseOutcomes(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Query(new ZodValidationPipe(grantBulkPageSchema)) page: GrantBulkPage, @Req() req: Request) {
+    return refusing(() => this.releases.outcomes(actorOf(req), jobId, page));
+  }
+
+  /** Stops it: what moved stays moved, the listing is as it was. */
+  @Post('inbound-releases/:jobId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  cancelRelease(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request, @Ip() ip: string) {
+    return refusing(() => this.releases.cancel({ ...actorOf(req), ip }, jobId));
   }
 }

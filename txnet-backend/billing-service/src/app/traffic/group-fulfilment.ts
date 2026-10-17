@@ -64,6 +64,8 @@ const MEMBER_FIELDS = {
   maxClients: true,
   inboundsPerBuyer: true,
   inbounds: { select: { maxClients: true, inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
+  // Inbounds a running release job is taking from this group: placed on by nobody new (F-027-es).
+  releases: { select: { inboundRemoteId: true } },
   panel: { select: MEMBER_PANEL_FIELDS },
 } satisfies Prisma.PanelGroupMemberSelect;
 
@@ -265,6 +267,9 @@ export class GroupFulfilmentService {
                         AND (EXISTS (SELECT 1 FROM "network"."panel_group_member_inbound" a
                                       WHERE a."groupId" = m."groupId" AND a."panelId" = m."panelId" AND a."inboundRemoteId" = i."remoteId")
                              OR (i."sold" AND i."audience" = 'every_group'))
+                        -- and not being released from it by a running job (F-027-es)
+                        AND NOT EXISTS (SELECT 1 FROM "network"."inbound_release" r
+                                         WHERE r."groupId" = m."groupId" AND r."panelId" = m."panelId" AND r."inboundRemoteId" = i."remoteId")
                   WHERE m."groupId" = pg."id"
                     AND m."role" <> 'drain'
                     AND p."reviewState" IN ('accepted', 'accepted_low_trust')

@@ -26,7 +26,8 @@ import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 
 import { ConfigActionRefused } from '../../traffic/config-actions';
-import { CONFIG_MOVE_BATCH_SIZE, ConfigMoveJobDrainService, ResellerConfigMoveJobService } from './config-move-job';
+import { ConfigMoveJobDrainService } from './config-move-drain';
+import { CONFIG_MOVE_BATCH_SIZE, ResellerConfigMoveJobService } from './config-move-job';
 import { configMoveJobSchema, ConfigMoveSelection } from './config-move-job.schema';
 
 type Config = { id: string; tenantId: string; userId: string; grantId: string; panelId: string; protocol: ConfigProtocol; live: boolean };
@@ -126,6 +127,7 @@ function build() {
         return [...CONFIGS.values()].find((x) => x.live && x.grantId === where.grantId && x.panelId === where.panelId && x.protocol === where.protocol) ? { id: 'held' } : null;
       },
     },
+    inboundRelease: { deleteMany: async () => ({ count: 0 }) },
     outboxEvent: { create: async ({ data }: { data: { type: string; payload: Row } }) => void outbox.push(data) },
     configMoveJob: {
       findUnique: async ({ where }: { where: Row }) => pick(inScope(jobs), (where.tenantId_requestId as Row) ?? where)[0] ?? null,
@@ -134,10 +136,11 @@ function build() {
       count: async () => inScope(jobs).length,
       create: async ({ data }: { data: Row }) => {
         if (jobs.some((j) => j.tenantId === data.tenantId && j.requestId === data.requestId)) throw duplicate();
-        const row = { id: randomUUID(), status: 'running', okCount: 0, refusedCount: 0, failedCount: 0, createdAt: new Date(Date.now() + jobs.length), finishedAt: null, purgedAt: null, ...data };
+        const row = { id: randomUUID(), kind: 'to_panel', orphans: null, status: 'running', okCount: 0, refusedCount: 0, failedCount: 0, createdAt: new Date(Date.now() + jobs.length), finishedAt: null, purgedAt: null, ...data };
         jobs.push(row);
         return row;
       },
+      findUniqueOrThrow: async ({ where }: { where: Row }) => pick(jobs, where)[0],
       update: async ({ where, data }: { where: Row; data: Row }) => apply(pick(inScope(jobs), where)[0], data),
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         const hit = pick(inScope(jobs), where);
@@ -177,7 +180,7 @@ function build() {
       }
     },
   };
-  const crossTenant = { configMoveJob: tx.configMoveJob, configMoveJobItem: tx.configMoveJobItem };
+  const crossTenant = { configMoveJob: tx.configMoveJob, configMoveJobItem: tx.configMoveJobItem, $transaction: prisma.$transaction };
   const actions = {
     move: async (_t: unknown, input: { configId: string; toPanelId: string; actor: unknown }) => {
       const left = throwing.get(input.configId) ?? 0;
@@ -192,7 +195,7 @@ function build() {
     },
   };
   const service = new ResellerConfigMoveJobService(prisma as never, access);
-  const drainer = new ConfigMoveJobDrainService(prisma as never, crossTenant as never, actions as never);
+  const drainer = new ConfigMoveJobDrainService(prisma as never, crossTenant as never, actions as never, {} as never);
   return { service, drainer, jobs, items, outbox, moves, throwing, refusing };
 }
 

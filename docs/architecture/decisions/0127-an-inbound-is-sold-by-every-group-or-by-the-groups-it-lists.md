@@ -6,7 +6,7 @@ updated: 2026-10-17
 
 # ADR 0127 — an inbound is sold by every group, or by the groups it lists
 
-- **Status:** accepted (rows F-027-ep..F-027-ev; decisions 1-2 and 4 built 2026-10-17, F-027-ep and F-027-er; decision 3 built 2026-10-17, F-027-eq)
+- **Status:** accepted (rows F-027-ep..F-027-ev; decisions 1-2 and 4 built 2026-10-17, F-027-ep and F-027-er; decision 3 built 2026-10-17, F-027-eq; decision 6 built 2026-10-17, F-027-es)
 - **Date:** 2026-10-06
 - **Affects units:** billing (systems routes, group fulfilment, drain), entitlement (Grant), network (`panel_inbound` schema), panel-web (systems page, users)
 - **Decision row:** D-64 (the agent's recommendations, accepted by the user)

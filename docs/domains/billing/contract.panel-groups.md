@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 50
+version: 51
 updated: 2026-10-17
 ---
 
@@ -27,8 +27,10 @@ desired state; nothing calls `network-service` (ADR-0071).
 | `POST /api/billing/systems/panel-groups/:id/members` | `panelId`, and any of `inboundPlacement`, `maxClients` (1–1000000), `priority` (0–1000), `weight` (1–1000), `inboundsPerBuyer` (1–16, K under `hrw`), each nullable; `.strict()` | `201` the member, `primary` | 400; 403; 404 `not_found` / `panel_not_found`; 409 `already_member` |
 | `PATCH /api/billing/systems/panel-groups/:id/members/:panelId` | any of those four, at least one; null inherits; `.strict()` — a server fact is refused | `200` the member | 400; 403; 404 `not_found` / `member_not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
-| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = lists none, sells the every-group ones); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_has_configs` `facts: {remoteId, groupId, configs}` (rule 24c) |
-| `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` | `{audience: 'every_group'}` or `{audience: 'listed', groups: [groupId]}` (≤100, each once, each a member of the panel; `[]` = nobody); `.strict()` | `200 {panelId, remoteId, audience, groups}` | 400; 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `inbound_not_sellable` (listing a gone or unsold-protocol one), `inbound_has_configs` `facts: {remoteId, groupId, configs}` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = lists none, sells the every-group ones); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_has_configs` `facts: {remoteId, groupId, configs, groups: [{groupId, configs}]}` (rule 24c) |
+| `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` | `{audience: 'every_group'}` or `{audience: 'listed', groups: [groupId]}` (≤100, each once, each a member of the panel; `[]` = nobody); `.strict()` | `200 {panelId, remoteId, audience, groups}` | 400; 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `inbound_not_sellable` (listing a gone or unsold-protocol one), `inbound_has_configs` `facts: {remoteId, groupId, configs, groups}` (rule 24g) |
+| `POST /api/billing/systems/panels/:id/inbounds/:remoteId/release` | `{requestId, groups: [groupId] (1–100, each once), mode: 'move' \| 'empty', orphans?: 'pause' \| 'refund' (an empty's, required there), reason}`; `.strict()` | **202** the job (rule 24g) | 400 (`selection_too_large` too); 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `not_a_seller` / `already_releasing` / `request_reused` |
+| `GET …/systems/inbound-releases/:jobId`, `…/:jobId/outcomes?page&pageSize&problems`, `POST …/:jobId/cancel` | — | the job (`kind`, `source`, `orphans`, counts) / its outcomes / the job, `cancelled` | 403; 404 `job_not_found` |
 | `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds/:remoteId/share` | `{maxClients: 1–1000000 \| null}`; `.strict()` | `200 {groupId, panelId, remoteId, maxClients}` | 400; 403; 404 `not_found` / `listing_not_found` (rule 24f) |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
 | `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
@@ -95,5 +97,13 @@ desired state; nothing calls `network-service` (ADR-0071).
     `PUT` keeps it while the listing stays. It, and a member-layer `maxClients`, count the group's
     own Grants; the inbound's and the panel layer's stay physical — network `contract.inbounds.md`
     rule 5. On `InboundAudienceController`. `member-inbounds.spec.ts` pins it.
+
+24g. **Releasing an inbound is a job, the admin's choice** (F-027-es, ADR-0127 decision 6). The
+    answer to `inbound_has_configs`, whose `groups` names each group losing it: `move` (each
+    config to its group's next placement) or `empty` (retired there; a Grant left with no line
+    `pause` or `refund`). A kind of the reseller's config move job — its drain, outcomes and
+    progress event (network [contract.config-move.md](../network/contract.config-move.md)). The
+    listing changes when the job ends; a cancel leaves it. The job is the actor's tenant's
+    (`InboundReleaseService`, on `InboundAudienceController`); `inbound-release.spec.ts` pins it.
 
 `panel-groups.spec.ts` pins rules 20–24e; `member-inbounds.spec.ts` 24c and 24f.

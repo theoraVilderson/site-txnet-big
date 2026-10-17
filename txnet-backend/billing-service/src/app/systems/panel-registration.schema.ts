@@ -330,3 +330,26 @@ export const setInboundAudienceSchema = z.union([
 ]);
 
 export type SetInboundAudienceBody = z.infer<typeof setInboundAudienceSchema>;
+
+/** One way out of `inbound_has_configs` (ADR-0127 decision 6): move each config to its group's next placement, or empty it there. */
+export const RELEASE_MODES = ['move', 'empty'] as const;
+
+/**
+ * Releasing an inbound from groups with live configs there (F-027-es, ADR-0127
+ * decision 6): the groups — each once — the way out, and for `empty` what a
+ * Grant left with no line gets; `orphans` is refused on a `move`. A `requestId`
+ * per confirm and the admin's reason, as every job. `.strict()`.
+ */
+export const releaseInboundSchema = z
+  .object({
+    requestId: z.string().uuid(),
+    groups: z.array(z.string().uuid()).min(1).max(MAX_LISTED_GROUPS),
+    mode: z.enum(RELEASE_MODES),
+    orphans: z.nativeEnum(EvictOrphans).optional(),
+    reason: z.string().trim().min(1).max(500),
+  })
+  .strict()
+  .refine((body) => new Set(body.groups).size === body.groups.length, { message: 'a group is named twice', path: ['groups'] })
+  .refine((body) => (body.mode === 'empty') === (body.orphans !== undefined), { message: 'orphans is an empty\'s, and required for it', path: ['orphans'] });
+
+export type ReleaseInboundBody = z.infer<typeof releaseInboundSchema>;

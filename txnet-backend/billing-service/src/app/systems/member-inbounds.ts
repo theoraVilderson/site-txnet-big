@@ -9,14 +9,16 @@ import { SystemsRefused } from './systems-read';
 
 /**
  * An inbound a group would stop selling while its Grants' configs are on it
- * (ADR-0127 decision 6): the first such group and its count, so the owner can
- * move or empty them first (F-027-es names every group).
+ * (ADR-0127 decision 6): the first such group and its count, and every group
+ * losing that inbound with its count (F-027-es) — what a release job moves or
+ * empties before the listing can go.
  */
 export class InboundHeldElsewhere extends SystemsRefused {
   constructor(
     readonly remoteId: string,
     readonly group: { id: string; name: string },
     readonly configs: number,
+    readonly groups: { groupId: string; configs: number }[] = [{ groupId: group.id, configs }],
   ) {
     super('inbound_has_configs');
   }
@@ -202,6 +204,9 @@ export class MemberInboundsService {
        WHERE c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
        GROUP BY i."remoteId", pg."id", pg."name"
        ORDER BY i."remoteId", pg."name"`;
-    if (live.length > 0) throw new InboundHeldElsewhere(live[0].remoteId, { id: live[0].groupId, name: live[0].groupName }, Number(live[0].configs));
+    if (live.length === 0) return;
+    const [first] = live;
+    const groups = live.filter((l) => l.remoteId === first.remoteId).map((l) => ({ groupId: l.groupId, configs: Number(l.configs) }));
+    throw new InboundHeldElsewhere(first.remoteId, { id: first.groupId, name: first.groupName }, Number(first.configs), groups);
   }
 }

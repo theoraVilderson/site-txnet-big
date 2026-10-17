@@ -823,6 +823,8 @@ model PanelGroupMember {
   panel    Panel                     @relation(fields: [panelId], references: [id], onDelete: Restrict)
   /// The `listed` inbounds this membership sells, beside every `every_group` one (F-027-ep).
   inbounds PanelGroupMemberInbound[]
+  /// Inbounds this membership is being released from: sold by nobody new while the job runs (F-027-es).
+  releases InboundRelease[]
 
   @@id([groupId, panelId])
   @@index([panelId])
@@ -1191,6 +1193,17 @@ model IpAccessRule {
 
 // =============================================================================
 
+/// What a config move job does with each config (F-311-ad, F-027-es): moves it
+/// to `toPanelId`; or releases an inbound from groups, by moving each to its
+/// group's next placement, or by emptying it there.
+enum ConfigMoveJobKind {
+  to_panel
+  release_move
+  release_empty
+
+  @@schema("network")
+}
+
 /// F-311-ad. Where a config move job stands: `running` until its last item has
 /// an outcome (`done`) or the admin stops it (`cancelled`).
 enum ConfigMoveJobStatus {
@@ -1213,9 +1226,14 @@ model ConfigMoveJob {
   actorUserId  String              @db.Uuid
   actorIp      String
   reason       String
-  /// What the admin named: `{panelId}` (its live configs there) or `{userIds}`.
+  kind         ConfigMoveJobKind   @default(to_panel)
+  /// What the admin named: `{panelId}` (its live configs there) or `{userIds}`;
+  /// for a release, `{panelId, remoteId, groupIds}` (F-027-es).
   source       Json
-  toPanelId    String              @db.Uuid
+  /// The target of a `to_panel` job; null for a release.
+  toPanelId    String?             @db.Uuid
+  /// A `release_empty` job's choice for a Grant left with no line (F-027-eg's).
+  orphans      EvictOrphans?
   status       ConfigMoveJobStatus @default(running)
   /// The configs frozen at the confirm; never changes after.
   total        Int
@@ -1227,7 +1245,8 @@ model ConfigMoveJob {
   /// When its items were purged, `CONFIG_MOVE_RETENTION_DAYS` after `finishedAt`; the row and counts stay.
   purgedAt     DateTime?
 
-  items ConfigMoveJobItem[]
+  items    ConfigMoveJobItem[]
+  releases InboundRelease[]
 
   @@unique([tenantId, requestId])
   @@index([tenantId, createdAt])
@@ -1252,5 +1271,25 @@ model ConfigMoveJobItem {
 
   @@id([jobId, configId])
   @@map("config_move_job_item")
+  @@schema("network")
+}
+
+/// F-027-es (ADR-0127 decision 6). A group being released from one inbound by a
+/// running job: fulfilment places none of its Grants there meanwhile, and the
+/// listing changes only when the job ends. Gone with the job, a cancel, or the member.
+model InboundRelease {
+  groupId         String  @db.Uuid
+  panelId         String  @db.Uuid
+  inboundRemoteId String
+  /// The group's (null = the platform's), as `panel_group_member_inbound`.
+  tenantId        String? @db.Uuid
+  jobId           String  @db.Uuid
+
+  member PanelGroupMember @relation(fields: [groupId, panelId], references: [groupId, panelId], onDelete: Cascade)
+  job    ConfigMoveJob    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, panelId, inboundRemoteId])
+  @@index([jobId])
+  @@map("inbound_release")
   @@schema("network")
 }

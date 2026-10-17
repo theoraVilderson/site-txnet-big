@@ -42,6 +42,12 @@ export type SystemsRejection =
   | 'inbound_has_configs'
   // A group's share of an inbound is a listing's (F-027-eq).
   | 'listing_not_found'
+  // Releasing an inbound from groups, as a job (F-027-es).
+  | 'not_a_seller'
+  | 'already_releasing'
+  | 'request_reused'
+  | 'selection_too_large'
+  | 'job_not_found'
   // A panel's monthly cost (F-1002-a): a price never lands in a closed month.
   | 'cost_in_closed_month'
   // Acknowledging with a choice (F-027-fa).
