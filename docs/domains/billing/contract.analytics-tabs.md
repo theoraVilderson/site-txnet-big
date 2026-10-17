@@ -150,10 +150,11 @@ user); cost is `saleCost`, else `cost` in its own currency. It answers:
 | `totals` | `net`, `cost`, `margin` as money KPIs with their deltas; `marginRate` and `previousMarginRate` (margin ÷ net in the operating currency, null with no net) |
 | `costParts` | `attributed` (split by use), `idle` (a panel's day with no traffic), `unallocated` (paid for nothing a row shows: a subscription, a day with no bytes) |
 | `series` | `net`, `cost`, `margin` per bucket |
-| `products`, `panels` | a cell each — `{id, net, cost, margin, marginRate, loss}` — largest net first, then the deepest loss |
+| `products`, `panels` | a cell each — `{id, net, cost, margin, marginRate, loss, noCost}` — largest net first, then the deepest loss; `noCost`: it sold and no cost row names it (F-1002-f, ADR-0151 (5)), a cost of 0 being a cost |
 | `users` | the 20 deepest losses, each with its `name` (F-1001-m; a label, as `topCustomers`'); `null` to the platform's staff on a reseller |
 | `resellers` | the platform's own only: each reseller's payments to it (`net`) against its users' share of the platform's panels (`cost`), with `name` |
 | `noCostPanels` | the platform's own only: its panels with a sale or a service in the window and no monthly cost on or before its end |
+| `noCostProducts` | every tenant: the ids of `products` cells with `noCost` — its margin is not a margin until a cost is set (F-1002-f) |
 | `lossAlertPercent` | the tenant's threshold for the loss alert (F-1003, below), for the form beside the users |
 
 1. **A tenant's margin is its own.** Totals and lists count the cost of its

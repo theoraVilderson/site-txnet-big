@@ -12,7 +12,9 @@
  *  - **a margin % from nothing.** Margin ÷ net with no net is no figure, not
  *    infinity and not -100%;
  *  - **a loss not flagged.** A row whose operating-currency margin is below 0
- *    says so; one with no cost at all is not a loss.
+ *    says so; one with no cost at all is not a loss;
+ *  - **no cost read as 100% margin** (ADR-0151 (5)). A row that sold with no
+ *    cost row at all is `noCost`; one costed at 0 is a cost, and is not.
  */
 import { Prisma } from '@prisma/client';
 
@@ -63,7 +65,7 @@ describe('marginCellsOf', () => {
 
   it('is net minus cost per currency, the rate of the operating one, a loss flagged', () => {
     const [cell] = marginCellsOf([{ key: 'p', currencyCode: 'IRT', amount: d('100') }], [{ key: 'p', currencyCode: 'IRT', amount: d('130') }], how);
-    expect(cell).toEqual({ id: 'p', net: { IRT: '100.00' }, cost: { IRT: '130.00' }, margin: { IRT: '-30.00' }, marginRate: -0.3, loss: true });
+    expect(cell).toEqual({ id: 'p', net: { IRT: '100.00' }, cost: { IRT: '130.00' }, margin: { IRT: '-30.00' }, marginRate: -0.3, loss: true, noCost: false });
   });
 
   it('answers no rate where nothing was sold, and an uncosted row is no loss', () => {
@@ -97,5 +99,19 @@ describe('marginCellsOf', () => {
       how,
     );
     expect(cells.map((c) => c.id)).toEqual(['b', 'a', 'd', 'c']);
+  });
+});
+
+describe('marginCellsOf, a row with no cost', () => {
+  const how = { currencies: ['USD'], operating: 'USD' };
+  const money = (key: string, amount: string) => ({ key, currencyCode: 'USD', amount: d(amount) });
+
+  it('is noCost when it sold and no cost row names it; a cost of 0 is a cost', () => {
+    const cells = marginCellsOf([money('api', '50'), money('ip', '20'), money('vpn', '10')], [money('ip', '0'), money('vpn', '4')], how);
+    expect(cells.map((c) => [c.id, c.noCost, c.marginRate])).toEqual([
+      ['api', true, 1],
+      ['ip', false, 1],
+      ['vpn', false, 0.6],
+    ]);
   });
 });

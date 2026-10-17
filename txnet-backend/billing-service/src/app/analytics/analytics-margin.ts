@@ -27,6 +27,8 @@ export type MarginTab = {
   resellers: ResellerMargin[] | null;
   /** The platform's own only: panels in use in the window with no monthly cost set — their margin is not a margin. */
   noCostPanels: string[] | null;
+  /** Products sold in the window with no cost row (F-1002-f): no variant or meter cost set and nothing paid the platform for them. */
+  noCostProducts: string[];
   /** The tenant's loss alert threshold (F-1003), for the form beside the users. */
   lossAlertPercent: number;
 };
@@ -160,6 +162,7 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
         .sort((a, b) => new Prisma.Decimal(a.margin[c.operating]).comparedTo(new Prisma.Decimal(b.margin[c.operating])) || String(a.id).localeCompare(String(b.id)))
         .slice(0, LOSING_USERS_SHOWN);
   const namedUsers = users ? await named(c.tx, users) : null;
+  const products = await cellsBy(c, 'product', currencies);
 
   return {
     currencies,
@@ -172,13 +175,14 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
     },
     costParts: { attributed: partOf('attributed'), idle: partOf('idle'), unallocated: partOf('unallocated') },
     series: { net: buckets.map((b) => b.net), cost: buckets.map((b) => b.cost), margin: buckets.map((b) => b.margin) },
-    products: await cellsBy(c, 'product', currencies),
+    products,
     panels: await cellsBy(c, 'panel', currencies),
     users: namedUsers,
     resellers: reseller
       ? marginCellsOf(reseller.paid, reseller.served, how).map((cell) => ({ ...cell, name: reseller.nameOf.get(cell.id ?? '') ?? cell.id ?? '' }))
       : null,
     noCostPanels: c.platform ? await noCostPanels(c.tx, c.window) : null,
+    noCostProducts: products.flatMap((cell) => ('noCost' in cell && cell.noCost && cell.id ? [cell.id] : [])),
     lossAlertPercent: (await settingsOf(c.tx)).lossAlertPercent,
   };
 }

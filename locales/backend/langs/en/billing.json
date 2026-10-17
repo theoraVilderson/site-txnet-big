@@ -99,6 +99,8 @@
       "users": "Users",
       "noCostPanels": "Panels with no cost set",
       "loss": "Loss-making",
+      "noCostProducts": "Products with no cost set",
+      "noCost": "No cost set",
       "id": "Id",
       "cohorts": "Cohorts",
       "cohort": "First purchase month",

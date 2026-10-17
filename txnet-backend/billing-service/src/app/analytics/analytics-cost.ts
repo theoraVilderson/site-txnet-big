@@ -153,7 +153,7 @@ export function spreadSubscriptions(charges: readonly ResellerCharge[], how: { p
   return rows;
 }
 
-/** One cost row per cell (day, kind, product, panel, user, currency), the costs summed and kept to six places; a cell summing to zero is dropped. */
+/** One cost row per cell (day, kind, product, panel, user, currency), the costs summed and kept to six places — a 0 kept: it says "costs nothing" (ADR-0151 (5)). */
 function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; currencyCode: string; cost: Prisma.Decimal })[]): CostDayRow[] {
   const cells = new Map<string, CostDayRow>();
   for (const p of parts) {
@@ -161,7 +161,7 @@ function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; curr
     const row = cells.get(key) ?? { day: p.day, kind: p.kind, panelId: p.panelId, servedTenantId: null, productId: p.productId, userId: p.userId, currencyCode: p.currencyCode, cost: ZERO, bytes: BigInt(0) };
     cells.set(key, { ...row, cost: row.cost.plus(p.cost) });
   }
-  return [...cells.values()].filter((r) => !r.cost.isZero()).map((r) => ({ ...r, cost: r.cost.toDecimalPlaces(COST_PLACES) }));
+  return [...cells.values()].map((r) => ({ ...r, cost: r.cost.toDecimalPlaces(COST_PLACES) }));
 }
 
 /** A sale or the refund that undoes it, priced at the variant's cost in effect when it was sold. */

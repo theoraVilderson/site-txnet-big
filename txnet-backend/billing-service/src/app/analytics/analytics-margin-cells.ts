@@ -20,6 +20,8 @@ export type MarginCell = {
   marginRate: number | null;
   /** The operating currency's margin is below zero. */
   loss: boolean;
+  /** It sold and no cost row names it: its margin is not a margin (ADR-0151 (5)) — a cost of 0 is a cost. */
+  noCost: boolean;
 };
 
 const ZERO = new Prisma.Decimal(0);
@@ -40,6 +42,7 @@ export function marginCellOf(id: string | null, net: readonly MoneyRow[], cost: 
     margin: amountsOf(m, how.currencies),
     marginRate: sold.isZero() ? null : own.div(sold).toDecimalPlaces(RATE_PLACES).toNumber(),
     loss: own.lt(ZERO),
+    noCost: net.length > 0 && cost.length === 0,
   };
 }
 

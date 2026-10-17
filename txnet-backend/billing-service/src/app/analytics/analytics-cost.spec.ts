@@ -154,3 +154,10 @@ describe('ownCosts', () => {
     ]);
   });
 });
+
+describe('ownCosts, a cost of 0', () => {
+  it('is kept as a row: 0 says "costs nothing", no row says "not set" (ADR-0151 (5))', () => {
+    const rows = ownCosts([{ day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD', cost: d('0'), sale: true }], []);
+    expect(rows.map((r) => [r.kind, r.cost.toFixed(2)])).toEqual([['sale', '0.00']]);
+  });
+});
