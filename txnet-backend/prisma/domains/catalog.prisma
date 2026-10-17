@@ -432,7 +432,8 @@ model RateCard {
   /// A `Meter.key` (`METER_KEYS`).
   meterKey         String
   /// How many of the meter's unit one `unitPrice` buys — 2^30 for a GiB of bytes.
-  unitSize         BigInt
+  /// Null with `unitCost`: taken back (F-1002-i, CHECK `meter_cost_unset_whole`).
+  unitSize         BigInt?
   unitPrice        Decimal               @db.Decimal(18, 8)
   /// On the same terms as `Price.currencyCode` (F-116-d).
   currencyCode     String
@@ -462,8 +463,8 @@ model VariantCost {
   id               String   @id @default(uuid()) @db.Uuid
   tenantId         String   @db.Uuid
   variantId        String   @db.Uuid
-  /// Per sale, in `currencyCode`; 0 is a cost (ADR-0151 (5)).
-  amount           Decimal  @db.Decimal(18, 2)
+  /// Per sale, in `currencyCode`; 0 is a cost (ADR-0151 (5)); null: taken back, not set from `effectiveFrom` (F-1002-i).
+  amount           Decimal? @db.Decimal(18, 2)
   /// The tenant's pricing currency when written, as a price's (F-116-d).
   currencyCode     String
   effectiveFrom    DateTime
@@ -487,7 +488,7 @@ model MeterCost {
   meterKey         String
   unitSize         BigInt
   /// For `unitSize` units, in `currencyCode`; `Decimal(18, 8)` as a rate card's.
-  unitCost         Decimal  @db.Decimal(18, 8)
+  unitCost         Decimal? @db.Decimal(18, 8)
   currencyCode     String
   effectiveFrom    DateTime
   createdByAdminId String?  @db.Uuid

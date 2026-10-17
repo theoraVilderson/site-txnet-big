@@ -80,6 +80,9 @@ enum AdminAction {
   // F-1002-d. A cost is history, as a price is.
   catalog_variant_cost_set
   catalog_meter_cost_set
+  /// F-1002-i: a cost taken back — a new row with none.
+  catalog_variant_cost_unset
+  catalog_meter_cost_unset
   // F-503-a. A campaign is two price rows; cancelling it switches both off.
   catalog_campaign_create
   catalog_campaign_cancel

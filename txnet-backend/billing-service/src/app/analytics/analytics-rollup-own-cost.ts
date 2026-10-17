@@ -18,8 +18,9 @@ const panelOf = (grant: Prisma.Sql) => Prisma.sql`(SELECT c."panelId" FROM netwo
 
 /**
  * Each purchase and the refund that undoes it in `r`, at its variant's cost in
- * effect when the invoice was made — with the money it was sold in, a refund
- * paid back after a currency change its sale's (`sourceCurrencyCode`, F-1001-q).
+ * effect when the invoice was made — none where that cost was taken back
+ * (F-1002-i) — with the money it was sold in, a refund paid back after a
+ * currency change its sale's (`sourceCurrencyCode`, F-1001-q).
  */
 function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<SaleCost[]> {
   return tx.$queryRaw`
@@ -34,7 +35,7 @@ function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<Sa
       SELECT c."amount", c."currencyCode" FROM catalog.variant_cost c
       WHERE c."variantId" = i."variantId" AND c."tenantId" = public.current_tenant_id() AND c."effectiveFrom" <= i."createdAt"
       ORDER BY c."effectiveFrom" DESC, c."createdAt" DESC LIMIT 1
-    ) vc ON true
+    ) vc ON vc."amount" IS NOT NULL
     WHERE wt."tenantId" = public.current_tenant_id() AND wt."createdAt" >= ${r.from} AND wt."createdAt" < ${r.to}
       AND ((wt."direction" = 'debit' AND wt."reasonType"::text = ${WalletReasonType.product_purchase})
         OR (wt."direction" = 'credit' AND wt."reasonType"::text = ${WalletReasonType.product_refund}))`;
@@ -56,7 +57,7 @@ function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<U
       SELECT c."unitSize", c."unitCost", c."currencyCode" FROM catalog.meter_cost c
       WHERE c."meterKey" = e."meterKey" AND c."tenantId" = public.current_tenant_id() AND c."effectiveFrom" <= e."occurredAt"
       ORDER BY c."effectiveFrom" DESC, c."createdAt" DESC LIMIT 1
-    ) mc ON true
+    ) mc ON mc."unitCost" IS NOT NULL
     WHERE e."tenantId" = public.current_tenant_id() AND e."meterKey" <> ${METER_KEYS.vpnTraffic}
       AND e."occurredAt" >= ${r.from} AND e."occurredAt" < ${r.to}
       AND NOT EXISTS (

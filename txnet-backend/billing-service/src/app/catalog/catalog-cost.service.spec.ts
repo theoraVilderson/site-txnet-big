@@ -16,7 +16,7 @@ import { Prisma } from '@prisma/client';
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { CatalogActor, CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
-import { setMeterCostSchema, setVariantCostSchema } from './catalog-cost.schema';
+import { setMeterCostSchema, setVariantCostSchema, unsetMeterCostSchema, unsetVariantCostSchema } from './catalog-cost.schema';
 import { CatalogCostService } from './catalog-cost.service';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -79,6 +79,32 @@ describe('CatalogCostService', () => {
     const lines = await h.costs.meterCosts(actor);
     expect(lines).toEqual([{ meterKey: 'api.calls', unit: 'count', nameKey: 'n', costs: [expect.objectContaining({ amount: '0.05', unitSize: '1000', currencyCode: 'IRT' })] }]);
     await expect(h.costs.setMeterCost(actor, { meterKey: 'nope', unitSize: '1', unitCost: '1' })).rejects.toMatchObject({ reason: 'meter_not_found' });
+  });
+});
+
+describe('CatalogCostService, a cost taken back (F-1002-i)', () => {
+  it("writes a variant's 'no cost from now' as a new row with no amount, audited apart, its days restated", async () => {
+    const h = harness(TENANT);
+    const view = await h.costs.unsetVariantCost(actor, VARIANT, {});
+    expect(view).toMatchObject({ amount: null, currencyCode: 'IRT' });
+    expect(h.written[0]).toMatchObject({ tenantId: TENANT, variantId: VARIANT, amount: null });
+    expect(h.audits).toEqual(['catalog_variant_cost_unset']);
+    expect(h.restated).toHaveLength(1);
+  });
+
+  it("writes a meter's the same way — neither a unit size nor a unit cost — and refuses a meter that does not exist", async () => {
+    const h = harness(TENANT);
+    const view = await h.costs.unsetMeterCost(actor, { meterKey: 'api.calls' });
+    expect(view).toMatchObject({ amount: null, unitSize: null });
+    expect(h.written[0]).toMatchObject({ tenantId: TENANT, meterKey: 'api.calls', unitSize: null, unitCost: null });
+    expect(h.audits).toEqual(['catalog_meter_cost_unset']);
+    await expect(h.costs.unsetMeterCost(actor, { meterKey: 'nope' })).rejects.toMatchObject({ reason: 'meter_not_found' });
+  });
+
+  it('refuses at the edge a take-back from a closed month, and one on vpn.traffic', () => {
+    expect(unsetVariantCostSchema.safeParse({ effectiveFrom: '2020-01-01T00:00:00Z' }).success).toBe(false);
+    expect(unsetVariantCostSchema.safeParse({}).success).toBe(true);
+    expect(unsetMeterCostSchema.safeParse({ meterKey: METER_KEYS.vpnTraffic }).success).toBe(false);
   });
 });
 

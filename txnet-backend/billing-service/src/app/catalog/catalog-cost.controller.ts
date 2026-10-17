@@ -11,12 +11,18 @@ import {
   SetMeterCostBody,
   SetResellerMeterCostBody,
   SetVariantCostBody,
+  UnsetMeterCostBody,
+  UnsetResellerMeterCostBody,
+  UnsetVariantCostBody,
   listMeterCostsSchema,
   setMeterCostSchema,
   setResellerMeterCostSchema,
   setVariantCostSchema,
+  unsetMeterCostSchema,
+  unsetResellerMeterCostSchema,
+  unsetVariantCostSchema,
 } from './catalog-cost.schema';
-import { CatalogCostService, MeterCostInput, VariantCostInput } from './catalog-cost.service';
+import { CatalogCostService, MeterCostInput, MeterCostUnsetInput, VariantCostInput } from './catalog-cost.service';
 import { CatalogPermissionGuard } from './catalog-permission.guard';
 import { CATALOG_REFUSAL_STATUS, catalogRefusal } from './catalog-refusal';
 import { STATUS as RESELLER_STATUS } from './reseller-catalog.controller';
@@ -48,6 +54,14 @@ export class CatalogCostController {
     return this.refusing(() => this.costs.setVariantCost(actorOf(req, ip), id, body as VariantCostInput));
   }
 
+  /** F-1002-i: the cost taken back — "not set" from `effectiveFrom` on. */
+  @Post('variants/:id/costs/unset')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  unsetVariantCost(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(unsetVariantCostSchema)) body: UnsetVariantCostBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.costs.unsetVariantCost(actorOf(req, ip), id, body));
+  }
+
   @Get('meter-costs')
   @RateLimit(READ)
   meterCosts(@Query(new ZodValidationPipe(listMeterCostsSchema)) query: ListMeterCostsQuery, @Req() req: Request, @Ip() ip: string) {
@@ -59,6 +73,13 @@ export class CatalogCostController {
   @RateLimit(WRITE)
   setMeterCost(@Body(new ZodValidationPipe(setMeterCostSchema)) body: SetMeterCostBody, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.costs.setMeterCost(actorOf(req, ip), { ...(body as MeterCostInput), tenantId: ownerOf(body.tenantId) }));
+  }
+
+  @Post('meter-costs/unset')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  unsetMeterCost(@Body(new ZodValidationPipe(unsetMeterCostSchema)) body: UnsetMeterCostBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.costs.unsetMeterCost(actorOf(req, ip), { ...(body as MeterCostUnsetInput), tenantId: ownerOf(body.tenantId) }));
   }
 
   private async refusing<T>(run: () => Promise<T>): Promise<T> {
@@ -103,6 +124,19 @@ export class ResellerCatalogCostController {
     return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setVariantCost(as, id, body as VariantCostInput)));
   }
 
+  @Post('variants/:id/costs/unset')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  unsetVariantCost(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(unsetVariantCostSchema)) body: UnsetVariantCostBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetVariantCost(as, id, body)));
+  }
+
   @Get('meter-costs')
   @RateLimit(READ)
   meterCosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
@@ -114,6 +148,13 @@ export class ResellerCatalogCostController {
   @RateLimit(WRITE)
   setMeterCost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(setResellerMeterCostSchema)) body: SetResellerMeterCostBody, @Req() req: Request, @Ip() ip: string) {
     return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setMeterCost(as, body as MeterCostInput)));
+  }
+
+  @Post('meter-costs/unset')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  unsetMeterCost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(unsetResellerMeterCostSchema)) body: UnsetResellerMeterCostBody, @Req() req: Request, @Ip() ip: string) {
+    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetMeterCost(as, body as MeterCostUnsetInput)));
   }
 
   private async refusing<T>(run: () => Promise<T>): Promise<T> {
