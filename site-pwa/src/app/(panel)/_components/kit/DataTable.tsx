@@ -158,8 +158,8 @@ export function DataTable<T>({
                     </td>
                   )}
                   {columns.map((c) => (
-                    <td key={c.id} dir={c.dir} className={cn(cell, "text-start", c.className)}>
-                      {c.cell(row)}
+                    <td key={c.id} className={cn(cell, "text-start", c.className)}>
+                      {content(c, row)}
                     </td>
                   ))}
                   {actions && <td className={cn(cell, "text-end")}>{menu(row)}</td>}
@@ -188,8 +188,8 @@ export function DataTable<T>({
                   {cardFields.map((c) => (
                     <div key={c.id} className="contents">
                       <dt className="text-text-secondary">{c.header}</dt>
-                      <dd dir={c.dir} className={cn("min-w-0 text-end text-text-primary", c.className)}>
-                        {c.cell(row)}
+                      <dd className={cn("min-w-0 text-end text-text-primary", c.className)}>
+                        {content(c, row)}
                       </dd>
                     </div>
                   ))}
@@ -220,6 +220,15 @@ export function DataTable<T>({
       </AnimatePresence>
     </>
   );
+}
+
+/**
+ * A cell's value in its column's direction. The `dir` goes on the value, not
+ * the cell: an `ltr` cell in an RTL page turns `text-start` into left, and the
+ * figures then sit at the other edge from their header.
+ */
+function content<T>(c: DataColumn<T>, row: T): ReactNode {
+  return c.dir ? <span dir={c.dir}>{c.cell(row)}</span> : c.cell(row);
 }
 
 function TickBox({

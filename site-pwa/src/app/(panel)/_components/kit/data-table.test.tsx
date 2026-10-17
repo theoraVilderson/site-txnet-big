@@ -119,6 +119,17 @@ describe("DataTable", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: /kit.table.selected/ })).not.toBeInTheDocument());
   });
 
+  it("keeps a figure's `dir` off its cell, so the cell aligns with its header in RTL", () => {
+    const money: DataColumn<Row>[] = [COLUMNS[0], { id: "a", header: "Net", cell: (r) => r.a, dir: "ltr" }];
+    render(<DataTable label="Things" rows={ROWS} columns={money} rowKey={(r) => r.id} />);
+    const inTable = within(table()).getByText("A1");
+    expect(inTable).toHaveAttribute("dir", "ltr");
+    expect(inTable.closest("td")).not.toHaveAttribute("dir");
+    const onCard = within(cards()[0]).getByText("A1");
+    expect(onCard).toHaveAttribute("dir", "ltr");
+    expect(onCard.closest("dd")).not.toHaveAttribute("dir");
+  });
+
   it("shows its empty state instead of an empty table", () => {
     render(<DataTable label="Things" rows={[]} columns={COLUMNS} rowKey={(r) => r.id} empty={<p>Nothing yet</p>} />);
     expect(screen.getByText("Nothing yet")).toBeInTheDocument();
