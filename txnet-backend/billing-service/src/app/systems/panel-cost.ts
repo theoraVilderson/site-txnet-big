@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
+import { platformTenantIdOf } from '@txnet-backend/shared-core';
+
+import { restateCostsFrom } from '../analytics/analytics-rollup-own-cost';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { calendarDaySchema as day } from '../request/calendar-day.schema';
@@ -57,14 +60,19 @@ export class PanelCostService {
     if (panel.retiredAt !== null) throw new SystemsRefused('panel_retired');
     const effectiveFrom = body.effectiveFrom ?? dayOf(now);
     if (effectiveFrom < openMonthOf(now)) throw new SystemsRefused('cost_in_closed_month');
-    await this.all.panelCost.create({
-      data: {
-        panelId,
-        monthlyCostUsd: body.monthlyCostUsd,
-        monthlyTrafficBytes: body.monthlyTrafficBytes === undefined ? null : BigInt(body.monthlyTrafficBytes),
-        effectiveFrom: new Date(`${effectiveFrom}T00:00:00Z`),
-        createdByUserId: actor.adminId,
-      },
+    const from = new Date(`${effectiveFrom}T00:00:00Z`);
+    await this.all.$transaction(async (tx) => {
+      await tx.panelCost.create({
+        data: {
+          panelId,
+          monthlyCostUsd: body.monthlyCostUsd,
+          monthlyTrafficBytes: body.monthlyTrafficBytes === undefined ? null : BigInt(body.monthlyTrafficBytes),
+          effectiveFrom: from,
+          createdByUserId: actor.adminId,
+        },
+      });
+      // A price from an earlier day restates the platform's cost rows from it (F-1002-e): only its rows carry panel costs.
+      await restateCostsFrom(tx, await platformTenantIdOf(tx), from);
     });
     this.logger.log(`panel ${panelId} costs ${body.monthlyCostUsd} USD a month from ${effectiveFrom}, set by ${actor.adminId}`);
     return this.view(panelId, now);

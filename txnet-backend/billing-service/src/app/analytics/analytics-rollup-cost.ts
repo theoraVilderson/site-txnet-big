@@ -6,6 +6,7 @@ import { ConvertedCost, convertCosts, rateLookup, readRates } from './analytics-
 import type { CrossTenantReader } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
 import { RollupRange, dayIn } from './analytics-rollup';
+import { readOwnCosts } from './analytics-rollup-own-cost';
 
 /**
  * The cost rollup (F-1002-b): the reads and the write around the arithmetic of
@@ -54,14 +55,34 @@ async function platformPanelCosts(tx: Prisma.TransactionClient, across: CrossTen
   return attributePanelCosts(datesOf(r), prices, use);
 }
 
-/** A reseller's payments to the platform in `r` of `reasons`, signed (a charge +, a refund −), on its tenant day. */
-function readResellerCharges(tx: Prisma.TransactionClient, r: RollupRange, reasons: readonly TenantBillingReasonType[], from: Date): Promise<ResellerCharge[]> {
-  return tx.$queryRaw<ResellerCharge[]>`
+/**
+ * The Grant a platform charge names (ADR-0151 (4)): itself, or the usage
+ * token, quota adjustment, renewal or end move it was charged for — each
+ * carries its `grantId`. Anything else (a random reference, a subscription)
+ * names none.
+ */
+const GRANT_NAMED = Prisma.sql`COALESCE(
+  (SELECT x."id" FROM entitlement."grant" x WHERE x."id" = b."referenceId"),
+  (SELECT x."grantId" FROM billing.usage_authorization x WHERE x."id" = b."referenceId"),
+  (SELECT x."grantId" FROM entitlement.quota_adjustment x WHERE x."id" = b."referenceId"),
+  (SELECT x."grantId" FROM entitlement.grant_renewal x WHERE x."id" = b."referenceId"),
+  (SELECT x."grantId" FROM entitlement.grant_duration_change x WHERE x."id" = b."referenceId"))`;
+
+type ChargeRow = Omit<ResellerCharge, 'grant'> & { grantId: string | null; productId: string | null; panelId: string | null; userId: string | null };
+
+/** A reseller's payments to the platform in `r` of `reasons`, signed (a charge +, a refund −), on its tenant day, with the Grant each names. */
+async function readResellerCharges(tx: Prisma.TransactionClient, r: RollupRange, reasons: readonly TenantBillingReasonType[], from: Date): Promise<ResellerCharge[]> {
+  const rows = await tx.$queryRaw<ChargeRow[]>`
     SELECT to_char(${dayIn(Prisma.sql`b."createdAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", b."currencyCode",
-           CASE WHEN b."direction" = 'debit' THEN b."amount" ELSE -b."amount" END AS "amount"
+           CASE WHEN b."direction" = 'debit' THEN b."amount" ELSE -b."amount" END AS "amount",
+           g."id" AS "grantId", v."productId", g."userId",
+           (SELECT c."panelId" FROM network.config c WHERE c."grantId" = g."id" ORDER BY c."createdAt" LIMIT 1) AS "panelId"
     FROM tenant.tenant_billing_transaction b
     JOIN tenant.tenant_billing_wallet w ON w."id" = b."walletId" AND w."tenantId" = public.current_tenant_id()
+    LEFT JOIN entitlement."grant" g ON g."id" = ${GRANT_NAMED} AND g."tenantId" = public.current_tenant_id()
+    LEFT JOIN catalog.product_variant v ON v."id" = g."variantId"
     WHERE b."reasonType"::text = ANY(${[...reasons]}) AND b."createdAt" >= ${from} AND b."createdAt" < ${r.to}`;
+  return rows.map(({ grantId, productId, panelId, userId, ...charge }) => ({ ...charge, grant: grantId ? { productId, panelId, userId } : null }));
 }
 
 /**
@@ -121,11 +142,13 @@ async function inSaleCurrency(tx: Prisma.TransactionClient, tenantId: string, ro
  * `analytics_cost_day` for the tenant in scope (`r.tenantId`) and `r`: the
  * platform's panel costs when it is the platform — its own users and products
  * named, a reseller's Grant only by its tenant — and what it pays the
- * platform when it is a reseller, down to its own users. Each source is
+ * platform when it is a reseller, down to its own users; for both, its own
+ * sale and usage costs (F-1002-e). Each source is
  * grouped to the grain already; each row also in the operating currency.
  */
 export async function writeCosts(tx: Prisma.TransactionClient, r: RollupRange & { tenantId: string }, how: { platform: boolean; across: CrossTenantReader }): Promise<void> {
   await tx.$executeRaw`DELETE FROM billing.analytics_cost_day WHERE "tenantId" = public.current_tenant_id() AND "day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date`;
-  const rows = how.platform ? await platformPanelCosts(tx, how.across, r) : await resellerCosts(tx, r);
+  // Every tenant's own sale and usage costs (ADR-0151), beside what its kind pays for.
+  const rows = [...(how.platform ? await platformPanelCosts(tx, how.across, r) : await resellerCosts(tx, r)), ...(await readOwnCosts(tx, r))];
   await insertCosts(tx, await inSaleCurrency(tx, r.tenantId, rows));
 }

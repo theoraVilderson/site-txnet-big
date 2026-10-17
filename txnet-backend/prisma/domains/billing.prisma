@@ -1569,6 +1569,9 @@ enum AnalyticsCostKind {
   idle
   wholesale
   subscription
+  /// F-1002-e (ADR-0151): a sale at its variant's cost; a meter's use at its unit cost.
+  sale
+  usage
 
   @@schema("billing")
 }
@@ -1678,6 +1681,8 @@ model AnalyticsRollupState {
   version         Int       @default(0)
   refreshedAt     DateTime?
   rebuildingSince DateTime?
+  /// F-1002-e: a cost written from an earlier day — the next pass restates cost rows from it, then clears it.
+  costsFrom       DateTime? @db.Date
   updatedAt       DateTime  @default(now()) @updatedAt
 
   @@map("analytics_rollup_state")

@@ -12,11 +12,16 @@
  *    the row in effect on it (`costOn`, the one reading of it);
  *  - **a reseller's cost from the wrong ledger.** What a reseller pays the
  *    platform is its cost: wholesale charges net of refunds split by its bytes
- *    per product, a subscription charge spread over its period's days.
+ *    per product, a subscription charge spread over its period's days;
+ *  - **a wholesale charge on the wrong product** (ADR-0151 (4)). A charge that
+ *    names a Grant is that Grant's, whole; only one naming none is split by
+ *    bytes — or an API Grant's charge lands on the reseller's VPN;
+ *  - **a product with no panel costing nothing** (ADR-0151 (1)). A sale costs
+ *    its variant's cost (a refund undoes it), a use its meter's unit cost.
  */
 import { Prisma } from '@prisma/client';
 
-import { attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
+import { attributePanelCosts, attributeWholesale, ownCosts, spreadSubscriptions } from './analytics-cost';
 
 const PANEL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
@@ -108,5 +113,44 @@ describe('spreadSubscriptions', () => {
       ['2026-10-02', '2.00'],
     ]);
     expect(rows.every((r) => r.kind === 'subscription' && r.productId === null)).toBe(true);
+  });
+});
+
+describe('attributeWholesale, a charge that names a Grant', () => {
+  it("is that Grant's product, panel and user, whole; the rest of the day is split by bytes", () => {
+    const grant = { productId: PRODUCT_B, panelId: null, userId: USER };
+    const rows = attributeWholesale(
+      [
+        { day: '2026-10-01', currencyCode: 'USD', amount: d('4.00'), grant },
+        { day: '2026-10-01', currencyCode: 'USD', amount: d('-1.00'), grant },
+        { day: '2026-10-01', currencyCode: 'USD', amount: d('2.00') },
+      ],
+      [{ day: '2026-10-01', productId: PRODUCT_A, panelId: PANEL, userId: USER, bytes: BigInt(10) }],
+    );
+    expect(rows.map((r) => [r.productId, r.panelId, r.cost.toFixed(2)])).toEqual([
+      [PRODUCT_B, null, '3.00'],
+      [PRODUCT_A, PANEL, '2.00'],
+    ]);
+  });
+});
+
+describe('ownCosts', () => {
+  it("costs a sale at its variant's cost, a refund back, and a use at its meter's unit cost — summed per cell", () => {
+    const cell = { day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD' };
+    const rows = ownCosts(
+      [
+        { ...cell, cost: d('2.50'), sale: true },
+        { ...cell, cost: d('2.50'), sale: true },
+        { ...cell, cost: d('2.50'), sale: false },
+      ],
+      [
+        { ...cell, productId: PRODUCT_B, quantity: BigInt(12_500), unitSize: BigInt(1000), unitCost: d('0.04') },
+        { ...cell, productId: PRODUCT_B, quantity: BigInt(500), unitSize: BigInt(1000), unitCost: d('0.04') },
+      ],
+    );
+    expect(rows.map((r) => [r.kind, r.productId, r.cost.toFixed(6)])).toEqual([
+      ['sale', PRODUCT_A, '2.500000'],
+      ['usage', PRODUCT_B, '0.520000'],
+    ]);
   });
 });

@@ -151,11 +151,16 @@ export class AnalyticsRollupService {
         await writeMeters(tx, range);
         await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today, now });
         await writeSignups(tx, customers);
-        await writeCosts(tx, { ...range, tenantId }, panels);
+        // A cost written for earlier days (F-1002-e) restates cost rows from its day, past this window.
+        const costsFrom = (await tx.analyticsRollupState.findUnique({ where: { tenantId }, select: { costsFrom: true } }))?.costsFrom;
+        const restateFrom = costsFrom ? dayOf(costsFrom, 'UTC') : null;
+        const costRange = restateFrom && restateFrom < fromDay ? { ...range, fromDay: restateFrom, ...dayBounds(restateFrom, toDay, zone) } : range;
+        await writeCosts(tx, { ...costRange, tenantId }, panels);
         await writePanelTraffic(tx, range, panels);
         // A panel's snapshot is cut on the UTC date; only a pass that covers now takes one.
         if (fromDay <= today && today <= toDay) await writePanelClientsToday(tx, dayOf(now, 'UTC'), panels);
-        const changed = (await fingerprint()) !== before;
+        // Rows restated before the window are outside the fingerprint: they change the answers all the same.
+        const changed = (await fingerprint()) !== before || costRange !== range;
 
         // The version is what a read cache is keyed by: a change bumps it, so
         // no answer cached before this commit is served after it.
@@ -168,6 +173,8 @@ export class AnalyticsRollupService {
             ...(how.rebuilt ? { timeZone: zone, rebuildingSince: null } : {}),
           },
         });
+        // Cleared only if no cost was written since it was read: a later ask is the next pass's.
+        if (costsFrom) await tx.analyticsRollupState.updateMany({ where: { tenantId, costsFrom }, data: { costsFrom: null } });
         if (changed) await announce(tx, tenantId, fromDay, toDay);
         return changed;
       },

@@ -28,7 +28,9 @@ const AT = new Date('2026-10-17T10:00:00Z');
 function harness(variantTenant: string) {
   const written: Record<string, unknown>[] = [];
   const audits: string[] = [];
+  const restated: unknown[][] = [];
   const tx = {
+    $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => (restated.push(values), 1),
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'IRT' }) },
     variantCost: { create: async ({ data }: { data: Record<string, unknown> }) => (written.push(data), { id: 'c1', createdAt: AT, ...data }) },
     meter: {
@@ -51,7 +53,7 @@ function harness(variantTenant: string) {
     },
     audit: async (_tx: unknown, _a: unknown, _t: unknown, action: string) => void audits.push(action),
   } as unknown as CatalogAdminService;
-  return { costs: new CatalogCostService(door), written, audits };
+  return { costs: new CatalogCostService(door), written, audits, restated };
 }
 
 describe('CatalogCostService', () => {
@@ -61,6 +63,9 @@ describe('CatalogCostService', () => {
     expect(view).toMatchObject({ amount: '2.50', currencyCode: 'IRT' });
     expect(h.written[0]).toMatchObject({ tenantId: TENANT, variantId: VARIANT, currencyCode: 'IRT', createdByAdminId: actor.adminId });
     expect(h.audits).toEqual(['catalog_variant_cost_set']);
+    // Its days already rolled are restated from the day before it took effect (F-1002-e).
+    expect(h.restated).toHaveLength(1);
+    expect(h.restated[0]).toContain(TENANT);
   });
 
   it("refuses another tenant's variant as not found, and writes nothing", async () => {

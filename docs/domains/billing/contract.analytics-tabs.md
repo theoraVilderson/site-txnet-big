@@ -111,10 +111,11 @@ by `margin` (below).
    cross-tenant pool; such a row names the reseller (`servedTenantId`) and no
    product or person (ADR-0104). The platform's own Grants name both.
 3. **A reseller's rows: what it pays the platform.** `metered_usage_charge`
-   net of `metered_usage_refund` per tenant day, split by its Grants' bytes on
-   the platform's panels per product, panel and user (*corrected*, ADR-0149
-   (3): its own people; `kind wholesale`; a day with no bytes is
-   unallocated, product null). Each `subscription_charge` is spread over the
+   net of `metered_usage_refund` per tenant day, `kind wholesale`: a charge
+   naming a Grant (itself, or a usage token, quota adjustment, renewal or end
+   move carrying its `grantId`) is that Grant's product, panel and user,
+   whole (*corrected*, ADR-0151 (4)); the rest split by its Grants' bytes on
+   the platform's panels (ADR-0149 (3); a day with no bytes is unallocated). Each `subscription_charge` is spread over the
    days until the next one — the last until `currentPeriodEnd` — unallocated
    (`kind subscription`): the periods as charged, whatever the billing model.
 4. **Days.** Panel costs are cut on the UTC date, as the traffic that splits
@@ -127,6 +128,16 @@ by `margin` (below).
    force at the end of its day — a live pin (the tenant's first), else the
    newest discovered rate, the toman as the rial over ten. No rate: `saleCost`
    null, and every read answers that cost in its own currency.
+6. **Every tenant's own costs** (F-1002-e, ADR-0151, catalog
+   [contract.cost.md](../catalog/contract.cost.md)): a purchase costs its
+   variant's cost in effect when the invoice was made (`kind sale`; its
+   refund the same back), a meter's use its quantity ÷ `unitSize` × `unitCost`
+   in effect then (`kind usage`) — never `vpn.traffic`, never a meter with a
+   wholesale leg (that charge is its cost). `analytics-rollup-own-cost.ts`.
+7. **A cost for earlier days restates them.** A catalog cost or a panel price
+   from a past day sets `analytics_rollup_state.costsFrom` (the day before it,
+   UTC; the earliest ask wins); the next pass rewrites that tenant's cost rows
+   from it, bumps the version, and clears it unless a newer ask came in.
 
 ## Margin (F-1001-l)
 

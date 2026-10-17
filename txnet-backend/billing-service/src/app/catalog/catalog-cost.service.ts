@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { MeterCost, Prisma, VariantCost } from '@prisma/client';
 import { METER_KEYS, operatingCurrencyOf } from '@txnet-backend/shared-core';
 
+import { restateCostsFrom } from '../analytics/analytics-rollup-own-cost';
 import { CatalogActor, CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 
 /** The most cost rows one list answers, newest first (C-28): a cost changes a few times a year. */
@@ -41,7 +42,8 @@ const meterCostView = (r: MeterCost): MeterCostView => ({
  * History — every write is a new row from `effectiveFrom` — and private to its
  * tenant (RLS). The door is the catalog's own (`CatalogAdminService`): a
  * tenant costs its own items, the platform owner any tenant's; another
- * tenant's variant, or the platform's to a reseller, is not found.
+ * tenant's variant, or the platform's to a reseller, is not found. A write
+ * asks analytics to restate the tenant's cost rows from its day (F-1002-e).
  */
 @Injectable()
 export class CatalogCostService {
@@ -74,6 +76,7 @@ export class CatalogCostService {
       });
       const view = variantCostView(row);
       await this.catalog.audit(tx, actor, tenantId, 'catalog_variant_cost_set', 'variant_cost', row.id, null, view);
+      await restateCostsFrom(tx, tenantId, row.effectiveFrom);
       return view;
     });
   }
@@ -113,6 +116,7 @@ export class CatalogCostService {
       });
       const view = meterCostView(row);
       await this.catalog.audit(tx, actor, tenantId, 'catalog_meter_cost_set', 'meter_cost', row.id, null, view);
+      await restateCostsFrom(tx, tenantId, row.effectiveFrom);
       return view;
     });
   }

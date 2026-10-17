@@ -15,6 +15,8 @@
 import { Prisma } from '@prisma/client';
 
 import { PanelCostService, panelCostSchema } from './panel-cost';
+
+const PLATFORM_TENANT = '10000000-0000-4000-8000-000000000001';
 import { costOn } from './panel-cost-on';
 import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
@@ -41,6 +43,7 @@ function build(history = [row('2026-09-01', '40.00')]) {
     panel: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === PANEL ? { id: PANEL, retiredAt: null } : null) },
     panelCost: { findMany: async () => [...history].sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime() || b.createdAt.getTime() - a.createdAt.getTime()) },
   };
+  const restated: unknown[][] = [];
   const all = {
     panelCost: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -52,8 +55,12 @@ function build(history = [row('2026-09-01', '40.00')]) {
         throw new Error('a price is never edited');
       },
     },
+    tenant: { findFirst: async () => ({ id: PLATFORM_TENANT }) },
+    // F-1002-e: the write asks the platform's cost rows restated from its day.
+    $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => (restated.push(values), 1),
+    $transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(all),
   };
-  return { created, service: new PanelCostService(prisma as never, all as never) };
+  return { created, restated, service: new PanelCostService(prisma as never, all as never) };
 }
 
 const platform = { adminId: ADMIN, tenantId: PLATFORM };
@@ -82,8 +89,10 @@ describe('costOn', () => {
 
 describe('PanelCostService', () => {
   it('adds a row for a change, from today unless told otherwise, and answers the history', async () => {
-    const { created, service } = build();
+    const { created, restated, service } = build();
     const answer = await service.set(platform, PANEL, { monthlyCostUsd: '60.00' }, NOW);
+    // The platform's cost rows from the day before it took effect are restated on the next pass.
+    expect(restated).toEqual([expect.arrayContaining(['2026-10-15', PLATFORM_TENANT])]);
     expect(created).toEqual([{ panelId: PANEL, monthlyCostUsd: '60.00', monthlyTrafficBytes: null, effectiveFrom: new Date('2026-10-16T00:00:00Z'), createdByUserId: ADMIN }]);
     expect(answer.current).toMatchObject({ monthlyCostUsd: '60.00', effectiveFrom: '2026-10-16' });
     expect(answer.history.map((h) => h.monthlyCostUsd)).toEqual(['60.00', '40.00']);

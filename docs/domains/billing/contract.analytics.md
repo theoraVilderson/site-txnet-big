@@ -216,8 +216,9 @@ section per block, BOM, formula-leading text quoted. A rebuild answers 409
   shown, never spread or hidden. A panel with no cost set attributes 0 and the
   margin says `no cost set`.
 - **A reseller's cost is what it pays the platform**: `metered_usage_charge`
-  split by bytes per product; `subscription_charge` spread over its period's
-  days as an unallocated fixed cost.
+  on the Grant it names, else split by bytes (ADR-0151); `subscription_charge`
+  spread over its period's days as an unallocated fixed cost. **Every tenant's
+  own costs**: a variant's cost per sale, a meter's per unit (F-1002-e).
 - `analytics_cost_day`: tenant · day · panel · product · user? — `cost`, `bytes` (*as built*: also kind, served tenant, currency, and the cost in the sale's currency — `contract.analytics-tabs.md`).
 - Margin = net − cost, and margin % = margin ÷ net (none when net is 0).
 - **F-1003**: a user whose 30-day cost exceeds their 30-day net, by more than
