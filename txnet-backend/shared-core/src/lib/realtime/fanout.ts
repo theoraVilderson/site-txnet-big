@@ -163,6 +163,18 @@ export interface OtpDeliveryEvent {
   failureKey?: string;
 }
 
+/**
+ * The other thing an `otp:` channel carries: where a messenger link the
+ * signed-out screen is waiting on got to (RT-1-h). The same fields its status
+ * route answers, so the screen re-reads that route and trusts no frame.
+ */
+export interface BotLinkEvent {
+  state: 'linked' | 'failed';
+  otpSent: boolean;
+  /** An i18n key, on `failed` only. */
+  failureKey?: string;
+}
+
 /** The channel one support conversation's live events ride (F-034). */
 export function supportRealtimeChannel(conversationId: string): string {
   return `${RealtimeChannelFamily.support}:${conversationId}`;

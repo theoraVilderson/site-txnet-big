@@ -52,7 +52,7 @@ corrected, per "Decide once".
 | `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
 | `network.panel.drift_raised` | `tenant:` | network → panel-tested consumer (F-027-fg) | SystemsView (F-027-fh) |
 | `network.panel.drained` | `tenant:` | billing (`GroupDrainService.drainDue`, RT-1-f) → live-push; body `{type, panelId, groupId}` | SystemsView |
-| OTP delivery state | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.publish`) | useOtpDelivery |
+| OTP delivery state; a bot link's outcome (`BotLinkEvent`, RT-1-h) | `otp:<channelId>` | auth-service, direct (`OtpDeliveryStore.mark` / `notify`) | useOtpDelivery; useBotLink |
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 | `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
 | `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
@@ -159,13 +159,17 @@ the idle sweep, reopen. A direct type is `DirectRealtimeEventType`
 (`routing-keys.ts`), never an `OutboxEventType`; `events.json` holds both.
 SupportInboxView re-reads on `tenantChannelOf(me)`; its 60 s poll is gone.
 
-**RT-1-h — bot linking before sign-in.** No new channel family: reuse `otp:`.
-`BotLinkService.startLink` calls `OtpDeliveryStore.mintHandles()` and returns
-`channel` + `channelToken` beside `linkToken`. `completeLink` and `fail`
-publish `{state, otpSent, failureKey?}` on that channel through the store.
-useBotLink subscribes on the anonymous socket the way useOtpDelivery does and
-calls `botLinkStatus` once per event, on `onMissed`, and on mount; the 2.5 s
-poll goes. `contract.channels.md` needs no new rule.
+**RT-1-h — bot linking before sign-in** — built 2026-10-17. No new channel
+family: reuse `otp:`. `BotLinkService.startLink` opens the channel with
+`OtpDeliveryStore.openChannel` for the **link's** TTL, not a send's five
+minutes, keeps it on the link — a re-ask holds the same one again, so a second
+tab still hears — and returns `channel` + `channelToken` beside `linkToken`.
+`completeLink` and `fail` publish `BotLinkEvent` `{state, otpSent,
+failureKey?}` (`shared-core` `fanout.ts`) through `notify`, after the record
+is written. A link from before has no channel and is told nothing. useBotLink
+subscribes on the anonymous socket the way useOtpDelivery does and calls
+`botLinkStatus` once per event, on `onMissed`, and on mount; the 2.5 s poll
+and its C-14 except are gone. `contract.channels.md` needs no new rule.
 
 **RT-1-i — delete `useLocaleVersion`.** Nothing imports it (2026-10-06). The
 file goes, and its C-14 `except` entry with it. A new-version banner, if ever

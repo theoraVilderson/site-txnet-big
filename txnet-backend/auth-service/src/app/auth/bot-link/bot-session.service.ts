@@ -5,7 +5,7 @@ import {
   BotPlatform,
 } from '@txnet-backend/messenger';
 import { PrismaService } from '../../prisma/prisma.service';
-import { normalizeMessengerPhone } from './bot-link.service';
+import { normalizeMessengerPhone } from './messenger-phone';
 import { AuthService, mayHoldSession } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
 import { TenantContext, runWithTenant } from '../../tenant-context/tenant-context';

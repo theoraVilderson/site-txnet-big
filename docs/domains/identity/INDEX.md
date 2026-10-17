@@ -26,6 +26,7 @@ source:
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.store.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.messages.ts
   - txnet-backend/auth-service/src/app/auth/bot-link/bot-link.types.ts
+  - txnet-backend/auth-service/src/app/auth/bot-link/messenger-phone.ts
   - txnet-backend/auth-service/src/app/auth/register/register.service.ts
   - txnet-backend/auth-service/src/app/auth/session/session.service.ts
   - txnet-backend/auth-service/src/app/auth/session/active-sessions.service.ts

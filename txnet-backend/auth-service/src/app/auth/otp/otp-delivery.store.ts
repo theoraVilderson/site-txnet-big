@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import {
   encodeRealtimeFanout,
   otpRealtimeChannel,
+  type BotLinkEvent,
   type OtpDeliveryEvent,
 } from '@txnet-backend/shared-core';
 import { RedisService } from '../../redis/redis.service';
@@ -21,12 +22,15 @@ export type OtpDeliveryState = 'queued' | 'sent' | 'failed';
  * it can — the socket when it has one, the status route when it does not
  * (D-15).
  */
-export interface OtpDeliveryHandles {
-  deliveryId: string;
+export interface OtpChannelHandles {
   /** The realtime channel is `otp:<channelId>` (`otpRealtimeChannel`). */
   channelId: string;
   /** The proof `gateway-service` demands before it will serve that channel. */
   channelToken: string;
+}
+
+export interface OtpDeliveryHandles extends OtpChannelHandles {
+  deliveryId: string;
 }
 
 export interface OtpDeliveryStatus {
@@ -85,17 +89,24 @@ export class OtpDeliveryStore {
    * keyspace and costs a round of argon2 on every subscribe.
    */
   async mintHandles(): Promise<OtpDeliveryHandles> {
-    const handles: OtpDeliveryHandles = {
-      deliveryId: OtpDeliveryStore.newId(),
-      channelId: OtpDeliveryStore.newId(),
-      channelToken: OtpDeliveryStore.newId(),
-    };
-    await this.redis.set(
-      RedisKeys.otpChannel(handles.channelId),
-      handles.channelToken,
-      RedisTtl.otpChannel,
-    );
-    return handles;
+    const channel = await this.openChannel(RedisTtl.otpChannel);
+    return { deliveryId: OtpDeliveryStore.newId(), ...channel };
+  }
+
+  /**
+   * Store a channel's proof for `ttlSeconds` — a new channel, or `held` again
+   * for a fresh lifetime. A messenger link (RT-1-h) lives as long as its
+   * link, not a send's five minutes: its outcome can arrive that late.
+   */
+  async openChannel(ttlSeconds: number, held?: OtpChannelHandles): Promise<OtpChannelHandles> {
+    const channel = held ?? { channelId: OtpDeliveryStore.newId(), channelToken: OtpDeliveryStore.newId() };
+    await this.redis.set(RedisKeys.otpChannel(channel.channelId), channel.channelToken, ttlSeconds);
+    return channel;
+  }
+
+  /** Push a messenger link's end state to its waiting screen (RT-1-h); best-effort, as `mark`'s. */
+  notify(channelId: string, event: BotLinkEvent): Promise<void> {
+    return this.publish(channelId, event);
   }
 
   /**
@@ -144,7 +155,7 @@ export class OtpDeliveryStore {
    * (`contract.fanout.md`). The channel name itself comes from `shared-core`,
    * so the three processes that have to agree on it cannot drift.
    */
-  private async publish(channelId: string, event: OtpDeliveryEvent): Promise<void> {
+  private async publish(channelId: string, event: OtpDeliveryEvent | BotLinkEvent): Promise<void> {
     const wire =
       this.redis.keyPrefix +
       RedisKeys.realtimeFanout(otpRealtimeChannel(channelId));

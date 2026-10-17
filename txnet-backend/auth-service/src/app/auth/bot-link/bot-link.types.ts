@@ -22,6 +22,12 @@ export interface PendingBotLink {
   /** Whether the OTP went out after linking. */
   otpSent: boolean;
   createdAt: number;
+  /**
+   * The `otp:` channel the waiting screen hears the outcome on (RT-1-h).
+   * Absent on a link started before it existed: that screen re-reads on mount.
+   */
+  channelId?: string;
+  channelToken?: string;
 }
 
 // The wire shapes (`BotUpdate`, `BotMessage`, `BotContact`) live in

@@ -1,9 +1,7 @@
 import type { Mock } from 'vitest';
 import { OtpPurpose } from '../otp/otp.interface';
-import {
-  BotLinkService,
-  normalizeMessengerPhone,
-} from './bot-link.service';
+import { BotLinkService } from './bot-link.service';
+import { normalizeMessengerPhone } from './messenger-phone';
 import { BotContact, PendingBotLink } from './bot-link.types';
 import { runWithTenant } from '../../tenant-context/tenant-context';
 
@@ -58,6 +56,7 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
   let sent: { chatId: string; text: string }[];
   let service: BotLinkService;
   let issueOtp: Mock;
+  let notify: Mock;
 
   beforeEach(() => {
     link = {
@@ -70,8 +69,12 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
       state: 'pending',
       otpSent: false,
       createdAt: Date.now(),
+      channelId: 'e'.repeat(32),
+      channelToken: 'f'.repeat(32),
     };
     upsert = vi.fn();
+    // What the waiting screen hears, with the state a status read would see then (RT-1-h).
+    notify = vi.fn(async () => link.state);
     issueOtp = vi.fn().mockResolvedValue(undefined);
     sent = [];
 
@@ -115,7 +118,7 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
           deliveryId: 'a'.repeat(32),
           channelId: 'c'.repeat(32),
           channelToken: 'd'.repeat(32),
-        }) } as never,
+        }), notify } as never,
     );
   });
 
@@ -152,6 +155,9 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     );
     expect(link.state).toBe('linked');
     expect(link.otpSent).toBe(true);
+    // The screen re-reads on this, so the record already says `linked` when it lands.
+    expect(notify).toHaveBeenCalledWith('e'.repeat(32), { state: 'linked', otpSent: true });
+    await expect(notify.mock.results[0].value).resolves.toBe('linked');
   });
 
   it('refuses a forged contact card describing somebody else', async () => {
@@ -166,6 +172,7 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     expect(issueOtp).not.toHaveBeenCalled();
     expect(link.state).toBe('failed');
     expect(link.failureKey).toBe('otp.botLink.senderMismatch');
+    expect(notify).toHaveBeenCalledWith('e'.repeat(32), { state: 'failed', otpSent: false, failureKey: 'otp.botLink.senderMismatch' });
   });
 
   it('refuses a contact card with no user_id at all', async () => {
@@ -187,6 +194,55 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     expect(upsert).not.toHaveBeenCalled();
     expect(issueOtp).not.toHaveBeenCalled();
     expect(link.failureKey).toBe('otp.botLink.phoneMismatch');
+  });
+});
+
+/**
+ * The screen showing the deep link hears the outcome on `otp:` instead of
+ * polling (RT-1-h): its handles ride the start answer, live as long as the
+ * link, and a re-ask inside the TTL keeps them, so a second tab open on the
+ * same link hears it too.
+ */
+describe('BotLinkService.startLink — the channel the waiting screen hears', () => {
+  const open = vi.fn(async (_ttl: number, held?: { channelId: string; channelToken: string }) => held ?? { channelId: 'a'.repeat(32), channelToken: 'b'.repeat(32) });
+  let saved: PendingBotLink | null;
+
+  const build = () => {
+    const store = {
+      ttlSeconds: 900,
+      byPhone: vi.fn(async () => saved),
+      save: vi.fn(async (l: PendingBotLink) => {
+        saved = { ...l };
+      }),
+    };
+    const bots = {
+      primaryFor: vi.fn().mockResolvedValue({ botUsername: 'txbot' }),
+      hasToken: vi.fn().mockResolvedValue(true),
+      deepLink: () => 'https://t.me/txbot?start=x',
+    };
+    return new BotLinkService({} as never, store as never, bots as never, {} as never, {} as never, { openChannel: open } as never);
+  };
+  const start = (service: BotLinkService) =>
+    inTenant(() => service.startLink({ platform: 'telegram', phoneNumber: '989123456789', purpose: OtpPurpose.login, lang: 'en', ip: '1.2.3.4' }));
+
+  beforeEach(() => {
+    saved = null;
+    open.mockClear();
+  });
+
+  it('answers with an otp: channel and its proof, held for the link\'s lifetime and kept on the link', async () => {
+    const started = await start(build());
+    expect(started).toMatchObject({ channel: `otp:${'a'.repeat(32)}`, channelToken: 'b'.repeat(32) });
+    expect(open).toHaveBeenCalledWith(900, undefined);
+    expect(saved).toMatchObject({ channelId: 'a'.repeat(32), channelToken: 'b'.repeat(32) });
+  });
+
+  it('a re-ask inside the TTL keeps the same channel, its proof held again', async () => {
+    const service = build();
+    await start(service);
+    const again = await start(service);
+    expect(again.channel).toBe(`otp:${'a'.repeat(32)}`);
+    expect(open).toHaveBeenLastCalledWith(900, { channelId: 'a'.repeat(32), channelToken: 'b'.repeat(32) });
   });
 });
 

@@ -309,7 +309,7 @@
   "txnet-backend/ai-service/src/app/profile/predictions.ts": 425,
   "txnet-backend/auth-service/src/app/account-switch/account-switch.service.ts": 618,
   "txnet-backend/auth-service/src/app/auth/auth.service.ts": 1298,
-  "txnet-backend/auth-service/src/app/auth/bot-link/bot-link.service.ts": 555,
+  "txnet-backend/auth-service/src/app/auth/bot-link/bot-link.service.ts": 541,
   "txnet-backend/auth-service/src/app/auth/bot-link/bot-session.service.ts": 408,
   "txnet-backend/auth-service/src/app/auth/notify/user-notifier.ts": 1231,
   "txnet-backend/auth-service/src/app/auth/users/reseller-users.service.ts": 418,

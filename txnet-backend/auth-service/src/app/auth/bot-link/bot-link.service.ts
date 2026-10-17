@@ -17,9 +17,9 @@ import {
 import { BotLinkStore } from './bot-link.store';
 import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
-import { parsePhone } from '../../common/validation/phone.schema';
+import { normalizeMessengerPhone } from './messenger-phone';
 import { TenantContext } from '../../tenant-context/tenant-context';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, type BotLinkEvent, otpRealtimeChannel } from '@txnet-backend/shared-core';
 
 /** A messenger channel and the platform behind it are the same thing. */
 const CHANNEL_OF: Record<BotPlatform, OtpChannel> = {
@@ -33,6 +33,9 @@ export interface StartedBotLink {
   linkToken: string;
   deepLink: string;
   expiresIn: number;
+  /** `otp:<channelId>` and its proof: the waiting screen hears the outcome there (RT-1-h). */
+  channel: string;
+  channelToken: string;
 }
 
 export interface BotLinkStatus {
@@ -193,6 +196,10 @@ export class BotLinkService {
     // number (login, then password reset) — the link itself is unchanged.
     link.purpose = input.purpose;
     link.lang = input.lang;
+    const held = link.channelId && link.channelToken ? { channelId: link.channelId, channelToken: link.channelToken } : undefined;
+    // A re-ask keeps the channel too, so a screen already waiting on it still hears.
+    const live = await this.deliveries.openChannel(this.store.ttlSeconds, held);
+    Object.assign(link, live);
     await this.store.save(link);
 
     const deepLink = this.bots.deepLink(integration, link.token);
@@ -204,10 +211,12 @@ export class BotLinkService {
       linkToken: link.token,
       deepLink,
       expiresIn: this.store.ttlSeconds,
+      channel: otpRealtimeChannel(live.channelId),
+      channelToken: live.channelToken,
     };
   }
 
-  /** What the waiting client polls for. */
+  /** What the waiting client reads, on mount and on each event of its channel. */
   async status(token: string): Promise<BotLinkStatus> {
     const link = await this.store.byToken(token);
     if (!link) return { state: 'failed', otpSent: false, failureKey: BackendI18nKeys.errors.otp.botLink.expired };
@@ -409,13 +418,8 @@ export class BotLinkService {
     let sent = false;
     if (link.purpose !== OtpPurpose.account_link) {
       try {
-        // Handles with no reader: this send is triggered by the user sharing
-        // their contact in the chat, so there is no HTTP caller holding a 202
-        // to hand them to and nobody can subscribe to the channel. The status
-        // is still written, and it is what `link.otpSent` reports through
-        // `/auth/bots/link/status`, which this flow polls. Giving *this* flow
-        // a socket is a separate change: the client here is the screen showing
-        // a deep link, and it never received a channel token.
+        // The send's own handles have no reader: the screen hears the link's
+        // channel instead (RT-1-h), told below once the record says `linked`.
         await this.otp.issueOtp(
           link.phoneNumber,
           link.purpose,
@@ -438,6 +442,7 @@ export class BotLinkService {
     link.otpSent = sent;
     await this.store.update(link);
     await this.store.releaseChat(platform, chatId);
+    await this.tell(link, { state: 'linked', otpSent: sent });
 
     return {
       state: 'linked',
@@ -456,6 +461,7 @@ export class BotLinkService {
     link.state = 'failed';
     link.failureKey = failureKey;
     await this.store.update(link);
+    await this.tell(link, { state: 'failed', otpSent: false, failureKey });
     return {
       state: 'failed',
       needsContact: false,
@@ -464,6 +470,11 @@ export class BotLinkService {
       failureKey,
       lang: link.lang,
     };
+  }
+
+  /** After the write, so the screen's re-read sees it; a link from before RT-1-h has no channel. */
+  private async tell(link: PendingBotLink, event: BotLinkEvent): Promise<void> {
+    if (link.channelId) await this.deliveries.notify(link.channelId, event);
   }
 
   /** An answer that changed no state — an expired token, an unknown command. */
@@ -527,29 +538,4 @@ export class BotLinkService {
     if (served.length === 0 || served.includes(configured)) return configured;
     return this.locale.resolveLanguage(languageCode);
   }
-}
-
-/**
- * Messengers report a contact's number in whatever shape the account was
- * registered with, and Telegram in particular drops the `+`: `989…`,
- * `+989…`, `09…` all arrive. Normalize to the E.164 form the rest of
- * identity stores (ADR-0018), or `null` if it is not a number that can hold
- * an account here.
- *
- * Two readings are tried, in this order, because they genuinely differ: a
- * bare `4915112345678` is a German number written internationally without
- * its `+`, but a bare `09121234567` is national. Reading it as national
- * first, then as international, is what makes both work without a
- * per-country branch.
- */
-export function normalizeMessengerPhone(raw: string): string | null {
-  const trimmed = (raw ?? '').trim();
-  if (!trimmed) return null;
-
-  const digits = trimmed.replace(/\D/g, '');
-  return (
-    parsePhone(trimmed) ??
-    (digits ? parsePhone(`+${digits}`) : undefined) ??
-    null
-  );
 }

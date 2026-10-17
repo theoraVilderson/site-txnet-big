@@ -31,8 +31,8 @@ Surfaced over HTTP by the `auth-api` interface — see
 | verify phone (register) | phoneNumber, 6-digit OTP | session tokens | sync | invalid/expired OTP, pending registration expired |
 | login (password) | identifier (phone or username), password | session tokens, or `requiresOtp` + `otpToken` | sync | invalid creds, phone-unverified, temporarily locked |
 | list OTP channels | — | `{channels:[{channel, requiresLink}]}` — what this environment offers | sync | — |
-| request login OTP | phone, optional channel | `{accepted:true, deliveryId, channel, channelToken}`, **or** `{accepted:true, linkRequired:true, platform, linkToken, deepLink, expiresIn}` when the chosen messenger is not connected yet | **async send** (v11) | channel not allowed / not configured / none available; broker unreachable |
-| poll bot link | linkToken | `{state:'pending'\|'linked'\|'failed', otpSent, failureKey?}` | sync | — |
+| request login OTP | phone, optional channel | `{accepted:true, deliveryId, channel, channelToken}`, **or** `{accepted:true, linkRequired:true, platform, linkToken, deepLink, expiresIn, channel, channelToken}` (the link's `otp:` channel, its outcome pushed there for the link's life, RT-1-h) when the chosen messenger is not connected yet | **async send** (v11) | channel not allowed / not configured / none available; broker unreachable |
+| read bot link (on mount and on each `otp:` frame) | linkToken | `{state:'pending'\|'linked'\|'failed', otpSent, failureKey?}` | sync | — |
 | read OTP delivery status | deliveryId | `{state:'queued'\|'sent'\|'failed', failureKey?}` | sync | — |
 | link messenger account | a contact shared with the bot | (in-chat) the account is linked and the pending code is sent | sync | contact not the sender's, phone mismatch, chat already linked elsewhere |
 | verify login OTP | (`otpToken` \| phone) + code | session tokens | sync | invalid OTP/token |

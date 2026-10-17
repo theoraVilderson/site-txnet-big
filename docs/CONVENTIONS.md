@@ -611,7 +611,7 @@ page's half, and only `setInterval`, not a `setTimeout` that re-arms itself.
 ```check C-14
 forbid: \bsetInterval\((?!.*\bset(?:Now|Seconds)\()(?!.*live-exempt:)
 in: site-pwa/src/app/**/*.ts, site-pwa/src/app/**/*.tsx, site-pwa/src/hooks/**/*.ts, site-pwa/src/hooks/**/*.tsx
-except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx, site-pwa/src/app/(auth)/auth/_hooks/useBotLink.ts
+except: site-pwa/src/**/*.test.ts, site-pwa/src/**/*.test.tsx
 message: subscribe and re-read with useLiveReread (C-14, ADR-0121); the producer owes an outbox event — a clock or a beat the page sends is marked `// live-exempt: <reason>`
 ```
 

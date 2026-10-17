@@ -15,8 +15,8 @@ export type OtpChannelDescriptor = { channel: OtpChannel; requiresLink: boolean 
 /**
  * A messenger channel the user has not connected yet: instead of a code, the
  * server hands back a deep link into the bot. The code is sent by the bot
- * itself once the user shares their contact there, so the screen polls
- * `botLinkStatus` and moves on when it reports `linked`.
+ * itself once the user shares their contact there, so the screen hears
+ * `channel` and re-reads `botLinkStatus` until it reports `linked` (RT-1-h).
  */
 export type BotLinkRequired = {
   accepted: true;
@@ -25,6 +25,9 @@ export type BotLinkRequired = {
   linkToken: string;
   deepLink: string;
   expiresIn: number;
+  /** `otp:<channelId>` — subscribed to verbatim, with `channelToken` as its proof. */
+  channel: string;
+  channelToken: string;
 };
 
 export type OtpRequested = { accepted: boolean; linkRequired?: undefined };
