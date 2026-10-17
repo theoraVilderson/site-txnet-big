@@ -149,7 +149,7 @@ export class AnalyticsRollupService {
         if (fromDay <= today && today <= toDay) await writeStockToday(tx, today);
         await writeTraffic(tx, range);
         await writeMeters(tx, range);
-        await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today });
+        await writeGrantEnds(tx, customers, { window: await renewalWindowOf(tx), today, now });
         await writeSignups(tx, customers);
         await writeCosts(tx, { ...range, tenantId }, panels);
         await writePanelTraffic(tx, range, panels);

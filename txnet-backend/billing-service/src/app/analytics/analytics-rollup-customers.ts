@@ -41,7 +41,9 @@ const stateSql = (window: number, today: Day) => Prisma.sql`(CASE
  * moved renews by the same user starting a Grant of the same product: the
  * start nearest its end, within 30 days either side.
  */
-export async function writeGrantEnds(tx: Prisma.TransactionClient, r: RollupRange, how: { window: number; today: Day }): Promise<void> {
+export async function writeGrantEnds(tx: Prisma.TransactionClient, r: RollupRange, how: { window: number; today: Day; now: Date }): Promise<void> {
+  // A pass over today reaches past now: a Grant ending later today is still running.
+  const passed = how.now < r.to ? how.now : r.to;
   await tx.$executeRaw`DELETE FROM billing.analytics_grant_end WHERE "tenantId" = public.current_tenant_id() AND "endedOn" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date`;
   await tx.$executeRaw`
     INSERT INTO billing.analytics_grant_end ("tenantId", "grantId", "userId", "productId", "panelId", "endedOn", "renewedOn", "state")
@@ -55,7 +57,7 @@ export async function writeGrantEnds(tx: Prisma.TransactionClient, r: RollupRang
     ends AS (
       SELECT g."id" AS "grantId", ${dayIn(Prisma.sql`g."endsAt"`, r.zone)} AS "endedOn", NULL::date AS "movedOn"
       FROM entitlement."grant" g
-      WHERE g."tenantId" = public.current_tenant_id() AND g."status" <> 'cancelled' AND g."endsAt" < ${r.to}
+      WHERE g."tenantId" = public.current_tenant_id() AND g."status" <> 'cancelled' AND g."endsAt" < ${passed}
       UNION ALL
       SELECT m."grantId", ${dayIn(Prisma.sql`m."endsAtBefore"`, r.zone)},
              GREATEST(${dayIn(Prisma.sql`m."createdAt"`, r.zone)}, ${dayIn(Prisma.sql`m."endsAtBefore"`, r.zone)})

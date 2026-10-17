@@ -18,6 +18,8 @@ import { Prisma } from '@prisma/client';
 
 import { contextOf } from './analytics-context';
 import { customersOf, renewalOf } from './analytics-customers';
+import { dayBounds } from './analytics-days';
+import { writeGrantEnds } from './analytics-rollup-customers';
 import { RENEWAL_WINDOW_DEFAULT_DAYS, analyticsSettingsSchema } from './analytics-settings';
 import { analyticsQuerySchema } from './analytics.schema';
 
@@ -112,5 +114,21 @@ describe('customersOf', () => {
     // The whole tenant's figures are tier A and stay.
     expect(tab.signups.total).toBe(10);
     expect(tab.renewal.rate).toBe(0.7);
+  });
+});
+
+describe('writeGrantEnds', () => {
+  it('ends only a term whose end has passed: a Grant ending later today is still running', async () => {
+    const written: unknown[][] = [];
+    const tx = { $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => written.push(values) } as unknown as Prisma.TransactionClient;
+    const today = { fromDay: '2026-10-17', toDay: '2026-10-17', zone: 'Asia/Tehran', ...dayBounds('2026-10-17', '2026-10-17', 'Asia/Tehran') };
+    const now = new Date('2026-10-17T11:45:00Z');
+
+    await writeGrantEnds(tx, today, { window: 7, today: '2026-10-17', now });
+
+    // The cutoff bound into the INSERT is now, never the end of today (contract.analytics-tabs.md "Renewal" 1).
+    const cutoffs = written[1].filter((v): v is Date => v instanceof Date);
+    expect(cutoffs).toContainEqual(now);
+    expect(cutoffs.every((v) => v.getTime() <= today.to.getTime())).toBe(true);
   });
 });
