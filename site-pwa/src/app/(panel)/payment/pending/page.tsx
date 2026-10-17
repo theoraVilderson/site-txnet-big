@@ -11,7 +11,7 @@ import { readResultToken } from "../_lib/result-token";
  * is the callback's (`RESULT_PATH.pending`).
  *
  * Like the other two it shows only a signed `?t=` (rule 10); anything else goes
- * to the financial page. Unlike them it is not final: the view polls the
+ * to the financial page. Unlike them it is not final: the view re-reads the
  * payment and becomes the success card when billing credits it.
  */
 export default async function PaymentPendingPage({

@@ -1,5 +1,5 @@
 import type { WalletPaymentRow } from "@/lib/billing-api";
-import { PENDING_POLL_MS, pendingStateOf, readPaymentCredited, readPaymentReversed } from "./pending-payment";
+import { pendingStateOf, readPaymentCredited, readPaymentReversed } from "./pending-payment";
 
 /**
  * `/payment/pending` (F-093-l, ADR-0044 decision 7). What breaks silently:
@@ -64,12 +64,6 @@ describe("pendingStateOf", () => {
 
   it("keeps waiting when the payment could not be read — a network blip is not an outcome", () => {
     expect(pendingStateOf(null)).toEqual({ kind: "waiting" });
-  });
-});
-
-describe("the poll", () => {
-  it("stays inside the route's budget over its 15-minute window", () => {
-    expect((15 * 60 * 1000) / PENDING_POLL_MS).toBeLessThanOrEqual(300 / 2);
   });
 });
 

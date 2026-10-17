@@ -3,7 +3,7 @@ import type { WalletPaymentRow } from "@/lib/billing-api";
 import { readSuccess } from "./payment-result";
 
 /**
- * What `/payment/pending` shows for the payment it polls (F-093-l,
+ * What `/payment/pending` shows for the payment it waits on (F-093-l,
  * ADR-0044 decision 7).
  *
  * The page exists because billing's callback met the gateway with silence: the
@@ -17,15 +17,8 @@ export type PendingState =
   | { kind: "reversed" }
   | { kind: "closed" };
 
-/**
- * Every 10 s: the retry ladder's first rung is 30 s and the sweep ticks every
- * 5 min, so faster buys nothing, and 90 reads in the token's 15 minutes stays
- * well inside `WALLET_PAYMENT_RATE_LIMIT` (300).
- */
-export const PENDING_POLL_MS = 10_000;
-
 export function pendingStateOf(row: WalletPaymentRow | null): PendingState {
-  // A read that failed is not an outcome; the next poll asks again. An expired
+  // A read that failed is not an outcome; the next event or visit asks again. An expired
   // payment is still asked about for a week and credited when the bank confirms
   // it (ADR-0046 decision 1) — "not settled" would send the payer to pay again.
   if (row === null || row.status === "pending" || row.status === "expired") return { kind: "waiting" };

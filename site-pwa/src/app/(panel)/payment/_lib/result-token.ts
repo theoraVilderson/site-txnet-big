@@ -11,7 +11,7 @@ import {
 export type VerifiedResult =
   | { kind: "success"; success: PaymentSuccess }
   | { kind: "failed"; failure: PaymentFailure }
-  /** A verifying payment (F-093-l): the id `/payment/pending` polls. */
+  /** A verifying payment (F-093-l): the id `/payment/pending` waits on. */
   | { kind: "verifying"; paymentId: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

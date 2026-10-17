@@ -51,7 +51,7 @@ describe("the bot a payer came from", () => {
 describe("a verifying payment (F-093-l)", () => {
   const PAYMENT = "77777777-7777-4777-8777-777777777777";
 
-  it("carries the payment the pending page polls", () => {
+  it("carries the payment the pending page waits on", () => {
     const token = signResultToken({ kind: "verifying", paymentId: PAYMENT }, SECRET, NOW);
     expect(readResultToken(token, SECRET, NOW)).toEqual({ kind: "verifying", paymentId: PAYMENT });
   });

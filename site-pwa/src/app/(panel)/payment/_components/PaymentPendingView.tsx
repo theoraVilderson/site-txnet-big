@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import { History, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { billingApi } from "@/lib/billing-api";
 import { PANEL_FINANCIAL } from "@/lib/routes";
 import { PAYMENT_RESULT_KEYS as P } from "../_lib/payment-result";
-import { PENDING_POLL_MS, pendingStateOf, type PendingState } from "../_lib/pending-payment";
+import { usePendingPayment } from "../_hooks/usePendingPayment";
 import { PaymentResultCard } from "./PaymentResultCard";
 import { PaymentSuccessView, SECONDARY_ACTION } from "./PaymentSuccessView";
 
@@ -15,31 +13,16 @@ import { PaymentSuccessView, SECONDARY_ACTION } from "./PaymentSuccessView";
  * A payment the gateway has not confirmed yet (F-093-l, ADR-0044 decision 7).
  *
  * **The one result page that reads anything.** The other two report an outcome
- * that is already final; this one reports that there is none yet, so it polls
- * the payment (`GET /wallet/payments/:id`) and turns into the success card the
- * moment billing's retries credit it. It settles nothing and asks no gateway —
+ * that is already final; this one reports that there is none yet, so it reads
+ * the payment (`GET /wallet/payments/:id`) when the wallet moves (RT-1-c) and
+ * turns into the success card the moment billing's retries credit it. It settles nothing and asks no gateway —
  * billing does that on its own clock (F-092-x/y).
  *
  * What it must say, above all: the money is safe, and not to pay again.
  */
 export function PaymentPendingView({ paymentId }: { paymentId: string }) {
   const { t } = useLocale();
-  const [state, setState] = useState<PendingState>({ kind: "waiting" });
-
-  useEffect(() => {
-    if (state.kind !== "waiting") return;
-    let cancelled = false;
-    const check = async () => {
-      const row = await billingApi.walletPayment(paymentId).catch(() => null);
-      if (!cancelled) setState(pendingStateOf(row));
-    };
-    void check();
-    const timer = setInterval(check, PENDING_POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [paymentId, state.kind]);
+  const state = usePendingPayment(paymentId);
 
   // Credited on this visit: the real celebration, not the quiet "already" one.
   if (state.kind === "credited") return <PaymentSuccessView reference={state.reference} alreadyPaid={false} />;
