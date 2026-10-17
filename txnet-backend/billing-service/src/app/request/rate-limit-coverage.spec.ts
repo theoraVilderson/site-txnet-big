@@ -58,7 +58,8 @@ const APP = join(__dirname, '..');
  * `InvoiceInternalController` is the invoice clock's seam (F-111-a), the same
  * tick and argument as `DepositInternalController`.
  * `GrantBulkJobInternalController` is the bulk jobs' drain (F-311-u2), a
- * minute tick: throttling it would leave a started +3 days half applied.
+ * minute tick: throttling it would leave a started +3 days half applied;
+ * `ConfigMoveJobInternalController` is the config moves' (F-311-ad), the same.
  * `UsageInternalController` is the postpaid capture (F-118-g), an hourly tick:
  * throttling it would leave measured usage held and uncharged.
  * `VpnReserveController` is the reserve sweep (F-118-b), a minute tick:
@@ -82,7 +83,7 @@ const APP = join(__dirname, '..');
  * tick: `SERVICE_ONLY` or a 404, and throttling it would leave the analytics
  * page's figures stale while it says "updated N min ago".
  */
-const EXEMPT = new Set(['AnalyticsInternalController', 'HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController', 'SupportContextController']);
+const EXEMPT = new Set(['AnalyticsInternalController', 'HealthController', 'AiOfferCouponController', 'DepositInternalController', 'InvoiceInternalController', 'EntitlementInternalController', 'GroupFulfilmentController', 'GrantBulkJobInternalController', 'ConfigMoveJobInternalController', 'UsageInternalController', 'VpnReserveController', 'ChargeCurrenciesController', 'SeasonInternalController', 'LotteryInternalController', 'WheelInternalController', 'SupportContextController']);
 
 /**
  * Controllers with no identity to bucket on, and what they count instead.

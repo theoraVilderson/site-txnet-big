@@ -31,6 +31,7 @@ import { UsageSettlementService } from '../../usage/usage-settlement';
 import { claimCompensation, CompensationAsk } from './grant-compensation';
 import { GrantBulkBody } from './grant-bulk.schema';
 import { GrantListQuery, GrantsByLinesBody } from './grant-list.schema';
+import { moveTargetWhere } from './config-move-selection';
 import { actOnEach, GrantBulkOutcome } from './reseller-grants-bulk';
 import { SubscriptionLinkService } from './subscription-link.service';
 import { UsersCatalogProduct, usersCatalogOf } from './reseller-users-catalog';
@@ -115,18 +116,16 @@ export class ResellerUserGrantsService {
   }
 
   /**
-   * The panels an admin may move one of this user's configs to (F-311-v1):
-   * shared (`tenantId` null) or this reseller's own, not retired — the rule
-   * `ConfigActionsService.move` holds — and accepted by review, since a move
-   * to a panel nothing provisions strands the config. **`network.panel` has no
-   * RLS**, so the path's tenant is written into the filter; the reseller's
-   * scope would hide nothing. No address and no credential is selected.
+   * The panels an admin may move one of this user's configs to (F-311-v1),
+   * `moveTargetWhere`'s: a move to a panel nothing provisions strands the
+   * config. **`network.panel` has no RLS**, so the path's tenant is written
+   * into the filter. No address and no credential is selected.
    */
   moveTargets(actor: ResellerActor, tenantId: string, userId: string): Promise<MoveTarget[]> {
     return this.run(actor, tenantId, userId, async () => {
       const panels = await tenantTransaction(this.prisma, (tx) =>
         tx.panel.findMany({
-          where: { retiredAt: null, reviewState: { in: ['accepted', 'accepted_low_trust'] }, OR: [{ tenantId: null }, { tenantId }] },
+          where: moveTargetWhere(tenantId),
           select: { id: true, name: true, region: true, tenantId: true },
           orderBy: [{ region: 'asc' }, { name: 'asc' }],
         }),

@@ -1190,3 +1190,67 @@ model IpAccessRule {
 }
 
 // =============================================================================
+
+/// F-311-ad. Where a config move job stands: `running` until its last item has
+/// an outcome (`done`) or the admin stops it (`cancelled`).
+enum ConfigMoveJobStatus {
+  running
+  done
+  cancelled
+
+  @@schema("network")
+}
+
+/// F-311-ad (D-63). A reseller's admin moves many configs to one panel, run by
+/// the worker in batches through `ConfigActions.move`. The configs are frozen
+/// at the confirm as its items, so progress has a fixed denominator.
+model ConfigMoveJob {
+  id           String              @id @default(uuid()) @db.Uuid
+  tenantId     String              @db.Uuid
+  /// One per confirm: a repeat answers this job, another body is `request_reused`.
+  requestId    String              @db.Uuid
+  fingerprint  String
+  actorUserId  String              @db.Uuid
+  actorIp      String
+  reason       String
+  /// What the admin named: `{panelId}` (its live configs there) or `{userIds}`.
+  source       Json
+  toPanelId    String              @db.Uuid
+  status       ConfigMoveJobStatus @default(running)
+  /// The configs frozen at the confirm; never changes after.
+  total        Int
+  okCount      Int                 @default(0)
+  refusedCount Int                 @default(0)
+  failedCount  Int                 @default(0)
+  createdAt    DateTime            @default(now())
+  finishedAt   DateTime?
+  /// When its items were purged, `CONFIG_MOVE_RETENTION_DAYS` after `finishedAt`; the row and counts stay.
+  purgedAt     DateTime?
+
+  items ConfigMoveJobItem[]
+
+  @@unique([tenantId, requestId])
+  @@index([tenantId, createdAt])
+  @@map("config_move_job")
+  @@schema("network")
+}
+
+/// One config of a `ConfigMoveJob`. `doneAt` is set with its outcome, in the
+/// move's own transaction when it moved: `ok` and the new config `movedTo`, or
+/// the refusal's `reason`, or `failed` after the last attempt.
+model ConfigMoveJobItem {
+  jobId    String    @db.Uuid
+  tenantId String    @db.Uuid
+  configId String    @db.Uuid
+  attempts Int       @default(0)
+  doneAt   DateTime?
+  ok       Boolean?
+  reason   String?
+  movedTo  String?   @db.Uuid
+
+  job ConfigMoveJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@id([jobId, configId])
+  @@map("config_move_job_item")
+  @@schema("network")
+}

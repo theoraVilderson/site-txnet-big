@@ -126,6 +126,7 @@ export async function auditedOwnGrantAct<T>(
 }
 
 export type BulkJobAuditAction = Extract<AdminAction, 'grant_bulk_start' | 'grant_bulk_cancel'>;
+export type MoveJobAuditAction = Extract<AdminAction, 'config_move_start' | 'config_move_cancel'>;
 
 export type LimitAuditAction = Extract<AdminAction, 'grant_limit_tenant_set' | 'grant_limit_user_set' | 'grant_limit_user_remove'>;
 
@@ -188,6 +189,20 @@ export async function auditBulkJob(
   reason: string | null,
 ): Promise<void> {
   await write(tx, actor, tenantId, action, AuditTargetType.grant_bulk_job, jobId, before, after, reason);
+}
+
+/** A config move job as one admin act (F-311-ad): its start and its cancel; each config it moves has its own `config_move` row. */
+export async function auditMoveJob(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  action: MoveJobAuditAction,
+  jobId: string,
+  before: unknown,
+  after: unknown,
+  reason: string | null,
+): Promise<void> {
+  await write(tx, actor, tenantId, action, AuditTargetType.config_move_job, jobId, before, after, reason);
 }
 
 export type GrantHistoryRow = {

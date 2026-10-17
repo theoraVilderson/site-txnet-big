@@ -11,7 +11,9 @@ import { GrantTokenController } from './grant-token.controller';
 import { OwnFreezeController } from './own-freeze.controller';
 import { OwnFreezeService } from './own-freeze.service';
 import { GiftRedemptionService } from './gift-redemption.service';
+import { ConfigMoveJobDrainService, ResellerConfigMoveJobService } from './config-move-job';
 import { GrantBulkJobDrainService, ResellerGrantBulkJobService } from './grant-bulk-job';
+import { ConfigMoveJobInternalController, ResellerConfigMoveJobController } from './reseller-config-move-job.controller';
 import { ResellerGrantsBulkController } from './reseller-grants-bulk.controller';
 import { GrantBulkJobInternalController, ResellerGrantsBulkJobController } from './reseller-grants-bulk-job.controller';
 import { ResellerGrantsByLinesController } from './reseller-grants-by-lines.controller';
@@ -34,12 +36,13 @@ import { SubscriptionLinkService } from './subscription-link.service';
  * The same reads, with a Grant's configs and usage from `TrafficModule`, are
  * answered to a reseller's admin for one of its users (F-311-f), and its
  * writes over many users' Grants at once (F-311-u) — by id in the request,
- * or by a filter as a job the worker drains (F-311-u2).
+ * or by a filter as a job the worker drains (F-311-u2) — and many configs
+ * moved to one panel, also a job (F-311-ad).
  */
 @Module({
   imports: [WalletModule, EntitlementModule, TrafficModule, UsageModule],
-  controllers: [GiftController, GrantTokenController, GrantListController, OwnFreezeController, ResellerUserGrantsController, ResellerGrantFreezeController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
-  providers: [OwnFreezeService, GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerAccess],
+  controllers: [GiftController, GrantTokenController, GrantListController, OwnFreezeController, ResellerUserGrantsController, ResellerGrantFreezeController, ResellerGrantsByLinesController, ResellerGrantsBulkController, ResellerGrantsBulkJobController, GrantBulkJobInternalController, ResellerConfigMoveJobController, ConfigMoveJobInternalController, ResellerUsersCatalogController, GrantLimitsController],
+  providers: [OwnFreezeService, GrantLimitsService, GiftRedemptionService, SubscriptionLinkService, ResellerUserGrantsService, ResellerGrantBulkJobService, GrantBulkJobDrainService, ResellerConfigMoveJobService, ConfigMoveJobDrainService, ResellerAccess],
   exports: [GiftRedemptionService],
 })
 export class GiftModule {}

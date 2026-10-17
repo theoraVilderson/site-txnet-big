@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { giverOf } from '../../traffic/gift-bytes';
 import { GrantBulkCommand } from './grant-bulk.schema';
 import { GrantBulkFilter, GrantBulkJobBody, GrantBulkPage } from './grant-bulk-job.schema';
+import { JobProgress, jobProgress } from './job-progress';
 import { countSelection, GrantBulkPanel, insertSelection, panelsOfSelection } from './grant-bulk-selection';
 import { actOnce, BulkActor, bulkFingerprint, GRANT_BULK_FAILED, GrantBulkOutcome } from './reseller-grants-bulk';
 import { AdminActor, ResellerUserGrantsRefused } from './reseller-user-grants.service';
@@ -42,23 +43,8 @@ export class GrantBulkJobRefused extends Error {
   }
 }
 
-export type GrantBulkJobView = {
-  id: string;
-  requestId: string;
-  action: string;
-  command: Record<string, unknown>;
-  filter: GrantBulkFilter;
-  status: GrantBulkJobStatus;
-  total: number;
-  processed: number;
-  ok: number;
-  refused: number;
-  failed: number;
-  createdAt: string;
-  finishedAt: string | null;
-  /** When its per-Grant outcomes were purged (F-311-u3); the counts above stay. */
-  purgedAt: string | null;
-};
+/** A job as its page reads it; `purgedAt` is when its per-Grant outcomes were purged (F-311-u3), the counts staying. */
+export type GrantBulkJobView = { id: string; requestId: string; action: string; command: Record<string, unknown>; filter: GrantBulkFilter } & JobProgress<GrantBulkJobStatus>;
 
 const view = (j: GrantBulkJob): GrantBulkJobView => ({
   id: j.id,
@@ -66,15 +52,7 @@ const view = (j: GrantBulkJob): GrantBulkJobView => ({
   action: j.action,
   command: j.command as Record<string, unknown>,
   filter: j.filter as GrantBulkFilter,
-  status: j.status,
-  total: j.total,
-  processed: j.okCount + j.refusedCount + j.failedCount,
-  ok: j.okCount,
-  refused: j.refusedCount,
-  failed: j.failedCount,
-  createdAt: j.createdAt.toISOString(),
-  finishedAt: j.finishedAt?.toISOString() ?? null,
-  purgedAt: j.purgedAt?.toISOString() ?? null,
+  ...jobProgress(j),
 });
 
 /** What a job's audit rows say it was and where it stood: never its Grants, which have rows of their own. */

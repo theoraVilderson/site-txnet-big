@@ -61,6 +61,8 @@ export const RealtimeEventType = {
   ANALYTICS_RESELLER_REFRESHED: 'billing.analytics.reseller_refreshed',
   /** F-1006-a: a scheduled analytics report is due (or asked now) — one per send, to the schedule's person (`AnalyticsReportService`); worker-service tells it and pushes its schedule live. */
   ANALYTICS_REPORT: 'billing.analytics.report',
+  /** F-311-ad: a config move job moved a batch, finished or was cancelled — its page re-reads the job (`ConfigMoveJobDrainService`). */
+  CONFIG_MOVE_JOB_PROGRESS: 'network.config_move_job.progress',
 } as const;
 
 /**
@@ -230,6 +232,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ANALYTICS_RESELLER_REFRESHED]: 'worker-service',
   [OutboxEventType.ANALYTICS_USER_LOSS]: 'worker-service',
   [OutboxEventType.ANALYTICS_REPORT]: 'worker-service',
+  [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

@@ -135,6 +135,9 @@ enum AdminAction {
   // F-311-u3. An admin's bulk job by filter: its start and its cancel.
   grant_bulk_start
   grant_bulk_cancel
+  // F-311-ad. A config move job: its start and its cancel; each config moved is its own `config_move`.
+  config_move_start
+  config_move_cancel
   grant_delete
   grant_issue
   grant_renew
@@ -252,6 +255,8 @@ enum AuditTargetType {
   notification_campaign
   // F-311-u3. A bulk job by filter, not any one Grant it acted on.
   grant_bulk_job
+  // F-311-ad. A config move job, not any one config it moved.
+  config_move_job
   // F-019-a. A reseller's billing wallet with the platform, not a user's `wallet`.
   tenant_billing_wallet
   // F-018-c. A tenant itself.

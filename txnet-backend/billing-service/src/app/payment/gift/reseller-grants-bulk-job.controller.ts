@@ -11,19 +11,18 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Query,
   Req,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, ResellerLimitReached, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { GrantBulkDrainResult, GrantBulkJobDrainService, GrantBulkJobRefused, GrantBulkJobRejection, ResellerGrantBulkJobService } from './grant-bulk-job';
-import { GrantBulkJobBody, grantBulkJobSchema, grantBulkCountSchema, GrantBulkPage, grantBulkPageSchema } from './grant-bulk-job.schema';
+import { GrantBulkJobBody, grantBulkJobSchema, grantBulkCountSchema } from './grant-bulk-job.schema';
+import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from './reseller-job-routes';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';
 import { ResellerUserGrantsRefused } from './reseller-user-grants.service';
 
@@ -46,27 +45,6 @@ function refusal(e: unknown): unknown {
   return new Exception(payload);
 }
 
-async function answer<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (e) {
-    throw refusal(e);
-  }
-}
-
-const writeLimit = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_CONFIG_ACTION, identityOf(req).userId),
-  configKey: 'RESELLER_USER_CONFIG_ACTION_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-
-/** The reseller reads' own bucket, as every reseller read of a user's services spends it. */
-const readLimit = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.RESELLER_USER_GRANTS_READ, identityOf(req).userId),
-  configKey: 'RESELLER_USER_GRANTS_READ_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-
 /**
  * An admin acts on Grants chosen by a filter, as a background job (F-311-u2,
  * spec F-311) — a panel, a product or variant, statuses — instead of 1..50
@@ -83,61 +61,38 @@ const readLimit = {
  * Refusals: the door's as every reseller route's (`resellerRefusal`); 409
  * `request_reused`, 422 `selection_empty` / `selection_too_large`, 404
  * `job_not_found`. The writes spend the bulk by id's bucket, per request; the
- * reads the reseller reads' bucket.
+ * reads the reseller reads' bucket. The list, one job, its outcomes and its
+ * cancel are `ResellerJobRoutes`'.
  */
 @Controller('billing/tenants/:tenantId/grants/bulk-jobs')
-export class ResellerGrantsBulkJobController {
-  constructor(private readonly service: ResellerGrantBulkJobService) {}
+export class ResellerGrantsBulkJobController extends ResellerJobRoutes {
+  constructor(protected readonly jobs: ResellerGrantBulkJobService) {
+    super();
+  }
+
+  protected refusal(e: unknown): unknown {
+    return refusal(e);
+  }
 
   @Post('count')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(readLimit)
+  @RateLimit(bulkReadLimit)
   count(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(grantBulkCountSchema)) body: { filter: GrantBulkJobBody['filter'] }, @Req() req: Request) {
-    return answer(async () => ({ count: await this.service.count(actorOf(req), tenantId, body.filter) }));
+    return this.answer(async () => ({ count: await this.jobs.count(actorOf(req), tenantId, body.filter) }));
   }
 
-  /** Before `:jobId`, which would take `panels` for an id and refuse it. */
+  /** Before the base's `:jobId`, which would take `panels` for an id and refuse it. */
   @Get('panels')
-  @RateLimit(readLimit)
+  @RateLimit(bulkReadLimit)
   panels(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
-    return answer(async () => ({ panels: await this.service.panels(actorOf(req), tenantId) }));
+    return this.answer(async () => ({ panels: await this.jobs.panels(actorOf(req), tenantId) }));
   }
 
   @Post()
   @HttpCode(HttpStatus.ACCEPTED)
-  @RateLimit(writeLimit)
+  @RateLimit(bulkWriteLimit)
   start(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(grantBulkJobSchema)) body: GrantBulkJobBody, @Req() req: Request, @Ip() ip: string) {
-    return answer(() => this.service.start({ ...actorOf(req), ip }, tenantId, body));
-  }
-
-  @Get()
-  @RateLimit(readLimit)
-  list(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Query(new ZodValidationPipe(grantBulkPageSchema)) page: GrantBulkPage, @Req() req: Request) {
-    return answer(() => this.service.list(actorOf(req), tenantId, page));
-  }
-
-  @Get(':jobId')
-  @RateLimit(readLimit)
-  job(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request) {
-    return answer(() => this.service.job(actorOf(req), tenantId, jobId));
-  }
-
-  @Get(':jobId/outcomes')
-  @RateLimit(readLimit)
-  outcomes(
-    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
-    @Param('jobId', new ParseUUIDPipe()) jobId: string,
-    @Query(new ZodValidationPipe(grantBulkPageSchema)) page: GrantBulkPage,
-    @Req() req: Request,
-  ) {
-    return answer(() => this.service.outcomes(actorOf(req), tenantId, jobId, page));
-  }
-
-  @Post(':jobId/cancel')
-  @HttpCode(HttpStatus.OK)
-  @RateLimit(writeLimit)
-  cancel(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request, @Ip() ip: string) {
-    return answer(() => this.service.cancel({ ...actorOf(req), ip }, tenantId, jobId));
+    return this.answer(() => this.jobs.start({ ...actorOf(req), ip }, tenantId, body));
   }
 }
 
