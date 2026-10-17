@@ -40,6 +40,8 @@ A fact that turns out wrong is said in one line and the rule corrected.
    `currencyCode`. A range that spans a currency change (F-116) answers one
    series per currency, and the page says so; nothing is converted here —
    **except cost**, converted at its own day's rate when written (ADR-0149).
+   A refund credited after the change counts in its sale's currency, its
+   `sourceAmount` (F-1001-q), so it comes off the sale it undoes.
 7. **Money is a decimal string** end to end (C-02); counts are ints.
 8. **Permission `analytics.read`**, so a reseller can give a staff seat its
    numbers and nothing else (`ResellerAccess.for('analytics.read')`).

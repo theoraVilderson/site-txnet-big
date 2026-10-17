@@ -124,8 +124,10 @@ by `margin` (below).
    currency on a reseller's — `cost` is never converted (principle 6); rule 5
    is its converted copy.
 5. **In the sale's currency** (ADR-0149, `analytics-fx.ts`). Each row is also
-   written in the tenant's operating currency as the pass runs, at the rate in
-   force at the end of its day — a live pin (the tenant's first), else the
+   written in the currency the tenant sold in at the end of its day — the
+   `fromCode` of its first later `currency_change`, else today's, so no pass
+   after a change moves an earlier day's cost into the new money (F-1001-q) —
+   at the rate in force at the end of its day — a live pin (the tenant's first), else the
    newest discovered rate, the toman as the rial over ten. No rate: `saleCost`
    null, and every read answers that cost in its own currency.
 6. **Every tenant's own costs** (F-1002-e, ADR-0151, catalog

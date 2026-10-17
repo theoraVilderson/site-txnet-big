@@ -9,6 +9,10 @@
  *    principle 2 exists for; both are read here, through the real service;
  *  - **a refund comes off the sale it undoes**, and a top-up, a gift and a
  *    transfer are never a sale;
+ *  - **a refund after a currency change comes off its sale's currency**
+ *    (F-1001-q): the ledger row is in the wallet's new money, its
+ *    `sourceAmount` in the sale's — the old currency nets to zero, the new
+ *    one never goes negative;
  *  - **another tenant's ledger is never summed in** — the scope is
  *    `current_tenant_id()`, bound by `tenantTransaction`;
  *  - **a second pass changes nothing**: no second event, no version bump —
@@ -30,6 +34,7 @@ vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS 
 
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
+const PLATFORM = '55555555-5555-4555-8555-555555555555';
 const ROLE_ID = '33333333-3333-4333-8333-333333333333';
 const USER_1 = '44444444-4444-4444-8444-444444444441';
 const USER_2 = '44444444-4444-4444-8444-444444444442';
@@ -70,10 +75,11 @@ afterAll(async () => {
 
 async function seed() {
   await owner.$executeRawUnsafe(`INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE_ID}', 'harness_user', false)`);
-  for (const [id, slug] of [[TENANT_A, 'alpha'], [TENANT_B, 'beta']]) {
+  // Every pass asks which tenant is the platform's (its panel costs), so one exists.
+  for (const [id, slug, type] of [[PLATFORM, 'platform', 'platform_owner'], [TENANT_A, 'alpha', 'reseller'], [TENANT_B, 'beta', 'reseller']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", timezone, "operatingCurrencyCode", "updatedAt")
-      VALUES ('${id}', 'reseller', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', '${ZONE}', 'USD', now())`);
+      VALUES ('${id}', '${type}', '${id}', '${slug}', 'active', 'pay_as_you_go_metered', '${ZONE}', 'USD', now())`);
   }
   for (const [user, tenant] of [[USER_1, TENANT_A], [USER_2, TENANT_A], [USER_B, TENANT_B]]) {
     await owner.$executeRawUnsafe(`
@@ -162,4 +168,24 @@ describe('the analytics rollup (F-1001-a)', () => {
     expect(await sumNet()).toBe('43.25');
   });
 
+  it('takes a refund off the sale it undoes in that sale\'s currency, across a currency change (F-1001-q)', async () => {
+    // Sold in tomans on day 1; the tenant moved to dollars (the wallet relabelled); the refund on day 2 was credited in dollars.
+    const relabel = (code: string) => owner.$executeRawUnsafe(`UPDATE billing.wallet SET "currencyCode" = '${code}' WHERE id = '${USER_B}'`);
+    await relabel('IRT');
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.wallet_transaction (id, "walletId", "tenantId", amount, direction, "reasonType", "balanceAfter", "currencyCode", "createdAt")
+      VALUES (gen_random_uuid(), '${USER_B}', '${TENANT_B}', 100000.00, 'debit', 'product_purchase', 0, 'IRT', '2026-09-01T09:00:00Z')`);
+    await relabel('USD');
+    await owner.$executeRawUnsafe(`
+      INSERT INTO billing.wallet_transaction (id, "walletId", "tenantId", amount, direction, "reasonType", "balanceAfter", "currencyCode", "sourceAmount", "sourceCurrencyCode", "createdAt")
+      VALUES (gen_random_uuid(), '${USER_B}', '${TENANT_B}', 2.00, 'credit', 'product_refund', 0, 'USD', 100000.00, 'IRT', '2026-09-02T09:00:00Z')`);
+    await rollup.rollup(TENANT_B, DAY_1, DAY_2, NOW);
+
+    const rows = await owner.analyticsSalesDay.findMany({ where: { tenantId: TENANT_B }, orderBy: [{ day: 'asc' }, { currencyCode: 'asc' }] });
+    expect(rows.map((r) => [r.day.toISOString().slice(0, 10), r.currencyCode, r.refunds.toFixed(2), r.net.toFixed(2), r.orders])).toEqual([
+      [DAY_1, 'IRT', '0.00', '100000.00', 1],
+      [DAY_1, 'USD', '0.00', '99.00', 1],
+      [DAY_2, 'IRT', '100000.00', '-100000.00', -1],
+    ]);
+  });
 });

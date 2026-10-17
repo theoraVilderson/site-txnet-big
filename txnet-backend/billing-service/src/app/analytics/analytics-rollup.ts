@@ -28,9 +28,13 @@ const GRANT_REASONS = referringTo('grant');
 /** The tenant day an instant column falls on — `createdAt` is UTC without a zone (C-37). */
 export const dayIn = (column: Prisma.Sql, zone: string) => Prisma.sql`((${column} AT TIME ZONE 'UTC') AT TIME ZONE ${zone})::date`;
 
-/** Sales and the refunds that undo them in the window, each with its owner and tenant day. */
+/**
+ * Sales and the refunds that undo them in the window, each with its owner and
+ * tenant day — a refund credited after a currency change in the money it was
+ * sold in (`sourceAmount`, F-116-f rule 5), so it comes off its own sale (F-1001-q).
+ */
 const ledger = (r: RollupRange) => Prisma.sql`
-  SELECT wt."amount", wt."currencyCode", wt."referenceId",
+  SELECT COALESCE(wt."sourceAmount", wt."amount") AS "amount", COALESCE(wt."sourceCurrencyCode", wt."currencyCode") AS "currencyCode", wt."referenceId",
          wt."reasonType"::text = ANY(${PACKAGE_REASONS}) AS "package",
          wt."reasonType"::text AS "reason",
          wt."direction" = 'debit' AS "sale",

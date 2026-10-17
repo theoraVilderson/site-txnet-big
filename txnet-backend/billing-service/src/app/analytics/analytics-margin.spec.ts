@@ -7,6 +7,9 @@
  *    in the tenant's currency; a cost is converted at **its own day's** rate
  *    (ADR-0149), the toman as the rial over ten — never today's rate for last
  *    month, never two currencies added;
+ *  - **a cost in today's currency for last month's sales** (F-1001-q). A
+ *    tenant that changed currency sold each day in the money it had then;
+ *    a day's cost converts into that, never into the currency of the pass;
  *  - **a cost with no rate read as free.** No rate on record keeps the cost in
  *    its own currency, so the margin shows it apart instead of a 0;
  *  - **a margin % from nothing.** Margin ÷ net with no net is no figure, not
@@ -19,7 +22,7 @@
 import { Prisma } from '@prisma/client';
 
 import type { CostDayRow } from './analytics-cost';
-import { convertCosts, rateLookup } from './analytics-fx';
+import { convertCosts, currencyOnDay, rateLookup } from './analytics-fx';
 import { marginCellsOf } from './analytics-margin-cells';
 
 const d = (v: string) => new Prisma.Decimal(v);
@@ -42,7 +45,7 @@ describe('convertCosts', () => {
   ]);
 
   it("converts each day at that day's rate, the toman as the rial over ten", () => {
-    const rows = convertCosts([cost('2026-09-10', '1.5'), cost('2026-09-11', '1.5')], 'IRT', rates);
+    const rows = convertCosts([cost('2026-09-10', '1.5'), cost('2026-09-11', '1.5')], () => 'IRT', rates);
     expect(rows.map((r) => [r.saleCurrencyCode, r.saleCost?.toFixed(2)])).toEqual([
       ['IRT', '90000.00'],
       ['IRT', '105000.00'],
@@ -50,13 +53,38 @@ describe('convertCosts', () => {
   });
 
   it('leaves a cost already in the operating currency as it is, and one with no rate unconverted', () => {
-    const [same, none] = convertCosts([cost('2026-09-10', '2.25', 'IRT'), cost('2026-09-10', '3', 'EUR')], 'IRT', rates);
+    const [same, none] = convertCosts([cost('2026-09-10', '2.25', 'IRT'), cost('2026-09-10', '3', 'EUR')], () => 'IRT', rates);
     expect(same.saleCost?.toFixed(6)).toBe('2.250000');
     expect(none).toMatchObject({ saleCurrencyCode: 'IRT', saleCost: null });
   });
 
   it('converts into the pivot without a rate of its own', () => {
-    expect(convertCosts([cost('2026-09-10', '60000', 'IRT')], 'USD', rates)[0].saleCost?.toFixed(2)).toBe('1.00');
+    expect(convertCosts([cost('2026-09-10', '60000', 'IRT')], () => 'USD', rates)[0].saleCost?.toFixed(2)).toBe('1.00');
+  });
+
+  it('converts each day into the currency the tenant sold in that day, not the one it has now (F-1001-q)', () => {
+    const soldIn = currencyOnDay('USD', [{ day: '2026-09-11', fromCode: 'IRT' }]);
+    const rows = convertCosts([cost('2026-09-10', '1.5'), cost('2026-09-11', '1.5')], soldIn, rates);
+    expect(rows.map((r) => [r.saleCurrencyCode, r.saleCost?.toFixed(2)])).toEqual([
+      ['IRT', '90000.00'],
+      ['USD', '1.50'],
+    ]);
+  });
+});
+
+describe('currencyOnDay', () => {
+  const soldIn = currencyOnDay('EUR', [
+    { day: '2026-09-05', fromCode: 'IRT' },
+    { day: '2026-09-05', fromCode: 'USD' },
+    { day: '2026-09-20', fromCode: 'GBP' },
+  ]);
+
+  it("answers the currency in force at a day's end: the first later change's old one, else today's", () => {
+    expect(['2026-09-04', '2026-09-05', '2026-09-19', '2026-09-20'].map(soldIn)).toEqual(['IRT', 'GBP', 'GBP', 'EUR']);
+  });
+
+  it('is the operating currency for every day of a tenant that never changed', () => {
+    expect(currencyOnDay('IRT', [])('2020-01-01')).toBe('IRT');
   });
 });
 

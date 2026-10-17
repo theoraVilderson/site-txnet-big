@@ -2,7 +2,7 @@ import { Prisma, TenantBillingReasonType } from '@prisma/client';
 import { operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CostDayRow, PanelUse, ResellerCharge, WholesaleUse, attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
-import { ConvertedCost, convertCosts, rateLookup, readRates } from './analytics-fx';
+import { ConvertedCost, convertCosts, currencyOnDay, rateLookup, readCurrencyChanges, readRates } from './analytics-fx';
 import type { CrossTenantReader } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
 import { RollupRange, dayIn } from './analytics-rollup';
@@ -129,13 +129,14 @@ async function insertCosts(tx: Prisma.TransactionClient, rows: readonly Converte
     ) AS x("day", "kind", "panelId", "servedTenantId", "productId", "userId", "currencyCode", "cost", "bytes", "saleCurrencyCode", "saleCost")`;
 }
 
-/** `rows` in the tenant's operating currency now, each at its own day's rate (ADR-0149). */
-async function inSaleCurrency(tx: Prisma.TransactionClient, tenantId: string, rows: readonly CostDayRow[]): Promise<ConvertedCost[]> {
+/** `rows` each in the currency its tenant sold in that day, at that day's rate (ADR-0149, F-1001-q). */
+async function inSaleCurrency(tx: Prisma.TransactionClient, r: RollupRange & { tenantId: string }, rows: readonly CostDayRow[]): Promise<ConvertedCost[]> {
   if (rows.length === 0) return [];
-  const operating = await operatingCurrencyOf(tx, tenantId);
-  const foreign = rows.filter((x) => x.currencyCode !== operating);
-  const rates = await readRates(tx, [operating, ...foreign.map((x) => x.currencyCode)], [...new Set(foreign.map((x) => x.day))]);
-  return convertCosts(rows, operating, rateLookup(rates));
+  const soldIn = currencyOnDay(await operatingCurrencyOf(tx, r.tenantId), await readCurrencyChanges(tx, r.zone));
+  const foreign = rows.filter((x) => x.currencyCode !== soldIn(x.day));
+  const codes = foreign.flatMap((x) => [x.currencyCode, soldIn(x.day)]);
+  const rates = await readRates(tx, codes, [...new Set(foreign.map((x) => x.day))]);
+  return convertCosts(rows, soldIn, rateLookup(rates));
 }
 
 /**
@@ -144,11 +145,11 @@ async function inSaleCurrency(tx: Prisma.TransactionClient, tenantId: string, ro
  * named, a reseller's Grant only by its tenant — and what it pays the
  * platform when it is a reseller, down to its own users; for both, its own
  * sale and usage costs (F-1002-e). Each source is
- * grouped to the grain already; each row also in the operating currency.
+ * grouped to the grain already; each row also in the currency sold in that day.
  */
 export async function writeCosts(tx: Prisma.TransactionClient, r: RollupRange & { tenantId: string }, how: { platform: boolean; across: CrossTenantReader }): Promise<void> {
   await tx.$executeRaw`DELETE FROM billing.analytics_cost_day WHERE "tenantId" = public.current_tenant_id() AND "day" BETWEEN ${r.fromDay}::date AND ${r.toDay}::date`;
   // Every tenant's own sale and usage costs (ADR-0151), beside what its kind pays for.
   const rows = [...(how.platform ? await platformPanelCosts(tx, how.across, r) : await resellerCosts(tx, r)), ...(await readOwnCosts(tx, r))];
-  await insertCosts(tx, await inSaleCurrency(tx, r.tenantId, rows));
+  await insertCosts(tx, await inSaleCurrency(tx, r, rows));
 }

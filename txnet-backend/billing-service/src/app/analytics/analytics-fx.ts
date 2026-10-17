@@ -3,15 +3,24 @@ import { DERIVED_CURRENCIES, FX_PIVOT_CURRENCY } from '@txnet-backend/shared-cor
 
 import type { CostDayRow } from './analytics-cost';
 import type { Day } from './analytics-days';
+import { dayIn } from './analytics-rollup';
 
 /**
  * A cost in the currency its tenant sells in (F-1001-l, ADR-0149): every cost
  * row is converted at **its own day's** rate, so a margin never subtracts
- * dollars from tomans and a rate moving today never rewrites last month.
+ * dollars from tomans and a rate moving today never rewrites last month — and
+ * into **its own day's** currency, so a currency change (F-116) never moves
+ * last month's cost into this month's money (F-1001-q).
  */
 
 /** A cost is kept to six places, as the attribution writes it. */
 const COST_PLACES = 6;
+
+/** A tenant's currency change on the tenant day it took effect, and the currency it left. */
+export type CurrencyChangeDay = { day: Day; fromCode: string };
+
+/** The currency a tenant sold in at a day's end. */
+export type CurrencyOn = (day: Day) => string;
 
 /** Units of a root currency per one USD on a day, as `currency_exchange_rate` quotes it. */
 export type RateRow = { code: string; day: Day; rate: Prisma.Decimal };
@@ -43,9 +52,28 @@ export function rootsOf(codes: Iterable<string>): string[] {
   return [...roots].sort();
 }
 
-/** Each row converted into `to` at its day's rate, through the pivot. */
-export function convertCosts(rows: readonly CostDayRow[], to: string, rateOf: RateOf): ConvertedCost[] {
+/**
+ * The currency in force at each day's end: the currency the first change after
+ * that day left, else `operating`. `changes` in the order they were made — two
+ * on one day leave the day in the second one's money.
+ */
+export function currencyOnDay(operating: string, changes: readonly CurrencyChangeDay[]): CurrencyOn {
+  return (day) => changes.find((c) => c.day > day)?.fromCode ?? operating;
+}
+
+/** A tenant's currency changes in the order made, each on its day in `zone` (the tenant in scope; RLS). */
+export function readCurrencyChanges(tx: Prisma.TransactionClient, zone: string): Promise<CurrencyChangeDay[]> {
+  return tx.$queryRaw<CurrencyChangeDay[]>`
+    SELECT to_char(${dayIn(Prisma.sql`c."createdAt"`, zone)}, 'YYYY-MM-DD') AS "day", c."fromCode"
+    FROM billing.currency_change c
+    WHERE c."tenantId" = public.current_tenant_id()
+    ORDER BY c."createdAt"`;
+}
+
+/** Each row converted into its day's currency (`toOn`) at its day's rate, through the pivot. */
+export function convertCosts(rows: readonly CostDayRow[], toOn: CurrencyOn, rateOf: RateOf): ConvertedCost[] {
   return rows.map((row) => {
+    const to = toOn(row.day);
     if (row.currencyCode === to) return { ...row, saleCurrencyCode: to, saleCost: row.cost };
     const from = rateOf(row.currencyCode, row.day);
     const into = rateOf(to, row.day);
