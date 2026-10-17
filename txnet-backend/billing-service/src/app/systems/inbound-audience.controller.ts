@@ -4,23 +4,22 @@ import type { Request } from 'express';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InboundAudienceInput, MemberInboundsService } from './member-inbounds';
-import { SetInboundAudienceBody, setInboundAudienceSchema } from './panel-registration.schema';
+import { SetInboundAudienceBody, setInboundAudienceSchema, SetListingShareBody, setListingShareSchema } from './panel-registration.schema';
 import { PanelPermissionGuard, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
 import { refusing } from './systems-refusals';
 
 /**
- * Who sells one inbound (F-027-ep, ADR-0127 decision 1):
- * `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` — every
- * group of the panel, or the groups listed. Beside `SystemsController` rather
- * than in it, which is past its size. `409 inbound_has_configs` names a group
- * that would lose it with live configs there.
+ * Who sells one inbound, and how much of it each group may take (F-027-ep,
+ * F-027-eq, ADR-0127 decisions 1 and 3). Beside `SystemsController` rather
+ * than in it, which is past its size.
  */
-@Controller('billing/systems/panels/:id/inbounds/:remoteId/audience')
+@Controller('billing/systems')
 @UseGuards(PanelPermissionGuard)
 export class InboundAudienceController {
   constructor(private readonly memberInbounds: MemberInboundsService) {}
 
-  @Put()
+  /** Every group of the panel, or the groups listed. `409 inbound_has_configs` names a group that would lose it with live configs there. */
+  @Put('panels/:id/inbounds/:remoteId/audience')
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   set(
     @Param('id', new ParseUUIDPipe()) id: string,
@@ -29,5 +28,18 @@ export class InboundAudienceController {
     @Req() req: Request,
   ) {
     return refusing(() => this.memberInbounds.setAudience(actorOf(req), id, remoteId, body as InboundAudienceInput));
+  }
+
+  /** A group's share of an inbound it lists; `404 listing_not_found` on any other. */
+  @Put('panel-groups/:id/members/:panelId/inbounds/:remoteId/share')
+  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  share(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Param('remoteId') remoteId: string,
+    @Body(new ZodValidationPipe(setListingShareSchema)) body: SetListingShareBody,
+    @Req() req: Request,
+  ) {
+    return refusing(() => this.memberInbounds.setShare(actorOf(req), id, panelId, remoteId, body.maxClients));
   }
 }

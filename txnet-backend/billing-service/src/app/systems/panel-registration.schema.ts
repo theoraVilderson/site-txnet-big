@@ -305,6 +305,14 @@ export const assignMemberInboundsSchema = z
 
 export type AssignMemberInboundsBody = z.infer<typeof assignMemberInboundsSchema>;
 
+/**
+ * A group's share of one inbound it lists (F-027-eq, ADR-0127 decision 3):
+ * the most of its Grants on it, null = none. `.strict()`.
+ */
+export const setListingShareSchema = z.object({ maxClients: capSchema }).strict();
+
+export type SetListingShareBody = z.infer<typeof setListingShareSchema>;
+
 /** At most this many groups listed on one inbound — a panel's members, with room. */
 const MAX_LISTED_GROUPS = 100;
 

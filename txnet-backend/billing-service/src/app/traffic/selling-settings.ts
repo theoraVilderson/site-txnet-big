@@ -13,7 +13,11 @@ import { ConfigProtocol, InboundPlacement } from '@prisma/client';
  */
 export type SellingValues = {
   inboundPlacement: InboundPlacement;
-  /** The most users on the panel before it takes no new one; null = no cap. */
+  /**
+   * The most users before the panel takes no new one; null = no cap. At the
+   * panel's layer a physical cap over every Grant; at a member's, the group's
+   * share, over its own Grants only (F-027-eq, ADR-0127 decision 3).
+   */
   maxClients: number | null;
   /** Lower first; read by strategies that choose among members, not `mirror`. */
   priority: number;
@@ -62,8 +66,15 @@ export function effectiveSellingSettings(member: SellingLayerValues | null, pane
   };
 }
 
-/** An inbound a buyer may be placed on: of a protocol we sell, with its cap (null = none). */
-export type SellingInbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null };
+/** A panel's inbound ids in the panel's own order: `2` before `10`. */
+export const byRemoteId = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
+
+/**
+ * An inbound a buyer may be placed on: of a protocol we sell, with its
+ * physical cap over every Grant and the group's share of it, over the group's
+ * own (F-027-eq); null = none. An `every_group` inbound has no share.
+ */
+export type SellingInbound = { remoteId: string; protocol: ConfigProtocol; maxClients: number | null; share: number | null };
 
 type ListedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null; enabled: boolean; goneAt: Date | null };
 
@@ -77,11 +88,11 @@ type ListedInbound = { remoteId: string; protocol: ConfigProtocol | null; maxCli
  * named once.
  */
 export function sellingInbounds(member: {
-  inbounds: { inbound: ListedInbound }[];
+  inbounds: { maxClients?: number | null; inbound: ListedInbound }[];
   panel: { inbounds: { remoteId: string; protocol: ConfigProtocol | null; maxClients: number | null }[] };
 }): SellingInbound[] {
-  const listed = member.inbounds.map((l) => l.inbound).filter((i) => i.enabled && i.goneAt === null);
+  const listed = member.inbounds.filter((l) => l.inbound.enabled && l.inbound.goneAt === null).map((l) => ({ ...l.inbound, share: l.maxClients ?? null }));
   const names = new Set(listed.map((i) => i.remoteId));
-  const rows = [...listed, ...member.panel.inbounds.filter((i) => !names.has(i.remoteId))];
-  return rows.flatMap((i) => (i.protocol === null ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients }]));
+  const rows = [...listed, ...member.panel.inbounds.filter((i) => !names.has(i.remoteId)).map((i) => ({ ...i, share: null }))];
+  return rows.flatMap((i) => (i.protocol === null ? [] : [{ remoteId: i.remoteId, protocol: i.protocol, maxClients: i.maxClients, share: i.share }]));
 }

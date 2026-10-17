@@ -2,7 +2,7 @@
 id: network
 layer: domain
 status: active
-version: 19
+version: 20
 updated: 2026-10-17
 ---
 
@@ -25,9 +25,9 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
 | `panel_inbound` | key `(panelId, remoteId)`; `tag`, `protocol` (null = one we do not sell), `port`, `host`, `enabled`, `goneAt`, `seenAt`, `fingerprint` (what its lines are built from; `contract.links.md` rule 6b) | `network-service`'s read |
 | `panel_inbound` | `sold`, `maxClients` (null = no cap, else `>= 1`) | the admin, on billing's systems routes |
 | `panel` | the panel's layer of the selling settings (rule 4a): `inboundPlacement` (`all` \| `spread` \| `hrw`), `maxClients` (`>= 1`), `priority` (`>= 0`), `weight` (`>= 1`), `inboundsPerBuyer` (`>= 1`, K under `hrw`); null = the platform default | the admin |
-| `panel_group_member` | the member's layer: the same five, null = the panel's | the admin |
+| `panel_group_member` | the member's layer: the same five, null = the panel's; its `maxClients` counts the group's own Grants (rule 5) | the admin |
 | `panel_inbound` | `audience` — `every_group` (default) or `listed` (rule 3a) | the admin |
-| `panel_group_member_inbound` | a `listed` inbound's sellers: key `(groupId, panelId, inboundRemoteId)`, an inbound listed to any number of memberships; only on a `listed` inbound (trigger `panel_group_member_inbound_is_listed`); `tenantId` = its member's (trigger); both FKs cascade (rule 3a) | the admin |
+| `panel_group_member_inbound` | a `listed` inbound's sellers: key `(groupId, panelId, inboundRemoteId)`, an inbound listed to any number of memberships; only on a `listed` inbound (trigger `panel_group_member_inbound_is_listed`); `tenantId` = its member's (trigger); both FKs cascade (rule 3a); `maxClients` = the group's share of it (null = none, else `>= 1`; rule 5) | the admin |
 | `panel` | `inboundsReadAt` — null = read on the next pass | the read sets it; the admin's refresh clears it |
 | `config` | `inboundRemoteId` — the inbound fulfilment placed it on | `ConfigActionsService.provisionForGroup` |
 
@@ -88,7 +88,8 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    So one panel can place `all` for one group and `spread` with a lower cap for
    another. Server facts — addresses, credentials, `maxRequestsPerMinute`,
    `maxLineRateBps` — have no member column and are never overridden. A member
-   cannot set "no cap" under a capped panel: unset inherits the cap. The due
+   cap is not one value but two (rule 5): the member's is its group's share,
+   the panel's stays physical, and both hold. The due
    scan resolves the three `mirror` reads in SQL (`COALESCE`), which assumes the
    platform cap is none; `placementSettings` does it in TypeScript, and rules 4
    and 5 read the effective values. Which inbounds a member sells is rule 3a.
@@ -107,12 +108,22 @@ holds the panel inherits it, and a panel with nothing picked places nobody.
    `contracts/network/hrw.json` holds cases it produced, read by `hrw.spec.ts`
    and the Go `contract_test.go`. A row with no `inboundRemoteId` holds its
    panel under `hrw` as under `all` (rule 7). `group-fulfilment.spec.ts` pins it.
-5. **The caps.** An inbound at `maxClients` live configs takes nobody. A panel
-   at its effective `maxClients` (rule 4a) users — distinct Grants with a live config (`present`, not
-   drained) — takes no **new** Grant; a Grant already on it still gets a pick
-   added later. Counted across every tenant, after a transaction lock on each
-   placeable panel (`pg_advisory_xact_lock`, panel-id order), so two
-   fulfilments never take one inbound's last seat together.
+5. **The caps — physical, and the group's share** (F-027-eq, ADR-0127
+   decision 3). Live = `present`, not drained. Physical, over every Grant of
+   every group and tenant: an inbound at its `maxClients` live configs takes
+   nobody; a panel at its own layer's `maxClients` (else the platform's, none)
+   users — distinct Grants with a live config — takes no **new** Grant. The
+   group's share, over that group's Grants alone (`grant.panelGroupId`): a
+   listing's `maxClients` caps the group's live configs on that inbound, a
+   member-layer `maxClients` the group's users on the panel. So one busy group
+   never uses up another's room. **Every cap that applies must have room**; a
+   Grant already on the panel still gets a pick added later (an inbound's caps
+   still hold for it). A share is set by billing (`contract.panel-groups.md`
+   rule 24f); one below what is placed moves nobody. Counted after a
+   transaction lock on each placeable panel (`pg_advisory_xact_lock`, panel-id
+   order), so two fulfilments never take one inbound's last seat together.
+   `group-fulfilment.spec.ts` pins both kinds; `planFulfilment` is
+   `traffic/group-plan.ts`.
 6. **A pick reaches the next placement.** Ticking an inbound gives existing
    Grants a config on it at the next sweep (`all`); unticking one stops new
    placements and moves nobody — a move is `retire`/`move`, a decision of its

@@ -2,7 +2,7 @@
 id: billing
 layer: domain
 status: active
-version: 49
+version: 50
 updated: 2026-10-17
 ---
 
@@ -20,7 +20,7 @@ desired state; nothing calls `network-service` (ADR-0071).
 
 | Route | Body | Answers | Errors |
 |---|---|---|---|
-| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inbounds, role, drainingSince, evictedAt, heldGrants, createdAt}]}]`, by name; members by effective `priority`. The five are the member's own (null = inherited); `inbounds` its listed remote ids, sold beside the every-group ones (rule 24c); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b); `heldGrants` (rule 24d) | 403 |
+| `GET /api/billing/systems/panel-groups` | — | `[{id, name, strategy, minHealthyPanels, subscriptionTtlSeconds, createdAt, updatedAt, variantCount, members: [{groupId, panelId, panelName, panelState, reviewState, lastHealthyAt, inboundPlacement, maxClients, priority, weight, inboundsPerBuyer, effective, inbounds, role, drainingSince, evictedAt, heldGrants, createdAt}]}]`, by name; members by effective `priority`. The five are the member's own (null = inherited); `inbounds` its listed remote ids, sold beside the every-group ones (rule 24c); `shares: [{remoteId, maxClients}]` the listings with a share (rule 24f); `effective` is `{<setting>: {value, layer}}`, layer `member` \| `panel` \| `platform` (rule 24b); `heldGrants` (rule 24d) | 403 |
 | `POST /api/billing/systems/panel-groups` | `name`, `minHealthyPanels?` (1–100), `subscriptionTtlSeconds?` (60–604800); `.strict()` — `protocol` is refused since F-114-b | `201` the group, `strategy: mirror` | 400; 403 |
 | `PATCH /api/billing/systems/panel-groups/:id` | any of the three, at least one; `.strict()` | `200` the group | 400; 403; 404 `not_found` |
 | `DELETE /api/billing/systems/panel-groups/:id` | — | `200 {id, removed: true}` | 400; 403; 404 `not_found`; 409 `group_has_members` / `group_in_use` |
@@ -29,6 +29,7 @@ desired state; nothing calls `network-service` (ADR-0071).
 | `DELETE /api/billing/systems/panel-groups/:id/members/:panelId` | — | `200 {groupId, panelId, removed: true}` | 400; 403; 404 `not_found` / `member_not_found`; 409 `member_has_configs` |
 | `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds` | `inbounds: [remoteId]` (≤500, each once; `[]` = lists none, sells the every-group ones); `.strict()` | `200 {groupId, panelId, inbounds}` | 400; 403; 404 `not_found` / `member_not_found` / `inbound_not_found`; 409 `inbound_not_sellable`, `inbound_has_configs` `facts: {remoteId, groupId, configs}` (rule 24c) |
 | `PUT /api/billing/systems/panels/:id/inbounds/:remoteId/audience` | `{audience: 'every_group'}` or `{audience: 'listed', groups: [groupId]}` (≤100, each once, each a member of the panel; `[]` = nobody); `.strict()` | `200 {panelId, remoteId, audience, groups}` | 400; 403; 404 `panel_not_found` / `inbound_not_found` / `member_not_found`; 409 `inbound_not_sellable` (listing a gone or unsold-protocol one), `inbound_has_configs` `facts: {remoteId, groupId, configs}` |
+| `PUT /api/billing/systems/panel-groups/:id/members/:panelId/inbounds/:remoteId/share` | `{maxClients: 1–1000000 \| null}`; `.strict()` | `200 {groupId, panelId, remoteId, maxClients}` | 400; 403; 404 `not_found` / `listing_not_found` (rule 24f) |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/drain` | — | `200` the member, `drain`, with `drainingSince` and `waitSeconds` | 400; 403; 404 `not_found` / `member_not_found`; 409 `already_draining` / `no_other_member` |
 | `GET /api/billing/systems/panel-groups/:id/members/:panelId/evict-preview` | — | `{liveConfigs, soleLineGrants}` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
 | `POST /api/billing/systems/panel-groups/:id/members/:panelId/evict` | `orphans: 'pause' \| 'refund'`; `.strict()` | `200` the member, `drain`, with `evictedAt`, `evictOrphans`, `evictedBy` and `soleLineGrants` (rule 24e) | 400; 403; 404 `not_found` / `member_not_found` |
@@ -88,4 +89,11 @@ desired state; nothing calls `network-service` (ADR-0071).
     evict keeps the first `evictedAt` and choice; `evictedBy` is the owner,
     the actor of a refund's `grant_deletion`.
 
-`panel-groups.spec.ts` pins rules 20–24e.
+24f. **A group's share of an inbound is its listing's** (F-027-eq, ADR-0127 decision 3). The
+    share `PUT` sets one listing's `maxClients` under the panel's fulfilment lock; only a listing
+    has one (`listing_not_found` on an `every_group` inbound or another group's), and the member
+    `PUT` keeps it while the listing stays. It, and a member-layer `maxClients`, count the group's
+    own Grants; the inbound's and the panel layer's stay physical — network `contract.inbounds.md`
+    rule 5. On `InboundAudienceController`. `member-inbounds.spec.ts` pins it.
+
+`panel-groups.spec.ts` pins rules 20–24e; `member-inbounds.spec.ts` 24c and 24f.

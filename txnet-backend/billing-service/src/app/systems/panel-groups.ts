@@ -4,7 +4,7 @@ import { EvictOrphans, PanelGroupMemberRole, Prisma } from '@prisma/client';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DRAIN_TTL_MULTIPLE, drainConfigs, soleLineGrants } from '../traffic/group-drain';
-import { effectiveSellingSettings, SellingLayerValues } from '../traffic/selling-settings';
+import { byRemoteId, effectiveSellingSettings, SellingLayerValues } from '../traffic/selling-settings';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -37,8 +37,8 @@ const MEMBER_FIELDS = {
   evictOrphans: true,
   evictedBy: true,
   createdAt: true,
-  // The inbounds it sells instead of the pool (F-027-ch); none = the pool.
-  inbounds: { select: { inboundRemoteId: true } },
+  // The inbounds it lists, sold beside the every-group ones (F-027-ep), each with the group's share (F-027-eq).
+  inbounds: { select: { inboundRemoteId: true, maxClients: true } },
   panel: { select: { name: true, panelState: true, reviewState: true, lastHealthyAt: true, ...PANEL_SELLING_FIELDS } },
 } satisfies Prisma.PanelGroupMemberSelect;
 
@@ -318,7 +318,8 @@ function sellingData(input: MemberSellingInput) {
 /**
  * The member's own values as stored (null = inherited), and `effective`:
  * each setting's value for this group and the layer it came from. `inbounds`
- * are the ones assigned to it (F-027-ch); `[]` = it sells the panel's pool.
+ * are the ones it lists (F-027-ep), beside the every-group ones; `shares` the
+ * listings with a share of their own (F-027-eq).
  * `heldGrants`: a draining member's Grants the sweep holds (rule 14); null
  * when not draining, or on an answer that did not count them.
  */
@@ -326,7 +327,8 @@ function wireMember({ panel, inbounds, ...m }: MemberRow, heldGrants: number | n
   return {
     ...m,
     heldGrants,
-    inbounds: inbounds.map((i) => i.inboundRemoteId).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })),
+    inbounds: inbounds.map((i) => i.inboundRemoteId).sort(byRemoteId),
+    shares: inbounds.filter((i) => i.maxClients !== null).map((i) => ({ remoteId: i.inboundRemoteId, maxClients: i.maxClients })).sort((a, b) => byRemoteId(a.remoteId, b.remoteId)),
     panelName: panel.name,
     panelState: panel.panelState,
     reviewState: panel.reviewState,

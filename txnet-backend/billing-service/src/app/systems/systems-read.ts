@@ -40,6 +40,8 @@ export type SystemsRejection =
   | 'group_in_use'
   // An inbound is the pool's or one group's (F-027-ch).
   | 'inbound_has_configs'
+  // A group's share of an inbound is a listing's (F-027-eq).
+  | 'listing_not_found'
   // A panel's monthly cost (F-1002-a): a price never lands in a closed month.
   | 'cost_in_closed_month'
   // Acknowledging with a choice (F-027-fa).

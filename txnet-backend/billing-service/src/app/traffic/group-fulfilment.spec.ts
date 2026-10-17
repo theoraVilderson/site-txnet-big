@@ -22,18 +22,25 @@
  *  - **a halted panel takes no buyer** (F-027-fe, ADR-0130 decision 5): an
  *    open halting drift event means network neither reads it nor, under a
  *    foreign claim, writes to it, so a config placed there is never made and
- *    one already there is not counted towards `minHealthyPanels`.
+ *    one already there is not counted towards `minHealthyPanels`;
+ *  - **a group's share counts only that group** (F-027-eq, ADR-0127
+ *    decision 3): a listing's `maxClients` and a member-layer `maxClients`
+ *    count the group's own Grants, so one busy group never uses up another's
+ *    room; the inbound's and the panel's caps stay physical, over every Grant.
  */
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { ConfigActionsService } from './config-actions';
-import { GroupFulfilmentService, planFulfilment } from './group-fulfilment';
+import { GroupFulfilmentService } from './group-fulfilment';
+import { planFulfilment } from './group-plan';
 import { hrwPick } from './hrw';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 const GRANT = '99999999-9999-4999-8999-999999999991';
+const GROUP = 'group-1';
+const OTHER_GROUP = 'group-2';
 const [A, B, C, D, E] = ['a', 'b', 'c', 'd', 'e'].map((x) => `${x.repeat(8)}-${x.repeat(4)}-4${x.repeat(3)}-8${x.repeat(3)}-${x.repeat(12)}`);
 
 type Row = Record<string, unknown> & { id: string };
@@ -45,8 +52,8 @@ type Member = {
   inboundPlacement?: InboundPlacement | null;
   maxClients?: number | null;
   inboundsPerBuyer?: number | null;
-  /** Listed inbounds (F-027-ep), sold beside the every-group ones, `panel.inbounds`. */
-  inbounds: { inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
+  /** Listed inbounds (F-027-ep), sold beside the every-group ones, `panel.inbounds`; `maxClients` is the group's share (F-027-eq). */
+  inbounds: { maxClients?: number | null; inbound: Inbound & { enabled: boolean; goneAt: Date | null } }[];
   panel: { reviewState: PanelReviewState; panelState: PanelState; inboundPlacement: InboundPlacement; maxClients: number | null; inboundsPerBuyer: number | null; inbounds: Inbound[]; driftEvents: { id: string }[] };
 };
 
@@ -68,8 +75,8 @@ const member = (
 const on = (panelId: string, panel: PanelOpts) => member(panelId, PanelState.healthy, PanelGroupMemberRole.primary, PanelReviewState.accepted, panel);
 
 function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minHealthyPanels?: number; members: Member[]; others?: Row[] }) {
-  const grant = { id: GRANT, tenantId: TENANT, userId: USER, status: opts.status ?? GrantStatus.pending };
-  const group = { id: 'group-1', strategy: opts.strategy ?? PanelGroupStrategy.mirror, minHealthyPanels: opts.minHealthyPanels ?? 1, members: opts.members };
+  const grant = { id: GRANT, tenantId: TENANT, userId: USER, status: opts.status ?? GrantStatus.pending, panelGroupId: GROUP };
+  const group = { id: GROUP, strategy: opts.strategy ?? PanelGroupStrategy.mirror, minHealthyPanels: opts.minHealthyPanels ?? 1, members: opts.members };
   const configs: Row[] = [];
   /** Other buyers' configs: they fill inbounds and panels, and are never this Grant's. */
   const others: Row[] = opts.others ?? [];
@@ -103,21 +110,29 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     tenant: { findUnique: async () => ({ tenantType: 'platform_owner' }) },
   };
 
-  // The load query, answered from the rows: per (panel, inbound) and per panel, live configs only.
+  // The load query, answered from the rows: per (panel, inbound) and per panel, live configs only,
+  // each also counted for `groupId`'s Grants alone. This Grant's configs are its group's.
   const crossTenant = {
     grant: {
       findFirst: async ({ where }: { where: { id: string; status: GrantStatus } }) =>
         where.id === GRANT && where.status === grant.status ? { id: GRANT, tenantId: TENANT } : null,
     },
-    $queryRaw: async (_s: TemplateStringsArray, panelIds: string[]) => {
-      const live = [...configs, ...others].filter((c) => panelIds.includes(c.panelId as string) && c.desiredRemote === DesiredRemote.present && !c.drainedAt);
+    $queryRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => {
+      const panelIds = values.find((v): v is string[] => Array.isArray(v)) ?? [];
+      const groupId = values.find((v) => typeof v === 'string');
+      const live = [...configs.map((c): Row => ({ groupId: GROUP, ...c })), ...others].filter(
+        (c) => panelIds.includes(c.panelId as string) && c.desiredRemote === DesiredRemote.present && !c.drainedAt,
+      );
+      const counts = (n: Row[]) => {
+        const own = n.filter((c) => c.groupId === groupId);
+        return { clients: BigInt(n.length), users: BigInt(new Set(n.map((c) => c.grantId)).size), groupClients: BigInt(own.length), groupUsers: BigInt(new Set(own.map((c) => c.grantId)).size) };
+      };
       const rows: Record<string, unknown>[] = [];
       for (const panelId of new Set(live.map((c) => c.panelId as string))) {
         const mine = live.filter((c) => c.panelId === panelId);
-        rows.push({ panelId, inboundRemoteId: null, total: 1, clients: BigInt(mine.length), users: BigInt(new Set(mine.map((c) => c.grantId)).size) });
+        rows.push({ panelId, inboundRemoteId: null, total: 1, ...counts(mine) });
         for (const id of new Set(mine.map((c) => (c.inboundRemoteId as string | null) ?? null))) {
-          const n = mine.filter((c) => (c.inboundRemoteId ?? null) === id);
-          rows.push({ panelId, inboundRemoteId: id, total: 0, clients: BigInt(n.length), users: BigInt(new Set(n.map((c) => c.grantId)).size) });
+          rows.push({ panelId, inboundRemoteId: id, total: 0, ...counts(mine.filter((c) => (c.inboundRemoteId ?? null) === id)) });
         }
       }
       return rows;
@@ -130,11 +145,14 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
 }
 
 /** A member as `planFulfilment` takes it: loaded, nobody on it yet. */
-const withLoad = (m: Member) => ({ ...m, panel: { ...m.panel, users: 0, inbounds: m.panel.inbounds.map((i) => ({ ...i, clients: 0 })) } });
+const withLoad = (m: Member) => ({
+  ...m,
+  panel: { ...m.panel, groupMaxClients: null, users: 0, groupUsers: 0, inbounds: m.panel.inbounds.map((i) => ({ ...i, share: null, clients: 0, groupClients: 0 })) },
+});
 
-/** Another buyer's live config on (panel, inbound). */
-const taken = (panelId: string, inboundRemoteId: string, grantId = `other-${panelId}-${inboundRemoteId}-${Math.random()}`): Row => ({
-  id: `o-${grantId}`, grantId, panelId, inboundRemoteId, desiredRemote: DesiredRemote.present, drainedAt: null,
+/** Another buyer's live config on (panel, inbound) — of another group unless `groupId` says this one. */
+const taken = (panelId: string, inboundRemoteId: string, grantId = `other-${panelId}-${inboundRemoteId}-${Math.random()}`, groupId = OTHER_GROUP): Row => ({
+  id: `o-${grantId}`, grantId, groupId, panelId, inboundRemoteId, desiredRemote: DesiredRemote.present, drainedAt: null,
 });
 
 describe('GroupFulfilmentService.fulfil (mirror)', () => {
@@ -306,15 +324,42 @@ describe('placement on the picked inbounds (F-114-b)', () => {
     expect((await held.service.fulfil(held.tx, GRANT)).placed).toBe(1);
   });
 
-  it('places by the member\'s own placement and cap over its panel\'s, and by the panel\'s where the member sets none (F-027-cg)', async () => {
-    const others = [taken(A, '1', 'g1')];
-    const panel = { inboundPlacement: InboundPlacement.spread, maxClients: 1, inbounds: [inbound('1'), inbound('2')] };
-    const overridden = build({ members: [{ ...on(A, panel), inboundPlacement: InboundPlacement.all, maxClients: 5 }], others });
+  it('places by the member\'s own placement over its panel\'s, and by the panel\'s where the member sets none (F-027-cg)', async () => {
+    const panel = { inboundPlacement: InboundPlacement.spread, inbounds: [inbound('1'), inbound('2')] };
+    const overridden = build({ members: [{ ...on(A, panel), inboundPlacement: InboundPlacement.all }] });
     await overridden.service.fulfil(overridden.tx, GRANT);
     expect(overridden.configs.map((c) => c.inboundRemoteId)).toEqual(['1', '2']);
 
-    const inherited = build({ members: [{ ...on(A, panel), inboundPlacement: null, maxClients: null }], others });
-    expect(await inherited.service.fulfil(inherited.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+    const inherited = build({ members: [{ ...on(A, panel), inboundPlacement: null }] });
+    await inherited.service.fulfil(inherited.tx, GRANT);
+    expect(inherited.configs.map((c) => c.inboundRemoteId)).toEqual(['1']);
+  });
+
+  it('a member\'s cap counts only its group\'s Grants; the panel\'s counts every Grant, whatever the member says (F-027-eq)', async () => {
+    const theirs = build({ members: [{ ...on(A, {}), maxClients: 1 }], others: [taken(A, '1', 'g1')] });
+    expect((await theirs.service.fulfil(theirs.tx, GRANT)).placed).toBe(1);
+
+    const ours = build({ members: [{ ...on(A, {}), maxClients: 1 }], others: [taken(A, '1', 'g1', GROUP)] });
+    expect(await ours.service.fulfil(ours.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+
+    const physical = build({ members: [{ ...on(A, { maxClients: 1 }), maxClients: 5 }], others: [taken(A, '1', 'g1')] });
+    expect(await physical.service.fulfil(physical.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+  });
+
+  it('a listing\'s share counts only its group\'s configs there; the inbound\'s own cap counts every one (F-027-eq)', async () => {
+    const listed = (maxClients: number | null, share: number | null) => ({
+      ...on(A, { inbounds: [] }),
+      inbounds: [{ maxClients: share, inbound: { ...inbound('7', ConfigProtocol.vless, maxClients), enabled: true, goneAt: null } }],
+    });
+    const theirs = build({ members: [listed(null, 1)], others: [taken(A, '7', 'g1')] });
+    await theirs.service.fulfil(theirs.tx, GRANT);
+    expect(theirs.configs.map((c) => c.inboundRemoteId)).toEqual(['7']);
+
+    const ours = build({ members: [listed(null, 1)], others: [taken(A, '7', 'g1', GROUP)] });
+    expect(await ours.service.fulfil(ours.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
+
+    const physical = build({ members: [listed(1, 5)], others: [taken(A, '7', 'g1')] });
+    expect(await physical.service.fulfil(physical.tx, GRANT)).toMatchObject({ placed: 0, waiting: [A] });
   });
 
   it('under `hrw`, K of the picks, the ones the Grant\'s rendezvous hash names; K defaults to 2 (F-027-di)', async () => {

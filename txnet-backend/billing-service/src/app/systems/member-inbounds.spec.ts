@@ -11,7 +11,9 @@
  *    selling an inbound its Grants' configs are on is refused, with the group
  *    and the count, until they are moved or emptied (F-027-es);
  *  - **a later group gaining a listed inbound** — only `every_group` reaches a
- *    membership that lists nothing.
+ *    membership that lists nothing;
+ *  - **a group's share lost on a re-save** — a listing's `maxClients` (F-027-eq)
+ *    stays while the listing does, and is set only on a listing.
  */
 import { ConfigProtocol, InboundAudience, Prisma, TenantType } from '@prisma/client';
 
@@ -20,7 +22,7 @@ import { sanitizeError } from '@txnet-backend/shared-core';
 import { sellingInbounds } from '../traffic/selling-settings';
 import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
-import { assignMemberInboundsSchema, setInboundAudienceSchema } from './panel-registration.schema';
+import { assignMemberInboundsSchema, setInboundAudienceSchema, setListingShareSchema } from './panel-registration.schema';
 import { PanelScopeRefused } from './panel-scope';
 import { refusing } from './systems-refusals';
 
@@ -87,6 +89,11 @@ function harness(opts: { live?: Record<string, number> } = {}) {
       createMany: async ({ data }: { data: Row[] }) => {
         for (const d of data) if (!listings.some((l) => match(l, d))) listings.push(d);
         return { count: data.length };
+      },
+      updateMany: async ({ where, data }: { where: Row; data: Row }) => {
+        const hit = listings.filter((l) => match(l, where));
+        for (const l of hit) Object.assign(l, data);
+        return { count: hit.length };
       },
     },
     $executeRaw: async (_s: TemplateStringsArray, key: string) => {
@@ -219,6 +226,28 @@ describe('MemberInboundsService.setAudience — who sells one inbound', () => {
  * `facts` and nothing else beside it, and a fact is never free text — so the
  * holder travels as its id, and the page names it from its own scoped lists.
  */
+describe('MemberInboundsService.setShare — a group\'s share of a listed inbound (F-027-eq)', () => {
+  it('sets the listing\'s maxClients under the panel\'s lock, keeps it on a re-save of the listings, and null clears it', async () => {
+    const { service, listings, locks } = harness();
+    await service.assign(owner, OTHER_GROUP, PANEL, ['3']);
+    expect(await service.setShare(owner, OTHER_GROUP, PANEL, '3', 40)).toEqual({ groupId: OTHER_GROUP, panelId: PANEL, remoteId: '3', maxClients: 40 });
+    expect(locks.at(-1)).toBe(`panel_inbound:${PANEL}`);
+
+    await service.assign(owner, OTHER_GROUP, PANEL, ['3']);
+    expect(listings.find((l) => l.groupId === OTHER_GROUP && l.inboundRemoteId === '3')?.maxClients).toBe(40);
+
+    await service.setShare(owner, OTHER_GROUP, PANEL, '3', null);
+    expect(listings.find((l) => l.groupId === OTHER_GROUP && l.inboundRemoteId === '3')?.maxClients).toBeNull();
+  });
+
+  it('takes a share only on a listing: an every-group inbound, or one listed to another group, is listing_not_found', async () => {
+    const { service } = harness();
+    await expect(service.setShare(owner, GROUP, PANEL, '1', 5)).rejects.toMatchObject({ reason: 'listing_not_found' });
+    await expect(service.setShare(owner, GROUP, PANEL, '3', 5)).rejects.toMatchObject({ reason: 'listing_not_found' });
+    await expect(service.setShare({ adminId: ADMIN, tenantId: RESELLER }, OTHER_GROUP, PANEL, '3', 5)).rejects.toBeInstanceOf(PanelScopeRefused);
+  });
+});
+
 describe('a refusal naming its holder, as the client receives it', () => {
   const answered = async (e: Error) => sanitizeError(await refusing(() => Promise.reject(e)).catch((x: unknown) => x));
 
@@ -242,7 +271,7 @@ describe('sellingInbounds', () => {
   const listed = (remoteId: string, extra: Row = {}) => ({ inbound: { remoteId, protocol: ConfigProtocol.trojan, maxClients: 5, enabled: true, goneAt: null, ...extra } });
 
   it('sells the every-group inbounds while the membership lists none', () => {
-    expect(sellingInbounds({ inbounds: [], panel: { inbounds: everyGroup } })).toEqual(everyGroup);
+    expect(sellingInbounds({ inbounds: [], panel: { inbounds: everyGroup } })).toEqual([{ ...everyGroup[0], share: null }]);
   });
 
   it('sells its listed inbounds plus the every-group ones — not a disabled, gone or unsold-protocol listing', () => {
@@ -250,11 +279,18 @@ describe('sellingInbounds', () => {
       inbounds: [listed('7'), listed('8', { enabled: false }), listed('9', { goneAt: new Date() }), listed('6', { protocol: null })],
       panel: { inbounds: everyGroup },
     };
-    expect(sellingInbounds(member)).toEqual([{ remoteId: '7', protocol: ConfigProtocol.trojan, maxClients: 5 }, ...everyGroup]);
+    expect(sellingInbounds(member)).toEqual([{ remoteId: '7', protocol: ConfigProtocol.trojan, maxClients: 5, share: null }, { ...everyGroup[0], share: null }]);
   });
 
   it('names an inbound once, its listing first, should it come back both ways', () => {
-    expect(sellingInbounds({ inbounds: [listed('1')], panel: { inbounds: everyGroup } })).toEqual([{ remoteId: '1', protocol: ConfigProtocol.trojan, maxClients: 5 }]);
+    expect(sellingInbounds({ inbounds: [listed('1')], panel: { inbounds: everyGroup } })).toEqual([{ remoteId: '1', protocol: ConfigProtocol.trojan, maxClients: 5, share: null }]);
+  });
+
+  it('carries a listing\'s share beside the inbound\'s own cap; an every-group inbound has none (F-027-eq)', () => {
+    expect(sellingInbounds({ inbounds: [{ ...listed('7'), maxClients: 2 }], panel: { inbounds: everyGroup } })).toEqual([
+      { remoteId: '7', protocol: ConfigProtocol.trojan, maxClients: 5, share: 2 },
+      { ...everyGroup[0], share: null },
+    ]);
   });
 });
 
@@ -267,6 +303,16 @@ describe('setInboundAudienceSchema', () => {
     expect(setInboundAudienceSchema.safeParse({ audience: 'every_group', groups: [GROUP] }).success).toBe(false);
     expect(setInboundAudienceSchema.safeParse({ audience: 'listed' }).success).toBe(false);
     expect(setInboundAudienceSchema.safeParse({ audience: 'listed', groups: ['not-a-uuid'] }).success).toBe(false);
+  });
+});
+
+describe('setListingShareSchema', () => {
+  it('takes a cap of at least one, or null for none, and nothing else', () => {
+    expect(setListingShareSchema.safeParse({ maxClients: 40 }).success).toBe(true);
+    expect(setListingShareSchema.safeParse({ maxClients: null }).success).toBe(true);
+    expect(setListingShareSchema.safeParse({ maxClients: 0 }).success).toBe(false);
+    expect(setListingShareSchema.safeParse({}).success).toBe(false);
+    expect(setListingShareSchema.safeParse({ maxClients: 4, sold: true }).success).toBe(false);
   });
 });
 

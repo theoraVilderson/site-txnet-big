@@ -3,6 +3,7 @@ import { InboundAudience, Prisma } from '@prisma/client';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { byRemoteId } from '../traffic/selling-settings';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -26,8 +27,6 @@ export type InboundAudienceInput = { audience: typeof InboundAudience.every_grou
 
 /** One inbound a set of groups stops selling. */
 type Loss = { remoteId: string; groupIds: string[] };
-
-const byRemoteId = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
 
 /**
  * Who sells an inbound (F-027-ep, ADR-0127 decision 1, network
@@ -132,6 +131,27 @@ export class MemberInboundsService {
     });
     this.logger.log(`panel ${panel.id} inbound ${remoteId} sold by ${input.audience === InboundAudience.listed ? `[${groups.join(', ')}]` : 'every group'}, by ${actor.adminId}`);
     return { panelId: panel.id, remoteId, audience: input.audience, groups };
+  }
+
+  /**
+   * The group's share of one inbound it lists (F-027-eq, ADR-0127 decision 3):
+   * the most of its Grants placed there, null = none. Only a listing has one —
+   * an `every_group` inbound, or one this group does not list, is
+   * `listing_not_found`. A share below what is placed moves nobody: it stops
+   * new placements, as any cap (network `contract.inbounds.md` rule 5). Under
+   * the panel's lock, so a fulfilment counts against one value or the other.
+   */
+  async setShare(actor: SystemsActor, groupId: string, panelId: string, remoteId: string, maxClients: number | null) {
+    const scope = await panelScopeOf(this.prisma, actor);
+    const group = await this.crossTenant.panelGroup.findFirst({ where: { id: groupId, tenantId: scope.tenantId }, select: { id: true } });
+    if (!group) throw new SystemsRefused('not_found');
+    const set = await this.crossTenant.$transaction(async (tx) => {
+      await this.lock(tx, panelId);
+      return tx.panelGroupMemberInbound.updateMany({ where: { groupId: group.id, panelId, inboundRemoteId: remoteId }, data: { maxClients } });
+    });
+    if (set.count === 0) throw new SystemsRefused('listing_not_found');
+    this.logger.log(`panel ${panelId} inbound ${remoteId}: group ${group.id}'s share set to ${maxClients ?? 'none'} by ${actor.adminId}`);
+    return { groupId: group.id, panelId, remoteId, maxClients };
   }
 
   private lock(tx: Prisma.TransactionClient, panelId: string) {

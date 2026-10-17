@@ -840,6 +840,8 @@ model PanelGroupMemberInbound {
   panelId         String  @db.Uuid
   inboundRemoteId String
   tenantId        String? @db.Uuid
+  /// The group's share of the inbound: the most of this group's Grants on it; null = none (F-027-eq, ADR-0127 decision 3).
+  maxClients      Int?
 
   member  PanelGroupMember @relation(fields: [groupId, panelId], references: [groupId, panelId], onDelete: Cascade)
   inbound PanelInbound     @relation(fields: [panelId, inboundRemoteId], references: [panelId, remoteId], onDelete: Cascade)
