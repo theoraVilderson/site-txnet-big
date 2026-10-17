@@ -6658,6 +6658,7 @@
       "thisMonth": "This month",
       "lastMonth": "Last month",
       "90d": "Last 90 days",
+      "12m": "Last 12 months",
       "custom": "Custom"
     },
     "compares": {

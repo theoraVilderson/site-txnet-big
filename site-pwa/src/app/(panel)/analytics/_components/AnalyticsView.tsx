@@ -15,7 +15,7 @@ import { Alert, Button, PageHeader, SegmentedControl } from "../../_components/k
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
 import { dayIn, formatInstant, formatMonth, formatRelative } from "../../_lib/datetime";
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
-import { type AnalyticsFilters, type PageTab, ROW_TABS, calendarOf, filtersOf, isFigureTab, queryOf, searchOf, windowOf } from "../_lib/filters";
+import { type AnalyticsFilters, type PageTab, ROW_TABS, calendarOf, filtersOf, isFigureTab, queryOf, retabbed, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, settingsEditable } from "../_lib/customers";
 import { analyticsLiveOf } from "../_lib/live";
 import { resellersVisible } from "../_lib/resellers";
@@ -98,7 +98,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   const texts = useCatalogTexts(lang);
 
   const hrefOf = (next: AnalyticsFilters) => {
-    const s = searchOf(next);
+    const s = searchOf(retabbed(filters, next));
     return s ? `${pathname}?${s}` : pathname;
   };
   const onChange = (next: Partial<AnalyticsFilters>) => router.replace(hrefOf({ ...filters, ...next }), { scroll: false });

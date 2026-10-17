@@ -68,6 +68,10 @@ every reader of `/analytics` — a view under Customers, named "Retention"
    Customers tab names it (`_lib/sources.ts`).
 4. Its table views are the flat lists: cohort · month · value, channel ·
    month · LTV.
+5. **Opens on the last 12 months** while no range is in the URL
+   (`defaultRangeOf`): 30 days holds one cohort and no month k, and read as
+   an empty tab (user, 2026-10-17). A range the reader chose is kept across
+   tabs; one that was only the last tab's default is not (`retabbed`).
 
 ## Capacity (F-1005-b)
 

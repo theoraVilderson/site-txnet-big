@@ -9,7 +9,7 @@ import { numberLocale } from "../../_lib/digits";
  */
 
 /** The range presets, in the bar's order; `custom` reads `from` and `to`. */
-export const RANGE_PRESETS = ["today", "7d", "30d", "thisMonth", "lastMonth", "90d", "custom"] as const;
+export const RANGE_PRESETS = ["today", "7d", "30d", "thisMonth", "lastMonth", "90d", "12m", "custom"] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
 /** The page's tabs: billing's figure tabs, then Reports (F-1006-b), which reads schedules and no figure. */
@@ -64,8 +64,18 @@ export const DEFAULT_FILTERS: AnalyticsFilters = {
   currency: null,
 };
 
+/**
+ * A tab whose figures need a longer window than the page's default: Cohorts
+ * are people by first-purchase month, so 30 days holds one cohort and no
+ * month k (user, 2026-10-17). Used only while the reader has chosen no range.
+ */
+const TAB_DEFAULT_RANGE: Readonly<Partial<Record<PageTab, RangePreset>>> = { cohorts: "12m" };
+
+/** The range a tab opens on when the URL names none. */
+export const defaultRangeOf = (tab: PageTab): RangePreset => TAB_DEFAULT_RANGE[tab] ?? DEFAULT_FILTERS.range;
+
 /** Days back from today, today included, per rolling preset; the default's when a month or custom range lacks its dates. */
-const ROLLING_DAYS: Partial<Record<RangePreset, number>> = { today: 1, "7d": 7, "30d": 30, "90d": 90 };
+const ROLLING_DAYS: Partial<Record<RangePreset, number>> = { today: 1, "7d": 7, "30d": 30, "90d": 90, "12m": 365 };
 const DEFAULT_DAYS = 30;
 
 /** The `Intl` calendar each of billing's calendars is. */
@@ -87,10 +97,11 @@ const kindOf = (v: string | null): FulfilmentKind | null => FULFILMENT_KINDS.fin
 export function filtersOf(params: { get(key: string): string | null }): AnalyticsFilters {
   const from = params.get("from");
   const to = params.get("to");
+  const tab = oneOf(PAGE_TABS, params.get("tab"), DEFAULT_FILTERS.tab);
   const custom = params.get("range") === "custom" && isDay(from) && isDay(to) && from <= to;
-  const range = custom ? "custom" : oneOf(RANGE_PRESETS.filter((r) => r !== "custom"), params.get("range"), DEFAULT_FILTERS.range);
+  const range = custom ? "custom" : oneOf(RANGE_PRESETS.filter((r) => r !== "custom"), params.get("range"), defaultRangeOf(tab));
   return {
-    tab: oneOf(PAGE_TABS, params.get("tab"), DEFAULT_FILTERS.tab),
+    tab,
     range,
     from: custom ? from : null,
     to: custom ? to : null,
@@ -102,19 +113,32 @@ export function filtersOf(params: { get(key: string): string | null }): Analytic
   };
 }
 
+/** The default of `key` for the tab `f` is on — the range is the tab's own. */
+const defaultOf = (f: AnalyticsFilters, key: keyof AnalyticsFilters) => (key === "range" ? defaultRangeOf(f.tab) : DEFAULT_FILTERS[key]);
+
 /** The query string for `f`, defaults left off — the bare page is the default view. */
 export function searchOf(f: AnalyticsFilters): string {
   const out = new URLSearchParams();
   for (const key of Object.keys(DEFAULT_FILTERS) as (keyof AnalyticsFilters)[]) {
     const value = f[key];
-    if (value !== null && value !== DEFAULT_FILTERS[key]) out.set(key, value);
+    if (value !== null && value !== defaultOf(f, key)) out.set(key, value);
   }
   return out.toString();
 }
 
+/**
+ * `next` built from `current` by a tab link: a range that was only the old
+ * tab's default becomes the new tab's, so Overview's 30 days is never carried
+ * into Cohorts as if chosen; a range the reader chose goes with them.
+ */
+export function retabbed(current: AnalyticsFilters, next: AnalyticsFilters): AnalyticsFilters {
+  const unchosen = next.tab !== current.tab && next.range === current.range && current.range === defaultRangeOf(current.tab);
+  return unchosen ? { ...next, range: defaultRangeOf(next.tab), from: null, to: null } : next;
+}
+
 /** How many filters differ from the default — the phone's Filters button shows it. */
 export function activeFilterCount(f: AnalyticsFilters): number {
-  return (["range", "compare", "product", "panel", "fulfilment"] as const).filter((key) => f[key] !== DEFAULT_FILTERS[key]).length;
+  return (["range", "compare", "product", "panel", "fulfilment"] as const).filter((key) => f[key] !== defaultOf(f, key)).length;
 }
 
 /** The calendar of the reader's language, as `Intl` resolves it — no table of languages here (C-17). */

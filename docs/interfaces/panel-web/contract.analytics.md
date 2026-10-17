@@ -131,8 +131,8 @@ page for the owner and a reseller; the owner also gets the Resellers tab.
 
 - **Header** (`PageHeader`): title, "updated N min ago" from `refreshedAt`, an
   Export menu (CSV, Excel) for the current tab.
-- **Filter bar**, one row, sticky under the top bar: range presets (today,
-  7 days, 30 days, this month, last month, 90 days, custom with `DatePicker`);
+- **Filter bar**, one row, sticky under the top bar: range presets (today, 7,
+  30 days, this/last month, 90 days, 12 months, custom with `DatePicker`);
   compare (previous period / same period last year / none); product; panel;
   reseller (owner). Everything lives in the URL, so a view can be shared and
   survives a reload. Below `md` the bar is the button opening a `Sheet`: what

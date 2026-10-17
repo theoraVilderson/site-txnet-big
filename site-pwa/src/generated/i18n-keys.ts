@@ -656,6 +656,7 @@ export const FrontendI18nKeys = {
         "usersSubtitle": "analytics.profit.usersSubtitle",
       },
       "ranges": {
+        "12m": "analytics.ranges.12m",
         "30d": "analytics.ranges.30d",
         "7d": "analytics.ranges.7d",
         "90d": "analytics.ranges.90d",
