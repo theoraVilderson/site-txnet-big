@@ -111,7 +111,7 @@ export async function renewGrant(tx: Prisma.TransactionClient, input: RenewGrant
 
   const grant = await tx.grant.findUnique({
     where: { id: input.grantId },
-    select: { id: true, tenantId: true, variantId: true, userId: true, suspendedAt: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
+    select: { id: true, tenantId: true, variantId: true, panelGroupId: true, userId: true, suspendedAt: true, status: true, statusReason: true, billingMode: true, trafficUnlimited: true, purchasedBytes: true, endsAt: true, consumedBytes: true },
   });
   if (!grant) throw new EntitlementRefused('grant_not_found', input.grantId);
   if (!RENEWABLE.has(grant.status)) throw new EntitlementRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);

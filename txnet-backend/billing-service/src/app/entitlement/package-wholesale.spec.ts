@@ -58,6 +58,8 @@ function world(w: World = {}) {
     id: GRANT,
     tenantId: RESELLER,
     variantId: 'variant-1',
+    // The Grant's own group (F-027-er): what `onPlatformPanel` asks.
+    panelGroupId: GROUP,
     status: w.status ?? GrantStatus.active,
     billingMode: w.billingMode ?? VariantBillingMode.prepaid,
     trafficUnlimited: w.trafficUnlimited ?? false,
@@ -85,7 +87,6 @@ function world(w: World = {}) {
         ...(w.timeRate ? [timeRate] : []),
       ],
     },
-    productVariant: { findUnique: async () => ({ panelGroupId: GROUP }) },
     panelGroupMember: {
       findFirst: async ({ where }: { where: { groupId: string; panel: { ownershipType: PanelOwnershipType } } }) =>
         where.groupId === GROUP && where.panel.ownershipType === PanelOwnershipType.platform && w.platformPanel ? { panelId: 'panel-p' } : null,

@@ -39,6 +39,8 @@ function world(w: World = {}) {
     userId: USER,
     tenantId: RESELLER,
     variantId: 'variant-1',
+    // The Grant's own group (F-027-er): what `onPlatformPanel` asks.
+    panelGroupId: GROUP,
     status: GrantStatus.active as GrantStatus,
     statusReason: null,
     suspendedAt: null,
@@ -87,7 +89,6 @@ function world(w: World = {}) {
     },
     config: { findMany: async () => [{ counterState: { lifetimeUpBytes: n(0), lifetimeDownBytes: grant.consumedBytes } }] },
     quotaAdjustment: { create: async () => ({ id: 'adjustment-1' }) },
-    productVariant: { findUnique: async () => ({ panelGroupId: GROUP }) },
     panelGroupMember: {
       findFirst: async ({ where }: { where: { groupId: string; panel: { ownershipType: PanelOwnershipType } } }) =>
         where.groupId === GROUP && where.panel.ownershipType === PanelOwnershipType.platform && w.platformPanel ? { panelId: 'panel-p' } : null,

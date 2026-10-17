@@ -20,7 +20,8 @@ import { assertAdminIssueRoom, assertPlatformGrantRoom, assertPlatformTrafficRoo
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
-const VARIANT = '66666666-6666-4666-8666-666666666666';
+// The group the sale is served by: the variant's at a sale, the Grant's own after (F-027-er).
+const GROUP = '66666666-6666-4666-8666-666666666666';
 const NOW = new Date('2026-10-01T12:00:00Z');
 
 function fakeTx(opts: { platformPanel?: boolean; limits?: Record<string, number | null>; count?: number; tenantType?: string; bytes?: { up: bigint; down: bigint } }) {
@@ -29,7 +30,6 @@ function fakeTx(opts: { platformPanel?: boolean; limits?: Record<string, number 
   let summed: Record<string, unknown> | undefined;
   const tx = {
     $executeRaw: vi.fn(async () => (calls.push('lock'), 1)),
-    productVariant: { findUnique: async () => ({ panelGroupId: 'g1' }) },
     panelGroupMember: { findFirst: async () => (opts.platformPanel === false ? null : { panelId: 'p1' }) },
     tenant: { findUnique: async () => ({ tenantType: opts.tenantType ?? 'reseller' }) },
     tenantSubscription: { findUnique: async () => null },
@@ -59,18 +59,18 @@ const inReseller = <R>(fn: () => Promise<R>) => runWithTenant({ id: RESELLER }, 
 describe('assertPlatformGrantRoom (F-019-o)', () => {
   it('counts the reseller\'s open services on platform panels under its lock, and passes below the limit', async () => {
     const { tx, calls, counted } = fakeTx({ limits: { platform_open_grants_max: 3 }, count: 2 });
-    await expect(inReseller(() => assertPlatformGrantRoom(tx as never, VARIANT))).resolves.toBeUndefined();
+    await expect(inReseller(() => assertPlatformGrantRoom(tx as never, GROUP))).resolves.toBeUndefined();
     expect(calls).toEqual(['lock', 'count']);
     expect(counted()).toEqual({
       tenantId: RESELLER,
       status: { in: [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended] },
-      variant: { panelGroup: { members: { some: { panel: { ownershipType: 'platform' } } } } },
+      panelGroup: { members: { some: { panel: { ownershipType: 'platform' } } } },
     });
   });
 
   it('refuses one more at the limit, with the figures', async () => {
     const { tx } = fakeTx({ limits: { platform_open_grants_max: 3 }, count: 3 });
-    const err = await inReseller(() => assertPlatformGrantRoom(tx as never, VARIANT)).catch((e: unknown) => e);
+    const err = await inReseller(() => assertPlatformGrantRoom(tx as never, GROUP)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ResellerLimitReached);
     expect(err).toMatchObject({ key: 'platform_open_grants_max', limit: 3, used: 3 });
   });
@@ -78,7 +78,7 @@ describe('assertPlatformGrantRoom (F-019-o)', () => {
   it('counts nothing for a variant on the reseller\'s own panels, with no limit, or on the platform\'s tenant', async () => {
     for (const opts of [{ platformPanel: false }, { limits: { platform_open_grants_max: null } }, { tenantType: 'platform_owner' }]) {
       const { tx, calls } = fakeTx({ ...opts, count: 10_000 });
-      await expect(runWithTenant({ id: opts.tenantType ? PLATFORM : RESELLER }, () => assertPlatformGrantRoom(tx as never, VARIANT))).resolves.toBeUndefined();
+      await expect(runWithTenant({ id: opts.tenantType ? PLATFORM : RESELLER }, () => assertPlatformGrantRoom(tx as never, GROUP))).resolves.toBeUndefined();
       expect(calls).toEqual([]);
     }
   });
@@ -89,7 +89,7 @@ describe('the month\'s traffic on platform panels (F-019-t6)', () => {
 
   it('sums this calendar month\'s bytes of the reseller\'s configs on platform panels, in whole GiB, and refuses at the limit', async () => {
     const { tx, summed } = fakeTx({ limits: { platform_traffic_gib_monthly_max: 10 }, bytes: { up: BigInt(2) * GIB, down: BigInt(8) * GIB } });
-    const err = await inReseller(() => assertPlatformTrafficRoom(tx as never, VARIANT, NOW)).catch((e: unknown) => e);
+    const err = await inReseller(() => assertPlatformTrafficRoom(tx as never, GROUP, NOW)).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ResellerLimitReached);
     expect(err).toMatchObject({ key: 'platform_traffic_gib_monthly_max', limit: 10, used: 10 });
     expect(summed()).toEqual({ date: { gte: new Date('2026-10-01T00:00:00Z') }, config: { tenantId: RESELLER, panel: { ownershipType: 'platform' } } });
@@ -97,15 +97,15 @@ describe('the month\'s traffic on platform panels (F-019-t6)', () => {
 
   it('passes under the limit, and is also asked by a new service on platform panels', async () => {
     const under = fakeTx({ limits: { platform_traffic_gib_monthly_max: 10 }, bytes: { up: BigInt(0), down: BigInt(10) * GIB - BigInt(1) } });
-    await expect(inReseller(() => assertPlatformTrafficRoom(under.tx as never, VARIANT, NOW))).resolves.toBeUndefined();
+    await expect(inReseller(() => assertPlatformTrafficRoom(under.tx as never, GROUP, NOW))).resolves.toBeUndefined();
     const full = fakeTx({ limits: { platform_traffic_gib_monthly_max: 1 }, bytes: { up: GIB, down: BigInt(0) } });
-    await expect(inReseller(() => assertPlatformGrantRoom(full.tx as never, VARIANT))).rejects.toMatchObject({ key: 'platform_traffic_gib_monthly_max' });
+    await expect(inReseller(() => assertPlatformGrantRoom(full.tx as never, GROUP))).rejects.toMatchObject({ key: 'platform_traffic_gib_monthly_max' });
   });
 
   it('reads nothing with no limit (the default), or on the reseller\'s own panels', async () => {
     for (const opts of [{}, { platformPanel: false, limits: { platform_traffic_gib_monthly_max: 1 } }]) {
       const { tx, calls } = fakeTx(opts);
-      await inReseller(() => assertPlatformTrafficRoom(tx as never, VARIANT, NOW));
+      await inReseller(() => assertPlatformTrafficRoom(tx as never, GROUP, NOW));
       expect(calls).not.toContain('traffic');
     }
   });

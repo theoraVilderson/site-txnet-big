@@ -72,6 +72,11 @@ model Grant {
   userId                String             @db.Uuid
   /// The variant it was issued from; null for one issued without a catalog item (`migration`).
   variantId             String?            @db.Uuid
+  /// The panel group it is served by (F-027-er, ADR-0127 decision 4): the
+  /// variant's at issue, then its own — a renewal keeps it, a move between
+  /// groups changes it and nothing else. Every reader of "this Grant's group"
+  /// reads this, never the variant's. Null = served by no group.
+  panelGroupId          String?            @db.Uuid
   source                GrantSource
   /// What issued it — the payment, the coupon redemption, the admin action. With
   /// `source`, unique when set, so issuing twice for one cause is refused.
@@ -219,6 +224,7 @@ model Grant {
 
   user             User              @relation(fields: [userId], references: [id])
   variant          ProductVariant?   @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  panelGroup       PanelGroup?       @relation(fields: [panelGroupId], references: [id], onDelete: Restrict)
   quotaAdjustments QuotaAdjustment[]
   durationChanges  GrantDurationChange[]
   renewals         GrantRenewal[]
@@ -233,6 +239,8 @@ model Grant {
 
   @@index([tenantId, userId])
   @@index([userId, status])
+  /// A group's Grants: the due scan, drain and a group's delete (F-027-er).
+  @@index([panelGroupId])
   /// The purge job's only question: which suspended Grants are now due (F-027-y).
   @@index([status, suspendedAt], map: "grant_status_suspendedAt_idx")
   /// The delivery sweep's only question: which `pending` Grants are due a check (F-111-d).

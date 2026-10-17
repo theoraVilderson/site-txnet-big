@@ -145,13 +145,15 @@ export class GrantDeliveryService {
         deliveryAttempts: true,
         createdAt: true,
         deliveryDelayedAt: true,
-        variant: { select: { panelGroupId: true, product: { select: { fulfilmentKind: true } } } },
+        // The route is the product's, the group the Grant's own (F-027-er).
+        panelGroupId: true,
+        variant: { select: { product: { select: { fulfilmentKind: true } } } },
       },
     });
     if (!grant || grant.status !== GrantStatus.pending) return 'skipped';
 
     const attempts = grant.deliveryAttempts + 1;
-    const route = grant.variant ? deliveryRouteOf(grant.variant.product.fulfilmentKind, grant.variant.panelGroupId) : null;
+    const route = grant.variant ? deliveryRouteOf(grant.variant.product.fulfilmentKind, grant.panelGroupId) : null;
     if (route === null) return this.refund(tx, grantId, attempts, 'no_delivery_route');
 
     if (route === 'activate') {

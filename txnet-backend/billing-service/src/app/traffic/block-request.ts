@@ -135,7 +135,7 @@ export class BlockRequestService {
         id: true,
         tenantId: true,
         userId: true,
-        variantId: true,
+        panelGroupId: true,
         status: true,
         billingMode: true,
         trafficUnlimited: true,
@@ -182,7 +182,7 @@ export class BlockRequestService {
   /** The reseller's side of the answer (F-118-w): a refusal of its leg told once, a funded block re-arming it. */
   private async wholesaleNotice(
     tx: Prisma.TransactionClient,
-    grant: { variantId: string },
+    grant: { panelGroupId: string | null },
     meter: { wholesalePayerTenantId: string | null },
     outcome: BlockRequestOutcome,
   ): Promise<'told' | 'rearmed' | null> {

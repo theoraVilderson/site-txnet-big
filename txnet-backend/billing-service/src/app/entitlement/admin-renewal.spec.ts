@@ -43,6 +43,7 @@ const grantRow = (over: GrantOver = {}) => ({
   id: GRANT,
   tenantId: TENANT,
   variantId: 'variant-1',
+  panelGroupId: 'group-1',
   status: GrantStatus.suspended,
   billingMode: over.billingMode ?? VariantBillingMode.prepaid,
   trafficUnlimited: over.trafficUnlimited ?? false,
@@ -98,7 +99,8 @@ describe('renewGrantByAdmin — the month\'s traffic on platform panels (F-019-t
     const { tx } = fakeTx(grantRow());
     vi.mocked(assertPlatformTrafficRoom).mockRejectedValue(new Error('reseller limit reached'));
     await expect(renewGrantByAdmin(tx, input({ bounded: true }))).rejects.toThrow('reseller limit reached');
-    expect(assertPlatformTrafficRoom).toHaveBeenCalledWith(tx, 'variant-1', AT);
+    // The Grant's own group, never its variant's (F-027-er).
+    expect(assertPlatformTrafficRoom).toHaveBeenCalledWith(tx, 'group-1', AT);
     expect(renewGrant).not.toHaveBeenCalled();
   });
 

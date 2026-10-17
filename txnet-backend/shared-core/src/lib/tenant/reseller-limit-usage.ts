@@ -73,13 +73,13 @@ type Count = (tx: ResellerUsageReader, tenantId: string, now: Date) => Promise<n
  */
 export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
   user_metered_cap_max: null,
-  /** Open Grants of variants whose group holds a platform panel (F-019-o). */
+  /** Open Grants whose own group holds a platform panel (F-019-o, F-027-er). */
   platform_open_grants_max: (tx, tenantId) =>
     tx.grant.count({
       where: {
         tenantId,
         status: { in: [...OPEN_GRANT_STATUSES] },
-        variant: { panelGroup: { members: { some: { panel: { ownershipType: PanelOwnershipType.platform } } } } },
+        panelGroup: { members: { some: { panel: { ownershipType: PanelOwnershipType.platform } } } },
       },
     }),
   /** Every `admin_grant` of the tenant in the last 30 days, whoever issued it (F-019-p). */

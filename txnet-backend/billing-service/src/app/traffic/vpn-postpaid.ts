@@ -119,7 +119,7 @@ export class VpnPostpaid {
   /** The reseller's leg of a growth, when the meter has one. `room` is read once and bounds the `buy` it precedes. */
   private legOf(ctx: Ctx): FundingLeg | undefined {
     if (!ctx.meter.wholesalePayerTenantId) return undefined;
-    const bag = () => ctx.grant as { variantId: string; purchasedBytes: bigint; consumedBytes: bigint };
+    const bag = () => ctx.grant as { panelGroupId: string | null; purchasedBytes: bigint; consumedBytes: bigint };
     let room: WholesaleRoom | null = null;
     return {
       room: async (tx, c) => (room = await this.wholesale.room(tx, bag(), c.meter))?.room ?? null,

@@ -3,14 +3,16 @@ id: network
 layer: domain
 status: active
 version: 18
-updated: 2026-10-14
+updated: 2026-10-17
 ---
 
 # Panel groups: where a variant's Grants are provisioned (catalog §7.3)
 
 A topic file of `contract.md` (§10), beside `contract.provisioning.md`. What
 governs `network.panel_group` / `network.panel_group_member` and the
-`catalog.product_variant.panelGroupId` that names one. The schema is F-027-bk
+`catalog.product_variant.panelGroupId` that names one for a sale, and
+`entitlement.grant.panelGroupId` that names the one a sold Grant is served by
+(F-027-er, ADR-0127 decision 4). The schema is F-027-bk
 (migration `20260924000900_a_variant_is_provisioned_on_a_panel_group`);
 fulfilment is F-027-bl (below), draining F-027-bm (below).
 
@@ -41,7 +43,9 @@ tenant's rows and the platform's), everything for `txnet_cross_tenant`.
    `catalog.variant_panel_group_fits` in the database, and catalog-admin's
    `panel_group_not_found` (404, as another tenant's variant is not found) for
    the caller. The FK is `ON DELETE RESTRICT`: a group a variant still names is
-   not deleted.
+   not deleted. A Grant names its group the same way (`grant_panel_group_fits`,
+   `RESTRICT`), copied from the variant at issue: fulfilment, the due scan,
+   drain and evict read the Grant's, never the variant's (F-027-er).
 5. **The triggers refuse what they cannot see.** They run as the caller, under
    RLS, where another tenant's panel or group is simply absent; *not found* is
    therefore a refusal, never a pass.

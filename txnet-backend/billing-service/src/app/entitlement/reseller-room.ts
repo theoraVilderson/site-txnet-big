@@ -21,13 +21,13 @@ async function room(tx: Prisma.TransactionClient, key: 'platform_open_grants_max
 
 /**
  * One more open service on the platform's panels (F-019-o,
- * `platform_open_grants_max`): only for a variant whose group holds a platform
- * panel now (`onPlatformPanel`, the wholesale leg's question); the count is the
- * reseller's open Grants of such variants. A service on its own panels spends
- * nothing of the platform's.
+ * `platform_open_grants_max`): only for a sale whose group — the variant's —
+ * holds a platform panel now (`onPlatformPanel`, the wholesale leg's
+ * question); the count is the reseller's open Grants on such groups. A
+ * service on its own panels spends nothing of the platform's.
  */
-export async function assertPlatformGrantRoom(tx: Prisma.TransactionClient, variantId: string): Promise<void> {
-  if (!(await onPlatformPanel(tx, variantId))) return;
+export async function assertPlatformGrantRoom(tx: Prisma.TransactionClient, panelGroupId: string | null): Promise<void> {
+  if (!(await onPlatformPanel(tx, panelGroupId))) return;
   const now = new Date();
   await room(tx, 'platform_open_grants_max', now);
   await trafficRoom(tx, now);
@@ -36,12 +36,13 @@ export async function assertPlatformGrantRoom(tx: Prisma.TransactionClient, vari
 /**
  * The month's traffic on the platform's panels (F-019-t6,
  * `platform_traffic_gib_monthly_max`): past it, no new service and no renewal
- * on a variant whose group holds a platform panel until the month ends.
+ * on a group holding a platform panel until the month ends — a renewal asks
+ * the Grant's own group (F-027-er).
  * Nothing already open is cut (ADR-0106 point 3). No lock: the act being
  * checked adds no traffic.
  */
-export async function assertPlatformTrafficRoom(tx: Prisma.TransactionClient, variantId: string, now = new Date()): Promise<void> {
-  if (!(await onPlatformPanel(tx, variantId))) return;
+export async function assertPlatformTrafficRoom(tx: Prisma.TransactionClient, panelGroupId: string | null, now = new Date()): Promise<void> {
+  if (!(await onPlatformPanel(tx, panelGroupId))) return;
   await trafficRoom(tx, now);
 }
 

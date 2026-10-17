@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: draft
-updated: 2026-09-29
+updated: 2026-10-17
 ---
 
 # Invariants — entitlement
@@ -47,6 +47,7 @@ database — the shapes are proved by
 | 28 | A Grant is sold at the card in effect at issue, per meter, and never repriced: one `grant_meter` row per meter, terms unchanged forever; only a meter something serves is sold, and a package plan gets none | `grantMetersFromVariant` + `GrantService.issue` (F-118-e, `grant-meter.spec.ts`); trigger `grant_meter_terms_are_locked`, unique `(grantId, meterKey)` (`entitlement-schema.int.spec.ts`) | a catalog edit reprices a running Grant, or a meter is served with nothing to refuse unfunded use |
 | 29 | A reseller's metered Grant is sold only at a wholesale rate its package prices, locked per meter at issue and never repriced — whatever its panels today; the platform's own Grants carry none | `lockWholesale` + `GrantService.issue` (`wholesale_rate_missing`, `grant-wholesale.spec.ts`); CHECK `grant_meter_wholesale_whole`, trigger `grant_meter_terms_are_locked` (`entitlement-schema.int.spec.ts`) | a reseller's user served on the platform's panels with no price to bill the reseller, or a package edit repricing a sold Grant |
 | 30 | A reseller's package plan on a group holding a platform panel is sold, renewed or raised only when its bag is bought wholesale in the same transaction; its rate is locked at issue, and at close what no platform panel served is given back, what one served past the cursor charged up to the balance, once (F-118-y) | `PackageWholesale.open`/`settle`/`settleAtClose` (`wholesale_unfunded`, `wholesale_rate_missing`; `package-wholesale.spec.ts`); trigger `grant_wholesale_terms_are_locked`, CHECK `grant_wholesale_cursors_not_negative` | the platform serving a reseller's plan for free, or charging it twice for one byte |
+| 31 | A Grant's group is its own (`grant.panelGroupId`): the variant's at issue, kept by a renewal, never re-read from the variant; every reader of "this Grant's group" — fulfilment and its due scan, delivery, drain and evict, a member's removal, the platform-panel question, `/sub`'s drain check — reads the Grant | `grantFromVariant` (F-027-er, `grant.spec.ts`); FK + trigger `grant_panel_group_fits`; `sub_grant_changed` hears it | a catalog edit of a variant's group moves Grants already sold, and a migrated Grant (no variant) is served by no group |
 
 ## How to test
 

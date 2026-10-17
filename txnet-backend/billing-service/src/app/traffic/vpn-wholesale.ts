@@ -28,18 +28,21 @@ import { vpnMeterOf } from './vpn-meter';
 /** What a reseller's side allows a block. `room` is the most bytes it may add to the bag; null is no bound. */
 export type WholesaleRoom = { ahead: boolean; room: bigint | null };
 
-type Bag = Pick<Grant, 'variantId' | 'purchasedBytes' | 'consumedBytes'>;
+type Bag = Pick<Grant, 'panelGroupId' | 'purchasedBytes' | 'consumedBytes'>;
 
 const CLOSED: ReadonlySet<GrantStatus> = new Set([GrantStatus.expired, GrantStatus.cancelled, GrantStatus.exhausted]);
 
 const max = (a: bigint, b: bigint) => (a > b ? a : b);
 
-/** Whether a variant's group holds a platform-owned panel now — members change after the sale. Also a package plan's question (F-118-p). */
-export async function onPlatformPanel(tx: Prisma.TransactionClient, variantId: string): Promise<boolean> {
-  const variant = await tx.productVariant.findUnique({ where: { id: variantId }, select: { panelGroupId: true } });
-  if (!variant?.panelGroupId) return false;
+/**
+ * Whether a group holds a platform-owned panel now — members change after the
+ * sale. Also a package plan's question (F-118-p). A sold Grant asks its own
+ * group (F-027-er); a sale not yet written asks its variant's.
+ */
+export async function onPlatformPanel(tx: Prisma.TransactionClient, panelGroupId: string | null): Promise<boolean> {
+  if (!panelGroupId) return false;
   const member = await tx.panelGroupMember.findFirst({
-    where: { groupId: variant.panelGroupId, panel: { ownershipType: PanelOwnershipType.platform } },
+    where: { groupId: panelGroupId, panel: { ownershipType: PanelOwnershipType.platform } },
     select: { panelId: true },
   });
   return member !== null;
@@ -53,14 +56,14 @@ export class VpnWholesale {
   }
 
   /** Whether the Grant's group holds a platform-owned panel now — members change after the sale. */
-  onPlatformPanel(tx: Prisma.TransactionClient, variantId: string): Promise<boolean> {
-    return onPlatformPanel(tx, variantId);
+  onPlatformPanel(tx: Prisma.TransactionClient, panelGroupId: string | null): Promise<boolean> {
+    return onPlatformPanel(tx, panelGroupId);
   }
 
   /** What the reseller's balance allows the next block; null when the meter has no wholesale leg. Reads only. */
   async room(tx: Prisma.TransactionClient, grant: Bag, meter: GrantMeter): Promise<WholesaleRoom | null> {
     if (!meter.wholesalePayerTenantId) return null;
-    const ahead = await this.onPlatformPanel(tx, grant.variantId);
+    const ahead = await this.onPlatformPanel(tx, grant.panelGroupId);
     const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: meter.wholesalePayerTenantId } });
     const rate = { unitSize: meter.wholesaleUnitSize!, unitPrice: meter.wholesaleUnitPrice!, includedQuantity: ZERO };
     // Every byte it can buy past its cursor, rounded down: the price of any figure up to it is at most the balance.

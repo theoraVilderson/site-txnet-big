@@ -108,10 +108,9 @@ export class MemberInboundsService {
              AND (c."inboundRemoteId" = i."remoteId"
                   OR (c."inboundRemoteId" IS NULL AND c."remoteId" IS NOT NULL AND c."protocol" = i."protocol"))
         JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-        JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
        WHERE i."panelId" = ${panelId}::uuid AND i."remoteId" = ANY(${remoteIds}::text[])
          AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
-         AND v."panelGroupId" IS DISTINCT FROM ${groupId}::uuid
+         AND g."panelGroupId" IS DISTINCT FROM ${groupId}::uuid
        GROUP BY i."remoteId"
        ORDER BY i."remoteId"`;
     if (live.length > 0) throw new InboundHeldElsewhere('inbound_has_configs', live[0].inboundRemoteId, null, Number(live[0].configs));

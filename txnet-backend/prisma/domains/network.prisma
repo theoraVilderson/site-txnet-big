@@ -731,6 +731,8 @@ model PanelGroup {
 
   members  PanelGroupMember[]
   variants ProductVariant[]
+  /// The Grants it serves (F-027-er); `RESTRICT`, as a variant's.
+  grants   Grant[]
 
   @@index([tenantId])
   @@map("panel_group")

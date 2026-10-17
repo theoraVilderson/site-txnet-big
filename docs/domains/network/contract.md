@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 18
-updated: 2026-10-14
+updated: 2026-10-17
 ---
 
 # Contract — network
@@ -223,7 +223,7 @@ pass are in [contract.collection.md](contract.collection.md). No config action i
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | identity | `userId` owner of a config | provisioning blocked |
-| entitlement | the `grant` a config is provisioned for — its status, quotas and `panelGroupId` via its variant (ADR-0049; F-027) | provisioning blocked |
+| entitlement | the `grant` a config is provisioned for — its status, quotas and its own `panelGroupId` (ADR-0049; F-027, F-027-er) | provisioning blocked |
 | tenant | `tenantId` denormalized onto panel/config; dedicated Panel pools; a panel's login via the vault's `use` route (F-027-aw) | shared pool still usable; a pending panel stays `pending`, `unopenable` |
 
 ## Guarantees (intended)

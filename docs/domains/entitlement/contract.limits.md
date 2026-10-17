@@ -3,7 +3,7 @@ id: entitlement
 layer: domain
 status: active
 version: 30
-updated: 2026-10-14
+updated: 2026-10-17
 ---
 
 # Contract — entitlement: how many a user may hold (F-118-ao)
@@ -68,7 +68,7 @@ tenant, counts nothing.
 
 | Check | Counts | Where |
 |---|---|---|
-| `assertPlatformGrantRoom` (`platform_open_grants_max`) | the tenant's open (`OPEN_GRANT_STATUSES`) Grants whose variant's group holds a platform panel — only when the new one's does (`onPlatformPanel`) | invoice create; `GrantService.issue` for `purchase` and `coupon`; a reseller admin's issue |
+| `assertPlatformGrantRoom` (`platform_open_grants_max`) | the tenant's open (`OPEN_GRANT_STATUSES`) Grants whose own group holds a platform panel — only when the new one's (its variant's) does (`onPlatformPanel`, F-027-er) | invoice create; `GrantService.issue` for `purchase` and `coupon`; a reseller admin's issue |
 | `assertPlatformTrafficRoom` (`platform_traffic_gib_monthly_max`, F-019-t6) — also inside `assertPlatformGrantRoom` | whole GiB, up and down, of the tenant's configs on platform panels since the 1st of this UTC month (`traffic_daily_aggregate`, as of the rollup's last run); no lock — the act adds no traffic. No limit by default | everywhere `assertPlatformGrantRoom` is; a reseller admin's renewal (`renewGrantByAdmin`, `bounded`) of a Grant whose variant is on a platform panel |
 | `assertPurchaseRoom` (`user_purchases_daily_max` / `_weekly_max` / `_monthly_max`, F-019-t7) | **per buyer**: the user's own `purchase` Grants created in the last 1, 7 and 30 days (rolling), only for a window with a limit (none by default), under a per-user lock | invoice create; `GrantService.issue` for `purchase` |
 | `assertAdminIssueRoom` (`admin_issues_30d_max`) | the tenant's `admin_grant` Grants created in the last 30 days, whoever issued them (the issuer's tenant is not readable in the reseller's scope) | a reseller admin's issue |

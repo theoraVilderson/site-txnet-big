@@ -89,18 +89,18 @@ type VariantShape = {
   durationDays: number | null;
   /** The variant's rate cards (F-118-d) — only the rows that could be in effect need be here. */
   rateCards: readonly RateCardRow[];
+  panelGroupId: string | null;
   product: { featureKeys: string[] };
 };
 
 /**
  * The part of a Grant copied from its variant at issue, so a later catalog edit
- * never changes what was sold. A purchase is `pending` until it settles; any
- * other source is `active` at once.
+ * never changes what was sold — its group too, the Grant's own from here
+ * (F-027-er). A purchase is `pending` until it settles; any other source is `active`.
  *
  * A metered Grant's rate is not here: it is its `vpn.traffic` `grant_meter`
  * (`grantMetersFromVariant`, F-118-l), and `issue` refuses a metered variant
- * with no rate the byte engine serves (`vpnTrafficRateAt`), with the variant
- * in the message.
+ * with no rate the byte engine serves (`vpnTrafficRateAt`), naming the variant.
  *
  * `purchasedBytes` is the bag the lease planner splits into panel ceilings
  * (ADR-0072). A prepaid package *is* a bag with a fixed ceiling, so it is
@@ -110,8 +110,7 @@ type VariantShape = {
  *
  * A prepaid variant sold with `traffic_bytes.limit = 0` is unlimited
  * (F-111-q): the bag stays 0 and `trafficUnlimited` says why, so nothing
- * downstream ever reads 0 as unlimited — to the lease planner and to exhaustion
- * 0 is empty.
+ * downstream reads 0 as unlimited — to the lease planner and exhaustion 0 is empty.
  */
 export function grantFromVariant(input: { source: GrantSource; startsAt: Date; currencyCode: string }, v: VariantShape) {
   // A metered Grant's traffic is what its blocks buy, never the variant's.
@@ -128,6 +127,7 @@ export function grantFromVariant(input: { source: GrantSource; startsAt: Date; c
     featureKeys: [...v.product.featureKeys],
     purchasedBytes: traffic?.kind === 'limited' ? traffic.bytes : BigInt(0),
     trafficUnlimited: traffic?.kind === 'unlimited',
+    panelGroupId: v.panelGroupId,
   };
 }
 
@@ -476,7 +476,7 @@ export class GrantService {
     // what its users buy or redeem. A reseller admin's issue is bounded by its
     // caller (`issueGrantByAdmin`); a renewal or a migration never is.
     if (input.source === GrantSource.purchase || input.source === GrantSource.coupon) {
-      await assertPlatformGrantRoom(tx, input.variantId);
+      await assertPlatformGrantRoom(tx, variant.panelGroupId);
     }
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;

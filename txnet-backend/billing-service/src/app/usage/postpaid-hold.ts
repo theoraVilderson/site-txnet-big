@@ -26,7 +26,7 @@ export type MeterRef = { grantId: string; meterKey: string };
 export type Captured = { amount: Prisma.Decimal; billed: bigint; walletTransactionId: string | null };
 export type ToppedUp = { captured: Prisma.Decimal; held: Prisma.Decimal; funded: bigint };
 
-type HeldGrant = { id: string; userId: string; status: GrantStatus; variantId?: string; consumedBytes?: bigint; purchasedBytes?: bigint };
+type HeldGrant = { id: string; userId: string; status: GrantStatus; panelGroupId?: string | null; consumedBytes?: bigint; purchasedBytes?: bigint };
 export type Ctx = { grant: HeldGrant; meter: GrantMeter };
 
 /**
@@ -57,7 +57,7 @@ export class PostpaidHolds {
   async load(tx: Prisma.TransactionClient, ref: MeterRef, mode?: RateCardMode): Promise<Ctx> {
     const grant = await tx.grant.findUnique({
       where: { id: ref.grantId },
-      select: { id: true, userId: true, status: true, variantId: true, consumedBytes: true, purchasedBytes: true },
+      select: { id: true, userId: true, status: true, panelGroupId: true, consumedBytes: true, purchasedBytes: true },
     });
     if (!grant) throw new UsageSettlementRefused('grant_not_found', ref.grantId);
     const meter = await tx.grantMeter.findUnique({ where: { grantId_meterKey: { grantId: ref.grantId, meterKey: ref.meterKey } } });

@@ -261,12 +261,11 @@ export class GroupDrainService {
     const waiting = await this.crossTenant.$queryRaw<Array<{ id: string; tenantId: string }>>`
       SELECT g."id", g."tenantId"
         FROM "entitlement"."grant" g
-        JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
        WHERE g."awaitingPanel"
          AND g."status" = 'suspended' AND g."statusReason" = ${ADMIN_FROZEN}
          AND EXISTS (SELECT 1 FROM "network"."panel_group_member" m
                        JOIN "network"."panel" p ON p."id" = m."panelId"
-                      WHERE m."groupId" = v."panelGroupId" AND m."role" <> 'drain'
+                      WHERE m."groupId" = g."panelGroupId" AND m."role" <> 'drain'
                         AND p."retiredAt" IS NULL AND p."reviewState" IN ('accepted', 'accepted_low_trust')
                         AND p."panelState" = 'healthy'
                         AND ${PANEL_P_NOT_HALTED})
@@ -299,8 +298,7 @@ export class GroupDrainService {
          AND NOT EXISTS (
                SELECT 1 FROM "network"."config" c
                  JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-                 JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
-                WHERE c."panelId" = m."panelId" AND v."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
+                WHERE c."panelId" = m."panelId" AND g."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
   }
 }
 
@@ -320,13 +318,12 @@ export function drainConfigs(db: Pick<CrossTenantPrismaService, '$queryRaw'>, me
                AND r."status" = 'active' AND r."desiredRemote" = 'present' AND r."linksUuid" = r."uuid"
                AND p."panelState" IN ('healthy', 'degraded', 'throttled_or_blocked')
                AND NOT EXISTS (SELECT 1 FROM "network"."panel_group_member" d
-                                WHERE d."groupId" = v."panelGroupId" AND d."panelId" = r."panelId" AND d."role" = 'drain')
+                                WHERE d."groupId" = g."panelGroupId" AND d."panelId" = r."panelId" AND d."role" = 'drain')
            ) AS "replacementSince"
       FROM "network"."config" c
       JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-      JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
      WHERE c."panelId" = ${member.panelId}::uuid
-       AND v."panelGroupId" = ${member.groupId}::uuid
+       AND g."panelGroupId" = ${member.groupId}::uuid
        AND c."status" <> 'retired'
      ORDER BY c."id"`;
 }

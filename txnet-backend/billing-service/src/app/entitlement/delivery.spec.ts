@@ -103,7 +103,9 @@ function build(
         deliveryAttempts: grant.deliveryAttempts,
         createdAt: grant.createdAt,
         deliveryDelayedAt: grant.deliveryDelayedAt,
-        variant: { panelGroupId: grant.panelGroupId, product: { fulfilmentKind: grant.kind } },
+        // The group is the Grant's own, never the variant's (F-027-er): the variant carries none here.
+        panelGroupId: grant.panelGroupId,
+        variant: { product: { fulfilmentKind: grant.kind } },
       }),
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         seen.grantWrites.push({ where, data });

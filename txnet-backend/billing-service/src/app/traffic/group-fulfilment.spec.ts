@@ -81,7 +81,7 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     $executeRaw: async (_s: TemplateStringsArray, key: string) => void locked.push(key),
     grant: {
       findUnique: async ({ where, select }: { where: { id: string }; select: Record<string, unknown> }) =>
-        where.id === GRANT ? { ...grant, ...('variant' in select ? { variant: { panelGroup: group } } : {}) } : null,
+        where.id === GRANT ? { ...grant, ...('panelGroup' in select ? { panelGroup: group } : {}) } : null,
       updateMany: async ({ where, data }: { where: { id: string; status: GrantStatus }; data: { status: GrantStatus } }) => {
         if (where.id !== GRANT || where.status !== grant.status) return { count: 0 };
         grant.status = data.status;

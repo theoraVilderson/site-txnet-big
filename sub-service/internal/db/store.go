@@ -54,7 +54,8 @@ func (s Store) GrantByTokenHash(ctx context.Context, hash string) (sub.Grant, bo
 }
 
 // ConfigsOfGrant reads every config of a Grant with its panel's state and
-// whether the panel is a drain member of the Grant's group (F-027-bm), oldest
+// whether the panel is a drain member of the Grant's own group (F-027-bm,
+// F-027-er: the Grant's, never its variant's), oldest
 // first so the body's order does not change between renders. Filtering is the
 // handler's (`sub.serves`), so the rule is tested without a database.
 func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config, error) {
@@ -62,8 +63,7 @@ func (s Store) ConfigsOfGrant(ctx context.Context, grantID string) ([]sub.Config
 		`SELECT c."panelId"::text, p."panelState"::text, c.status::text, c."desiredRemote"::text, c.uuid,
 		        COALESCE(c."linksUuid", ''), c."linkLines", COALESCE(c."userLabel", ''), p.region,
 		        EXISTS (SELECT 1 FROM entitlement."grant" g
-		                  JOIN catalog.product_variant v ON v.id = g."variantId"
-		                  JOIN network.panel_group_member m ON m."groupId" = v."panelGroupId" AND m."panelId" = c."panelId"
+		                  JOIN network.panel_group_member m ON m."groupId" = g."panelGroupId" AND m."panelId" = c."panelId"
 		                 WHERE g.id = c."grantId" AND m.role = 'drain')
 		   FROM network.config c JOIN network.panel p ON p.id = c."panelId"
 		  WHERE c."grantId" = $1::uuid

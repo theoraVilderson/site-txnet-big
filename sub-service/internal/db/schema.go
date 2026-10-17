@@ -35,18 +35,15 @@ var RequiredColumns = map[string]map[string][]string{
 	},
 	// The Grant a token names (F-502), and its Subscription-Userinfo (F-609).
 	"entitlement": {
-		"grant":            {"id", "tenantId", "status", "subscriptionTokenHash", "billingMode", "consumedBytes", "quotas", "endsAt", "variantId", "trafficUnlimited"},
+		"grant":            {"id", "tenantId", "status", "subscriptionTokenHash", "billingMode", "consumedBytes", "quotas", "endsAt", "panelGroupId", "trafficUnlimited"},
 		"quota_adjustment": {"grantId", "metric", "delta", "expiresAt"},
 	},
 	// The Grant's configs, their stored lines and their panel's state (F-113-b).
 	"network": {
 		"config": {"id", "grantId", "panelId", "status", "desiredRemote", "uuid", "linkLines", "linksUuid", "createdAt", "userLabel"},
 		"panel":  {"id", "panelState", "region"},
-		// Whether a config's panel is draining in its Grant's group (F-027-bm).
+		// Whether a config's panel is draining in its Grant's own group (F-027-bm, F-027-er).
 		"panel_group_member": {"groupId", "panelId", "role"},
-	},
-	"catalog": {
-		"product_variant": {"id", "panelGroupId"},
 	},
 }
 

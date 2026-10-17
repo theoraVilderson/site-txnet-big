@@ -52,7 +52,8 @@ const GROUP_FIELDS = {
   updatedAt: true,
   // Ordered by effective priority in `wireGroup`: a member's own may be unset.
   members: { select: MEMBER_FIELDS, orderBy: { createdAt: 'asc' } },
-  _count: { select: { variants: true } },
+  // A Grant names its group too (F-027-er): either one keeps the group (`RESTRICT`).
+  _count: { select: { variants: true, grants: true } },
 } satisfies Prisma.PanelGroupSelect;
 
 type MemberRow = Prisma.PanelGroupMemberGetPayload<{ select: typeof MEMBER_FIELDS }>;
@@ -168,8 +169,7 @@ export class PanelGroupsService {
          AND NOT EXISTS (
                SELECT 1 FROM "network"."config" c
                  JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-                 JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
-                WHERE c."panelId" = m."panelId" AND v."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
+                WHERE c."panelId" = m."panelId" AND g."panelGroupId" = m."groupId" AND c."status" <> 'retired')`;
     if (removed === 0) {
       const member = await this.crossTenant.panelGroupMember.findFirst({ where: { groupId: group.id, panelId }, select: { panelId: true } });
       throw new SystemsRefused(member ? 'member_has_configs' : 'member_not_found');
@@ -259,14 +259,14 @@ export class PanelGroupsService {
 
   /**
    * Delete a group (F-027-ca). One with members is `group_has_members` — remove
-   * or drain them first — and one a variant names is `group_in_use`: the FK is
-   * `RESTRICT` (groups rule 4), and the variant would be left with nowhere to
-   * deliver. The delete itself meets both keys, so a member or a variant added
+   * or drain them first — and one a variant or a Grant names is `group_in_use`:
+   * both FKs are `RESTRICT` (groups rule 4), and either would be left with
+   * nowhere to deliver. The delete itself meets both keys, so a member or a variant added
    * meanwhile refuses it too.
    */
   async remove(actor: SystemsActor, groupId: string) {
     const scope = await this.groupScopeOf(actor);
-    const refusal = (g: GroupRow) => (g.members.length > 0 ? 'group_has_members' : g._count.variants > 0 ? 'group_in_use' : null);
+    const refusal = (g: GroupRow) => (g.members.length > 0 ? 'group_has_members' : g._count.variants > 0 || g._count.grants > 0 ? 'group_in_use' : null);
     const reason = refusal(await this.groupInScope(scope, groupId));
     if (reason) throw new SystemsRefused(reason);
 

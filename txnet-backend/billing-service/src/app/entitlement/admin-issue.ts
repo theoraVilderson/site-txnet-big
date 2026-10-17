@@ -85,7 +85,7 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
       throw new EntitlementRefused('variant_not_assignable', input.variantId);
     }
     await assertAdminIssueRoom(tx, input.at);
-    await assertPlatformGrantRoom(tx, input.variantId);
+    await assertPlatformGrantRoom(tx, variant.panelGroupId);
   }
 
   const { grant, token } = await grants.issue(tx, {

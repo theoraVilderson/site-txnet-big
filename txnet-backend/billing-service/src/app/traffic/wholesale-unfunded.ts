@@ -46,14 +46,14 @@ export async function noticeWholesaleUnfunded(tx: Prisma.TransactionClient, paye
  */
 export async function rearmWholesaleNotice(
   tx: Prisma.TransactionClient,
-  grant: { variantId: string },
+  grant: { panelGroupId: string | null },
   meter: Pick<GrantMeter, 'wholesalePayerTenantId'>,
 ): Promise<boolean> {
   const tenantId = meter.wholesalePayerTenantId;
   if (!tenantId) return false;
   const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId }, select: { unfundedNoticeAt: true } });
   if (!wallet?.unfundedNoticeAt) return false;
-  if (!(await onPlatformPanel(tx, grant.variantId))) return false;
+  if (!(await onPlatformPanel(tx, grant.panelGroupId))) return false;
   const cleared = await tx.tenantBillingWallet.updateMany({ where: { tenantId, unfundedNoticeAt: wallet.unfundedNoticeAt }, data: { unfundedNoticeAt: null } });
   return cleared.count === 1;
 }

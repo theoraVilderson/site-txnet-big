@@ -61,7 +61,7 @@ export async function giftGrantBytes(
       suspendedAt: true,
       billingMode: true,
       trafficUnlimited: true,
-      variantId: true,
+      panelGroupId: true,
       purchasedBytes: true,
       consumedBytes: true,
       endsAt: true,
@@ -107,7 +107,7 @@ export async function giftGrantBytes(
 /** The reseller's side of the gift, after the bag moved; the leg's errors as this route's refusals. */
 async function wholesaleOf(
   tx: Prisma.TransactionClient,
-  grant: { variantId: string; purchasedBytes: bigint; consumedBytes: bigint },
+  grant: { panelGroupId: string | null; purchasedBytes: bigint; consumedBytes: bigint },
   meter: GrantMeter,
   room: WholesaleRoom | null,
   input: { bytes: bigint; giver: GiftGiver },

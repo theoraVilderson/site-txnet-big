@@ -136,7 +136,7 @@ export class InvoiceService {
       // ...nor past the buyer's purchases in a day, week or month (F-019-t7), told before paying and again at issue.
       await assertPurchaseRoom(tx, userId);
       // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.
-      await assertPlatformGrantRoom(tx, offer.variantId);
+      await assertPlatformGrantRoom(tx, groupId);
       // ...nor past its reseller's package quota for the product, or overage it cannot pay (F-019-v6):
       // asked now, consumed at issue.
       await admitProductSale(tx, { tenantId: tenant.id, product: { id: offer.productId, tenantId: offer.tenantId }, now });

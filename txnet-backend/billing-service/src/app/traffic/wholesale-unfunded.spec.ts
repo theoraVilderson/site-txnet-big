@@ -51,7 +51,6 @@ function fakeTx(world: World = {}) {
       },
     },
     tenant: { findUnique: async () => ({ ownerUserId: 'owner1' }) },
-    productVariant: { findUnique: async () => ({ panelGroupId: 'pg1' }) },
     panelGroupMember: { findFirst: async () => (world.platform === false ? null : { panelId: 'p1' }) },
     grant: {
       findUnique: async () => ({
@@ -59,6 +58,7 @@ function fakeTx(world: World = {}) {
         tenantId: RESELLER,
         userId: 'u',
         variantId: 'v1',
+        panelGroupId: 'pg1',
         status: GrantStatus.active,
         billingMode: VariantBillingMode.metered,
         trafficUnlimited: false,
@@ -115,22 +115,22 @@ describe('rearmWholesaleNotice', () => {
 
   it('ends the spell when a block on a platform panel is funded again', async () => {
     const { tx, wallet } = fakeTx({ noticeAt: TOLD });
-    expect(await rearmWholesaleNotice(tx, { variantId: 'v1' }, meter)).toBe(true);
+    expect(await rearmWholesaleNotice(tx, { panelGroupId: 'pg1' }, meter)).toBe(true);
     expect(wallet.noticeAt).toBeNull();
   });
 
   it('keeps it on a block of the reseller own panels only: that says nothing of the platform side', async () => {
     const { tx, wallet } = fakeTx({ noticeAt: TOLD, platform: false });
-    expect(await rearmWholesaleNotice(tx, { variantId: 'v1' }, meter)).toBe(false);
+    expect(await rearmWholesaleNotice(tx, { panelGroupId: 'pg1' }, meter)).toBe(false);
     expect(wallet.noticeAt).toBe(TOLD);
   });
 
   it('writes nothing when no spell is open, or the meter has no wholesale leg', async () => {
     const open = fakeTx();
-    expect(await rearmWholesaleNotice(open.tx, { variantId: 'v1' }, meter)).toBe(false);
+    expect(await rearmWholesaleNotice(open.tx, { panelGroupId: 'pg1' }, meter)).toBe(false);
     expect(open.walletUpdates).toHaveLength(0);
     const legless = fakeTx({ noticeAt: TOLD });
-    expect(await rearmWholesaleNotice(legless.tx, { variantId: 'v1' }, { wholesalePayerTenantId: null } as never)).toBe(false);
+    expect(await rearmWholesaleNotice(legless.tx, { panelGroupId: 'pg1' }, { wholesalePayerTenantId: null } as never)).toBe(false);
     expect(legless.walletUpdates).toHaveLength(0);
   });
 });

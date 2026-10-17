@@ -40,6 +40,7 @@ import { grantNamesSchema, GrantNamesService } from './grant-names';
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
 const VARIANT = '66666666-6666-4666-8666-6666666666c1';
+const GROUP = '77777777-7777-4777-8777-7777777777c1';
 const PAYMENT = '99999999-9999-4999-8999-999999999999';
 const at = (iso: string) => new Date(iso);
 
@@ -124,6 +125,7 @@ describe('grantFromVariant', () => {
     quotas: { traffic_bytes: { limit: 53687091200, resetPolicy: 'none' } },
     durationDays: 30,
     rateCards: [],
+    panelGroupId: GROUP,
     product: { featureKeys: ['vpn.access'] },
   };
 
@@ -139,7 +141,16 @@ describe('grantFromVariant', () => {
       featureKeys: ['vpn.access'],
       purchasedBytes: BigInt(53687091200),
       trafficUnlimited: false,
+      panelGroupId: GROUP,
     });
+  });
+
+  // ADR-0127 decision 4: the group is the Grant's from issue, so a later edit of
+  // the variant's group, a renewal or a migrated Grant never infers it again.
+  it('names the group the variant is served by, and none when the variant has none (F-027-er)', () => {
+    const start = { source: GrantSource.purchase, startsAt: at('2026-09-01T00:00:00Z'), currencyCode: 'USD' };
+    expect(grantFromVariant(start, variant).panelGroupId).toBe(GROUP);
+    expect(grantFromVariant(start, { ...variant, panelGroupId: null }).panelGroupId).toBeNull();
   });
 
   it('fills a prepaid Grant\'s bag with its traffic quota at issue, and a metered one\'s with nothing (ADR-0072)', () => {
@@ -190,6 +201,7 @@ describe('GrantService.issue', () => {
     quotas: {},
     durationDays: 30,
     rateCards: [] as RateCardRow[],
+    panelGroupId: GROUP,
     product: { isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
   });
 
@@ -200,6 +212,8 @@ describe('GrantService.issue', () => {
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
       productVariant: { findUnique: vi.fn(async () => variant) },
+      // Its group holds no platform panel: the reseller's room is not asked (F-019-o).
+      panelGroupMember: { findFirst: async () => null },
       grant: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) =>
           grants.find((g) => g['source'] === where['source'] && g['sourceReferenceId'] === where['sourceReferenceId']) ?? null,
@@ -227,7 +241,7 @@ describe('GrantService.issue', () => {
 
     expect(first.token).toEqual(expect.any(String));
     expect(grants).toHaveLength(1);
-    expect(grants[0]).toMatchObject({ tenantId: TENANT, userId: USER, variantId: VARIANT, status: GrantStatus.active });
+    expect(grants[0]).toMatchObject({ tenantId: TENANT, userId: USER, variantId: VARIANT, panelGroupId: GROUP, status: GrantStatus.active });
     expect(grants[0]['subscriptionTokenHash']).toBe(hashSubscriptionToken(first.token as string));
     expect(JSON.stringify(grants[0], (_k, v) => (typeof v === 'bigint' ? v.toString() : v))).not.toContain(first.token as string);
   });

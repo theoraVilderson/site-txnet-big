@@ -312,22 +312,19 @@ export class GroupFulfilmentService {
       select: {
         id: true,
         status: true,
-        variant: {
+        // The Grant's own group, never its variant's (F-027-er, ADR-0127 decision 4).
+        panelGroup: {
           select: {
-            panelGroup: {
-              select: {
-                strategy: true,
-                minHealthyPanels: true,
-                members: { select: MEMBER_FIELDS },
-              },
-            },
+            strategy: true,
+            minHealthyPanels: true,
+            members: { select: MEMBER_FIELDS },
           },
         },
       },
     });
     if (!grant) throw new GroupFulfilmentRefused('grant_not_found', grantId);
     if (grant.status !== GrantStatus.pending && grant.status !== GrantStatus.active) throw new GroupFulfilmentRefused('grant_not_fulfillable', grant.status);
-    const group = grant.variant.panelGroup;
+    const group = grant.panelGroup;
     if (!group) throw new GroupFulfilmentRefused('no_panel_group', grantId);
     // `priority` and `weighted` were declared with no fulfilment behind them
     // (contract.groups.md rule 7): refused, never placed as `mirror`.
@@ -415,8 +412,7 @@ export class GroupFulfilmentService {
     const due = await this.crossTenant.$queryRaw<{ id: string; tenantId: string }[]>`
       SELECT g."id", g."tenantId"
         FROM "entitlement"."grant" g
-        JOIN "catalog"."product_variant" v ON v."id" = g."variantId"
-        JOIN "network"."panel_group" pg ON pg."id" = v."panelGroupId"
+        JOIN "network"."panel_group" pg ON pg."id" = g."panelGroupId"
        WHERE g."status" IN ('pending', 'active')
          AND pg."strategy" = 'mirror'
          AND (

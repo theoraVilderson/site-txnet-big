@@ -42,7 +42,7 @@ import { coverable, priceOf } from '../usage/usage-wholesale';
 /** Why a sale or a raise is refused: the package prices no VPN traffic on a platform panel, or the reseller cannot pay. */
 export type PackageWholesaleRefusal = 'wholesale_rate_missing' | 'wholesale_unfunded';
 
-type Plan = Pick<Grant, 'id' | 'tenantId' | 'variantId' | 'billingMode' | 'trafficUnlimited' | 'purchasedBytes' | 'consumedBytes' | 'startsAt' | 'endsAt'>;
+type Plan = Pick<Grant, 'id' | 'tenantId' | 'panelGroupId' | 'billingMode' | 'trafficUnlimited' | 'purchasedBytes' | 'consumedBytes' | 'startsAt' | 'endsAt'>;
 
 const SECOND_MS = 1000;
 const DAY_S = BigInt(86_400);
@@ -70,7 +70,7 @@ export class PackageWholesale {
     if (typeof leg === 'string') return leg;
     if (!grant.trafficUnlimited) return this.settle(tx, grant.id, grant.id);
     const sold = BigInt(Math.ceil(((grant.endsAt as Date).getTime() - grant.startsAt.getTime()) / SECOND_MS));
-    return this.buyTime(tx, leg, grant.variantId, sold, grant.id);
+    return this.buyTime(tx, leg, grant.panelGroupId, sold, grant.id);
   }
 
   /**
@@ -114,9 +114,9 @@ export class PackageWholesale {
     if (seconds <= ZERO) return null;
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
     if (!leg || !isTime(leg)) return null;
-    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { variantId: true } });
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { panelGroupId: true } });
     if (!grant) return null;
-    return this.buyTime(tx, leg, grant.variantId, seconds, referenceId);
+    return this.buyTime(tx, leg, grant.panelGroupId, seconds, referenceId);
   }
 
   /**
@@ -127,10 +127,10 @@ export class PackageWholesale {
   async settle(tx: Prisma.TransactionClient, grantId: string, referenceId: string): Promise<PackageWholesaleRefusal | null> {
     const leg = await tx.grantWholesale.findUnique({ where: { grantId } });
     if (!leg || isTime(leg)) return null;
-    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { variantId: true, purchasedBytes: true, consumedBytes: true } });
+    const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { panelGroupId: true, purchasedBytes: true, consumedBytes: true } });
     if (!grant) return null;
 
-    const ahead = (await onPlatformPanel(tx, grant.variantId)) ? max(ZERO, grant.purchasedBytes - grant.consumedBytes) : ZERO;
+    const ahead = (await onPlatformPanel(tx, grant.panelGroupId)) ? max(ZERO, grant.purchasedBytes - grant.consumedBytes) : ZERO;
     const short = leg.consumed + ahead - leg.billed;
     if (short <= ZERO) return null;
 
@@ -235,8 +235,8 @@ export class PackageWholesale {
    * `seconds` of an unlimited plan, priced **up** to a cent when the group
    * holds a platform panel now; the cursor moves by the seconds sold.
    */
-  private async buyTime(tx: Prisma.TransactionClient, leg: GrantWholesale, variantId: string | null, seconds: bigint, referenceId: string): Promise<PackageWholesaleRefusal | null> {
-    if (seconds <= ZERO || variantId === null || !(await onPlatformPanel(tx, variantId))) return null;
+  private async buyTime(tx: Prisma.TransactionClient, leg: GrantWholesale, panelGroupId: string | null, seconds: bigint, referenceId: string): Promise<PackageWholesaleRefusal | null> {
+    if (seconds <= ZERO || !(await onPlatformPanel(tx, panelGroupId))) return null;
     const cents = priceOf(rateOf(leg), seconds);
     const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: leg.payerTenantId } });
     if (cents > toCents(wallet?.cachedBalance ?? new Prisma.Decimal(0))) return 'wholesale_unfunded';
@@ -268,7 +268,7 @@ export class PackageWholesale {
     const rate = await this.rateAt(tx, grant.tenantId, meterKey, at);
     // An unlimited plan with no end has no period to price: on a platform panel it is as unpriced.
     const priced = rate && (!grant.trafficUnlimited || grant.endsAt !== null) ? rate : null;
-    if (!priced) return (await onPlatformPanel(tx, grant.variantId)) ? 'wholesale_rate_missing' : null;
+    if (!priced) return (await onPlatformPanel(tx, grant.panelGroupId)) ? 'wholesale_rate_missing' : null;
     return tx.grantWholesale.create({
       data: {
         tenantId: grant.tenantId,
