@@ -19,16 +19,19 @@
  *  - **the job itself is audited** (F-311-u3): its start and its cancel are
  *    one admin row each, a repeat or a no-op cancel none;
  *  - **30 days after it ends its per-Grant rows go** (F-311-u3), and the
- *    job's summary stays — a repeat of its `requestId` still acts on nothing.
+ *    job's summary stays — a repeat of its `requestId` still acts on nothing;
+ *  - **every batch, the end and a cancel are announced** (RT-1-d) to whoever
+ *    has the page open: the job tenant's staff, its owner, the platform's staff.
  */
 import { Prisma } from '@prisma/client';
-import { ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
+import { OutboxEventType, ResellerAccess, ResellerLimitReached, TenantContext } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 import { vi } from 'vitest';
 
 import { EntitlementRefused } from '../../entitlement/grant';
 import { GrantBulkJobDrainService, ResellerGrantBulkJobService } from './grant-bulk-job';
 import { GrantBulkFilter, grantBulkJobSchema } from './grant-bulk-job.schema';
+import { announceBulkProgress } from './grant-bulk-progress';
 
 type Grant = { id: string; tenantId: string; userId: string; status: string; panels: string[] };
 const GRANTS = new Map<string, Grant>();
@@ -115,6 +118,7 @@ function build(batch = 200, bulkLimit?: number | null) {
   const jobs: Row[] = [];
   const items: Row[] = [];
   const outcomes: Row[] = [];
+  const outbox: Row[] = [];
   const jobOf = (id: unknown) => jobs.find((j) => j.id === id)!;
   const tenants: Record<string, unknown> = {
     [PLATFORM]: { id: PLATFORM, slug: 'platform', tenantType: 'platform_owner', ownerUserId: null, status: 'active', graceEndsAt: null, deletedAt: null },
@@ -134,7 +138,11 @@ function build(batch = 200, bulkLimit?: number | null) {
   const tx = {
     $executeRaw: async () => 1,
     // The reseller's limits, read in its own scope (ADR-0106).
-    tenant: { findUnique: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null },
+    tenant: {
+      findUnique: async ({ where }: { where: { id: string } }) => tenants[where.id] ?? null,
+      findFirst: async ({ where }: { where: Row }) => Object.values(tenants).find((t) => (t as Row).tenantType === where.tenantType) ?? null,
+    },
+    outboxEvent: { create: async ({ data }: { data: Row }) => void outbox.push(data) },
     tenantSubscription: { findUnique: async () => null },
     resellerLimit: { findMany: async () => limitRows },
     packageLimit: { findMany: async () => [] },
@@ -212,13 +220,14 @@ function build(batch = 200, bulkLimit?: number | null) {
   /** A throw rolls back what the transaction appended, as Postgres would. */
   const prisma = {
     $transaction: async (fn: (t: unknown) => Promise<unknown>) => {
-      const at = [jobs.length, items.length, outcomes.length];
+      const at = [jobs.length, items.length, outcomes.length, outbox.length];
       try {
         return await fn(tx);
       } catch (e) {
         jobs.length = at[0];
         items.length = at[1];
         outcomes.length = at[2];
+        outbox.length = at[3];
         throw e;
       }
     },
@@ -246,7 +255,7 @@ function build(batch = 200, bulkLimit?: number | null) {
   const config = { get: (k: string) => ({ GRANT_BULK_JOB_BATCH_SIZE: batch, GRANT_BULK_RETENTION_DAYS: 30 })[k] };
   const service = new ResellerGrantBulkJobService(prisma as never, access);
   const drain = new GrantBulkJobDrainService(prisma as never, crossTenant as never, config as never);
-  return { service, drain, jobs, items, outcomes };
+  return { service, drain, jobs, items, outcomes, outbox, tx };
 }
 
 const days = (filter: Partial<GrantBulkFilter> = {}, requestId = randomUUID()) =>
@@ -418,5 +427,31 @@ describe('bulk act by filter, as a job (F-311-u2)', () => {
 
     expect(await drain.purge(new Date('2026-09-28T00:00:00Z'))).toMatchObject({ jobs: 0 });
     expect(items.filter((i) => i.jobId === job.id)).toHaveLength(3);
+  });
+
+  it("announces every batch, the end and a cancel to the reseller's tenant and owner and to the platform's tenant (RT-1-d)", async () => {
+    const { service, drain, outbox } = build(1);
+    const job = await service.start(owner, RESELLER, days({ panelId: PANEL }));
+    expect(outbox).toEqual([]);
+    await drain.drain();
+    const progressed = (tenantId: string) => ({
+      aggregate: 'billing.grant_bulk_job',
+      aggregateId: job.id,
+      type: OutboxEventType.GRANT_BULK_PROGRESSED,
+      payload: { tenantId, userId: OWNER, resellerId: RESELLER, jobId: job.id },
+    });
+    expect(outbox).toEqual([progressed(RESELLER), progressed(PLATFORM)]);
+
+    await service.cancel(owner, RESELLER, job.id);
+    await service.cancel(owner, RESELLER, job.id);
+    expect(outbox).toHaveLength(4);
+    await drain.drain();
+    expect(outbox).toHaveLength(4);
+  });
+
+  it("announces the platform's own job once, to its tenant and the admin who started it", async () => {
+    const { tx, outbox } = build();
+    await announceBulkProgress(tx as never, { id: 'job-1', tenantId: PLATFORM, actorUserId: 'admin-1' });
+    expect(outbox.map((o) => o.payload)).toEqual([{ tenantId: PLATFORM, userId: 'admin-1', resellerId: PLATFORM, jobId: 'job-1' }]);
   });
 });

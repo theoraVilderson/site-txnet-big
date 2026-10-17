@@ -59,6 +59,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.ANALYTICS_REPORT]: { audience: ['user'], fields: ['scheduleId'] },
   /** F-311-ad: a config move job moved a batch or ended — its tenant's and its starter's (F-027-ev) open job page re-reads the job's counts. */
   [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: { audience: ['user', 'tenant'], fields: ['jobId'] },
+  /** RT-1-d: a bulk-by-filter job acted on a batch, ended or was cancelled — an open BulkByFilter of `resellerId` re-reads its jobs. */
+  [OutboxEventType.GRANT_BULK_PROGRESSED]: { audience: ['user', 'tenant'], fields: ['resellerId', 'jobId'] },
 };
 
 /**

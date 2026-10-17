@@ -26,6 +26,7 @@
     "analyticsReport": "billing.analytics.report",
     "analyticsResellerRefreshed": "billing.analytics.reseller_refreshed",
     "supportInboxChanged": "support.inbox.changed",
-    "configMoveJobProgress": "network.config_move_job.progress"
+    "configMoveJobProgress": "network.config_move_job.progress",
+    "grantBulkProgressed": "billing.grant_bulk.progressed"
   }
 }

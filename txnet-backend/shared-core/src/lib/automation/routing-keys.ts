@@ -63,6 +63,7 @@ export const RealtimeEventType = {
   ANALYTICS_REPORT: 'billing.analytics.report',
   /** F-311-ad: a config move job moved a batch, finished or was cancelled — its page re-reads the job (`ConfigMoveJobDrainService`). */
   CONFIG_MOVE_JOB_PROGRESS: 'network.config_move_job.progress',
+  GRANT_BULK_PROGRESSED: 'billing.grant_bulk.progressed',
 } as const;
 
 /**
@@ -233,6 +234,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ANALYTICS_USER_LOSS]: 'worker-service',
   [OutboxEventType.ANALYTICS_REPORT]: 'worker-service',
   [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: 'worker-service',
+  [OutboxEventType.GRANT_BULK_PROGRESSED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED]: 'worker-service',
   [OutboxEventType.TENANT_BILLING_CREDITED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_PAYMENT_DUE]: 'worker-service',

@@ -119,13 +119,6 @@ export function jobPercent(job: { total: number; processed: number }): number {
 }
 
 /**
- * How often the jobs are read again while one runs. Every read spends the
- * reseller reads' bucket (300 per 15 minutes, per caller), shared with the
- * rest of these pages: 10s is 90 of it for a job watched a quarter hour.
- */
-export const JOB_POLL_MS = 10_000;
-
-/**
  * A refused Grant's sentence: the single act's (`GRANT_REFUSAL_KEYS`), the
  * bulk's own `grant_not_found` and `failed`, and `failed`'s for a reason
  * nobody has written one for yet.

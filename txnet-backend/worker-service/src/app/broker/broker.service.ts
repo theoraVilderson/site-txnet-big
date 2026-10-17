@@ -348,7 +348,7 @@ export class BrokerService implements OnModuleInit, OnApplicationShutdown {
     const livePushes = [
       OutboxEventType.GRANT_LINKS_CAPTURED, OutboxEventType.WALLET_CHANGED, OutboxEventType.GRANT_USAGE, OutboxEventType.GRANT_FREEZE_CHANGED, OutboxEventType.TENANT_DOMAIN_CHANGED,
       OutboxEventType.TENANT_SUBSCRIPTION_RENEWED, OutboxEventType.TENANT_STATUS_CHANGED, OutboxEventType.TENANT_SUBSCRIPTION_GRACE_EXTENDED, OutboxEventType.ACCESS_CHANGED,
-      OutboxEventType.PAYMENT_OPEN_CHANGED, OutboxEventType.ANALYTICS_REFRESHED, OutboxEventType.ANALYTICS_RESELLER_REFRESHED, OutboxEventType.ANALYTICS_REPORT, OutboxEventType.TENANT_CURRENCY_CHANGED, OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED, OutboxEventType.CONFIG_MOVE_JOB_PROGRESS,
+      OutboxEventType.PAYMENT_OPEN_CHANGED, OutboxEventType.ANALYTICS_REFRESHED, OutboxEventType.ANALYTICS_RESELLER_REFRESHED, OutboxEventType.ANALYTICS_REPORT, OutboxEventType.TENANT_CURRENCY_CHANGED, OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED, OutboxEventType.CONFIG_MOVE_JOB_PROGRESS, OutboxEventType.GRANT_BULK_PROGRESSED,
     ];
     await this.outboxQueue(this.livePushQueue, livePushes);
     // F-601-a: the retention notices — one queue for every type in

@@ -84,6 +84,7 @@ export const RealtimeEvents = {
   "analyticsResellerRefreshed": "billing.analytics.reseller_refreshed",
   "supportInboxChanged": "support.inbox.changed",
   "configMoveJobProgress": "network.config_move_job.progress",
+  "grantBulkProgressed": "billing.grant_bulk.progressed",
 } as const;
 
 /** `contracts/billing/iran-banks.json` -> `iranBanks`. */

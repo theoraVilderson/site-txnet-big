@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
+import { useBulkJobsLive } from "../_hooks/useBulkJobsLive";
 import { resellerGrantsApi, type BulkJob, type BulkPanel } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { flattenTexts } from "../../../../catalog/_lib/catalog-form";
 import { GRANT_KEYS as G, emptyDraft, type GrantActionDraft } from "../../../_lib/grant-actions";
-import { BULK_ACTIONS, JOB_KEYS as J, JOB_POLL_MS, bulkJobBody, filterOf, type BulkAction, type BulkScope } from "../../../_lib/grant-bulk";
+import { BULK_ACTIONS, JOB_KEYS as J, bulkJobBody, filterOf, type BulkAction, type BulkScope } from "../../../_lib/grant-bulk";
 import { USER_KEYS } from "../../../_lib/users";
 import { ActionFields } from "../[userId]/_components/GrantActions";
 import { useUserMessage } from "../[userId]/_components/useUserMessage";
@@ -33,8 +34,8 @@ interface Product {
  *  - **the confirm shows the count now**, and billing freezes that selection
  *    when the job starts; a service matching later is not in it;
  *  - **one form, one `requestId`**: a double click answers the same job;
- *  - **the job runs in the worker**: its progress is read again while any job
- *    on the page runs, it can be stopped (what was done stands), and its
+ *  - **the job runs in the worker**: its progress is read again when billing
+ *    announces a batch, the end or a cancel (RT-1-d), it can be stopped (what was done stands), and its
  *    refused services are listed with their sentence until billing purges them.
  */
 export function BulkByFilter({ id }: { id: string }) {
@@ -136,13 +137,7 @@ export function BulkByFilter({ id }: { id: string }) {
     void readJobs();
   }, [readJobs, jobsAsked]);
 
-  // Read again while a job on this page runs; stop once none does.
-  const running = jobs?.rows.some((j) => j.status === "running") ?? false;
-  useEffect(() => {
-    if (!running) return;
-    const timer = setInterval(() => void readJobs(), JOB_POLL_MS);
-    return () => clearInterval(timer);
-  }, [running, readJobs]);
+  useBulkJobsLive(id, () => void readJobs());
 
   function start(action: BulkAction) {
     setOpen(action);

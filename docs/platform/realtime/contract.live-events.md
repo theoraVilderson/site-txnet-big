@@ -59,6 +59,7 @@ corrected, per "Decide once".
 | `billing.analytics.report` | `user:` | billing (`AnalyticsReportSender`, a scheduled report sent, F-1006-a) → live-push; body `{type, scheduleId}` | `/analytics?tab=reports` (F-1006-b), the person's own schedules |
 | `billing.analytics.reseller_refreshed` | `user:` + `tenant:` | billing (the same pass, for a reseller with an owner, F-1001-p) → live-push; body `{type, resellerId, from, to}`; payload `tenantId` = the platform's, `userId` = the owner | the workspace twins `/reseller/analytics`, `/my-resellers/:id/analytics`, filtered by `resellerId` (`analyticsLiveOf`) |
 | `tenant.currency.changed` | `members:` | tenant (`OperatingCurrencyService.set`, RT-1-l) → live-push; body `{type, tenantId}` | `(panel)/template.tsx` remounts the page (RT-1-m), `useWalletBalance` |
+| `billing.grant_bulk.progressed` | `user:` + `tenant:` | billing (`announceBulkProgress`, RT-1-d) → live-push; body `{type, resellerId, jobId}`; a reseller's job writes a row for its tenant and one for the platform's | BulkByFilter via `useBulkJobsLive`, the shown tenant only |
 | `tenant.currency.reseller_changed` | `user:` + `tenant:` | tenant (the same `set`, a reseller's only, RT-1-m2) → live-push; body `{type, resellerId}`; payload `tenantId` = the platform's, `userId` = the owner | `(panel)/template.tsx` via `useCurrencyChanged`, the open workspace's reseller only |
 
 ## Planned — the RT-1 rows
@@ -97,16 +98,17 @@ closes without credit (expiry, rejection) has no event, and inventing one only
 for this page buys a few seconds on a page that says "your money is safe".
 `setInterval` goes.
 
-**RT-1-d — bulk-by-filter progress.** Type `billing.grant_bulk.progressed`,
-body `{type, jobId}`. **Corrected 2026-10-17:** on `user:<reseller owner>` and
-`tenant:<platform>`, not the job's `tenant:` — BulkByFilter is on
-`/my-resellers/[id]`, the platform's panel, as in RT-1-e. Payload `{tenantId:
-the platform's (`platformTenantIdOf`), userId: the owner, resellerId, jobId}`.
-Written by `GrantBulkJobService`
-(`billing-service/src/app/payment/gift/grant-bulk-job.ts`) in `drainJob`'s
-transaction after each batch, in the one that sets `done`, and in `cancel`.
-BulkByFilter re-reads its job list on the reseller it shows; `JOB_POLL_MS`
-goes from `grant-bulk.ts`.
+**RT-1-d — bulk-by-filter progress** — built 2026-10-17. Type
+`billing.grant_bulk.progressed`, body `{type, resellerId, jobId}`. The page is
+open in three places (user, 2026-10-17): the job tenant's staff (`/users`,
+`/reseller/users`), its owner — a platform user, on the reseller's domain too —
+and the platform's staff (`/my-resellers/:id`). `announceBulkProgress`
+(`gift/grant-bulk-progress.ts`) writes one row per tenant — the job's, and for
+a reseller's job the platform's — each `userId` the owner, or the starter when
+the tenant has none; `resellerId` is the job's tenant. In `drainJob`'s
+per-batch transaction (the one that sets `done`) and in a `cancel` that
+stopped something. `useBulkJobsLive` hears the viewer's `user:` and `tenant:`,
+only for `resellerId` = the page's tenant. `JOB_POLL_MS` is gone.
 
 **RT-1-e — reseller domain status** — producer built 2026-10-07 with
 EDGE-1-e. Type `tenant.domain.changed`, body `{type, domainId}`, written by

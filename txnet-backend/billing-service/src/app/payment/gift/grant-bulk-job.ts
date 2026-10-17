@@ -20,6 +20,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { giverOf } from '../../traffic/gift-bytes';
 import { GrantBulkCommand } from './grant-bulk.schema';
 import { GrantBulkFilter, GrantBulkJobBody, GrantBulkPage } from './grant-bulk-job.schema';
+import { announceBulkProgress } from './grant-bulk-progress';
 import { JobProgress, jobProgress } from './job-progress';
 import { countSelection, GrantBulkPanel, insertSelection, panelsOfSelection } from './grant-bulk-selection';
 import { actOnce, BulkActor, bulkFingerprint, GRANT_BULK_FAILED, GrantBulkOutcome } from './reseller-grants-bulk';
@@ -151,7 +152,10 @@ export class ResellerGrantBulkJobService {
         const before = await this.find(tx, tenantId, jobId);
         const { count } = await tx.grantBulkJob.updateMany({ where: { id: jobId, status: GrantBulkJobStatus.running }, data: { status: GrantBulkJobStatus.cancelled, finishedAt: new Date() } });
         const after = await this.find(tx, tenantId, jobId);
-        if (count > 0) await auditBulkJob(tx, actor, tenantId, 'grant_bulk_cancel', jobId, auditState(before), auditState(after), null);
+        if (count > 0) {
+          await auditBulkJob(tx, actor, tenantId, 'grant_bulk_cancel', jobId, auditState(before), auditState(after), null);
+          await announceBulkProgress(tx, after);
+        }
         return view(after);
       }),
     );
@@ -353,6 +357,8 @@ export class GrantBulkJobDrainService {
         where: { id: job.id },
         data: { okCount: { increment: counts.okCount }, refusedCount: { increment: counts.refusedCount }, failedCount: { increment: counts.failedCount } },
       });
+      // The batch, and the end with it, reach an open page (RT-1-d).
+      await announceBulkProgress(tx, job);
       const left = await tx.grantBulkJobItem.count({ where: { jobId: job.id, doneAt: null } });
       if (left > 0) return { acted, finished: false };
       const { count } = await tx.grantBulkJob.updateMany({ where: { id: job.id, status: GrantBulkJobStatus.running }, data: { status: GrantBulkJobStatus.done, finishedAt: now } });
