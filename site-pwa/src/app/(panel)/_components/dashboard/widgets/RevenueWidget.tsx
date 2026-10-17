@@ -128,17 +128,19 @@ export default function RevenueWidget() {
             </dl>
           </div>
           {canAnalyse && (
-            <div className="flex flex-wrap items-end justify-between gap-2">
+            <>
+              {/* Its own row, the card's full width, label over the line: beside the label and the link,
+                  the full-width sparkline was squeezed and the label wrapped into a corner. */}
               {trend && (
-                <div className="flex items-center gap-2" role="img" aria-label={t("common", D.revenue.trend)}>
-                  <Sparkline values={trend} />
-                  <span className="text-2xs text-text-secondary" aria-hidden>
+                <div className="mt-3 rounded-2xl bg-bg-inner p-3" role="img" aria-label={t("common", D.revenue.trend)}>
+                  <span className="block text-2xs text-text-secondary" aria-hidden>
                     {t("common", D.revenue.trend)}
                   </span>
+                  <Sparkline values={trend} />
                 </div>
               )}
               <FooterLink href={PANEL_ANALYTICS}>{t("common", D.revenue.seeAnalytics)}</FooterLink>
-            </div>
+            </>
           )}
         </>
       )}
