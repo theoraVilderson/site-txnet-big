@@ -94,8 +94,8 @@ with no sale in either window is counted in `total`, not listed.
 ## Cost attribution (F-1002-b)
 
 `analytics_cost_day` (tenant · day · kind · panel · served tenant · product ·
-user · currency — `cost` to six places, `bytes`, and `saleCost` in
-`saleCurrencyCode`, rule 5), written by every pass
+user · currency · sale currency — `cost` to six places, `bytes`, and
+`saleCost` in `saleCurrencyCode`, rule 5), written by every pass
 (`analytics-rollup-cost.ts`, the arithmetic pure in `analytics-cost.ts`). Read
 by `margin` (below).
 
@@ -124,9 +124,11 @@ by `margin` (below).
    currency on a reseller's — `cost` is never converted (principle 6); rule 5
    is its converted copy.
 5. **In the sale's currency** (ADR-0149, `analytics-fx.ts`). Each row is also
-   written in the currency the tenant sold in at the end of its day — the
-   `fromCode` of its first later `currency_change`, else today's, so no pass
-   after a change moves an earlier day's cost into the new money (F-1001-q) —
+   written in the currency its sale was made in — a sale's cost and its
+   refund's carry it (a refund after a change: its `sourceCurrencyCode`) —
+   else the one the tenant sold in at the end of its day: the `fromCode` of
+   its first later `currency_change`, else today's. No pass after a change
+   moves an earlier day's cost into the new money (F-1001-q) —
    at the rate in force at the end of its day — a live pin (the tenant's first), else the
    newest discovered rate, the toman as the rial over ten. No rate: `saleCost`
    null, and every read answers that cost in its own currency.

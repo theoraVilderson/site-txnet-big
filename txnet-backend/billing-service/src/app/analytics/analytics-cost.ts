@@ -28,6 +28,8 @@ export type CostDayRow = {
   currencyCode: string;
   cost: Prisma.Decimal;
   bytes: bigint;
+  /** The currency of the sale this cost is part of — a sale's cost and its refund's (F-1001-q); absent, the day's. */
+  soldIn?: string;
 };
 
 /** A cost is kept to six places, so a split rounds below a cent and a month's sum stays whole. */
@@ -153,19 +155,19 @@ export function spreadSubscriptions(charges: readonly ResellerCharge[], how: { p
   return rows;
 }
 
-/** One cost row per cell (day, kind, product, panel, user, currency), the costs summed and kept to six places — a 0 kept: it says "costs nothing" (ADR-0151 (5)). */
-function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; currencyCode: string; cost: Prisma.Decimal })[]): CostDayRow[] {
+/** One cost row per cell (day, kind, product, panel, user, currency, the sale's currency), the costs summed and kept to six places — a 0 kept: it says "costs nothing" (ADR-0151 (5)). */
+function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; currencyCode: string; cost: Prisma.Decimal; soldIn?: string })[]): CostDayRow[] {
   const cells = new Map<string, CostDayRow>();
   for (const p of parts) {
-    const key = [p.day, p.kind, p.productId, p.panelId, p.userId, p.currencyCode].join('|');
-    const row = cells.get(key) ?? { day: p.day, kind: p.kind, panelId: p.panelId, servedTenantId: null, productId: p.productId, userId: p.userId, currencyCode: p.currencyCode, cost: ZERO, bytes: BigInt(0) };
+    const key = [p.day, p.kind, p.productId, p.panelId, p.userId, p.currencyCode, p.soldIn].join('|');
+    const row = cells.get(key) ?? { day: p.day, kind: p.kind, panelId: p.panelId, servedTenantId: null, productId: p.productId, userId: p.userId, currencyCode: p.currencyCode, cost: ZERO, bytes: BigInt(0), soldIn: p.soldIn };
     cells.set(key, { ...row, cost: row.cost.plus(p.cost) });
   }
   return [...cells.values()].map((r) => ({ ...r, cost: r.cost.toDecimalPlaces(COST_PLACES) }));
 }
 
 /** A sale or the refund that undoes it, priced at the variant's cost in effect when it was sold. */
-export type SaleCost = CostOwner & { day: Day; currencyCode: string; cost: Prisma.Decimal; sale: boolean };
+export type SaleCost = CostOwner & { day: Day; currencyCode: string; cost: Prisma.Decimal; sale: boolean; soldIn: string };
 /** A Grant's use of a meter on a day, and the meter's unit cost in effect then. */
 export type UsageCost = CostOwner & { day: Day; currencyCode: string; quantity: bigint; unitSize: bigint; unitCost: Prisma.Decimal };
 

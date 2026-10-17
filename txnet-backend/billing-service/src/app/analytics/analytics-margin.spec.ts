@@ -10,6 +10,8 @@
  *  - **a cost in today's currency for last month's sales** (F-1001-q). A
  *    tenant that changed currency sold each day in the money it had then;
  *    a day's cost converts into that, never into the currency of the pass;
+ *  - **a refund's cost in another currency than its refund.** The cost a
+ *    refund takes back is in the money of the sale it undoes, as its net is;
  *  - **a cost with no rate read as free.** No rate on record keeps the cost in
  *    its own currency, so the margin shows it apart instead of a 0;
  *  - **a margin % from nothing.** Margin ÷ net with no net is no figure, not
@@ -69,6 +71,12 @@ describe('convertCosts', () => {
       ['IRT', '90000.00'],
       ['USD', '1.50'],
     ]);
+  });
+
+  it("converts a sale's cost, and its refund's, into the currency that sale was made in — a refund paid back after a change too", () => {
+    const refund = { ...cost('2026-09-11', '-4'), kind: 'sale' as const, soldIn: 'USD' };
+    const [row] = convertCosts([refund], () => 'IRT', rates);
+    expect([row.saleCurrencyCode, row.saleCost?.toFixed(2)]).toEqual(['USD', '-4.00']);
   });
 });
 

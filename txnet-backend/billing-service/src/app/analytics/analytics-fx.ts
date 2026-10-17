@@ -70,10 +70,13 @@ export function readCurrencyChanges(tx: Prisma.TransactionClient, zone: string):
     ORDER BY c."createdAt"`;
 }
 
-/** Each row converted into its day's currency (`toOn`) at its day's rate, through the pivot. */
+/** The currency a cost row is answered in: its sale's when it has one, else the one in force at its day's end. */
+export const saleCurrencyOf = (row: CostDayRow, toOn: CurrencyOn): string => row.soldIn ?? toOn(row.day);
+
+/** Each row converted into its sale's or its day's currency (`saleCurrencyOf`) at its day's rate, through the pivot. */
 export function convertCosts(rows: readonly CostDayRow[], toOn: CurrencyOn, rateOf: RateOf): ConvertedCost[] {
   return rows.map((row) => {
-    const to = toOn(row.day);
+    const to = saleCurrencyOf(row, toOn);
     if (row.currencyCode === to) return { ...row, saleCurrencyCode: to, saleCost: row.cost };
     const from = rateOf(row.currencyCode, row.day);
     const into = rateOf(to, row.day);

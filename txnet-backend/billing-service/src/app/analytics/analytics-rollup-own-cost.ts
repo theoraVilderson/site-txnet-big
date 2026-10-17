@@ -15,11 +15,15 @@ import { RollupRange, dayIn } from './analytics-rollup';
 /** A Grant's panel: its first config's, as a sale's panel is (`analytics-rollup.ts`). */
 const panelOf = (grant: Prisma.Sql) => Prisma.sql`(SELECT c."panelId" FROM network.config c WHERE c."grantId" = ${grant} ORDER BY c."createdAt" LIMIT 1)`;
 
-/** Each purchase and the refund that undoes it in `r`, at its variant's cost in effect when the invoice was made. */
+/**
+ * Each purchase and the refund that undoes it in `r`, at its variant's cost in
+ * effect when the invoice was made — with the money it was sold in, a refund
+ * paid back after a currency change its sale's (`sourceCurrencyCode`, F-1001-q).
+ */
 function readSaleCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<SaleCost[]> {
   return tx.$queryRaw`
     SELECT to_char(${dayIn(Prisma.sql`wt."createdAt"`, r.zone)}, 'YYYY-MM-DD') AS "day", vc."currencyCode", vc."amount" AS "cost",
-           wt."direction" = 'debit' AS "sale", v."productId", w."ownerUserId" AS "userId",
+           wt."direction" = 'debit' AS "sale", COALESCE(wt."sourceCurrencyCode", wt."currencyCode") AS "soldIn", v."productId", w."ownerUserId" AS "userId",
            ${panelOf(Prisma.sql`(SELECT g."id" FROM entitlement."grant" g WHERE g."sourceReferenceId" = i."id" ORDER BY g."createdAt" LIMIT 1)`)} AS "panelId"
     FROM billing.wallet_transaction wt
     JOIN billing.wallet w ON w."id" = wt."walletId"

@@ -2,7 +2,7 @@ import { Prisma, TenantBillingReasonType } from '@prisma/client';
 import { operatingCurrencyOf } from '@txnet-backend/shared-core';
 
 import { CostDayRow, PanelUse, ResellerCharge, WholesaleUse, attributePanelCosts, attributeWholesale, spreadSubscriptions } from './analytics-cost';
-import { ConvertedCost, convertCosts, currencyOnDay, rateLookup, readCurrencyChanges, readRates } from './analytics-fx';
+import { ConvertedCost, convertCosts, currencyOnDay, rateLookup, readCurrencyChanges, readRates, saleCurrencyOf } from './analytics-fx';
 import type { CrossTenantReader } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
 import { RollupRange, dayIn } from './analytics-rollup';
@@ -133,8 +133,8 @@ async function insertCosts(tx: Prisma.TransactionClient, rows: readonly Converte
 async function inSaleCurrency(tx: Prisma.TransactionClient, r: RollupRange & { tenantId: string }, rows: readonly CostDayRow[]): Promise<ConvertedCost[]> {
   if (rows.length === 0) return [];
   const soldIn = currencyOnDay(await operatingCurrencyOf(tx, r.tenantId), await readCurrencyChanges(tx, r.zone));
-  const foreign = rows.filter((x) => x.currencyCode !== soldIn(x.day));
-  const codes = foreign.flatMap((x) => [x.currencyCode, soldIn(x.day)]);
+  const foreign = rows.filter((x) => x.currencyCode !== saleCurrencyOf(x, soldIn));
+  const codes = foreign.flatMap((x) => [x.currencyCode, saleCurrencyOf(x, soldIn)]);
   const rates = await readRates(tx, codes, [...new Set(foreign.map((x) => x.day))]);
   return convertCosts(rows, soldIn, rateLookup(rates));
 }

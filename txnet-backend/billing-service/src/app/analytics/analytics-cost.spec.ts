@@ -139,9 +139,9 @@ describe('ownCosts', () => {
     const cell = { day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD' };
     const rows = ownCosts(
       [
-        { ...cell, cost: d('2.50'), sale: true },
-        { ...cell, cost: d('2.50'), sale: true },
-        { ...cell, cost: d('2.50'), sale: false },
+        { ...cell, cost: d('2.50'), sale: true, soldIn: 'USD' },
+        { ...cell, cost: d('2.50'), sale: true, soldIn: 'USD' },
+        { ...cell, cost: d('2.50'), sale: false, soldIn: 'USD' },
       ],
       [
         { ...cell, productId: PRODUCT_B, quantity: BigInt(12_500), unitSize: BigInt(1000), unitCost: d('0.04') },
@@ -157,7 +157,7 @@ describe('ownCosts', () => {
 
 describe('ownCosts, a cost of 0', () => {
   it('is kept as a row: 0 says "costs nothing", no row says "not set" (ADR-0151 (5))', () => {
-    const rows = ownCosts([{ day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD', cost: d('0'), sale: true }], []);
+    const rows = ownCosts([{ day: '2026-10-01', productId: PRODUCT_A, panelId: null, userId: USER, currencyCode: 'USD', cost: d('0'), sale: true, soldIn: 'USD' }], []);
     expect(rows.map((r) => [r.kind, r.cost.toFixed(2)])).toEqual([['sale', '0.00']]);
   });
 });

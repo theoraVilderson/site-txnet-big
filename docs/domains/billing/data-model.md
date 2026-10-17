@@ -142,7 +142,8 @@ from `identity.user` as `unknown`) and `analytics_setting` (CHECK 1..30, none =
 (F-1002-b) added `_cost_day` (enum `AnalyticsCostKind`, cost to six places)
 and flagged them again; `20261016000500_analytics_cost_in_sale_currency`
 (F-1001-l, ADR-0149) its `saleCurrencyCode` / `saleCost` (null = no rate), and
-flagged them again. `20261016000600_analytics_loss_alert` (F-1003) added
+flagged them again; `20261017001100_analytics_cost_grain_has_sale_currency`
+(F-1001-q) put `saleCurrencyCode` in its unique grain. `20261016000600_analytics_loss_alert` (F-1003) added
 `analytics_setting.lossAlertPercent` (CHECK 0..500, default 20) and
 `analytics_loss_alert` (key tenant · user · month) — the claim that tells a
 loss once a month: **not** derived, never deleted by a rebuild. `20261016000700_panel_capacity` (F-1005-a) added
