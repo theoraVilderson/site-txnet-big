@@ -1,11 +1,17 @@
 "use client";
 
+import { Gauge, Package, Repeat, Users, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { SegmentedControl, Select, TabLinks } from "../../_components/kit";
 import { type AnalyticsFilters, type PageTab, TAB_VIEWS, groupOf } from "../_lib/filters";
 
 const K = FrontendI18nKeys.common.analytics;
+
+/** One icon per view, so the switch reads as a choice of pages and not as a filter. */
+const VIEW_ICONS: Readonly<Partial<Record<PageTab, LucideIcon>>> = { customers: Users, cohorts: Repeat, catalog: Package, capacity: Gauge };
+/** What each view answers, said under the switch. */
+const VIEW_HINTS: Readonly<Partial<Record<PageTab, string>>> = K.viewHints;
 
 export interface AnalyticsTabsProps {
   filters: AnalyticsFilters;
@@ -26,6 +32,7 @@ export function AnalyticsTabs({ filters, tabs, hrefOf, onOpen }: AnalyticsTabsPr
   const { t } = useLocale();
   const group = groupOf(filters.tab);
   const views = TAB_VIEWS[group];
+  const hint = VIEW_HINTS[filters.tab];
 
   return (
     <>
@@ -46,14 +53,17 @@ export function AnalyticsTabs({ filters, tabs, hrefOf, onOpen }: AnalyticsTabsPr
         className="hidden flex-wrap md:flex"
       />
       {views && (
-        <SegmentedControl
-          size="sm"
-          ariaLabel={t("common", K.tabs[group])}
-          value={filters.tab}
-          onChange={onOpen}
-          options={views.map((view) => ({ value: view, label: t("common", K.tabs[view]) }))}
-          className="w-fit"
-        />
+        <div className="flex flex-col gap-1.5">
+          {/* A small pill was missed and Retention read as gone (2026-10-17): full width on a phone, with icons and a line. */}
+          <SegmentedControl
+            ariaLabel={t("common", K.tabs[group])}
+            value={filters.tab}
+            onChange={onOpen}
+            options={views.map((view) => ({ value: view, label: t("common", K.tabs[view]), icon: VIEW_ICONS[view] }))}
+            className="grid w-full auto-cols-fr grid-flow-col sm:inline-flex sm:w-fit"
+          />
+          {hint && <p className="text-xs text-text-secondary">{t("common", hint)}</p>}
+        </div>
       )}
     </>
   );

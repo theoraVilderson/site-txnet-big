@@ -140,8 +140,10 @@ page for the owner and a reseller; the owner also gets the Resellers tab.
 - **Tabs** (`TabLinks`, `?tab=`): Overview, Sales, Customers, Products and
   panels, Resellers (owner), Profit (after F-1002), Cohorts, Capacity, Reports.
   Cohorts ("Retention") and Capacity are views under Customers and Products
-  and panels (`TAB_VIEWS`, own `?tab=`). The row wraps from `md`; below it one
-  `Select` (`AnalyticsTabs`). 3+ long labels are a `Select`, never a segment.
+  and panels (`TAB_VIEWS`, own `?tab=`); their switch is full width on a phone,
+  icon per view, a line under it saying what the view answers (`viewHints`).
+  The row wraps from `md`; below it one `Select` (`AnalyticsTabs`). 3+ long
+  labels are a `Select`, never a segment.
 - **Live:** the page re-reads on `billing.analytics.refreshed` with
   `useLiveReread` (C-14) — never a poll.
 - **Rebuilding** (zone change) shows an `Alert` instead of half-built numbers.

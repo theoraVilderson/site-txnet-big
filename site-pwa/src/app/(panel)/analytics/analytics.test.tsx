@@ -180,6 +180,13 @@ describe("AnalyticsView", () => {
     expect(push).toHaveBeenCalledWith("/analytics?tab=cohorts&compare=year", { scroll: false });
   });
 
+  it("says under the view switch what the open view answers, so a view under a tab is not missed", () => {
+    vi.mocked(useSearchParams).mockReturnValue(params("tab=cohorts"));
+    render(<AnalyticsView />);
+    expect(screen.getByRole("radio", { name: "analytics.tabs.cohorts" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByText("analytics.viewHints.cohorts")).toBeInTheDocument();
+  });
+
   it("keeps the Overview to the answer: the buyers chart is the Customers tab's, the calendar and usage folded away", async () => {
     vi.mocked(readAnalytics).mockResolvedValue(answer({ usage: [{ meterKey: "vpn.traffic", total: "2048", previous: "1024", delta: 1, series: ["1024", "1024"] }] }) as never);
     render(<AnalyticsView />);

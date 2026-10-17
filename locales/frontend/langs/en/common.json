@@ -6672,6 +6672,12 @@
       "capacity": "Capacity",
       "reports": "Reports"
     },
+    "viewHints": {
+      "customers": "Who buys, how many are new and how many came back",
+      "cohorts": "Of the people who first bought in a month, how many kept buying in the months after",
+      "catalog": "What each product and each panel sold",
+      "capacity": "How full each panel is, and when it fills up"
+    },
     "section": "Section",
     "filters": {
       "button": "Filters",
