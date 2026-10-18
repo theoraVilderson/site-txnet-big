@@ -1,6 +1,10 @@
 import { TenantPackageRefused, TenantPackageService } from './tenant-package.service';
 import { type CreatePackageInput, createPackageSchema, updatePackageSchema } from './tenant-package.schema';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { markingTranslator, memoryItemTextStore } from '../../../../test-support/item-text-store';
+import { PACKAGE_TEXT_NAMESPACE, PackageTextService } from './package-texts';
+
+const packageTexts = () => new PackageTextService(memoryItemTextStore(PACKAGE_TEXT_NAMESPACE, ['en'], 'en').store, markingTranslator);
 
 /**
  * The invariants F-018-d turns on, at the one surface that writes a package.
@@ -65,7 +69,7 @@ describe('TenantPackageService', () => {
     };
     // The cross-tenant pool, where every package write and its audit row go.
     const all = { ...prisma, $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
-    return { service: new TenantPackageService(prisma as never, all as never), prisma, all, tx, writes };
+    return { service: new TenantPackageService(prisma as never, all as never, packageTexts()), prisma, all, tx, writes };
   };
 
   it('refuses a caller who is not the platform owner before a package is touched', async () => {

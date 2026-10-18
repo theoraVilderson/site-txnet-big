@@ -188,7 +188,8 @@ namespace, the pattern of the keys its server derives (any other key is
 refused `text_key_invalid`) and its refusal error (`texts_unavailable` when
 locale-service does not answer). Drafting never fails the write it follows.
 Users: billing's `CatalogTextService` (namespace `catalog`, proved by
-`catalog-texts.spec.ts`); tenant-service's packages next (PK-1-c).
+`catalog-texts.spec.ts`); tenant-service's `PackageTextService` (namespace
+`packages`, `packages.p_<id>.name|description`, `package-texts.spec.ts`, PK-1-c).
 
 ## Guarantees
 

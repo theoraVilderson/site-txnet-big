@@ -1,12 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus } from '@prisma/client';
-import { platformCurrencyOf, isPlatformTenant, inCurrency } from '@txnet-backend/shared-core';
+import { AdminAction, Prisma, TenantBillingModel, TenantStatus } from '@prisma/client';
+import { platformCurrencyOf, inCurrency, type ItemTexts } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { checkPackageParts, type PackagePartRejection, writePackageParts } from './package-parts';
+import { packageAudit, platformOwnerOnly, type TenantPackageActor } from './package-admin';
+import { checkPackageParts, writePackageParts } from './package-parts';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
 import { type MeterRateView, ratesOf, unknownMeters, writeMeterRates } from './package-meter-rates';
+import { PackageTextService, type PackageTextView, packageTextKey } from './package-texts';
+import { TenantPackageRefused } from './tenant-package.refusal';
 import type { CreatePackageInput, ListPackagesInput, MeterRateEdit, UpdatePackageInput } from './tenant-package.schema';
+
+export { TenantPackageRefused, type TenantPackageRejection } from './tenant-package.refusal';
+export type { TenantPackageActor } from './package-admin';
 
 /**
  * The platform owner creates, edits, deactivates, lists and reads the
@@ -31,13 +37,17 @@ import type { CreatePackageInput, ListPackagesInput, MeterRateEdit, UpdatePackag
  * **The wholesale price list rides along (F-118-n1).** `meterRates` writes
  * `tenant_package_meter_rate` in the same transaction as the package and its
  * audit row (`package-meter-rates.ts`); the view shows the rates in force.
+ *
+ * **Name and description are locale-service text (ADR-0154 decision 5).** The
+ * source language is published as written as the transaction's last step, so a
+ * locale-service that does not answer rolls the write back; the other languages
+ * are drafted after the commit (`package-texts.ts`). `name` stays the source text.
  */
 
-export type TenantPackageActor = { adminId: string; tenantId: string; ip: string };
 
 export type PackageApplyView = { packageId: string; includedFeatureKeys: string[]; subscribers: number };
 
-export type PackageView = {
+export type PackageView = PackageTextView & {
   id: string;
   name: string;
   monthlyPrice: string | null;
@@ -50,29 +60,6 @@ export type PackageView = {
   meterRates: MeterRateView[];
 };
 
-/** `package_price_finer_than_currency`: a price with more places than the platform's currency has (F-116-r). */
-export type TenantPackageRejection =
-  | 'not_platform_owner'
-  | 'package_not_found'
-  | 'package_name_taken'
-  | 'package_unpriced'
-  | 'package_price_finer_than_currency'
-  | 'package_price_in_use'
-  | 'meter_not_found'
-  | PackagePartRejection;
-
-/** `field`: the request field refused, `limits.2.value`, when a create's part is (ADR-0154 decision 4). */
-export class TenantPackageRefused extends Error {
-  constructor(
-    readonly reason: TenantPackageRejection,
-    detail = '',
-    readonly field?: string,
-  ) {
-    super(`tenant package refused: ${reason}${detail ? ` (${detail})` : ''}`);
-    this.name = 'TenantPackageRefused';
-  }
-}
-
 /** `currencyCode`, once every price given is at its places (F-116-r) — refused otherwise. */
 const pricesFit = (tx: Prisma.TransactionClient, currencyCode: string, prices: ReadonlyArray<string | null | undefined>) =>
   inCurrency(tx, currencyCode, { price: prices.filter((p): p is string => typeof p === 'string').map((p) => new Prisma.Decimal(p)) }, () => new TenantPackageRefused('package_price_finer_than_currency', currencyCode));
@@ -80,6 +67,7 @@ const pricesFit = (tx: Prisma.TransactionClient, currencyCode: string, prices: R
 const PACKAGE_SELECT = {
   id: true,
   name: true,
+  sourceLang: true,
   monthlyPrice: true,
   yearlyPrice: true,
   currencyCode: true,
@@ -96,13 +84,15 @@ export class TenantPackageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly all: CrossTenantPrismaService,
+    private readonly texts: PackageTextService,
   ) {}
 
   /** The package and, when given, its limits, overage modes and products — all in one transaction, or none (ADR-0154 decision 4). */
   async create(actor: TenantPackageActor, input: CreatePackageInput): Promise<PackageView> {
-    await this.access(actor);
+    await platformOwnerOnly(this.prisma, actor);
     await this.nameFree(input.name);
     checkPackageParts(input);
+    const sourceLang = this.texts.sourceOf(input.sourceLang);
     // The cross-tenant pool, as `update` and `apply`: RLS refuses this audit row on the app pool.
     const view = await this.writing(input.name, () =>
       this.all.$transaction(async (tx) => {
@@ -110,6 +100,7 @@ export class TenantPackageService {
         const row = await tx.tenantFeaturePackage.create({
           data: {
             name: input.name,
+            sourceLang,
             monthlyPrice: input.monthlyPrice ?? null,
             yearlyPrice: input.yearlyPrice ?? null,
             includedFeatureKeys: input.includedFeatureKeys,
@@ -120,12 +111,17 @@ export class TenantPackageService {
         });
         await writeMeterRates(tx, row, [], input.meterRates ?? [], actor.adminId);
         await writePackageParts(tx, row, { input, adminId: actor.adminId });
-        const created = toView(row, await this.ratesOne(tx, row));
+        // Its text is published below, so the view cannot ask locale-service whether it has a description yet.
+        const created = { ...this.view(row, await this.ratesOne(tx, row)), descriptionKey: input.description ? packageTextKey(row.id, 'description') : null };
         const parts = { limits: input.limits ?? [], quotaOverages: input.quotaOverages ?? [], products: input.products ?? [] };
-        await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.tenant_package_create, created.id, null, { ...created, ...parts }) });
+        await tx.adminAuditLog.create({
+          data: packageAudit(actor, AdminAction.tenant_package_create, created.id, null, { ...created, description: input.description ?? null, ...parts }),
+        });
+        await this.texts.publishSources(sourceTexts(created.id, sourceLang, input));
         return created;
       }),
     );
+    void this.texts.draftOthers(draftsOf(sourceTexts(view.id, sourceLang, input), sourceLang));
     this.logger.log(`package ${view.id} (${view.name}) created by ${actor.adminId}`);
     return view;
   }
@@ -148,9 +144,9 @@ export class TenantPackageService {
   }
 
   async update(actor: TenantPackageActor, id: string, patch: UpdatePackageInput): Promise<PackageView> {
-    await this.access(actor);
+    await platformOwnerOnly(this.prisma, actor);
     const found = await this.find(id);
-    const before = toView(found, await this.ratesOne(this.prisma, found));
+    const before = this.view(found, await this.ratesOne(this.prisma, found));
     const monthly = patch.monthlyPrice === undefined ? before.monthlyPrice : patch.monthlyPrice;
     const yearly = patch.yearlyPrice === undefined ? before.yearlyPrice : patch.yearlyPrice;
     if (monthly === null && yearly === null) throw new TenantPackageRefused('package_unpriced', id);
@@ -162,8 +158,12 @@ export class TenantPackageService {
     if (patch.yearlyPrice !== undefined) data.yearlyPrice = patch.yearlyPrice;
     if (patch.includedFeatureKeys !== undefined) data.includedFeatureKeys = patch.includedFeatureKeys;
     if (patch.isActive !== undefined) data.isActive = patch.isActive;
+    const retexted = patch.name !== undefined || patch.description !== undefined;
+    const sourceLang = retexted ? this.texts.sourceOf(patch.sourceLang ?? found.sourceLang) : before.sourceLang;
+    if (patch.sourceLang !== undefined) data.sourceLang = sourceLang;
+    const publish = sourceTexts(id, sourceLang, patch);
 
-    return this.writing(patch.name ?? before.name, () =>
+    const view = await this.writing(patch.name ?? before.name, () =>
       this.all.$transaction(async (tx) => {
         await lockPackage(tx, id, 'update');
         await pricesFit(tx, before.currencyCode, [patch.monthlyPrice, patch.yearlyPrice]);
@@ -172,7 +172,8 @@ export class TenantPackageService {
         const held = patch.includedFeatureKeys === undefined ? null : await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
         const row = await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT });
         const repriced = await writeMeterRates(tx, row, before.meterRates, patch.meterRates ?? [], actor.adminId);
-        const after = toView(row, await this.ratesOne(tx, row));
+        const descriptionKey = patch.description === undefined ? before.descriptionKey : patch.description && packageTextKey(id, 'description');
+        const after = { ...this.view(row, await this.ratesOne(tx, row)), descriptionKey };
         if (held) {
           const had = new Set(held.includedFeatureKeys as string[]);
           const added = after.includedFeatureKeys.filter((k) => !had.has(k));
@@ -181,16 +182,23 @@ export class TenantPackageService {
         const changed = Object.keys(data) as (keyof PackageView)[];
         if (repriced) changed.push('meterRates');
         await tx.adminAuditLog.create({
-          data: this.audit(actor, AdminAction.tenant_package_update, id, pick(before, changed), pick(after, changed)),
+          data: packageAudit(actor, AdminAction.tenant_package_update, id, pick(before, changed), {
+            ...pick(after, changed),
+            ...(patch.description === undefined ? {} : { description: patch.description }),
+          }),
         });
+        await this.texts.publishSources(publish);
+        if (patch.description === null) await this.texts.clear([packageTextKey(id, 'description')]);
         return after;
       }),
     );
+    void this.texts.draftOthers(draftsOf(publish, sourceLang));
+    return view;
   }
 
   /** Every subscriber's `package_included` entitlements become the package's list now, removals included. */
   async apply(actor: TenantPackageActor, id: string): Promise<PackageApplyView> {
-    await this.access(actor);
+    await platformOwnerOnly(this.prisma, actor);
     await this.find(id);
     const view = await this.all.$transaction(async (tx) => {
       await lockPackage(tx, id, 'share');
@@ -201,7 +209,7 @@ export class TenantPackageService {
       await replacePackageEntitlements(tx, subscribers, includedFeatureKeys);
       const result = { packageId: id, includedFeatureKeys, subscribers: subscribers.length };
       await tx.adminAuditLog.create({
-        data: this.audit(actor, AdminAction.tenant_package_apply, id, null, { includedFeatureKeys, subscribers: subscribers.length, tenantIds: subscribers }),
+        data: packageAudit(actor, AdminAction.tenant_package_apply, id, null, { includedFeatureKeys, subscribers: subscribers.length, tenantIds: subscribers }),
       });
       return result;
     });
@@ -210,20 +218,24 @@ export class TenantPackageService {
   }
 
   async list(actor: TenantPackageActor, query: ListPackagesInput): Promise<PackageView[]> {
-    await this.access(actor);
+    await platformOwnerOnly(this.prisma, actor);
     const rows = await this.prisma.tenantFeaturePackage.findMany({
       where: query.active === undefined ? {} : { isActive: query.active },
       orderBy: { name: 'asc' },
       select: PACKAGE_SELECT,
     });
     const rates = await ratesOf(this.prisma, rows);
-    return rows.map((row) => toView(row, rates.get(row.id) ?? []));
+    return rows.map((row) => this.view(row, rates.get(row.id) ?? []));
   }
 
   async read(actor: TenantPackageActor, id: string): Promise<PackageView> {
-    await this.access(actor);
+    await platformOwnerOnly(this.prisma, actor);
     const row = await this.find(id);
-    return toView(row, await this.ratesOne(this.prisma, row));
+    return this.view(row, await this.ratesOne(this.prisma, row));
+  }
+
+  private view(row: PackageRow, meterRates: MeterRateView[]): PackageView {
+    return toView(row, meterRates, this.texts.viewOf(row.id, row.sourceLang));
   }
 
   private async find(id: string): Promise<PackageRow> {
@@ -256,39 +268,13 @@ export class TenantPackageService {
       throw e;
     }
   }
-
-  /** The platform owner's tenant — the same check as reseller administration. */
-  private async access(actor: TenantPackageActor): Promise<void> {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-    if (!isPlatformTenant(tenant?.tenantType)) {
-      throw new TenantPackageRefused('not_platform_owner', 'package administration');
-    }
-  }
-
-  private audit(
-    actor: TenantPackageActor,
-    action: AdminAction,
-    id: string,
-    oldValue: object | null,
-    newValue: object,
-  ): Prisma.AdminAuditLogUncheckedCreateInput {
-    return {
-      tenantId: actor.tenantId,
-      adminId: actor.adminId,
-      action,
-      targetEntityType: AuditTargetType.tenant_feature_package,
-      targetEntityId: id,
-      oldValue: oldValue ? (oldValue as Prisma.InputJsonValue) : Prisma.JsonNull,
-      newValue: newValue as Prisma.InputJsonValue,
-      adminIpAddress: actor.ip,
-    };
-  }
 }
 
-function toView(row: PackageRow, meterRates: MeterRateView[]): PackageView {
+function toView(row: PackageRow, meterRates: MeterRateView[], texts: PackageTextView): PackageView {
   return {
     id: row.id,
     name: row.name,
+    ...texts,
     monthlyPrice: row.monthlyPrice?.toString() ?? null,
     yearlyPrice: row.yearlyPrice?.toString() ?? null,
     currencyCode: row.currencyCode,
@@ -300,4 +286,17 @@ function toView(row: PackageRow, meterRates: MeterRateView[]): PackageView {
 
 function pick(view: PackageView, keys: (keyof PackageView)[]): Partial<PackageView> {
   return Object.fromEntries(keys.map((k) => [k, view[k]]));
+}
+
+/** The source-language texts a create or edit publishes: the name and a description given. */
+function sourceTexts(id: string, lang: string, input: { name?: string; description?: string | null }): { key: string; text: ItemTexts }[] {
+  const texts = [];
+  if (input.name !== undefined) texts.push({ key: packageTextKey(id, 'name'), text: { [lang]: input.name } });
+  if (input.description) texts.push({ key: packageTextKey(id, 'description'), text: { [lang]: input.description } });
+  return texts;
+}
+
+/** Every other language is drafted from the source (ADR-0154 decision 5). */
+function draftsOf(texts: { key: string; text: ItemTexts }[], from: string) {
+  return texts.map(({ key, text }) => ({ key, from, text: text[from], written: [from] }));
 }

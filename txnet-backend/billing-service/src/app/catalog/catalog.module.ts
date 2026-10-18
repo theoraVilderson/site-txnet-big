@@ -34,7 +34,7 @@ import { SeasonInternalController } from './season-internal.controller';
     ResellerCatalogService,
     ResellerAccess,
     CatalogTextService,
-    { provide: CATALOG_TEXT_STORE, useExisting: LocaleService },
+    { provide: CATALOG_TEXT_STORE, inject: [LocaleService], useFactory: (locale: LocaleService) => locale.textStore() },
     { provide: TRANSLATOR, useFactory: () => translatorFromEnv() },
   ],
   exports: [CatalogReadService],

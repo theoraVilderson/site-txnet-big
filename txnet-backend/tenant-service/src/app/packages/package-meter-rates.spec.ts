@@ -3,6 +3,10 @@ import { Prisma } from '@prisma/client';
 import { createPackageSchema, updatePackageSchema } from './tenant-package.schema';
 import { TenantPackageService } from './tenant-package.service';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { markingTranslator, memoryItemTextStore } from '../../../../test-support/item-text-store';
+import { PACKAGE_TEXT_NAMESPACE, PackageTextService } from './package-texts';
+
+const packageTexts = () => new PackageTextService(memoryItemTextStore(PACKAGE_TEXT_NAMESPACE, ['en'], 'en').store, markingTranslator);
 
 /**
  * The invariants F-118-n1 turns on: the wholesale price list on a reseller
@@ -87,7 +91,7 @@ describe('a package prices platform meters (F-118-n1)', () => {
       tenantPackageMeterRate: rateTable,
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
-    return { service: new TenantPackageService(prisma as never, prisma as never), tx, writes };
+    return { service: new TenantPackageService(prisma as never, prisma as never, packageTexts()), tx, writes };
   };
 
   const auditOf = (tx: ReturnType<typeof build>['tx']) => (tx.adminAuditLog.create.mock.calls[0] as unknown as [{ data: { oldValue: unknown; newValue: unknown } }])[0].data;

@@ -1,5 +1,9 @@
 import { TenantPackageService } from './tenant-package.service';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { markingTranslator, memoryItemTextStore } from '../../../../test-support/item-text-store';
+import { PACKAGE_TEXT_NAMESPACE, PackageTextService } from './package-texts';
+
+const packageTexts = () => new PackageTextService(memoryItemTextStore(PACKAGE_TEXT_NAMESPACE, ['en'], 'en').store, markingTranslator);
 
 /**
  * The invariants F-018-o turns on: what a package's subscribers see when its
@@ -65,7 +69,7 @@ describe('TenantPackageService — subscribers', () => {
       tenantFeaturePackage: { findUnique: vi.fn(async ({ where }: { where: { name?: string } }) => (where.name ? null : stored(keys))) },
     };
     const all = { $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)) };
-    return { service: new TenantPackageService(prisma as never, all as never), all, tx, writes };
+    return { service: new TenantPackageService(prisma as never, all as never, packageTexts()), all, tx, writes };
   };
 
   it('grants an added key to every subscriber in the edit, and leaves a removed key in place', async () => {

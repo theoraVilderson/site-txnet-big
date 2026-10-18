@@ -38,6 +38,21 @@ export interface ItemTextStore {
   publishDrafts(target: { scope: string; lang: string; namespace: string; keys: string[] }): Promise<number>;
 }
 
+/** The locale client's overlay calls, as `@txnet/locale-client` has them; shared-core holds no gRPC client. */
+export type ItemTextOverlay = Omit<ItemTextStore, 'getDefaultLanguage'>;
+
+/** A service's locale client and its `DEFAULT_LANGUAGE` as the writer's store — the one adapter, for every service that writes item text. */
+export function itemTextStoreOf(client: ItemTextOverlay, defaultLanguage: string): ItemTextStore {
+  return {
+    languages: () => client.languages(),
+    getDefaultLanguage: () => defaultLanguage,
+    namespace: (lang, namespace) => client.namespace(lang, namespace),
+    setEntries: (target) => client.setEntries(target),
+    listDrafts: (filter) => client.listDrafts(filter),
+    publishDrafts: (target) => client.publishDrafts(target),
+  };
+}
+
 /** One draft waiting for review, beside what a reviewer compares it with. */
 export type ItemTextDraft = {
   lang: string;

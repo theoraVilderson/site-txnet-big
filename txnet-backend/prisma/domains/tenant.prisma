@@ -320,6 +320,9 @@ model TenantDomain {
 model TenantFeaturePackage {
   id                  String   @id @default(uuid()) @db.Uuid
   name                String   @unique // «Starter»، «Growth»، «Enterprise»
+  /// PK-1-c (ADR-0154 (5)): the language `name` and the description are written
+  /// in; both are locale-service text (`packages.p_<id>.*`). Null: DEFAULT_LANGUAGE.
+  sourceLang          String?
   // F-018-d: in `currencyCode` (C-02). Either may be null — a package sold for one
   // period only — but not both, and neither is zero (CHECKs in migration
   // 20260917001200_tenant_feature_package).

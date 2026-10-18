@@ -56,6 +56,11 @@ services:
       - DATABASE_CROSS_TENANT_URL=postgresql://txnet_cross_tenant_user:${DB_CROSS_TENANT_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
       - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE}
       - LOCALE_SERVICE_ADDR=locale-service:${LOCALE_SERVICE_HOST_PORT:-50051}
+      # Drafts a package's name and description in every language but its source (PK-1-c,
+      # ADR-0154 (5)); billing-service's catalog drafts with the same engines. Unset = no drafts.
+      - TRANSLATOR_URL=${TRANSLATOR_URL:-}
+      - TRANSLATOR_LLM_URL=${TRANSLATOR_LLM_URL:-}
+      - TRANSLATOR_LLM_MODEL=${TRANSLATOR_LLM_MODEL:-qwen2.5:3b}
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}
       - REDIS_KEYSPACE_VERSION=${REDIS_KEYSPACE_VERSION:-v2}

@@ -94,16 +94,17 @@ it; the audit row carries the platform owner's tenant.
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `POST /api/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys, meterRates?, limits?, quotaOverages?, products?}`, `.strict()` | `201` a package view |
+| `POST /api/tenant-packages` | `{name, sourceLang?, description?, monthlyPrice?, yearlyPrice?, includedFeatureKeys, meterRates?, limits?, quotaOverages?, products?}`, `.strict()` | `201` a package view |
 | `GET /api/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
 | `GET /api/tenant-packages/:id` | — | one package view |
-| `PATCH /api/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive`; a `meterRates` entry may be `{meterKey, unitPrice: null}` | the package view after |
+| `PATCH /api/tenant-packages/:id` | any of the create fields, a price or `description` may be `null`, `isActive`; a `meterRates` entry may be `{meterKey, unitPrice: null}`; a new `sourceLang` comes with `name` and `description` | the package view after |
+| `GET\|POST draft-missing\|POST publish\|PATCH /api/tenant-packages/translations` | catalog's translation routes and shapes (`lang?`; `{lang, keys}`; `{lang, texts}`) | catalog's answers (PK-1-c) |
 | `POST /api/tenant-packages/:id/apply` | — | `200 {packageId, includedFeatureKeys, subscribers}` |
 
-A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
+A package view: `id, name, sourceLang, nameKey, descriptionKey` (`null`: no description), `monthlyPrice, yearlyPrice` (decimal strings or
 `null`, C-02), `currencyCode` (the package's, the platform's — F-116-h3), `includedFeatureKeys, isActive`,
 `meterRates: [{meterKey, unitSize, unitPrice, currencyCode, effectiveFrom}]` (the rates in force, by key). Refusals: `not_platform_owner`
-403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422, `meter_not_found` 422;
+403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422, `meter_not_found` 422, `lang_unknown` / `text_key_invalid` 422, `texts_unavailable` 503;
 a create's part: `unknown_limit`, `limit_out_of_range`, `not_a_quota`, `product_not_found`, `amount_finer_than_currency`, all 422 — `error.reason` beside a `fieldErrors` entry `{path, message}` for the field (PK-1-j).
 
 | Rule | Why |
@@ -120,6 +121,7 @@ a create's part: `unknown_limit`, `limit_out_of_range`, `not_a_quota`, `product_
 | **`meterRates` is the wholesale price list** (F-118-n1, ADR-0105 (10)): per platform meter, what the platform charges a reseller on this package for `unitSize` of it (2^30 = a GiB of `vpn.traffic` — on its metered Grants and, from F-118-p, the bags of its package plans; `vpn.unlimited.time` is an unlimited plan's flat price per `unitSize` seconds, F-118-z), strings as a rate card takes them — a whole `unitSize` ≥ 1, a positive `unitPrice` to 8 places — each meter once. Written to `tenant_package_meter_rate` in the edit's transaction, in the package's currency | the price lives on the package, so a tier or a negotiated deal (a package of its own) prices every reseller on it (user, 2026-09-29) |
 | A rate is history: a new price is a new row from now, the old one kept; the same price again writes nothing; `null` switches every active row of that meter off; a meter left out is left alone. A meter not in `catalog.meter` is `meter_not_found` before anything is written. `meterRates` is audited before and after when it changed | a Grant that locked a price (F-118-n2) is traced to the row it came from; the trigger `package_meter_rate_is_history` lets only `isActive` change |
 | **Create takes the whole package** (ADR-0154 (4), PK-1-a): `limits: [{key, value}]`, `quotaOverages: [{key, mode, unitPrice?}]`, `products: [{productId, day?, week?, month?, overage?}]` — each entry the body of its own route in contract.limits.md, each key or product once — written in the package's transaction with one `tenant_package_create` audit row holding them; checked by the same functions (`limits/package-terms.ts`). Any refusal writes nothing, not even the package, and names the field as a `fieldErrors` path (`limits.2.value`), as a schema refusal does — a zod default message there becomes `validation.invalidValue`, so its path is never dropped. The body without them is unchanged | a package that sells nothing cannot be half-saved; the wizard returns to the step the field is on |
+| **Name and description are locale-service text** (ADR-0154 (5), PK-1-c): `packages.p_<id, no dashes>.name` / `.description` under `shareds`, derived by the server only. The body's text is in `sourceLang` (absent: `DEFAULT_LANGUAGE`, a language locale-service lacks is `lang_unknown`), published as written as the write's last step — no answer is `texts_unavailable` and nothing is written; every other language gets a machine draft after the commit, served only once a human publishes it on `/translations` (only keys of an existing package, each publish audited `tenant_package_update`). `name` stays the source text. A reader falls back requested → source language → `name`. "Translate missing" publishes the `name` of a package from before PK-1-c as its source first | a buyer reads the package in their language; one translation system, the catalog's writer (ADR-0154 (6)) |
 | Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
 
 ## A reseller's subscription (F-018-e)

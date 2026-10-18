@@ -1,6 +1,10 @@
 import { createPackageSchema, type CreatePackageInput } from './tenant-package.schema';
 import { TenantPackageService } from './tenant-package.service';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { markingTranslator, memoryItemTextStore } from '../../../../test-support/item-text-store';
+import { PACKAGE_TEXT_NAMESPACE, PackageTextService } from './package-texts';
+
+const packageTexts = () => new PackageTextService(memoryItemTextStore(PACKAGE_TEXT_NAMESPACE, ['en'], 'en').store, markingTranslator);
 
 /**
  * A package is created whole, or not at all (ADR-0154 decision 4, PK-1-a).
@@ -72,7 +76,7 @@ describe('TenantPackageService — create, the whole package in one transaction'
         return result;
       }),
     };
-    return { service: new TenantPackageService(prisma as never, all as never), tx, all, committed };
+    return { service: new TenantPackageService(prisma as never, all as never, packageTexts()), tx, all, committed };
   };
 
   it('writes the package, its limits, overage modes and products in one transaction, and audits all of it', async () => {

@@ -14,6 +14,7 @@ import {
   Post,
   Query,
   Req,
+  ServiceUnavailableException,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
@@ -41,7 +42,7 @@ import {
 } from './tenant-package.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
+const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422 | 503> = {
   not_platform_owner: 403,
   package_not_found: 404,
   package_name_taken: 409,
@@ -55,6 +56,10 @@ const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
   not_a_quota: 422,
   product_not_found: 422,
   amount_finer_than_currency: 422,
+  // The name and description in locale-service (ADR-0154 decision 5).
+  lang_unknown: 422,
+  text_key_invalid: 422,
+  texts_unavailable: 503,
 };
 
 /**
@@ -80,7 +85,7 @@ export class TenantPackageController {
     @Body(new ZodValidationPipe(createPackageSchema)) body: CreatePackageInput,
     @Ip() ip: string,
   ): Promise<PackageView> {
-    return this.refusing(() => this.packages.create(actorOf(req, ip), body));
+    return refusing(() => this.packages.create(actorOf(req, ip), body));
   }
 
   @Get()
@@ -89,19 +94,19 @@ export class TenantPackageController {
     @Query(new ZodValidationPipe(listPackagesSchema)) query: ListPackagesInput,
     @Ip() ip: string,
   ): Promise<PackageView[]> {
-    return this.refusing(() => this.packages.list(actorOf(req, ip), query));
+    return refusing(() => this.packages.list(actorOf(req, ip), query));
   }
 
   @Get(':id')
   async read(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageView> {
-    return this.refusing(() => this.packages.read(actorOf(req, ip), id));
+    return refusing(() => this.packages.read(actorOf(req, ip), id));
   }
 
   /** Forces the package's feature list onto every current subscriber now, removals included (F-018-o). */
   @Post(':id/apply')
   @HttpCode(HttpStatus.OK)
   async apply(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string, @Ip() ip: string): Promise<PackageApplyView> {
-    return this.refusing(() => this.packages.apply(actorOf(req, ip), id));
+    return refusing(() => this.packages.apply(actorOf(req, ip), id));
   }
 
   @Patch(':id')
@@ -111,26 +116,7 @@ export class TenantPackageController {
     @Body(new ZodValidationPipe(updatePackageSchema)) body: UpdatePackageInput,
     @Ip() ip: string,
   ): Promise<PackageView> {
-    return this.refusing(() => this.packages.update(actorOf(req, ip), id, body));
-  }
-
-  private async refusing<T>(work: () => Promise<T>): Promise<T> {
-    try {
-      return await work();
-    } catch (e) {
-      if (!(e instanceof TenantPackageRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message, ...fieldOf(e) };
-      switch (STATUS[e.reason]) {
-        case 403:
-          throw new ForbiddenException(payload);
-        case 404:
-          throw new NotFoundException(payload);
-        case 409:
-          throw new ConflictException(payload);
-        default:
-          throw new UnprocessableEntityException(payload);
-      }
-    }
+    return refusing(() => this.packages.update(actorOf(req, ip), id, body));
   }
 }
 
@@ -143,12 +129,34 @@ const PART_TEXT: Record<PackagePartRejection, string> = {
   amount_finer_than_currency: BackendI18nKeys.errors.tenant.package.priceFinerThanCurrency,
 };
 
+/** A package refusal as its HTTP answer, `reason` beside any `fieldErrors`; anything else is rethrown. */
+export async function refusing<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (e) {
+    if (!(e instanceof TenantPackageRefused)) throw e;
+    const payload = { reason: e.reason, message: e.message, ...fieldOf(e) };
+    switch (STATUS[e.reason]) {
+      case 403:
+        throw new ForbiddenException(payload);
+      case 404:
+        throw new NotFoundException(payload);
+      case 409:
+        throw new ConflictException(payload);
+      case 503:
+        throw new ServiceUnavailableException(payload);
+      default:
+        throw new UnprocessableEntityException(payload);
+    }
+  }
+}
+
 function fieldOf(e: TenantPackageRefused): { fieldErrors?: { path: string; i18nKey: string }[] } {
   if (!e.field || !isPartRejection(e.reason)) return {};
   return { fieldErrors: [{ path: e.field, i18nKey: PART_TEXT[e.reason] }] };
 }
 
-function actorOf(req: Request, ip: string): TenantPackageActor {
+export function actorOf(req: Request, ip: string): TenantPackageActor {
   const identity = identityOf(req);
   return { adminId: identity.userId, tenantId: identity.tenantId, ip };
 }

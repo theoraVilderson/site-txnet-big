@@ -16,6 +16,9 @@ import { limitValue, overageTermsWith, setPackageProductSchema, type SetOverageI
  * takes them (F-118-m): a whole `unitSize` of at least 1, a positive
  * `unitPrice` to 8 places. On an edit `unitPrice: null` switches a meter off.
  *
+ * `name` is the text in `sourceLang` (absent: `DEFAULT_LANGUAGE`), and so is
+ * `description`; both become locale-service text (ADR-0154 decision 5).
+ *
  * On create only, the rest of the package may ride along (ADR-0154 decision
  * 4): `limits`, `quotaOverages` and `products`, each entry the body its own
  * endpoint takes (contract.limits.md) plus the key or product it is for.
@@ -33,6 +36,9 @@ const featureKeys = z
   .refine((keys) => new Set(keys).size === keys.length, { message: 'a feature key is repeated' });
 
 const name = z.string().trim().min(1).max(80);
+/** A language code as locale-service names it; which exist is its answer, checked by the service (`lang_unknown`). */
+const lang = z.string().regex(/^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$/, { message: 'lang must be a language code' });
+const description = z.string().trim().min(1).max(2000);
 
 const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 const UNIT_SIZE = /^[1-9]\d{0,18}$/;
@@ -89,6 +95,8 @@ export type MeterRateEdit = z.infer<typeof meterRate> | z.infer<typeof meterRate
 export const createPackageSchema = z
   .object({
     name,
+    sourceLang: lang.optional(),
+    description: description.optional(),
     monthlyPrice: price.optional(),
     yearlyPrice: price.optional(),
     includedFeatureKeys: featureKeys,
@@ -108,10 +116,16 @@ export type CreatePackageInput = Omit<z.infer<typeof createPackageSchema>, 'limi
   products?: PackageProductInput[];
 };
 
-/** `null` clears a price; the service refuses an edit that leaves none. `isActive: false` deactivates. */
+/**
+ * `null` clears a price; the service refuses an edit that leaves none. `isActive: false` deactivates.
+ * `description: null` removes it. A new `sourceLang` says the text is now in that language, so it
+ * comes with the name and the description (or `null`) written in it.
+ */
 export const updatePackageSchema = z
   .object({
     name: name.optional(),
+    sourceLang: lang.optional(),
+    description: description.nullable().optional(),
     monthlyPrice: price.nullable().optional(),
     yearlyPrice: price.nullable().optional(),
     includedFeatureKeys: featureKeys.optional(),
@@ -119,7 +133,11 @@ export const updatePackageSchema = z
     meterRates: meterRateEdits.optional(),
   })
   .strict()
-  .refine((p) => Object.keys(p).length > 0, { message: 'nothing to change' });
+  .refine((p) => Object.keys(p).length > 0, { message: 'nothing to change' })
+  .refine((p) => p.sourceLang === undefined || (p.name !== undefined && p.description !== undefined), {
+    message: 'a new sourceLang comes with name and description in it',
+    path: ['sourceLang'],
+  });
 
 export type UpdatePackageInput = z.infer<typeof updatePackageSchema>;
 
@@ -128,3 +146,17 @@ export const listPackagesSchema = z
   .strict();
 
 export type ListPackagesInput = z.infer<typeof listPackagesSchema>;
+
+/** Package translation review (ADR-0154 decision 6): catalog's request shapes, so the panel's view serves both. */
+const textKey = z.string().max(200);
+const REVIEW_BATCH_MAX = 200;
+export const listPackageTextsSchema = z.object({ lang: lang.optional() }).strict();
+export const publishPackageTextsSchema = z.object({ lang, keys: z.array(textKey).min(1).max(REVIEW_BATCH_MAX) }).strict();
+export const editPackageTextsSchema = z
+  .object({ lang, texts: z.record(textKey, description) })
+  .strict()
+  .refine((b) => Object.keys(b.texts).length > 0 && Object.keys(b.texts).length <= REVIEW_BATCH_MAX, { message: 'texts holds 1-200 entries', path: ['texts'] });
+
+export type ListPackageTextsInput = z.infer<typeof listPackageTextsSchema>;
+export type PublishPackageTextsInput = { lang: string; keys: string[] };
+export type EditPackageTextsInput = { lang: string; texts: Record<string, string> };

@@ -4,7 +4,7 @@ import { inCurrency, platformTenantIdOf } from '@txnet-backend/shared-core';
 import { firstNotPlatformProduct, limitWithin, overageColumns, productQuotaColumns, quotaKeyOf } from '../limits/package-terms';
 import { ResellerLimitsRefused } from '../limits/reseller-limits.service';
 import type { CreatePackageInput, PackageProductInput } from './tenant-package.schema';
-import { TenantPackageRefused } from './tenant-package.service';
+import { TenantPackageRefused } from './tenant-package.refusal';
 
 /**
  * The rest of a package, written with it (ADR-0154 decision 4): its limits,
