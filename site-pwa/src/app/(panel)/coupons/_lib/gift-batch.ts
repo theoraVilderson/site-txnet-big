@@ -2,13 +2,20 @@ import type { Me } from "@/lib/auth-api";
 import type { GenerateGiftBatchBody } from "@/lib/billing-api";
 import { COUPON_KEYS, dayToInstant, type CouponOwnerChoice } from "./coupon-form";
 import { isPlatformTenant } from "@/lib/tenant-type";
-import { MONEY_PATTERN } from "../../_lib/money";
+import { MONEY_MAX_PLACES, MONEY_PATTERN, moneyUnits } from "../../_lib/money";
 
 /** Every string the gift tab can show (C-06). */
 export const GIFT_KEYS = COUPON_KEYS.gift;
 
 /** billing's `GIFT_BATCH_MAX` (F-502-d). */
 export const GIFT_BATCH_MAX = 5000;
+
+/** billing's `GIFT_CODE_ALPHABET` and `BODY_LENGTH`: a code is `PREFIX-` and ten of these, test-checked against the service. */
+export const GIFT_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+export const GIFT_CODE_BODY_LENGTH = 10;
+
+/** How many sample codes the review shows (UX-3-e): enough to see the shape, too few to read as a batch. */
+const SAMPLE_CODES = 3;
 
 export interface GiftBatchForm {
   owner: CouponOwnerChoice;
@@ -59,4 +66,26 @@ export function giftBatchBody(f: GiftBatchForm, me: Me | null): GenerateGiftBatc
   if (f.expiresAt) body.expiresAt = dayToInstant(f.expiresAt, "end");
   if (isPlatformTenant(me?.tenant?.type) && f.owner !== "own") body.tenantId = f.owner === "platform" ? null : f.tenantId.trim();
   return body;
+}
+
+/**
+ * Codes in the shape billing will make them (UX-3-e) — invented here, never
+ * real ones: rule 10 keeps the batch's codes off the screen, so the review
+ * shows only what a code will look like.
+ */
+export function sampleGiftCodes(prefix: string, count: number): string[] {
+  const head = prefix.trim().toUpperCase();
+  const draw = new Uint32Array(GIFT_CODE_BODY_LENGTH);
+  return Array.from({ length: Math.min(SAMPLE_CODES, count) }, () => {
+    const body = Array.from(crypto.getRandomValues(draw), (n) => GIFT_CODE_ALPHABET[n % GIFT_CODE_ALPHABET.length]).join("");
+    return head ? `${head}-${body}` : body;
+  });
+}
+
+/** `count` codes of `value` each, as a decimal string with no trailing zeros, multiplied without a float (C-02). */
+export function batchTotal(value: string, count: number): string {
+  const units = (moneyUnits(value.trim()) * BigInt(count)).toString().padStart(MONEY_MAX_PLACES + 1, "0");
+  const whole = units.slice(0, -MONEY_MAX_PLACES);
+  const fraction = units.slice(-MONEY_MAX_PLACES).replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole;
 }

@@ -70,7 +70,14 @@ The routes, the scope and every rule are
     and revokes its object URL at once, and billing audits the export. A batch
     form mirrors billing: a name, 1..5000 codes (`GIFT_BATCH_MAX`, test-checked
     against the service), a value > 0, an optional prefix of up to 8 letters or
-    digits, an inclusive Tehran end day; owner fields as rule 6.
+    digits, an inclusive Tehran end day; owner fields as rule 6. **A batch
+    is reviewed before it is made (UX-3-e)** — no wizard, a second view of
+    the same sheet (`GiftBatchSheet` → `GiftBatchReview`): owner, count, the
+    credit per code with `batchTotal` (count × value, BigInt — C-02) or the
+    variant granted by its label, the end or "never expires", and three
+    invented codes in billing's shape (`sampleGiftCodes`, alphabet and length
+    test-checked against the service) — never real ones. "Generate N codes"
+    is only on the review, under the warning that a batch cannot be undone.
 11. **Switching a batch off is confirmed and re-read.** The sentence says how
     many codes went off; codes already redeemed keep their credit. Usage opens
     the same report view as a coupon's, with the batch's totals.
@@ -145,6 +152,9 @@ statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,
 inclusive day), every gift key in `en` and `fa`.
+`coupons/gift-batch-review.test.tsx` — sample codes against billing's
+alphabet and length, `batchTotal` without a float, the sheet held on an error,
+nothing generated before the review's button, back keeps the fields.
 `coupons/coupon-wizard.test.tsx` — every field on one step, a step's errors
 alone, refusal → step, the review's "only what was set", Next held on step 1.
 `coupons/pickers.test.tsx` — each picker writes the same ids text: a pick

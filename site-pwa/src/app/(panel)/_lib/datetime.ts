@@ -123,6 +123,9 @@ export const PLATFORM_UTC_OFFSET = "+03:30";
 /** A picked platform day's first instant, as billing stores it. */
 export const platformDayStart = (day: string): string => `${day}T00:00:00${PLATFORM_UTC_OFFSET}`;
 
+/** A picked platform day (`YYYY-MM-DD`) in the reader's calendar, read at noon so no zone moves it to the next or last day. */
+export const formatPlatformDay = (day: string, lang: string): string => formatInstant(`${day}T12:00:00${PLATFORM_UTC_OFFSET}`, lang, { withTime: false }) ?? day;
+
 /** A moment as the visitor's wall time, `YYYY-MM-DDTHH:mm` — what `DatePicker withTime` holds (GR-1-k, F-030-c). */
 export type WallTime = string;
 

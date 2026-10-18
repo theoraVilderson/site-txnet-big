@@ -487,7 +487,6 @@
  "state": {
   "site-pwa/src/app/(panel)/_components/ManualRateCard.tsx": 12,
   "site-pwa/src/app/(panel)/catalog/_components/ProductDetailSheet.tsx": 11,
-  "site-pwa/src/app/(panel)/coupons/_components/GiftCodes.tsx": 13,
   "site-pwa/src/app/(panel)/financial/deposit/_components/DepositView.tsx": 11,
   "site-pwa/src/app/(panel)/groups/_components/GroupWizard.tsx": 12,
   "site-pwa/src/app/(panel)/groups/_components/MembersSheet.tsx": 11,

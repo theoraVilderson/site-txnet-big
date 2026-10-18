@@ -1435,7 +1435,20 @@
         "kindCredit": "Wallet credit",
         "kindService": "A free service",
         "grantVariantId": "Catalog variant",
-        "grantVariantHint": "The code gives a Grant of this variant."
+        "grantVariantHint": "The code gives a Grant of this variant.",
+        "review": {
+          "open": "Review",
+          "title": "Check the batch before generating",
+          "batch": "The batch",
+          "edit": "Change",
+          "back": "Back to the form",
+          "confirm": "Generate {{count}} codes",
+          "total": "Total credit handed out: {{total}}",
+          "neverExpires": "Never expires",
+          "samples": "What the codes will look like",
+          "samplesHint": "Examples of the shape only. The real codes are made when you generate, and are only in the CSV.",
+          "irreversible": "A batch cannot be undone. Once generated, the codes exist; you can only switch the batch off later, and codes already redeemed keep what they gave."
+        }
       },
       "errors": {
         "label": "Name the batch",

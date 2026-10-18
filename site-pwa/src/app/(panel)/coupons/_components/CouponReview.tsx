@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { CHANNELS, COUPON_KEYS, WEEKDAY_KEYS, type CouponForm } from "../_lib/coupon-form";
 import { idsOf } from "../_lib/discount-rules";
 import { FIELD_STEPS, STEP_FIELDS, hourLabel, setFields, type FieldStep } from "../_lib/coupon-steps";
-import { PLATFORM_UTC_OFFSET, formatInstant } from "../../_lib/datetime";
+import { formatPlatformDay } from "../../_lib/datetime";
 import { formatList } from "../../_lib/digits";
 import { ReviewRows, type ReviewRow } from "../../_components/kit";
 import { SHORT_ID } from "./PickedChips";
@@ -23,9 +23,6 @@ const NOT_FOR: Record<CouponForm["discountType"], (keyof CouponForm)[]> = {
   fixed_amount: ["grantVariantId", "maxDiscountCap"],
   free_grant: ["discountValue", "maxDiscountCap"],
 };
-
-/** A picked Tehran day in the reader's calendar, read at noon so no zone moves it. */
-const dayText = (day: string, lang: string) => formatInstant(`${day}T12:00:00${PLATFORM_UTC_OFFSET}`, lang, { withTime: false }) ?? day;
 
 /**
  * The wizard's last step (UX-3-b, K5): each step's choices with a way back to
@@ -114,9 +111,9 @@ function useValueText(form: CouponForm, lang: string, gatewayName: (key: string)
       case "firstPurchaseOnly":
         return yes(form[k]);
       case "validFrom":
-        return dayText(form.validFrom, lang);
+        return formatPlatformDay(form.validFrom, lang);
       case "expiresAt":
-        return form.expiresAt ? dayText(form.expiresAt, lang) : t("common", F.neverExpires);
+        return form.expiresAt ? formatPlatformDay(form.expiresAt, lang) : t("common", F.neverExpires);
       case "activeWeekdays":
         return formatList([...form.activeWeekdays].sort().map((d) => t("common", WEEKDAY_KEYS[d as keyof typeof WEEKDAY_KEYS])), lang);
       case "activeHourFrom":
