@@ -13,13 +13,13 @@ import {
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, refusedAudienceGroup, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant, moneyText, inCurrency } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, refusedAudienceGroup, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant, moneyText, inCurrency, type ItemTextDraft, type ItemTexts } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PLACEABLE_PANEL_FIELDS, placeableMember } from '../traffic/panel-placeable';
 import { sellingInbounds } from '../traffic/selling-settings';
-import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
+import { CatalogTextKind, CatalogTextService, catalogTextKey, parseCatalogTextKey } from './catalog-texts';
 import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
 import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf, upcomingSeasonCampaigns } from './season-plan';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
@@ -160,10 +160,10 @@ export class CatalogAdminRefused extends Error {
 /** `parentId`: the category it sits under; absent or `null` = top level (F-026-r). */
 /** `translateAll` (F-1533-i): draft every language not written into the review list. Off when absent. */
 type TranslateAll = { translateAll?: boolean };
-export type CreateCategoryInput = TranslateAll & { tenantId?: string; parentId?: string | null; key: string; sourceLang?: string; name: Texts };
+export type CreateCategoryInput = TranslateAll & { tenantId?: string; parentId?: string | null; key: string; sourceLang?: string; name: ItemTexts };
 /** A new `sourceLang` needs `name` with that language's text. */
 /** `archived: false` brings an archived category back, still switched off (F-026-l). `parentId: null` moves it to the top. */
-export type UpdateCategoryInput = TranslateAll & { parentId?: string | null; sourceLang?: string; name?: Texts; isActive?: boolean; archived?: false };
+export type UpdateCategoryInput = TranslateAll & { parentId?: string | null; sourceLang?: string; name?: ItemTexts; isActive?: boolean; archived?: false };
 export type CreateProductInput = TranslateAll & {
   tenantId?: string;
   /** One or more, distinct; the first is shown first (F-026-r). */
@@ -171,9 +171,9 @@ export type CreateProductInput = TranslateAll & {
   key: string;
   /** Absent: `DEFAULT_LANGUAGE`. */
   sourceLang?: string;
-  name: Texts;
+  name: ItemTexts;
   /** `null` or absent: no description. */
-  description?: Texts | null;
+  description?: ItemTexts | null;
   fulfilmentKind: FulfilmentKind;
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
@@ -182,9 +182,9 @@ export type UpdateProductInput = TranslateAll & {
   /** Replaces every category the product sits in, in this order. */
   categoryIds?: string[];
   sourceLang?: string;
-  name?: Texts;
+  name?: ItemTexts;
   /** `null` removes the description. */
-  description?: Texts | null;
+  description?: ItemTexts | null;
   featureKeys?: string[];
   defaultQuotas?: Record<string, unknown>;
   isActive?: boolean;
@@ -192,8 +192,8 @@ export type UpdateProductInput = TranslateAll & {
   archived?: false;
 };
 /** A capability (F-114-f-a): the key is written once; the name is text, as a product's. */
-export type CreateCapabilityInput = TranslateAll & { tenantId?: string; key: string; sourceLang?: string; name: Texts; description?: Texts | null };
-export type UpdateCapabilityInput = TranslateAll & { sourceLang?: string; name?: Texts; description?: Texts | null };
+export type CreateCapabilityInput = TranslateAll & { tenantId?: string; key: string; sourceLang?: string; name: ItemTexts; description?: ItemTexts | null };
+export type UpdateCapabilityInput = TranslateAll & { sourceLang?: string; name?: ItemTexts; description?: ItemTexts | null };
 export type VariantFields = {
   nameKey?: string | null;
   quotas?: Record<string, unknown>;
@@ -485,7 +485,7 @@ const TEXT_ITEMS = {
 type DraftRequest = { key: string; from: string; text: string; written: string[] };
 
 /** What to draft for one text: from its source language, into every language not written. */
-const drafts = (key: string, from: string, text: Texts): DraftRequest[] =>
+const drafts = (key: string, from: string, text: ItemTexts): DraftRequest[] =>
   text[from] ? [{ key, from, text: text[from], written: Object.keys(text) }] : [];
 
 @Injectable()
@@ -1134,7 +1134,7 @@ export class CatalogAdminService {
   // -------------------------------------------------------------- translations
 
   /** Drafts waiting for review — every key for the platform owner, a tenant's own otherwise. */
-  async listTextDrafts(actor: CatalogActor, lang?: string): Promise<ReviewItem[]> {
+  async listTextDrafts(actor: CatalogActor, lang?: string): Promise<ItemTextDraft[]> {
     return this.texts.reviewList(await this.textSourcesOf(actor), lang);
   }
 
@@ -1681,12 +1681,12 @@ export class CatalogAdminService {
     keyOwner: string | null,
     key: string,
     sourceLang: string,
-    name: Texts | undefined,
-    description: Texts | null | undefined,
+    name: ItemTexts | undefined,
+    description: ItemTexts | null | undefined,
   ) {
     const nameKey = catalogTextKey(keyOwner, kind, key, 'name');
     const descriptionKey = catalogTextKey(keyOwner, kind, key, 'description');
-    const publish: { key: string; text: Texts }[] = [];
+    const publish: { key: string; text: ItemTexts }[] = [];
     const draft: DraftRequest[] = [];
     const clear: string[] = [];
     if (name) {
@@ -1708,7 +1708,7 @@ export class CatalogAdminService {
    * has (`lang_unknown`), and each text given must include it
    * (`source_text_missing`) — a draft is translated from it.
    */
-  private sourceLang(requested: string | undefined, name: Texts | undefined, description: Texts | null | undefined): string {
+  private sourceLang(requested: string | undefined, name: ItemTexts | undefined, description: ItemTexts | null | undefined): string {
     const lang = requested ?? this.texts.defaultLanguage();
     const known = new Set(this.texts.languages());
     const written = [...Object.keys(name ?? {}), ...Object.keys(description ?? {})];

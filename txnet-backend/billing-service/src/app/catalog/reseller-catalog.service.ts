@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  type ItemTextDraft,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -43,7 +44,6 @@ import {
   UpdateVariantInput,
 } from './catalog-admin.service';
 import type { VariantView } from './catalog-views';
-import type { ReviewItem } from './catalog-texts';
 
 /** The caller, as `forward-auth` proved them, plus the address a write is audited from. */
 export type ResellerCatalogActor = ResellerActor & { ip: string };
@@ -258,7 +258,7 @@ export class ResellerCatalogService {
 
   // ------------------------------------------------------------ translations
 
-  listTextDrafts(actor: ResellerCatalogActor, tenantId: string, lang?: string): Promise<ReviewItem[]> {
+  listTextDrafts(actor: ResellerCatalogActor, tenantId: string, lang?: string): Promise<ItemTextDraft[]> {
     return this.run(actor, tenantId, 'read', (as) => this.catalog.listTextDrafts(as, lang));
   }
 

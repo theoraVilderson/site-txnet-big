@@ -110,7 +110,8 @@ copies the strings (`catalog/catalog-admin.service.ts`, proved by
 ## Names (F-1533-d/f, ADR-0050 and its amendments)
 
 A category or product body carries **text, never a key**; `nameKey` /
-`descriptionKey` are derived and returned (`catalog/catalog-texts.ts`, proved by
+`descriptionKey` are derived and returned (`catalog/catalog-texts.ts`: the keys,
+over shared-core's `ItemTextWriter` — i18n contract; proved by
 `catalog-texts.spec.ts` and `catalog-admin.service.spec.ts`).
 
 | Rule | Held by |

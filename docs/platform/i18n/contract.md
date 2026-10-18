@@ -178,6 +178,18 @@ campaign texts (`message`).
 | Output is a **draft** only — nothing publishes it but a human (ADR-0050 decision 3) | callers (F-1533-d) |
 | No language list in code: pairs come from the engine, languages from locale-service; which models load is `TRANSLATOR_LANGUAGES` | §1.1 |
 
+## Item text writer (`ItemTextWriter`, ADR-0154 decision 6)
+
+`shared-core` exports `ItemTextWriter`: the one writer of an item's name and
+description — publish the owner's languages, machine-draft the rest from the
+source language, "translate missing", review, publish a draft or an edit, all
+under `shareds`. An `ItemTextScheme` is what a kind of item owns: its
+namespace, the pattern of the keys its server derives (any other key is
+refused `text_key_invalid`) and its refusal error (`texts_unavailable` when
+locale-service does not answer). Drafting never fails the write it follows.
+Users: billing's `CatalogTextService` (namespace `catalog`, proved by
+`catalog-texts.spec.ts`); tenant-service's packages next (PK-1-c).
+
 ## Guarantees
 
 - Boot dependency: a consumer that cannot reach `locale-service` within its boot
