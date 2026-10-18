@@ -15,7 +15,7 @@ export type { RealtimeErrorCode, RealtimeSocket, SocketFactory, ChannelListener,
  */
 export const SUBPROTOCOL = "txnet.v1";
 
-export { membersChannel, tenantChannel, userChannel } from "./realtime-channels";
+export { catalogChannel, membersChannel, PLATFORM_CATALOG, tenantChannel, userChannel } from "./realtime-channels";
 
 /** Used until a `welcome` frame says otherwise; the gateway's own default. */
 const DEFAULT_MAX_SUBSCRIPTIONS = 32;

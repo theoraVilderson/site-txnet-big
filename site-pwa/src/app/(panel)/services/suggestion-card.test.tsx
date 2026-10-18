@@ -44,6 +44,8 @@ const offer = (variantId: string, nameKey: string, price: string): ShopOffer => 
   price,
   currencyCode: "USD",
   rateCards: [],
+  remaining: null,
+  soldOut: false,
 });
 const texts = { "catalog.small": "Small 50 GB", "catalog.big": "Big 100 GB" };
 const card: Card = {

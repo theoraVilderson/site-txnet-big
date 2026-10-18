@@ -14,7 +14,8 @@ purchase routes ([billing/contract.purchase.md](../../domains/billing/contract.p
 `GET /offers`, `POST /invoices`, `GET /invoices/:id`, `POST /invoices/:id/pay`,
 `POST /invoices/:id/cancel`.
 
-Its pieces: `_components/ShopView.tsx` (cards, checkout, paid),
+Its pieces: `_components/ShopView.tsx` (checkout, paid), `OfferList.tsx`
+(the cards), `_hooks/useCatalogSalesLive.ts` (rule 13),
 `_lib/shop.ts` (the shortfall, the pre-fill, the grouping, the tabs, a quota's
 limit, the return id),
 `page.tsx` (reads `?invoice=`). The top-up page and `/payment/success` each
@@ -106,6 +107,15 @@ carry one piece of the return (rules 7 and 8).
    suggestion card's one call to action. Read once the list is: a variant the
    list does not offer leaves the list, never a guessed checkout; "back" is
    the list. `?invoice=` wins when both are given.
+13. **Sold out is shown, never bought, and live** (F-513-c, catalog
+   [contract.sales-cap.md](../../domains/catalog/contract.sales-cap.md)).
+   An offer `soldOut` stays on its card with an error-tone "sold out" pill on
+   its chip (or under the price, alone on its card) and the buy off; a card
+   opens on its first variant still for sale (`firstForSale`). The list
+   re-reads on `catalog.variant.sales_changed` and on a reconnect, over
+   `catalog:<own tenant>` and `catalog:platform` (`catalogChannel`, RT-1-p);
+   a failed re-read shows the first read's retry box. A checkout already open
+   is not withdrawn: the invoice's `soldOut` 409 is its sentence.
 
 ## Proof
 
@@ -117,6 +127,8 @@ rejected code dropped, the top-up link carrying the invoice and `missing`, no ke
 shown, only the My services link, one pay per press, and the return on
 `?invoice=` — pending pays, expired does not; a metered buy under 1 GB of
 wallet told so, with its top-up link and the pay still offered.
+`shop/sold-out.test.tsx` — rule 13: the pill, the buy off, the card opening
+past a sold-out chip, both channels heard and the card following an event.
 `my-resellers/grant-limits.test.tsx` — `meteredCapOf` reads `{cap, open}` from
 `metered_cap_reached` only.
 

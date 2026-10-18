@@ -158,6 +158,11 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    would only repeat the review. Only a failed variant opens the sheet, with
    `wizard.partial`, because adding it is the work left.
 
+10h. **A variant's sales cap** (F-513-c, catalog [contract.sales-cap.md](../../domains/catalog/contract.sales-cap.md)):
+   `SalesCapSection` on each variant card shows billing's `sales` — sold, held
+   by unpaid invoices, left — sets a whole number 1..`MAX_SALES_CAP` (`parseSalesCap`,
+   test-held to billing's) and clears it to `null`; a sold-out card says so.
+
 A variant's cost per sale and the usage costs tab: [contract.catalog-cost.md](contract.catalog-cost.md) (F-1002-g).
 
 ## Who can buy a product (PT-1-b)

@@ -56,6 +56,7 @@ vi.mock("../_hooks/useWalletBalance", () => ({
   }),
 }));
 vi.mock("@/lib/catalog-api", () => ({ catalogApi: { texts: vi.fn().mockRejectedValue(new Error("404")) } }));
+vi.mock("./_hooks/useCatalogSalesLive", () => ({ useCatalogSalesLive: () => {} }));
 
 const shopOffers = vi.mocked(billingApi.shopOffers);
 const createInvoice = vi.mocked(billingApi.createInvoice);
@@ -84,6 +85,8 @@ const OFFER: ShopOffer = {
   quotas: { traffic_bytes: { limit: 50 * 1024 ** 3, resetPolicy: "never" } },
   price: "12.50",
   rateCards: [],
+  remaining: null,
+  soldOut: false,
 };
 
 const OFFER_90: ShopOffer = { ...OFFER, variantId: "v-90", sku: "VPN-90", durationDays: 90, price: "30.00" };

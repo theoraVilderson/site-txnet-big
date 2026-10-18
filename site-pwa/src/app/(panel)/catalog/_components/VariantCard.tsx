@@ -24,6 +24,7 @@ import {
 } from "../_lib/catalog-form";
 import { RateCardSection, RegenerateCardSection } from "./RateCardSection";
 import { VariantCostSection } from "./VariantCostSection";
+import { SalesCapSection } from "./SalesCapSection";
 import { PanelGroupSelect, type PanelGroups } from "./PanelGroupSelect";
 import { CopyId, Field, useMessage } from "./catalog-ui";
 import { Alert, Button, Input } from "../../_components/kit";
@@ -99,6 +100,7 @@ export function VariantCard({
           </p>
           {notForSale(v, kind) && <p className="mt-1 text-2xs font-bold text-error">{t("common", K.variant.notForSale)}</p>}
           {noRate(v, now) && <p className="mt-1 text-2xs font-bold text-error">{t("common", K.rateCard.none)}</p>}
+          {v.sales.soldOut && <p className="mt-1 text-2xs font-bold text-error">{t("common", K.salesCap.soldOut)}</p>}
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <span className="rounded-full bg-[var(--leaf-bg)] px-2 py-0.5 text-xs font-bold text-primary">
@@ -115,6 +117,7 @@ export function VariantCard({
         <PanelGroupSelect value={v.panelGroupId ?? ""} groups={groups} onChange={(id) => void act(() => api.updateVariant(v.id, panelGroupPatch(id)))} />
       )}
 
+      <SalesCapSection variant={v} act={act} />
       {v.billingMode === "metered" && <RateCardSection variant={v} act={act} />}
       {takesPanelGroup(kind) && <RegenerateCardSection variant={v} act={act} />}
       <VariantCostSection variantId={v.id} />

@@ -137,10 +137,7 @@ export interface CreateCapabilityBody {
 }
 
 /** What a removal did to one product (F-026-h): gone for good, kept because it was sold, or not the caller's. */
-export interface ProductRemoval {
-  id: string;
-  outcome: "deleted" | "archived" | "not_found";
-}
+export type ProductRemoval = { id: string; outcome: "deleted" | "archived" | "not_found" };
 
 /**
  * What a removal did to one category (F-026-j): gone, kept because a product sits in it (archived ones too), or not
@@ -210,6 +207,8 @@ export interface CatalogVariant {
   panelGroupId: string | null;
   qualityTier: QualityTier;
   isActive: boolean;
+  /** Its sales cap, what is sold and held, and what is left; `remaining` is `null` with no cap (F-513-a). */
+  sales: { cap: number | null; sold: number; reserved: number; remaining: number | null; soldOut: boolean };
   /** Newest `effectiveFrom` first. */
   prices: CatalogPrice[];
   /** Every meter's card history, newest first (F-118-m). */
@@ -273,7 +272,8 @@ export interface CreateVariantBody {
   /** A metered variant's first card, from the same instant as the first price (F-118-m). */
   rateCard?: RateCardTerms;
 }
-export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId">> & { isActive?: boolean };
+/** `salesCap`: `null` clears it, absent leaves it (F-513-a). */
+export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId">> & { isActive?: boolean; salesCap?: number | null };
 
 export interface SetPriceBody {
   amount: string;

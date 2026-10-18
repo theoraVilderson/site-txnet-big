@@ -1972,6 +1972,16 @@
       "save": "Save access",
       "saved": "Saved",
       "limited": "Groups only"
+    },
+    "salesCap": {
+      "label": "Sales cap",
+      "hint": "The most of this variant that will be sold. Blank means no cap.",
+      "save": "Save cap",
+      "clear": "Remove cap",
+      "counts": "{{sold}} sold · {{reserved}} held by unpaid invoices · {{remaining}} left",
+      "uncapped": "No cap · {{sold}} sold so far",
+      "invalid": "Enter a positive whole number, at most {{max}}.",
+      "soldOut": "Sold out — cannot be bought in the shop"
     }
   },
   "settings": {
@@ -4298,7 +4308,8 @@
       "choose": "Choose",
       "pay": "Invoice and pay",
       "delivered": "Delivered"
-    }
+    },
+    "soldOut": "Sold out"
   },
   "userGroups": {
     "title": "Groups",

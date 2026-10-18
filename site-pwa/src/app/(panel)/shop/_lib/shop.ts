@@ -75,6 +75,11 @@ export function groupOffers(offers: readonly ShopOffer[]): OfferGroup[] {
   return [...groups.values()];
 }
 
+/** The variant a card opens on: the first still for sale, else the first — a sold-out card is still shown (F-513-c). */
+export function firstForSale(variants: readonly ShopOffer[]): ShopOffer {
+  return variants.find((v) => !v.soldOut) ?? variants[0];
+}
+
 /** The tabs over the cards: every category any offer is filed in, once, in the order first met (F-114-d). */
 export function categoriesOf(offers: readonly ShopOffer[]): Array<{ key: string; nameKey: string }> {
   const seen = new Map<string, { key: string; nameKey: string }>();

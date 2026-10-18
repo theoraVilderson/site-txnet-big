@@ -34,3 +34,20 @@ export function tenantChannel(tenantId: string): string {
 export function membersChannel(tenantId: string): string {
   return `members:${tenantId}`;
 }
+
+/**
+ * The platform's catalog channel's id (RT-1-p): the gateway holds no database
+ * to learn the platform's tenant id, so its catalog is named by this word —
+ * shared-core's `PLATFORM_CATALOG_ID`.
+ */
+export const PLATFORM_CATALOG = "platform";
+
+/**
+ * What a shop shows of one catalog (RT-1-p): `catalog:<tenantId>` for a
+ * tenant's own, heard by its signed-in members, and
+ * `catalog(PLATFORM_CATALOG)` for the platform's, heard by every signed-in
+ * connection because every tenant's shop sells from it.
+ */
+export function catalogChannel(catalogId: string): string {
+  return `catalog:${catalogId}`;
+}

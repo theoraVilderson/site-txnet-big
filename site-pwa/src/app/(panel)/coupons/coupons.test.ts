@@ -300,6 +300,7 @@ describe("the variant picker", () => {
     panelGroupId: null,
     qualityTier: "standard",
     isActive: true,
+    sales: { cap: null, sold: 0, reserved: 0, remaining: null, soldOut: false },
     prices: [],
     rateCards: [],
     ...patch,

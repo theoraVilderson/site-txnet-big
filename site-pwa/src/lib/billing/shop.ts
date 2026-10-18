@@ -30,6 +30,10 @@ export interface ShopOffer {
   currencyCode: string;
   /** The card in effect for each meter (F-118-ae): what a sale now would lock. */
   rateCards: ShopRateCard[];
+  /** Units left under the variant's sales cap, `null` with none (F-513-a). */
+  remaining: number | null;
+  /** Listed but not buyable: the invoice refuses it (catalog `contract.sales-cap.md` rule 6). */
+  soldOut: boolean;
 }
 
 /** A rate card as an offer names it; quantities and money as strings. */
