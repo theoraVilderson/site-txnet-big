@@ -19,6 +19,7 @@ import type { Request } from 'express';
 import { LocaleService } from '../locale/locale.service';
 import { COUPON_REJECTION_KEY } from '../payment/deposit/deposit.controller';
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
+import { VariantSoldOut } from '../catalog/sales-counts';
 import { identityOf } from '../request/identity.middleware';
 import { EntitlementRefused, MeteredCapReached } from '../entitlement/grant';
 import { PurchaseLimitReached } from '../entitlement/purchase-limits';
@@ -53,6 +54,8 @@ function toHttp(e: unknown): unknown {
     return e.reason === 'not_found' ? new NotFoundException(body) : new ConflictException(body);
   }
   if (e instanceof InvoiceVariantNotFound) return new NotFoundException({ i18nKey: E.invoice.variantNotFound, message });
+  // Every unit of a capped variant is sold or held by another invoice (F-513-b): nothing was written.
+  if (e instanceof VariantSoldOut) return new ConflictException({ i18nKey: E.invoice.soldOut, reason: e.reason, message });
   if (e instanceof InvoiceUnpayable) {
     const body = { i18nKey: PAY_REFUSAL_KEY[e.reason], reason: e.reason, message };
     if (e.reason === 'not_found') return new NotFoundException(body);

@@ -67,6 +67,8 @@ const variantRow = (over: VariantOver = {}) => ({
 function fakeTx(variant: ReturnType<typeof variantRow> | null, placeable = 1) {
   const grants: Array<Record<string, unknown>> = [];
   const tx = {
+    // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+    $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
     productVariant: { findUnique: vi.fn(async () => variant) },
     // PT-1-b: the product names no group, so everyone may be issued it.

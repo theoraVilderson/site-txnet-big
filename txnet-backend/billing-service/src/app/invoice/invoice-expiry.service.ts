@@ -7,6 +7,7 @@ import type { EnvConfig } from '../config/env.validation';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { releaseSalesUnit } from './invoice.service';
 
 /**
  * The 30-minute clock on an invoice nobody paid (F-111-a), and the coupon
@@ -65,6 +66,7 @@ export class InvoiceExpiryService {
             data: { status: InvoiceStatus.expired },
           });
           if (count !== 1) return null;
+          await releaseSalesUnit(tx, id);
           return this.reservations.release(tx, id, RedemptionStatus.expired);
         }),
       );

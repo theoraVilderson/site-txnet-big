@@ -105,6 +105,8 @@ describe('GrantService.issue writes the Grant\'s meters beside its quotas', () =
     const grants: Array<Record<string, unknown>> = [];
     const meters: Array<Record<string, unknown>> = [];
     const tx = {
+      // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+      $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },

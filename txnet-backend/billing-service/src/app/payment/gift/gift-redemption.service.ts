@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, Prisma, WalletReasonType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
+import { VariantSoldOut } from '../../catalog/sales-counts';
 import { GrantService } from '../../entitlement/grant';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WalletCreditService } from '../../wallet/wallet-credit.service';
@@ -41,7 +42,9 @@ export type GiftRejection =
   | 'expired'
   | 'per_user_limit_reached'
   /** `usedCount + reservedCount` has reached `totalUsageLimit`. */
-  | 'capacity_reached';
+  | 'capacity_reached'
+  /** A free-service code whose variant has no unit left under its sales cap (F-513-b) — the issue's, not the function's. */
+  | 'sold_out';
 
 export type GiftRedemption =
   | {
@@ -130,12 +133,12 @@ export class GiftRedemptionService {
       // variant switched off after the coupon was made throws here and rolls the
       // use back — an admin's broken coupon, never the user's mistake.
       if (row.grant_variant_id) {
-        const issued = await this.grants.issue(tx, {
-          userId,
-          variantId: row.grant_variant_id,
-          source: GrantSource.coupon,
-          sourceReferenceId: row.redemption_id as string,
-        });
+        const issued = await this.grants
+          .issue(tx, { userId, variantId: row.grant_variant_id, source: GrantSource.coupon, sourceReferenceId: row.redemption_id as string })
+          // Sold out (F-513-b): the use rolls back with the throw, and the user is told why.
+          .catch((e: unknown) => {
+            throw e instanceof VariantSoldOut ? new GiftCodeRefused(code, 'sold_out') : e;
+          });
         if (!issued.token) throw new Error(`redemption ${row.redemption_id} already had a Grant`);
         return { kind: 'free_grant' as const, redemptionId: row.redemption_id as string, code, grant: issued.grant, token: issued.token };
       }

@@ -208,6 +208,8 @@ describe('GrantService.issue', () => {
   function fakeTx(variant: ReturnType<typeof variantRow> | null) {
     const grants: Array<Record<string, unknown>> = [];
     const tx = {
+      // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+      $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
@@ -293,6 +295,8 @@ describe('GrantService.issue locks the metered rate (F-027-p, ADR-0073)', () => 
     const grants: Array<Record<string, unknown>> = [];
     const meters: Array<Record<string, unknown>> = [];
     const tx = {
+      // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+      $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
@@ -367,6 +371,8 @@ describe('GrantNamesService — the services a combined notice names (F-601-p)',
       { grantId: 'g1', userId: USER, userLabel: 'laptop' },
     ];
     const tx = {
+      // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+      $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       $executeRaw: vi.fn(),

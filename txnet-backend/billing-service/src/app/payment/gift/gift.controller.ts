@@ -17,6 +17,7 @@ const GIFT_REJECTION_KEY: Record<GiftRejection, string> = {
   expired: E.gift.expired,
   per_user_limit_reached: E.gift.perUserLimitReached,
   capacity_reached: E.gift.capacityReached,
+  sold_out: E.gift.soldOut,
 };
 
 /**

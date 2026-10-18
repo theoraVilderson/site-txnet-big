@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ActorType, ConfigStatus, FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { OutboxEventType, productSaleRef, ResellerQuota, runWithTenant, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
+import { moveSales } from '../catalog/sales-counts';
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -242,12 +243,14 @@ export class GrantDeliveryService {
     const configs = await tx.config.findMany({ where: { grantId, status: { not: ConfigStatus.retired } }, select: { id: true } });
     for (const { id } of configs) await this.actions.retire(tx, { configId: id, actor: GRANT_DELIVERY_ACTOR });
 
-    const [invoice] = await tx.$queryRaw<Array<{ id: string; userId: string; total: Prisma.Decimal; currencyCode: string; status: InvoiceStatus }>>`
-      SELECT id, "userId", total, "currencyCode", status FROM billing.invoice WHERE id = ${grant.sourceReferenceId}::uuid FOR UPDATE`;
+    const [invoice] = await tx.$queryRaw<Array<{ id: string; userId: string; variantId: string; total: Prisma.Decimal; currencyCode: string; status: InvoiceStatus; salesCounted: boolean }>>`
+      SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted" FROM billing.invoice WHERE id = ${grant.sourceReferenceId}::uuid FOR UPDATE`;
     if (!invoice) throw new Error(`invoice ${grant.sourceReferenceId} of grant ${grantId} not found`);
     const flipped = await tx.invoice.updateMany({ where: { id: invoice.id, status: InvoiceStatus.paid }, data: { status: InvoiceStatus.refunded } });
     // Anything but `paid` here is a second refund of one invoice: roll the cancel back with it.
     if (flipped.count !== 1) throw new Error(`invoice ${invoice.id} is ${invoice.status}, not paid: not refunded twice`);
+    // Never served, the sale is undone and the unit is for sale again (F-513-b); one paid before the counts took none.
+    if (invoice.salesCounted) await moveSales(tx, invoice.variantId, 'unsell');
 
     const total = new Prisma.Decimal(invoice.total);
     // A free invoice moved no money and writes no row (billing invariant 2).

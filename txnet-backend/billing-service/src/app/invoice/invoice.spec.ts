@@ -15,11 +15,15 @@
  *    could ever place it (F-111-i): a paid Grant nothing can place is only
  *    refunded an hour later;
  *  - the sweep's flip is guarded by the row's status, like the top-up sweep:
- *    an invoice paid between the scan and the write keeps its holds.
+ *    an invoice paid between the scan and the write keeps its holds;
+ *  - a capped variant's last unit is held by one invoice only (F-513-b): the
+ *    next is refused `sold_out` with nothing written, and an invoice that
+ *    expires or is cancelled gives its unit back.
  */
 import { FulfilmentKind, InvoiceStatus, Prisma, RedemptionStatus, VariantVisibility } from '@prisma/client';
 import { TenantContext, runWithTenant } from '@txnet-backend/shared-core';
 
+import { VariantSoldOut } from '../catalog/sales-counts';
 import { CouponReservationRefused } from '../payment/coupon/coupon-reservation';
 import { INVOICE_TTL_MS, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
 import { InvoiceExpiryService } from './invoice-expiry.service';
@@ -97,6 +101,16 @@ type CreateSetup = {
   rules?: Array<Record<string, unknown>>;
   /** The panel groups the filter answers (F-111-i); default: one group with one deliverable panel. */
   groups?: GroupRow[];
+  /** Every unit of the variant is sold or held (F-513-b). */
+  soldOut?: boolean;
+};
+
+/** `move_variant_sales`'s answer for an uncapped variant, or a refusal (F-513-b). */
+const salesMove = (outcome = 'moved') => [{ outcome, tenantId: TENANT, salesCap: null }];
+/** A recording `$queryRaw`: the move's arguments, `[variantId, sold, held, refusesWhenFull]`. */
+const recordMoves = (moves: unknown[][], outcome?: string) => async (_s: TemplateStringsArray, ...values: unknown[]) => {
+  moves.push(values);
+  return salesMove(outcome);
 };
 
 function buildCreate(setup: CreateSetup = {}) {
@@ -106,8 +120,10 @@ function buildCreate(setup: CreateSetup = {}) {
     validated: [] as Array<Record<string, unknown>>,
     reserved: [] as Array<Record<string, unknown>>,
     groupQueries: [] as unknown[],
+    moves: [] as unknown[][],
   };
   const tx = {
+    $queryRaw: recordMoves(calls.moves, setup.soldOut ? 'sold_out' : undefined),
     // The registry: every wallet here is in a two-place currency (ADR-0153).
     currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // No restriction on the person (F-030-e).
@@ -221,6 +237,16 @@ describe('InvoiceService.create', () => {
     expect(expiresAt).toBeLessThanOrEqual(Date.now() + INVOICE_TTL_MS);
     expect(INVOICE_TTL_MS).toBe(30 * 60 * 1000);
     expect(invoice).toMatchObject({ id: row['id'], amount: '12.50', discount: '0.00', total: '12.50', rejected: [] });
+    // It holds one unit of the variant, refused when none is left (F-513-b).
+    expect(calls.moves).toEqual([[VARIANT, 0, 1, true]]);
+    expect(row['salesCounted']).toBe(true);
+  });
+
+  it('refuses a sold-out variant before any invoice or coupon hold is written (F-513-b)', async () => {
+    const { service, calls } = buildCreate({ soldOut: true, validation: { applied: [{ couponId: COUPON, code: 'SPRING', discount: D('2.50') }], rejected: [] } });
+    await expect(asTenant(() => service.create({ userId: USER, variantId: VARIANT, couponCodes: ['spring'] }))).rejects.toBeInstanceOf(VariantSoldOut);
+    expect(calls.created).toEqual([]);
+    expect(calls.reserved).toEqual([]);
   });
 
   it('validates coupons against this variant and holds them under the invoice id', async () => {
@@ -337,9 +363,11 @@ describe('InvoiceExpiryService.expirePending', () => {
     const calls = {
       updated: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown>; tenant: string | null }>,
       released: [] as Array<{ id: string; outcome: string; tenant: string | null }>,
+      moves: [] as unknown[][],
     };
     const scoped = () => TenantContext.currentOrNull()?.id ?? null;
     const tx = {
+      $queryRaw: recordMoves(calls.moves),
       // The registry: every wallet here is in a two-place currency (ADR-0153).
       currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
@@ -350,6 +378,8 @@ describe('InvoiceExpiryService.expirePending', () => {
           calls.updated.push({ where, data, tenant: scoped() });
           return { count: lost.includes(where['id'] as string) ? 0 : 1 };
         },
+        // INVOICE_2 was made before the counts (F-513-b): it holds no unit.
+        findUnique: async ({ where }: { where: { id: string } }) => ({ variantId: VARIANT, salesCounted: where.id !== INVOICE_2 }),
       },
     };
     const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -381,6 +411,8 @@ describe('InvoiceExpiryService.expirePending', () => {
       { id: INVOICE_1, outcome: RedemptionStatus.expired, tenant: TENANT },
       { id: INVOICE_2, outcome: RedemptionStatus.expired, tenant: TENANT_B },
     ]);
+    // Only the invoice that held a unit gives one back (F-513-b).
+    expect(calls.moves).toEqual([[VARIANT, 0, -1, false]]);
   });
 
   it('keeps the holds of an invoice paid between the scan and the flip', async () => {
@@ -390,6 +422,7 @@ describe('InvoiceExpiryService.expirePending', () => {
 
     expect(result).toEqual({ scanned: 1, expired: 0, holdsReleased: 0 });
     expect(calls.released).toEqual([]);
+    expect(calls.moves).toEqual([]);
   });
 });
 
@@ -546,8 +579,10 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
       updated: [] as Array<{ where: Record<string, unknown>; data: Record<string, unknown> }>,
       released: [] as Array<{ id: string; outcome: RedemptionStatus }>,
       read: [] as unknown[],
+      moves: [] as unknown[][],
     };
     const tx = {
+      $queryRaw: recordMoves(calls.moves),
       // The registry: every wallet here is in a two-place currency (ADR-0153).
       currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
@@ -562,6 +597,7 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
           calls.read.push(q);
           return opts.status ? { status: opts.status } : null;
         },
+        findUnique: async () => ({ variantId: VARIANT, salesCounted: true }),
       },
     };
     const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
@@ -581,6 +617,7 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
       { where: { id: INVOICE_1, userId: USER, status: InvoiceStatus.pending }, data: { status: InvoiceStatus.cancelled } },
     ]);
     expect(calls.released).toEqual([{ id: INVOICE_1, outcome: RedemptionStatus.cancelled }]);
+    expect(calls.moves).toEqual([[VARIANT, 0, -1, false]]);
   });
 
   it('answers an invoice already cancelled or expired as it is: it holds nothing, so there is nothing to refuse', async () => {
@@ -596,6 +633,7 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
       const { service, calls } = buildCancel({ matched: false, status });
       await expect(asTenant(() => service.cancel(USER, INVOICE_1))).rejects.toMatchObject({ reason: 'already_paid' });
       expect(calls.released).toEqual([]);
+      expect(calls.moves).toEqual([]);
     }
   });
 

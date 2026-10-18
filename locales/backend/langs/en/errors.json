@@ -233,7 +233,8 @@
       "notAGiftCode": "This is a discount code. Enter it when you top up your wallet.",
       "expired": "This gift code has expired.",
       "perUserLimitReached": "You have already used this gift code.",
-      "capacityReached": "This gift code has been used up."
+      "capacityReached": "This gift code has been used up.",
+      "soldOut": "The service this gift code gives is sold out."
     },
     "grant": {
       "notFound": "No such subscription in your account.",
@@ -261,7 +262,8 @@
       "notAvailableNow": "This service can't be bought right now. Please try again later or contact support.",
       "purchaseLimitDay": "You've bought as many services as allowed in 24 hours. Please try again later.",
       "purchaseLimitWeek": "You've bought as many services as allowed in 7 days. Please try again later.",
-      "purchaseLimitMonth": "You've bought as many services as allowed in 30 days. Please try again later."
+      "purchaseLimitMonth": "You've bought as many services as allowed in 30 days. Please try again later.",
+      "soldOut": "This product is sold out."
     },
     "resellerLimitReached": "You have reached a limit of your plan for this. Ask the platform to raise it.",
     "restricted": {

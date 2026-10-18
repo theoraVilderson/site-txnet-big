@@ -92,6 +92,8 @@ function fakeTx(opts: {
   const variant = variantRow(opts.billingMode ?? VariantBillingMode.metered);
   const rates = opts.rates ?? [];
   const tx = {
+    // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+    $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
     // No restriction on the person (F-030-e).
     userRestriction: { findMany: async () => [] },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'EUR', tenantType: opts.tenantType }) },

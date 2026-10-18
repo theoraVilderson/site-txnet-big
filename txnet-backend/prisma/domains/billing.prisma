@@ -673,6 +673,9 @@ model Invoice {
   /// by the tenant, whose currency may change. `^[A-Z]{3}$`, CHECK in the migration.
   currencyCode String
   status    InvoiceStatus @default(pending)
+  /// Whether it is in its variant's sales counts (F-513-b): held while
+  /// `pending`, sold once `paid`. False on every invoice made before the counts.
+  salesCounted Boolean    @default(false)
   expiresAt DateTime
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt

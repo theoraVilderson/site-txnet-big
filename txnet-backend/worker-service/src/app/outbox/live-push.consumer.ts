@@ -63,6 +63,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   /** RT-1-f: a drain sweep retired a draining member's configs or removed it — the member tenant's open systems page re-reads its groups. */
   [OutboxEventType.PANEL_DRAINED]: { audience: ['tenant'], fields: ['panelId', 'groupId'] },
   [OutboxEventType.GRANT_BULK_PROGRESSED]: { audience: ['user', 'tenant'], fields: ['resellerId', 'jobId'] },
+  /** F-513-b: a capped variant's counts moved — every member's shop and the staff's catalog re-read what is left; one row per tenant that shows it. */
+  [OutboxEventType.CATALOG_VARIANT_SALES_CHANGED]: { audience: ['members'], fields: ['variantId'] },
 };
 
 /**

@@ -17,6 +17,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import { isSellableBySku, vpnTrafficRateAt, type OfferFacts, type RateCardRow } from '../catalog/catalog-reads';
+import { countSaleOf } from '../catalog/sales-counts';
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { PrismaService } from '../prisma/prisma.service';
 import { grantMetersFromVariant, lockWholesale } from './grant-meter';
@@ -434,14 +435,11 @@ export class GrantService {
       categoryActive: productCategoriesLive(variant.product.categories),
     };
     if (!assignable(input.source, facts)) throw new EntitlementRefused('variant_not_assignable', input.variantId);
-    // A platform product the reseller's package does not list is not sold to its users, nor
-    // redeemed by them (F-019-v5). A reseller admin's issue is bounded by its caller (`issueGrantByAdmin`).
-    if ((input.source === GrantSource.purchase || input.source === GrantSource.coupon) && !(await tenantSellsProduct(tx, tenant.id, variant.product))) {
-      throw new EntitlementRefused('variant_not_assignable', input.variantId);
-    }
-    // Nor to a user its audience leaves out (PT-1-b): asked at invoice create, and again here, at the sale.
-    // A renewal is not a new sale — a Grant already sold is kept when its owner leaves the group.
-    if ((input.source === GrantSource.purchase || input.source === GrantSource.coupon) && !(await productOpenTo(tx, tenant.id, input.userId, variant.product))) {
+    // Not sold or redeemed: a platform product the reseller's package does not list (F-019-v5; a reseller admin's
+    // issue is bounded by `issueGrantByAdmin`), nor to a user its audience leaves out (PT-1-b, asked at invoice
+    // create too). A renewal is not a new sale — a Grant already sold is kept when its owner leaves the group.
+    const sold = input.source === GrantSource.purchase || input.source === GrantSource.coupon;
+    if (sold && (!(await tenantSellsProduct(tx, tenant.id, variant.product)) || !(await productOpenTo(tx, tenant.id, input.userId, variant.product)))) {
       throw new EntitlementRefused('variant_not_assignable', input.variantId);
     }
 
@@ -478,6 +476,8 @@ export class GrantService {
     if (input.source === GrantSource.purchase || input.source === GrantSource.coupon) {
       await assertPlatformGrantRoom(tx, variant.panelGroupId);
     }
+    // F-513-b: a free path takes a unit of a capped variant or throws VariantSoldOut; staff's issue only counts.
+    await countSaleOf(tx, variant.id, input.source);
     // Born `active`, it is activated at its start (F-601-c); a purchase waits for `markDelivered`.
     const activatedAt = shape.status === GrantStatus.active ? startsAt : null;
     try {

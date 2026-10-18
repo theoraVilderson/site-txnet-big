@@ -51,6 +51,7 @@ Migration `20260915000200_gift_redeems_free_grant`; `GiftRedemptionService` with
 | The answer is `{kind: "free_grant", code, grant: {id, variantId, startsAt, endsAt, featureKeys}}` — **no token**: the link is `GET .../subscription-link`'s, as often as asked. A credit answers `{kind: "wallet_credit", code, credited, balance}` | the user's call, 2026-09-14; the token left the answer with F-114-e-c (ADR-0085) — one place hands out the link |
 | A variant switched off after the coupon was made refuses the issue and rolls the use back (500) | an admin's broken coupon, never a user's mistake |
 | A free-service code past the reseller's room on the platform's panels (F-019-o), or past its package quota for a platform product (F-019-v6 — a redemption is one of its sales), rolls the use back: **409** `errors.billing.invoice.notAvailableNow`, `reason` `reseller_limit_reached` / `reseller_quota_exhausted`, no facts | a reseller could mint gift codes faster than any limit on sales; the user is told what a buyer is told |
+| A free-service code whose variant is sold out under its sales cap (F-513-b) rolls the use back: **409** `errors.billing.gift.soldOut`, `reason` `sold_out` | an automatic free path takes a unit or is refused — catalog [contract.sales-cap.md](../catalog/contract.sales-cap.md) rule 5 |
 
 ## A Grant's subscription link, and resetting it (built — F-502-p, F-114-e-b, F-114-e-d)
 

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
 import { currencyPlacesOf, OutboxEventType, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
+import { moveSales } from '../catalog/sales-counts';
 import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import { GrantService } from '../entitlement/grant';
 import { PrismaService } from '../prisma/prisma.service';
@@ -29,7 +30,8 @@ import { InvoiceShortfall, invoiceShortfall } from './invoice-shortfall';
  *  5. the invoice → `paid`;
  *  6. the Grant, `source: purchase` keyed on the invoice id — `pending` until
  *     delivery (F-111-d) activates it;
- *  7. the invoice's coupon holds → uses;
+ *  7. the invoice's coupon holds → uses, and its held unit of the variant → a
+ *     sale (F-513-b) — counted, never refused, for one made before the counts;
  *  8. `entitlement.grant.created` in the outbox (ADR-0021).
  *
  * Concurrent pays of one invoice queue on step 1, and every one after the
@@ -78,6 +80,7 @@ type LockedInvoice = {
   total: Prisma.Decimal;
   currencyCode: string;
   status: InvoiceStatus;
+  salesCounted: boolean;
   expiresAt: Date;
 };
 
@@ -100,7 +103,7 @@ export class InvoicePaymentService {
       // RLS scopes the row to this tenant; the `userId` makes another user's
       // invoice as absent as another tenant's.
       const [invoice] = await tx.$queryRaw<LockedInvoice[]>`
-        SELECT id, "userId", "variantId", total, "currencyCode", status, "expiresAt"
+        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "expiresAt"
           FROM billing.invoice
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
@@ -149,7 +152,7 @@ export class InvoicePaymentService {
         }
       }
 
-      await tx.invoice.update({ where: { id: invoice.id }, data: { status: InvoiceStatus.paid } });
+      await tx.invoice.update({ where: { id: invoice.id }, data: { status: InvoiceStatus.paid, salesCounted: true } });
 
       const issued = await this.grants.issue(tx, {
         userId,
@@ -162,6 +165,7 @@ export class InvoicePaymentService {
       if (!issued.token) throw new Error(`invoice ${invoice.id} already had a Grant`);
 
       await this.reservations.confirm(tx, invoice.id);
+      await moveSales(tx, invoice.variantId, invoice.salesCounted ? 'sellReserved' : 'count');
 
       await tx.outboxEvent.create({
         data: {

@@ -430,7 +430,7 @@ export class WheelSpinService {
       return issued;
     } catch (e) {
       await tx.$executeRaw`ROLLBACK TO SAVEPOINT spin_reward`;
-      if (e instanceof RewardRefused || (e instanceof Error && e.name === 'EntitlementRefused')) {
+      if (e instanceof RewardRefused || (e instanceof Error && (e.name === 'EntitlementRefused' || e.name === 'VariantSoldOut'))) {
         this.logger.warn(`spin ${attemptId}: prize ${prize.position} not given (${e.message})`);
         return null;
       }

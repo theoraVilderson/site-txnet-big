@@ -29,6 +29,8 @@ function fakeTx(opts: { open: number; tenantCap?: number; userCap?: number; bill
   const calls: string[] = [];
   const grants: Array<Record<string, unknown>> = [];
   const tx = {
+    // F-513-b: the variant's sales counts move, uncapped — nothing announced.
+    $queryRaw: async () => [{ outcome: 'moved', tenantId: null, salesCap: null }],
     $executeRaw: vi.fn(async () => {
       calls.push('lock');
       return 1;

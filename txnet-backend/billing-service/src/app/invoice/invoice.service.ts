@@ -4,6 +4,7 @@ import { admitProductSale, TenantContext, tenantTransaction, moneyText } from '@
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
+import { moveSales } from '../catalog/sales-counts';
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
 import { assertBuyerRoom } from '../entitlement/user-restrictions';
@@ -166,6 +167,9 @@ export class InvoiceService {
             ratesTenantId: tenant.id,
           });
 
+      // The invoice holds a unit of a capped variant for its 30 minutes, or is refused `sold_out` (F-513-b).
+      await moveSales(tx, offer.variantId, 'reserve');
+
       const id = randomUUID();
       const invoice = await tx.invoice.create({
         data: {
@@ -182,6 +186,7 @@ export class InvoiceService {
           discountRuleId: rule?.rule.id ?? null,
           ruleDiscount,
           status: InvoiceStatus.pending,
+          salesCounted: true,
           expiresAt: new Date(now.getTime() + INVOICE_TTL_MS),
         },
       });
@@ -288,6 +293,7 @@ export class InvoiceService {
       });
       if (count === 1) {
         await this.reservations.release(tx, id, RedemptionStatus.cancelled);
+        await releaseSalesUnit(tx, id);
         return { id, status: InvoiceStatus.cancelled };
       }
       const row = await tx.invoice.findFirst({ where: { id, userId }, select: { status: true } });
@@ -296,4 +302,13 @@ export class InvoiceService {
       throw new InvoiceNotCancellable('already_paid', id);
     });
   }
+}
+
+/**
+ * A pending invoice just flipped to `expired` or `cancelled` gives its unit
+ * back (F-513-b). One made before the counts holds none (`salesCounted`).
+ */
+export async function releaseSalesUnit(tx: Prisma.TransactionClient, invoiceId: string): Promise<void> {
+  const row = await tx.invoice.findUnique({ where: { id: invoiceId }, select: { variantId: true, salesCounted: true } });
+  if (row?.salesCounted) await moveSales(tx, row.variantId, 'release');
 }
