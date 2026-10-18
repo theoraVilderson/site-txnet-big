@@ -30,5 +30,6 @@ import { TenantPackageService } from './tenant-package.service';
     { provide: PACKAGE_TEXT_STORE, inject: [LocaleService], useFactory: (locale: LocaleService) => locale.textStore() },
     { provide: TRANSLATOR, useFactory: () => translatorFromEnv() },
   ],
+  exports: [PackageTextService],
 })
 export class PackagesModule {}

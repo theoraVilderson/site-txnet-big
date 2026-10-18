@@ -225,7 +225,7 @@ describe("the workspace's quota cards (F-019-v10)", () => {
   });
 
   it("shows an upgrade's prorated price, asks, then applies it; short of it, offers no button", async () => {
-    vi.mocked(resellerPurchaseApi.packages).mockResolvedValue([{ id: "gold", name: "Gold", monthlyPrice: "30.00", yearlyPrice: null, currencyCode: "USD", includedFeatureKeys: [] }]);
+    vi.mocked(resellerPurchaseApi.packages).mockResolvedValue([{ id: "gold", name: "Gold", nameKey: "packages.p_gold.name", descriptionKey: null, sourceLang: "en", monthlyPrice: "30.00", yearlyPrice: null, currencyCode: "USD", includedFeatureKeys: [] }]);
     const preview = { when: "now" as const, charge: "12.00", currencyCode: "USD", balance: "40.00", currentPeriodEnd: "2026-10-20T00:00:00Z" };
     vi.mocked(tenantApi.subscriptionChange).mockResolvedValue(preview);
     vi.mocked(tenantApi.changeSubscription).mockResolvedValue({} as never);

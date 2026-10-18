@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { resellerLimitsApi, type OverageView, type QuotaOverageMode, type ResellerLimitRow, type TenantPackage } from "@/lib/tenant-api";
 import { LIMIT_KEYS as K, overageBodyOf } from "../../_lib/limits";
 import { Button, Input } from "../../../_components/kit";
@@ -38,6 +39,7 @@ export function QuotaOverage({
 }) {
   const { t } = useLocale();
   const held = useOverageHeld();
+  const packageTexts = usePackageTexts();
   if (row.kind !== "quota" || row.overage === null) return null;
   const { overage } = row;
   const own = new Map(overage.packages.map((p) => [p.packageId, p]));
@@ -61,10 +63,10 @@ export function QuotaOverage({
 
       {packages.map((p) => (
         <div key={p.id} className="space-y-1 border-t border-card-border pt-2">
-          <span className="text-sm font-bold text-text-primary">{p.name}</span>
+          <span className="text-sm font-bold text-text-primary">{packageTexts.name(p)}</span>
           <p className="text-xs text-text-secondary">{t("common", K.current, { value: held(own.get(p.id)) })}</p>
           <OverageEditor
-            label={p.name}
+            label={packageTexts.name(p)}
             busy={busy}
             onSave={(body) => run(() => resellerLimitsApi.setPackageOverage(p.id, row.key, body))}
             onClear={own.has(p.id) ? () => run(() => resellerLimitsApi.clearPackageOverage(p.id, row.key)) : undefined}

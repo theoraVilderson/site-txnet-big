@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Gauge, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { resellerLimitsApi, tenantApi, type Reseller, type ResellerLimitKey, type ResellerLimitRow, type TenantPackage } from "@/lib/tenant-api";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
@@ -103,6 +104,7 @@ function useHeld() {
 
 function LimitCard({ row, packages, resellers, onSaved }: { row: ResellerLimitRow; packages: TenantPackage[]; resellers: Reseller[]; onSaved: () => void }) {
   const { t } = useLocale();
+  const packageTexts = usePackageTexts();
   const message = useMessage();
   const held = useHeld();
   const name = (K.keys as Record<ResellerLimitKey, { name: string; hint: string }>)[row.key];
@@ -155,10 +157,10 @@ function LimitCard({ row, packages, resellers, onSaved }: { row: ResellerLimitRo
           <h3 className="text-xs font-bold text-text-primary">{t("common", K.perPackage)}</h3>
           {packages.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center gap-2 border-t border-card-border pt-2">
-              <span className="min-w-32 text-sm font-bold text-text-primary">{p.name}</span>
+              <span className="min-w-32 text-sm font-bold text-text-primary">{packageTexts.name(p)}</span>
               <span className="text-xs text-text-secondary">{t("common", K.current, { value: held(own.has(p.id) ? own.get(p.id) : undefined) })}</span>
               <ValueEditor
-                label={p.name}
+                label={packageTexts.name(p)}
                 max={row.max}
                 busy={busy}
                 onSave={(v) => run(() => resellerLimitsApi.setPackage(p.id, row.key, v))}

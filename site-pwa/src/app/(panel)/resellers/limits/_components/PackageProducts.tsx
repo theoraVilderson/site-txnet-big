@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { catalogApi, type CatalogProduct } from "@/lib/catalog-api";
 import { resellerLimitsApi, type PackageProduct, type TenantPackage } from "@/lib/tenant-api";
 import { flattenTexts } from "../../../catalog/_lib/catalog-form";
@@ -23,6 +24,7 @@ const box = "w-24 rounded-xl border border-card-border bg-bg-inner px-3 py-2 tex
  */
 export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
   const { t, lang } = useLocale();
+  const packageTexts = usePackageTexts();
   const message = useMessage();
   const [packageId, setPackageId] = useState("");
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
@@ -79,7 +81,7 @@ export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
           <option value="">{t("common", P.pick)}</option>
           {packages.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
+              {packageTexts.name(p)}
             </option>
           ))}
         </select>

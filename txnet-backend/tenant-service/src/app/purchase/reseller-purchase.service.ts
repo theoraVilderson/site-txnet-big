@@ -14,6 +14,7 @@ import {
 import { randomBytes } from 'node:crypto';
 
 import { lockPackage, replacePackageEntitlements } from '../packages/package-entitlements';
+import { PackageTextService, type PackageTextView, packageTextKey } from '../packages/package-texts';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -58,7 +59,7 @@ export type PurchaseView = ResellerView & { packageId: string; currentPeriodEnd:
  * and never put on a package.
  */
 export type OwnedReseller = Pick<ResellerView, 'id' | 'slug' | 'status' | 'billingModel' | 'domains'> & {
-  package: { id: string; name: string } | null;
+  package: { id: string; name: string; nameKey: string } | null;
   currentPeriodEnd: Date | null;
   /**
    * When an unpaid renewal suspends it: `currentPeriodEnd` + the setting's
@@ -68,7 +69,8 @@ export type OwnedReseller = Pick<ResellerView, 'id' | 'slug' | 'status' | 'billi
   suspendsAt: Date | null;
 };
 
-export type PackageOffer = {
+/** `nameKey` / `descriptionKey` / `sourceLang`: its text in the buyer's language (ADR-0154 (7)). */
+export type PackageOffer = PackageTextView & {
   id: string;
   name: string;
   monthlyPrice: string | null;
@@ -102,6 +104,7 @@ export class ResellerPurchaseRefused extends Error {
 const PACKAGE_SELECT = {
   id: true,
   name: true,
+  sourceLang: true,
   isActive: true,
   monthlyPrice: true,
   yearlyPrice: true,
@@ -124,6 +127,7 @@ export class ResellerPurchaseService {
     private readonly config: ConfigService,
     private readonly wallets: WalletLedgerService,
     private readonly billing: TenantBillingLedger,
+    private readonly texts: PackageTextService,
   ) {}
 
   /** The packages on sale: active ones, by name. */
@@ -133,6 +137,7 @@ export class ResellerPurchaseService {
     return rows.map((p) => ({
       id: p.id,
       name: p.name,
+      ...this.texts.viewOf(p.id, p.sourceLang),
       monthlyPrice: p.monthlyPrice ? moneyText(p.monthlyPrice) : null,
       yearlyPrice: p.yearlyPrice ? moneyText(p.yearlyPrice) : null,
       currencyCode: p.currencyCode,
@@ -167,7 +172,7 @@ export class ResellerPurchaseService {
       suspendsAt = renewalDeadline(subscription.currentPeriodEnd, settings.renewalGraceDays, subscription.graceUntil);
     }
     return {
-      reseller: { ...rest, package: subscription?.package ?? null, currentPeriodEnd: subscription?.currentPeriodEnd ?? null, suspendsAt },
+      reseller: { ...rest, package: heldPackage(subscription?.package), currentPeriodEnd: subscription?.currentPeriodEnd ?? null, suspendsAt },
     };
   }
 
@@ -295,4 +300,9 @@ function sellable(pkg: PackageRow | null, model: TenantBillingModel): Prisma.Dec
   const price = field ? pkg[field] : null;
   if (!price) throw new ResellerPurchaseRefused('package_not_sold_for_period', `${pkg.name} ${model}`);
   return price;
+}
+
+/** The held reseller's package, with the key its name is read by (ADR-0154 (7)). */
+function heldPackage(pkg: { id: string; name: string } | undefined): OwnedReseller['package'] {
+  return pkg ? { ...pkg, nameKey: packageTextKey(pkg.id, 'name') } : null;
 }

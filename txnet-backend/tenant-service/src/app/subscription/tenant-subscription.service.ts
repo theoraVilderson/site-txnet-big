@@ -16,6 +16,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
 import { applyTenantStatus } from '../status/tenant-status.transition';
 import { lockPackage, replacePackageEntitlements } from '../packages/package-entitlements';
+import { type NamedPackage, namedPackage } from '../packages/package-texts';
 import { planPackageChange, upgradeChargeReference, type PackageChangePlan } from './package-change';
 import type { GrantGraceInput, PutSubscriptionInput, UpdateSubscriptionSettingsInput } from './tenant-subscription.schema';
 
@@ -48,10 +49,9 @@ import type { GrantGraceInput, PutSubscriptionInput, UpdateSubscriptionSettingsI
 
 export type TenantSubscriptionActor = { adminId: string; tenantId: string; ip: string };
 
-export type SubscriptionView = {
+export type SubscriptionView = NamedPackage & {
   tenantId: string;
   packageId: string;
-  packageName: string;
   billingModel: TenantBillingModel;
   currentPeriodEnd: Date;
   startedAt: Date;
@@ -206,7 +206,7 @@ export class TenantSubscriptionService {
         return audit({
           tenantId,
           packageId: current.packageId,
-          packageName: current.package.name,
+          ...namedPackage(current.packageId, current.package.name),
           billingModel: state.billingModel,
           currentPeriodEnd: current.currentPeriodEnd,
           startedAt: current.createdAt,
@@ -251,7 +251,7 @@ export class TenantSubscriptionService {
       return audit({
         tenantId,
         packageId: pkg.id,
-        packageName: pkg.name,
+        ...namedPackage(pkg.id, pkg.name),
         billingModel: input.billingModel,
         currentPeriodEnd: row.currentPeriodEnd,
         startedAt: row.createdAt,
@@ -333,7 +333,7 @@ export class TenantSubscriptionService {
     return {
       tenantId,
       packageId: row.packageId,
-      packageName: row.package.name,
+      ...namedPackage(row.packageId, row.package.name),
       billingModel: reseller.billingModel,
       currentPeriodEnd: row.currentPeriodEnd,
       startedAt: row.createdAt,

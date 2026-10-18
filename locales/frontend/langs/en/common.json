@@ -2330,7 +2330,10 @@
       "package_unpriced": "A package needs a monthly or a yearly price.",
       "package_price_finer_than_currency": "A price has more decimal places than the platform's currency has. Round it and save again.",
       "package_price_in_use": "Resellers are subscribed for that period, so its price cannot be cleared.",
-      "meter_not_found": "That meter does not exist on the platform."
+      "meter_not_found": "That meter does not exist on the platform.",
+      "texts_unavailable": "The package's name could not be stored just now, so nothing was saved. Try again in a moment.",
+      "lang_unknown": "The platform has no such language.",
+      "text_key_invalid": "That text does not belong to any package. Reload the page and try again."
     },
     "retry": "Retry",
     "packages": {

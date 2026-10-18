@@ -40,6 +40,9 @@ const read = (path: string) => readFileSync(join(REPO, "txnet-backend", path), "
 const PKG: TenantPackage = {
   id: "p1",
   name: "Silver",
+  nameKey: "packages.p_p1.name",
+  descriptionKey: null,
+  sourceLang: "en",
   monthlyPrice: "30",
   yearlyPrice: null,
   currencyCode: "USD",

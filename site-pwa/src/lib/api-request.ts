@@ -208,3 +208,16 @@ function factsOf(value: unknown): Record<string, string | number | boolean> | un
   }
   return out;
 }
+
+/**
+ * A published shared namespace in one language (`catalog`, `packages`), nested
+ * as locale-service serves it, from the panel's own i18n route — same origin,
+ * not the backend envelope. A language with no text there yet answers 404,
+ * which is `{}`, not an error.
+ */
+export async function publishedNamespace(lang: string, ns: string): Promise<unknown> {
+  const res = await fetch(`/api/i18n/${encodeURIComponent(lang)}/${encodeURIComponent(ns)}`, { cache: "no-store" });
+  if (res.status === 404) return {};
+  if (!res.ok) throw new Error(`${ns} texts ${lang}: ${res.status}`);
+  return res.json();
+}

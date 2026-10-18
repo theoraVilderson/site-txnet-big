@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Package, Plus, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { operatingCurrencyApi, tenantApi, type TenantPackage } from "@/lib/tenant-api";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
@@ -27,6 +28,7 @@ import { formatList } from "../../../_lib/digits";
  */
 export function PackagesView() {
   const { lang, t } = useLocale();
+  const packageTexts = usePackageTexts();
   const confirm = useConfirm();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
@@ -153,7 +155,7 @@ export function PackagesView() {
           minWidth="min-w-[860px]"
           rowClassName="align-top"
           columns={[
-            { id: "name", header: t("common", K.columns.name), cell: (p) => p.name, className: "font-bold text-text-primary" },
+            { id: "name", header: t("common", K.columns.name), cell: (p) => packageTexts.name(p), className: "font-bold text-text-primary" },
             { id: "monthly", header: t("common", K.columns.monthly), cell: (p) => money(p.monthlyPrice, p.currencyCode), dir: "ltr" },
             { id: "yearly", header: t("common", K.columns.yearly), cell: (p) => money(p.yearlyPrice, p.currencyCode), dir: "ltr" },
             { id: "rate", header: t("common", K.columns.rate), cell: rateOf, className: "text-text-secondary" },
@@ -187,7 +189,7 @@ export function PackagesView() {
           onSaved={(p, created) => {
             setEditing(null);
             setFailure(null);
-            setNotice(t("common", created ? K.created : K.saved, { name: p.name }));
+            setNotice(t("common", created ? K.created : K.saved, { name: packageTexts.name(p) }));
             reload();
           }}
         />

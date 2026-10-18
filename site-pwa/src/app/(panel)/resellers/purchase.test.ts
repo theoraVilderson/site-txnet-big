@@ -128,6 +128,9 @@ describe("the packages on sale", () => {
     currencyCode: "USD",
     id,
     name: id,
+    nameKey: `packages.p_${id}.name`,
+    descriptionKey: null,
+    sourceLang: "en",
     monthlyPrice: "10",
     yearlyPrice: "100",
     includedFeatureKeys: [],
@@ -207,7 +210,7 @@ describe("a buyer who already holds one (F-019-l)", () => {
     slug: "ali-vpn",
     status: "active",
     billingModel: "subscription_monthly",
-    package: { id: "p1", name: "Pro" },
+    package: { id: "p1", name: "Pro", nameKey: "packages.p_p1.name" },
     currentPeriodEnd: "2026-10-18T10:00:00.000Z",
     suspendsAt: "2026-10-21T10:00:00.000Z",
     domains: [

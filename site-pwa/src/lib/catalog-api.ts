@@ -3,7 +3,7 @@
 // access token as a Bearer header, exactly as `billing-api.ts` calls billing:
 // the same gate, the same credential.
 import { API_BASE } from "./api-origin";
-import { createApiClient } from "./api-request";
+import { createApiClient, publishedNamespace } from "./api-request";
 import { authApi } from "./auth-api";
 
 const API_URL = `${API_BASE}/catalog`;
@@ -442,11 +442,8 @@ export function catalogAdminApi(tenantId: string | null) {
      * The same on both surfaces: a reseller's items are named in the same
      * published namespace, and this route is the panel's, not billing's.
      */
-    async texts(lang: string): Promise<unknown> {
-      const res = await fetch(`/api/i18n/${encodeURIComponent(lang)}/catalog`, { cache: "no-store" });
-      if (res.status === 404) return {};
-      if (!res.ok) throw new Error(`catalog texts ${lang}: ${res.status}`);
-      return res.json();
+    texts(lang: string): Promise<unknown> {
+      return publishedNamespace(lang, "catalog");
     },
   };
 }

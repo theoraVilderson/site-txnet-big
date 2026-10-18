@@ -13,6 +13,8 @@ import { ResellerPurchaseController } from './reseller-purchase.controller';
 import { ResellerPurchaseService } from './reseller-purchase.service';
 import { slugFromName } from './slug-suggestion';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { markingTranslator, memoryItemTextStore } from '../../../../test-support/item-text-store';
+import { PACKAGE_TEXT_NAMESPACE, PackageTextService, packageTextKey } from '../packages/package-texts';
 
 /**
  * The invariants F-019-h turns on (ADR-0061):
@@ -133,7 +135,7 @@ describe('ResellerPurchaseService', () => {
       credit: vi.fn(async (_tx: unknown, _entry: Record<string, unknown>) => (writes.push('billing credit'), {})),
       debit: vi.fn(async (_tx: unknown, _entry: Record<string, unknown>) => (writes.push('billing debit'), {})),
     };
-    const service = new ResellerPurchaseService(appPrisma as never, all as never, redis as never, config as never, wallets as never, billing as never);
+    const service = new ResellerPurchaseService(appPrisma as never, all as never, redis as never, config as never, wallets as never, billing as never, new PackageTextService(memoryItemTextStore(PACKAGE_TEXT_NAMESPACE, ['en'], 'en').store, markingTranslator));
     return { service, all, tx, wallets, billing, writes };
   };
 
@@ -228,6 +230,11 @@ describe('ResellerPurchaseService', () => {
     ).rejects.toMatchObject({ reason: 'package_not_sold_for_period' });
   });
 
+  it('offers each package with the keys its name and description are read by (ADR-0154 (7))', async () => {
+    const [offer] = await build().service.packages(buyer);
+    expect(offer).toMatchObject({ id: PACKAGE, name: 'Pro', nameKey: packageTextKey(PACKAGE, 'name'), descriptionKey: null, sourceLang: 'en' });
+  });
+
   it('answers the reseller the caller already owns, or null — never a refusal for having none (F-019-l)', async () => {
     const none = build();
     expect(await none.service.mine(buyer)).toEqual({ reseller: null });
@@ -247,7 +254,7 @@ describe('ResellerPurchaseService', () => {
         slug: 'ali-vpn',
         status: 'active',
         billingModel: 'subscription_monthly',
-        package: { id: PACKAGE, name: 'Pro' },
+        package: { id: PACKAGE, name: 'Pro', nameKey: packageTextKey(PACKAGE, 'name') },
         currentPeriodEnd: NOW,
         // F-019-c3: when an unpaid renewal suspends it — the setting's grace days past the period end.
         suspendsAt: new Date(NOW.getTime() + 3 * 86_400_000),

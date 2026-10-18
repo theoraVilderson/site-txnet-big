@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { tenantApi, type TenantPackage } from "@/lib/tenant-api";
 import { Alert, Field, Sheet, useMessage } from "../../_components/resellers-ui";
 import type { Errors } from "../../_lib/resellers";
@@ -42,6 +43,7 @@ export function PackageSheet({
   onSaved: (p: TenantPackage, created: boolean) => void;
 }) {
   const { t } = useLocale();
+  const packageTexts = usePackageTexts();
   const meterName = useMeterNames();
   const message = useMessage();
   const [form, setForm] = useState<PackageForm>(() => (pkg ? packageFormOf(pkg) : emptyPackageForm()));
@@ -80,7 +82,7 @@ export function PackageSheet({
 
   return (
     <Sheet
-      title={pkg ? t("common", K.form.editTitle, { name: pkg.name }) : t("common", K.form.createTitle)}
+      title={pkg ? t("common", K.form.editTitle, { name: packageTexts.name(pkg) }) : t("common", K.form.createTitle)}
       onClose={onClose}
       footer={
         <Button variant="primary" size="sm" onClick={submit} loading={busy}>

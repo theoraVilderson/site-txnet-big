@@ -66,8 +66,8 @@ read on the app pool before the cross-tenant pool is touched.
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name}, currentPeriodEnd, suspendsAt, domains` — `suspendsAt` is `renewalDeadline`, F-019-c3), `null` when none — a 200 either way (F-019-l) |
-| `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, monthlyPrice, yearlyPrice, currencyCode, includedFeatureKeys` — `currencyCode` the package's (F-116-h3) |
+| `GET /api/tenants/purchase/mine` | — | `{reseller}`: the caller's live reseller (`id, slug, status, billingModel, package {id, name, nameKey}, currentPeriodEnd, suspendsAt, domains` — `suspendsAt` is `renewalDeadline`, F-019-c3), `null` when none — a 200 either way (F-019-l) |
+| `GET /api/tenants/purchase/packages` | — | active packages by name: `id, name, nameKey, descriptionKey, sourceLang, monthlyPrice, yearlyPrice, currencyCode, includedFeatureKeys` — `currencyCode` the package's (F-116-h3) |
 | `GET /api/tenants/purchase/slug` | `name` 1..100, `.strict()` | `{slug}` — a suggestion, checked again by the purchase |
 | `POST /api/tenants/purchase` | `{packageId, billingModel, name, slug?}`, `.strict()` | `201` a reseller view + `packageId, currentPeriodEnd, charged, walletBalance, currencyCode` (the buyer's wallet's) |
 
@@ -140,7 +140,7 @@ after it is on the cross-tenant pool.
 | `GET /api/tenant-subscription-settings` | — | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
 | `PATCH /api/tenant-subscription-settings` | `{trialDays?, suspensionHoldDays?, renewalGraceDays?, quotaTimeZone?}` — integers 0..365 / 0..90 / 0..30, an IANA zone the runtime knows, at least one, `.strict()` | `{trialDays, suspensionHoldDays, renewalGraceDays, quotaTimeZone}` |
 
-A subscription view: `tenantId, packageId, packageName, billingModel,
+A subscription view: `tenantId, packageId, packageName, packageNameKey` (PK-1-d), `billingModel,
 currentPeriodEnd, startedAt, includedFeatureKeys, next` (`{packageId,
 billingModel}` waiting for the renewal, or null) and, on a write, `charged`.
 Refusals: `not_platform_owner` 403; `reseller_not_found`, `subscription_not_found`,

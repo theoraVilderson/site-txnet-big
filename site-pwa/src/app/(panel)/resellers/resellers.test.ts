@@ -66,7 +66,7 @@ describe("what the services behind this page can refuse", () => {
       ...unionOf("tenant-service/src/app/resellers/reseller.service.ts", "ResellerRejection"),
       ...unionOf("tenant-service/src/app/subscription/tenant-subscription.service.ts", "TenantSubscriptionRejection"),
       ...unionOf("tenant-service/src/app/status/tenant-status.service.ts", "TenantStatusRejection"),
-      ...unionOf("tenant-service/src/app/packages/tenant-package.service.ts", "TenantPackageRejection"),
+      ...unionOf("tenant-service/src/app/packages/tenant-package.refusal.ts", "TenantPackageRejection"),
       ...unionOf("billing-service/src/app/tenant-billing/tenant-billing-admin.service.ts", "TenantBillingAdminRejection"),
     ]);
     expect(Object.keys(REFUSAL_KEYS).sort()).toEqual([...reasons].sort());
@@ -148,6 +148,9 @@ describe("package and period", () => {
     meterRates: [],
     id,
     name: id,
+    nameKey: `packages.p_${id}.name`,
+    descriptionKey: null,
+    sourceLang: "en",
     monthlyPrice: "10",
     yearlyPrice: "100",
     includedFeatureKeys: [],

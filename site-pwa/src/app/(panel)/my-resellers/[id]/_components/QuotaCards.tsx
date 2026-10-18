@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowUpCircle, Boxes, PiggyBank } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { catalogApi } from "@/lib/catalog-api";
 import { PANEL_TENANT_BILLING_TOPUP } from "@/lib/routes";
@@ -215,6 +216,7 @@ export function OverageCapCard({ tenantId }: { tenantId: string }) {
  */
 export function PackageChangeCard({ tenantId }: { tenantId: string }) {
   const { t, lang } = useLocale();
+  const packageTexts = usePackageTexts();
   const confirm = useConfirm();
   const message = useApiErrorMessage();
   const money = useMoney();
@@ -290,7 +292,7 @@ export function PackageChangeCard({ tenantId }: { tenantId: string }) {
             <option value="">{t("common", Q.change.pick)}</option>
             {offers.map((o) => (
               <option key={o.id} value={o.id}>
-                {o.name}
+                {packageTexts.name(o)}
               </option>
             ))}
           </NativeSelect>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { billingApi, type TenantLedgerDirection } from "@/lib/billing-api";
 import {
   tenantApi,
@@ -310,6 +311,7 @@ function useWrite() {
 function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () => void }) {
   const { lang, t } = useLocale();
   const { reseller, subscription, packages } = loaded;
+  const packageTexts = usePackageTexts();
   const initialPeriod: ResellerBillingModel =
     subscription?.billingModel ?? (reseller.billingModel === "subscription_yearly" ? "subscription_yearly" : "subscription_monthly");
   const [period, setPeriod] = useState<ResellerBillingModel>(initialPeriod);
@@ -337,7 +339,7 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
       <p className="text-xs text-text-secondary">
         {subscription
           ? t("common", K.subscription.current, {
-              package: subscription.packageName,
+              package: packageTexts.name({ name: subscription.packageName, nameKey: subscription.packageNameKey }),
               period: t("common", K.period[subscription.billingModel]),
               date: formatInstant(subscription.currentPeriodEnd, lang, { withTime: false }) ?? "—",
             })
@@ -361,10 +363,7 @@ function SubscriptionSection({ loaded, onSaved }: { loaded: Loaded; onSaved: () 
                   value={packageId}
                   onChange={setPackageId}
                   placeholder={t("common", K.subscription.package)}
-                  options={choices.map((p) => ({
-                    value: p.id,
-                    label: `${p.name} — ${formatMoney(priceFor(p, period) ?? "0", p.currencyCode, { lang, t })}`,
-                  }))}
+                  options={choices.map((p) => ({ value: p.id, label: `${packageTexts.name(p)} — ${formatMoney(priceFor(p, period) ?? "0", p.currencyCode, { lang, t })}` }))}
                 />
               )}
             </Field>

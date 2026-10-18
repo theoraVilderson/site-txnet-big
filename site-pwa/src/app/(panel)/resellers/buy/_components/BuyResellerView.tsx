@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, CheckCircle2, HandCoins, Loader2, Minus, Store } from "lucide-react";
+import { CheckCircle2, HandCoins, Loader2, Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { billingApi } from "@/lib/billing-api";
@@ -18,20 +18,18 @@ import {
 import { useResellerPanelOpener } from "../../../_components/ResellerWorkspaceNav";
 import { Select } from "../../../_components/kit/Select";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
-import { DataTable } from "../../../_components/kit/DataTable";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
+import { usePackageTexts } from "../../../_hooks/usePackageTexts";
+import { Capabilities } from "./PackageCapabilities";
 import { formatInstant } from "../../../_lib/datetime";
 import { formatMoney } from "../../../_lib/money";
 import { Alert, Field, StatusBadge } from "../../_components/resellers-ui";
-import { PACKAGE_KEYS } from "../../_lib/packages";
 import { BILLING_MODELS, RESELLER_KEYS } from "../../_lib/resellers";
 import {
   PURCHASE_KEYS as K,
-  RESELLER_BASICS,
   afterPurchasePath,
   canBuyReseller,
   emptyPurchaseForm,
-  featureChart,
   isInsufficientBalance,
   offerChoices,
   offerPrice,
@@ -147,6 +145,7 @@ export function BuyResellerView() {
   const picked = choices.find((o) => o.id === form.packageId) ?? null;
   const price = picked ? offerPrice(picked, form.billingModel) : null;
   const money = (amount: string, currency: string) => formatMoney(amount, currency, { lang, t });
+  const packages = usePackageTexts();
 
   // A period the picked package is not sold for drops the pick, rather than
   // sending one the service would refuse `package_not_sold_for_period`.
@@ -267,7 +266,7 @@ export function BuyResellerView() {
               <Select
                 value={form.packageId}
                 onChange={(v) => set({ packageId: v })}
-                options={choices.map((o) => ({ value: o.id, label: `${o.name} — ${money(offerPrice(o, form.billingModel) as string, o.currencyCode)}` }))}
+                options={choices.map((o) => ({ value: o.id, label: `${packages.name(o)} — ${money(offerPrice(o, form.billingModel) as string, o.currencyCode)}` }))}
                 invalid={!!errors.packageId}
               />
             )}
@@ -315,64 +314,6 @@ export function BuyResellerView() {
 }
 
 /**
- * Everything a reseller can do, before the buyer pays (user, 2026-10-06): what
- * every package gives, then every feature a package may carry against the
- * packages on sale for this period, the picked one marked. Words, never keys.
- */
-function Capabilities({ offers, pickedId }: { offers: PackageOffer[]; pickedId: string }) {
-  const { t } = useLocale();
-  const features = PACKAGE_KEYS.features as Record<string, string>;
-  return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-xs font-bold text-text-secondary">{t("common", K.everyPackage)}</p>
-        <ul className="mt-2 grid gap-1.5 text-sm text-text-primary sm:grid-cols-2">
-          {RESELLER_BASICS.map((k) => (
-            <li key={k} className="flex items-center gap-2">
-              <Check size={14} className="shrink-0 text-primary" aria-hidden />
-              {t("common", K.basics[k])}
-            </li>
-          ))}
-        </ul>
-      </div>
-      {offers.length > 0 && (
-        <div>
-          <p className="text-xs font-bold text-text-secondary">{t("common", K.features)}</p>
-          <div className="mt-2">
-            <DataTable
-              label={t("common", K.features)}
-              compact
-              bare
-              rows={featureChart(offers)}
-              rowKey={(row) => row.key}
-              columns={[
-                {
-                  id: "feature",
-                  header: t("common", K.feature),
-                  cell: (row) => (features[row.key] ? t("common", features[row.key]) : row.key),
-                  className: "text-text-primary",
-                },
-                ...offers.map((o, i) => ({
-                  id: o.id,
-                  header: <span className={o.id === pickedId ? "text-primary" : undefined}>{o.name}</span>,
-                  cell: (row: { included: boolean[] }) =>
-                    row.included[i] ? (
-                      <Check size={16} className="text-primary" aria-label={t("common", K.has)} />
-                    ) : (
-                      <Minus size={16} className="text-text-secondary" aria-label={t("common", K.hasNot)} />
-                    ),
-                  className: o.id === pickedId ? "bg-primary/5" : undefined,
-                })),
-              ]}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
  * The reseller this buyer already holds (F-019-l): its package and period, its
  * address, and the way into its panel — the sidebar entry's own handoff. The
  * CNAME target is said as where to point a domain, never linked (ADR-0063).
@@ -381,6 +322,7 @@ function Capabilities({ offers, pickedId }: { offers: PackageOffer[]; pickedId: 
 function HeldReseller({ reseller }: { reseller: OwnedReseller }) {
   const { lang, t } = useLocale();
   const { pending, open } = useResellerPanelOpener();
+  const packages = usePackageTexts();
   const hosts = ownedHosts(reseller);
   const H = K.owned;
   const periodEnd = reseller.currentPeriodEnd
@@ -404,7 +346,7 @@ function HeldReseller({ reseller }: { reseller: OwnedReseller }) {
         <div>
           <dt className="text-xs text-text-secondary">{t("common", H.package)}</dt>
           <dd className="mt-1 font-medium text-text-primary">
-            {reseller.package ? `${reseller.package.name} — ${period}` : t("common", H.noPackage)}
+            {reseller.package ? `${packages.name(reseller.package)} — ${period}` : t("common", H.noPackage)}
           </dd>
         </div>
         {periodEnd && (

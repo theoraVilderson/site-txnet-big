@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Store } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
+import { usePackageTexts } from "../../_hooks/usePackageTexts";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerConsolePath } from "@/lib/routes";
 import { buttonClass } from "../../_components/kit";
@@ -21,6 +22,7 @@ const R = FrontendI18nKeys.common.myServices.reseller;
  */
 export function ResellerSubscription() {
   const { t, lang } = useLocale();
+  const packageTexts = usePackageTexts();
   const reseller = useOwnedReseller();
   if (!reseller) return null;
   const state = subscriptionState(reseller, Date.now());
@@ -44,7 +46,7 @@ export function ResellerSubscription() {
       <dl className="grid gap-3 text-sm sm:grid-cols-2">
         <div>
           <dt className="text-xs text-text-secondary">{t("common", R.package)}</dt>
-          <dd className="mt-0.5 font-medium text-text-primary">{reseller.package?.name ?? t("common", R.noPackage)}</dd>
+          <dd className="mt-0.5 font-medium text-text-primary">{reseller.package ? packageTexts.name(reseller.package) : t("common", R.noPackage)}</dd>
         </div>
         {end && (
           <div>

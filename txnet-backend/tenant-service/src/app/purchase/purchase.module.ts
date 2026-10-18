@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TenantBillingLedger, WalletLedgerService } from '@txnet-backend/shared-core';
 
+import { PackagesModule } from '../packages/packages.module';
 import { ResellerPurchaseController } from './reseller-purchase.controller';
 import { ResellerPurchaseService } from './reseller-purchase.service';
 
@@ -13,6 +14,8 @@ import { ResellerPurchaseService } from './reseller-purchase.service';
  * `PrismaModule` and `RedisModule` are `@Global`.
  */
 @Module({
+  // A package's name and description are offered in the buyer's language (ADR-0154 (7)).
+  imports: [PackagesModule],
   controllers: [ResellerPurchaseController],
   providers: [ResellerPurchaseService, WalletLedgerService, TenantBillingLedger],
 })

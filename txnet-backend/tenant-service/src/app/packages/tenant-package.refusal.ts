@@ -1,5 +1,3 @@
-import type { ItemTextRefusal } from '@txnet-backend/shared-core';
-
 import type { PackagePartRejection } from './package-parts';
 
 /**
@@ -21,7 +19,9 @@ export type TenantPackageRejection =
   | 'package_price_in_use'
   | 'meter_not_found'
   | 'lang_unknown'
-  | ItemTextRefusal
+  // ItemTextRefusal, spelled out: the panel's test reads this union for a sentence per reason.
+  | 'text_key_invalid'
+  | 'texts_unavailable'
   | PackagePartRejection;
 
 /** `field`: the request field refused, `limits.2.value`, when a create's part is (ADR-0154 decision 4). */

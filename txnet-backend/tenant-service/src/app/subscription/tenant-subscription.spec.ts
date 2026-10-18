@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { packageTextKey } from '../packages/package-texts';
 import { TenantSubscriptionService } from './tenant-subscription.service';
 import { putSubscriptionSchema, updateSubscriptionSettingsSchema } from './tenant-subscription.schema';
 
@@ -108,7 +109,7 @@ describe('TenantSubscriptionService', () => {
       targetEntityId: RESELLER,
       oldValue: Prisma.JsonNull,
     });
-    expect(view).toMatchObject({ tenantId: RESELLER, packageId: PKG, packageName: 'Growth', billingModel: 'subscription_monthly', includedFeatureKeys: ['spin_wheel', 'coupon_engine'] });
+    expect(view).toMatchObject({ tenantId: RESELLER, packageId: PKG, packageName: 'Growth', packageNameKey: packageTextKey(PKG, 'name'), billingModel: 'subscription_monthly', includedFeatureKeys: ['spin_wheel', 'coupon_engine'] });
   });
 
   it('keeps currentPeriodEnd on a package and period change, and moves the tenant to the new period', async () => {

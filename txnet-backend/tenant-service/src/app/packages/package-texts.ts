@@ -25,6 +25,14 @@ export function packageTextKey(packageId: string, field: PackageTextField): stri
   return `${PACKAGE_TEXT_NAMESPACE}.p_${packageId.replace(/-/g, '').toLowerCase()}.${field}`;
 }
 
+/** A subscription's package as a view names it: its source text and the key it is read by (ADR-0154 (7)). */
+export type NamedPackage = { packageName: string; packageNameKey: string };
+
+/** {@link NamedPackage} for a package. */
+export function namedPackage(packageId: string, name: string): NamedPackage {
+  return { packageName: name, packageNameKey: packageTextKey(packageId, 'name') };
+}
+
 /** The package a key `packageTextKey` built is for, or `null` for any other key. */
 export function packageOfTextKey(key: string): string | null {
   const m = KEY_RE.exec(key);

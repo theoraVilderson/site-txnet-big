@@ -43,7 +43,7 @@ const HELD: OwnedReseller = {
   slug: "sara-vpn",
   status: "active",
   billingModel: "subscription_monthly",
-  package: { id: "p-1", name: "Silver" },
+  package: { id: "p-1", name: "Silver", nameKey: "packages.p_p1.name" },
   currentPeriodEnd: "2026-11-01T00:00:00.000Z",
   suspendsAt: "2026-11-04T00:00:00.000Z",
   domains: [],

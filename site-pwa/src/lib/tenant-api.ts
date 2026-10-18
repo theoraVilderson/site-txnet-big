@@ -42,10 +42,12 @@ export interface CreateResellerBody {
   ownerUserId: string;
 }
 
+/** A package's text as the server keys it (ADR-0154 (5)): `name` is the source text — read through `usePackageTexts`; `descriptionKey` null is none. */
+export type PackageTexts = { name: string; nameKey: string; descriptionKey: string | null; sourceLang: string };
+
 /** A package view (F-018-d). A price is a decimal string, `null` when not sold for that period. */
-export interface TenantPackage {
+export interface TenantPackage extends PackageTexts {
   id: string;
-  name: string;
   monthlyPrice: string | null;
   yearlyPrice: string | null;
   /** What both prices are in: the package's own, the platform's (F-116-h3). */
@@ -104,6 +106,7 @@ export interface TenantSubscription {
   tenantId: string;
   packageId: string;
   packageName: string;
+  packageNameKey: string;
   billingModel: ResellerBillingModel;
   currentPeriodEnd: string;
   startedAt: string;
@@ -111,19 +114,11 @@ export interface TenantSubscription {
 }
 
 /**
- * A package as the purchase offers it (F-019-i). Not {@link TenantPackage}:
- * `GET /tenants/purchase/packages` answers a buyer, so it lists the active
- * ones only and carries no `isActive`.
+ * A package as the purchase offers it (F-019-i): {@link TenantPackage} less what
+ * a buyer is not shown — `GET /tenants/purchase/packages` lists the active
+ * ones only, so no `isActive`, and no wholesale rates.
  */
-export interface PackageOffer {
-  id: string;
-  name: string;
-  monthlyPrice: string | null;
-  yearlyPrice: string | null;
-  /** What both prices are in (F-116-h3). */
-  currencyCode: string;
-  includedFeatureKeys: string[];
-}
+export type PackageOffer = Omit<TenantPackage, "isActive" | "meterRates">;
 
 /** `POST /tenants/purchase`'s body. The route is `.strict()`: `slug` is sent only when the buyer kept one. */
 export interface PurchaseBody {
@@ -155,7 +150,7 @@ export interface OwnedReseller {
   slug: string;
   status: TenantStatus;
   billingModel: Reseller["billingModel"];
-  package: { id: string; name: string } | null;
+  package: { id: string; name: string; nameKey: string } | null;
   currentPeriodEnd: string | null;
   /**
    * When an unpaid renewal suspends it — the period end plus the grace days,
