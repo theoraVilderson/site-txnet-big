@@ -15,11 +15,10 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { BackendI18nKeys, ResellerLimitReached, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, ResellerLimitReached, ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { GrantBulkDrainResult, GrantBulkJobDrainService, GrantBulkJobRefused, GrantBulkJobRejection, ResellerGrantBulkJobService } from './grant-bulk-job';
 import { GrantBulkJobBody, grantBulkJobSchema, grantBulkCountSchema } from './grant-bulk-job.schema';
 import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from './reseller-job-routes';

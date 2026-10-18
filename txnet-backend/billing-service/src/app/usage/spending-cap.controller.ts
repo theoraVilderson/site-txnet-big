@@ -1,10 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, BadRequestException, NotFoundException, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { SpendingCapRefused, SpendingCapService } from './spending-cap';
 import { SpendingCapBody, spendingCapSchema } from './spending-cap.schema';
 

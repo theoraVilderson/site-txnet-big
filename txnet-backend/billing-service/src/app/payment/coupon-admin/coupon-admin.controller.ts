@@ -18,12 +18,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import {
   CouponCurrencyQuery,
   CreateCouponBody,

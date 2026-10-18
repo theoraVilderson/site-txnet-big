@@ -1,11 +1,10 @@
 import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Ip, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { z } from 'zod';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { EngagementPermissionGuard } from './engagement-permission.guard';
 import { WheelVersionBody, wheelVersionSchema } from './wheel-admin.schema';
 import { WheelActor, WheelAdminRefused, WheelAdminRejection, WheelAdminService, WheelVersionInput } from './wheel-admin.service';

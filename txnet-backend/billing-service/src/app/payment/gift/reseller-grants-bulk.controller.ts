@@ -1,11 +1,10 @@
 import { Body, ConflictException, Controller, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { EntitlementRefused } from '../../entitlement/grant';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { GrantBulkBody, grantBulkSchema } from './grant-bulk.schema';
 import { actorOf, resellerRefusal } from './reseller-user-grants.controller';
 import { ResellerUserGrantsRefused, ResellerUserGrantsService } from './reseller-user-grants.service';

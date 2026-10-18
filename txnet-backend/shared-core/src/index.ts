@@ -109,6 +109,7 @@ export * from './lib/sms/sms-provider.service';
 export * from './lib/mail/mail-provider.service';
 export * from './lib/envelope/response';
 export * from './lib/envelope/sanitize-error';
+export * from './lib/envelope/zod-validation.pipe';
 export * from './lib/envelope/response.interceptor';
 export * from './lib/envelope/i18n-exception.filter';
 export * from './lib/rate-limit/rate-limiter';

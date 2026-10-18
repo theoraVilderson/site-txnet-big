@@ -1,11 +1,10 @@
 import { Controller, ForbiddenException, Get, NotFoundException, Param, ParseUUIDPipe, Query, Req, UseGuards, ConflictException } from '@nestjs/common';
-import { RateLimitBucket, accessTraceOf, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, accessTraceOf, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { AuthGuard } from '../auth/auth.guard';
 import { RateLimit, type RateLimitOptions } from '../auth/decorators/rate-limit.decorator';
 import type { AuthClaims } from '../auth/token.service';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { historyQuerySchema, type HistoryQuery } from './access-history.schema';
 import { AccessHistoryRefused, AccessHistoryRejection, AccessHistoryService } from './access-history.service';
 

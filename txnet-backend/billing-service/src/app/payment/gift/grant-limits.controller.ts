@@ -1,10 +1,9 @@
 import { Body, ConflictException, Controller, Get, Ip, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { CompensationCapBody, compensationCapSchema } from './grant-compensation.schema';
 import { FreezeSettingsBody, freezeSettingsSchema, TenantGrantLimitBody, tenantGrantLimitSchema } from './grant-limits.schema';
 import { GrantLimitsService } from './grant-limits.service';

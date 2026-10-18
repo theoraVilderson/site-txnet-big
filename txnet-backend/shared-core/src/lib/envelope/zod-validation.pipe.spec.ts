@@ -1,8 +1,22 @@
 import { BadRequestException } from '@nestjs/common';
 import { z } from 'zod';
-import { ZodValidationPipe } from './zod-validation.pipe';
-import { registerSchema } from '../../auth/register/register.schema';
-import { sanitizeError } from '../security/sanitize-error';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
+import { sanitizeError } from './sanitize-error';
+
+/**
+ * The one request-body pipe every Nest service uses (CS-1-l; it was six
+ * copies, one per app). A registration form stands in for any schema: keyed
+ * messages, a transform, an unknown field.
+ */
+const registerSchema = z.object({
+  fullName: z.string().min(2, 'fullName.tooShort'),
+  username: z.string().min(3, 'username.tooShort').regex(/^[a-z0-9_]+$/, 'username.invalidChars'),
+  phoneNumber: z
+    .string()
+    .regex(/^(\+98|0)?9\d{9}$/, 'phone.invalidFormat')
+    .transform((p) => `+98${p.slice(-10)}`),
+  password: z.string().min(8, 'password.tooShort'),
+});
 
 const validRegistration = {
   fullName: 'Ada Lovelace',
@@ -137,21 +151,20 @@ describe('ZodValidationPipe', () => {
     });
   });
 
-  // The pipe forwards `issue.message` verbatim — it cannot tell a key from
-  // prose. A schema rule written without a message therefore emits Zod's
-  // English default, and the sanitizer, not the pipe, is what stops it from
-  // reaching the client. This pins that division of labour down.
+  // A schema rule written without a message carries Zod's English default.
+  // The client must never see that prose, but it must still learn which field
+  // failed: the pipe answers it with a generic key, so the path survives
+  // sanitizeError (PK-1-j, CS-1-l).
   describe('a schema rule with no i18n message', () => {
     const pipe = new ZodValidationPipe(z.object({ email: z.string() }));
 
-    it('leaks the Zod default message out of the pipe', () => {
+    it('answers the Zod default with validation.invalidValue', () => {
       const body = bodyOf(() => pipe.transform({}));
 
-      expect(body.fieldErrors[0].path).toBe('email');
-      expect(body.fieldErrors[0].i18nKey).toBe('Required');
+      expect(body.fieldErrors).toEqual([{ path: 'email', i18nKey: 'validation.invalidValue' }]);
     });
 
-    it('is dropped by sanitizeError, so the client never sees the prose', () => {
+    it('keeps the path through sanitizeError, and never the prose', () => {
       let thrown: unknown;
       try {
         pipe.transform({});
@@ -163,7 +176,7 @@ describe('ZodValidationPipe', () => {
 
       expect(safe.status).toBe(400);
       expect(safe.msgKey).toBe('validation.failed');
-      expect(safe.fieldErrors).toEqual([]);
+      expect(safe.fieldErrors).toEqual([{ path: 'email', i18nKey: 'validation.invalidValue' }]);
     });
   });
 });

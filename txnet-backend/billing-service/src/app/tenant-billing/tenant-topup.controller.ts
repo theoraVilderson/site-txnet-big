@@ -9,13 +9,12 @@ import {
   Req,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { toHttp } from '../payment/deposit/deposit.controller';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { TenantTopupBody, tenantTopupSchema } from './tenant-topup.schema';
 import { TenantTopupRefused, TenantTopupRejection, TenantTopupService, TopupInput } from './tenant-topup.service';
 

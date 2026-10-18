@@ -2,7 +2,7 @@ import { Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, N
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { SetTenantTimeZoneInput, setTenantTimeZoneSchema } from './tenant-time-zone.schema';
 import { TenantTimeZoneRefused, TenantTimeZoneRejection, TenantTimeZoneService, TenantTimeZoneView } from './tenant-time-zone.service';
 

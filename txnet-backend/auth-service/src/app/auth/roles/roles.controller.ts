@@ -12,12 +12,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { createRoleSchema, updateRoleSchema, type CreateRoleInput, type UpdateRoleInput } from './role.schema';
 import type { AuthClaims } from '../token.service';
 import { ROLE_MANAGE, RolesService } from './roles.service';

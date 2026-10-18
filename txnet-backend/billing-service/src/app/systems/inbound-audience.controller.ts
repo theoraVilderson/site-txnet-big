@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, 
 import type { Request } from 'express';
 
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { GrantBulkPage, grantBulkPageSchema } from '../payment/gift/grant-bulk-job.schema';
 import { InboundReleaseInput, InboundReleaseService } from './inbound-release';
 import { InboundAudienceInput, MemberInboundsService } from './member-inbounds';

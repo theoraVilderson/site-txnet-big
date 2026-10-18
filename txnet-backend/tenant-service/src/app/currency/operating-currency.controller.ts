@@ -2,7 +2,7 @@ import { Body, Controller, ForbiddenException, Get, HttpException, HttpStatus, I
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { SetOperatingCurrencyInput, setOperatingCurrencySchema } from './operating-currency.schema';
 import {
   OperatingCurrencyChange,

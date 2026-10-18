@@ -1,10 +1,9 @@
 import { Body, Controller, Get, Put, Req } from '@nestjs/common';
-import { RateLimitBucket, TenantCapability, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, TenantCapability, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { NotificationPreferencesService, Preferences } from './notification-preferences.service';
 import { preferencesSchema } from './notification-preferences.schema';
 

@@ -15,12 +15,11 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import type { AudienceFilter } from './campaign-admin.schema';
 import { CAMPAIGN_REFUSAL_STATUS } from './campaign-admin.controller';
 import { CreateCampaignInput } from './campaign-admin.service';

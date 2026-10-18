@@ -1,8 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { NoticeSms, NoticeSmsAnswer, NoticeSmsService } from './notice-sms';
 
 const noticeSmsSchema = z

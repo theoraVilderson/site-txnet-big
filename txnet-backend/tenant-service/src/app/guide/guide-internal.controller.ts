@@ -1,8 +1,7 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard, runWithTenant, requestLanguage } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, runWithTenant, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   guideInternalListQuerySchema,
   guideInternalOneQuerySchema,

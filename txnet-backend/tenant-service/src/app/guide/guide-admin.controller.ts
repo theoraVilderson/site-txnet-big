@@ -21,11 +21,10 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { GuideKind } from '@prisma/client';
-import { ResellerLimitReached, requestLanguage } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   GUIDE_IMAGE_POLICY,
   GUIDE_VIDEO_POLICY,

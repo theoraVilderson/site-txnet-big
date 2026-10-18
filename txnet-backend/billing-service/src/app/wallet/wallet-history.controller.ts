@@ -1,11 +1,10 @@
 import { Controller, Get, NotFoundException, Param, ParseUUIDPipe, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { WalletHistoryService } from './wallet-history.service';
 import {
   WalletHistoryQuery,

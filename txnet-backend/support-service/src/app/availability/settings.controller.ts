@@ -1,11 +1,10 @@
 import { Body, Controller, Get, Put, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { callerOf, refusing } from '../conversations/conversations.controller';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { SlaTargetView, SupportSla } from '../sla/sla';
 import { SupportAvailability } from './availability';
 import { HoursBody, SlaBody, hoursSchema, slaSchema } from './availability.schema';

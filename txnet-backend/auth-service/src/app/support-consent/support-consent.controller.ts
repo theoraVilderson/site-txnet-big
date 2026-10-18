@@ -16,13 +16,12 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { AuthGuard } from '../auth/auth.guard';
 import { RateLimit, RateLimitOptions } from '../auth/decorators/rate-limit.decorator';
 import type { AuthClaims } from '../auth/token.service';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import {
   ActivityQuery,
   ConsentPolicyBody,

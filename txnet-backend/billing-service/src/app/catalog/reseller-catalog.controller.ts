@@ -17,7 +17,7 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { CATALOG_REFUSAL_STATUS, catalogRefusal, type CatalogRefusalStatus } from './catalog-refusal';
 import { CATALOG_ADMIN_READ as READ, CATALOG_ADMIN_WRITE as WRITE } from './catalog-admin.rate-limit';
 import {

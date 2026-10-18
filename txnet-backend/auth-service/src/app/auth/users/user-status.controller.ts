@@ -14,12 +14,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { UserStatus } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { z } from 'zod';
 import { AuthGuard } from '../auth.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import type { AuthClaims } from '../token.service';
 import { UserStatusInput, UserStatusRefusal, UserStatusRefused, UserStatusService } from './user-status.service';
 

@@ -1,11 +1,10 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { GrantLabelBody, grantLabelSchema, GrantListQuery, GrantsByLinesBody, grantListSchema, grantsByLinesSchema } from './grant-list.schema';
 
 const E = BackendI18nKeys.errors.billing;

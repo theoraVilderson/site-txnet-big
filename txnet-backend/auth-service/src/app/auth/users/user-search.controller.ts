@@ -1,10 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus, Query, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { PermissionsGuard } from '../guards/permissions.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { userSearchSchema, type UserSearchInput } from '../auth.schema';
 import type { AuthClaims } from '../token.service';
 import { USER_SEARCH, UserSearchService } from './user-search.service';

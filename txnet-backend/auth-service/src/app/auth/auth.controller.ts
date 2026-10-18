@@ -1,4 +1,4 @@
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -14,7 +14,6 @@ import {
 } from '@nestjs/common';
 import { REFRESH_TOKEN_COOKIE } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { AuthService } from './auth.service';
 import { SecondFactorService } from './second-factor.service';
 import { OtpResendService } from './otp/otp-resend.service';

@@ -9,13 +9,12 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { RateLimitBucket, type RateLimitOptions, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, type RateLimitOptions, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import type { RateLimitConfigKey } from '../config/env.validation';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { RevenuePeriodQuery, revenuePeriodSchema } from './reseller-revenue.schema';
 import {
   ResellerRevenueRefused,

@@ -14,11 +14,10 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { ConfigMoveDrainResult, ConfigMoveJobDrainService } from './config-move-drain';
 import { ConfigMoveJobRefused, ConfigMoveJobRejection, ResellerConfigMoveJobService } from './config-move-job';
 import { ConfigMoveJobBody, configMoveJobSchema, ConfigMoveSelection, configMoveSelectionSchema } from './config-move-job.schema';

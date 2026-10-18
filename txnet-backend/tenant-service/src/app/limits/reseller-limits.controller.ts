@@ -18,11 +18,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-backend/shared-core';
+import { ResellerAccessRefused, type ResellerAccessRejection, ZodValidationPipe } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
 import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   ClearResellersLimitInput,
   clearResellersLimitSchema,

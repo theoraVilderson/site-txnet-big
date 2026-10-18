@@ -1,9 +1,8 @@
 import { Body, Controller, Get, NotFoundException, Param, Put, Req } from '@nestjs/common';
-import { requestLanguage } from '@txnet-backend/shared-core';
+import { requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { GuideRefused } from './guide-admin';
 import { guideKeySchema, guideVoteBodySchema } from './guide-public.schema';
 import { GuideStats } from './guide-stats';

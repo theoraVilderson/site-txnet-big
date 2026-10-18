@@ -14,12 +14,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import type { Availability } from '../availability/availability';
 import { SupportAttachmentService } from './attachments.service';
 import {

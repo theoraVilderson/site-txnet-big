@@ -1,7 +1,6 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, ZodValidationPipe } from '@txnet-backend/shared-core';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CreateNotification, NotificationInboxService } from './notification-inbox.service';
 import { createNotificationSchema } from './notification-inbox.schema';
 import { LotteryClaim, RetentionClaim, RetentionHold, RetentionLedgerService, SuggestionClaim } from './retention-ledger.service';

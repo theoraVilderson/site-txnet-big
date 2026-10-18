@@ -1,7 +1,6 @@
-import { sanitizeError } from '@txnet-backend/shared-core';
+import { sanitizeError, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { TenantPackageController } from './tenant-package.controller';
 import { createPackageSchema } from './tenant-package.schema';
 import { TenantPackageRefused, type TenantPackageService } from './tenant-package.service';

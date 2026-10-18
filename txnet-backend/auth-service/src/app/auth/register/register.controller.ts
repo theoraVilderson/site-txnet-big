@@ -1,4 +1,4 @@
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -16,7 +16,6 @@ import { RegisterService } from './register.service';
 import { OtpResendGrants } from '../otp/otp-resend.store';
 import { AuthService } from '../auth.service';
 import { registerSchema, verifyPhoneSchema } from './register.schema';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { LocaleService } from '../../locale/locale.service';
 import { ResponseType } from '../../common/response/response.util';
 import { setRefreshCookie } from '../../common/http/refresh-cookie';

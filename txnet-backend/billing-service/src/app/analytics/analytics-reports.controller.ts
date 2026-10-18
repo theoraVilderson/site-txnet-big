@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { RefusalStatus, refusalException } from '../request/refusal-exception';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { ReportScheduleBody, ReportScheduleChange, reportScheduleChangeSchema, reportScheduleSchema } from './analytics-reports.schema';
 import { AnalyticsReportService, ReportRefusal, ReportRefused } from './analytics-reports.service';
 import { READ } from './analytics.controller';

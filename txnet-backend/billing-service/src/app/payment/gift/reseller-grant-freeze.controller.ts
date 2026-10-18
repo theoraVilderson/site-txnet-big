@@ -1,7 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Put, Req } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { GrantReasonBody, grantReasonSchema } from './grant-audit.schema';
 import { GrantFreezeBody, GrantFreezeModeBody, grantFreezeModeSchema, grantFreezeSchema } from './grant-freeze.schema';
 import { actionLimit, adminOf, grantActRefusal } from './reseller-user-grants.controller';

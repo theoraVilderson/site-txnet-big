@@ -10,7 +10,7 @@ import {
 import { z } from 'zod';
 import { I18nExceptionFilter } from './i18n-exception.filter';
 import { LocaleService } from '../../locale/locale.service';
-import { ZodValidationPipe } from '../pipes/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { fakeArgumentsHost } from '../../../test-support/execution-context';
 import { sanitizeError } from '../security/sanitize-error';
 

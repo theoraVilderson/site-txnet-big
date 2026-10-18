@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { GrantBulkPage, grantBulkPageSchema } from '../payment/gift/grant-bulk-job.schema';
 import { GrantGroupMoveJobBody, grantGroupMoveJobSchema, GrantGroupMoveSelection, grantGroupMoveSelectionSchema, GrantRegroupBody, grantRegroupSchema } from '../payment/gift/grant-group-move.schema';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { GrantGroupMoveService } from './grant-group-move';
 import { PanelPermissionGuard, SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
 import { refusing } from './systems-refusals';

@@ -1,4 +1,5 @@
 import {
+  ZodValidationPipe,
   BackendI18nKeys,
   RateLimitBucket,
   rateLimitBucketKey,
@@ -16,7 +17,6 @@ import {
   UsePipes,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ok, err } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 import { rateLimitSubject } from '../../common/security/service-caller';

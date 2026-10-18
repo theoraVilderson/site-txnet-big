@@ -1,12 +1,11 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, ServiceOnlyGuard, TenantCapability, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, ServiceOnlyGuard, TenantCapability, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { SupportManageGuard } from '../availability/support-manage.guard';
 import { callerOf, refusing } from '../conversations/conversations.controller';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { LifecyclePolicy, RatingView, SupportLifecycle } from './lifecycle';
 import { LifecycleBody, RatingBody, lifecycleSchema, ratingSchema } from './lifecycle.schema';
 

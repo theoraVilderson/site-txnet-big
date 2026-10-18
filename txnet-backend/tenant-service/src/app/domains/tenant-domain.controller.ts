@@ -12,11 +12,10 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { ResellerLimitReached } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { AddDomainInput, addDomainSchema } from './tenant-domain.schema';
 import { DomainActor, DomainRefused, DomainRejection, DomainView, TenantDomainService } from './tenant-domain.service';
 

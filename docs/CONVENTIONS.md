@@ -952,6 +952,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | browser storage | `lib/storage.ts` (FE-1-l): a key in `StorageKeys`, `readStored`/`writeStored`, `readStoredJson` with a zod schema | — |
 | copy to clipboard | `_lib/clipboard.ts` (`copyText`, `COPY_FEEDBACK_MS`) | — |
 | keys and moves for an editable list | `_hooks/useRowKeys.ts`, `_lib/rows.ts` (C-30) | — |
+| parse a request body | — | `ZodValidationPipe`, `shared-core/src/lib/envelope` (CS-1-l): a message that is not a locale key becomes `validation.invalidValue`, its path kept |
 | a Redis key, a rate-limit bucket | — | `RedisKeys` (C-03), the bucket registry (C-05) |
 | tenant scope | — | `tenantTransaction` / `withTenant` / `runWithTenant` |
 | who holds a key | — | `findKeyHolders` (C-15) |

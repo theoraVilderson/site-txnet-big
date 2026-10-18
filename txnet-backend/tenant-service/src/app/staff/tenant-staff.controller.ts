@@ -15,10 +15,9 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { ResellerLimitReached } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, ZodValidationPipe } from '@txnet-backend/shared-core';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InviteStaffInput, SeatExpiryInput, inviteStaffSchema, seatExpirySchema } from './tenant-staff.schema';
 import { StaffActor, StaffRefused, StaffRejection, StaffView, TenantStaffService } from './tenant-staff.service';
 

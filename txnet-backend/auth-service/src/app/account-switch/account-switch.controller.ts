@@ -1,4 +1,4 @@
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import {
   Body,
   Controller,
@@ -14,7 +14,6 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { RateLimit } from '../auth/decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../auth/decorators/require-captcha.decorator';
 import { AccountSwitchService } from './account-switch.service';

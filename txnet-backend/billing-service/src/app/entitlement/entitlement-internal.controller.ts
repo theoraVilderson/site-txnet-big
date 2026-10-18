@@ -1,5 +1,5 @@
 import { Body, Controller, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 
 import { GrantCloseStageService } from './close-stage';
 import { DeliverDueResult, DeliveryOutcome, GrantDeliveryService } from './delivery';
@@ -11,7 +11,6 @@ import { GrantIdleNoticeService, IdleNoticeResult } from './idle-notice';
 import { GrantPurgeService, PurgeResult } from './purge';
 import { GrantPurgeNoticeService } from './purge-notice';
 import { GrantUnusedNoticeService, UnusedNoticeResult } from './unused-notice';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 
 /**
  * The seam `worker-service` reaches the purge clock through (F-027-y).

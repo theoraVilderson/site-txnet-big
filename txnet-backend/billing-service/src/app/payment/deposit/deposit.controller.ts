@@ -15,14 +15,13 @@ import {
 } from '@nestjs/common';
 import { CouponChannel, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
-import { BackendI18nKeys, CredentialUnavailable, headerValue, IdentityHeaders, presentsServiceToken, RateLimitBucket, RequestHeaders, holdsPermission, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, CredentialUnavailable, headerValue, IdentityHeaders, presentsServiceToken, RateLimitBucket, RequestHeaders, holdsPermission, rateLimitBucketKey, TenantCapability, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { RESTRICTED_I18N_KEY, UserRestricted } from '../../entitlement/user-restrictions';
 import { LocaleService } from '../../locale/locale.service';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { CouponReservationRefused } from '../coupon/coupon-reservation';
 import type { CouponRejection } from '../coupon/coupon-validation';
 import { GatewayFailure, ProviderNotSupported } from '../gateway/payment-provider';

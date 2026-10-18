@@ -1,12 +1,11 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, HttpStatus, NotFoundException, Post, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { z } from 'zod';
 
 import { fingerprintSourceOf } from '../fraud/device-fingerprint';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { WheelSpinRefused, WheelSpinRejection, WheelSpinService } from './wheel-spin.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */

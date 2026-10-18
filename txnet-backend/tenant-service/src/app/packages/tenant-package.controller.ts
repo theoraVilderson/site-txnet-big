@@ -17,12 +17,11 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { isPartRejection, type PackagePartRejection } from './package-parts';
 import {
   CreatePackageInput,

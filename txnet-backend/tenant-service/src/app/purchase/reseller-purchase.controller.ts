@@ -13,12 +13,11 @@ import {
   Req,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PurchaseInput, SuggestSlugInput, purchaseSchema, suggestSlugSchema } from './reseller-purchase.schema';
 import {
   OwnedReseller,

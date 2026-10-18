@@ -1,10 +1,9 @@
 import { Controller, Get, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { refusal } from './tenant-topup.controller';
 import { TenantWalletQueryBody, tenantWalletSchema } from './tenant-wallet.schema';
 import { TenantWalletService } from './tenant-wallet.service';

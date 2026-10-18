@@ -18,10 +18,9 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, ResellerLimitReached, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, ResellerLimitReached, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AuthGuard } from '../../auth/auth.guard';
 import { RateLimit } from '../../auth/decorators/rate-limit.decorator';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';

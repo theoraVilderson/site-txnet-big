@@ -1,10 +1,9 @@
 import { Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, ResellerActor } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ResellerActor, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { GrantBulkPage, grantBulkPageSchema } from './grant-bulk-job.schema';
 import { actorOf } from './reseller-user-grants.controller';
 import { AdminActor } from './reseller-user-grants.service';

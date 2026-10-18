@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NoticeMessenger } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, TenantCapability, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { SensitiveActionGuard } from '../../impersonation/guards/sensitive-action.guard';
@@ -21,7 +21,6 @@ import { MeEmailService } from './me-email.service';
 import { MeMessengerService } from './me-messenger.service';
 import { MeTimeZoneService, type TimeZoneReport } from './me-time-zone.service';
 import { MeAccountService, type PasswordChange } from './me-account.service';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { LocaleService } from '../../locale/locale.service';
 import {
   meEmailRequestSchema,

@@ -1,8 +1,7 @@
 import { Body, Controller, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
-import { BackendI18nKeys, ServiceOnlyGuard } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, ServiceOnlyGuard, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { CampaignDeliveryService } from './campaign-delivery.service';
 import { CampaignFanOutRefused, CampaignFanOutService, RECIPIENT_OUTCOMES, RecipientOutcome } from './campaign-fan-out.service';
 

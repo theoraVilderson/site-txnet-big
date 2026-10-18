@@ -21,12 +21,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { holdsPermission, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { holdsPermission, RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
 import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
 import { MemberSellingInput, PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';

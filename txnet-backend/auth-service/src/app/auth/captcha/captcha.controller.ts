@@ -1,4 +1,5 @@
 import {
+  ZodValidationPipe,
   RateLimitBucket,
   rateLimitBucketKey,
   TenantCapability,
@@ -6,7 +7,6 @@ import {
 import { Body, Controller, HttpCode, HttpStatus, Post, UsePipes } from '@nestjs/common';
 import { CaptchaService } from './captcha.service';
 import { captchaVerifySchema } from './captcha.schema';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { ok, err } from '../../common/response/response.util';
 import { RateLimit } from '../decorators/rate-limit.decorator';
 

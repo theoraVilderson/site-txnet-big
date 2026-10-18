@@ -1,7 +1,6 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { type AiOfferCouponAnswer, type AiOfferCouponBody, aiOfferCouponSchema, AiOfferCouponService } from './ai-offer-coupon';
 
 /**

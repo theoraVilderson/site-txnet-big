@@ -16,7 +16,7 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { ChangeTenantStatusInput, changeTenantStatusSchema } from './tenant-status.schema';
 import {
   TenantStatusActor,

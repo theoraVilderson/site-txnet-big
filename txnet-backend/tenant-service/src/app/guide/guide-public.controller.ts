@@ -1,8 +1,7 @@
 import { Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req, Res } from '@nestjs/common';
-import { PublicRoute, TenantContext, publicPath, requestLanguage } from '@txnet-backend/shared-core';
+import { PublicRoute, TenantContext, publicPath, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { guideKeySchema, guideListQuerySchema, guideSearchQuerySchema } from './guide-public.schema';
 import { GuidePlacementQuery, GuideRead, GuideReader, ResolvedGuide } from './guide-reader';
 import type { GuideHit, GuideMatch } from './guide-search';

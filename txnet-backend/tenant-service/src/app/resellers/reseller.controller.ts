@@ -19,7 +19,7 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { CreateResellerInput, ListResellersInput, createResellerSchema, listResellersSchema } from './reseller.schema';
 import { ResellerActor, ResellerRefused, ResellerRejection, ResellerService, ResellerView } from './reseller.service';
 

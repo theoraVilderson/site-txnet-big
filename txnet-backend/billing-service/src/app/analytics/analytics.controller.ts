@@ -1,12 +1,11 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Put, Query, Req, Res, StreamableFile } from '@nestjs/common';
-import { RateLimitBucket, type RateLimitOptions, ResellerAccessRejection, rateLimitBucketKey, requestLanguage } from '@txnet-backend/shared-core';
+import { RateLimitBucket, type RateLimitOptions, ResellerAccessRejection, rateLimitBucketKey, requestLanguage, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import type { RateLimitConfigKey } from '../config/env.validation';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { RefusalStatus, refusalException } from '../request/refusal-exception';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { LocaleService } from '../locale/locale.service';
 import { AnalyticsExportService, AnalyticsRebuilding } from './analytics-export.service';
 import { AnalyticsSettingsBody, analyticsSettingsSchema } from './analytics-settings';

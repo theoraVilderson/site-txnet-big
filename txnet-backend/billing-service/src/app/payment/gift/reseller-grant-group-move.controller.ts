@@ -2,7 +2,7 @@ import { Body, ConflictException, Controller, Get, HttpCode, HttpStatus, Ip, Not
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { GRANT_REGROUP_STATUS, GrantRegroupRefused } from '../../traffic/grant-regroup';
 import { GrantGroupMoveJobBody, grantGroupMoveJobSchema, GrantGroupMoveSelection, grantGroupMoveSelectionSchema, GrantRegroupBody, grantRegroupSchema } from './grant-group-move.schema';
 import { moveJobRefusal } from './reseller-config-move-job.controller';

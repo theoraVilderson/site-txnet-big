@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel } from '@prisma/client';
-import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability, moneyText } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability, moneyText, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
@@ -25,7 +25,6 @@ import { EntitlementRefused, MeteredCapReached } from '../entitlement/grant';
 import { PurchaseLimitReached } from '../entitlement/purchase-limits';
 import { RESTRICTED_I18N_KEY, UserRestricted } from '../entitlement/user-restrictions';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
 import { InvoiceCreateBody, invoiceCreateSchema } from './invoice.schema';
 import { InvoiceCancelRefusal, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';

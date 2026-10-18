@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
-import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import {
   SetScheduleInput,
   ToggleWorkerInput,

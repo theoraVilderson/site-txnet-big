@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, accessTraceOf, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, accessTraceOf, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { MessagesQuery, ReadBody, messagesQuerySchema, readSchema } from '../conversations/conversations.schema';
@@ -7,7 +7,6 @@ import { refusing } from '../conversations/conversations.controller';
 import type { SupportCaller } from '../conversations/refusal';
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { AssignBody, InboxQuery, PriorityBody, ReplyBody, assignSchema, inboxQuerySchema, prioritySchema, replySchema } from './agent.schema';
 import { AgentConversationView, AgentMessagePage, AgentMessageView, SupportAgentService } from './agent.service';
 import { ConsentNeed, PlatformSupportDoor } from './platform-door';

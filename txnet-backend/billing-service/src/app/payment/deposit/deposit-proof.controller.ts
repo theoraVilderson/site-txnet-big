@@ -1,12 +1,11 @@
 import { Body, Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 import { z } from 'zod';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { refusalException } from '../../request/refusal-exception';
 import { DepositProofService, ProofRefused, type ProofRejection } from './deposit-proof.service';
 

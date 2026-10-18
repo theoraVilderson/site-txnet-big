@@ -15,13 +15,12 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { CouponPermissionGuard } from '../../payment/coupon-admin/coupon-permission.guard';
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import {
   DiscountRuleActor,
   DiscountRuleAdminService,

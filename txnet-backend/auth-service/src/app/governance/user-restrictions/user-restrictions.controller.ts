@@ -1,11 +1,10 @@
 import { Body, Controller, Delete, Get, HttpException, Param, ParseUUIDPipe, Put, Req, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, accessTraceOf, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, accessTraceOf, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
 import { AuthGuard } from '../../auth/auth.guard';
 import { RateLimit, type RateLimitOptions } from '../../auth/decorators/rate-limit.decorator';
 import type { AuthClaims } from '../../auth/token.service';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { restrictionKeyParamSchema, setRestrictionSchema, type SetRestrictionInput } from './user-restriction.schema';
 import { UserRestrictionsRefused, UserRestrictionsService, type UserRestrictionsRejection } from './user-restrictions.service';
 

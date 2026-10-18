@@ -1,8 +1,7 @@
 import { Body, Controller, Inject, Post, UseGuards } from '@nestjs/common';
-import { TenantCapability } from '@txnet-backend/shared-core';
+import { TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import {
   IOtpService,
   OTP_SERVICE,

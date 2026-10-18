@@ -16,12 +16,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey, moneyText } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, moneyText, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { SettlementPermissionGuard } from './settlement-permission.guard';
 import {
   CreateGrantBody,

@@ -1,9 +1,8 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { DepositInChatService, InChatPaidResult, InChatPaymentRef, PreCheckoutVerdict } from './deposit-in-chat.service';
 import { InChatPaidBody, inChatPaidSchema, InChatPreCheckoutBody, inChatPreCheckoutSchema } from './deposit.schema';
 

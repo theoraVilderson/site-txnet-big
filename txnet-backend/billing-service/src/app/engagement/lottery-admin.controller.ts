@@ -3,7 +3,7 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { EngagementPermissionGuard } from './engagement-permission.guard';
 import { LotteryAdminReportService } from './lottery-admin-report.service';
 import { LotteryCancelBody, LotteryDraftBody, lotteryCancelSchema, lotteryDraftSchema } from './lottery-admin.schema';

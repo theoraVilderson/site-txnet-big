@@ -18,11 +18,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { PublicRoute, ResellerLimitReached, TenantContext, publicPath } from '@txnet-backend/shared-core';
+import { PublicRoute, ResellerLimitReached, TenantContext, publicPath, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import {
   BrandingSlot,
   LineNamePreviewInput,

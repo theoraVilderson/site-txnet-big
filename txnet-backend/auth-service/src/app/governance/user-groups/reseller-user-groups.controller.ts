@@ -18,6 +18,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ZodValidationPipe,
   AdmittedReseller,
   ResellerAccess,
   ResellerAccessRefused,
@@ -31,7 +32,6 @@ import { Request } from 'express';
 import { AuthGuard } from '../../auth/auth.guard';
 import { RateLimit } from '../../auth/decorators/rate-limit.decorator';
 import type { AuthClaims } from '../../auth/token.service';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { USER_GROUP_READ, USER_GROUP_WRITE, answeringRefusals } from './user-group.controller';
 import { UserGroupActor, UserGroupAdminService, UserGroupInput, UserGroupView } from './user-group-admin.service';
 import { UserGroupPersonService } from './user-group-person.service';

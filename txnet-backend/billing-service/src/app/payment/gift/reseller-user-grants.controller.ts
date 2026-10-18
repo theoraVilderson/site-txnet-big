@@ -16,12 +16,11 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { accessTraceOf, BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted } from '@txnet-backend/shared-core';
+import { accessTraceOf, BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
-import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import { EntitlementRefused, EntitlementRejection } from '../../entitlement/grant';
 import { ConfigActionRefused } from '../../traffic/config-actions';
 import { SpeedCapRefused } from '../../traffic/grant-speed';

@@ -10,12 +10,11 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { REFRESH_TOKEN_COOKIE, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
+import { REFRESH_TOKEN_COOKIE, RateLimitBucket, rateLimitBucketKey, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { Request, Response } from 'express';
 import { AuthGuard } from '../auth.guard';
 import { NoActiveSessionGuard } from '../guards/no-active-session.guard';
 import { RateLimit } from '../decorators/rate-limit.decorator';
-import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { rateLimitSubject } from '../../common/security/service-caller';
 import { readCookie } from '../../common/http/cookies';
 import { withRefreshCookie } from '../../common/http/refresh-cookie';

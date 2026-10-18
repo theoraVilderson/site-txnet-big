@@ -1,8 +1,7 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
-import { ZodValidationPipe } from '../request/zod-validation.pipe';
 import { WheelSpinService, type WheelInviteCheck } from './wheel-spin.service';
 
 export const inviteCheckSchema = z.object({ tenantId: z.string().uuid(), userId: z.string().uuid() }).strict();
