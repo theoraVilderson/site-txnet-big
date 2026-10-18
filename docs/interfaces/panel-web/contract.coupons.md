@@ -10,8 +10,8 @@ updated: 2026-10-18
 
 A topic file of [contract.md](contract.md) (§10). One page, `/coupons`
 (`PANEL_COUPONS`), under `(panel)/coupons/`: `page.tsx` is a server shell,
-`_components/CouponsView.tsx` the three tabs, `CouponForm.tsx` the create/edit
-sheet, `CouponUsage.tsx` the usage report, and `_lib/coupon-form.ts` the rules;
+`_components/CouponsView.tsx` the three tabs, `CouponWizard.tsx` a new coupon,
+`CouponForm.tsx` the edit sheet (both on `CouponSections.tsx`), `CouponUsage.tsx` the usage report, and `_lib/coupon-form.ts` the rules;
 tab 3 is `DiscountRules.tsx` + `DiscountRuleForm.tsx`, rules `_lib/discount-rules.ts`.
 The routes, the scope and every rule are
 [billing/contract.coupon.md](../../domains/billing/contract.coupon.md)'s
@@ -123,6 +123,18 @@ The routes, the scope and every rule are
     and "by id" on purpose — leaves the old ids box, so a caller without
     `catalog.manage` or `/tenants` is never stuck.
 
+15. **A new coupon is a wizard; an edit is the sheet (UX-3-b, K12).**
+    `CouponWizard`: code and type → limits → schedule → audience → where →
+    review. Each field is on one step (`STEP_FIELDS`, test-checked against the
+    form); Next stops only on that step's errors (`stepErrors` over
+    `validateCouponForm` — the rules are not split, only what is shown). The
+    review lists what differs from a new form (`setFields`), plus the code,
+    its type and value and its end, an empty end said as "never expires".
+    Create re-checks everything and opens the first step with an error; a
+    refusal naming a field (`refusalStep`) opens its step with the sentence.
+    `CouponForm` edits with the same five steps as sections. The hour window
+    is two hour pickers (00:00–23:00, 01:00–24:00, or any hour).
+
 ## Proof
 
 `coupons/coupons.test.ts` — refusal and status unions against the service
@@ -133,6 +145,8 @@ statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,
 inclusive day), every gift key in `en` and `fa`.
+`coupons/coupon-wizard.test.tsx` — every field on one step, a step's errors
+alone, refusal → step, the review's "only what was set", Next held on step 1.
 `coupons/pickers.test.tsx` — each picker writes the same ids text: a pick
 adds, a chip removes, a saved unknown id stays, a refused list types ids.
 `coupons/discount-rules.test.ts` — refusal and status unions against

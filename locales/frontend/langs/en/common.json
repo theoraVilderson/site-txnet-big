@@ -1308,6 +1308,18 @@
         "loading": "Loading resellers…",
         "none": "No reseller matches.",
         "byId": "Tenant ID"
+      },
+      "anyHour": "Any hour",
+      "startsNow": "Starts now",
+      "neverExpires": "Never expires",
+      "wizard": {
+        "create": "Create coupon",
+        "review": "Review",
+        "edit": "Edit",
+        "nothingSet": "Nothing set — the defaults apply.",
+        "yes": "Yes",
+        "no": "No",
+        "count": "{{count}} chosen"
       }
     },
     "errors": {

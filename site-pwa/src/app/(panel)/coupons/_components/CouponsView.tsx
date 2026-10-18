@@ -12,6 +12,7 @@ import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS as K, STATUS_TONES, refusalKey } from "../_lib/coupon-form";
 import { CouponForm } from "./CouponForm";
+import { CouponWizard } from "./CouponWizard";
 import { CouponUsage } from "./CouponUsage";
 import { DiscountRules } from "./DiscountRules";
 import { GiftCodes } from "./GiftCodes";
@@ -109,6 +110,11 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
   }, [load, query]);
 
   const reload = () => load(query);
+  const saved = async (text: string) => {
+    setEditing(null);
+    setNotice(text);
+    await reload();
+  };
   const narrow = (patch: Partial<CouponListQuery>) => setQuery((q) => ({ ...q, ...patch, page: 1 }));
 
   const toggle = async (c: AdminCoupon) => {
@@ -288,18 +294,8 @@ function DiscountCoupons({ owner }: { owner: boolean }) {
         </section>
       )}
 
-      {editing && (
-        <CouponForm
-          me={me}
-          coupon={editing === "new" ? null : editing}
-          onClose={() => setEditing(null)}
-          onSaved={async (text) => {
-            setEditing(null);
-            setNotice(text);
-            await reload();
-          }}
-        />
-      )}
+      {editing === "new" && <CouponWizard me={me} onClose={() => setEditing(null)} onSaved={saved} />}
+      {editing && editing !== "new" && <CouponForm me={me} coupon={editing} onClose={() => setEditing(null)} onSaved={saved} />}
       {usageOf && <CouponUsage coupon={usageOf} onClose={() => setUsageOf(null)} />}
     </>
   );
