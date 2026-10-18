@@ -9,12 +9,13 @@ import { AtRisk } from './at-risk';
 import { Margins } from './margins';
 import { PlanLayout } from './plan-layout';
 import { ResellerForecasts } from './reseller-forecast';
+import { SettingsActivity } from './settings-activity';
 import { UsageReport } from './usage-report';
 
 /** The reseller's AI admin (F-038-j1): `/api/ai/admin/*`, behind the gate and `ai.manage`. */
 @Module({
   imports: [DecisionModule, PolicyModule],
   controllers: [AiAdminController],
-  providers: [AiAdminSettings, AiManageGuard, AtRisk, Margins, PlanLayout, ResellerForecasts, UsageReport],
+  providers: [AiAdminSettings, AiManageGuard, AtRisk, Margins, PlanLayout, ResellerForecasts, SettingsActivity, UsageReport],
 })
 export class AdminModule {}

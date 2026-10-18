@@ -13,6 +13,7 @@ import { AT_RISK_KINDS, AtRisk } from './at-risk';
 import { Margins } from './margins';
 import { PlanLayout } from './plan-layout';
 import { RESELLER_FORECAST_KINDS, ResellerForecasts } from './reseller-forecast';
+import { SettingsActivity } from './settings-activity';
 import { UsageReport } from './usage-report';
 
 const DAY_MS = 86_400_000;
@@ -74,11 +75,18 @@ export class AiAdminController {
     private readonly layout: PlanLayout,
     private readonly resellers: ResellerForecasts,
     private readonly usage: UsageReport,
+    private readonly activity: SettingsActivity,
   ) {}
 
   @Get('settings')
   async readSettings(@Req() req: Request) {
     return ok({ settings: await this.settings.read(identityOf(req).tenantId) });
+  }
+
+  /** F-038-j3: per type, what went out and what held it back over the last 30 days. */
+  @Get('settings/activity')
+  async readActivity(@Req() req: Request) {
+    return ok(await this.activity.read(identityOf(req).tenantId, new Date()));
   }
 
   @Put('settings')

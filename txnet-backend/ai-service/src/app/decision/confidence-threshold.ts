@@ -7,11 +7,14 @@
  * the decision is the one the stored row shows, never a float artefact.
  */
 
-export type ThresholdVerdict = { pass: true } | { pass: false; suppressedBy: 'confidence_threshold' };
+/** The `suppressedBy` a threshold drop is recorded under; the AI page counts it apart (F-038-j3). */
+export const THRESHOLD_SUPPRESSION = 'confidence_threshold';
+
+export type ThresholdVerdict = { pass: true } | { pass: false; suppressedBy: typeof THRESHOLD_SUPPRESSION };
 
 const SCALE = 10_000;
 
 export function thresholdVerdict(confidence: number, threshold: number): ThresholdVerdict {
   const below = !Number.isFinite(confidence) || Math.round(confidence * SCALE) < Math.round(threshold * SCALE);
-  return below ? { pass: false, suppressedBy: 'confidence_threshold' } : { pass: true };
+  return below ? { pass: false, suppressedBy: THRESHOLD_SUPPRESSION } : { pass: true };
 }

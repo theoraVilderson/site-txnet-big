@@ -3,7 +3,7 @@ id: ai
 layer: domain
 status: active
 version: 2
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 
 # Contract — ai: the reseller's AI admin (F-038-j1)
@@ -55,12 +55,20 @@ at its ceiling. Per-type model mode and caps were F-038-w's, dropped 2026-10-03.
    `add_bigger` — ≥ 25 % of the family's largest plan at the cap, 1.5 × it,
    `demandCensored`; `no_takers` — a plan nobody holds, once the family has 10
    measured. Read on request, nothing stored.
+8. **Activity (F-038-j3, `admin/settings-activity.ts`): what the engine
+   recorded, never its rules restated.** Per v1 type over the last 30 days of
+   `ai.action`: `sent` (sent, accepted, dismissed), `queued`,
+   `heldByThreshold` (`confidence_threshold`), `heldOtherwise` (any other
+   suppression, or expired), and the confidences seen — null with no rows.
+   `waitsOn`: `active_offer` for an offer type with no active offer,
+   `not_available` for a type with no candidate rule (`CANDIDATE_TYPES`).
 
 ## Routes
 
 | route | body / query | answer |
 |---|---|---|
 | `GET /api/ai/admin/settings` | — | `{settings: {engineEnabled, engineRuns, confidenceThreshold, holdoutPercent, disabledActionTypes, actionTypes}}` — `engineRuns` false when the package lacks `ai_recommendation` or the tenant may not sell (F-1550, F-038-x), whatever the switch says |
+| `GET /api/ai/admin/settings/activity` | — | `{windowDays, types: [{type, sent, queued, heldByThreshold, heldOtherwise, confidence: {min, max} \| null, waitsOn}]}` — rule 8 (F-038-j3) |
 | `PUT /api/ai/admin/settings` | any of `engineEnabled`, `confidenceThreshold`, `holdoutPercent`, `disabledActionTypes` | the settings, as read after |
 | `GET /api/ai/admin/at-risk` | `kind=renewal\|run_out`, `cursor?`, `take` ≤ 100 (50) | `{items: [{userId, grantId, value, predictedAt, confidence, reasons}], nextCursor}` — `renewal`: `renewal_probability` under 0.5 (`AT_RISK_RENEWAL_BELOW`), Grant end ahead, soonest first; `run_out`: `meter_exhaustion` inside 7 days |
 | `GET /api/ai/admin/margins` | — | `{items: [{variantId, productId, sku, nameKey, billingMode, durationDays, size, unlimited, price, cost, margin, losingMoney, reasons, grants: {active, losing, costUnknown}}]}` — rule 6 (F-1528) |
@@ -82,6 +90,8 @@ threshold and holdout bounds; defaults and `engineRuns`; a write's tenant and
 author, the type list through `TypeSwitch`; engine off stops the queue; the
 at-risk filters, order and paging. `admin/margins.spec.ts`: the rate in
 force, a losing plan, the order, the time meter for an unlimited plan, every
-unknown cost, the Grants count. `admin/plan-layout.spec.ts`: the window and
+unknown cost, the Grants count. `admin/settings-activity.spec.ts`: the
+counts per outcome, no confidence without rows, an offer type waiting on an
+offer, a type with no rule, the tenant and the window. `admin/plan-layout.spec.ts`: the window and
 the period scaling, the families, the cap, the minimum sample, each
 suggestion and when it is withheld.
