@@ -5,14 +5,12 @@ import Link from "next/link";
 import { ArrowLeft, Boxes, Coins, Gauge, Loader2, Package, Sparkles, Tag, TrendingUp } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { PANEL_RESELLER_PACKAGES } from "@/lib/routes";
-import { catalogApi } from "@/lib/catalog-api";
 import { resellerLimitsApi, tenantApi, type PackageProduct, type TenantPackage } from "@/lib/tenant-api";
 import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
-import { flattenTexts } from "../../../catalog/_lib/catalog-form";
 import { formatMoney } from "../../../_lib/money";
 import { formatList } from "../../../_lib/digits";
-import { useMeterNames } from "../../../catalog/_lib/meter-names";
+import { useCatalogTexts, useMeterNames } from "../../../catalog/_lib/meter-names";
 import { Alert as KitAlert, Button, Card, PageHeader, ReviewRows, type ReviewRow } from "../../../_components/kit";
 import { Alert, Sheet, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
@@ -42,13 +40,13 @@ const PRODUCTS_ANCHOR = "products";
  * Who may see it is tenant-service's to decide, as on the list (rule 1).
  */
 export function PackageDetailView({ id }: { id: string }) {
-  const { t, lang } = useLocale();
+  const { t } = useLocale();
   const packageTexts = usePackageTexts();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
   const allowed = canAdministerResellers(me);
   const [data, setData] = useState<Loaded | null>(null);
-  const [productNames, setProductNames] = useState<Record<string, string>>({});
+  const productNames = useCatalogTexts();
   const [error, setError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
   const [open, setOpen] = useState<Open | null>(null);
@@ -70,18 +68,6 @@ export function PackageDetailView({ id }: { id: string }) {
       alive = false;
     };
   }, [allowed, id, asked]);
-
-  useEffect(() => {
-    let alive = true;
-    catalogApi
-      .texts(lang)
-      .then(flattenTexts)
-      .catch(() => ({}))
-      .then((flat) => alive && setProductNames(flat));
-    return () => {
-      alive = false;
-    };
-  }, [lang]);
 
   const shell = (children: ReactNode) => <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-8">{children}</div>;
   if (sessionLoading) return null;

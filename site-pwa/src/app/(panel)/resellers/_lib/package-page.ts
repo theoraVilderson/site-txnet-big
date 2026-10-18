@@ -48,6 +48,9 @@ export interface PackageLimit {
   overage: { own: OverageView | undefined; platform: OverageView | null } | null;
 }
 
+/** What a package with no row of its own gets for `row`'s key: the platform's row, else the code's default; `null` no limit. */
+export const platformValueOf = (row: Pick<ResellerLimitRow, "platform" | "codeDefault">) => (row.platform ? row.platform.value : row.codeDefault);
+
 /** Every key of `GET /tenants/limits/settings` as package `packageId` holds it, in the registry's order. */
 export function packageLimitsOf(table: readonly ResellerLimitRow[], packageId: string): PackageLimit[] {
   return table.map((r) => {
@@ -58,7 +61,7 @@ export function packageLimitsOf(table: readonly ResellerLimitRow[], packageId: s
       kind: r.kind,
       max: r.max,
       own: own ? own.value : undefined,
-      platform: r.platform ? r.platform.value : r.codeDefault,
+      platform: platformValueOf(r),
       overage: r.overage
         ? { own: past ? { mode: past.mode, unitPrice: past.unitPrice, currencyCode: past.currencyCode } : undefined, platform: r.overage.platform }
         : null,

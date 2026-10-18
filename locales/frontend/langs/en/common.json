@@ -2357,7 +2357,6 @@
         "state": "State"
       },
       "form": {
-        "createTitle": "New package",
         "name": "Name",
         "monthly": "Monthly price ({{currency}})",
         "yearly": "Yearly price ({{currency}})",
@@ -2368,7 +2367,6 @@
         "unlimitedRate": "Wholesale price of an unlimited plan per 30 days of {{meter}} ({{currency}})",
         "unlimitedRateHint": "What a reseller on this package pays the platform for each 30 days of an unlimited plan it sells on the platform's panels, charged pro rata to the days sold: a 90-day plan pays three times this, a 15-day renewal half of it. Days left when a service closes early come back. A change applies to services sold from now on. Empty: resellers on this package cannot sell unlimited plans on the platform's panels.",
         "otherRates": "Other rates in force — set through the API; this form leaves them as they are",
-        "submit": "Create package",
         "save": "Save",
         "nothingChanged": "Nothing has changed.",
         "regenerateRate": "Wholesale price of each {{meter}} ({{currency}})",
@@ -2380,7 +2378,6 @@
       "apply": "Apply to subscribers",
       "applyConfirm": "Replace every subscriber's package features with this list now? A feature removed from the package is taken away at once, not at renewal.",
       "applyDone": "Applied to {{count}} subscriber(s).",
-      "created": "Package {{name}} created.",
       "saved": "Package {{name}} saved.",
       "errors": {
         "name": "Give the package a name of up to 80 characters.",
@@ -2428,6 +2425,54 @@
         "subtitle": "Machine drafts of package names and descriptions. Buyers see none until it is published.",
         "back": "Back to packages",
         "open": "Translations"
+      },
+      "wizard": {
+        "title": "New package",
+        "confirmClose": "The package you are building is not saved. Close it?",
+        "create": "Create package",
+        "steps": {
+          "names": "Name and description",
+          "prices": "Prices",
+          "features": "Features",
+          "products": "Products",
+          "limits": "Limits",
+          "rates": "Wholesale rates",
+          "review": "Review"
+        },
+        "intro": {
+          "names": "Resellers see the package by this name and description. Write them in the language you pick; every other language gets a machine draft that you publish on the translations page.",
+          "prices": "What does the package cost per period? Leave a period blank if it is not sold for it.",
+          "features": "What a reseller on this package gets in its own panel.",
+          "products": "A reseller on this package sells only the ticked products. Every active platform product starts ticked. Give a product a sales cap if it needs one; blank means no cap.",
+          "limits": "Each limit is shown at the platform's value. Change only what differs for this package; the rest keeps the platform's value.",
+          "rates": "What a reseller on this package pays the platform for its users' use of the platform's servers.",
+          "review": "Look the package over before creating it. It is created in one request: all of it or none."
+        },
+        "sourceLang": "Language of the text",
+        "description": "Description (optional)",
+        "descriptionHint": "Shown under the package's name on the \"become a reseller\" page.",
+        "noProducts": "The platform has no active product yet. The package is created with none and sells nothing until products are added on its page.",
+        "inactive": "inactive",
+        "platformValue": "Platform: {{value}}",
+        "usePlatform": "Platform's value",
+        "changed": "This package: {{value}}",
+        "edit": "Edit",
+        "none": "—",
+        "productsListed": "{{count}} products: {{names}}",
+        "limitsChanged": "{{count}} limits set for this package",
+        "limitsPlatform": "All at the platform's value",
+        "warnings": "Warnings",
+        "sellsNothing": "No product is ticked: a reseller who buys this package cannot sell any of the platform's products.",
+        "blank": {
+          "traffic": "The wholesale traffic price is blank: resellers on this package cannot sell metered VPN on the platform's servers.",
+          "unlimited": "The wholesale unlimited price is blank: resellers on this package cannot sell unlimited plans on the platform's servers.",
+          "regenerate": "The wholesale new-link price is blank: resellers on this package cannot sell a priced new link."
+        },
+        "errors": {
+          "window": "Each window's cap is a whole number up to 10,000,000, or blank.",
+          "limit": "Enter a whole number up to {{max}}, or tick \"no limit\".",
+          "description": "A description is at most 2000 characters."
+        }
       }
     },
     "limits": {

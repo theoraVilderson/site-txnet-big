@@ -10,19 +10,36 @@ import { useMeterNames } from "../../../catalog/_lib/meter-names";
 import { Input } from "../../../_components/kit";
 
 /**
- * A package's fields by section (PK-1-f): the create sheet shows all three, a
- * package page's sheet one. `code` is the currency the prices are asked in.
+ * A package's fields by section (PK-1-f): a package page's sheet shows one
+ * section, the new-package wizard one per step (PK-1-g). `code` is the currency the prices are asked in.
  */
 type FieldsProps = { form: PackageForm; set: (patch: Partial<PackageForm>) => void; errors: Errors<PackageForm>; code: string };
 
-/** The name and the two prices. */
-export function BasicsFields({ form, set, errors, code }: FieldsProps) {
+/** The name and the two prices: the page's basics sheet. */
+export function BasicsFields(props: FieldsProps) {
+  return (
+    <>
+      <NameField {...props} />
+      <PriceFields {...props} />
+    </>
+  );
+}
+
+/** The name, in the language the text is written in (`dir`). */
+export function NameField({ form, set, errors, dir }: Pick<FieldsProps, "form" | "set" | "errors"> & { dir?: string }) {
+  const { t } = useLocale();
+  return (
+    <Field label={t("common", K.form.name)} error={errors.name}>
+      <Input dir={dir} value={form.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} />
+    </Field>
+  );
+}
+
+/** The two prices, in `code`; at least one is needed. */
+export function PriceFields({ form, set, errors, code }: FieldsProps) {
   const { t } = useLocale();
   return (
     <>
-      <Field label={t("common", K.form.name)} error={errors.name}>
-        <Input value={form.name} maxLength={80} onChange={(e) => set({ name: e.target.value })} />
-      </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={t("common", K.form.monthly, { currency: code })} error={errors.monthlyPrice}>
           <Input dir="ltr" inputMode="decimal" value={form.monthlyPrice} onChange={(e) => set({ monthlyPrice: e.target.value })} />

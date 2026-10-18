@@ -6,12 +6,11 @@ import { catalogApi } from "@/lib/catalog-api";
 import { flattenTexts, meterName } from "./catalog-form";
 
 /**
- * Meter names in the viewer's language (F-118-s), for a form that prices a
- * meter — the variant's rate card, the platform's package rates. The
- * `catalog` namespace is the panel's own route whichever tenant the form
- * manages; a failure costs the names, never the form.
+ * The published `catalog` namespace in the viewer's language, flat by full
+ * key. The panel's own route whichever tenant a page manages; a failure costs
+ * the names, never the page — a reader falls back to the item's key.
  */
-export function useMeterNames(): (key: string) => string {
+export function useCatalogTexts(): Record<string, string> {
   const { lang } = useLocale();
   const [texts, setTexts] = useState<Record<string, string>>({});
   useEffect(() => {
@@ -25,5 +24,11 @@ export function useMeterNames(): (key: string) => string {
       alive = false;
     };
   }, [lang]);
+  return texts;
+}
+
+/** Meter names in the viewer's language (F-118-s), for a form that prices a meter — the variant's rate card, the platform's package rates. */
+export function useMeterNames(): (key: string) => string {
+  const texts = useCatalogTexts();
   return (key) => meterName(texts, key);
 }

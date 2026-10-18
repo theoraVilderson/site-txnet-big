@@ -48,11 +48,7 @@ export interface TenantPackage extends PackageTexts {
   productCount: number;
 }
 
-/**
- * What the platform charges a reseller on a package for `unitSize` of a
- * platform meter (F-118-n1) — 2^30 bytes for a GiB of `vpn.traffic`. Strings:
- * `unitSize` passes 2^53, `unitPrice` has 8 places.
- */
+/** What the platform charges a reseller on a package for `unitSize` of a platform meter (F-118-n1) — 2^30 bytes for a GiB of `vpn.traffic`; strings: `unitSize` passes 2^53, `unitPrice` has 8 places. */
 export interface PackageMeterRate {
   meterKey: string;
   unitSize: string;
@@ -65,13 +61,17 @@ export interface PackageMeterRate {
 export type MeterRateInput = { meterKey: string; unitSize: string; unitPrice: string };
 export type MeterRateEdit = MeterRateInput | { meterKey: string; unitPrice: null };
 
-/** `POST /tenant-packages`, `.strict()`: at least one of the two prices. */
+/** `POST /tenant-packages`, `.strict()`: at least one price; text in `sourceLang`; limits and products on create only, one transaction (ADR-0154 (4)). */
 export interface CreatePackageBody {
   name: string;
+  sourceLang?: string;
+  description?: string;
   monthlyPrice?: string;
   yearlyPrice?: string;
   includedFeatureKeys: string[];
   meterRates?: MeterRateInput[];
+  limits?: { key: ResellerLimitKey; value: number | null }[];
+  products?: (PackageProductBody & { productId: string })[];
 }
 
 /** `PATCH /tenant-packages/:id`: only what changed; a price may be `null`. */
@@ -103,11 +103,7 @@ export interface TenantSubscription {
   includedFeatureKeys: string[];
 }
 
-/**
- * A package as the purchase offers it (F-019-i): {@link TenantPackage} less what
- * a buyer is not shown — `GET /tenants/purchase/packages` lists the active
- * ones only, so no `isActive`, and no wholesale rates.
- */
+/** A package as the purchase offers it (F-019-i): {@link TenantPackage} less what a buyer is not shown — `GET /tenants/purchase/packages` lists active ones only, so no `isActive`, and no wholesale rates. */
 export type PackageOffer = Omit<TenantPackage, "isActive" | "meterRates" | "productCount">;
 
 /** `POST /tenants/purchase`'s body. The route is `.strict()`: `slug` is sent only when the buyer kept one. */

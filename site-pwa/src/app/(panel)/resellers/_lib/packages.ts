@@ -31,19 +31,21 @@ export const WHOLESALE_PERIOD = 30 * 24 * 3600;
  * reseller resells on the platform's panels, each with the field's own words.
  * VPN traffic per GiB (F-118-n3), and an unlimited plan's flat price per 30
  * days, charged pro rata to the days sold (F-118-z). A rate on another meter,
- * or in another unit, is shown and left alone ({@link otherRates}).
+ * or in another unit, is shown and left alone ({@link otherRates}). `blank` is
+ * what a reseller cannot sell while the rate is empty, the wizard's review warning.
  */
 export const WHOLESALE_METERS = [
-  { meterKey: "vpn.traffic", unitSize: GIB, label: K.form.rate, hint: K.form.rateHint, perUnit: K.perGib },
+  { meterKey: "vpn.traffic", unitSize: GIB, label: K.form.rate, hint: K.form.rateHint, perUnit: K.perGib, blank: K.wizard.blank.traffic },
   {
     meterKey: "vpn.unlimited.time",
     unitSize: WHOLESALE_PERIOD,
     label: K.form.unlimitedRate,
     hint: K.form.unlimitedRateHint,
     perUnit: K.perPeriod,
+    blank: K.wizard.blank.unlimited,
   },
   // F-118-r: a reseller's priced new link buys its use here first (F-118-h's wholesale leg).
-  { meterKey: "vpn.config.regenerate", unitSize: 1, label: K.form.regenerateRate, hint: K.form.regenerateRateHint, perUnit: K.perUse },
+  { meterKey: "vpn.config.regenerate", unitSize: 1, label: K.form.regenerateRate, hint: K.form.regenerateRateHint, perUnit: K.perUse, blank: K.wizard.blank.regenerate },
 ] as const;
 type WholesaleMeter = (typeof WHOLESALE_METERS)[number]["meterKey"];
 

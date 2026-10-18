@@ -5,7 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { catalogApi, type CatalogProduct } from "@/lib/catalog-api";
 import { resellerLimitsApi, type PackageProduct, type TenantPackage } from "@/lib/tenant-api";
-import { flattenTexts } from "../../../catalog/_lib/catalog-form";
+import { useCatalogTexts } from "../../../catalog/_lib/meter-names";
 import { Alert, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS as K, productQuotaBodyOf, productQuotaFormOf, type ProductQuotaForm } from "../../_lib/limits";
 import { ModeRadios, useOverageHeld } from "./QuotaOverage";
@@ -56,10 +56,9 @@ export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
  * `onSaved` hears every list and unlist, after the list is read again.
  */
 export function ProductTermsList({ packageId, onSaved }: { packageId: string; onSaved?: () => void }) {
-  const { lang } = useLocale();
   const message = useMessage();
   const [products, setProducts] = useState<CatalogProduct[] | null>(null);
-  const [texts, setTexts] = useState<Record<string, string>>({});
+  const texts = useCatalogTexts();
   const [listed, setListed] = useState<PackageProduct[] | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [asked, setAsked] = useState(0);
@@ -74,15 +73,10 @@ export function ProductTermsList({ packageId, onSaved }: { packageId: string; on
       (list) => alive && setProducts(list.filter((p) => p.platform)),
       (e) => alive && setError(e),
     );
-    catalogApi
-      .texts(lang)
-      .then(flattenTexts)
-      .catch(() => ({}))
-      .then((flat) => alive && setTexts(flat));
     return () => {
       alive = false;
     };
-  }, [lang]);
+  }, []);
 
   useEffect(() => {
     let alive = true;

@@ -17,7 +17,7 @@ import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
 import { sellsNothing } from "../../_lib/package-page";
 import { usePackageActions } from "../_hooks/usePackageActions";
-import { PackageSheet } from "./PackageSheet";
+import { PackageWizard } from "./PackageWizard";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { Badge, Button, buttonClass } from "../../../_components/kit";
 import { formatList } from "../../../_lib/digits";
@@ -26,8 +26,9 @@ import { formatList } from "../../../_lib/digits";
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
  * "Packages"): every one, active or withdrawn, with its prices, features and
  * wholesale VPN rate, and a flag on one that lists no product. A package opens
- * its own page, where each section is edited (PK-1-f); create is a sheet;
- * drafted names are reviewed on the translations page (PK-1-h);
+ * its own page, where each section is edited (PK-1-f); create is the wizard,
+ * which opens the new package's page (PK-1-g); drafted names are reviewed on
+ * the translations page (PK-1-h);
  * withdraw / offer again is `isActive`; "apply" forces the package's features
  * on every subscriber now.
  *
@@ -50,7 +51,7 @@ export function PackagesView() {
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const [loaded, setLoaded] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
-  const { busy, notice, failure, setNotice, setFailure, toggleActive, apply } = usePackageActions(reload);
+  const { busy, notice, failure, toggleActive, apply } = usePackageActions(reload);
 
   useEffect(() => {
     if (!allowed || !tenantId) return;
@@ -174,18 +175,7 @@ export function PackagesView() {
         />
       )}
 
-      {creating && (
-        <PackageSheet
-          currency={currency}
-          onClose={() => setCreating(false)}
-          onSaved={(p) => {
-            setCreating(false);
-            setFailure(null);
-            setNotice(t("common", K.created, { name: packageTexts.name(p) }));
-            reload();
-          }}
-        />
-      )}
+      {creating && <PackageWizard currency={currency} onClose={() => setCreating(false)} onCreated={(p) => router.push(panelResellerPackagePath(p.id))} />}
     </div>
   );
 }
