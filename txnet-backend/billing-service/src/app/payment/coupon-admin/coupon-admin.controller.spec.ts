@@ -9,13 +9,15 @@
  *  - **bodies are strict.** A counter, a deletion stamp or a tenant on an update
  *    is refused, never silently dropped;
  *  - **a refusal keeps its reason** in the body, with a status per reason, so
- *    the panel can translate it.
+ *    the panel can translate it;
+ *  - **a form learns the currency it writes in** (F-116-h11a) from the same
+ *    door as the write, so a coupon seat without `settings.manage` is told it.
  */
 import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 
 import { COUPON_REFUSAL_STATUS, CouponAdminController } from './coupon-admin.controller';
-import { createCouponSchema, generateBatchSchema, listCouponsSchema, updateCouponSchema } from './coupon-admin.schema';
+import { couponCurrencySchema, createCouponSchema, generateBatchSchema, listCouponsSchema, updateCouponSchema } from './coupon-admin.schema';
 import { CouponAdminRefused } from './coupon-admin.service';
 import { CouponPermissionGuard } from './coupon-permission.guard';
 
@@ -38,7 +40,7 @@ describe('CouponAdminController routes', () => {
     const paths = Object.getOwnPropertyNames(proto)
       .filter((m) => typeof proto[m] === 'function' && Reflect.getMetadata(METHOD_METADATA, proto[m]) !== undefined)
       .map((m) => String(Reflect.getMetadata(PATH_METADATA, proto[m])));
-    const lastBatch = paths.map((p) => p.startsWith('batches')).lastIndexOf(true);
+    const lastBatch = paths.map((p) => p.startsWith('batches') || p === 'currency').lastIndexOf(true);
     const firstId = paths.findIndex((p) => p.startsWith(':id'));
     expect(lastBatch).toBeGreaterThanOrEqual(0);
     expect(firstId).toBeGreaterThan(lastBatch);
@@ -60,6 +62,38 @@ describe('CouponAdminController routes', () => {
     const controller = new CouponAdminController(coupons as never, {} as never, {} as never);
     await controller.create({ code: 'ABC', discountType: 'percentage', discountValue: '5' } as never, { identity: identity(['coupon.manage']) } as never, '10.0.0.1');
     expect(coupons.create).toHaveBeenCalledWith({ adminId: 'u-1', tenantId: 't-1', ip: '10.0.0.1' }, expect.objectContaining({ code: 'ABC' }));
+  });
+});
+
+describe('GET /coupons/currency (F-116-h11a)', () => {
+  const req = { identity: identity(['coupon.manage']) } as never;
+  const open = (ownerOfNew: (actor: unknown, t: string | null | undefined) => Promise<string | null>) => {
+    const coupons = { ownerOfNew: vi.fn(ownerOfNew), access: vi.fn(async () => ({ owner: true })), within: vi.fn(async () => 'EUR') };
+    return { coupons, controller: new CouponAdminController(coupons as never, {} as never, {} as never) };
+  };
+
+  it("asks whose a new coupon would be — absent the caller's, `platform` the platform's — and answers that owner's code", async () => {
+    const { coupons, controller } = open(async (_a, t) => (t === undefined ? 't-1' : (t ?? null)));
+    await expect(controller.currency({}, req, '10.0.0.1')).resolves.toEqual({ code: 'EUR' });
+    expect(coupons.ownerOfNew).toHaveBeenLastCalledWith(expect.objectContaining({ tenantId: 't-1' }), undefined);
+    await controller.currency({ tenantId: 'platform' }, req, '10.0.0.1');
+    expect(coupons.ownerOfNew).toHaveBeenLastCalledWith(expect.anything(), null);
+    const other = '22222222-2222-4222-8222-222222222222';
+    await controller.currency({ tenantId: other }, req, '10.0.0.1');
+    expect(coupons.ownerOfNew).toHaveBeenLastCalledWith(expect.anything(), other);
+  });
+
+  it("refuses a reseller asking for another owner's currency as the write would", async () => {
+    const { controller } = open(async () => {
+      throw new CouponAdminRefused('not_platform_owner', 'x');
+    });
+    await expect(controller.currency({ tenantId: 'platform' }, req, '10.0.0.1')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('takes a uuid or `platform`, nothing else', () => {
+    expect(couponCurrencySchema.safeParse({ tenantId: 'platform' }).success).toBe(true);
+    expect(couponCurrencySchema.safeParse({}).success).toBe(true);
+    expect(couponCurrencySchema.safeParse({ tenantId: 'mine' }).success).toBe(false);
   });
 });
 

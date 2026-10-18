@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 
-import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import { assertUnderDiscountCap } from './coupon-discount-cap';
-import { couponInCurrency } from './coupon-money-places';
+import { couponCurrencyOf, couponInCurrency } from './coupon-money-places';
 import { frozenBy, statusOf } from './coupon-status';
 
 /** Who is acting, as the gate proved it. Never taken from a body. */
@@ -286,7 +286,7 @@ export class CouponAdminService {
           ...this.columns(next),
           tenantId,
           // A platform coupon is in the platform's currency, a tenant's in its own (F-116-b).
-          currencyCode: await couponInCurrency(tx, tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx), next, invalidValue),
+          currencyCode: await couponInCurrency(tx, await couponCurrencyOf(tx, tenantId), next, invalidValue),
           createdByAdminId: actor.adminId,
         } as Prisma.CouponUncheckedCreateInput,
       })) as unknown as Row;

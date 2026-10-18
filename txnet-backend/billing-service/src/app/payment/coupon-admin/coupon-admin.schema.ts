@@ -100,6 +100,9 @@ export const generateBatchSchema = z
   })
   .strict();
 
+/** `GET /coupons/currency` (F-116-h11a): whose new coupon — absent the caller's, `platform` the platform's. */
+export const couponCurrencySchema = z.object({ tenantId: z.union([z.literal('platform'), uuid('tenantId')]).optional() }).strict();
+
 export const listBatchesSchema = z.object({ tenantId: z.union([z.literal('platform'), uuid('tenantId')]).optional(), ...page });
 
 export const usageSchema = z.object({
@@ -112,6 +115,7 @@ export const usageSchema = z.object({
 export type CreateCouponBody = z.infer<typeof createCouponSchema>;
 export type UpdateCouponBody = z.infer<typeof updateCouponSchema>;
 export type ListCouponsQuery = z.infer<typeof listCouponsSchema>;
+export type CouponCurrencyQuery = z.infer<typeof couponCurrencySchema>;
 export type GenerateBatchBody = z.infer<typeof generateBatchSchema>;
 export type ListBatchesQuery = z.infer<typeof listBatchesSchema>;
 export type UsageQuery = z.infer<typeof usageSchema>;

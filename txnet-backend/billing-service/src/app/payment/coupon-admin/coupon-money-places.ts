@@ -1,5 +1,5 @@
 import { DiscountType, Prisma } from '@prisma/client';
-import { inCurrency } from '@txnet-backend/shared-core';
+import { inCurrency, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 /** A percentage coupon's value is told to two places: 12.50%. */
 const PERCENT_PLACES = 2;
@@ -25,3 +25,6 @@ export async function couponInCurrency(tx: Pick<Prisma.TransactionClient, 'curre
   };
   return inCurrency(tx, currencyCode, money, refuse);
 }
+
+/** The currency a new coupon or gift batch of `tenantId` is written in: a platform one (`null`) in the platform's, a tenant's in its own (F-116-b). */
+export const couponCurrencyOf = (tx: Prisma.TransactionClient, tenantId: string | null): Promise<string> => (tenantId ? operatingCurrencyOf(tx, tenantId) : platformCurrencyOf(tx));

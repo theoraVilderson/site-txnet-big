@@ -200,6 +200,7 @@ Migration `20260915000100_coupon_free_grant`; `coupon-admin.service.ts`,
 | `GET\|PATCH\|DELETE /coupons/:id` | patch `.strict()`, no `tenantId` | `CouponView`; delete `{id, mode}` |
 | — | a `CouponView` carries `currencyCode`, the coupon's own: what a fixed `discountValue`, `maxDiscountCap` and the purchase bounds are in (F-116-h2) | — |
 | `GET /coupons/:id/usage`, `GET /coupons/batches/:id/usage` | `status`, `from`, `to`, `page`, `pageSize` | `UsageReport` |
+| `GET /coupons/currency` (F-116-h11a) | `tenantId?` (uuid or `platform`; absent = the caller's) | `{code}` — the currency a new coupon or batch of that owner is written in (`couponCurrencyOf`, the write's own), for a form to name; whose is `ownerOfNew`'s: `not_platform_owner`, `tenant_not_found` |
 | `GET\|POST /coupons/batches` | list: `tenantId`, page; generate: `label`, `count` 1..5000, `value`, `prefix`, `expiresAt`, `note`, `tenantId` | page of `BatchView`; 201 `BatchView` |
 | `GET /coupons/batches/:id` | — | `BatchView` |
 | `GET /coupons/batches/:id/export` | — | `{filename, csv}` in the JSON envelope (the panel builds the file); spends the **write** budget |

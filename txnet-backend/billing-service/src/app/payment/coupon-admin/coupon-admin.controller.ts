@@ -25,12 +25,14 @@ import { identityOf } from '../../request/identity.middleware';
 import { RateLimit } from '../../request/rate-limit';
 import { ZodValidationPipe } from '../../request/zod-validation.pipe';
 import {
+  CouponCurrencyQuery,
   CreateCouponBody,
   GenerateBatchBody,
   ListBatchesQuery,
   ListCouponsQuery,
   UpdateCouponBody,
   UsageQuery,
+  couponCurrencySchema,
   createCouponSchema,
   generateBatchSchema,
   listBatchesSchema,
@@ -40,6 +42,7 @@ import {
 } from './coupon-admin.schema';
 import { CouponActor, CouponAdminRefused, CouponAdminRejection, CouponAdminService, CreateCouponInput, UpdateCouponInput } from './coupon-admin.service';
 import { CouponBatchService, GenerateBatchInput } from './coupon-batch.service';
+import { couponCurrencyOf } from './coupon-money-places';
 import { CouponPermissionGuard } from './coupon-permission.guard';
 import { CouponUsageService } from './coupon-usage.service';
 
@@ -117,6 +120,22 @@ export class CouponAdminController {
     // The schema requires code, type and value; the cast is for this project's
     // non-strict tsconfig, under which zod infers every key as optional.
     return this.refusing(() => this.coupons.create(this.actor(req, ip), body as CreateCouponInput));
+  }
+
+  /**
+   * F-116-h11a: the currency a new coupon or batch of that owner is written
+   * in — what a form names beside an amount. Whose is `ownerOfNew`'s, so a
+   * caller is told only the currency it could write in.
+   */
+  @Get('currency')
+  @RateLimit(READ)
+  async currency(@Query(new ZodValidationPipe(couponCurrencySchema)) query: CouponCurrencyQuery, @Req() req: Request, @Ip() ip: string) {
+    const actor = this.actor(req, ip);
+    return this.refusing(async () => {
+      const tenantId = await this.coupons.ownerOfNew(actor, query.tenantId === 'platform' ? null : query.tenantId);
+      const { owner } = await this.coupons.access(actor);
+      return { code: await this.coupons.within(owner, (tx) => couponCurrencyOf(tx, tenantId)) };
+    });
   }
 
   @Get('batches')

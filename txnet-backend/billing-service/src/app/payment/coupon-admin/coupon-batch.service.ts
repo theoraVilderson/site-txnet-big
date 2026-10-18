@@ -2,9 +2,10 @@ import { randomInt } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
-import { operatingCurrencyOf, platformCurrencyOf, moneyText, MONEY_MAX_PLACES, finerThanCurrency } from '@txnet-backend/shared-core';
+import { moneyText, MONEY_MAX_PLACES, finerThanCurrency } from '@txnet-backend/shared-core';
 
 import { CouponActor, CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
+import { couponCurrencyOf } from './coupon-money-places';
 import { statusOf } from './coupon-status';
 import { assertUnderDiscountCap } from './coupon-discount-cap';
 
@@ -96,8 +97,7 @@ export class CouponBatchService {
         // A free-service batch is a 100% discount, bounded as one code is (F-904).
         await assertUnderDiscountCap(tx, { actorTenantId: actor.tenantId, tenantId, next: { discountType: grantVariantId ? DiscountType.free_grant : DiscountType.wallet_credit, discountValue: value } });
         const codes = await this.draw(tx, tenantId, prefix, count);
-        // A platform batch is in the platform's currency, a tenant's in its own (F-116-b).
-        const currencyCode = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
+        const currencyCode = await couponCurrencyOf(tx, tenantId);
         // A gift code's value is money in that currency, at its places (F-116-r).
         if (await finerThanCurrency(tx, currencyCode, { value })) throw new CouponAdminRefused('invalid_value', 'value');
         const row = await tx.couponBatch.create({ data: { tenantId, label, note: input.note?.trim() || null, createdByAdminId: actor.adminId } });
