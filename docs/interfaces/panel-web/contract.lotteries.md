@@ -54,7 +54,7 @@ Over billing's `/api/billing/engagement/lotteries` ([engagement contract](../../
 
 - `/lotteries/manage` (`PANEL_LOTTERIES_MANAGE`): `manage/_components/LotteryAdminView.tsx` — the list, a new draft.
 - `/lotteries/manage/[id]` (`panelLotteryManagePath`): `LotteryAdminDetail.tsx` — the lottery, its acts, who enters, the winners.
-- The form: `LotteryEditor.tsx`. The rules: `manage/_lib/lottery-admin.ts`.
+- The form: `LotteryWizard.tsx` (`LotterySteps.tsx`, `LotteryReview.tsx`). The rules: `manage/_lib/lottery-admin.ts`; the steps: `manage/_lib/lottery-steps.ts`.
 
 1. **The menu entry asks `engagement.manage`**, the guard's key, as the
    wheel's settings; RLS keeps each tenant to its own.
@@ -73,7 +73,19 @@ Over billing's `/api/billing/engagement/lotteries` ([engagement contract](../../
    reason (`EXCLUDED_COUNT_KEYS`, typed by the close's union).
 6. **Winners only once drawn**: each place, its ticket, its user, the prize or
    "reserve", the delivery and a pass-on's reason, and whom a reserve replaced.
+7. **A draft is a kit `Wizard`** (UX-3-d, [contract.ux.md](contract.ux.md) K12):
+   title and group → close time and who enters → rules → prizes → review. A
+   new draft closes a week out; 1 day / 1 week / 1 month set the close from
+   now on the admin's wall clock, rounded up to its whole hour
+   (`closeAfterDays`). A saved draft reopens on its review, with billing's
+   eligible count of the draft as saved; a new one shows its group's size.
+   The prize step is the wheel's (`PrizeListStep`). Publish stays on the
+   detail page; closing a changed wizard asks first.
 
 Proof: `manage/lottery-admin.test.ts` — the refusal union and the schema's
 bounds read from billing, the menu, the zone round trip, the form and its
 body, a draft reopened, the acts per status, every key in `en` and `fa`.
+`manage/lottery-wizard.test.tsx` — every checked field on one step, the default
+close a week out on a whole Tehran hour, each shortcut at least its length and
+inside the window, Next held on title and group, a draft opened on its review
+with billing's count, a shortcut from there.

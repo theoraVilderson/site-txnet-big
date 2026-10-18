@@ -11,7 +11,7 @@ import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatInstant } from "../../../_lib/datetime";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { LOTTERY_ADMIN_KEYS as K, canManageLotteries } from "../_lib/lottery-admin";
-import { LotteryEditor } from "./LotteryEditor";
+import { LotteryWizard } from "./LotteryWizard";
 import { StatusPill, useLotteryMessage } from "./lottery-admin-ui";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { Alert, Button, buttonClass } from "../../../_components/kit";
@@ -80,7 +80,7 @@ export function LotteryAdminView() {
         }
       />
 
-      {creating && <LotteryEditor from={null} onCancel={() => setCreating(false)} onSaved={(l) => router.push(panelLotteryManagePath(l.id))} />}
+      {creating && <LotteryWizard from={null} onClose={() => setCreating(false)} onSaved={(l) => router.push(panelLotteryManagePath(l.id))} />}
 
       {error ? (
         <div className="flex flex-wrap items-center gap-3">

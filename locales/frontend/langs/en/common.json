@@ -5671,6 +5671,47 @@
         "passed_on": "Passed on"
       },
       "deliveredAt": "Given {{time}}"
+    },
+    "wizard": {
+      "steps": {
+        "basics": {
+          "title": "Title and group",
+          "subtitle": "What it is and for whom"
+        },
+        "schedule": {
+          "title": "When it closes",
+          "subtitle": "Close time and who enters"
+        },
+        "rules": {
+          "title": "Rules",
+          "subtitle": "Who may get a ticket"
+        },
+        "prizes": {
+          "title": "Prizes",
+          "subtitle": "In rank order"
+        },
+        "review": {
+          "title": "Review"
+        }
+      },
+      "confirmClose": "Close without saving the draft?",
+      "edit": "Edit",
+      "shortcutsLabel": "Close in",
+      "shortcuts": {
+        "day": "1 day",
+        "week": "1 week",
+        "month": "1 month"
+      },
+      "review": {
+        "eligibleTitle": "Who enters",
+        "savedNote": "Counted on the draft as last saved; the close judges everyone again.",
+        "groupMembers": "{{n}} member(s) in the group",
+        "afterSave": "The count by the rules shows here once the draft is saved.",
+        "yes": "Yes",
+        "no": "No",
+        "none": "None",
+        "prizes": "{{n}} prize(s), {{winners}} winner(s)"
+      }
     }
   },
   "support": {

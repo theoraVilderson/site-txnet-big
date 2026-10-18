@@ -50,7 +50,6 @@
   "site-pwa/src/app/(panel)/gateways/_components/DepositTaxCard.tsx": 3,
   "site-pwa/src/app/(panel)/groups/_components/GroupsView.tsx": 8,
   "site-pwa/src/app/(panel)/groups/_components/MembersSheet.tsx": 4,
-  "site-pwa/src/app/(panel)/lotteries/manage/_components/LotteryEditor.tsx": 3,
   "site-pwa/src/app/(panel)/lotteries/manage/_lib/lottery-admin.ts": 8,
   "site-pwa/src/app/(panel)/my-resellers/[id]/_components/OnboardingConsoleView.tsx": 16,
   "site-pwa/src/app/(panel)/my-resellers/[id]/_components/QuotaCards.tsx": 1,
