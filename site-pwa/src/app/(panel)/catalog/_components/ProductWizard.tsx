@@ -8,15 +8,15 @@ import { PricingCurrencyContext, useCatalogSurface, usePricingCurrency } from ".
 import { currencyDecimals, formatMoney } from "../../_lib/money";
 import { DEFAULT_LOCALE } from "@/env";
 import { usePanelSession } from "../../_context/PanelSessionContext";
-import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS as K, DESCRIPTION_MAX, CREATABLE_FULFILMENT_KINDS, NAME_MAX, WIZARD_STEPS, capabilitiesFor, wizardCategoryBody, productBody, suggestKey, surfaceActor, suggestSku, variantBody, takesPanelGroup, groupsForVariant, wizardVariantTenant, wizardStepErrors, emptyWizard, firstInvalidStep, rateDecimals, type ProductForm, type ProductWizard as Wizard, type VariantForm, type WizardStep } from "../_lib/catalog-form";
 import { CapabilityPicker } from "./CapabilityPicker";
 import { CategoryFields } from "./NameSheets";
 import { CategoryMultiPicker, TranslateAllBox } from "./CategoryPickers";
-import { VariantFields, usePanelGroups } from "./ProductDetailSheet";
+import { VariantFields } from "./VariantFields";
+import { usePanelGroups } from "./PanelGroupSelect";
 import { Field, KeyField, LanguageSelect, useDirOf, useMessage } from "./catalog-ui";
 import { Wizard as KitWizard, useWizard } from "../../_components/kit/Wizard";
-import { Button, Checkbox, Input, Textarea } from "../../_components/kit";
+import { Button, Checkbox, Input, Select, Textarea } from "../../_components/kit";
 import { formatList } from "../../_lib/digits";
 import { isPlatformTenant } from "@/lib/tenant-type";
 

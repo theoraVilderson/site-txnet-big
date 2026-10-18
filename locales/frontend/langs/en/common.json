@@ -1732,6 +1732,7 @@
       "quotaRepeat": "Each metric once",
       "pastDay": "A price cannot start on a day already past",
       "unitPrice": "A price per GB above zero, like 0.5 or 0.00012 (up to 8 decimals)",
+      "salesCap": "Enter a positive whole number, or leave it blank for no cap",
       "includedCount": "A whole number, 0 or more",
       "stopIncludes": "With no more after the free ones, give at least one free",
       "usePrice": "A price above zero, like 0.5 (up to 8 decimals)"

@@ -42,7 +42,6 @@ export const RESET_POLICIES = ["none", "monthly", "daily"] as const;
 export type ResetPolicy = (typeof RESET_POLICIES)[number];
 
 export type Quotas = Partial<Record<QuotaMetric, { limit: number; resetPolicy: ResetPolicy }>>;
-
 export type { CatalogRejection } from "./catalog-rejections";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
@@ -271,9 +270,10 @@ export interface CreateVariantBody {
   effectiveFrom?: string;
   /** A metered variant's first card, from the same instant as the first price (F-118-m). */
   rateCard?: RateCardTerms;
+  /** At most this many sold, `null` none; on an update absent leaves it (F-513-a). */
+  salesCap?: number | null;
 }
-/** `salesCap`: `null` clears it, absent leaves it (F-513-a). */
-export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId">> & { isActive?: boolean; salesCap?: number | null };
+export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId" | "salesCap">> & { isActive?: boolean };
 
 export interface SetPriceBody {
   amount: string;

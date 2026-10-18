@@ -161,7 +161,8 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
 10h. **A variant's sales cap** (F-513-c, catalog [contract.sales-cap.md](../../domains/catalog/contract.sales-cap.md)):
    `SalesCapSection` on each variant card shows billing's `sales` — sold, held
    by unpaid invoices, left — sets a whole number 1..`MAX_SALES_CAP` (`parseSalesCap`,
-   test-held to billing's) and clears it to `null`; a sold-out card says so.
+   test-held to billing's) and clears it to `null`; a sold-out card says so. "New variant" and
+   the wizard take it too (`VariantFields`, F-513-e): blank sends none, else the same rule.
 
 A variant's cost per sale and the usage costs tab: [contract.catalog-cost.md](contract.catalog-cost.md) (F-1002-g).
 
