@@ -545,6 +545,15 @@ not exist in the current database") — the Panels page on 2026-09-26.
   constraint that rewrites or rejects existing rows, or any `migrate reset`.
   Name the tables and row counts at stake in the question.
 - **Dev only.** Never the production host or cluster, never another database.
+- **Check before you apply, then never touch the file.** Prisma stores each
+  applied file's sha256; an edit after `deploy` — even a comment — leaves dev's
+  history disagreeing with the repo (`migrate dev` then demands a reset). So a
+  new migration passes `python3 tools/conventions.py C-39` and a dry run
+  (`BEGIN; <file>; ROLLBACK;` through `psql -v ON_ERROR_STOP=1`) **before**
+  `deploy`. Once applied, a mistake is fixed by the next migration. A
+  migration that fails mid-way is rolled back by Postgres; mark it with
+  `prisma migrate resolve --rolled-back <name>`, fix it, deploy again
+  (F-116-q, 2026-10-18).
 
 ## If you cannot run shell commands
 
