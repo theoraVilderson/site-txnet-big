@@ -24,6 +24,8 @@ import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from
 import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf, upcomingSeasonCampaigns } from './season-plan';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 import { priceView, rateCardView, variantView, type VariantView } from './catalog-views';
+import { withLiveCountRows } from './live-grants';
+import { variantPatchData } from './variant-patch';
 
 /**
  * Catalog management (F-026-d; D-34, ADR-0049): categories, products, variants
@@ -199,8 +201,9 @@ export type VariantFields = {
   visibility?: VariantVisibility;
   panelGroupId?: string | null;
   qualityTier?: QualityTier;
-  /** F-513-a: null clears it. */
+  /** F-513-a, F-514-a: null clears it. */
   salesCap?: number | null;
+  activeCap?: number | null;
 };
 /** A rate card's terms (F-118-m). Quantities are strings in the meter's unit: bytes pass 2^53. */
 export type RateCardTerms = {
@@ -939,7 +942,7 @@ export class CatalogAdminService {
     const pid = await this.platformId();
     return this.within(owner, async (db) => {
       const product = await this.managed(db, 'product', 'product_not_found', actor, id, owner);
-      const variants = (await db.productVariant.findMany({ where: { productId: id }, orderBy: { sku: 'asc' } })) as unknown as Row[];
+      const variants = await withLiveCountRows(db, (await db.productVariant.findMany({ where: { productId: id }, orderBy: { sku: 'asc' } })) as unknown as Row[]);
       const withPrices: VariantView[] = [];
       for (const v of variants) {
         const variantId = v['id'] as string;
@@ -1182,6 +1185,7 @@ export class CatalogAdminService {
             panelGroupId: input.panelGroupId ?? null,
             qualityTier: input.qualityTier ?? QualityTier.standard,
             salesCap: input.salesCap ?? null,
+            activeCap: input.activeCap ?? null,
           },
         }),
       )) as unknown as Row;
@@ -1217,17 +1221,8 @@ export class CatalogAdminService {
         const product = await tx.product.findUnique({ where: { id: before['productId'] as string }, select: { fulfilmentKind: true } });
         this.refuseUnstatedTraffic(product?.fulfilmentKind ?? null, before['billingMode'] as VariantBillingMode, patch.quotas, before['sku'] as string);
       }
-      const data: Prisma.ProductVariantUpdateInput = {
-        ...(patch.nameKey !== undefined ? { nameKey: patch.nameKey } : {}),
-        ...(patch.quotas !== undefined ? { quotas: patch.quotas as Prisma.InputJsonValue } : {}),
-        ...(patch.durationDays !== undefined ? { durationDays: patch.durationDays } : {}),
-        ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
-        ...(patch.panelGroupId !== undefined ? { panelGroupId: patch.panelGroupId } : {}),
-        ...(patch.qualityTier !== undefined ? { qualityTier: patch.qualityTier } : {}),
-        ...(patch.salesCap !== undefined ? { salesCap: patch.salesCap } : {}),
-        ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
-      };
-      const row = (await tx.productVariant.update({ where: { id }, data })) as unknown as Row;
+      const updated = (await tx.productVariant.update({ where: { id }, data: variantPatchData(patch) })) as unknown as Row;
+      const [row] = await withLiveCountRows(tx, [updated]);
       const prices = (await tx.price.findMany({ where: { variantId: id } })) as unknown as Row[];
       const cards = (await tx.rateCard.findMany({ where: { variantId: id } })) as unknown as Row[];
       const view = variantView(row, pid, prices, cards);

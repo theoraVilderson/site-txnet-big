@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: draft
-updated: 2026-10-13
+updated: 2026-10-18
 ---
 
 # Invariants — catalog
@@ -28,6 +28,7 @@ Held by the database since F-026-a; proved by
 | 14 | A product with an audience is sold — listed, invoiced, issued, issued by hand — only to a live user member of one of its groups, and only its own tenant's buyers are asked; a Grant already sold is kept (PT-1-b, ADR-0142 (4)) | `productsClosedTo` at every door (`contract.audience.md` rule 5-6); composite FKs to the product's tenant's groups | a product meant for a group sold to everyone, or a reseller's buyers filtered by the platform's groups |
 | 11 | A tenant is offered only prices and rates in its operating currency; a row in another is no price, never converted (F-116-d, ADR-0098 part 2) | `effectiveIn`, `pricesInEffect` / `rateCardsInEffect` (`price-currency.spec.ts`) | a rial user quoted the platform's dollar amount as rial, or a debit the ledger refuses at the last step |
 | 15 | A variant's sales cap is above zero or null, and its sold and held counts never negative; a cap under them closes sales and undoes none (F-513-a) | CHECKs `product_variant_sales_cap_positive`, `product_variant_sales_counts_not_negative`; `salesOf` | a negative remainder sold as stock, or a cap lowered that cancels paid sales |
+| 16 | A variant's active cap is above zero or null, and its live count is read from the Grants, never stored; a cap under the live count closes sales and ends no service (F-514-a) | CHECK `product_variant_active_cap_positive`; `catalog.live_grants_of`; `activeOf` | a counter drifting from the Grants and selling a slot that is taken, or a lowered cap that cuts live services |
 
 ## How to test
 

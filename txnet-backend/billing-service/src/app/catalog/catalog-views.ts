@@ -2,7 +2,7 @@ import { Prisma, type QualityTier, type RateCardAfterIncluded, type RateCardMode
 import { moneyText } from '@txnet-backend/shared-core';
 
 import type { PriceView, RateCardView } from './catalog-admin.service';
-import { salesOf, type SalesView } from './sales-cap';
+import { activeOf, salesOf, type ActiveView, type SalesView } from './sales-cap';
 
 /** A catalog row as the catalog service reads it: untyped columns. */
 type Row = Record<string, unknown>;
@@ -50,6 +50,8 @@ export type VariantView = {
   isActive: boolean;
   /** F-513-a: the cap, what is sold and held, and what is left. */
   sales: SalesView;
+  /** F-514-a: the active cap, the live services and held slots, and what is left. */
+  active: ActiveView;
   /** Newest `effectiveFrom` first. */
   prices: PriceView[];
   /** Every meter's card history, newest `effectiveFrom` first (F-118-m). */
@@ -76,6 +78,12 @@ export const variantView = (r: Row, platformId: string, prices: Row[], cards: Ro
   sales: salesOf({
     salesCap: (r['salesCap'] as number | null) ?? null,
     soldCount: (r['soldCount'] as number | undefined) ?? 0,
+    reservedCount: (r['reservedCount'] as number | undefined) ?? 0,
+  }),
+  // `liveCount` is on a row read through `withLiveCountRows`; a new variant has none live.
+  active: activeOf({
+    activeCap: (r['activeCap'] as number | null | undefined) ?? null,
+    liveCount: (r['liveCount'] as number | undefined) ?? 0,
     reservedCount: (r['reservedCount'] as number | undefined) ?? 0,
   }),
   prices: newestFirst(prices.map(priceView)),

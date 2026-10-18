@@ -312,7 +312,7 @@
   "txnet-backend/auth-service/src/app/governance/user-groups/user-group-admin.service.ts": 722,
   "txnet-backend/auth-service/src/app/support-consent/support-consent.service.ts": 492,
   "txnet-backend/billing-service/src/app/catalog/catalog-admin.controller.ts": 410,
-  "txnet-backend/billing-service/src/app/catalog/catalog-admin.service.ts": 1856,
+  "txnet-backend/billing-service/src/app/catalog/catalog-admin.service.ts": 1851,
   "txnet-backend/billing-service/src/app/catalog/reseller-catalog.controller.ts": 505,
   "txnet-backend/billing-service/src/app/config/env.validation.ts": 484,
   "txnet-backend/billing-service/src/app/engagement/wheel-spin.service.ts": 504,

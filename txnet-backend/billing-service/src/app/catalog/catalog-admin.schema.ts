@@ -193,6 +193,8 @@ const variantFields = {
   qualityTier: z.nativeEnum(QualityTier).optional(),
   /** F-513-a: at most this many sold; null clears it. */
   salesCap: z.number().int().min(1).max(MAX_SALES_CAP).nullable().optional(),
+  /** F-514-a: at most this many live at once; null clears it. The same typo guard as the sales cap. */
+  activeCap: z.number().int().min(1).max(MAX_SALES_CAP).nullable().optional(),
 };
 
 /** `Decimal(18, 8)`: at most 10 whole digits and 8 places — a GiB can cost a fraction of a cent. */

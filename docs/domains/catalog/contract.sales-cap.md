@@ -2,11 +2,11 @@
 id: catalog
 layer: domain
 status: active
-version: 14
+version: 15
 updated: 2026-10-18
 ---
 
-# Contract — catalog / a variant's sales cap (F-513)
+# Contract — catalog / a variant's sales and active caps (F-513, F-514)
 
 At most `salesCap` of one variant are sold, then it is sold out (catalog
 F-513, user decisions 2026-10-18). `sales-cap.ts` in
@@ -30,14 +30,31 @@ and 5.
 | 4 | A pending invoice holds a unit as a sale does; payment moves it to sold; expiry, cancel or refund releases it — so two buyers never oversell the last unit | `moveSales` under the variant's row lock; `invoice.salesCounted` (`sales-counts.spec.ts`, `invoice.spec.ts`) |
 | 5 | A free-grant coupon and the wheel count and are refused when sold out; an admin's or a reseller's issue counts and is never refused | `SALE_COUNTING` in `GrantService.issue` (`sales-counts.spec.ts`) |
 | 7 | An invoice made before the counts (`salesCounted = false`) gives back nothing at expiry, cancel or refund; paid, it is counted, never refused | `releaseSalesUnit`, `InvoicePaymentService.pay` |
-| 6 | A sold-out variant is still listed, marked `soldOut` — the shop shows it, never hides it | `listOffersIn` / `toOffer` |
+| 6 | A sold-out variant is still listed, marked `soldOut` — the shop shows it, never hides it | `listOffersIn` / `toOffer`; `GET /billing/offers` carries `remaining`/`soldOut` (`offers.controller.spec.ts`) |
+
+## The active cap (F-514-a)
+
+At most `activeCap` live services of one variant at once, beside the lifetime
+cap (catalog F-514, user decisions 2026-10-18). `product_variant.activeCap`
+(null = no cap, CHECK `> 0`), migration `20261018000800`.
+
+| # | Rule | Held by |
+|---|---|---|
+| A1 | Live = a Grant of the variant `pending`, `active` or `suspended`, across every tenant. Counted from the grants, never stored: a counter would have to be moved by every status writer | `catalog.live_grants_of` (SECURITY DEFINER — RLS shows a reseller only its own grants of a platform variant; proved on dev); `withLiveCounts` |
+| A2 | `remaining = max(0, activeCap − live − reservedCount)`: a pending invoice's hold takes a slot as it takes a unit. A cap under the live count closes sales and ends no service | `activeOf` (`sales-cap.spec.ts`) |
+| A3 | An offer's `remaining` is the smaller of the two caps' remainders, `null` with neither; `soldOut` when either is full | `availabilityOf` |
+| A4 | A read asks the count only for capped variants, in one query; an uncapped read asks nothing | `liveGrantsOf`; partial index `grant_variant_live_idx` |
+
+Enforcing it at the invoice and the issue, and pushing "available again" when
+a Grant leaves the live set, are F-514-b and F-514-c.
 
 ## HTTP surface
 
 `POST /products/:id/variants` and `PATCH /variants/:id` (and the reseller
-routes over the same service, F-066-w7) take `salesCap?: integer 1..1 000 000 | null`
+routes over the same service, F-066-w7) take `salesCap?` and `activeCap?: integer 1..1 000 000 | null`
 — `null` clears it, absent leaves it. Anything else is a schema 400. Every
-variant view answers `sales: {cap, sold, reserved, remaining, soldOut}`, and
+variant view answers `sales: {cap, sold, reserved, remaining, soldOut}` and
+`active: {cap, live, held, remaining, full}` (F-514-a), and
 the edit is audited with it (`catalog_variant_update`).
 
 ## Provides

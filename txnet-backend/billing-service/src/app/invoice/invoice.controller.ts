@@ -268,6 +268,9 @@ export class OffersController {
       price: o.price.amount,
       currencyCode: o.price.currencyCode,
       rateCards: o.rateCards,
+      // Listed but not buyable when either cap is full (catalog contract.sales-cap.md rule 6, F-514).
+      remaining: o.remaining,
+      soldOut: o.soldOut,
     }));
   }
 }

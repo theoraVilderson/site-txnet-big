@@ -31,7 +31,8 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { offerCampaignEndsAt } from './price-campaign';
-import { salesOf, type SalesCounts } from './sales-cap';
+import { withLiveCounts } from './live-grants';
+import { availabilityOf } from './sales-cap';
 
 /**
  * What the catalog offers a tenant's users, and at what price (F-026-c).
@@ -83,7 +84,7 @@ export type CatalogOffer = {
   campaignEndsAt: Date | null;
   /** The card in effect for each meter, by meter key (F-118-ae): what a sale now would lock. */
   rateCards: OfferRateCard[];
-  /** F-513-a: units left under the variant's sales cap, `null` with no cap. */
+  /** F-513-a, F-514-a: units left under the nearer of the sales and active caps, `null` with neither. */
   remaining: number | null;
   /** Shown as sold out, never hidden; the invoice refuses it (F-513-b). */
   soldOut: boolean;
@@ -149,13 +150,7 @@ const tenantCurrency = (tx: Prisma.TransactionClient) => operatingCurrencyOf(tx,
 /** The platform products the caller's tenant may sell (F-019-v5, ADR-0107 point 3); `null` bounds nothing. */
 const listedForTenant = (tx: Prisma.TransactionClient) => platformProductsSoldBy(tx, TenantContext.current('catalog offer').id);
 
-/** An offer's share of {@link salesOf}: what is left and whether it is sold out. */
-const soldOutOf = (v: SalesCounts) => {
-  const { remaining, soldOut } = salesOf(v);
-  return { remaining, soldOut };
-};
-
-function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
+function toOffer(v: VariantRow & { liveCount: number }, at: Date, currencyCode: string, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
   const facts = {
     visibility: v.visibility,
     isActive: v.isActive,
@@ -193,7 +188,7 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
     price: { id: price.id, amount: moneyText(price.amount), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
     campaignEndsAt: offerCampaignEndsAt(price, at),
     rateCards: offerRateCards(v.rateCards ?? [], at, currencyCode),
-    ...soldOutOf(v),
+    ...availabilityOf(v),
   };
 }
 
@@ -222,7 +217,8 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
   // A platform product the reseller's package does not list is not for sale to it (F-019-v5).
   if (!row || !(await tenantSellsProduct(tx, TenantContext.current('catalog offer').id, row.product))) return null;
   if (!(await openTo(tx, buyer, row.product))) return null;
-  return toOffer(row, at, currencyCode, isSellableBySku);
+  const [live] = await withLiveCounts(tx, [row]);
+  return toOffer(live, at, currencyCode, isSellableBySku);
 }
 
 /**
@@ -242,7 +238,7 @@ export async function listOffersIn(tx: Prisma.TransactionClient, at: Date, buyer
   });
   // What the buyer's groups leave out (PT-1-b): one read when no product names a group.
   const closed = buyer ? await productsClosedTo(tx, tenantId, buyer, rows.map((v) => v.product), at) : new Set<string>();
-  return rows.flatMap((v) => (sellsProduct(listed, v.product, tenantId) && !closed.has(v.product.id) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
+  return (await withLiveCounts(tx, rows)).flatMap((v) => (sellsProduct(listed, v.product, tenantId) && !closed.has(v.product.id) ? (toOffer(v, at, currencyCode, isListed) ?? []) : []));
 }
 
 @Injectable()
@@ -263,7 +259,8 @@ export class CatalogReadService {
       const row = pickBySku(rows, tenant.id, platformId);
       if (!row || !(await tenantSellsProduct(tx, tenant.id, row.product))) return null;
       if (!(await openTo(tx, buyer, row.product))) return null;
-      return toOffer(row, at, currencyCode, isSellableBySku);
+      const [live] = await withLiveCounts(tx, [row]);
+      return toOffer(live, at, currencyCode, isSellableBySku);
     });
   }
 

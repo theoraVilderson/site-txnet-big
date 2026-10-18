@@ -256,6 +256,9 @@ model ProductVariant {
   salesCap      Int?
   soldCount     Int               @default(0)
   reservedCount Int               @default(0)
+  /// F-514-a: at most this many live services at once; null = no cap (CHECK > 0).
+  /// The live count is the variant's Grants, never stored (`catalog.live_grants_of`).
+  activeCap     Int?
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @default(now()) @updatedAt
 
