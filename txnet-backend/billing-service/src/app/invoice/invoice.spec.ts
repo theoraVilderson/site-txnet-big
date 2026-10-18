@@ -106,7 +106,7 @@ type CreateSetup = {
 };
 
 /** `move_variant_sales`'s answer for an uncapped variant, or a refusal (F-513-b). */
-const salesMove = (outcome = 'moved') => [{ outcome, tenantId: TENANT, salesCap: null }];
+const salesMove = (outcome = 'moved') => [{ outcome, tenantId: TENANT, salesCap: null, activeCap: null }];
 /** A recording `$queryRaw`: the move's arguments, `[variantId, sold, held, refusesWhenFull]`. */
 const recordMoves = (moves: unknown[][], outcome?: string) => async (_s: TemplateStringsArray, ...values: unknown[]) => {
   moves.push(values);

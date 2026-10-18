@@ -44,9 +44,10 @@ cap (catalog F-514, user decisions 2026-10-18). `product_variant.activeCap`
 | A2 | `remaining = max(0, activeCap − live − reservedCount)`: a pending invoice's hold takes a slot as it takes a unit. A cap under the live count closes sales and ends no service | `activeOf` (`sales-cap.spec.ts`) |
 | A3 | An offer's `remaining` is the smaller of the two caps' remainders, `null` with neither; `soldOut` when either is full | `availabilityOf` |
 | A4 | A read asks the count only for capped variants, in one query; an uncapped read asks nothing | `liveGrantsOf`; partial index `grant_variant_live_idx` |
+| A5 | A move that takes a unit and refuses (`reserve`, `sell`) is refused `sold_out` when `live + held >= activeCap`, as for a full sales cap — same refusals, same sources (F-514-b). `sellReserved`, `count` and every give-back never are; a renewal is the same Grant (F-027-dg) and makes no move | `catalog.move_variant_sales` (migration `20261018000900`) |
+| A6 | No moment leaves a slot neither held nor live: payment releases the hold and inserts the `pending` Grant in one transaction, and the live count is its own statement **after** the row lock, so a buyer queued behind a payment counts its Grant (READ COMMITTED takes the count's snapshot under the lock). Counted in the locking statement, the slot would be given twice | the function's header; raced on dev 2026-10-18 — the queued hold answered `sold_out` |
 
-Enforcing it at the invoice and the issue, and pushing "available again" when
-a Grant leaves the live set, are F-514-b and F-514-c.
+Pushing "available again" when a Grant leaves the live set is F-514-c.
 
 ## HTTP surface
 
@@ -69,7 +70,7 @@ the edit is audited with it (`catalog_variant_update`).
 ## The writers (F-513-b)
 
 `sales-counts.ts`. Every move is one call of `catalog.move_variant_sales`
-(migrations `20261018000600`, `…0700`), a SECURITY DEFINER function: a
+(migrations `20261018000600`, `…0700`, `…0900`), a SECURITY DEFINER function: a
 reseller's users buy the platform's variants, and `tenant_isolation`'s
 WITH CHECK refuses a reseller's transaction writing a platform row (proved on
 dev, 2026-10-18). It writes the two counts only, of a variant the bound tenant
@@ -89,9 +90,10 @@ sale) move nothing at issue. A give-back past zero is the CHECK's error, a bug,
 never floored. Counts move for an uncapped variant too, so a cap set later
 starts from what was sold since F-513-b.
 
-**The event (C-14).** A move of a **capped** variant writes one
+**The event (C-14).** A move of a variant with **either cap** writes one
 `catalog.variant.sales_changed` `{catalogId, tenantId, variantId}` (`aggregate:
 'catalog.variant'`) on its owner's catalog channel (realtime RT-1-p):
 `catalog:platform` for a platform variant, which every reseller's shop hears,
 else `catalog:<ownerTenantId>`. One row however many resellers sell it. An
-uncapped move writes none: no page shows it as left.
+uncapped move writes none: no page shows it as left. A hold takes an active
+cap's slot as it takes a sales cap's unit, so both announce it (F-514-b).

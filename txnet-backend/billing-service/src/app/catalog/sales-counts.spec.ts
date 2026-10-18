@@ -11,7 +11,9 @@
  *  - a page left stale: a capped variant's move writes one event on its
  *    owner's catalog channel — `platform` for the platform's, which every
  *    reseller's shop hears, however many there are (RT-1-p);
- *  - a socket push on every sale of an uncapped variant, which shows nothing.
+ *  - a socket push on every sale of an uncapped variant, which shows nothing;
+ *  - a hold on a variant capped only by its live services left unannounced:
+ *    the hold takes a slot there too (F-514-b), so the shop's `remaining` moved.
  */
 import { GrantSource } from '@prisma/client';
 import { OutboxEventType, PLATFORM_CATALOG_ID, runWithTenant } from '@txnet-backend/shared-core';
@@ -23,7 +25,14 @@ const RESELLER = '11111111-1111-4111-8111-111111111111';
 const PLATFORM = '22222222-2222-4222-8222-222222222222';
 const VARIANT = '55555555-5555-4555-8555-555555555555';
 
-type Row = { outcome: string; tenantId: string | null; salesCap: number | null; soldCount: number | null; reservedCount: number | null };
+type Row = {
+  outcome: string;
+  tenantId: string | null;
+  salesCap: number | null;
+  activeCap: number | null;
+  soldCount: number | null;
+  reservedCount: number | null;
+};
 
 function fakeTx(row: Row) {
   const sql: Array<{ text: string; values: unknown[] }> = [];
@@ -39,11 +48,11 @@ function fakeTx(row: Row) {
 }
 
 const asTenant = <T>(fn: () => Promise<T>, id = RESELLER) => runWithTenant({ id }, fn);
-const moved = (o: Partial<Row> = {}): Row => ({ outcome: 'moved', tenantId: RESELLER, salesCap: 10, soldCount: 3, reservedCount: 1, ...o });
+const moved = (o: Partial<Row> = {}): Row => ({ outcome: 'moved', tenantId: RESELLER, salesCap: 10, activeCap: null, soldCount: 3, reservedCount: 1, ...o });
 
 describe('moveSales (F-513-b)', () => {
   it('a hold takes a unit and is refused when none is left', async () => {
-    const { tx, sql } = fakeTx({ outcome: 'sold_out', tenantId: RESELLER, salesCap: 2, soldCount: 1, reservedCount: 1 });
+    const { tx, sql } = fakeTx({ outcome: 'sold_out', tenantId: RESELLER, salesCap: 2, activeCap: null, soldCount: 1, reservedCount: 1 });
     await expect(asTenant(() => moveSales(tx as never, VARIANT, 'reserve'))).rejects.toBeInstanceOf(VariantSoldOut);
     // sold 0, held +1, refused when full
     expect(sql[0].values).toEqual([VARIANT, 0, 1, true]);
@@ -83,6 +92,18 @@ describe('moveSales (F-513-b)', () => {
     expect(eventsOf(tx)).toEqual([sales(RESELLER, RESELLER)]);
   });
 
+  it('a variant capped only by its live services announces the hold: it took a slot (F-514-b)', async () => {
+    const { tx } = fakeTx(moved({ salesCap: null, activeCap: 3 }));
+    await asTenant(() => moveSales(tx as never, VARIANT, 'reserve'));
+    expect(eventsOf(tx)).toEqual([sales(RESELLER, RESELLER)]);
+  });
+
+  it('a full active cap refuses the hold as a full sales cap does (F-514-b)', async () => {
+    const { tx } = fakeTx({ outcome: 'sold_out', tenantId: RESELLER, salesCap: null, activeCap: 1, soldCount: 4, reservedCount: 0 });
+    await expect(asTenant(() => moveSales(tx as never, VARIANT, 'reserve'))).rejects.toBeInstanceOf(VariantSoldOut);
+    expect(tx.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
   it('a variant with no cap moves its counts and pushes nothing — no page shows them as left', async () => {
     const { tx } = fakeTx(moved({ salesCap: null }));
     await asTenant(() => moveSales(tx as never, VARIANT, 'reserve'));
@@ -90,7 +111,7 @@ describe('moveSales (F-513-b)', () => {
   });
 
   it('a variant the tenant cannot see is a bug in the caller, never a silent no-op', async () => {
-    const { tx } = fakeTx({ outcome: 'not_found', tenantId: null, salesCap: null, soldCount: null, reservedCount: null });
+    const { tx } = fakeTx({ outcome: 'not_found', tenantId: null, salesCap: null, activeCap: null, soldCount: null, reservedCount: null });
     await expect(asTenant(() => moveSales(tx as never, VARIANT, 'release'))).rejects.toThrow(/not_found/);
   });
 });
@@ -108,7 +129,7 @@ describe('how each source meets the cap (user, 2026-10-18)', () => {
   });
 
   it('countSaleOf moves a free path’s unit, and a sold-out one refuses the issue', async () => {
-    const { tx, sql } = fakeTx({ outcome: 'sold_out', tenantId: RESELLER, salesCap: 1, soldCount: 1, reservedCount: 0 });
+    const { tx, sql } = fakeTx({ outcome: 'sold_out', tenantId: RESELLER, salesCap: 1, activeCap: null, soldCount: 1, reservedCount: 0 });
     await expect(asTenant(() => countSaleOf(tx as never, VARIANT, GrantSource.coupon))).rejects.toBeInstanceOf(VariantSoldOut);
     expect(sql[0].values).toEqual([VARIANT, 1, 0, true]);
   });

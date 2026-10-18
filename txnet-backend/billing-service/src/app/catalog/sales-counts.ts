@@ -43,10 +43,12 @@ const SALES_MOVES = {
 
 export type SalesMove = keyof typeof SALES_MOVES;
 
-type MoveRow = { outcome: string; tenantId: string | null; salesCap: number | null };
+type MoveRow = { outcome: string; tenantId: string | null; salesCap: number | null; activeCap: number | null };
 
 /**
- * Moves the variant's counts by one, or throws {@link VariantSoldOut}. A
+ * Moves the variant's counts by one, or throws {@link VariantSoldOut} — when
+ * the move takes a unit and either cap is full: the sales cap, or the active
+ * cap's live Grants plus holds (F-514-b), counted under the same row lock. A
  * capped variant's move is announced once, on its owner's catalog channel
  * (C-14, RT-1-p): `catalog:platform` for the platform's, which every shop
  * hears however many resellers sell it, else `catalog:<ownerTenantId>`.
@@ -54,12 +56,13 @@ type MoveRow = { outcome: string; tenantId: string | null; salesCap: number | nu
 export async function moveSales(tx: Prisma.TransactionClient, variantId: string, move: SalesMove): Promise<void> {
   const m = SALES_MOVES[move];
   const [row] = await tx.$queryRaw<MoveRow[]>`
-    SELECT outcome, "tenantId", "salesCap"
+    SELECT outcome, "tenantId", "salesCap", "activeCap"
       FROM catalog.move_variant_sales(${variantId}::uuid, ${m.sold}::integer, ${m.reserved}::integer, ${m.refusesWhenFull}::boolean)`;
   if (row.outcome === 'sold_out') throw new VariantSoldOut(variantId);
   if (row.outcome !== 'moved') throw new Error(`move_variant_sales(${variantId}, ${move}) answered ${row.outcome}`);
-  // An uncapped variant shows nothing as left, so no open page needs the move.
-  if (row.salesCap === null || row.tenantId === null) return;
+  // An uncapped variant shows nothing as left, so no open page needs the move;
+  // a hold takes a slot of the active cap as it takes a unit of the sales cap.
+  if ((row.salesCap === null && row.activeCap === null) || row.tenantId === null) return;
   const catalogId = row.tenantId === (await platformTenantIdOf(tx)) ? PLATFORM_CATALOG_ID : row.tenantId;
   await tx.outboxEvent.create({
     data: {
