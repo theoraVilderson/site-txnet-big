@@ -28,7 +28,7 @@ export function CouponWizard({ me, onClose, onSaved }: { me: Me | null; onClose:
   const currency = useCouponCurrency(me, couponTenant({ form, me, coupon: null }));
 
   const check = (step: CouponStep) => {
-    const found = stepErrors(step, validateCouponForm(form, me, null));
+    const found = stepErrors(step, validateCouponForm(form, me, { currency }));
     setErrors(found);
     return Object.keys(found).length === 0;
   };
@@ -37,7 +37,7 @@ export function CouponWizard({ me, onClose, onSaved }: { me: Me | null; onClose:
   const goTo = (s: CouponStep) => wizard.goTo(COUPON_STEPS.indexOf(s));
 
   const submit = async () => {
-    const found = validateCouponForm(form, me, null);
+    const found = validateCouponForm(form, me, { currency });
     const bad = firstStepWithError(found);
     if (bad) {
       goTo(bad);

@@ -35,11 +35,11 @@ describe("the coupon steps", () => {
   });
 
   it("stop a step only on its own errors", () => {
-    const all = validateCouponForm(form({ activeHourFrom: "22" }), null, null);
+    const all = validateCouponForm(form({ activeHourFrom: "22" }), null);
     expect(Object.keys(stepErrors("basics", all)).sort()).toEqual(["code", "discountValue"]);
     expect(Object.keys(stepErrors("limits", all))).toEqual([]);
     expect(Object.keys(stepErrors("schedule", all))).toEqual(["activeHourTo"]);
-    expect(firstStepWithError(validateCouponForm(form({ code: "SPRING", discountValue: "10", activeHourFrom: "22" }), null, null))).toBe("schedule");
+    expect(firstStepWithError(validateCouponForm(form({ code: "SPRING", discountValue: "10", activeHourFrom: "22" }), null))).toBe("schedule");
   });
 
   it("send a refusal back to the step that holds its field", () => {

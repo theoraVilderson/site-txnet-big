@@ -1,7 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { Me } from "@/lib/auth-api";
 import { PLATFORM_DEFAULT_TIMEZONE } from "@/lib/time-zone";
-import { PLATFORM_UTC_OFFSET, dayIn, platformDayStart } from "../../_lib/datetime";
+import { dayIn, platformDayStart } from "../../_lib/datetime";
 import type {
   AdminCoupon,
   CouponChannel,
@@ -9,13 +9,10 @@ import type {
   CouponRejection,
   CouponStatus,
   CreateCouponBody,
-  RedemptionStatus,
   UpdateCouponBody,
-  UsageQuery,
 } from "@/lib/billing-api";
-import { REDEMPTION_STATUSES } from "@/lib/billing-api";
 import { isPlatformTenant } from "@/lib/tenant-type";
-import { amountPattern, MONEY_PATTERN } from "../../_lib/money";
+import { amountPattern, currencyDecimals, MONEY_PATTERN } from "../../_lib/money";
 
 /** Every string the coupons page can show (C-06). */
 export const COUPON_KEYS = FrontendI18nKeys.common.coupons;
@@ -173,40 +170,6 @@ export function dayToInstant(day: string, edge: "start" | "end"): string {
   return platformDayStart(next.toISOString().slice(0, 10));
 }
 
-/** The usage report's status filter offers billing's redemption statuses (F-502-i). */
-export const USAGE_STATUSES = REDEMPTION_STATUSES;
-
-/** The usage report's filters as picked: `""` is no filter; days are Tehran's `YYYY-MM-DD`. */
-export interface UsageFilter {
-  status: RedemptionStatus | "";
-  from: string;
-  to: string;
-}
-
-export const emptyUsageFilter = (): UsageFilter => ({ status: "", from: "", to: "" });
-
-const USAGE_PAGE_SIZE = 20;
-
-/**
- * The report's query. Billing reads `from` as `gte` and `to` as `lte`, so the
- * "to" day ends on its own last instant — the next midnight would count a
- * redemption made at exactly 00:00 of the day after.
- */
-export function usageQuery(f: UsageFilter, page: number): UsageQuery {
-  return {
-    ...(f.status ? { status: f.status } : {}),
-    ...(f.from ? { from: dayToInstant(f.from, "start") } : {}),
-    ...(f.to ? { to: `${f.to}T23:59:59.999${PLATFORM_UTC_OFFSET}` } : {}),
-    page,
-    pageSize: USAGE_PAGE_SIZE,
-  };
-}
-
-/** The sentence key when the range ends before it starts; one day (from = to) is a range. */
-export function validateUsageFilter(f: UsageFilter): string | null {
-  return f.from && f.to && f.from > f.to ? COUPON_KEYS.usage.filters.badRange : null;
-}
-
 /** The day a stored instant shows as — the reverse of {@link dayToInstant}. */
 export function instantToDay(instant: string | null, edge: "start" | "end"): string {
   if (!instant) return "";
@@ -249,7 +212,7 @@ export function formFromCoupon(c: AdminCoupon): CouponForm {
 }
 
 const CODE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
-/** A percentage at two places; money is any amount a column holds — billing refuses one finer than its currency (F-116-s). */
+/** A percentage at two places; money at its currency's places once billing has named it, else any amount a column holds (F-116-s, F-116-h11). */
 const PERCENT = amountPattern(2);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INT = /^\d{1,7}$/;
@@ -257,13 +220,20 @@ const INT = /^\d{1,7}$/;
 const ids = (text: string) => [...new Set(text.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
 const blank = (v: string) => v.trim() === "";
 
+/** What a check knows beyond the form: the coupon being edited, and the currency its money is in. */
+export interface CouponCheck {
+  original?: AdminCoupon | null;
+  currency?: string | null;
+}
+
 /**
  * `CouponAdminService`'s rules on one value, mirrored so a refusal is caught
  * before the call. Billing still decides; what cannot be known here (a taken
  * code, a user in another tenant) comes back as its refusal sentence.
  */
-export function validateCouponForm(f: CouponForm, me: Me | null, original: AdminCoupon | null): CouponFormErrors {
+export function validateCouponForm(f: CouponForm, me: Me | null, { original = null, currency = null }: CouponCheck = {}): CouponFormErrors {
   const errors: CouponFormErrors = {};
+  const MONEY = currency ? amountPattern(currencyDecimals(currency)) : MONEY_PATTERN;
   const put = (k: keyof CouponForm, key: string) => {
     errors[k] ??= key;
   };
@@ -285,12 +255,12 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
     for (const k of ["productIds", "variantIds"] as const) if (ids(f[k]).length > 0) put(k, E.notForFreeService);
   } else {
     const value = f.discountValue.trim();
-    if (!(f.discountType === "percentage" ? PERCENT : MONEY_PATTERN).test(value) || Number(value) <= 0) put("discountValue", E.decimal);
+    if (!(f.discountType === "percentage" ? PERCENT : MONEY).test(value) || Number(value) <= 0) put("discountValue", E.decimal);
     else if (f.discountType === "percentage" && Number(value) > 100) put("discountValue", E.percentMax);
   }
 
   for (const k of ["maxDiscountCap", "minPurchaseAmount", "maxPurchaseAmount"] as const) {
-    if (!blank(f[k]) && !MONEY_PATTERN.test(f[k].trim())) put(k, E.decimal);
+    if (!blank(f[k]) && !MONEY.test(f[k].trim())) put(k, E.decimal);
   }
   if (!blank(f.maxDiscountCap) && f.discountType !== "percentage") put("maxDiscountCap", E.capPercentOnly);
   if (!blank(f.maxDiscountCap) && Number(f.maxDiscountCap) <= 0) put("maxDiscountCap", E.decimal);

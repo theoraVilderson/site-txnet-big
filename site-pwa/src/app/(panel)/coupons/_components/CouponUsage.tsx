@@ -11,15 +11,8 @@ import { Pagination } from "../../_components/kit/Pagination";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
-import {
-  COUPON_KEYS as K,
-  USAGE_STATUSES,
-  emptyUsageFilter,
-  refusalKey,
-  usageQuery,
-  validateUsageFilter,
-  type UsageFilter,
-} from "../_lib/coupon-form";
+import { COUPON_KEYS as K, refusalKey } from "../_lib/coupon-form";
+import { USAGE_STATUSES, emptyUsageFilter, usageQuery, validateUsageFilter, type UsageFilter } from "../_lib/coupon-usage";
 import { Button, Dialog } from "../../_components/kit";
 
 const U = K.usage;

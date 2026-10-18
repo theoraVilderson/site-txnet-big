@@ -148,15 +148,17 @@ The routes, the scope and every rule are
     which the tenant operating-currency route does not admit. An edit uses
     its row's `currencyCode`. Named: a gift value and the review's total, a
     coupon's fixed value, cap and purchase bounds and its review, a rule's
-    value. Nothing is named until billing answers; a gift value is then held
-    to that currency's places (`validateGiftBatch`).
+    value. Nothing is named until billing answers; then a gift value
+    (`validateGiftBatch`) and a coupon's fixed value, cap and purchase bounds
+    (`validateCouponForm`'s `{ currency }`; an edit's is the coupon's) are held
+    to that currency's places, a percentage to its two.
 
 ## Proof
 
 `coupons/coupons.test.ts` — refusal and status unions against the service
 source, `validateCouponForm` per rule, `createBody` (reseller vs owner, days,
 limits), `updateBody` (only changes, null clears), the Tehran day round trip,
-the menu permission, the usage filter (`usageQuery`, `validateUsageFilter`,
+the menu permission, money at the currency's places, the usage filter (`_lib/coupon-usage.ts`: `usageQuery`, `validateUsageFilter`,
 statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,

@@ -10,19 +10,16 @@ import {
   COUPON_MANAGE,
   REFUSAL_KEYS,
   STATUS_TONES,
-  USAGE_STATUSES,
   createBody,
   dayToInstant,
   emptyCouponForm,
-  emptyUsageFilter,
   formFromCoupon,
   instantToDay,
   isFrozen,
   updateBody,
-  usageQuery,
   validateCouponForm,
-  validateUsageFilter,
 } from "./_lib/coupon-form";
+import { USAGE_STATUSES, emptyUsageFilter, usageQuery, validateUsageFilter } from "./_lib/coupon-usage";
 import { variantChoices, variantOwnerTenant } from "./_lib/variant-choices";
 import type { CatalogProductDetail, CatalogVariant } from "@/lib/catalog-api";
 
@@ -116,7 +113,7 @@ describe("validateCouponForm", () => {
   const valid = () => ({ ...emptyCouponForm(), code: "yalda", discountValue: "15" });
 
   it("accepts a plain percentage coupon", () => {
-    expect(validateCouponForm(valid(), RESELLER, null)).toEqual({});
+    expect(validateCouponForm(valid(), RESELLER)).toEqual({});
   });
 
   it.each([
@@ -133,17 +130,17 @@ describe("validateCouponForm", () => {
     [{ visibility: "targeted" as const, allowedUserIds: "not-a-uuid" }, "allowedUserIds", COUPON_KEYS.errors.uuid],
     [{ perUserUsageLimit: "1.5" }, "perUserUsageLimit", COUPON_KEYS.errors.integer],
   ])("refuses %o on %s", (patch, field, key) => {
-    expect(validateCouponForm({ ...valid(), ...patch }, RESELLER, null)).toMatchObject({ [field]: key });
+    expect(validateCouponForm({ ...valid(), ...patch }, RESELLER)).toMatchObject({ [field]: key });
   });
 
   it("asks the platform owner for a tenant id when the coupon is another tenant's", () => {
-    expect(validateCouponForm({ ...valid(), owner: "tenant", tenantId: "" }, OWNER, null)).toMatchObject({ tenantId: COUPON_KEYS.errors.uuid });
+    expect(validateCouponForm({ ...valid(), owner: "tenant", tenantId: "" }, OWNER)).toMatchObject({ tenantId: COUPON_KEYS.errors.uuid });
   });
 
   it("never lets an edit drop capacity below used + reserved", () => {
     const form = { ...formFromCoupon(COUPON), totalUsageLimit: "4" };
-    expect(validateCouponForm(form, RESELLER, COUPON)).toMatchObject({ totalUsageLimit: COUPON_KEYS.errors.capacityBelowUsed });
-    expect(validateCouponForm({ ...form, totalUsageLimit: "5" }, RESELLER, COUPON)).toEqual({});
+    expect(validateCouponForm(form, RESELLER, { original: COUPON })).toMatchObject({ totalUsageLimit: COUPON_KEYS.errors.capacityBelowUsed });
+    expect(validateCouponForm({ ...form, totalUsageLimit: "5" }, RESELLER, { original: COUPON })).toEqual({});
   });
 });
 
@@ -251,9 +248,9 @@ describe("a free-service coupon", () => {
   const free = () => ({ ...emptyCouponForm(), code: "freevpn", discountType: "free_grant" as const, discountValue: "", grantVariantId: UUID });
 
   it("needs a variant and no value", () => {
-    expect(validateCouponForm(free(), RESELLER, null)).toEqual({});
-    expect(validateCouponForm({ ...free(), grantVariantId: "" }, RESELLER, null)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
-    expect(validateCouponForm({ ...free(), grantVariantId: "nope" }, RESELLER, null)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
+    expect(validateCouponForm(free(), RESELLER)).toEqual({});
+    expect(validateCouponForm({ ...free(), grantVariantId: "" }, RESELLER)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
+    expect(validateCouponForm({ ...free(), grantVariantId: "nope" }, RESELLER)).toMatchObject({ grantVariantId: COUPON_KEYS.errors.uuid });
   });
 
   it.each([
@@ -268,7 +265,7 @@ describe("a free-service coupon", () => {
     [{ productIds: UUID }, "productIds"],
     [{ variantIds: UUID }, "variantIds"],
   ])("refuses %o on %s, as billing does", (patch, field) => {
-    expect(validateCouponForm({ ...free(), ...patch }, RESELLER, null)).toMatchObject({ [field]: COUPON_KEYS.errors.notForFreeService });
+    expect(validateCouponForm({ ...free(), ...patch }, RESELLER)).toMatchObject({ [field]: COUPON_KEYS.errors.notForFreeService });
   });
 
   it("sends the variant with a value of 0 and no cap", () => {
@@ -370,5 +367,26 @@ describe("every key this page can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(COUPON_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+/** Money at its currency's places, once billing has named the currency (F-116-h11). */
+describe("validateCouponForm in a currency", () => {
+  const fixed = { ...emptyCouponForm(), code: "SPRING", discountType: "fixed_amount" as const, discountValue: "5.5" };
+
+  it("refuses a fixed value or a purchase bound finer than the currency", () => {
+    expect(validateCouponForm(fixed, RESELLER, { currency: "IRR" })).toMatchObject({ discountValue: COUPON_KEYS.errors.decimal });
+    expect(validateCouponForm({ ...fixed, discountValue: "5", minPurchaseAmount: "10.5" }, RESELLER, { currency: "IRR" })).toMatchObject({ minPurchaseAmount: COUPON_KEYS.errors.decimal });
+    expect(validateCouponForm(fixed, RESELLER, { currency: "USD" })).toEqual({});
+  });
+
+  it("keeps a percentage at two places whatever the currency, and its cap in the currency", () => {
+    const percent = { ...fixed, discountType: "percentage" as const, discountValue: "12.5" };
+    expect(validateCouponForm(percent, RESELLER, { currency: "IRR" })).toEqual({});
+    expect(validateCouponForm({ ...percent, maxDiscountCap: "1.5" }, RESELLER, { currency: "IRR" })).toMatchObject({ maxDiscountCap: COUPON_KEYS.errors.decimal });
+  });
+
+  it("takes any amount a column holds until the currency is known", () => {
+    expect(validateCouponForm({ ...fixed, discountValue: "5.5555" }, RESELLER)).toEqual({});
   });
 });

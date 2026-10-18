@@ -33,7 +33,7 @@ export function CouponForm({ me, coupon, onClose, onSaved }: { me: Me | null; co
   };
 
   const submit = async () => {
-    const found = validateCouponForm(form, me, coupon);
+    const found = validateCouponForm(form, me, { original: coupon, currency: coupon.currencyCode });
     setErrors(found);
     if (Object.keys(found).length > 0) return;
     await save(async () => {
