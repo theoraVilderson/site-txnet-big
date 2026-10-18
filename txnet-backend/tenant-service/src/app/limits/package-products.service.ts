@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
-import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
+import { lockProductQuotaTerms, overageTermsOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { firstNotPlatformProduct, productQuotaColumns } from './package-terms';
+import { firstNotPlatformProduct, platformMoney, productQuotaColumns } from './package-terms';
 import type { SetPackageProductInput } from './reseller-limits.schema';
 import { ResellerLimitsRefused, type OverageView, type ResellerLimitsActor } from './reseller-limits.service';
 import { overageView } from './reseller-overage-view';
@@ -62,7 +62,7 @@ export class PackageProductsService {
     await this.all.$transaction(async (tx) => {
       await this.packageExists(tx, packageId);
       if (await firstNotPlatformProduct(tx, await platformTenantIdOf(tx), [productId])) throw new ResellerLimitsRefused('product_not_found', productId);
-      const terms = await productQuotaColumns(input, () => platformCurrencyOf(tx));
+      const terms = await productQuotaColumns(input, (price) => platformMoney(tx, price));
       const where = { packageId_productId: { packageId, productId } };
       const before = await tx.packageProduct.findUnique({ where, select: QUOTA_SELECT });
       if (before && sameTerms(before, terms)) return;

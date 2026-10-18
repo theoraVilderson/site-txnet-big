@@ -24,11 +24,10 @@ import {
   type QuotaMeterStatement,
   isPlatformTenant,
   moneyText,
-  inCurrency,
 } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
-import { limitKeyOf, limitWithin, overageColumns, quotaKeyOf } from './package-terms';
+import { limitKeyOf, limitWithin, overageColumns, platformMoney, quotaKeyOf } from './package-terms';
 import { held, overageView, viewOf } from './reseller-overage-view';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -94,10 +93,6 @@ type Held = number | null | 'unset';
 
 /** What an overage audit row says a level held. */
 export type HeldOverage = OverageView | 'unset';
-
-/** The platform's currency, once `amount` is at its places: the reseller's billing ledger never rounds (F-116-r, contract.reseller-quota rule 8). */
-const platformMoney = async (tx: Prisma.TransactionClient, amount: Prisma.Decimal) =>
-  inCurrency(tx, await platformCurrencyOf(tx), { amount }, () => new ResellerLimitsRefused('amount_finer_than_currency', amount.toFixed()));
 
 const OVERAGE_SELECT = { mode: true, unitPrice: true, currencyCode: true } as const;
 

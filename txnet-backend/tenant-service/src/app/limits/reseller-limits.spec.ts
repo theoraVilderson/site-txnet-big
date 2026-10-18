@@ -425,7 +425,7 @@ describe('PackageProductsService — the platform products a package sells (F-01
   const PLATFORM_PRODUCT = '66666666-6666-4666-8666-666666666666';
   const OWN_PRODUCT = '77777777-7777-4777-8777-777777777777';
 
-  function products(callerType = 'platform_owner') {
+  function products(callerType = 'platform_owner', platformCurrency = 'USD') {
     const listed = new Map<string, Record<string, unknown>>();
     const audit: Array<Record<string, unknown>> = [];
     const order: string[] = [];
@@ -447,7 +447,7 @@ describe('PackageProductsService — the platform products a package sells (F-01
       },
       // lockProductQuotaTerms: the package's subscribers, read before the write.
       tenantSubscription: { findMany: async () => (order.push('lock'), []) },
-      tenant: { findFirst: async () => ({ id: OWNER_TENANT, operatingCurrencyCode: 'USD' }) },
+      tenant: { findFirst: async () => ({ id: OWNER_TENANT, operatingCurrencyCode: platformCurrency }) },
       adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => audit.push(data) },
     };
     const all = { ...tx, $transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) };
@@ -497,6 +497,13 @@ describe('PackageProductsService — the platform products a package sells (F-01
     expect(order).toEqual(['write', 'lock', 'write']);
     expect(listed.get(PLATFORM_PRODUCT)).toMatchObject({ dayIncluded: 5, weekIncluded: null, monthIncluded: null, mode: 'overage', currencyCode: 'USD' });
     expect(String(listed.get(PLATFORM_PRODUCT)?.unitPrice)).toBe('2');
+  });
+
+  it("refuses an overage price finer than the platform currency's places, as a quota's (F-019-v6-a, F-116-r)", async () => {
+    const { service, listed } = products('platform_owner', 'IRT');
+    await expect(service.set(actor, PKG, PLATFORM_PRODUCT, { overage: { mode: 'overage', unitPrice: '1.25' } })).rejects.toMatchObject({ reason: 'amount_finer_than_currency' });
+    await service.set(actor, PKG, PLATFORM_PRODUCT, { overage: { mode: 'overage', unitPrice: '1250' } });
+    expect(listed.get(PLATFORM_PRODUCT)).toMatchObject({ mode: 'overage', currencyCode: 'IRT' });
   });
 
   it('takes the whole terms in one strict body', () => {

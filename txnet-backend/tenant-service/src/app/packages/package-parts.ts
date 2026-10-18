@@ -3,7 +3,7 @@ import { inCurrency, platformTenantIdOf } from '@txnet-backend/shared-core';
 
 import { firstNotPlatformProduct, limitWithin, overageColumns, productQuotaColumns, quotaKeyOf } from '../limits/package-terms';
 import { ResellerLimitsRefused } from '../limits/reseller-limits.service';
-import type { CreatePackageInput, PackageOverageInput, PackageProductInput } from './tenant-package.schema';
+import type { CreatePackageInput, PackageProductInput } from './tenant-package.schema';
 import { TenantPackageRefused } from './tenant-package.service';
 
 /**
@@ -57,7 +57,7 @@ export async function writePackageParts(
   const limits = input.limits ?? [];
   const overages = input.quotaOverages ?? [];
   const products = input.products ?? [];
-  await overagePricesFit(tx, pkg.currencyCode, overages);
+  await overagePricesFit(tx, pkg.currencyCode, input);
   await platformProductsOnly(tx, products);
   // Every price is the platform's currency, which the package is priced in too (ADR-0098 part 4).
   const inPackageCurrency = async () => pkg.currencyCode;
@@ -75,11 +75,14 @@ export async function writePackageParts(
   }
 }
 
-/** An overage price at most the currency's places, as `PUT …/overage` holds it (F-116-r) — all of them in one read. */
-async function overagePricesFit(tx: Prisma.TransactionClient, currencyCode: string, overages: PackageOverageInput[]): Promise<void> {
+/** Every overage price at most the currency's places, as `PUT …/overage` and `PUT …/products/:id` hold it (F-116-r, F-019-v6-a) — all of them in one read. */
+async function overagePricesFit(tx: Prisma.TransactionClient, currencyCode: string, input: CreatePackageInput): Promise<void> {
   const prices: Record<string, Prisma.Decimal> = {};
-  overages.forEach((o, i) => {
+  (input.quotaOverages ?? []).forEach((o, i) => {
     if (o.mode === 'overage') prices[`quotaOverages.${i}.unitPrice`] = new Prisma.Decimal(o.unitPrice);
+  });
+  (input.products ?? []).forEach((p, i) => {
+    if (p.overage?.mode === 'overage') prices[`products.${i}.overage.unitPrice`] = new Prisma.Decimal(p.overage.unitPrice);
   });
   if (Object.keys(prices).length === 0) return;
   await inCurrency(tx, currencyCode, prices, (field) => new TenantPackageRefused('amount_finer_than_currency', currencyCode, field));

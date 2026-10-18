@@ -1,5 +1,5 @@
 import { Prisma, QuotaOverageMode } from '@prisma/client';
-import { isResellerLimitKey, isResellerQuotaKey, RESELLER_LIMITS, type ResellerLimitKey, type ResellerQuotaKey } from '@txnet-backend/shared-core';
+import { inCurrency, isResellerLimitKey, isResellerQuotaKey, platformCurrencyOf, RESELLER_LIMITS, type ResellerLimitKey, type ResellerQuotaKey } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput, SetPackageProductInput } from './reseller-limits.schema';
 import { ResellerLimitsRefused } from './reseller-limits.service';
@@ -31,10 +31,15 @@ export function quotaKeyOf(key: string): ResellerQuotaKey {
   return k;
 }
 
+/** The platform's currency, once `amount` is at its places: the reseller's billing ledger never rounds (F-116-r, contract.reseller-quota rule 8). */
+export async function platformMoney(tx: Prisma.TransactionClient, amount: Prisma.Decimal): Promise<string> {
+  return inCurrency(tx, await platformCurrencyOf(tx), { amount }, () => new ResellerLimitsRefused('amount_finer_than_currency', amount.toFixed()));
+}
+
 /**
  * The overage columns past a quota: `stop` has no price; an `overage` price is
- * in the currency `currencyFor` answers — the platform's, checked for places or
- * not as the caller's route always has (F-116-r).
+ * in the currency `currencyFor` answers — the platform's, at its places
+ * (`platformMoney`, F-116-r; a product's too since F-019-v6-a).
  */
 export async function overageColumns(input: SetOverageInput, currencyFor: (price: Prisma.Decimal) => Promise<string>) {
   if (input.mode === 'stop') return { mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null };

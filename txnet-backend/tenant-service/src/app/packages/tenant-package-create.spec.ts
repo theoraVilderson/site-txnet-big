@@ -32,7 +32,7 @@ describe('TenantPackageService — create, the whole package in one transaction'
   };
 
   /** A transaction whose writes land only when its callback resolves — as Postgres's do. */
-  const build = () => {
+  const build = (platformCurrency = 'USD') => {
     const committed: string[] = [];
     let staged: string[] = [];
     const write = (what: string) => staged.push(what);
@@ -40,7 +40,7 @@ describe('TenantPackageService — create, the whole package in one transaction'
       ...currencyRegistry,
       $queryRaw: vi.fn(async () => []),
       tenant: {
-        findFirst: vi.fn(async () => ({ id: OWNER_TENANT, operatingCurrencyCode: 'USD' })),
+        findFirst: vi.fn(async () => ({ id: OWNER_TENANT, operatingCurrencyCode: platformCurrency })),
       },
       tenantFeaturePackage: {
         create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -108,6 +108,13 @@ describe('TenantPackageService — create, the whole package in one transaction'
   ])('refuses %s, names the field, and writes nothing — not even the package', async (_, part, reason, field) => {
     const { service, committed } = build();
     await expect(service.create(actor, { ...whole, ...part } as CreatePackageInput)).rejects.toMatchObject({ reason, field });
+    expect(committed).toEqual([]);
+  });
+
+  it("refuses a product's overage price finer than the platform currency's places, naming it (F-019-v6-a)", async () => {
+    const { service, committed } = build('IRT');
+    const finer = { ...whole, quotaOverages: [], products: [{ productId: PLATFORM_PRODUCT, overage: { mode: 'overage' as const, unitPrice: '1.25' } }] };
+    await expect(service.create(actor, finer)).rejects.toMatchObject({ reason: 'amount_finer_than_currency', field: 'products.0.overage.unitPrice' });
     expect(committed).toEqual([]);
   });
 
