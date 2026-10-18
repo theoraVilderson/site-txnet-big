@@ -65,6 +65,10 @@ function fakeTx(opts: { status?: GrantStatus; billingMode?: VariantBillingMode; 
   };
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'EUR' }), findFirst: async () => ({ operatingCurrencyCode: 'EUR' }) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === GRANT ? { ...grant } : null),

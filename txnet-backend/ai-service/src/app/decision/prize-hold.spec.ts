@@ -128,7 +128,7 @@ const renewal = (value: number): DecisionPrediction => ({
   reasons: [{ code: 'rule_defaults', base: 0.5, grantId: GRANT }],
 });
 
-const OFFER: OfferOption = { id: 'off-1', variantId: null, template: null, maxDiscountPercent: new Prisma.Decimal(10), currencyCode: IRR };
+const OFFER: OfferOption = { id: 'off-1', variantId: null, template: null, maxDiscountPercent: new Prisma.Decimal(10), currencyCode: IRR, places: 0 };
 
 function inputs(over: Partial<CandidateInputs> = {}): CandidateInputs {
   return {

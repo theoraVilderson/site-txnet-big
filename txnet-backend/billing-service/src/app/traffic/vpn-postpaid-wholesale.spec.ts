@@ -91,6 +91,10 @@ function world(w: World = {}) {
   const resellerLedger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // No planner close (F-027-ec).
     leaseClose: { findUnique: async () => null },
     tenant: { findFirst: async () => ({ id: 'platform' }), findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },

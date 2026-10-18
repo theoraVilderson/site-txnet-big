@@ -54,7 +54,9 @@ describe('TenantSubscriptionService', () => {
             : { ...create, createdAt: new Date() };
         }),
       },
-      tenant: { findUnique: vi.fn(async () => reseller), update: vi.fn(async () => (writes.push('tenant'), {})) },
+      tenant: { findUnique: vi.fn(async () => reseller), findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })), update: vi.fn(async () => (writes.push('tenant'), {})) },
+      // The platform's currency in the registry: a package price is rounded to its places (ADR-0153).
+      currency: { findUnique: vi.fn(async () => ({ decimalPlaces: 2 })) },
       tenantFeatureEntitlement: {
         deleteMany: vi.fn(async () => (writes.push('entitlements.delete'), { count: 1 })),
         createMany: vi.fn(async () => (writes.push('entitlements.create'), { count: 2 })),

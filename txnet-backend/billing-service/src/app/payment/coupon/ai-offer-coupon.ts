@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma } from '@prisma/client';
-import { quotaPeriodAt, resolveTimeZone, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, quotaPeriodAt, resolveTimeZone, roundCredit, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { sellableOfferById } from '../../catalog/catalog-reads';
@@ -68,14 +68,18 @@ export type AiOfferCouponAnswer =
 type TemplateTerms = { discountType: string; discountValue: Prisma.Decimal; maxDiscountCap: Prisma.Decimal | null };
 export type PersonalTerms = { discountType: DiscountType; discountValue: string; maxDiscountCap: string | null; charge: string };
 
-const down = (d: Prisma.Decimal) => d.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
-
 /**
  * The cloned coupon's discount on `price` and what it charges the budget —
- * never more than either the offer's cap or the template's own. Null for a
- * template that is no discount, or a discount of nothing.
+ * never more than either the offer's cap or the template's own, rounded down
+ * to the price currency's `places` (ADR-0153). Null for a template that is no
+ * discount, or a discount of nothing.
  */
-export function personalCouponTerms(price: Prisma.Decimal, maxPercent: Prisma.Decimal, template: TemplateTerms | null): PersonalTerms | null {
+export function personalCouponTerms(
+  { amount: price, places }: { amount: Prisma.Decimal; places: number },
+  maxPercent: Prisma.Decimal,
+  template: TemplateTerms | null,
+): PersonalTerms | null {
+  const down = (d: Prisma.Decimal) => roundCredit(d, places);
   const capped = down(price.times(maxPercent).dividedBy(100));
   let terms: PersonalTerms;
   if (!template) {
@@ -155,7 +159,8 @@ export class AiOfferCouponService {
           const scoped = template.serviceScopes.length === 0 || template.serviceScopes.some((s) => s.variantId === plan.variantId || s.productId === plan.productId);
           if (!scoped) return { refused: 'offer_unavailable' };
         }
-        const terms = personalCouponTerms(price, new Prisma.Decimal(body.maxDiscountPercent), template);
+        const places = await currencyPlacesOf(tx, currencyCode);
+        const terms = personalCouponTerms({ amount: price, places }, new Prisma.Decimal(body.maxDiscountPercent), template);
         if (!terms) return { refused: 'offer_unavailable' };
 
         // One offer's budget at a time: the sum and the insert are one decision.

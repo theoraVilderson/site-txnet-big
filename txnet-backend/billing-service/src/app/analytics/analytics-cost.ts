@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { roundRate, splitWhole } from '@txnet-backend/shared-core';
 
 import { CostRow, costOn } from '../systems/panel-cost-on';
 import { Day, addDays } from './analytics-days';
@@ -30,7 +31,7 @@ export type CostDayRow = {
   bytes: bigint;
 };
 
-/** A cost is kept to six places, so a split rounds below a cent and a month's sum stays whole. */
+/** A cost is kept to six places — a unit-price scale, where precision lives (ADR-0153 point 5) — so a split rounds below a cent and a month's sum stays whole. */
 const COST_PLACES = 6;
 /** Panels are bought in dollars (network `contract.panel-cost.md` rule 5). */
 const PANEL_CURRENCY = 'USD';
@@ -42,18 +43,6 @@ const daysInMonthOf = (day: Day) => {
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 };
 
-/**
- * `whole` split by `weights`, each share rounded to six places and the
- * rounding remainder given to the largest share — so the shares always sum to
- * `whole` exactly.
- */
-function splitBy(whole: Prisma.Decimal, weights: readonly bigint[]): Prisma.Decimal[] {
-  const total = weights.reduce((a, b) => a + b, BigInt(0));
-  const shares = weights.map((w) => whole.mul(w.toString()).div(total.toString()).toDecimalPlaces(COST_PLACES, Prisma.Decimal.ROUND_DOWN));
-  const largest = weights.reduce((best, w, i) => (w > weights[best] ? i : best), 0);
-  shares[largest] = shares[largest].plus(whole.minus(shares.reduce((a, b) => a.plus(b), ZERO)));
-  return shares;
-}
 
 /** One panel's use on one day: the bytes a Grant of `servedTenantId` used on it. */
 export type PanelUse = { day: Day; panelId: string; servedTenantId: string; productId: string | null; userId: string | null; bytes: bigint };
@@ -72,13 +61,14 @@ export function attributePanelCosts<P extends CostRow & { panelId: string }>(day
     for (const day of days) {
       const price = costOn(own, day);
       if (!price) continue;
-      const daily = price.monthlyCostUsd.div(daysInMonthOf(day)).toDecimalPlaces(COST_PLACES);
+      const daily = roundRate(price.monthlyCostUsd.div(daysInMonthOf(day)), COST_PLACES);
       const used = use.filter((u) => u.panelId === panelId && u.day === day && u.bytes > BigInt(0));
       if (used.length === 0) {
         rows.push({ day, kind: 'idle', panelId, servedTenantId: null, productId: null, userId: null, currencyCode: PANEL_CURRENCY, cost: daily, bytes: BigInt(0) });
         continue;
       }
-      const shares = splitBy(daily, used.map((u) => u.bytes));
+      // Split at six places, the shares summing to the day exactly (ADR-0153 point 4).
+      const shares = splitWhole(daily, used.map((u) => u.bytes), COST_PLACES);
       used.forEach((u, i) =>
         rows.push({ day, kind: 'panel', panelId, servedTenantId: u.servedTenantId, productId: u.productId, userId: u.userId, currencyCode: PANEL_CURRENCY, cost: shares[i], bytes: u.bytes }),
       );
@@ -123,7 +113,7 @@ export function attributeWholesale(all: readonly ResellerCharge[], use: readonly
       rows.push({ ...row, productId: null, panelId: null, userId: null, cost: net, bytes: BigInt(0) });
       continue;
     }
-    const shares = splitBy(net, used.map((u) => u.bytes));
+    const shares = splitWhole(net, used.map((u) => u.bytes), COST_PLACES);
     used.forEach((u, i) => rows.push({ ...row, productId: u.productId, panelId: u.panelId, userId: u.userId, cost: shares[i], bytes: u.bytes }));
   }
   return rows;
@@ -144,7 +134,7 @@ export function spreadSubscriptions(charges: readonly ResellerCharge[], how: { p
     if (!end || end <= charge.day) return;
     const days: Day[] = [];
     for (let day = charge.day; day < end; day = addDays(day, 1)) days.push(day);
-    const daily = charge.amount.div(days.length).toDecimalPlaces(COST_PLACES);
+    const daily = roundRate(charge.amount.div(days.length), COST_PLACES);
     for (const day of days) {
       if (day < how.window.from || day > how.window.to) continue;
       rows.push({ day, kind: 'subscription', panelId: null, servedTenantId: null, productId: null, userId: null, currencyCode: charge.currencyCode, cost: daily, bytes: BigInt(0) });
@@ -161,7 +151,7 @@ function sumByCell(parts: readonly (CostOwner & { day: Day; kind: CostKind; curr
     const row = cells.get(key) ?? { day: p.day, kind: p.kind, panelId: p.panelId, servedTenantId: null, productId: p.productId, userId: p.userId, currencyCode: p.currencyCode, cost: ZERO, bytes: BigInt(0) };
     cells.set(key, { ...row, cost: row.cost.plus(p.cost) });
   }
-  return [...cells.values()].map((r) => ({ ...r, cost: r.cost.toDecimalPlaces(COST_PLACES) }));
+  return [...cells.values()].map((r) => ({ ...r, cost: roundRate(r.cost, COST_PLACES) }));
 }
 
 /** A sale or the refund that undoes it, priced at the variant's cost in effect when it was sold. */

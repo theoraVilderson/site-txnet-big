@@ -3,6 +3,7 @@ import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 import {
   applyCoupons,
   CouponFacts,
+  CouponOrder,
   CouponRequest,
   InvalidCouponInput,
   normalizeCouponCodes,
@@ -65,7 +66,8 @@ function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
   };
 }
 
-const topUp = (amount: string, codes: string[]): CouponRequest => ({
+const topUp = (amount: string, codes: string[]): CouponOrder => ({
+  places: 2,
   codes,
   amount: D(amount),
   currencyCode: 'USD',
@@ -200,7 +202,7 @@ describe('each gate refuses with its own reason', () => {
 
   it.each(cases)('%s', (_name, over, reason, target = { kind: 'wallet_top_up' }) => {
     const known = _name === 'unknown code' ? [] : [coupon('CODE', over)];
-    const r = applyCoupons({ codes: ['CODE'], amount: D('20.00'), currencyCode: 'USD', target }, known, NOW);
+    const r = applyCoupons({ codes: ['CODE'], amount: D('20.00'), currencyCode: 'USD', places: 2, target }, known, NOW);
 
     if (reason === null) {
       expect(r.rejected).toEqual([]);
@@ -214,7 +216,8 @@ describe('each gate refuses with its own reason', () => {
 });
 
 describe('ownership (F-502-b, ADR-0048)', () => {
-  const onGateway = (gatewaySource: 'platform' | 'tenant', codes = ['CODE']): CouponRequest => ({
+  const onGateway = (gatewaySource: 'platform' | 'tenant', codes = ['CODE']): CouponOrder => ({
+    places: 2,
     ...topUp('20.00', codes),
     gatewaySource,
   });

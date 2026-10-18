@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { DERIVED_CURRENCIES, FX_PIVOT_CURRENCY } from '@txnet-backend/shared-core';
+import { DERIVED_CURRENCIES, FX_PIVOT_CURRENCY, roundRate } from '@txnet-backend/shared-core';
 
 import type { CostDayRow } from './analytics-cost';
 import type { Day } from './analytics-days';
@@ -64,7 +64,7 @@ export function factorOf(rateOf: RateOf, from: string, to: string, day: Day): Pr
 export function convertCosts(rows: readonly CostDayRow[], to: string, rateOf: RateOf): ConvertedCost[] {
   return rows.map((row) => {
     const factor = factorOf(rateOf, row.currencyCode, to, row.day);
-    return { ...row, saleCurrencyCode: to, saleCost: factor ? row.cost.mul(factor).toDecimalPlaces(COST_PLACES) : null };
+    return { ...row, saleCurrencyCode: to, saleCost: factor ? roundRate(row.cost.mul(factor), COST_PLACES) : null };
   });
 }
 

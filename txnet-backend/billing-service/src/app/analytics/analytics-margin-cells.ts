@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { roundRatio } from '@txnet-backend/shared-core';
 
 import { Amounts, amountsOf, byCurrency } from './analytics-figures';
 
@@ -40,7 +41,7 @@ export function marginCellOf(id: string | null, net: readonly MoneyRow[], cost: 
     net: amountsOf(n, how.currencies),
     cost: amountsOf(k, how.currencies),
     margin: amountsOf(m, how.currencies),
-    marginRate: sold.isZero() ? null : own.div(sold).toDecimalPlaces(RATE_PLACES).toNumber(),
+    marginRate: sold.isZero() ? null : roundRatio(own.div(sold), RATE_PLACES).toNumber(),
     loss: own.lt(ZERO),
     noCost: net.length > 0 && cost.length === 0,
   };

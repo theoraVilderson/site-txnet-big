@@ -1,5 +1,5 @@
 import { Prisma, type AiActionType, type AiPredictionKind, type VariantBillingMode } from '@prisma/client';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, roundCredit, roundRatio } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 import type { ActionCandidate } from './action-log';
@@ -119,10 +119,10 @@ export type PlanOption = {
 };
 
 /**
- * A `retain_offer` offer the tenant runs (F-038-f2, ADR-0110), with its
- * template coupon's terms when it targets one. A variant offer discounts that
- * plan only; a template offer any plan — its service scope is billing's to
- * hold when it issues the coupon (F-038-f3).
+ * A `retain_offer` offer the tenant runs (F-038-f2, ADR-0110), with its template
+ * coupon's terms when it targets one. A variant offer discounts that plan only; a
+ * template offer any plan — its scope is billing's to hold (F-038-f3). `places`
+ * is `currencyCode`'s `decimalPlaces`: the discount is rounded down there (ADR-0153).
  */
 export type OfferOption = {
   id: string;
@@ -130,6 +130,7 @@ export type OfferOption = {
   template: { discountType: string; discountValue: Prisma.Decimal; maxDiscountCap: Prisma.Decimal | null; currencyCode: string } | null;
   maxDiscountPercent: Prisma.Decimal;
   currencyCode: string;
+  places: number;
 };
 
 /** A gateway payment the user started and did not finish (F-038-m): `billing.payment_transaction`, C-02. */
@@ -223,6 +224,8 @@ const grantOf = (p: DecisionPrediction): string | null => {
 
 type Price = NonNullable<PlanOption['price']>;
 type Discount = { offer: OfferOption; amount: Prisma.Decimal; percent: Prisma.Decimal };
+/** A discount's share of the price is told to two places: 12.50%. */
+const PERCENT_PLACES = 2;
 
 /**
  * What `offer` takes off `plan` (F-038-f2): the lower of the offer's cap and
@@ -246,18 +249,15 @@ export function offerDiscount(offer: OfferOption, plan: PlanOption): Discount | 
       return null;
     }
   }
-  amount = amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  amount = roundCredit(amount, offer.places);
   if (amount.lte(0)) return null;
-  return { offer, amount, percent: amount.times(100).dividedBy(price.amount).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN) };
+  return { offer, amount, percent: roundRatio(amount.times(100).dividedBy(price.amount), PERCENT_PLACES) };
 }
 
 /** The unused offer giving the least away on `plan` — the highest margin; null when none applies. */
 function bestOffer(input: CandidateInputs, plan: PlanOption): Discount | null {
   const used = input.usedOfferIds ?? new Set<string>();
-  const fits = (input.offers ?? [])
-    .filter((o) => !used.has(o.id))
-    .map((o) => offerDiscount(o, plan))
-    .filter((d): d is Discount => d !== null);
+  const fits = (input.offers ?? []).filter((o) => !used.has(o.id)).map((o) => offerDiscount(o, plan)).filter((d): d is Discount => d !== null);
   return fits.sort((a, b) => a.amount.comparedTo(b.amount))[0] ?? null;
 }
 

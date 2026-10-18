@@ -1,4 +1,5 @@
 import { FeeCalcMode, FeeType, PaymentGateway, Prisma, RateRoundingMode } from '@prisma/client';
+import { fromMinorUnits, roundCharge, roundConverted, roundRate, roundRateToStep, toMinorUnits } from '@txnet-backend/shared-core';
 
 /**
  * What a deposit costs at one gateway (F-092-e; catalog F-0609..F-0612).
@@ -90,10 +91,12 @@ export type GatewayPricing = Pick<
 export type PriceRequest = {
   /** A `payment_gateway` row, or a `tenant_gateway_config` row — the columns are the same. */
   pricing: GatewayPricing;
-  /** The payer's currency — the payment's `currencyCode` (ADR-0098 part 2) — > 0, at most 2 decimal places. */
+  /** The payer's currency — the payment's `currencyCode` (ADR-0098 part 2) — > 0, at most `places` decimal places. */
   amount: Prisma.Decimal;
-  /** Every coupon together, 0 <= discount <= amount, at most 2 decimal places. */
+  /** Every coupon together, 0 <= discount <= amount, at most `places` decimal places. */
   discount: Prisma.Decimal;
+  /** The payment currency's `decimalPlaces`: every amount in it is rounded there (ADR-0153). */
+  places: number;
   /**
    * The tenant's default tax on a top-up (`deposit_setting.taxRatePercent`),
    * used when the gateway's own `taxRatePercent` is null. Null = no tax.
@@ -156,7 +159,7 @@ export class AmountOutOfGatewayRange extends Error {
     readonly min: Prisma.Decimal | null,
     readonly max: Prisma.Decimal | null,
   ) {
-    super(`amount must be between ${min?.toFixed(MONEY_SCALE) ?? 'any'} and ${max?.toFixed(MONEY_SCALE) ?? 'any'}`);
+    super(`amount must be between ${min?.toFixed() ?? 'any'} and ${max?.toFixed() ?? 'any'}`);
     this.name = 'AmountOutOfGatewayRange';
   }
 }
@@ -185,9 +188,6 @@ export class RateOutOfRange extends Error {
   }
 }
 
-/** `payment_transaction` money columns are `Decimal(18, 2)`. */
-const MONEY_SCALE = 2;
-
 /**
  * `payment_transaction.exchangeRateSnapshot` is `Decimal(30, 18)`. The rate is
  * rounded to it **before** it charges, so the rate stored is the rate charged:
@@ -210,8 +210,6 @@ const dec = (v: Prisma.Decimal): Dec => new Dec(v.toString());
 const decOrNull = (v: Prisma.Decimal | null | undefined): Dec | null => (v == null ? null : dec(v));
 const out = (v: Dec, scale?: number): Prisma.Decimal =>
   new Prisma.Decimal(scale === undefined ? v.toFixed() : v.toFixed(scale));
-const centsUp = (v: Dec): Dec => v.toDecimalPlaces(MONEY_SCALE, Dec.ROUND_UP);
-const centsHalfUp = (v: Dec): Dec => v.toDecimalPlaces(MONEY_SCALE, Dec.ROUND_HALF_UP);
 
 function taxRate(v: Prisma.Decimal | null | undefined, name: string): Dec | null {
   const d = decOrNull(v);
@@ -219,10 +217,10 @@ function taxRate(v: Prisma.Decimal | null | undefined, name: string): Dec | null
   return d;
 }
 
-function money(v: Prisma.Decimal, name: string): Dec {
+function money(v: Prisma.Decimal, name: string, places: number): Dec {
   const d = dec(v);
-  if (d.decimalPlaces() > MONEY_SCALE) {
-    throw new InvalidPricingInput(`${name} has more than ${MONEY_SCALE} decimal places`);
+  if (d.decimalPlaces() > places) {
+    throw new InvalidPricingInput(`${name} has more than ${places} decimal places`);
   }
   return d;
 }
@@ -250,8 +248,8 @@ function settle(request: PriceRequest): Settled {
   const { pricing } = request;
   checkConfig(pricing);
 
-  const amount = money(request.amount, 'amount');
-  const discount = money(request.discount, 'discount');
+  const amount = money(request.amount, 'amount', request.places);
+  const discount = money(request.discount, 'discount', request.places);
   if (amount.lte(0)) throw new InvalidPricingInput('amount must be positive');
   if (discount.lt(0)) throw new InvalidPricingInput('discount is negative');
   if (discount.gt(amount)) throw new InvalidPricingInput('discount is larger than the amount');
@@ -268,7 +266,7 @@ function settle(request: PriceRequest): Settled {
   return { amount, discount, gap, basis: remainder.plus(gap) };
 }
 
-function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null | undefined): Dec {
+function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null | undefined, places: number): Dec {
   let fee: Dec;
   if (p.feeCalculationMode === FeeCalcMode.manual) {
     if (p.feeType === FeeType.fixed) fee = dec(p.feeValue);
@@ -282,7 +280,7 @@ function feeOf(p: GatewayPricing, basis: Dec, quotedFee: Prisma.Decimal | null |
     throw new InvalidPricingInput(`unknown feeCalculationMode ${String(p.feeCalculationMode)}`);
   }
 
-  fee = centsUp(fee);
+  fee = roundCharge(fee, places);
   const floor = decOrNull(p.feeFloor);
   const ceiling = decOrNull(p.feeCeiling);
   if (floor && fee.lt(floor)) fee = floor;
@@ -324,11 +322,9 @@ function rateOf(request: PriceRequest): RateUsed {
 
   let rate = source.mul(dec(p.percentageModifier).div(100).plus(1)).plus(dec(p.fixedAmountModifier));
   if (p.roundingStep != null) {
-    const step = dec(p.roundingStep);
-    const mode = p.roundingMode === RateRoundingMode.up ? Dec.ROUND_CEIL : Dec.ROUND_HALF_UP;
-    rate = rate.div(step).toDecimalPlaces(0, mode).mul(step);
+    rate = roundRateToStep(rate, dec(p.roundingStep), p.roundingMode === RateRoundingMode.up ? 'up' : 'nearest');
   }
-  rate = rate.toDecimalPlaces(RATE_SCALE, Dec.ROUND_HALF_UP);
+  rate = roundRate(rate, RATE_SCALE);
 
   const min = decOrNull(p.minRate);
   const max = decOrNull(p.maxRate);
@@ -343,7 +339,7 @@ function rateOf(request: PriceRequest): RateUsed {
  * discount and the gap. Zero means the free path — ask for nothing.
  */
 export function feeBasis(request: PriceRequest): Prisma.Decimal {
-  return out(settle(request).basis, MONEY_SCALE);
+  return out(settle(request).basis, request.places);
 }
 
 function checkChargeDecimals(chargeDecimals: number): void {
@@ -362,8 +358,7 @@ export function feeQuoteAmountMinor(request: PriceRequest): bigint | null {
   const { basis } = settle(request);
   if (basis.isZero()) return null;
   const { rate } = rateOf(request);
-  const minor = basis.mul(rate).mul(new Dec(10).pow(request.chargeDecimals)).toDecimalPlaces(0, Dec.ROUND_CEIL);
-  return BigInt(minor.toFixed(0));
+  return toMinorUnits(roundCharge(basis.mul(rate), request.chargeDecimals), request.chargeDecimals);
 }
 
 /**
@@ -375,12 +370,12 @@ export function quotedFeeFromMinor(request: PriceRequest, feeMinor: bigint): Pri
   checkChargeDecimals(request.chargeDecimals);
   if (feeMinor < BigInt(0)) throw new InvalidPricingInput('feeMinor is negative');
   const { rate } = rateOf(request);
-  const fee = new Dec(feeMinor.toString()).div(new Dec(10).pow(request.chargeDecimals)).div(rate);
-  return out(centsUp(fee), MONEY_SCALE);
+  const fee = dec(fromMinorUnits(feeMinor, request.chargeDecimals)).div(rate);
+  return out(roundCharge(fee, request.places), request.places);
 }
 
 export function priceAtGateway(request: PriceRequest): GatewayPrice {
-  const { chargeDecimals, pricing } = request;
+  const { chargeDecimals, pricing, places } = request;
   checkChargeDecimals(chargeDecimals);
 
   const { amount, discount, gap, basis } = settle(request);
@@ -390,14 +385,14 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
 
   if (basis.isZero()) {
     return {
-      amount: out(amount, MONEY_SCALE),
-      discount: out(discount, MONEY_SCALE),
-      gap: out(ZERO, MONEY_SCALE),
-      fee: out(ZERO, MONEY_SCALE),
-      tax: out(ZERO, MONEY_SCALE),
+      amount: out(amount, places),
+      discount: out(discount, places),
+      gap: out(ZERO, places),
+      fee: out(ZERO, places),
+      tax: out(ZERO, places),
       taxRatePercent: null,
-      payable: out(ZERO, MONEY_SCALE),
-      credited: out(credited, MONEY_SCALE),
+      payable: out(ZERO, places),
+      credited: out(credited, places),
       free: true,
       rate: null,
       rateSnapshotId: null,
@@ -406,28 +401,25 @@ export function priceAtGateway(request: PriceRequest): GatewayPrice {
     };
   }
 
-  const fee = feeOf(pricing, basis, request.quotedFee);
-  const tax = taxPercent ? centsHalfUp(basis.mul(taxPercent).div(100)) : ZERO;
+  const fee = feeOf(pricing, basis, request.quotedFee, places);
+  const tax = taxPercent ? roundConverted(basis.mul(taxPercent).div(100), places) : ZERO;
   const payable = basis.plus(fee).plus(tax);
   const { rate, snapshotId, fromSnapshotId } = rateOf(request);
-  const charged = payable
-    .mul(rate)
-    .mul(new Dec(10).pow(chargeDecimals))
-    .toDecimalPlaces(0, Dec.ROUND_CEIL);
+  const charged = toMinorUnits(roundCharge(payable.mul(rate), chargeDecimals), chargeDecimals);
 
   return {
-    amount: out(amount, MONEY_SCALE),
-    discount: out(discount, MONEY_SCALE),
-    gap: out(gap, MONEY_SCALE),
-    fee: out(fee, MONEY_SCALE),
-    tax: out(tax, MONEY_SCALE),
+    amount: out(amount, places),
+    discount: out(discount, places),
+    gap: out(gap, places),
+    fee: out(fee, places),
+    tax: out(tax, places),
     taxRatePercent: taxPercent ? out(taxPercent) : null,
-    payable: out(payable, MONEY_SCALE),
-    credited: out(credited, MONEY_SCALE),
+    payable: out(payable, places),
+    credited: out(credited, places),
     free: false,
     rate: out(rate),
     rateSnapshotId: snapshotId,
     rateFromSnapshotId: fromSnapshotId,
-    chargedAmountMinor: BigInt(charged.toFixed(0)),
+    chargedAmountMinor: charged,
   };
 }

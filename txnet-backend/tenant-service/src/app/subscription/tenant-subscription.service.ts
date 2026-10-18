@@ -10,7 +10,7 @@ import {
   TenantSuspensionCause,
   TenantType,
 } from '@prisma/client';
-import { OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor, isPlatformTenant } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor, isPlatformTenant } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
@@ -277,7 +277,7 @@ export class TenantSubscriptionService {
     return pkg;
   }
 
-  /** The reseller's status, period and subscription, as `tx` sees them. */
+  /** The reseller's status, period and subscription, as `tx` sees them — and the places of the platform currency its packages are priced in (ADR-0153). */
   private async state(tx: Prisma.TransactionClient, tenantId: string) {
     const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { status: true, billingModel: true } });
     if (!tenant) throw new TenantSubscriptionRefused('reseller_not_found', tenantId);
@@ -292,7 +292,7 @@ export class TenantSubscriptionService {
         package: { select: { name: true, monthlyPrice: true, yearlyPrice: true } },
       },
     });
-    return { status: tenant.status, billingModel: tenant.billingModel, current };
+    return { status: tenant.status, billingModel: tenant.billingModel, current, places: await currencyPlacesOf(tx, await platformCurrencyOf(tx)) };
   }
 
   private plan(
@@ -311,7 +311,7 @@ export class TenantSubscriptionService {
         price: fromField && current.package ? current.package[fromField] : null,
         priceForNewModel: current.package ? current.package[toField] : null,
       },
-      to: { model: input.billingModel, price: pkg[toField] as Prisma.Decimal },
+      to: { model: input.billingModel, price: pkg[toField] as Prisma.Decimal, places: state.places },
       periodEnd: current.currentPeriodEnd,
       paid: isPaid(state.status, current.currentPeriodEnd, now),
       now,

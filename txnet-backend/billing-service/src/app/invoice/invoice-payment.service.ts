@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import { GrantService } from '../entitlement/grant';
@@ -124,7 +124,7 @@ export class InvoicePaymentService {
       // Held money is not spendable (F-118-a): the shortfall is against what is free.
       const free = wallet ? balance.minus(new Prisma.Decimal(wallet.heldAmount)) : ZERO;
       if (free.lt(total)) {
-        throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free), currencyCode: invoice.currencyCode });
+        throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free, await currencyPlacesOf(tx, invoice.currencyCode)), currencyCode: invoice.currencyCode });
       }
 
       let walletTransactionId: string | null = null;
@@ -143,7 +143,7 @@ export class InvoicePaymentService {
         } catch (e) {
           // Unreachable under the wallet lock; kept so a change to the lock fails as a refusal, not a 500.
           if (e instanceof InsufficientFunds) {
-            throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free), currencyCode: invoice.currencyCode });
+            throw new InvoiceUnpayable('insufficient_balance', invoiceId, { ...invoiceShortfall(total, free, await currencyPlacesOf(tx, invoice.currencyCode)), currencyCode: invoice.currencyCode });
           }
           throw e;
         }

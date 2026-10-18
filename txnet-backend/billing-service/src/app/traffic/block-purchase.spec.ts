@@ -112,6 +112,10 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
   const ledger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // Every tenant here keeps its books in USD (F-116-b).
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {

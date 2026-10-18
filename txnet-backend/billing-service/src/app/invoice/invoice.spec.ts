@@ -108,6 +108,8 @@ function buildCreate(setup: CreateSetup = {}) {
     groupQueries: [] as unknown[],
   };
   const tx = {
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // No restriction on the person (F-030-e).
     userRestriction: { findMany: async () => [] },
     // Every tenant here keeps its books in USD (F-116-b).
@@ -338,6 +340,8 @@ describe('InvoiceExpiryService.expirePending', () => {
     };
     const scoped = () => TenantContext.currentOrNull()?.id ?? null;
     const tx = {
+      // The registry: every wallet here is in a two-place currency (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,
@@ -405,6 +409,8 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
   function buildGet(row: typeof ROW | null, redemptions: Array<{ discountAppliedAmount: Prisma.Decimal; coupon: { code: string } }> = []) {
     const asked = { invoice: [] as unknown[], redemptions: [] as unknown[] };
     const tx = {
+      // The registry: every wallet here is in a two-place currency (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,
@@ -463,6 +469,8 @@ describe('InvoiceService.forSale — what the shop lists (F-111-e)', () => {
   function buildList(rows: Array<ReturnType<typeof variantRow>>, groups: GroupRow[] = [groupRow()]) {
     const asked: unknown[] = [];
     const tx = {
+      // The registry: every wallet here is in a two-place currency (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
@@ -540,6 +548,8 @@ describe('InvoiceService.cancel — the shop replaces an invoice it will not pay
       read: [] as unknown[],
     };
     const tx = {
+      // The registry: every wallet here is in a two-place currency (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 0,

@@ -392,15 +392,12 @@ export function offeredInCurrency(gateway: Pick<SelectedGateway, 'currencyCode'>
   return gateway.currencyCode === currencyCode;
 }
 
-export type DepositPricingInput = {
+/** `amount`, `discount` (every coupon together) and `places` mean what they mean to `priceAtGateway`, in `currencyCode`. */
+export type DepositPricingInput = Pick<PriceRequest, 'amount' | 'discount' | 'places'> & {
   gateway: SelectedGateway;
   ref: MerchantGatewayRef;
-  /** In `currencyCode`. */
-  amount: Prisma.Decimal;
   /** The payment's currency — the payer tenant's operating currency, read by the caller (ADR-0098 part 2). */
   currencyCode: string;
-  /** Every applied coupon together, as validation answered it. */
-  discount: Prisma.Decimal;
   /**
    * The caller's `deposit_setting.taxRatePercent` — the rate a gateway with
    * none of its own inherits (ADR-0076). The caller's, not a lender's, like the
@@ -439,7 +436,7 @@ export async function priceDeposit(
   },
   input: DepositPricingInput,
 ): Promise<DepositPricing> {
-  const { gateway, ref, amount, discount, actorId, defaultTaxRatePercent, currencyCode } = input;
+  const { gateway, ref, amount, discount, places, actorId, defaultTaxRatePercent, currencyCode } = input;
   // A caller bug, not a user's: the list and the selection already drop it.
   if (!offeredInCurrency(gateway, currencyCode)) {
     throw new InvalidPricingInput(`gateway is configured in ${gateway.currencyCode}, the payment is in ${currencyCode}`);
@@ -463,6 +460,7 @@ export async function priceDeposit(
     pricing,
     amount,
     discount,
+    places,
     defaultTaxRatePercent,
     // Payer currency -> charge currency, through the USD pivot (ADR-0098 part 6).
     liveRate: pricing.useLiveRate && !chargesInPaymentCurrency ? await deps.fx.pair(currencyCode, charge.currency, input.ratesTenantId) : null,

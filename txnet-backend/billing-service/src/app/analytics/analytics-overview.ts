@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { roundRatio } from '@txnet-backend/shared-core';
 
 import type { TabContext } from './analytics-context';
 import { dayMap } from './analytics-context';
@@ -81,9 +82,12 @@ function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[
   };
 }
 
+/** A share is answered to four places, as a delta is. */
+const SHARE_PLACES = 4;
+
 /** A part of the operating currency's whole, as a ratio; none when the whole is zero. */
 export function shareOf(part: Prisma.Decimal | undefined, whole: Prisma.Decimal): number | null {
-  return whole.isZero() ? null : (part ?? new Prisma.Decimal(0)).div(whole).toDecimalPlaces(4).toNumber();
+  return whole.isZero() ? null : roundRatio((part ?? new Prisma.Decimal(0)).div(whole), SHARE_PLACES).toNumber();
 }
 
 /** Sales by product, largest first in the operating currency: the top seven and the rest as `other`. */

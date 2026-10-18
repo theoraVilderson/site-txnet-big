@@ -107,7 +107,7 @@ function build(setup: Setup = {}) {
       },
     },
   };
-  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx), currency: { findUnique: async () => ({ decimalPlaces: 2 }) } };
   const settlement = {
     creditVerified: async (p: { id: string }, verified: { referenceId: string; received?: unknown }) => {
       calls.credited.push({ id: p.id, referenceId: verified.referenceId, ...(verified.received ? { received: verified.received } : {}) });
@@ -124,7 +124,7 @@ function build(setup: Setup = {}) {
 describe('followOnCredit — what the arriving money is worth', () => {
   it('takes the gateway’s cut in the proportion that arrived, as a short receipt does (F-104-r)', () => {
     // 105.00 charged of which 5.00 is the cut; 42.00 arrives -> 100.00 x 42/105.
-    expect(followOnCredit(original(), BigInt(4200), 2)).toEqual({
+    expect(followOnCredit(original(), { minor: BigInt(4200), decimals: 2 }, 2)).toEqual({
       credited: new Prisma.Decimal('40.00'),
       fee: new Prisma.Decimal('2.00'),
     });
@@ -135,22 +135,22 @@ describe('followOnCredit — what the arriving money is worth', () => {
 
     // The first payment credited 100.00 for a 105.00 charge because a coupon
     // paid part of it. The second one buys no discount: 105.00 in, 5.00 cut.
-    expect(followOnCredit(discounted, BigInt(10500), 2)).toEqual({
+    expect(followOnCredit(discounted, { minor: BigInt(10500), decimals: 2 }, 2)).toEqual({
       credited: new Prisma.Decimal('100.00'),
       fee: new Prisma.Decimal('5.00'),
     });
   });
 
   it('values nothing without a usable rate', () => {
-    expect(followOnCredit(original({ exchangeRateSnapshot: null }), BigInt(4200), 2)).toBeNull();
+    expect(followOnCredit(original({ exchangeRateSnapshot: null }), { minor: BigInt(4200), decimals: 2 }, 2)).toBeNull();
   });
 
   it('values nothing when the gateway’s cut swallowed the whole charge', () => {
-    expect(followOnCredit(original({ feeApplied: new Prisma.Decimal('105.00') }), BigInt(4200), 2)).toBeNull();
+    expect(followOnCredit(original({ feeApplied: new Prisma.Decimal('105.00') }), { minor: BigInt(4200), decimals: 2 }, 2)).toBeNull();
   });
 
   it('values nothing when under a cent arrived', () => {
-    expect(followOnCredit(original(), BigInt(1), 2)).toBeNull();
+    expect(followOnCredit(original(), { minor: BigInt(1), decimals: 2 }, 2)).toBeNull();
   });
 });
 

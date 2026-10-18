@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { PaymentProviderName, Prisma } from '@prisma/client';
+import { roundCharge, roundCredit, toMinorUnits } from '@txnet-backend/shared-core';
 
 import { paymentIdInUrl } from '../deposit/payment-callback-url';
 import {
@@ -188,12 +189,13 @@ export class NowPaymentsProvider implements PaymentProvider {
     const pay = decimalOf(body.pay_amount);
     const paid = decimalOf(body.actually_paid);
     if (String(body.price_currency).toLowerCase() !== 'usd' || !price || !pay || !paid || pay.lte(0) || paid.lt(0)) return null;
-    return BigInt(price.mul(paid).div(pay).mul(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_DOWN).toFixed(0));
+    return toMinorUnits(roundCredit(price.mul(paid).div(pay), this.chargeDecimals), this.chargeDecimals);
   }
 
   private askedCents(body: Ipn): bigint | null {
     const price = decimalOf(body.price_amount);
-    return price ? BigInt(price.mul(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP).toFixed(0)) : null;
+    // Our own price, echoed: already at the cent, so the direction only guards a provider that adds digits.
+    return price ? toMinorUnits(roundCharge(price, this.chargeDecimals), this.chargeDecimals) : null;
   }
 
   private async post(apiKey: string, path: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {

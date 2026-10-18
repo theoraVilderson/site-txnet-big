@@ -25,7 +25,7 @@ const at = (ms: number) => new Date(NOW.getTime() + ms);
 
 const plan: PlanOption = { variantId: 'v50', productId: 'p1', billingMode: 'prepaid', durationDays: 30, size: BigInt(50) * BigInt(1024 ** 3), price: { amount: D('200000'), currencyCode: 'IRR' } };
 const renewal = (value: number): DecisionPrediction => ({ id: 'pr-renew', kind: 'renewal_probability', value, predictedAt: null, confidence: 0.7, reasons: [{ code: 'rule_defaults', grantId: GRANT }] });
-const offer: OfferOption = { id: 'of-1', variantId: 'v50', template: null, maxDiscountPercent: D('20'), currencyCode: 'IRR' };
+const offer: OfferOption = { id: 'of-1', variantId: 'v50', template: null, maxDiscountPercent: D('20'), currencyCode: 'IRR', places: 0 };
 const thursday = (over: Partial<SeasonWindow> = {}): SeasonWindow => ({
   seasonId: 'se-1', name: 'Thursday night', variantId: 'v50', amount: D('150000'), currencyCode: 'IRR', startsAt: at(2 * DAY), endsAt: at(2 * DAY + 12 * HOUR), ...over,
 });

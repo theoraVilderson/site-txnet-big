@@ -63,6 +63,7 @@ export * from './lib/billing/wallet-ledger';
 export * from './lib/billing/wallet-hold';
 export * from './lib/billing/usage-event';
 export * from './lib/billing/operating-currency';
+export * from './lib/billing/money-rounding';
 export * from './lib/time/quiet-hours';
 export * from './lib/time/time-zone';
 export * from './lib/billing/quota-period';

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, RateSource } from '@prisma/client';
+import { roundRate } from '@txnet-backend/shared-core';
 import { RedisKeys } from '../redis/redis.keys';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -116,7 +117,7 @@ export class FxRateSnapshotStore {
     // the same number: an inverted book (1 / 1.13685) has more digits than
     // `DECIMAL(18,8)` keeps, and a key carrying the unrounded one would be a
     // rate no snapshot backs.
-    const rate = median.toDecimalPlaces(RATE_SCALE, Prisma.Decimal.ROUND_HALF_UP);
+    const rate = roundRate(median, RATE_SCALE);
     const currency = await this.prisma.currency.findUnique({
       where: { code },
     });

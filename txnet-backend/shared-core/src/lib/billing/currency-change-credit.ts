@@ -1,5 +1,7 @@
 import { Prisma } from '@prisma/client';
 
+import { roundConverted } from './money-rounding';
+
 /**
  * `amount` in `fromCode`, in `toCode` through the tenant's recorded changes —
  * or `null` when no chain of them leads there. Walked newest first from the
@@ -28,8 +30,7 @@ export async function convertedByChanges(
     if (code === fromCode) {
       const target = await tx.currency.findUnique({ where: { code: toCode }, select: { decimalPlaces: true } });
       if (!target) return null;
-      const converted = amount.mul(factor).toDecimalPlaces(target.decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
-      return converted.isZero() && amount.gt(0) ? new Prisma.Decimal(10).pow(-target.decimalPlaces) : converted;
+      return roundConverted(amount.mul(factor), target.decimalPlaces);
     }
   }
   return null;

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -53,18 +53,16 @@ import { webhookUrlFor, withPaymentId } from './payment-callback-url';
  * `success`, in transaction 2 and nowhere else (billing invariants 1-3). It is
  * the one path that asks neither the vault nor the provider.
  *
- * `amount` is base currency, as the quote takes it. The legacy `amount * 10`
- * toman→rial step that ran in the browser is gone: converting for the gateway
- * happens once, inside `priceAtGateway`, with the rate snapshot the row records
- * (ADR-0019, invariant 12). Converting a **display** currency into the base one
- * is F-025's, and arrives in front of this.
+ * `amount` is in the payer's currency, at most its `decimalPlaces` (ADR-0098,
+ * ADR-0153); converting for the gateway happens once, inside `priceAtGateway`,
+ * with the rate snapshot the row records (ADR-0019, invariant 12).
  */
 
 export type DepositStartRequest = {
   userId: string;
   gatewayId: string;
   source: GatewaySource;
-  /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
+  /** In the payer's currency, > 0, at most its decimal places (ADR-0153). */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
   /** Where the top-up was started, and so where the codes were typed (F-502-k, F-306-a). Absent = the panel. */
@@ -173,7 +171,7 @@ export class DepositStartService {
 
     // 1. Read: the gateway, the coupons as they stand, and where the bank will
     //    send the user back to. Nothing is held after this closes.
-    const { gateway, coupons, callbackUrl, returnOrigin, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, callbackUrl, returnOrigin, defaultTaxRatePercent, currencyCode, places } = await tenantTransaction(this.prisma, async (tx) => {
       // The payer's tenant's currency; a billing top-up is money with the
       // platform, so it is in the platform's (ADR-0098 part 4, F-116-b). Read
       // before pricing: the price is computed in it (F-116-e).
@@ -207,6 +205,7 @@ export class DepositStartService {
         returnOrigin: await returnOriginOf(tx, this.config, tenant.id, request.origin),
         defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id),
         currencyCode,
+        places: await currencyPlacesOf(tx, currencyCode),
       };
     });
 
@@ -226,6 +225,7 @@ export class DepositStartService {
         ref,
         amount,
         currencyCode,
+        places,
         discount: coupons.totalDiscount,
         actorId: userId,
         defaultTaxRatePercent,

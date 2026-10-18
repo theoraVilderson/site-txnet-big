@@ -122,7 +122,7 @@ a code held by the old one counts as a use (`per_user_limit_reached` counts
 
 | Rule | Why |
 |---|---|
-| `missing` = `total - balance` rounded **up** to the cent — never half-up — and only for a balance short of `total` | spec §5.9: the user must never come back from a top-up a fraction of a cent short. Every column is `Decimal(18, 2)` today, so this is exact now and stays right if a balance ever carries more places |
+| `missing` = `total - balance` rounded **up** to the invoice currency's minor unit (`roundCharge`, ADR-0153) — never half-up — and only for a balance short of `total` | spec §5.9: the user must never come back from a top-up a fraction of a unit short; a rial invoice asks whole rials |
 | `missing` has at most 2 places | a deposit `amount` takes at most 2 (`deposit.schema.ts`, `priceAtGateway`); a longer one would be refused |
 | A top-up of exactly `missing` covers the invoice | a top-up credits `amount + gap`; fee and tax are on top of it, never taken from it (`contract.deposit.md`) |
 | The panel pre-fills `missing` raised to the chosen gateway's `minAmount` (the gateway list), and returns to the same invoice (F-111-e) | below its minimum a gateway refuses the top-up `400 billing.amountOutOfRange`, and only the panel knows which gateway the user picks; a larger top-up credits whole, so it still covers |
@@ -153,7 +153,7 @@ ADR-0087, D-45. `discount-rule.ts` decides, proved by
 | A rule is its tenant's own (strict RLS), the platform owner's included; none serves another tenant's users | `discount_rule` policies; every read and write in the caller's `tenantTransaction` |
 | It covers everything, one `productId`, or one `categoryId` **and every category under it** — never both (CHECK); it serves everyone, its `discount_rule_user` rows (`forNamedUsers`), or the **user** members of one of its tenant's groups (`groupId`, F-114-j) — never named users and a group at once (CHECK); a reseller member of the platform's group is not its customers | `ruleMatches`; `discount_rule_one_audience`; `discount_rule_groupId_tenantId_fkey` (the group's `(id, tenantId)`) |
 | It runs from `startsAt` to `endsAt`, the end exclusive, null = until switched off; `isActive: false` takes nothing | `ruleMatches`; `discount_rule_window_ok` |
-| A percentage in (0, 100] rounds down to the cent; a fixed amount takes at most the price | `ruleDiscountOf`; `discount_rule_value_ok` |
+| A percentage in (0, 100] rounds down to the price currency's minor unit (ADR-0153); a fixed amount takes at most the price | `ruleDiscountOf`; `discount_rule_value_ok` |
 | Of every match, the one that takes the most; a tie goes to the older rule. Rules never stack | `bestDiscountRule` |
 | An invoice keeps what its rule took: an edit reaches only later invoices, and a rule an invoice names is switched off, never deleted | `invoice.ruleDiscount`; `invoice_discountRuleId_fkey` RESTRICT |
 | A group a rule names is not deleted: the rule is pointed elsewhere first | `discount_rule_groupId_tenantId_fkey` RESTRICT; governance `group_in_use` |

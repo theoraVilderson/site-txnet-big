@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Coupon, CouponChannel, CouponVisibility, DiscountType, PaymentStatus, Prisma, RedemptionStatus } from '@prisma/client';
-import { PLATFORM_DEFAULT_TIMEZONE, TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, PLATFORM_DEFAULT_TIMEZONE, roundCharge, roundCredit, TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
 
 import { FxRateReader } from '../pricing/fx-rate.reader';
 
@@ -41,7 +41,7 @@ export type CouponTarget =
 export type CouponRequest = {
   /** As typed. Blank entries are dropped, the rest trimmed, upper-cased and de-duplicated. */
   codes: readonly string[];
-  /** > 0, at most 2 decimal places, in `currencyCode`. */
+  /** > 0, at most `currencyCode`'s decimal places. */
   amount: Prisma.Decimal;
   /** The order's currency: the one its caller priced it in (F-116-h6). */
   currencyCode: string;
@@ -63,6 +63,9 @@ export type CouponRequest = {
    */
   ratesTenantId?: string | null;
 };
+
+/** A request as `applyCoupons` prices it: with its currency's `decimalPlaces`, which every amount is rounded to (ADR-0153). */
+export type CouponOrder = CouponRequest & { places: number };
 
 /** A coupon row, plus what the loader counted for this user. */
 export type CouponFacts = Pick<
@@ -173,8 +176,6 @@ export class InvalidCouponInput extends Error {
   }
 }
 
-/** `coupon` and `coupon_redemption` money columns are `Decimal(18, 2)`. */
-const MONEY_SCALE = 2;
 const ZERO = new Prisma.Decimal(0);
 const LIVE: RedemptionStatus[] = [RedemptionStatus.pending, RedemptionStatus.confirmed];
 
@@ -194,26 +195,23 @@ export function carriesMoney(c: Pick<CouponFacts, 'discountType' | 'maxDiscountC
 }
 
 /**
- * `c`'s money in `currencyCode`, or `null` when it needs a rate and has none.
- * What a discount gives is rounded down and a minimum purchase up, so a
- * conversion never grants more than the coupon's own terms (C-02: Decimal).
+ * `c`'s money in the order's currency, or `null` when it needs a rate and has
+ * none. What a discount gives is rounded down and a minimum purchase up, to the
+ * order currency's places, so a conversion never grants more than the coupon's
+ * own terms (ADR-0153 point 2).
  */
-function moneyIn(c: CouponFacts, currencyCode: string): CouponMoney | null {
+function moneyIn(c: CouponFacts, order: Pick<CouponOrder, 'currencyCode' | 'places'>): CouponMoney | null {
   const own = { discountValue: c.discountValue, maxDiscountCap: c.maxDiscountCap, minPurchaseAmount: c.minPurchaseAmount, maxPurchaseAmount: c.maxPurchaseAmount };
-  if (c.currencyCode === currencyCode || !carriesMoney(c)) return { ...own, fx: null };
+  if (c.currencyCode === order.currencyCode || !carriesMoney(c)) return { ...own, fx: null };
   if (!c.fx) return null;
   const { rate } = c.fx;
-  const at = (v: Prisma.Decimal | null, rounding: Prisma.Decimal.Rounding) =>
-    v == null ? null : v.mul(rate).toDecimalPlaces(MONEY_SCALE, rounding);
+  const at = (v: Prisma.Decimal | null, round: typeof roundCredit) => (v == null ? null : round(v.mul(rate), order.places));
   return {
     // A percentage is a ratio, never converted.
-    discountValue:
-      c.discountType === DiscountType.fixed_amount
-        ? c.discountValue.mul(rate).toDecimalPlaces(MONEY_SCALE, Prisma.Decimal.ROUND_DOWN)
-        : c.discountValue,
-    maxDiscountCap: at(c.maxDiscountCap, Prisma.Decimal.ROUND_DOWN),
-    minPurchaseAmount: at(c.minPurchaseAmount, Prisma.Decimal.ROUND_UP),
-    maxPurchaseAmount: at(c.maxPurchaseAmount, Prisma.Decimal.ROUND_DOWN),
+    discountValue: c.discountType === DiscountType.fixed_amount ? roundCredit(c.discountValue.mul(rate), order.places) : c.discountValue,
+    maxDiscountCap: at(c.maxDiscountCap, roundCredit),
+    minPurchaseAmount: at(c.minPurchaseAmount, roundCharge),
+    maxPurchaseAmount: at(c.maxPurchaseAmount, roundCredit),
     fx: c.fx,
   };
 }
@@ -307,20 +305,20 @@ function rank(c: CouponFacts): number {
  * coupon's own terms are checked; `money` is what it gives in the order's
  * currency, where a fixed value may round to nothing.
  */
-function discountOf(c: CouponFacts, money: CouponMoney, running: Prisma.Decimal): Prisma.Decimal {
+function discountOf(c: CouponFacts, money: CouponMoney, running: Prisma.Decimal, places: number): Prisma.Decimal {
   const value = c.discountValue;
   if (c.discountType === DiscountType.percentage) {
     if (value.lte(0) || value.gt(100)) {
       throw new InvalidCouponInput(`coupon ${c.code}: a percentage must be in (0, 100]`);
     }
-    // Down to the cent: a discount rounded up would give away money no rule granted.
-    let d = running.mul(value).div(100).toDecimalPlaces(MONEY_SCALE, Prisma.Decimal.ROUND_DOWN);
+    // Down to the minor unit: a discount rounded up would give away money no rule granted.
+    let d = roundCredit(running.mul(value).div(100), places);
     if (money.maxDiscountCap && d.gt(money.maxDiscountCap)) d = money.maxDiscountCap;
     return d;
   }
   if (c.discountType === DiscountType.fixed_amount) {
-    if (value.lte(0) || value.decimalPlaces() > MONEY_SCALE) {
-      throw new InvalidCouponInput(`coupon ${c.code}: a fixed discount must be > 0 in cents`);
+    if (value.lte(0) || money.discountValue.decimalPlaces() > places) {
+      throw new InvalidCouponInput(`coupon ${c.code}: a fixed discount must be > 0 in the order currency's minor unit`);
     }
     return money.discountValue;
   }
@@ -328,13 +326,13 @@ function discountOf(c: CouponFacts, money: CouponMoney, running: Prisma.Decimal)
 }
 
 export function applyCoupons(
-  request: CouponRequest,
+  request: CouponOrder,
   coupons: readonly CouponFacts[],
   now: Date,
 ): CouponValidation {
   const { amount } = request;
-  if (amount.lte(0) || amount.decimalPlaces() > MONEY_SCALE) {
-    throw new InvalidCouponInput(`amount must be > 0 with at most ${MONEY_SCALE} decimal places`);
+  if (amount.lte(0) || amount.decimalPlaces() > request.places) {
+    throw new InvalidCouponInput(`amount must be > 0 with at most ${request.places} decimal places`);
   }
 
   const byCode = new Map<string, CouponFacts>();
@@ -348,14 +346,14 @@ export function applyCoupons(
 
   for (const code of normalizeCouponCodes(request.codes)) {
     const c = byCode.get(code);
-    const money = c ? moneyIn(c, request.currencyCode) : null;
+    const money = c ? moneyIn(c, request) : null;
     const reason = c ? gate(c, money, request, now) : 'not_found';
     if (!c || !money || reason) {
       rejected.push({ code, reason: reason ?? 'not_found' });
       continue;
     }
 
-    const discount = Prisma.Decimal.min(discountOf(c, money, running), running);
+    const discount = Prisma.Decimal.min(discountOf(c, money, running, request.places), running);
     if (discount.lte(0)) {
       rejected.push({ code, reason: 'nothing_to_discount' });
       continue;
@@ -456,6 +454,6 @@ export class CouponValidationService {
         fx: rates.get(coupon.currencyCode),
       });
     }
-    return applyCoupons(request, facts, now);
+    return applyCoupons({ ...request, places: await currencyPlacesOf(tx, request.currencyCode) }, facts, now);
   }
 }

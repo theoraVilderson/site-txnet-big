@@ -43,6 +43,10 @@ function fakeStore() {
   const ledger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => {
         const g = grants.get(where.id);

@@ -36,23 +36,28 @@ const topUp = (missing: Prisma.Decimal) =>
     pricing,
     amount: Prisma.Decimal.max(missing, pricing.minAcceptAmount ?? missing),
     discount: d('0'),
+    places: 2,
     chargeDecimals: 2,
     chargesInPaymentCurrency: true,
   });
 
 describe('invoiceShortfall (F-111-c, spec §5.9)', () => {
   it('a cent-exact gap is the gap itself', () => {
-    expect(invoiceShortfall(d('12.50'), d('5.00')).missing.toFixed()).toBe('7.5');
+    expect(invoiceShortfall(d('12.50'), d('5.00'), 2).missing.toFixed()).toBe('7.5');
   });
 
   it('a sub-cent gap is rounded up, never down', () => {
     // Half-up would say 7.50 here and leave the user 0.004 short after topping it up.
-    expect(invoiceShortfall(d('12.504'), d('5')).missing.toFixed()).toBe('7.51');
-    expect(invoiceShortfall(d('12.50'), d('4.999999')).missing.toFixed()).toBe('7.51');
+    expect(invoiceShortfall(d('12.504'), d('5'), 2).missing.toFixed()).toBe('7.51');
+    expect(invoiceShortfall(d('12.50'), d('4.999999'), 2).missing.toFixed()).toBe('7.51');
+  });
+
+  it('rounds up to the invoice currency’s own places: a rial has no cents (ADR-0153)', () => {
+    expect(invoiceShortfall(d('1000'), d('999.5'), 0).missing.toFixed()).toBe('1');
   });
 
   it('no balance at all is the whole total', () => {
-    expect(invoiceShortfall(d('3.33'), d('0')).missing.toFixed()).toBe('3.33');
+    expect(invoiceShortfall(d('3.33'), d('0'), 2).missing.toFixed()).toBe('3.33');
   });
 
   it.each([
@@ -62,7 +67,7 @@ describe('invoiceShortfall (F-111-c, spec §5.9)', () => {
     ['99.999999', '0.000001'],
     ['2', '0'], // under the gateway minimum: the minimum is topped up, and credited whole
   ])('a top-up of exactly `missing` always covers %s against a balance of %s', (total, balance) => {
-    const s = invoiceShortfall(d(total), d(balance));
+    const s = invoiceShortfall(d(total), d(balance), 2);
     // The deposit schema and the pricer take at most 2 places: a longer `missing` would be refused.
     expect(s.missing.decimalPlaces()).toBeLessThanOrEqual(2);
     // Fee and tax are on top of the amount, never taken from what is credited.
@@ -73,6 +78,6 @@ describe('invoiceShortfall (F-111-c, spec §5.9)', () => {
   });
 
   it('refuses a balance that already covers the total — it is not a shortfall', () => {
-    expect(() => invoiceShortfall(d('5'), d('5'))).toThrow(RangeError);
+    expect(() => invoiceShortfall(d('5'), d('5'), 2)).toThrow(RangeError);
   });
 });

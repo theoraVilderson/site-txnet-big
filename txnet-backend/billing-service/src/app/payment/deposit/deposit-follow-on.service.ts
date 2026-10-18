@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfirmationSource, PaymentStatus, Prisma, ReconciliationAction } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, fromMinorUnits, roundCredit, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -62,8 +62,6 @@ export type FollowOnArrival = {
  */
 export type FollowOnOutcome = 'credited' | 'duplicate' | 'flagged';
 
-const floor2 = (v: Prisma.Decimal) => v.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
-
 /**
  * What arriving money is worth, and what of it is the gateway's (F-104-s).
  *
@@ -76,26 +74,27 @@ const floor2 = (v: Prisma.Decimal) => v.toDecimalPlaces(2, Prisma.Decimal.ROUND_
  *
  * `null` means it cannot be valued, and the caller flags instead of guessing: a
  * row with no usable rate (the free path), a fee at or above the whole charge,
- * or an arrival worth under a cent.
+ * or an arrival worth under one minor unit of the payment currency (`places`,
+ * floored there: ADR-0153).
  */
 export function followOnCredit(
   original: Pick<PaymentRow, 'feeApplied' | 'chargedAmountMinor' | 'exchangeRateSnapshot'>,
-  arrivedMinor: bigint,
-  decimals: number,
+  arrived: { minor: bigint; decimals: number },
+  places: number,
 ): { credited: Prisma.Decimal; fee: Prisma.Decimal } | null {
+  const { minor: arrivedMinor, decimals } = arrived;
   const rate = original.exchangeRateSnapshot;
   const charged = original.chargedAmountMinor;
   if (!rate || rate.lte(0) || charged <= BigInt(0) || arrivedMinor <= BigInt(0)) return null;
 
-  const toBase = (minor: bigint) =>
-    new Prisma.Decimal(minor.toString()).div(new Prisma.Decimal(10).pow(decimals)).div(rate);
+  const toBase = (minor: bigint) => fromMinorUnits(minor, decimals).div(rate);
   const net = toBase(charged).minus(original.feeApplied);
   if (net.lte(0)) return null;
 
   const share = new Prisma.Decimal(arrivedMinor.toString()).div(charged.toString());
-  const credited = floor2(net.times(share));
+  const credited = roundCredit(net.times(share), places);
   if (credited.lte(0)) return null;
-  const gross = floor2(toBase(arrivedMinor));
+  const gross = roundCredit(toBase(arrivedMinor), places);
   const fee = gross.minus(credited);
   return { credited, fee: fee.lt(0) ? new Prisma.Decimal(0) : fee };
 }
@@ -123,7 +122,7 @@ export class DepositFollowOnService {
 
     const decimals = arrival.received?.decimals ?? arrival.chargeDecimals;
     const arrivedMinor = arrival.received?.amountMinor ?? original.chargedAmountMinor;
-    const value = followOnCredit(original, arrivedMinor, decimals);
+    const value = followOnCredit(original, { minor: arrivedMinor, decimals }, await currencyPlacesOf(this.prisma, original.currencyCode));
     if (!value) {
       await this.flag(original, arrival, 'the arrival cannot be valued at this payment’s rate');
       return 'flagged';

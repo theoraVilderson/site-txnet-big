@@ -68,6 +68,8 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
 
   const open = openPaymentFakes();
   const tx = {
+    // The registry: every payment here is in a two-place currency (ADR-0153).
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     $executeRaw: async () => 0,
     tenant: open.tenant,
     paymentTransferDetail: open.paymentTransferDetail,
@@ -114,6 +116,7 @@ function build({ lostTheFlip = false, rowIs = PaymentStatus.pending as PaymentSt
       calls.committed = true;
       return out;
     },
+    currency: tx.currency,
   };
 
   const reservations = {

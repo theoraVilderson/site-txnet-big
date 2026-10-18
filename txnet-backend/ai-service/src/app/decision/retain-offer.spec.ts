@@ -37,10 +37,10 @@ const renewal = (value: number): DecisionPrediction => ({
 });
 
 const variantOffer = (over: Partial<OfferOption> = {}): OfferOption => ({
-  id: 'of-variant', variantId: 'v50', template: null, maxDiscountPercent: D('20'), currencyCode: 'IRR', ...over,
+  id: 'of-variant', variantId: 'v50', template: null, maxDiscountPercent: D('20'), currencyCode: 'IRR', places: 0, ...over,
 });
 const templateOffer = (template: OfferOption['template'], over: Partial<OfferOption> = {}): OfferOption => ({
-  id: 'of-template', variantId: null, template, maxDiscountPercent: D('20'), currencyCode: 'IRR', ...over,
+  id: 'of-template', variantId: null, template, maxDiscountPercent: D('20'), currencyCode: 'IRR', places: 0, ...over,
 });
 const percentTemplate = (value: string, cap: string | null = null) => ({ discountType: 'percentage' as const, discountValue: D(value), maxDiscountCap: cap === null ? null : D(cap), currencyCode: 'IRR' });
 const fixedTemplate = (value: string, currencyCode = 'IRR') => ({ discountType: 'fixed_amount' as const, discountValue: D(value), maxDiscountCap: null, currencyCode });

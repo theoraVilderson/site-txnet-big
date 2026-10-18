@@ -62,6 +62,8 @@ describe('settling a reseller billing top-up', () => {
         calls.pools.push(name);
         return fn(tx(name));
       },
+      // The registry: the platform's currency has two places (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     });
     const reservations = {
       confirm: async () => void calls.writes.push('confirm'),

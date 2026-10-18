@@ -62,7 +62,7 @@ describe('the run that loses the race (F-038-q)', () => {
     variantId: 'v50', productId: 'p1', billingMode: 'prepaid', durationDays: 30,
     size: BigInt(50) * BigInt(1024 ** 3), price: { amount: new Prisma.Decimal('200000'), currencyCode: 'IRR' },
   };
-  const offer: OfferOption = { id: 'of-1', variantId: 'v50', template: null, maxDiscountPercent: new Prisma.Decimal('20'), currencyCode: 'IRR' };
+  const offer: OfferOption = { id: 'of-1', variantId: 'v50', template: null, maxDiscountPercent: new Prisma.Decimal('20'), currencyCode: 'IRR', places: 0 };
   const candidates: CandidateInputs = {
     predictions: [{ id: 'pr', kind: 'renewal_probability', value: 0.3, predictedAt: null, confidence: 0.7, reasons: [{ code: 'rule_defaults', grantId: GRANT }] }],
     grants: new Map([[GRANT, { id: GRANT, variantId: 'v50', endsAt: new Date(NOW.getTime() + 3 * DAY) }]]),

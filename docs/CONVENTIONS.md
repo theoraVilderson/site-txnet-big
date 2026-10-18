@@ -220,6 +220,23 @@ except: txnet-backend/**/*.spec.ts
 message: read a number as Decimal (money) or Number.parseInt / Number (counts) — a float rounds money silently (C-02)
 ```
 
+**Rounding has one home** (ADR-0153, F-116-p). An amount is rounded once, at the
+write, to its row currency's `decimalPlaces` (`currencyPlacesOf`, never a
+literal 2), by a function in `shared-core/src/lib/billing/money-rounding.ts`
+named for its intent — `roundCharge` up, `roundCredit` and `roundHold` down,
+`roundConverted` half up and never to nothing, `splitWhole` summing to the
+whole; `roundRate` and `roundRatio` for what is not money. Anything else that
+calls `toDecimalPlaces` or names a rounding mode chose a direction by hand. The
+three analytics files below still show money at two places; F-116-r takes them
+off the list.
+
+```check C-02
+forbid: \.(toDecimalPlaces|toDP)\(|\bROUND_(UP|DOWN|CEIL|FLOOR|HALF_UP|HALF_DOWN|HALF_EVEN|HALF_CEIL|HALF_FLOOR)\b
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/**/*.spec.ts, txnet-backend/shared-core/src/lib/billing/money-rounding.ts, txnet-backend/billing-service/src/app/analytics/analytics-figures.ts, txnet-backend/billing-service/src/app/analytics/analytics-capacity-forecast.ts, txnet-backend/billing-service/src/app/analytics/analytics-cohort-grid.ts
+message: round through shared-core's money-rounding (roundCharge / roundCredit / roundHold / roundConverted / splitWhole, roundRate / roundRatio) at the currency's places — never a direction or a 2 chosen here (C-02, ADR-0153)
+```
+
 ## C-03 — Redis keys go through `RedisKeys` only
 
 **Rule.** Every Redis command's key argument is built via `RedisKeys.*` (Node)
@@ -908,7 +925,7 @@ is needed it is moved to its home and both callers import it — not pasted.
 | the tenant type | `lib/tenant-type.ts` (C-18) | `shared-core/src/lib/tenant/platform-tenant.ts` (C-18) |
 | a header / cookie / permission name | `@/generated/wire` (C-04) | `shared-core/src/lib/http` (C-04) |
 | a translated string | `@/generated/i18n-keys` (C-06) | `BackendI18nKeys` / `BotKeys` (C-07) |
-| money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02) |
+| money | `_lib/money.ts` | `Decimal`, `shared-core/src/lib/billing` (C-02); rounding: `money-rounding.ts` + `currencyPlacesOf` (ADR-0153) |
 | a date or time | `_lib/datetime.ts` (`formatInstant`, `dayIn`, `platformToday`, `platformDayStart`), `lib/time-zone.ts` | `shared-core/src/lib/time` |
 | digits, numbers and lists | `_lib/digits.ts` (`numberLocale`, `formatList`); typed digits read by `toEnglishDigits` (`util/helper.ts`) | — |
 | Arabic-script folds, transliteration, stop words | `util/helper.ts` | `shared-core/src/lib/i18n/arabic-script.ts` (C-19) |

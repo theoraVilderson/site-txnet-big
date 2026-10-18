@@ -73,6 +73,10 @@ function world(w: World = {}) {
   const matches = (row: Record<string, unknown>, where: Record<string, unknown>) => Object.entries(where).every(([k, v]) => row[k] === v);
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
       findUnique: async ({ where }: { where: { id: string } }) => (where.id === grant.id ? { ...grant } : null),

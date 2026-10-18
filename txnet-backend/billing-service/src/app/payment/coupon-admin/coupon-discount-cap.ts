@@ -1,10 +1,12 @@
 import { DiscountType, Prisma } from '@prisma/client';
-import { ResellerLimitReached, resellerLimitOf } from '@txnet-backend/shared-core';
+import { ResellerLimitReached, resellerLimitOf, roundRatio } from '@txnet-backend/shared-core';
 
 /** A coupon's discount as it is being written or was stored: its type, value and minimum purchase (decimal strings). */
 export type CouponDiscount = { discountType?: unknown; discountValue?: unknown; minPurchaseAmount?: unknown };
 
 const WHOLE = new Prisma.Decimal(100);
+/** A share of the price is told to two places: 33.33. */
+const PERCENT_PLACES = 2;
 
 /**
  * The most a coupon can take off a price, as a percentage of it: a
@@ -48,5 +50,5 @@ export async function assertUnderDiscountCap(
   if (pct === null) return;
   const { limit } = await resellerLimitOf(tx, c.tenantId, 'coupon_discount_pct_max');
   // `used` is shown to the reseller: a fixed amount's share is rounded to two places (33.33, not 33.333…).
-  if (limit !== null && pct.greaterThan(limit)) throw new ResellerLimitReached('coupon_discount_pct_max', limit, pct.toDecimalPlaces(2).toNumber());
+  if (limit !== null && pct.greaterThan(limit)) throw new ResellerLimitReached('coupon_discount_pct_max', limit, roundRatio(pct, PERCENT_PLACES).toNumber());
 }

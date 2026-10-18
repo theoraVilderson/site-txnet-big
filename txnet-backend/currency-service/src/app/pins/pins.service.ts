@@ -10,6 +10,7 @@ import {
   UnscopedRedisKeys,
   tenantTransaction,
   isPlatformTenant,
+  roundRate,
 } from '@txnet-backend/shared-core';
 
 import { BillingClient } from '../billing/billing.client';
@@ -192,10 +193,7 @@ export class CurrencyPinService {
 
     let rate: Prisma.Decimal;
     try {
-      rate = new Prisma.Decimal(input.rate).toDecimalPlaces(
-        RATE_SCALE,
-        Prisma.Decimal.ROUND_HALF_UP,
-      );
+      rate = roundRate(new Prisma.Decimal(input.rate), RATE_SCALE);
     } catch {
       throw new CurrencyPinRefused('invalid_rate', input.rate);
     }

@@ -31,42 +31,42 @@ describe('planPackageChange', () => {
   const base = { samePackage: false, paid: true, periodEnd: END, now: NOW };
 
   it('an upgrade on the same period charges the difference for the days left, at once', () => {
-    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('300'), priceForNewModel: D('300') }, to: { model: monthly, price: D('600') } });
+    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('300'), priceForNewModel: D('300') }, to: { model: monthly, price: D('600'), places: 2 } });
     expect(plan).toEqual({ when: 'now', charge: D('100'), periodEnd: END });
   });
 
   it('rounds the charge to the cent, half up', () => {
-    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('100'), priceForNewModel: D('100') }, to: { model: monthly, price: D('200') } });
+    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('100'), priceForNewModel: D('100') }, to: { model: monthly, price: D('200'), places: 2 } });
     expect(plan.when === 'now' && plan.charge.toFixed(2)).toBe('33.33');
   });
 
   it('a cheaper or an equal package waits for the renewal', () => {
-    expect(planPackageChange({ ...base, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('300') } })).toEqual({ when: 'renewal' });
-    expect(planPackageChange({ ...base, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('600') } })).toEqual({ when: 'renewal' });
+    expect(planPackageChange({ ...base, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('300'), places: 2 } })).toEqual({ when: 'renewal' });
+    expect(planPackageChange({ ...base, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('600'), places: 2 } })).toEqual({ when: 'renewal' });
   });
 
   it('monthly -> yearly charges the year less the unused days and starts the year now', () => {
-    const plan = planPackageChange({ ...base, samePackage: true, from: { model: monthly, price: D('300'), priceForNewModel: D('3000') }, to: { model: yearly, price: D('3000') } });
+    const plan = planPackageChange({ ...base, samePackage: true, from: { model: monthly, price: D('300'), priceForNewModel: D('3000') }, to: { model: yearly, price: D('3000'), places: 2 } });
     expect(plan).toEqual({ when: 'now', charge: D('2900'), periodEnd: new Date('2027-10-11T00:00:00.000Z') });
   });
 
   it('monthly -> yearly onto a package cheaper by the year waits for the renewal', () => {
-    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('300'), priceForNewModel: D('3000') }, to: { model: yearly, price: D('2000') } });
+    const plan = planPackageChange({ ...base, from: { model: monthly, price: D('300'), priceForNewModel: D('3000') }, to: { model: yearly, price: D('2000'), places: 2 } });
     expect(plan).toEqual({ when: 'renewal' });
   });
 
   it('yearly -> monthly waits for the year to end, whatever the package', () => {
-    const plan = planPackageChange({ ...base, from: { model: yearly, price: D('3000'), priceForNewModel: D('300') }, to: { model: monthly, price: D('900') } });
+    const plan = planPackageChange({ ...base, from: { model: yearly, price: D('3000'), priceForNewModel: D('300') }, to: { model: monthly, price: D('900'), places: 2 } });
     expect(plan).toEqual({ when: 'renewal' });
   });
 
   it('a trial or an unpaid period changes at once and free', () => {
-    const plan = planPackageChange({ ...base, paid: false, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('300') } });
+    const plan = planPackageChange({ ...base, paid: false, from: { model: monthly, price: D('600'), priceForNewModel: D('600') }, to: { model: monthly, price: D('300'), places: 2 } });
     expect(plan).toEqual({ when: 'now', charge: D('0'), periodEnd: END });
   });
 
   it('the same package and period is no change', () => {
-    expect(planPackageChange({ ...base, samePackage: true, from: { model: monthly, price: D('300'), priceForNewModel: D('300') }, to: { model: monthly, price: D('300') } })).toEqual({
+    expect(planPackageChange({ ...base, samePackage: true, from: { model: monthly, price: D('300'), priceForNewModel: D('300') }, to: { model: monthly, price: D('300'), places: 2 } })).toEqual({
       when: 'none',
     });
   });
@@ -91,7 +91,9 @@ describe('TenantSubscriptionService — changing a paid package (F-019-v7)', () 
     const reseller = { id: RESELLER, status: opts.status ?? 'active', billingModel: 'subscription_monthly' };
     const tx = {
       $queryRaw: vi.fn(async () => (writes.push('lock'), [{ id: RESELLER }])),
-      tenant: { findUnique: vi.fn(async () => reseller), update: vi.fn(async () => (writes.push('tenant'), {})) },
+      tenant: { findUnique: vi.fn(async () => reseller), findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })), update: vi.fn(async () => (writes.push('tenant'), {})) },
+      // The platform's currency in the registry: a package price is rounded to its places (ADR-0153).
+      currency: { findUnique: vi.fn(async () => ({ decimalPlaces: 2 })) },
       tenantFeaturePackage: { findUnique: vi.fn(async () => target) },
       tenantSubscription: {
         findUnique: vi.fn(async () => current),

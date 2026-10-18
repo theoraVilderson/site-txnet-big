@@ -79,6 +79,8 @@ function build(
   let current = row;
   const open = openPaymentFakes();
   const tx = {
+    // The registry: every payment here is in a two-place currency (ADR-0153).
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     tenant: open.tenant,
     outboxEvent: open.outboxEvent(),
     $executeRaw: async () => 0,
@@ -95,7 +97,7 @@ function build(
       },
     },
   };
-  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx), currency: tx.currency };
   // Outside every tenant: the relay arrives with none, and the row names its own.
   const crossTenant = {
     paymentTransaction: {
@@ -297,6 +299,7 @@ describe('a Telegram Stars price', () => {
         ref: {} as never,
         amount: d('10.00'),
         currencyCode: 'USD',
+        places: 2,
         discount: d('0'),
         actorId: USER,
         defaultTaxRatePercent: null,

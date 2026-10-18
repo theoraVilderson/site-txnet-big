@@ -1,4 +1,5 @@
 import { Prisma, TenantBillingModel } from '@prisma/client';
+import { roundConverted } from '@txnet-backend/shared-core';
 import { addBillingPeriod, nameBasedUuid } from '../renewal/tenant-renewal.service';
 
 /**
@@ -34,7 +35,8 @@ export type PackageChangeFacts = {
   samePackage: boolean;
   /** The package the reseller is on: its period, its price for that period, and its price for the period asked. */
   from: { model: TenantBillingModel; price: Prisma.Decimal | null; priceForNewModel: Prisma.Decimal | null };
-  to: { model: TenantBillingModel; price: Prisma.Decimal };
+  /** The package asked for; `places` is its price currency's `decimalPlaces`, a prorated charge being a price rounded half up there (ADR-0153). */
+  to: { model: TenantBillingModel; price: Prisma.Decimal; places: number };
   periodEnd: Date;
   /** The current period was paid for: not a trial, and not over. */
   paid: boolean;
@@ -50,11 +52,11 @@ export function planPackageChange(f: PackageChangeFacts): PackageChangePlan {
 
   if (f.from.model === f.to.model) {
     if (!f.to.price.gt(f.from.price)) return { when: 'renewal' };
-    return { when: 'now', charge: cents(f.to.price.sub(f.from.price).mul(left).div(length)), periodEnd: f.periodEnd };
+    return { when: 'now', charge: roundConverted(f.to.price.sub(f.from.price).mul(left).div(length), f.to.places), periodEnd: f.periodEnd };
   }
   if (f.from.model !== TenantBillingModel.subscription_monthly || f.to.model !== TenantBillingModel.subscription_yearly) return { when: 'renewal' };
   if (f.from.priceForNewModel !== null && f.to.price.lt(f.from.priceForNewModel)) return { when: 'renewal' };
-  const charge = cents(f.to.price.sub(f.from.price.mul(left).div(length)));
+  const charge = roundConverted(f.to.price.sub(f.from.price.mul(left).div(length)), f.to.places);
   if (!charge.gt(0)) return { when: 'renewal' };
   return { when: 'now', charge, periodEnd: addBillingPeriod(f.now, TenantBillingModel.subscription_yearly) };
 }
@@ -70,8 +72,4 @@ function daysLeft(periodEnd: Date, model: TenantBillingModel, now: Date): { left
   const length = Math.round((periodEnd.getTime() - start.getTime()) / DAY_MS);
   const left = Math.min(length, Math.max(0, Math.ceil((periodEnd.getTime() - now.getTime()) / DAY_MS)));
   return { left, length };
-}
-
-function cents(v: Prisma.Decimal): Prisma.Decimal {
-  return v.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }

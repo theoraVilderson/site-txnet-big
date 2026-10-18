@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { roundRatio } from '@txnet-backend/shared-core';
 
 import { FEWER_THAN, hiddenCells } from '../revenue/revenue-breakdown';
 
@@ -30,7 +31,7 @@ export function deltaOf(value: Prisma.Decimal.Value, previous: Prisma.Decimal.Va
   const v = new Prisma.Decimal(value);
   const p = new Prisma.Decimal(previous);
   if (p.isZero()) return v.isZero() ? 0 : 'new';
-  return v.minus(p).div(p.abs()).toDecimalPlaces(DELTA_PLACES).toNumber();
+  return roundRatio(v.minus(p).div(p.abs()), DELTA_PLACES).toNumber();
 }
 
 export function countKpi(value: number, previous: number | null): CountKpi {

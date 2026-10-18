@@ -230,7 +230,12 @@ export class DecisionReader {
           },
           select: { variantId: true, amount: true, currencyCode: true, startsAt: true, endsAt: true, season: { select: { id: true, name: true } } },
         });
-        return { grants, variants, prices, legs, users, windows, templates, payments, seasons };
+        // An offer's discount is rounded to its currency's places (ADR-0153).
+        const currencies = await tx.currency.findMany({
+          where: { code: { in: [...new Set(own.offers.map((o) => o.currencyCode))] } },
+          select: { code: true, decimalPlaces: true },
+        });
+        return { grants, variants, prices, legs, users, windows, templates, payments, seasons, currencies };
       },
       { timeout: READ_TIMEOUT_MS },
     );
@@ -266,8 +271,9 @@ export class DecisionReader {
     // A template offer whose coupon is gone is no offer; the target is fixed at creation (F-038-f1).
     const offers: OfferOption[] = own.offers.flatMap((o) => {
       const t = o.couponTemplateId ? theirs.templates.find((c) => c.id === o.couponTemplateId) : null;
-      if (o.couponTemplateId && !t) return [];
-      return [{ id: o.id, variantId: o.variantId, maxDiscountPercent: o.maxDiscountPercent, currencyCode: o.currencyCode, template: t ? { discountType: t.discountType, discountValue: t.discountValue, maxDiscountCap: t.maxDiscountCap, currencyCode: t.currencyCode } : null }];
+      const places = theirs.currencies.find((c) => c.code === o.currencyCode)?.decimalPlaces;
+      if ((o.couponTemplateId && !t) || places === undefined) return [];
+      return [{ id: o.id, variantId: o.variantId, maxDiscountPercent: o.maxDiscountPercent, currencyCode: o.currencyCode, places, template: t ? { discountType: t.discountType, discountValue: t.discountValue, maxDiscountCap: t.maxDiscountCap, currencyCode: t.currencyCode } : null }];
     });
 
     const seasons: SeasonWindow[] = theirs.seasons.flatMap((s) =>

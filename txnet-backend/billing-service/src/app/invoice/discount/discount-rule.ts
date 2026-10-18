@@ -1,5 +1,5 @@
 import { DiscountRuleKind, Prisma, UserGroupMemberType } from '@prisma/client';
-import { categoryChainInclude, liveMembership } from '@txnet-backend/shared-core';
+import { categoryChainInclude, currencyPlacesOf, liveMembership, roundCredit } from '@txnet-backend/shared-core';
 
 /**
  * A discount with no code (F-114-h, D-45, ADR-0087): which rule a purchase
@@ -16,9 +16,6 @@ import { categoryChainInclude, liveMembership } from '@txnet-backend/shared-core
  * A time-boxed campaign price is not this: that is a new catalog price row
  * (F-503-a), never a rule.
  */
-
-/** Same scale as every money column (C-02). */
-const MONEY_SCALE = 2;
 
 export type DiscountRuleFacts = {
   id: string;
@@ -46,6 +43,8 @@ export type PurchaseFacts = {
   /** Every group the buyer is a user member of. */
   groupIds: readonly string[];
   at: Date;
+  /** The price currency's `decimalPlaces`: a discount is rounded down there (ADR-0153). */
+  places: number;
 };
 
 export type ChosenRule = { rule: DiscountRuleFacts; discount: Prisma.Decimal };
@@ -62,12 +61,12 @@ export function ruleMatches(rule: DiscountRuleFacts, p: PurchaseFacts): boolean 
   return true;
 }
 
-/** What `rule` takes from `amount`: a percentage down to the cent, never more than `amount`. */
-export function ruleDiscountOf(rule: DiscountRuleFacts, amount: Prisma.Decimal): Prisma.Decimal {
+/** What `rule` takes from `amount`: a percentage down to the minor unit at `places`, never more than `amount`. */
+export function ruleDiscountOf(rule: DiscountRuleFacts, amount: Prisma.Decimal, places: number): Prisma.Decimal {
   const d =
     rule.kind === DiscountRuleKind.percentage
-      ? // Down to the cent: a discount rounded up would give away money no rule granted.
-        amount.mul(rule.value).div(100).toDecimalPlaces(MONEY_SCALE, Prisma.Decimal.ROUND_DOWN)
+      ? // Down: a discount rounded up would give away money no rule granted.
+        roundCredit(amount.mul(rule.value).div(100), places)
       : rule.value;
   return d.gt(amount) ? amount : d;
 }
@@ -77,7 +76,7 @@ export function bestDiscountRule(rules: readonly DiscountRuleFacts[], p: Purchas
   let best: ChosenRule | null = null;
   for (const rule of rules) {
     if (!ruleMatches(rule, p)) continue;
-    const discount = ruleDiscountOf(rule, amount);
+    const discount = ruleDiscountOf(rule, amount, p.places);
     if (discount.lte(0)) continue;
     if (
       !best ||
@@ -98,12 +97,13 @@ function chainIds(c: CategoryWithChain | null | undefined, out: Set<string>): vo
 }
 
 /**
- * The rule `userId`'s purchase of `productId` takes at `amount`, read in the
- * caller's `tenantTransaction` — RLS shows only this tenant's rules.
+ * The rule `userId`'s purchase of `productId` takes at `amount` (in
+ * `currencyCode`), read in the caller's `tenantTransaction` — RLS shows only
+ * this tenant's rules.
  */
 export async function discountRuleFor(
   tx: Prisma.TransactionClient,
-  purchase: { userId: string; productId: string; at: Date },
+  purchase: { userId: string; productId: string; at: Date; currencyCode: string },
   amount: Prisma.Decimal,
 ): Promise<ChosenRule | null> {
   if (amount.lte(0)) return null;
@@ -127,5 +127,6 @@ export async function discountRuleFor(
     : [];
 
   const facts = rows.map((r) => ({ ...r, userIds: r.users.map((u) => u.userId) }));
-  return bestDiscountRule(facts, { userId, productId, categoryIds: [...categoryIds], groupIds, at }, amount);
+  const places = await currencyPlacesOf(tx, purchase.currencyCode);
+  return bestDiscountRule(facts, { userId, productId, categoryIds: [...categoryIds], groupIds, at, places }, amount);
 }

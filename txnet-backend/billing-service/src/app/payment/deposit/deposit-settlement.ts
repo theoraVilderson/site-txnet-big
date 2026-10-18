@@ -7,7 +7,7 @@ import {
   TenantBillingReasonType,
   WalletReasonType,
 } from '@prisma/client';
-import { OutboxEventType, TenantBillingLedger, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, fromMinorUnits, OutboxEventType, roundCredit, TenantBillingLedger, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -122,9 +122,9 @@ export type GatewayReceipt = { amountMinor: bigint; currency: string; decimals: 
  * What a payment is worth in base currency, given what arrived (F-104-d, D-32:
  * credit what actually arrived). Exactly the asked amount, or no receipt, is
  * `amountCredited`. More is `amountCredited` plus the surplus at the frozen
- * rate. Every conversion floors to the cent: a fraction that did not arrive is
- * never credited. A payment with no rate (the free path) has nothing to value a
- * receipt at, and credits as asked.
+ * rate. Every conversion floors to the payment currency's minor unit (`places`,
+ * ADR-0153): what did not arrive is never credited. A payment with no rate
+ * (the free path) has nothing to value a receipt at, and credits as asked.
  *
  * **Less is the payer's share of what the charge was actually for** (F-104-r),
  * not the receipt valued whole. `chargedAmountMinor` is `amountCredited` *plus*
@@ -141,15 +141,15 @@ export type GatewayReceipt = { amountMinor: bigint; currency: string; decimals: 
 export function creditForReceipt(
   payment: Pick<PaymentRow, 'amountCredited' | 'feeApplied' | 'chargedAmountMinor' | 'exchangeRateSnapshot'>,
   received: GatewayReceipt | undefined,
+  places: number,
 ): { credited: Prisma.Decimal; full: boolean } {
   const asked = payment.chargedAmountMinor;
   const rate = payment.exchangeRateSnapshot;
   if (!received || received.amountMinor === asked || !rate || rate.lte(0)) {
     return { credited: payment.amountCredited, full: true };
   }
-  const toBase = (minor: bigint) =>
-    new Prisma.Decimal(minor.toString()).div(new Prisma.Decimal(10).pow(received.decimals)).div(rate);
-  const cents = (v: Prisma.Decimal) => v.toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  const toBase = (minor: bigint) => fromMinorUnits(minor, received.decimals).div(rate);
+  const cents = (v: Prisma.Decimal) => roundCredit(v, places);
   if (received.amountMinor < asked) {
     // The charge less the fee: what a full payment would have left the platform
     // holding. A fee at or above the whole charge leaves nothing to share out,
@@ -195,7 +195,7 @@ export class DepositSettlementService {
     if ((source === ConfirmationSource.admin_manual) !== (manual !== undefined)) {
       throw new Error('an admin_manual credit needs a ManualConfirmation, and only it may carry one');
     }
-    const { credited, full } = creditForReceipt(payment, verified.received);
+    const { credited, full } = creditForReceipt(payment, verified.received, await currencyPlacesOf(this.prisma, payment.currencyCode));
     // A reseller's billing top-up (F-019-b, ADR-0056) is the platform owner's
     // payment crediting another tenant's `tenant_billing_wallet`, which strict
     // RLS hides from the owner-bound app pool — so its whole settlement, flip

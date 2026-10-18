@@ -15,6 +15,7 @@ import {
   repricePackageRates,
 } from './currency-change-platform';
 import { balance, type Conversion, money, moneyList, owned, RATE_COLUMN_SCALE } from './currency-change-sql';
+import { roundRate } from './money-rounding';
 
 /**
  * F-116-f (ADR-0098 part 5) — a tenant's operating currency changes, and what
@@ -129,7 +130,7 @@ export async function convertOperatingCurrency(
 ): Promise<CurrencyChangeOutcome> {
   const { tenantId, toCode, pair } = input;
   if (pair.toCode !== toCode) throw new Error(`rate pair ends in ${pair.toCode}, the change in ${toCode}`);
-  const rate = pair.rate.toDecimalPlaces(RATE_SCALE);
+  const rate = roundRate(pair.rate, RATE_SCALE);
 
   const [tenant] = await tx.$queryRaw<Array<{ code: string; type: TenantType }>>`
     SELECT "operatingCurrencyCode" AS code, "tenantType" AS type FROM tenant.tenant WHERE id = ${tenantId}::uuid FOR UPDATE`;

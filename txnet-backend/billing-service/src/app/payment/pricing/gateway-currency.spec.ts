@@ -105,6 +105,8 @@ const input = (g: SelectedGateway, currencyCode: string, amount = '100.00') => (
   defaultTaxRatePercent: null,
   actorId: 'u',
   currencyCode,
+  // A payer currency's places, from the registry: the rial has none.
+  places: currencyCode === 'IRR' ? 0 : 2,
   ratesTenantId: null as string | null,
 });
 

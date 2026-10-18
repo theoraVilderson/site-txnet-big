@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { roundRatio } from '@txnet-backend/shared-core';
 
 import type { Day } from './analytics-days';
 import { Amounts, FEWER_THAN, amountsOf, byCurrency, hiddenKeys } from './analytics-figures';
@@ -60,7 +61,7 @@ export function cohortGridOf(input: CohortInput, how: { currencies: readonly str
       const month = byCurrency(net.filter((r) => kOf(cohort, r.month) === k), (r) => r.net);
       for (const [c, v] of month) running.set(c, (running.get(c) ?? new Prisma.Decimal(0)).plus(v));
       const active = input.active.filter((r) => r.cohort === cohort && kOf(cohort, r.month) === k).reduce((n, r) => n + r.users, 0);
-      cells.push({ k, share: new Prisma.Decimal(active).div(users).toDecimalPlaces(SHARE_PLACES).toNumber(), netPerUser: amountsOf(perUser(month, users), how.currencies), ltv: amountsOf(perUser(running, users), how.currencies) });
+      cells.push({ k, share: roundRatio(new Prisma.Decimal(active).div(users), SHARE_PLACES).toNumber(), netPerUser: amountsOf(perUser(month, users), how.currencies), ltv: amountsOf(perUser(running, users), how.currencies) });
     }
     return { cohort, users, cells, currencies: new Set(net.map((r) => r.currencyCode)) };
   });

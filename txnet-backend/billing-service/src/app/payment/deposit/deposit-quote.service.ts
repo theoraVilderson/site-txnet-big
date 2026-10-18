@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfirmationMode, CouponChannel, Prisma } from '@prisma/client';
-import { operatingCurrencyOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, operatingCurrencyOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -86,7 +86,7 @@ export type DepositQuoteRequest = {
   userId: string;
   gatewayId: string;
   source: GatewaySource;
-  /** Base currency (ADR-0019), > 0, at most 2 decimal places. */
+  /** In the payer's currency, > 0, at most its decimal places (ADR-0153). */
   amount: Prisma.Decimal;
   couponCodes: readonly string[];
   /** Where the codes were typed (F-502-k). Absent = the panel. */
@@ -210,7 +210,7 @@ export class DepositQuoteService {
     const tenant = TenantContext.current('deposit quote');
     const { userId, gatewayId, amount } = request;
 
-    const { gateway, coupons, defaultTaxRatePercent, currencyCode } = await tenantTransaction(this.prisma, async (tx) => {
+    const { gateway, coupons, defaultTaxRatePercent, currencyCode, places } = await tenantTransaction(this.prisma, async (tx) => {
       const currencyCode = await operatingCurrencyOf(tx, tenant.id);
       const gateway = await selectPayerGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest, userId });
       if (!gateway || !this.offeredHere(gateway, request.chatPlatform) || !offeredInCurrency(gateway, currencyCode)) {
@@ -229,7 +229,7 @@ export class DepositQuoteService {
         // A user's top-up is inside this tenant's books: its own pin prices it (F-116-j).
         ratesTenantId: tenant.id,
       });
-      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode };
+      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode, places: await currencyPlacesOf(tx, currencyCode) };
     });
 
     const { price, charge } = await priceDeposit(
@@ -249,6 +249,7 @@ export class DepositQuoteService {
         },
         amount,
         currencyCode,
+        places,
         discount: coupons.totalDiscount,
         actorId: userId,
         defaultTaxRatePercent,

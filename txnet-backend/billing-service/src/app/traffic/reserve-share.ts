@@ -1,5 +1,5 @@
 import { GrantStatus, Prisma, VariantBillingMode, WalletHoldStatus } from '@prisma/client';
-import { METER_KEYS } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, METER_KEYS, roundHold } from '@txnet-backend/shared-core';
 
 import { WalletHoldService, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { HAS_VPN_METER } from './vpn-meter';
@@ -81,8 +81,10 @@ export async function reserveShareOf(tx: Prisma.TransactionClient, grant: { id: 
       })
     : [];
   const pool = holds.reduce((sum, h) => sum.plus(h.amount), wallet.cachedBalance.minus(wallet.heldAmount));
-  const share = pool.lte(0) ? ZERO : pool.div(count).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
-  const headroom = pool.lte(0) ? ZERO : pool.div(count * HEADROOM_PART).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  // A share is what a hold may take: down, at the wallet currency's places (ADR-0153).
+  const places = await currencyPlacesOf(tx, wallet.currencyCode);
+  const share = pool.lte(0) ? ZERO : roundHold(pool.div(count), places);
+  const headroom = pool.lte(0) ? ZERO : roundHold(pool.div(count * HEADROOM_PART), places);
   const siblings = holds
     .filter((h) => h.ownerRef !== grant.id && leased.includes(h.ownerRef))
     .map((h) => ({ grantId: h.ownerRef, amount: h.amount }));

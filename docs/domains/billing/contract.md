@@ -55,7 +55,7 @@ quote calls it (F-092-o) and `deposit/start` reserves what it applied (F-092-i).
 |---|---|
 | Codes are trimmed, upper-cased, blanks dropped, de-duplicated; a stored `coupon.code` must be upper-case — the admin writer normalises | legacy behaviour kept; the lookup is exact |
 | Applied in the order typed, each on what the previous left (60% then 50% of 20 = 12 + 4); `totalDiscount` is the calculator's `discount` | D-21, D-23 |
-| A percentage is rounded **down** to the cent, then capped by `maxDiscountCap`; any discount is capped at the running payable | never give away an unrounded cent |
+| A percentage is rounded **down** to the order currency's minor unit (ADR-0153), then capped by `maxDiscountCap`; any discount is capped at the running payable | never give away an unrounded unit |
 | A failing code is `rejected` with a closed `reason` and takes nothing; the route maps `reason` to an i18n key (C-01) | the codes after it see the untouched payable |
 | Gates, in order: inactive / soft-deleted / targeted at someone else → `not_found`; `wallet_credit` → `not_a_discount` (F-092-m); a platform coupon on a tenant gateway → `platform_coupon_needs_platform_gateway` (F-502-b); then F-502-k's limits interleaved as [contract.coupon.md](contract.coupon.md) lists; `expiresAt <= now` → `expired`; scope; `minPurchaseAmount` against the **amount**; per-user; capacity | legacy order |
 | Scope: no `coupon_service_scope` row is open; a top-up matches no scoped coupon; a plan matches a row naming the plan or its category | schema comment |

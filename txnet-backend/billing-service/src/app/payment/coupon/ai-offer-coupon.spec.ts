@@ -65,6 +65,8 @@ function build(opts: { template?: Template | null; spentToday?: string; existing
       return 1;
     },
     tenant: { findUnique: async () => ({ timezone: 'Asia/Tehran' }) },
+    // The registry: a rial has no minor unit.
+    currency: { findUnique: async () => ({ decimalPlaces: 0 }) },
     coupon: {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => {
         if ('aiActionId' in where) return opts.existing ?? null;
@@ -88,7 +90,7 @@ function build(opts: { template?: Template | null; spentToday?: string; existing
 }
 
 describe('personalCouponTerms (F-038-f3)', () => {
-  const price = D('200000');
+  const price = { amount: D('200000'), places: 0 };
 
   it('takes the lower of the template\'s percentage and the offer\'s cap, and the template\'s money cap', () => {
     expect(personalCouponTerms(price, D('20'), template())).toMatchObject({ discountType: 'percentage', discountValue: '20.00', charge: '40000.00' });

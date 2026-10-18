@@ -91,6 +91,8 @@ function requestOf(c: Golden['cases'][number]): PriceRequest {
     discount: new Prisma.Decimal(c.input.discount),
     quotedFee: dec(c.input.quotedFee),
     liveRate: c.input.liveRate == null ? null : { snapshotId: SNAPSHOT_ID, rate: new Prisma.Decimal(c.input.liveRate) },
+    // Every golden case is in a two-place payer currency.
+    places: 2,
     chargeDecimals: c.input.chargeDecimals,
   };
 }
@@ -187,7 +189,8 @@ describe('purity (F-0610)', () => {
     for (const forbidden of [/\bMath\./, /\bNumber\(/, /parseFloat|parseInt/, /\bDate\b/, /process\./, /\.toNumber\(/]) {
       expect(code).not.toMatch(forbidden);
     }
-    expect(code.match(/from '([^']+)'/g)).toEqual(["from '@prisma/client'"]);
+    // Rounding is shared-core's one module (ADR-0153), itself pure.
+    expect(code.match(/from '([^']+)'/g)).toEqual(["from '@prisma/client'", "from '@txnet-backend/shared-core'"]);
   });
 });
 
@@ -200,6 +203,7 @@ describe('tax on a top-up (ADR-0076)', () => {
     amount: new Prisma.Decimal(amount),
     discount: new Prisma.Decimal(discount),
     defaultTaxRatePercent: dec(tenantRate),
+    places: 2,
     chargeDecimals: 2,
   });
   const figures = (p: ReturnType<typeof priceAtGateway>) => ({

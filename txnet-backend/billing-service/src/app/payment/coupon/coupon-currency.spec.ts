@@ -2,7 +2,7 @@ import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 import { runInBoundTransaction, runWithTenant } from '@txnet-backend/shared-core';
 
 import { CouponReservationService } from './coupon-reservation';
-import { applyCoupons, CouponFacts, CouponRequest, CouponValidationService } from './coupon-validation';
+import { applyCoupons, CouponFacts, CouponOrder, CouponValidationService } from './coupon-validation';
 
 /**
  * A coupon applies only in its own currency (F-116-h6, ADR-0098 part 3).
@@ -68,7 +68,8 @@ function coupon(code: string, over: Partial<CouponFacts> = {}): CouponFacts {
 const inTenantTransaction = <T>(fn: () => T): T =>
   runWithTenant({ id: TENANT } as never, () => runInBoundTransaction(TENANT, fn));
 
-const irrOrder = (amount: string, codes: string[]): CouponRequest => ({
+const irrOrder = (amount: string, codes: string[]): CouponOrder => ({
+  places: 0,
   codes,
   amount: D(amount),
   currencyCode: 'IRR',
@@ -86,9 +87,15 @@ describe('a coupon in another currency than the order (F-116-h6)', () => {
   it("converts a percentage's cap, and rounds a converted amount down to the cent", () => {
     const c = coupon('HALF', { discountType: DiscountType.percentage, discountValue: D(50), maxDiscountCap: D('1.5') });
     const pair = { rate: D('0.923456789'), snapshotId: TO_LEG, fromSnapshotId: null };
-    const v = applyCoupons({ ...irrOrder('10', ['HALF']), currencyCode: 'EUR' }, [{ ...c, fx: pair }], NOW);
+    const v = applyCoupons({ ...irrOrder('10', ['HALF']), currencyCode: 'EUR', places: 2 }, [{ ...c, fx: pair }], NOW);
     // 50% of 10 is 5, capped at 1.5 USD = 1.3851851835 EUR -> 1.38.
     expect(v.applied[0].discount.toFixed(2)).toBe('1.38');
+  });
+
+  it('rounds a converted amount to the order currency’s own places: a rial has no cents (ADR-0153)', () => {
+    const c = coupon('ODD', { discountValue: D('1.5'), fx: { rate: D('100000.5'), snapshotId: TO_LEG, fromSnapshotId: null } });
+    // 1.5 USD at 100000.5 is 150000.75 IRR: down to the whole rial, never 150000.75.
+    expect(applyCoupons(irrOrder('1000000', ['ODD']), [c], NOW).applied[0].discount.toFixed()).toBe('150000');
   });
 
   it('tests the purchase bounds in the order currency', () => {
@@ -116,7 +123,7 @@ describe('a coupon in another currency than the order (F-116-h6)', () => {
 
   it('a fixed value that converts to less than a cent takes nothing', () => {
     const c = coupon('TINY', { discountValue: D('0.01'), fx: { rate: D('0.1'), snapshotId: null, fromSnapshotId: TO_LEG } });
-    expect(applyCoupons({ ...irrOrder('10', ['TINY']), currencyCode: 'USD' }, [{ ...c, currencyCode: 'IRR' }], NOW).rejected).toEqual([
+    expect(applyCoupons({ ...irrOrder('10', ['TINY']), currencyCode: 'USD', places: 2 }, [{ ...c, currencyCode: 'IRR' }], NOW).rejected).toEqual([
       { code: 'TINY', reason: 'nothing_to_discount' },
     ]);
   });
@@ -137,6 +144,7 @@ describe('the loader reads a rate only for a coupon that needs one', () => {
           row('OWN', { tenantId: TENANT, currencyCode: 'IRR' }),
         ]),
       },
+      currency: { findUnique: vi.fn().mockResolvedValue({ decimalPlaces: 0 }) },
     } as unknown as Prisma.TransactionClient;
     const fx = { pair: vi.fn().mockResolvedValue(USD_IRR) };
     const service = new CouponValidationService(fx as never);

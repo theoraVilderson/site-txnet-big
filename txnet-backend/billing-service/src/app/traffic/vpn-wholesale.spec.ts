@@ -76,6 +76,10 @@ function world(w: World = {}) {
   const resellerLedger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {
       // The fair share's reads (F-118-ag): this fake's one Grant, its meter and its holds.

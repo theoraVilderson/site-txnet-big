@@ -143,7 +143,7 @@ export class InvoiceService {
 
       const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).
-      const rule = await discountRuleFor(tx, { userId, productId: offer.productId, at: now }, amount);
+      const rule = await discountRuleFor(tx, { userId, productId: offer.productId, at: now, currencyCode: offer.price.currencyCode }, amount);
       const ruleDiscount = rule?.discount ?? ZERO;
       const couponBase = amount.minus(ruleDiscount);
       const coupons: CouponValidation = couponBase.isZero()

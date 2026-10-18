@@ -66,6 +66,10 @@ function world(opts: { status?: string; balance?: string; mode?: 'prepaid' | 'po
   const ledger: Array<{ amount: string; reasonType: WalletReasonType; usage?: { meterKey: string; quantity: bigint }; note?: string }> = [];
 
   const tx = {
+
+    // The registry: every wallet here is in a two-place currency (ADR-0153).
+
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // No planner close (F-027-ec).
     leaseClose: { findUnique: async () => null },
     grant: {

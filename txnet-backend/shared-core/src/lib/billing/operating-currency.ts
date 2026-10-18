@@ -34,3 +34,14 @@ export async function platformCurrencyOf(tx: Prisma.TransactionClient): Promise<
   if (!row) throw new Error('no platform_owner tenant to read the platform currency from');
   return row.operatingCurrencyCode;
 }
+
+/**
+ * The places of `code`'s minor unit, from the registry (`currency.decimalPlaces`):
+ * what every money amount in it is rounded to (ADR-0153 point 1). Never a
+ * fallback to 2 — a rial has none, and an unregistered code is a caller bug.
+ */
+export async function currencyPlacesOf(tx: Pick<Prisma.TransactionClient, 'currency'>, code: string): Promise<number> {
+  const row = await tx.currency.findUnique({ where: { code }, select: { decimalPlaces: true } });
+  if (!row) throw new Error(`currency ${code} is not registered`);
+  return row.decimalPlaces;
+}

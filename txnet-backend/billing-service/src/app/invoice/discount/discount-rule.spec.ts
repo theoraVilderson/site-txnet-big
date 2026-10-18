@@ -54,7 +54,7 @@ function rule(o: Partial<DiscountRuleFacts> = {}): DiscountRuleFacts {
   };
 }
 
-const purchase: PurchaseFacts = { userId: USER, productId: PRODUCT, categoryIds: [CATEGORY, PARENT_CATEGORY], groupIds: [GROUP], at: AT };
+const purchase: PurchaseFacts = { userId: USER, productId: PRODUCT, categoryIds: [CATEGORY, PARENT_CATEGORY], groupIds: [GROUP], at: AT, places: 2 };
 
 describe('ruleMatches', () => {
   it('a rule for everything and everyone matches inside its window', () => {
@@ -85,12 +85,12 @@ describe('ruleMatches', () => {
 
 describe('ruleDiscountOf', () => {
   it('rounds a percentage down to the cent', () => {
-    expect(ruleDiscountOf(rule({ value: D('15') }), D('12.99')).toFixed(2)).toBe('1.94');
+    expect(ruleDiscountOf(rule({ value: D('15') }), D('12.99'), 2).toFixed(2)).toBe('1.94');
   });
 
   it('never takes more than the price', () => {
-    expect(ruleDiscountOf(rule({ kind: DiscountRuleKind.fixed_amount, value: D('20') }), D('12.50')).toFixed(2)).toBe('12.50');
-    expect(ruleDiscountOf(rule({ value: D('100') }), D('12.50')).toFixed(2)).toBe('12.50');
+    expect(ruleDiscountOf(rule({ kind: DiscountRuleKind.fixed_amount, value: D('20') }), D('12.50'), 2).toFixed(2)).toBe('12.50');
+    expect(ruleDiscountOf(rule({ value: D('100') }), D('12.50'), 2).toFixed(2)).toBe('12.50');
   });
 });
 

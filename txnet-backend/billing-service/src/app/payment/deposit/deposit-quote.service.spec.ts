@@ -96,6 +96,8 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
   asked = [];
   audienceRead = false;
   const tx = {
+    // The registry: every payment here is in a two-place currency (ADR-0153).
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     // No restriction on the person (F-030-e).
     userRestriction: { findMany: async () => [] },
     gatewayAudience: {
@@ -113,7 +115,7 @@ function build({ rows = [gatewayRow()], coupons = noCoupons('20.00'), quoteFee, 
       findMany: async (args: { where: Record<string, unknown> }) => (asked.push(args.where), rows),
     },
   };
-  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx), currency: tx.currency };
   const zarinpal = {
     name: 'zarinpal',
     chargeCurrency: 'IRR',
@@ -428,6 +430,8 @@ describe('OtherGatewayService (F-038-m)', () => {
   function build(opts: { paidSince?: boolean; gateways?: unknown[]; payment?: unknown } = {}) {
     const payment = opts.payment === undefined ? { gatewayId: null, tenantGatewayConfigId: TRIED, amountRequested: d('500000'), currencyCode: 'IRR', createdAt: new Date('2026-10-05T08:00:00Z') } : opts.payment;
     const tx = {
+      // The registry: every payment here is in a two-place currency (ADR-0153).
+      currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       $executeRaw: async () => 1,
@@ -435,7 +439,7 @@ describe('OtherGatewayService (F-038-m)', () => {
         findFirst: async ({ where }: { where: { status?: string } }) => (where.status === 'success' ? (opts.paidSince ? { id: 'p2' } : null) : payment),
       },
     };
-    const prisma = { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) };
+    const prisma = { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx), currency: tx.currency };
     const quotes = { listGateways: async () => opts.gateways ?? [gw(TRIED), gw('88888888-8888-4888-8888-888888888888')] };
     return new OtherGatewayService(prisma as never, quotes as never);
   }

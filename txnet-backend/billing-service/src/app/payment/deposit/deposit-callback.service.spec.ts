@@ -84,6 +84,8 @@ function build(setup: Setup = {}) {
 
   const open = openPaymentFakes();
   const tx = {
+    // The registry: every payment here is in a two-place currency (ADR-0153).
+    currency: { findUnique: async () => ({ decimalPlaces: 2 }) },
     $executeRaw: async () => 0,
     tenant: open.tenant,
     paymentTransferDetail: open.paymentTransferDetail,
@@ -112,7 +114,7 @@ function build(setup: Setup = {}) {
       return { id: 'event-1' };
     }),
   };
-  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
+  const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx), currency: tx.currency };
 
   const zarinpal = {
     name: 'zarinpal',
