@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Package, Plus, RotateCw } from "lucide-react";
+import { Languages, Package, Plus, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { operatingCurrencyApi, tenantApi, type TenantPackage } from "@/lib/tenant-api";
-import { panelResellerPackagePath } from "@/lib/routes";
+import { PANEL_RESELLER_PACKAGE_TRANSLATIONS, panelResellerPackagePath } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
@@ -19,7 +19,7 @@ import { sellsNothing } from "../../_lib/package-page";
 import { usePackageActions } from "../_hooks/usePackageActions";
 import { PackageSheet } from "./PackageSheet";
 import { PageHeader } from "../../../_components/kit/PageHeader";
-import { Badge, Button } from "../../../_components/kit";
+import { Badge, Button, buttonClass } from "../../../_components/kit";
 import { formatList } from "../../../_lib/digits";
 
 /**
@@ -27,6 +27,7 @@ import { formatList } from "../../../_lib/digits";
  * "Packages"): every one, active or withdrawn, with its prices, features and
  * wholesale VPN rate, and a flag on one that lists no product. A package opens
  * its own page, where each section is edited (PK-1-f); create is a sheet;
+ * drafted names are reviewed on the translations page (PK-1-h);
  * withdraw / offer again is `isActive`; "apply" forces the package's features
  * on every subscriber now.
  *
@@ -103,6 +104,10 @@ export function PackagesView() {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
+            <Link href={PANEL_RESELLER_PACKAGE_TRANSLATIONS} className={buttonClass({ variant: "quiet", size: "sm" })}>
+              <Languages size={14} aria-hidden />
+              {t("common", K.translations.open)}
+            </Link>
             <Button variant="primary" size="sm" disabled={!currency} onClick={() => setCreating(true)} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.new)}
             </Button>

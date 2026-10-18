@@ -5,6 +5,9 @@
 import { API_BASE } from "./api-origin";
 import { createApiClient, publishedNamespace } from "./api-request";
 import { authApi } from "./auth-api";
+import { translationReviewApi } from "./translation-review-api";
+
+export type { TranslationDraft } from "./translation-review-api";
 
 const API_URL = `${API_BASE}/catalog`;
 
@@ -46,17 +49,6 @@ export type { CatalogRejection } from "./catalog-rejections";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;
-
-/** One machine draft waiting for review, beside its source (`GET /translations`). */
-export interface TranslationDraft {
-  lang: string;
-  /** The full i18n key the item row holds. */
-  key: string;
-  draft: string;
-  published: string | null;
-  /** The item's source language and its published text there. */
-  source: { lang: string; text: string | null };
-}
 
 export interface CreateCategoryBody {
   /** Absent = the caller's tenant (the platform's, for its staff); another id = the platform owner's alone. */
@@ -416,23 +408,7 @@ export function catalogAdminApi(tenantId: string | null) {
     },
 
     // Translation review (F-1533-d/e): billing limits each call to the caller's items.
-
-    async translations(lang?: string): Promise<TranslationDraft[]> {
-      return call<TranslationDraft[]>(`${at}/translations${lang ? `?lang=${encodeURIComponent(lang)}` : ""}`, { method: "GET" });
-    },
-
-    /** Drafts every language that has neither text nor a draft yet. */
-    async draftMissing(): Promise<{ drafted: number }> {
-      return call<{ drafted: number }>(`${at}/translations/draft-missing`, { method: "POST" });
-    },
-
-    async publishTranslations(lang: string, keys: string[]): Promise<{ published: number }> {
-      return call<{ published: number }>(`${at}/translations/publish`, { method: "POST", ...json({ lang, keys }) });
-    },
-
-    async editTranslations(lang: string, texts: Record<string, string>): Promise<{ published: number }> {
-      return call<{ published: number }>(`${at}/translations`, { method: "PATCH", ...json({ lang, texts }) });
-    },
+    ...translationReviewApi(call, at),
 
     /**
      * The published `catalog` namespace in one language, flat by full key — from

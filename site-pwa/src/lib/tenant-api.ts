@@ -1,18 +1,6 @@
-// Tenant administration (F-018-c/e/f) is served by tenant-service on its own
-// public paths, `/api/tenants` and `/api/tenant-packages` on the page's own
-// domain (ADR-0058, ADR-0060). The access token as a Bearer header, exactly as
-// `billing-api.ts` calls billing: the same gate, the same credential.
-import { API_BASE } from "./api-origin";
-import { createApiClient } from "./api-request";
-import { authApi } from "./auth-api";
-
-const call = createApiClient({
-  baseUrl: API_BASE,
-  service: "tenant-service",
-  credential: () => authApi.getAccessToken(),
-  onCredentialRefused: (stale) => authApi.refreshCredential(stale),
-  credentialSettled: () => authApi.credentialSettled(),
-});
+// Tenant administration (F-018-c/e/f): tenant-service's routes, through its one caller (`tenant-call.ts`).
+import { call } from "./tenant-call";
+import { translationReviewApi } from "./translation-review-api";
 
 /** Prisma's `TenantStatus`. */
 export type TenantStatus = "trial" | "active" | "suspended" | "terminated";
@@ -210,6 +198,9 @@ export const tenantApi = {
   /** Every subscriber's package features replaced by the package's now, removals included (F-018-o). */
   applyPackage: (id: string) => call<PackageApplied>(`/tenant-packages/${encodeURIComponent(id)}/apply`, { method: "POST" }),
 };
+
+/** The package names' translation review (ADR-0154 (6)): catalog's four routes and shapes under `/tenant-packages`. */
+export const packageTranslationsApi = translationReviewApi(call, "/tenant-packages");
 
 /** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */
 export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max" | "platform_traffic_gib_monthly_max" | "user_purchases_daily_max" | "user_purchases_weekly_max" | "user_purchases_monthly_max" | "storage_mib_max" | "coupon_discount_pct_max";

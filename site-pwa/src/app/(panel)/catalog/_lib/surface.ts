@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { catalogApi, type CatalogAdminApi } from "@/lib/catalog-api";
+import type { TranslationReviewApi } from "@/lib/translation-review-api";
+import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_CATALOG, PANEL_CATALOG_TRANSLATIONS } from "@/lib/routes";
 import { pricingCurrencyQuery } from "./catalog-form";
 
@@ -59,6 +61,26 @@ export const CatalogSurfaceProvider = CatalogSurfaceContext.Provider;
 
 /** The surface the screen around this component set; the ambient one where none did. */
 export const useCatalogSurface = () => useContext(CatalogSurfaceContext);
+
+/**
+ * What one translation review page differs by (ADR-0154 (6)): whose drafts
+ * (`api`), where "back" leads, its headings (locale keys) and the chrome under
+ * them. The catalog's comes from its surface; the packages' is tenant-service's.
+ */
+export interface TranslationReview {
+  api: TranslationReviewApi;
+  backHref: string;
+  text: { title: string; subtitle: string; back: string };
+  chrome?: ReactNode;
+}
+
+const CATALOG_REVIEW_TEXT = FrontendI18nKeys.common.catalog.translations;
+
+/** The review of the catalog surface around the component: its api, its list, its tab bar. */
+export function useCatalogReview(): TranslationReview {
+  const { api, catalogHref, chrome } = useCatalogSurface();
+  return { api, backHref: catalogHref, chrome, text: CATALOG_REVIEW_TEXT };
+}
 
 /**
  * The code a price field names (F-116-h10): billing's answer for whose rows are

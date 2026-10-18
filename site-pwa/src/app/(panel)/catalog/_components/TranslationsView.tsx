@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Languages, Loader2, RotateCw, Send, Wand2 } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { type TranslationDraft } from "@/lib/catalog-api";
-import { useCatalogSurface } from "../_lib/surface";
+import { type TranslationDraft } from "@/lib/translation-review-api";
+import { useCatalogReview, type TranslationReview } from "../_lib/surface";
 import { Select } from "../../_components/kit/Select";
 import { CATALOG_KEYS, DESCRIPTION_MAX, editId, reviewWrites } from "../_lib/catalog-form";
 import { useMessage } from "./catalog-ui";
@@ -23,11 +23,15 @@ const K = CATALOG_KEYS.translations;
  * published now. "Translate missing" drafts a
  * language added after the item was written. Billing limits every call to the
  * caller's own items (the platform owner: all), so this page filters nothing.
+ *
+ * `review` is another owner's drafts on the same view — the packages',
+ * tenant-service's (ADR-0154 (6)); absent, the catalog surface around it.
  */
-export function TranslationsView() {
+export function TranslationsView({ review }: { review?: TranslationReview }) {
   const { t, availableLocales } = useLocale();
   const message = useMessage();
-  const { api, catalogHref, chrome } = useCatalogSurface();
+  const catalogReview = useCatalogReview();
+  const { api, backHref, chrome, text } = review ?? catalogReview;
   const [lang, setLang] = useState("");
   const [drafts, setDrafts] = useState<TranslationDraft[] | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
@@ -90,14 +94,14 @@ export function TranslationsView() {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 sm:p-6">
       <PageHeader
         icon={Languages}
-        tail={t("common", K.title)}
-        title={t("common", K.title)}
-        subtitle={t("common", K.subtitle)}
+        tail={t("common", text.title)}
+        title={t("common", text.title)}
+        subtitle={t("common", text.subtitle)}
         actions={
           <>
-            <Link href={catalogHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
+            <Link href={backHref} className={buttonClass({ variant: "quiet", size: "sm" })}>
               <ArrowRight size={14} className="ltr:rotate-180" aria-hidden />
-              {t("common", K.back)}
+              {t("common", text.back)}
             </Link>
           </>
         }

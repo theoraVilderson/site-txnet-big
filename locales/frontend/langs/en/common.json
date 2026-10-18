@@ -2422,6 +2422,12 @@
         "overageHint": "What happens past each quota’s included amount on this package: refused, or each extra unit sold at a price.",
         "rates": "Wholesale rates",
         "sheetTitle": "{{section}}: {{name}}"
+      },
+      "translations": {
+        "title": "Package translations",
+        "subtitle": "Machine drafts of package names and descriptions. Buyers see none until it is published.",
+        "back": "Back to packages",
+        "open": "Translations"
       }
     },
     "limits": {

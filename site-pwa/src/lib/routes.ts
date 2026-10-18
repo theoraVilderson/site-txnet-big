@@ -121,6 +121,8 @@ export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURI
 export const PANEL_RESELLER_PACKAGES = `${PANEL_RESELLERS}/packages`;
 /** One package's page (PK-1-f, ADR-0154 (2)): everything it sells and holds, each part edited in its own sheet. */
 export const panelResellerPackagePath = (id: string) => `${PANEL_RESELLER_PACKAGES}/${encodeURIComponent(id)}`;
+/** Review of the packages' machine-drafted names and descriptions (PK-1-h, ADR-0154 (6)); a static segment, so it wins over `[id]`. */
+export const PANEL_RESELLER_PACKAGE_TRANSLATIONS = `${PANEL_RESELLER_PACKAGES}/translations`;
 /**
  * What a reseller may spend of the platform's (F-019-r, ADR-0106): each limit
  * for every reseller, per package, and for one or several resellers. Under

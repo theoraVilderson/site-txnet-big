@@ -2,14 +2,14 @@
 id: panel-web
 layer: interface
 status: active
-version: 41
+version: 42
 updated: 2026-10-18
 ---
 
 # Contract — panel-web: the packages the platform sells resellers (F-118-n5)
 
 `/resellers/packages` (`PANEL_RESELLER_PACKAGES`) and one package's page
-`/resellers/packages/[id]` (`panelResellerPackagePath`, PK-1-f), files under
+`/resellers/packages/[id]` (`panelResellerPackagePath`, PK-1-f) and `/resellers/packages/translations` (PK-1-h), files under
 `resellers/packages/` and `resellers/_lib/packages.ts`, `package-page.ts`. The panel half of the
 package routes — `GET/POST /api/tenant-packages`, `GET/PATCH /:id`, `POST /:id/apply`
 (producer: [tenant/contract.admin.md](../../domains/tenant/contract.admin.md)
@@ -39,4 +39,6 @@ one is routine and a rates-only page would have left it to the API.
 | 10 | The feature list is `PACKAGE_FEATURE_KEYS`, shared-core's `TENANT_FEATURE_KEYS` in its order, each named in `resellers.packages.features`; `packages.test.ts` holds the two together | a new sellable feature does not ship unnamed or unofferable |
 | 11 | **A package's name is read through `usePackageTexts` (`(panel)/_hooks`) wherever the panel shows one** — the packages list and sheet, the limits page and its products, a reseller's page, `/resellers/buy` (with the picked package's description, `PackageCapabilities`), `/services`, a reseller's package change — never from `name` where a key exists. It reads the `packages` namespace from the panel's i18n route (`publishedNamespace`): the reader's language, then the package's source language (description), then `name`, the source text; a failed route costs the translation only (ADR-0154 (7), PK-1-d) | a buyer reads the package in their language, and one resolver keeps every page's fallback the same |
 
-Spec: `resellers/packages.test.ts`; rules 3, 3b `resellers/package-page.test.ts`; rule 11 `_hooks/usePackageTexts.test.ts`.
+| 12 | **Drafted names are reviewed at `/resellers/packages/translations`** (`PANEL_RESELLER_PACKAGE_TRANSLATIONS`, PK-1-h, ADR-0154 (6)), reached from **Translations** on the list: the catalog's `TranslationsView` given the packages' `TranslationReview` — `packageTranslationsApi` (`translationReviewApi` over `/tenant-packages`, catalog's four calls and shapes), "back" to the list, its own headings. No copy of the view; rule 1's check | a buyer reads a package only in a language a person published |
+
+Spec: `resellers/packages.test.ts`; rules 3, 3b `resellers/package-page.test.ts`; rule 11 `_hooks/usePackageTexts.test.ts`; rule 12 `resellers/package-translations.test.tsx`.
