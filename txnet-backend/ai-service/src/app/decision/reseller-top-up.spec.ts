@@ -51,7 +51,7 @@ describe('resellerTopUpCandidate (F-1525-c)', () => {
         templateKey: RESELLER_TOP_UP_TEMPLATE_KEY, renderedBy: 'template', renderedText: null, deadline: at(4.5 * DAY), reasons: c?.reasons as Prisma.JsonValue,
       },
       undefined,
-      { recipientUserId: 'owner', currentPackageId: 'silver', packageName: null, packageActive: false, livePrice: null, productNameKey: null, walletBalance: '95.00' },
+      { recipientUserId: 'owner', currentPackageId: 'silver', packageName: null, packageNameKey: null, packageActive: false, livePrice: null, productNameKey: null, walletBalance: '95.00' },
     );
     expect(item.amount).toEqual({ amount: '510.00', currencyCode: 'USD' });
     expect(item.reseller).toMatchObject({ recipientUserId: 'owner', packageId: null, balanceThen: '90.00', balanceNow: '95.00' });

@@ -189,7 +189,9 @@ refused `text_key_invalid`) and its refusal error (`texts_unavailable` when
 locale-service does not answer). Drafting never fails the write it follows.
 Users: billing's `CatalogTextService` (namespace `catalog`, proved by
 `catalog-texts.spec.ts`); tenant-service's `PackageTextService` (namespace
-`packages`, `packages.p_<id>.name|description`, `package-texts.spec.ts`, PK-1-c).
+`packages`, `packages.p_<id>.name|description`, `package-texts.spec.ts`, PK-1-c) —
+the key is shared-core's `packageTextKey`, which auth-service reads a package's
+name by in a notice (PK-1-e).
 
 ## Guarantees
 

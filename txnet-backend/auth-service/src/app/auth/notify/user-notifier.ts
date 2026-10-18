@@ -1,6 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { BotClientRegistry, BotPlatform } from '@txnet-backend/messenger';
-import { suggestionCopyVerdict } from '@txnet-backend/shared-core';
+import { PACKAGE_TEXT_NAMESPACE, suggestionCopyVerdict } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../../locale/locale.service';
 import { NotificationInboxClient } from './notification-inbox.client';
@@ -1156,9 +1156,8 @@ export class UserNotifier {
    * apart. Past {@link LISTED_SERVICES}, one "and N more" line.
    */
   /**
-   * A quota notice names its quota in the user's language (F-019-v8): a
-   * registry key by `resellerQuotaKeys.<key>`, a product's sales by its
-   * catalog name. A name already given is kept.
+   * A quota notice names its quota in the user's language (F-019-v8): a registry key by `resellerQuotaKeys.<key>`,
+   * a product's sales by its catalog name. A name already given is kept.
    */
   private withQuotaName(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
     // F-038-o4: a package upgrade names its quota the same way, and its new number in words when there is none.
@@ -1175,10 +1174,10 @@ export class UserNotifier {
   }
 
   /**
-   * An AI suggestion names its service and plan in the user's language
-   * (F-038-g3) from billing's keys: the service as a combined notice lists it
-   * — the buyer's own name first, then the catalog name, else the sku — and
-   * the plan by its catalog name (else sku) with its size beside it.
+   * An AI suggestion names its service and plan in the user's language (F-038-g3) from billing's keys: the service
+   * as a combined notice lists it — the buyer's own name first, then the catalog name, else the sku — and the plan
+   * by its catalog name (else sku) with its size beside it. A package (PK-1-e) by its key in the user's language
+   * alone, else `package` as sent: the `name` column, which is the source text (ADR-0154 (5)).
    */
   private withSuggestionNames(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
     if (!template.startsWith('suggestion')) return params;
@@ -1187,7 +1186,8 @@ export class UserNotifier {
     const service = params.serviceLabel ? say(SERVICE_LIST.named, { label: params.serviceLabel, name: catalog }) : catalog;
     const planName = this.catalogName(params.planNameKey ?? null, lang) ?? params.planSku ?? '';
     const plan = params.planSize ? say(SERVICE_LIST.named, { label: planName, name: params.planSize }) : planName;
-    return { ...params, service, plan };
+    const packageText = params.packageNameKey?.startsWith(`${PACKAGE_TEXT_NAMESPACE}.`) ? this.locale.getKey(lang, PACKAGE_TEXT_NAMESPACE, params.packageNameKey.slice(PACKAGE_TEXT_NAMESPACE.length + 1)) : undefined;
+    return { ...params, service, plan, ...(typeof packageText === 'string' && packageText !== '' ? { package: packageText } : {}) };
   }
 
   /**

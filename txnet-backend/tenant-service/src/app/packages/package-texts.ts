@@ -1,29 +1,24 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ItemTextWriter, TRANSLATOR, type ItemTextStore, type Translator } from '@txnet-backend/shared-core';
+import { ItemTextWriter, PACKAGE_TEXT_NAMESPACE, packageTextKey, TRANSLATOR, type ItemTextStore, type Translator } from '@txnet-backend/shared-core';
 
 import { TenantPackageRefused } from './tenant-package.refusal';
 
 /**
  * A package's name and description in every language (ADR-0154 decision 5):
  * shared-core's `ItemTextWriter` over the `packages` namespace. The key is
- * derived here from the package id and never taken from a caller; the `name`
+ * derived from the package id (shared-core's `packageTextKey`), never taken from a caller; the `name`
  * column stays the source-language text, so refusals and logs keep reading it
  * and a package whose text was never written still has a name.
  */
 
-export const PACKAGE_TEXT_NAMESPACE = 'packages';
-export type PackageTextField = 'name' | 'description';
+// The key's one home is shared-core (ai and auth-service tell a package by it); re-exported for this service's callers.
+export { PACKAGE_TEXT_NAMESPACE, packageTextKey } from '@txnet-backend/shared-core';
 
 export const PACKAGE_TEXT_STORE = Symbol('PACKAGE_TEXT_STORE');
 
 const KEY_RE = /^packages\.p_([0-9a-f]{32})\.(name|description)$/;
 
 const uuidOf = (h: string) => `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-
-/** The i18n key of a package's text: `packages.p_<id, no dashes>.<field>`. */
-export function packageTextKey(packageId: string, field: PackageTextField): string {
-  return `${PACKAGE_TEXT_NAMESPACE}.p_${packageId.replace(/-/g, '').toLowerCase()}.${field}`;
-}
 
 /** A subscription's package as a view names it: its source text and the key it is read by (ADR-0154 (7)). */
 export type NamedPackage = { packageName: string; packageNameKey: string };

@@ -69,9 +69,10 @@ type Due = {
     recipientUserId: string;
     currentPackageId: string | null;
     fromPackageId: string | null;
-    /** The upgrade's; null for a top-up. */
+    /** The upgrade's; null for a top-up. `packageNameKey` names it in the owner's language, `packageName` is its source text (PK-1-e). */
     packageId: string | null;
     packageName: string | null;
+    packageNameKey?: string | null;
     packageActive: boolean;
     price: Money | null;
     meter: string | null;
@@ -364,11 +365,10 @@ export class AiSuggestionDeliveryJob implements Job {
 }
 
 /**
- * F-038-o4: the package as ai read it at the take. A reseller already moved
- * off the package the engine saw (it upgraded, or changed) is not told —
- * `already_paid`; a package no longer sold, or unpriced for its period, is
- * `plan_unavailable`. The quota is named by auth-service as a quota alert
- * names it: a registry key, or a product's catalog name.
+ * F-038-o4: the package as ai read it at the take. A reseller already moved off the package the engine saw (it
+ * upgraded, or changed) is not told — `already_paid`; a package no longer sold, or unpriced for its period, is
+ * `plan_unavailable`. auth-service names the quota as a quota alert does (a registry key, or a product's catalog
+ * name), and the package by its key in the owner's language, else its source text (ADR-0154 (7)).
  */
 export function upgradeWords(r: NonNullable<Due['reseller']>): Words {
   if (r.currentPackageId !== r.fromPackageId) return { stop: 'already_paid' };
@@ -376,7 +376,7 @@ export function upgradeWords(r: NonNullable<Due['reseller']>): Words {
   return {
     params: {
       ...((r.meter ?? '').startsWith('product:') ? (r.productNameKey ? { productNameKey: r.productNameKey } : {}) : { quotaKey: r.meter ?? '' }),
-      package: r.packageName,
+      package: r.packageName, ...(r.packageNameKey ? { packageNameKey: r.packageNameKey } : {}),
       price: `${r.price.amount} ${r.price.currencyCode}`,
       used: String(r.used ?? 0),
       included: String(r.included ?? 0),

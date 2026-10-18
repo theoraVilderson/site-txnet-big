@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AiAction, type AiOffer } from '@prisma/client';
-import { runWithTenant, tenantTransaction, moneyText, percentText } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, moneyText, packageTextKey, percentText } from '@txnet-backend/shared-core';
 
 import { SafetyFloor } from '../floor/safety-floor';
 import { ResellerReader } from '../profile/reseller-reader';
@@ -62,7 +62,10 @@ type OfferTerms = Pick<AiOffer, 'id' | 'couponTemplateId' | 'maxDiscountPercent'
 export type ResellerLive = {
   recipientUserId: string;
   currentPackageId: string | null;
+  /** The `name` column — the source text, told when the owner's language has none. */
   packageName: string | null;
+  /** PK-1-e (ADR-0154 (7)): what auth-service names the package by, in the owner's language. */
+  packageNameKey: string | null;
   packageActive: boolean;
   /** The package's price for the reseller's period now; null when it has none. */
   livePrice: string | null;
@@ -127,6 +130,7 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLiv
             fromPackageId: str(upgrade?.['fromPackageId']),
             packageId: str(upgrade?.['packageId']),
             packageName: upgrade ? live.packageName : null,
+            packageNameKey: upgrade ? live.packageNameKey : null,
             packageActive: upgrade ? live.packageActive : false,
             price: upgrade && live.livePrice && str(upgrade['currencyCode']) ? { amount: live.livePrice, currencyCode: upgrade['currencyCode'] as string } : null,
             meter: str(upgrade?.['meter']),
@@ -239,6 +243,7 @@ export class ActionDelivery {
         recipientUserId: reseller.ownerUserId,
         currentPackageId: reseller.packageId,
         packageName: pkg?.name ?? null,
+        packageNameKey: pkg ? packageTextKey(pkg.id, 'name') : null,
         packageActive: pkg?.isActive ?? false,
         livePrice: price && pkg?.currencyCode === reason?.['currencyCode'] ? moneyText(price) : null,
         productNameKey: meter.startsWith('product:') ? (nameKeys.get(meter.slice('product:'.length)) ?? null) : null,

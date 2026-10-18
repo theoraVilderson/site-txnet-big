@@ -315,7 +315,7 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
     const RESELLER = '22222222-2222-4222-8222-222222222222';
     const OWNER = '55555555-5555-4555-8555-555555555555';
     const reseller = (over: Record<string, unknown> = {}) => ({
-      recipientUserId: OWNER, currentPackageId: 'silver', fromPackageId: 'silver', packageId: 'gold', packageName: 'Gold', packageActive: true,
+      recipientUserId: OWNER, currentPackageId: 'silver', fromPackageId: 'silver', packageId: 'gold', packageName: 'Gold', packageNameKey: 'packages.p_gold.name', packageActive: true,
       price: { amount: '95.00', currencyCode: 'USD' }, meter: 'campaign_sends_daily_max', period: 'month', included: 1000, used: 600, newIncluded: 5000, productNameKey: null, ...over,
     });
     const upgrade = (over: Record<string, unknown> = {}) =>
@@ -330,7 +330,7 @@ describe('AiSuggestionDeliveryJob (F-038-g3)', () => {
         consumer: 'ai-suggestion', eventId: ACTION, only: ['inbox', 'bot'], class: 'suggestion',
         person: {
           tenantId: TENANT, userId: OWNER, template: 'suggestionPackageUpgrade',
-          params: { actionId: ACTION, quotaKey: 'campaign_sends_daily_max', package: 'Gold', price: '95.00 USD', used: '600', included: '1000', newIncluded: '5000' },
+          params: { actionId: ACTION, quotaKey: 'campaign_sends_daily_max', package: 'Gold', packageNameKey: 'packages.p_gold.name', price: '95.00 USD', used: '600', included: '1000', newIncluded: '5000' },
         },
       }]);
     });

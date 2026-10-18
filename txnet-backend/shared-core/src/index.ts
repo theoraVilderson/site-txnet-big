@@ -38,6 +38,7 @@ export * from './lib/redis/rate-limit-buckets';
 export * from './lib/i18n/keys.backend.generated';
 export * from './lib/i18n/translator/translator';
 export * from './lib/i18n/item-texts/item-text-writer';
+export * from './lib/i18n/item-texts/package-text-key';
 export * from './lib/i18n/request-language';
 export * from './lib/i18n/arabic-script';
 export * from './lib/i18n/locale-client-options';
