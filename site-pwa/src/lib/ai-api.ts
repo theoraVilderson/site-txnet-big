@@ -70,6 +70,18 @@ export interface AiSettings {
 
 export type AiSettingsPatch = Partial<Pick<AiSettings, "engineEnabled" | "confidenceThreshold" | "holdoutPercent" | "disabledActionTypes">>;
 
+/** One type's last-window activity (F-038-j3): what went out, what held it, the confidences seen, what it waits on. */
+export interface AiTypeActivity {
+  type: AiActionType;
+  sent: number;
+  queued: number;
+  heldByThreshold: number;
+  heldOtherwise: number;
+  /** Decimal strings; null when the engine proposed none in the window. */
+  confidence: { min: string; max: string } | null;
+  waitsOn: "active_offer" | "not_available" | null;
+}
+
 /** A reason is a code and its numbers; the page words it (`common.ai.reasons.*`). */
 export type AiReason = { code: string } & Record<string, string | number | boolean | null>;
 
@@ -191,6 +203,9 @@ export const aiAdminApi = {
   },
   saveSettings(patch: AiSettingsPatch): Promise<{ settings: AiSettings }> {
     return call<{ settings: AiSettings }>("/admin/settings", { method: "PUT", body: JSON.stringify(patch) });
+  },
+  settingsActivity(): Promise<{ windowDays: number; types: AiTypeActivity[] }> {
+    return call<{ windowDays: number; types: AiTypeActivity[] }>("/admin/settings/activity", { method: "GET" });
   },
   atRisk(kind: AtRiskKind, cursor?: string | null): Promise<{ items: AtRiskItem[]; nextCursor: string | null }> {
     const q = new URLSearchParams({ kind, ...(cursor ? { cursor } : {}) });

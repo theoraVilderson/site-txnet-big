@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 42
-updated: 2026-10-02
+updated: 2026-10-18
 ---
 
 # panel-web — the tenant's AI page (F-038-j2)
@@ -17,12 +17,24 @@ Per-type model mode and caps were F-038-w's page, dropped 2026-10-03.
 ## Rules
 
 1. **No call names a tenant or an author** — ai takes both from the gate.
-2. **A settings save sends only what changed** (`patchOf`): never a value
-   another admin may have changed meanwhile. A threshold outside [0, 1] at two
-   places, or a holdout share outside 5–20, disables the save — the server's
-   bounds, held here so they are never sent.
+2. **A settings save sends only what changed** (`patchOf`, `ai-settings.ts`),
+   through the kit's `SaveBar`: never a value another admin may have changed
+   meanwhile. A threshold outside [0, 1] at two places, or a holdout share
+   outside 5–20, disables the save — the server's bounds, held here so they
+   are never sent.
 3. **`engineRuns: false` is said out loud** (`settings.notRunning`), whatever
    the switch shows: the package lacks AI or the tenant may not sell.
+3a. **Settings in plain words (F-038-j4).** The threshold is three levels
+   (`THRESHOLD_LEVELS`: careful 0.70, balanced 0.60 = ai's default, more
+   0.50); a value no level names is said as custom with no level chosen, and
+   the number itself is under "advanced". Each type has a one-line
+   `typeHelp` and a state from ai's activity (F-038-j3) — off, not available,
+   needs a discount offer (a button opens the offers tab), silenced or partly
+   held by the chosen level (judged on the confidences ai recorded, never on
+   restated engine rules), sent N times, or idle. The level's line names the
+   switched-on types it silences before saving. The holdout is said as "N in
+   every 100". Activity unreadable: everything still saves, nothing about
+   activity is claimed.
 4. **Offers are made on a coupon template**: the tenant's own `percentage` or
    `fixed_amount` coupon, not deleted (`templateChoices`) — never a platform
    coupon or a gift code. The budget is in the template's currency. An offer
@@ -67,14 +79,16 @@ Per-type model mode and caps were F-038-w's page, dropped 2026-10-03.
 
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
-| ai | `/api/ai/admin/settings`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers`, `…/usage-forecast`, `…/resellers` and `…/capacity` (platform owner) | the tab shows the error line; the others work |
+| ai | `/api/ai/admin/settings`, `…/settings/activity`, `…/at-risk`, `…/margins`, `…/plan-layout`, `…/reports/uplift`, `…/offers`, `…/usage-forecast`, `…/resellers` and `…/capacity` (platform owner) | the tab shows the error line; the others work |
 | billing | `GET /api/billing/coupons?kind=discount` (templates, `coupon.manage`) | the form says there is no template to use |
 | catalog | `GET /api/i18n/:lang/catalog` (plan names, as the shop reads them) | a plan is named by its sku |
 
 ## Proof
 
-`ai/ai-page.test.tsx`: only the change saved; bad bounds never sent;
-not running said; templates filtered and the currency taken from one; a
+`ai/ai-settings.test.tsx`: only the change saved; bad bounds never sent;
+not running said; each type's state; the offer button; what a level
+silences, said before saving; a custom value; no activity, still saved.
+`ai/ai-page.test.tsx`: templates filtered and the currency taken from one; a
 refusal worded; an offer off; at-risk link, worded reasons, paging; the
 report's period and arms; a losing plan flagged and counted, an unknown cost
 worded; the resellers tab hidden from a reseller, a reseller linked, its

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
-import { aiAdminApi, type AiOffer, type AiSettings, type PlanMargin } from "@/lib/ai-api";
+import { aiAdminApi, type AiOffer, type PlanMargin } from "@/lib/ai-api";
 import { billingApi, type AdminCoupon } from "@/lib/billing-api";
 import { catalogApi } from "@/lib/catalog-api";
 import { panelResellerPath, panelUserPath } from "@/lib/routes";
@@ -13,10 +13,8 @@ import { AiView } from "./_components/AiView";
  * F-038-j2 (ADR-0109 points 7, 13; ADR-0110): the tenant's AI page over ai's
  * `/api/ai/admin/*` (F-038-j1).
  *
- * The failures worth a spec: a save that sends what was not changed (and so
- * overwrites another admin's edit); a threshold or holdout share the server
- * refuses, sent anyway; an engine that is "on" but does not run, shown as
- * running; a template list with a platform coupon or a gift code in it; a
+ * The failures worth a spec (settings: ai-settings.test.tsx): a template
+ * list with a platform coupon or a gift code in it; a
  * refusal shown as "something went wrong" instead of its reason; an at-risk
  * customer with no way to open them, or a reason shown as a raw code; a plan
  * that loses money on every sale not flagged, or an unknown cost shown as a
@@ -28,8 +26,10 @@ vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: vi.fn() }))
 vi.mock("@/hooks/useApiError", () => ({ useApiErrorMessage: () => () => "generic" }));
 vi.mock("@/lib/ai-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/ai-api")>()),
-  aiAdminApi: { settings: vi.fn(), saveSettings: vi.fn(), atRisk: vi.fn(), resellers: vi.fn(), usageForecast: vi.fn(), capacity: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
+  aiAdminApi: { atRisk: vi.fn(), resellers: vi.fn(), usageForecast: vi.fn(), capacity: vi.fn(), margins: vi.fn(), planLayout: vi.fn(), uplift: vi.fn(), offers: vi.fn(), createOffer: vi.fn(), updateOffer: vi.fn() },
 }));
+// The settings tab has its own spec (ai-settings.test.tsx, F-038-j4); here it is the default tab and nothing more.
+vi.mock("./_components/AiSettingsPanel", () => ({ AiSettingsPanel: () => null }));
 vi.mock("@/lib/catalog-api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/catalog-api")>()),
   catalogApi: { texts: vi.fn() },
@@ -42,14 +42,6 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
 const TENANT = "t-1";
 const t = (_ns: string, key: string, vars?: Record<string, string | number>) => (vars ? `${key}:${Object.values(vars).join(",")}` : key);
 
-const settings: AiSettings = {
-  engineEnabled: true,
-  engineRuns: true,
-  confidenceThreshold: "0.60",
-  holdoutPercent: 10,
-  disabledActionTypes: [],
-  actionTypes: ["renew", "resize_up", "retain_offer"],
-};
 const coupon = (over: Partial<AdminCoupon>) => ({ id: "c-1", tenantId: TENANT, code: "STAY20", discountType: "percentage", currencyCode: "IRR", status: "active", ...over }) as AdminCoupon;
 const offer: AiOffer = {
   id: "o-1", name: "Stay with us", actionType: "retain_offer", target: { couponTemplateId: "c-1", variantId: null },
@@ -60,8 +52,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useLocale).mockReturnValue({ lang: "en", t } as ReturnType<typeof useLocale>);
   vi.mocked(usePanelSession).mockReturnValue({ me: { tenant: { id: TENANT } }, isLoading: false } as unknown as ReturnType<typeof usePanelSession>);
-  vi.mocked(aiAdminApi.settings).mockResolvedValue({ settings });
-  vi.mocked(aiAdminApi.saveSettings).mockImplementation(async (p) => ({ settings: { ...settings, ...p } }));
   vi.mocked(aiAdminApi.offers).mockResolvedValue({ items: [offer] });
   vi.mocked(aiAdminApi.updateOffer).mockResolvedValue({ offer: { ...offer, isActive: false } });
   vi.mocked(aiAdminApi.atRisk).mockResolvedValue({ items: [], nextCursor: null });
@@ -81,35 +71,6 @@ beforeEach(() => {
 });
 
 const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }));
-
-describe("settings (F-038-j2)", () => {
-  it("sends only what changed: switching one type off", async () => {
-    render(<AiView />);
-    fireEvent.click(await screen.findByRole("checkbox", { name: "ai.types.resize_up" }));
-    fireEvent.click(screen.getByRole("button", { name: "ai.settings.save" }));
-    await waitFor(() => expect(aiAdminApi.saveSettings).toHaveBeenCalledWith({ disabledActionTypes: ["resize_up"] }));
-    expect(await screen.findByText("ai.saved")).toBeTruthy();
-  });
-
-  it("never sends a threshold or holdout share the server refuses", async () => {
-    render(<AiView />);
-    const threshold = await screen.findByLabelText("ai.settings.threshold");
-    fireEvent.change(threshold, { target: { value: "1.5" } });
-    expect(screen.getByRole("button", { name: "ai.settings.save" })).toHaveProperty("disabled", true);
-    fireEvent.change(threshold, { target: { value: "0.7" } });
-    fireEvent.change(screen.getByLabelText("ai.settings.holdout"), { target: { value: "0" } });
-    expect(screen.getByRole("button", { name: "ai.settings.save" })).toHaveProperty("disabled", true);
-    fireEvent.change(screen.getByLabelText("ai.settings.holdout"), { target: { value: "15" } });
-    fireEvent.click(screen.getByRole("button", { name: "ai.settings.save" }));
-    await waitFor(() => expect(aiAdminApi.saveSettings).toHaveBeenCalledWith({ confidenceThreshold: "0.7", holdoutPercent: 15 }));
-  });
-
-  it("says so when the switch is on but the engine does not run", async () => {
-    vi.mocked(aiAdminApi.settings).mockResolvedValue({ settings: { ...settings, engineRuns: false } });
-    render(<AiView />);
-    expect(await screen.findByText("ai.settings.notRunning")).toBeTruthy();
-  });
-});
 
 describe("discount offers (F-038-j2)", () => {
   it("offers only the tenant's own live discount coupons as templates, and creates with the template's currency", async () => {

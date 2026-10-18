@@ -54,7 +54,7 @@ export function AiView() {
         tabs={tabs.map((id) => ({ value: id, label: t("common", K.tabs[id]) }))}
       />
 
-      {tab === "settings" ? <AiSettingsPanel /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "usage" ? <UsageForecastView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
+      {tab === "settings" ? <AiSettingsPanel onOpenOffers={() => setTab("offers")} /> : tab === "offers" ? <AiOffers /> : tab === "atRisk" ? <AtRiskList /> : tab === "margins" ? <MarginsList /> : tab === "layout" ? <PlanLayoutView /> : tab === "usage" ? <UsageForecastView /> : tab === "resellers" ? <ResellersAtRisk /> : <UpliftReportView />}
     </div>
   );
 }

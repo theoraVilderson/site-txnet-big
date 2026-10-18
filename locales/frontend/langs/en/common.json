@@ -5055,7 +5055,6 @@
     "title": "AI",
     "subtitle": "Who may not renew, what the engine suggests, and whether it earns more than staying quiet.",
     "loading": "Loading…",
-    "saved": "Saved.",
     "tabs": {
       "settings": "Settings",
       "offers": "Discount offers",
@@ -5067,16 +5066,44 @@
       "usage": "Usage forecast"
     },
     "settings": {
-      "engine": "Suggestion engine",
-      "engineHint": "When off, nothing is suggested and everything already queued is cancelled.",
+      "engine": "AI suggestion engine",
+      "engineHint": "When on, the AI suggests things to your customers at the right moment (renewal, a better-fitting plan, a wallet top-up…). Turning it off also cancels queued suggestions.",
       "notRunning": "The engine is not running for you: your package does not include AI suggestions, or your account cannot sell right now.",
-      "threshold": "Confidence threshold",
-      "thresholdHint": "Between 0 and 1. A suggestion the engine is less sure of than this is not sent.",
-      "holdout": "Holdout share (%)",
-      "holdoutHint": "5 to 20. These customers never get a suggestion, so the report can show what the others gained.",
-      "types": "Suggestion types",
-      "typesHint": "A type switched off is never suggested; any already queued is cancelled.",
-      "save": "Save settings"
+      "threshold": "Minimum confidence (exact number)",
+      "thresholdHint": "Between 0 and 1, e.g. 0.6. The levels above set this number: careful 0.7, balanced 0.6, more 0.5.",
+      "holdout": "Control group (%)",
+      "holdoutHint": "From 5 to 20.",
+      "types": "Which suggestions?",
+      "typesHint": "Turn off any you do not want. Queued suggestions of a type turned off are cancelled.",
+      "summarySent": "In the last {days} days, {count} suggestions were sent to customers.",
+      "summaryNone": "No suggestion has been sent in the last {days} days.",
+      "levelTitle": "How many suggestions?",
+      "levelHint": "For each suggestion the AI weighs how sure it is that it will help the customer. Here you choose how sure it must be to send one.",
+      "levels": {
+        "careful": "Careful",
+        "balanced": "Balanced (recommended)",
+        "more": "More suggestions"
+      },
+      "levelsHint": {
+        "careful": "Only when it is very sure. Fewer messages, more accurate.",
+        "balanced": "The default: a balance between how many and how right.",
+        "more": "Less certain suggestions go out too. Customers get more messages."
+      },
+      "levelCustom": "A custom value ({value}) is set. Change it under \"Advanced settings\".",
+      "silenced": "At this level these suggestions are never sent: {types}",
+      "silencedNone": "At this level every suggestion that is on can be sent.",
+      "state": {
+        "off": "Off",
+        "notAvailable": "Coming soon",
+        "needsOffer": "Create a discount offer first",
+        "silenced": "Not sent at this level",
+        "partly": "Partly held back at this level",
+        "sent": "Sent {count} times",
+        "idle": "None in the last {days} days"
+      },
+      "makeOffer": "Create a discount offer",
+      "advanced": "Advanced settings",
+      "holdoutExample": "{n} in every 100 customers get no suggestion, so the \"Report\" tab can show how much the suggestions raised sales."
     },
     "types": {
       "renew": "Renewal",
@@ -5219,6 +5246,18 @@
       "topUpNone": "It already covers 30 days",
       "capacityTitle": "All tenants — capacity",
       "covers": "Covers {{measured}} of {{total}} tenants; the others are not measured."
+    },
+    "typeHelp": {
+      "renew": "Reminds the customer to renew shortly before the service ends.",
+      "resize_up": "Offers a bigger plan to someone who runs out before the period ends.",
+      "resize_down": "Offers a smaller, cheaper plan to someone who uses little of theirs, so they stay.",
+      "top_up_wallet": "Suggests topping up the wallet to cover the next renewals.",
+      "retain_offer": "Gives one of your discounts to a customer who is unlikely to renew.",
+      "trial_convert": "Invites a trial customer who used the service to buy.",
+      "checkout_help": "If a payment is left unfinished, shows another way to pay once. Not a pitch.",
+      "win_back": "Invites back a customer who has had no active service for a while.",
+      "usage_alert": "Tells the customer when their data is about to run out.",
+      "wheel_invite": "Invites the customer to spin the prize wheel (only if you run one)."
     }
   },
   "wheel": {

@@ -3,44 +3,30 @@
 import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { aiAdminApi, type AiActionType, type AiSettings, type AiSettingsPatch } from "@/lib/ai-api";
+import { aiAdminApi, type AiActionType, type AiSettings, type AiTypeActivity } from "@/lib/ai-api";
 import { HOLDOUT, K, THRESHOLD_RE, card } from "./ai-ui";
-import { Button, Checkbox, Field, Input } from "../../_components/kit";
+import { draftOf, patchOf, silencedTypes, type Draft } from "./ai-settings";
+import { AiAdvancedSettings } from "./AiAdvancedSettings";
+import { AiLevelPicker } from "./AiLevelPicker";
+import { AiTypeList } from "./AiTypeList";
+import { SaveBar, Toggle } from "../../_components/kit";
 
-type Draft = { engineEnabled: boolean; confidenceThreshold: string; holdoutPercent: string; disabled: Set<AiActionType> };
-
-const draftOf = (s: AiSettings): Draft => ({
-  engineEnabled: s.engineEnabled,
-  confidenceThreshold: s.confidenceThreshold,
-  holdoutPercent: String(s.holdoutPercent),
-  disabled: new Set(s.disabledActionTypes),
-});
+type Activity = { windowDays: number; types: AiTypeActivity[] };
 
 /**
- * Only what changed is sent: a save never writes back a value another admin
- * changed meanwhile. A threshold or holdout share the server would refuse
- * disables the save instead of reaching it (ai contract.admin.md rule 4).
+ * The AI settings any admin can set (F-038-j4): the switch with what it did
+ * lately, how bold to be as three levels, each type explained with its own
+ * activity, and the exact numbers folded under "advanced". Activity is
+ * ai's record (F-038-j3); when it cannot be read, everything still saves and
+ * nothing about activity is claimed.
  */
-export function patchOf(saved: AiSettings, d: Draft): AiSettingsPatch {
-  const patch: AiSettingsPatch = {};
-  if (d.engineEnabled !== saved.engineEnabled) patch.engineEnabled = d.engineEnabled;
-  if (Number(d.confidenceThreshold) !== Number(saved.confidenceThreshold)) patch.confidenceThreshold = d.confidenceThreshold;
-  if (Number(d.holdoutPercent) !== saved.holdoutPercent) patch.holdoutPercent = Number(d.holdoutPercent);
-  const before = new Set(saved.disabledActionTypes);
-  if (d.disabled.size !== before.size || [...d.disabled].some((x) => !before.has(x))) {
-    patch.disabledActionTypes = saved.actionTypes.filter((x) => d.disabled.has(x));
-  }
-  return patch;
-}
-
-export function AiSettingsPanel() {
+export function AiSettingsPanel({ onOpenOffers }: { onOpenOffers: () => void }) {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
   const [saved, setSaved] = useState<AiSettings | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [activity, setActivity] = useState<Activity | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState(false);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -52,6 +38,11 @@ export function AiSettingsPanel() {
         setDraft(draftOf(settings));
       })
       .catch((e: unknown) => alive && setError(errorMessage(e)));
+    aiAdminApi
+      .settingsActivity()
+      .then((a) => alive && setActivity(a))
+      // Activity only explains the settings; without it they are still set.
+      .catch(() => undefined);
     return () => {
       alive = false;
     };
@@ -63,76 +54,64 @@ export function AiSettingsPanel() {
   const holdout = Number(draft.holdoutPercent);
   const valid = THRESHOLD_RE.test(draft.confidenceThreshold) && Number.isInteger(holdout) && holdout >= HOLDOUT.min && holdout <= HOLDOUT.max;
   const patch = patchOf(saved, draft);
-  const edit = (p: Partial<Draft>) => {
-    setNotice(false);
-    setDraft({ ...draft, ...p });
+  const edit = (p: Partial<Draft>) => setDraft({ ...draft, ...p });
+  const toggleType = (type: AiActionType, on: boolean) => {
+    const disabled = new Set(draft.disabled);
+    if (on) disabled.delete(type);
+    else disabled.add(type);
+    edit({ disabled });
   };
+  const sent = activity?.types.reduce((n, a) => n + a.sent, 0) ?? null;
 
   const save = async () => {
-    setBusy(true);
     setError(null);
     try {
       const { settings } = await aiAdminApi.saveSettings(patch);
       setSaved(settings);
       setDraft(draftOf(settings));
-      setNotice(true);
     } catch (e) {
       setError(errorMessage(e));
-    } finally {
-      setBusy(false);
+      throw e;
     }
   };
 
   return (
-    <section className={`${card} flex flex-col gap-5`}>
-      {!saved.engineRuns && (
-        <p role="status" className="rounded-2xl bg-error/10 p-3 text-xs font-medium text-error">
-          {t("common", K.settings.notRunning)}
-        </p>
-      )}
-      <Checkbox
-        checked={draft.engineEnabled}
-        onChange={(engineEnabled) => edit({ engineEnabled })}
-        label={<span className="font-bold">{t("common", K.settings.engine)}</span>}
-        hint={t("common", K.settings.engineHint)}
-      />
+    <div className="flex flex-col gap-4">
+      <section className={`${card} flex flex-col gap-3`}>
+        {!saved.engineRuns && (
+          <p role="status" className="rounded-2xl bg-error/10 p-3 text-xs font-medium text-error">
+            {t("common", K.settings.notRunning)}
+          </p>
+        )}
+        <Toggle checked={draft.engineEnabled} onChange={(engineEnabled) => edit({ engineEnabled })} label={t("common", K.settings.engine)} hint={t("common", K.settings.engineHint)} />
+        {activity && sent !== null && (
+          <p className="text-xs text-text-secondary">
+            {sent > 0 ? t("common", K.settings.summarySent, { days: activity.windowDays, count: sent }) : t("common", K.settings.summaryNone, { days: activity.windowDays })}
+          </p>
+        )}
+      </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="ai-threshold" label={t("common", K.settings.threshold)} hint={t("common", K.settings.thresholdHint)}>
-          <Input id="ai-threshold" inputMode="decimal" dir="ltr" value={draft.confidenceThreshold} onChange={(e) => edit({ confidenceThreshold: e.target.value.trim() })} />
-        </Field>
-        <Field id="ai-holdout" label={t("common", K.settings.holdout)} hint={t("common", K.settings.holdoutHint)}>
-          <Input id="ai-holdout" inputMode="numeric" dir="ltr" value={draft.holdoutPercent} onChange={(e) => edit({ holdoutPercent: e.target.value.trim() })} />
-        </Field>
-      </div>
-
-      <fieldset>
-        <legend className="text-sm font-bold text-text-primary">{t("common", K.settings.types)}</legend>
-        <p className="text-xs text-text-secondary">{t("common", K.settings.typesHint)}</p>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-          {saved.actionTypes.map((type) => (
-            <Checkbox
-              key={type}
-              checked={!draft.disabled.has(type)}
-              onChange={(on) => {
-                const disabled = new Set(draft.disabled);
-                if (on) disabled.delete(type);
-                else disabled.add(type);
-                edit({ disabled });
-              }}
-              label={t("common", K.types[type])}
-            />
-          ))}
+      <section className={`${card} flex flex-col gap-5`}>
+        <AiLevelPicker
+          threshold={draft.confidenceThreshold}
+          onChange={(confidenceThreshold) => edit({ confidenceThreshold })}
+          silenced={activity && silencedTypes(saved.actionTypes, draft.disabled, activity.types, draft.confidenceThreshold)}
+        />
+        <div className="flex flex-col gap-2">
+          <h3 className="text-sm font-bold text-text-primary">{t("common", K.settings.types)}</h3>
+          <p className="text-xs text-text-secondary">{t("common", K.settings.typesHint)}</p>
+          <AiTypeList types={saved.actionTypes} disabled={draft.disabled} activity={activity} threshold={draft.confidenceThreshold} onToggle={toggleType} onOpenOffers={onOpenOffers} />
         </div>
-      </fieldset>
+        <AiAdvancedSettings
+          threshold={draft.confidenceThreshold}
+          holdoutPercent={draft.holdoutPercent}
+          onThreshold={(confidenceThreshold) => edit({ confidenceThreshold })}
+          onHoldout={(holdoutPercent) => edit({ holdoutPercent })}
+        />
+        {error && <p role="alert" className="text-xs font-medium text-error">{error}</p>}
+      </section>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button variant="primary" size="sm" disabled={busy || !valid || Object.keys(patch).length === 0} onClick={() => void save()}>
-          {t("common", K.settings.save)}
-        </Button>
-        {notice && <span role="status" className="text-xs font-bold text-primary">{t("common", K.saved)}</span>}
-        {error && <span role="alert" className="text-xs font-medium text-error">{error}</span>}
-      </div>
-    </section>
+      <SaveBar dirty={Object.keys(patch).length > 0} disabled={!valid} onSave={save} onDiscard={() => setDraft(draftOf(saved))} />
+    </div>
   );
 }
