@@ -28,7 +28,7 @@ import type {
 import { isPlatformTenant } from "@/lib/tenant-type";
 import { toEnglishDigits } from "@/util/helper";
 import { MONEY_PATTERN } from "../../_lib/money";
-import { parseSalesCap } from "./sales-cap";
+import { CAP_FIELDS, capsOf, parseSalesCap } from "./sales-cap";
 
 export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RATE_CARD_MODES, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
@@ -468,13 +468,14 @@ export interface VariantForm {
   /** A metered variant's first card (F-118-m): how its traffic is paid, and the price per GB. */
   rateMode: RateCardMode;
   ratePerGb: string;
-  /** Blank = no cap; else `parseSalesCap`'s rule, the card's (F-513-e). */
+  /** Blank = no cap; else `parseSalesCap`'s rule, the card's (F-513-e, F-514-d). */
   salesCap: string;
+  activeCap: string;
 }
 
 export const emptyVariantForm = (): VariantForm => ({
   sku: "", billingMode: "prepaid", visibility: "public", qualityTier: "standard", durationDays: "", price: "", quotas: [],
-  panelGroupId: "", rateMode: "prepaid", ratePerGb: "", salesCap: "",
+  panelGroupId: "", rateMode: "prepaid", ratePerGb: "", salesCap: "", activeCap: "",
 });
 
 /** A metered variant earns on its rate, so its price is an optional one-off at purchase: blank is 0. */
@@ -491,7 +492,7 @@ export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
   if (f.quotas.some((q) => !WHOLE.test(q.limit.trim()))) errors.quotas = E.quota;
   else if (new Set(f.quotas.map((q) => q.metric)).size !== f.quotas.length) errors.quotas = E.quotaRepeat;
   if (f.billingMode === "metered" && !isUnitPrice(f.ratePerGb)) errors.ratePerGb = E.unitPrice;
-  if (!blank(f.salesCap) && parseSalesCap(f.salesCap) === null) errors.salesCap = E.salesCap;
+  for (const k of CAP_FIELDS) if (!blank(f[k]) && parseSalesCap(f[k]) === null) errors[k] = E.salesCap;
   return errors;
 }
 
@@ -515,7 +516,6 @@ const quotasOf = (rows: QuotaRow[]): Quotas =>
 /** A new variant with its first price, in billing's wire shape. A group only for `network_access` (F-026-o). */
 export function variantBody(f: VariantForm, kind: FulfilmentKind): CreateVariantBody {
   const group = f.panelGroupId.trim();
-  const cap = parseSalesCap(f.salesCap);
   return {
     sku: f.sku.trim().toUpperCase(),
     billingMode: f.billingMode,
@@ -526,7 +526,7 @@ export function variantBody(f: VariantForm, kind: FulfilmentKind): CreateVariant
     ...(f.quotas.length ? { quotas: quotasOf(f.quotas) } : {}),
     ...(takesPanelGroup(kind) && group ? { panelGroupId: group } : {}),
     ...(f.billingMode === "metered" ? { rateCard: perGbCard(f.rateMode, f.ratePerGb) } : {}),
-    ...(cap === null ? {} : { salesCap: cap }),
+    ...capsOf(f),
   };
 }
 

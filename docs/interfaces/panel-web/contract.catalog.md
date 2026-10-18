@@ -158,11 +158,12 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    would only repeat the review. Only a failed variant opens the sheet, with
    `wizard.partial`, because adding it is the work left.
 
-10h. **A variant's sales cap** (F-513-c, catalog [contract.sales-cap.md](../../domains/catalog/contract.sales-cap.md)):
-   `SalesCapSection` on each variant card shows billing's `sales` — sold, held
-   by unpaid invoices, left — sets a whole number 1..`MAX_SALES_CAP` (`parseSalesCap`,
-   test-held to billing's) and clears it to `null`; a sold-out card says so. "New variant" and
-   the wizard take it too (`VariantFields`, F-513-e): blank sends none, else the same rule.
+10h. **A variant's sales and active caps** (F-513-c, F-514-d, catalog [contract.sales-cap.md](../../domains/catalog/contract.sales-cap.md)):
+   each variant card has `SalesCapSection` (billing's `sales`: sold, held by unpaid invoices, left)
+   and `ActiveCapSection` (`active`: live / cap, held, left), one shared box: a whole number
+   1..`MAX_SALES_CAP` (`parseSalesCap`, test-held to billing's, which takes it for both) or cleared to `null`;
+   a sold-out or full card says so. "New variant" and the wizard take both (`VariantFields`, `capsOf`):
+   blank sends none, else the same rule. The shop needs nothing: its `soldOut` is either cap full.
 
 A variant's cost per sale and the usage costs tab: [contract.catalog-cost.md](contract.catalog-cost.md) (F-1002-g).
 

@@ -1983,6 +1983,15 @@
       "uncapped": "No cap · {{sold}} sold so far",
       "invalid": "Enter a positive whole number, at most {{max}}.",
       "soldOut": "Sold out — cannot be bought in the shop"
+    },
+    "activeCap": {
+      "label": "Active cap",
+      "hint": "The most services of this variant live at once. Blank means no cap.",
+      "save": "Save cap",
+      "clear": "Remove cap",
+      "counts": "{{live}} / {{cap}} live · {{held}} held by unpaid invoices · {{remaining}} left",
+      "uncapped": "No cap · {{live}} live now",
+      "full": "Full — no live slot left, cannot be bought in the shop"
     }
   },
   "settings": {

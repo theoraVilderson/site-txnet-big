@@ -22,6 +22,7 @@ import {
   type Errors,
   type VariantForm,
 } from "../_lib/catalog-form";
+import { CAP_FIELDS } from "../_lib/sales-cap";
 import { FirstRateFields } from "./RateCardSection";
 import { PanelGroupSelect, type PanelGroups } from "./PanelGroupSelect";
 import { Field } from "./catalog-ui";
@@ -97,10 +98,14 @@ export function VariantFields({
 
       {takesPanelGroup(kind) && <PanelGroupSelect value={form.panelGroupId} groups={groups} onChange={(id) => set("panelGroupId", id)} />}
 
-      {/* The card's box (SalesCapSection) from the first moment; blank = no cap (F-513-e). */}
-      <Field label={t("common", K.salesCap.label)} error={errors.salesCap} hint={t("common", K.salesCap.hint)}>
-        <Input dir="ltr" inputMode="numeric" value={form.salesCap} onChange={(e) => set("salesCap", e.target.value)} />
-      </Field>
+      {/* The card's two boxes (SalesCapSection) from the first moment; blank = no cap (F-513-e, F-514-d). */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {CAP_FIELDS.map((k) => (
+          <Field key={k} label={t("common", K[k].label)} error={errors[k]} hint={t("common", K[k].hint)}>
+            <Input dir="ltr" inputMode="numeric" value={form[k]} onChange={(e) => set(k, e.target.value)} />
+          </Field>
+        ))}
+      </div>
 
       <div className="flex flex-col gap-2">
         <p className="text-xs font-bold text-text-secondary">{t("common", K.variant.quotas)}</p>

@@ -206,8 +206,9 @@ export interface CatalogVariant {
   panelGroupId: string | null;
   qualityTier: QualityTier;
   isActive: boolean;
-  /** Its sales cap, what is sold and held, and what is left; `remaining` is `null` with no cap (F-513-a). */
+  /** Its sales cap (F-513-a) and active cap (F-514-a): what is counted, held and left; `remaining` is `null` with no cap. */
   sales: { cap: number | null; sold: number; reserved: number; remaining: number | null; soldOut: boolean };
+  active: { cap: number | null; live: number; held: number; remaining: number | null; full: boolean };
   /** Newest `effectiveFrom` first. */
   prices: CatalogPrice[];
   /** Every meter's card history, newest first (F-118-m). */
@@ -249,11 +250,8 @@ export interface CreateProductBody {
   featureKeys?: string[];
   defaultQuotas?: Quotas;
 }
-export type UpdateProductBody = Partial<Pick<CreateProductBody, "categoryIds" | "sourceLang" | "name" | "description" | "translateAll" | "featureKeys" | "defaultQuotas">> & {
-  isActive?: boolean;
-  /** Only `false`: back from the archive, still switched off. */
-  archived?: false;
-};
+/** `archived` is only `false`: back from the archive, still switched off. */
+export type UpdateProductBody = Partial<Pick<CreateProductBody, "categoryIds" | "sourceLang" | "name" | "description" | "translateAll" | "featureKeys" | "defaultQuotas">> & { isActive?: boolean; archived?: false };
 
 export interface CreateVariantBody {
   sku: string;
@@ -270,10 +268,11 @@ export interface CreateVariantBody {
   effectiveFrom?: string;
   /** A metered variant's first card, from the same instant as the first price (F-118-m). */
   rateCard?: RateCardTerms;
-  /** At most this many sold, `null` none; on an update absent leaves it (F-513-a). */
+  /** At most this many sold (F-513-a) / live at once (F-514-a), `null` none; on an update absent leaves it. */
   salesCap?: number | null;
+  activeCap?: number | null;
 }
-export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId" | "salesCap">> & { isActive?: boolean };
+export type UpdateVariantBody = Partial<Pick<CreateVariantBody, "visibility" | "qualityTier" | "durationDays" | "quotas" | "nameKey" | "panelGroupId" | "salesCap" | "activeCap">> & { isActive?: boolean };
 
 export interface SetPriceBody {
   amount: string;

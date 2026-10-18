@@ -297,7 +297,7 @@
   "site-pwa/src/app/(panel)/systems/_components/PanelList.tsx": 509,
   "site-pwa/src/app/(panel)/systems/_components/RegisterWizard.tsx": 711,
   "site-pwa/src/app/(panel)/systems/_lib/systems.ts": 417,
-  "site-pwa/src/lib/catalog-api.ts": 456,
+  "site-pwa/src/lib/catalog-api.ts": 455,
   "site-pwa/src/lib/realtime.ts": 411,
   "site-pwa/src/lib/tenant-api.ts": 630,
   "sub-service/internal/sub/formats.go": 415,
