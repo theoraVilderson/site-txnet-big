@@ -37,11 +37,11 @@ model SpinWheelConfig {
   effectiveFromDay                DateTime @db.Date
   isActive                        Boolean  @default(true)
   /// The day's cost ceiling, in `currencyCode`, whatever the odds.
-  dailyBudgetCapAmount            Decimal  @db.Decimal(18, 2)
+  dailyBudgetCapAmount            Decimal  @db.Decimal(20, 4)
   currencyCode                    String
   perUserCooldownHours            Int      @default(24)
   requiresMinAccountAgeHours      Int      @default(24)
-  requiresMinTotalPurchaseAmount  Decimal? @db.Decimal(18, 2)
+  requiresMinTotalPurchaseAmount  Decimal? @db.Decimal(20, 4)
   requiresMinCompletedOrdersCount Int?
   requiresActiveServiceAtSpinTime Boolean  @default(true)
   requiresPhoneVerified           Boolean  @default(true)
@@ -74,12 +74,12 @@ model SpinWheelPrize {
   position          Int
   label             String
   prizeType         SpinPrizeType
-  prizeValue        Decimal       @db.Decimal(18, 2)
+  prizeValue        Decimal       @db.Decimal(20, 4)
   couponTemplateId  String?       @db.Uuid
   couponValidDays   Int?
   variantId         String?       @db.Uuid
   probabilityWeight Int
-  costAmount        Decimal       @default(0) @db.Decimal(18, 2)
+  costAmount        Decimal       @default(0) @db.Decimal(20, 4)
   dailyStockLimit   Int?
 
   wheelConfig SpinWheelConfig     @relation(fields: [wheelConfigId, tenantId], references: [id, tenantId])
@@ -100,7 +100,7 @@ model SpinWheelDay {
   tenantId      String   @db.Uuid
   tenantDay     DateTime @db.Date
   wheelConfigId String   @db.Uuid
-  costSpent     Decimal  @default(0) @db.Decimal(18, 2)
+  costSpent     Decimal  @default(0) @db.Decimal(20, 4)
   currencyCode  String
   spins         Int      @default(0)
   /// When the tenant's admins were told the day passed 80% of the cap (F-707-e); once a day.
@@ -146,7 +146,7 @@ model SpinWheelAttempt {
   eligibilityCheckSnapshotJson Json
   pickedPrizeId                String?           @db.Uuid
   prizeAwardedId               String?           @db.Uuid
-  costAmount                   Decimal           @default(0) @db.Decimal(18, 2)
+  costAmount                   Decimal           @default(0) @db.Decimal(20, 4)
   currencyCode                 String
   /// Never set (ADR-0111 point 2: no cash). Kept so the change stays additive.
   resultWalletTransactionId    String?           @unique @db.Uuid
@@ -244,7 +244,7 @@ model LotteryPrize {
   rank             Int
   label            String
   prizeType        SpinPrizeType
-  prizeValue       Decimal       @db.Decimal(18, 2)
+  prizeValue       Decimal       @db.Decimal(20, 4)
   couponTemplateId String?       @db.Uuid
   couponValidDays  Int?
   variantId        String?       @db.Uuid

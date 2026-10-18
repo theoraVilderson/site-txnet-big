@@ -58,7 +58,7 @@ only `quota`; every other key is a `guard`. `RESELLER_QUOTA_KEYS` lists them.
 | `resellerOverageOf(tx, tenantId, key)` → `{mode, unitPrice, currencyCode, source}`: `stop`, or `overage` at a unit price. Levels as the number — `reseller_quota_overage` → `package_quota_overage` (its subscription's package) → `quota_overage_setting` → `stop` (`default`); `exempt` for a non-reseller. `resellerOveragesOf` answers every quota key | one place resolves it; every consumer and page reads the same answer |
 | The mode resolves **apart from the number**: its own three tables, not columns on the limit rows | a reseller given a larger number keeps its package's price; a row there means "this level's number" (ADR-0106) |
 | A guard key always resolves `stop` (`default`), whatever a row says | a stray row cannot sell a guard |
-| `unitPrice` is a positive `Decimal(18,2)` in `currencyCode` — the **platform's**, stamped at write. It is debited from the reseller's billing wallet, which is in the platform's money, so the platform's currency change converts every level's price with it (never to nothing: one minor unit) | C-02; `billing/contract.currency-change.md` |
+| `unitPrice` is a positive `Decimal(20,4)` in `currencyCode` — the **platform's**, stamped at write. It is debited from the reseller's billing wallet, which is in the platform's money, so the platform's currency change converts every level's price with it (never to nothing: one minor unit) | C-02; `billing/contract.currency-change.md` |
 | No row anywhere is `stop` | refusal is what ADR-0106 did; selling is a decision |
 
 What consumes this — counting, fixed periods, the wallet debit, the

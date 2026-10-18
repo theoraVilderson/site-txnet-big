@@ -4,8 +4,8 @@ import { createGatewaySchema, depositTaxSchema, updateGatewaySchema } from './ga
 /**
  * The wire refuses money finer than the column that stores it (F-104-ad).
  *
- * `payment_gateway.feeFloor` is `numeric(18, 2)` and `feeValue` is
- * `numeric(18, 4)`. Postgres does not refuse a finer value, it rounds it —
+ * `payment_gateway.feeFloor` is money, held at two places until F-116-r
+ * (ADR-0153), and `feeValue` is `numeric(18, 4)`. Postgres does not refuse a finer value, it rounds it —
  * so `0.125` was accepted, written as `0.13`, and the operator who typed it
  * was told nothing. The scales below are that table's, not a guess.
  */

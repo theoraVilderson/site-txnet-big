@@ -19,6 +19,7 @@ updated: 2026-09-28
 | 6 | A pin is a person's decision, never the market: a live pin prices first — one with no end until it is ended (F-116-n) — an expired or ended one prices nothing, and none is ever the FX worker's deviation baseline | `readFxRate` `fromPin` / `fromTable` (`source` filters); `FxRateSnapshotStore.lastAccepted` reads `external_api` only; CHECK `currency_exchange_rate_pin_shape` | a stale pin prices sales; the gate refuses the real market as a jump |
 | 7 | A rate of any age stays usable; age is shown, not enforced (ADR-0101) | `readFxRate` has no age cut-off | a currency stops selling during an outage |
 | 8 | A tenant's pin prices only a read that names that tenant; a read without a tenant — the tenant ↔ platform boundary — never sees one (ADR-0098 part 9) | RLS `tenant_isolation` on `currency_exchange_rate` (migration `20260928003600`); `readFxRate` binds exactly the named tenant for its pin lookup (`pinRow`), `tenantId: null` without a scope; billing passes `ratesTenantId: null` for a billing top-up; CHECK `currency_exchange_rate_tenant_pin_only` | a tenant picks the rate it pays the platform at |
+| 9 | A currency's `decimalPlaces` is 0..4: never finer than a money column, `DECIMAL(20,4)` (ADR-0153 point 6) | CHECK `currency_decimal_places_fit_money` (F-116-q, `money-scale.int.spec.ts`) | Postgres rounds every amount in it on write, unseen |
 
 ## How to test
 

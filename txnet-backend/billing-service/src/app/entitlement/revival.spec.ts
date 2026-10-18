@@ -11,7 +11,7 @@
  * reset, for ever.
  *
  * The realistic shape of that is narrow and worth naming, so nobody reads more
- * into these tests than is there. `cachedBalance` is `Decimal(18, 2)` and
+ * into these tests than is there. `cachedBalance` is held at its currency's places and
  * `sizeBlock` floors a block to one cent, so at any sane rate every positive
  * balance funds one: a user topping up a cent at a time buys a cent of traffic
  * and is exploiting nothing. What is left for the guard is the degenerate end —

@@ -16,7 +16,7 @@ vi.mock('@txnet-backend/shared-core', async (original) => ({
  * - Every tenant, the platform owner's included, has an operating currency;
  *   the column's default is `USD`.
  * - Only a currency with a rate may be chosen: active, at most two decimals
- *   (money columns are `DECIMAL(18,2)`), and either the USD pivot or holding an
+ *   (money leaves the API at two until F-116-r), and either the USD pivot or holding an
  *   active rate row.
  * - A change converts the tenant's money at the rate old -> new, read once, in
  *   one transaction (F-116-f; what is converted is `currency-change.int.spec.ts`'s).

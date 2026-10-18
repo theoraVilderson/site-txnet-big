@@ -347,7 +347,7 @@ model GrantDeletion {
   statusBefore        GrantStatus
   refundRemainder     Boolean
   /// Whole cents credited back; with `walletTransactionId`, only when asked.
-  refundedAmount      Decimal?    @db.Decimal(18, 2)
+  refundedAmount      Decimal?    @db.Decimal(20, 4)
   walletTransactionId String?     @db.Uuid
   /// A refund asked for that credited nothing: F-027-r's reason (prepaid, all served).
   refundSkipped       String?

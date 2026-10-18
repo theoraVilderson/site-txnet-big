@@ -282,7 +282,7 @@ model Price {
   id               String   @id @default(uuid()) @db.Uuid
   tenantId         String   @db.Uuid
   variantId        String   @db.Uuid
-  amount           Decimal  @db.Decimal(18, 2)
+  amount           Decimal  @db.Decimal(20, 4)
   /// The currency `amount` is in (F-116-d, ADR-0098): the tenant's operating
   /// currency when written — the platform's for a platform row. A reader
   /// takes only the rows in its tenant's currency; no default (C-02).
@@ -314,7 +314,7 @@ model PriceCampaign {
   id               String    @id @default(uuid()) @db.Uuid
   tenantId         String    @db.Uuid
   variantId        String    @db.Uuid
-  amount           Decimal   @db.Decimal(18, 2)
+  amount           Decimal   @db.Decimal(20, 4)
   currencyCode     String
   startsAt         DateTime
   endsAt           DateTime
@@ -379,7 +379,7 @@ model SeasonPrice {
   seasonId         String   @db.Uuid
   variantId        String   @db.Uuid
   tenantId         String   @db.Uuid
-  amount           Decimal  @db.Decimal(18, 2)
+  amount           Decimal  @db.Decimal(20, 4)
   updatedByAdminId String?  @db.Uuid
   updatedAt        DateTime @updatedAt
 
@@ -464,7 +464,7 @@ model VariantCost {
   tenantId         String   @db.Uuid
   variantId        String   @db.Uuid
   /// Per sale, in `currencyCode`; 0 is a cost (ADR-0151 (5)); null: taken back, not set from `effectiveFrom` (F-1002-i).
-  amount           Decimal? @db.Decimal(18, 2)
+  amount           Decimal? @db.Decimal(20, 4)
   /// The tenant's pricing currency when written, as a price's (F-116-d).
   currencyCode     String
   effectiveFrom    DateTime

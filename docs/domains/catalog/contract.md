@@ -230,7 +230,7 @@ None.
 | A price row is never deleted on its own, and only `isActive` changes on it (`price_is_history`); it goes only with its variant's delete (cascade, F-026-h) | trigger `catalog.price_is_history` |
 | A category key, a product key and a SKU are unique inside a tenant, and once among platform rows | partial unique indexes |
 | A coupon scope row names exactly one product or one variant (`coupon_service_scope_names_one`) | CHECK |
-| Money is `Decimal(18,2)` in the row's `currencyCode` (`^[A-Z]{3}$`), never negative; zero is a free variant | column type + CHECKs (ADR-0098, C-02) |
+| Money is `Decimal(20,4)` in the row's `currencyCode` (`^[A-Z]{3}$`), never negative; zero is a free variant | column type + CHECKs (ADR-0098, C-02) |
 | A meter is a platform row every tenant reads and no service role writes; its `key` and `unit` never change, even for the owner (`meter_is_immutable`) — F-118-c | grants (SELECT only), trigger `catalog.meter_is_immutable` |
 | A rate card is history (`rate_card_is_history`), carries its variant's tenant, names a meter that exists (FK on `meter.key`); a metered unit is priced above zero and a `stop` card includes some (`rate_card_stop_includes_some`) — F-118-d | triggers, FKs, CHECKs |
 | `visibility`: `public` listed; `unlisted` by SKU only; `admin_only` never sold, only assigned (F-506) | F-026-c |

@@ -25,10 +25,10 @@ import { z } from 'zod';
 /**
  * A decimal string, at its **column's** scale (F-104-ad).
  *
- * `numeric(18, 2)` does not refuse a third decimal place, it rounds it away —
+ * A `numeric` column does not refuse a place past its scale, it rounds it away —
  * so a `feeCeiling` of `0.125` was accepted here, stored as `0.13`, and the
  * operator was never told. Each field below names the scale of the column it
- * lands in; anything finer is refused, as a rate outside its range is
+ * lands in — money at two until F-116-r (ADR-0153) — and anything finer is refused, as a rate outside its range is
  * (`gateway-pricing.ts`), because money nobody asked for is not ours to round.
  */
 const decimalAt = (places: number) => new RegExp(`^(0|[1-9]\\d{0,15})(\\.\\d{1,${places}})?$`);

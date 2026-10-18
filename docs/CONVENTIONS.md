@@ -213,6 +213,16 @@ in: txnet-backend/prisma/domains/*.prisma
 message: store money as Decimal with its currencyCode, or BigInt minor units — never Float (C-02, ADR-0002)
 ```
 
+A money column holds four places, `Decimal(20, 4)` (ADR-0153 point 6, F-116-q):
+two would round a dinar's third place away on write, silently. None is left at
+two, so the check holds that.
+
+```check C-02
+forbid: @db\.Decimal\(18,\s*2\)
+in: txnet-backend/prisma/domains/*.prisma
+message: a money column is @db.Decimal(20, 4) — two places round a three-place currency away on write (C-02, ADR-0153)
+```
+
 ```check C-02
 forbid: \bparseFloat\(
 in: txnet-backend/*/src/**/*.ts

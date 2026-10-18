@@ -323,8 +323,8 @@ model TenantFeaturePackage {
   // F-018-d: in `currencyCode` (C-02). Either may be null — a package sold for one
   // period only — but not both, and neither is zero (CHECKs in migration
   // 20260917001200_tenant_feature_package).
-  monthlyPrice        Decimal? @db.Decimal(18, 2)
-  yearlyPrice         Decimal? @db.Decimal(18, 2)
+  monthlyPrice        Decimal? @db.Decimal(20, 4)
+  yearlyPrice         Decimal? @db.Decimal(20, 4)
   /// The platform's currency (ADR-0098 part 4); converted with it (F-116-f).
   currencyCode        String
   includedFeatureKeys Json // Array of TENANT_FEATURE_KEYS (shared-core)
@@ -496,7 +496,7 @@ model TenantStaffMember {
 model TenantBillingWallet {
   id            String  @id @default(uuid()) @db.Uuid
   tenantId      String  @unique @db.Uuid
-  cachedBalance Decimal @default(0) @db.Decimal(18, 2) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
+  cachedBalance Decimal @default(0) @db.Decimal(20, 4) // فقط Cache؛ منبع حقیقت TenantBillingTransaction است
   /// The platform's currency (ADR-0098 part 4), converted with it (F-116-f).
   currencyCode  String
   version       Int     @default(0) // Optimistic Locking
@@ -517,15 +517,15 @@ model TenantBillingWallet {
 model TenantBillingTransaction {
   id           String                  @id @default(uuid()) @db.Uuid
   walletId     String                  @db.Uuid
-  amount       Decimal                 @db.Decimal(18, 2)
+  amount       Decimal                 @db.Decimal(20, 4)
   direction    TenantLedgerDirection
   reasonType   TenantBillingReasonType
   referenceId  String?                 @db.Uuid
-  balanceAfter Decimal                 @db.Decimal(18, 2)
+  balanceAfter Decimal                 @db.Decimal(20, 4)
   /// Always its wallet's (F-116-f); a trigger refuses another.
   currencyCode String
   /// A credit priced before a platform currency change and landing after it: what it was before conversion. Both or neither.
-  sourceAmount       Decimal?          @db.Decimal(18, 2)
+  sourceAmount       Decimal?          @db.Decimal(20, 4)
   sourceCurrencyCode String?
   createdAt    DateTime                @default(now())
 
@@ -586,16 +586,16 @@ model TenantGatewayConfig {
   blockedReason       String?
   blockedByAdminId    String?                         @db.Uuid
   isActive            Boolean                         @default(false)
-  minAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no minimum
-  maxAcceptAmount     Decimal?                        @db.Decimal(18, 2) // null = no maximum
+  minAcceptAmount     Decimal?                        @db.Decimal(20, 4) // null = no minimum
+  maxAcceptAmount     Decimal?                        @db.Decimal(20, 4) // null = no maximum
   /// The tenant's currency its limits, fees and presets are in (F-116-b) —
   /// not what it charges in.
   currencyCode        String
   feeCalculationMode  FeeCalcMode
   feeType             FeeType
   feeValue            Decimal                         @db.Decimal(18, 4)
-  feeFloor            Decimal?                        @db.Decimal(18, 2)
-  feeCeiling          Decimal?                        @db.Decimal(18, 2)
+  feeFloor            Decimal?                        @db.Decimal(20, 4)
+  feeCeiling          Decimal?                        @db.Decimal(20, 4)
   useLiveRate         Boolean                         @default(true)
   staticRate          Decimal?                        @db.Decimal(30, 18)
   percentageModifier  Decimal                         @default(0) @db.Decimal(9, 4) // + = markup
@@ -605,7 +605,7 @@ model TenantGatewayConfig {
   roundingStep        Decimal?                        @db.Decimal(18, 8)
   roundingMode        RateRoundingMode                @default(up)
   // Quick amounts on the top-up page (F-092-v). Empty = the tenant's default.
-  depositPresets      Decimal[]                       @default([]) @db.Decimal(18, 2)
+  depositPresets      Decimal[]                       @default([]) @db.Decimal(20, 4)
   // Tax on a top-up through this gateway (ADR-0076, F-104-ae). Null = the
   // tenant's default on `billing.deposit_setting`. 0..100, CHECK in the migration.
   taxRatePercent      Decimal?                        @db.Decimal(9, 4)
@@ -723,7 +723,7 @@ enum QuotaOverageMode {
 model QuotaOverageSetting {
   key             String           @id
   mode            QuotaOverageMode
-  unitPrice       Decimal?         @db.Decimal(18, 2)
+  unitPrice       Decimal?         @db.Decimal(20, 4)
   currencyCode    String?
   updatedByUserId String           @db.Uuid
   updatedAt       DateTime         @updatedAt
@@ -737,7 +737,7 @@ model PackageQuotaOverage {
   packageId       String           @db.Uuid
   key             String
   mode            QuotaOverageMode
-  unitPrice       Decimal?         @db.Decimal(18, 2)
+  unitPrice       Decimal?         @db.Decimal(20, 4)
   currencyCode    String?
   updatedByUserId String           @db.Uuid
   updatedAt       DateTime         @updatedAt
@@ -761,7 +761,7 @@ model PackageProduct {
   monthIncluded   Int?
   /// Past any window (ADR-0107 point 3): refused, or sold at `unitPrice` once per sale.
   mode            QuotaOverageMode @default(stop)
-  unitPrice       Decimal?         @db.Decimal(18, 2)
+  unitPrice       Decimal?         @db.Decimal(20, 4)
   /// The platform's currency, as every overage price (converted with it, F-116-f).
   currencyCode    String?
   updatedByUserId String           @db.Uuid
@@ -783,7 +783,7 @@ model ResellerQuotaOverage {
   tenantId     String           @db.Uuid
   key          String
   mode         QuotaOverageMode
-  unitPrice    Decimal?         @db.Decimal(18, 2)
+  unitPrice    Decimal?         @db.Decimal(20, 4)
   currencyCode String?
   reason       String
   setByUserId  String           @db.Uuid
@@ -811,7 +811,7 @@ model ResellerQuotaTermsLock {
   included       Int?
   includedSource String
   mode           QuotaOverageMode
-  unitPrice      Decimal?         @db.Decimal(18, 2)
+  unitPrice      Decimal?         @db.Decimal(20, 4)
   currencyCode   String?
   overageSource  String
   lockedAt       DateTime         @default(now())
@@ -881,8 +881,8 @@ model ResellerQuotaUsage {
   qty                 Int
   includedQty         Int
   overageQty          Int
-  unitPrice           Decimal?  @db.Decimal(18, 2)
-  overageAmount       Decimal   @default(0) @db.Decimal(18, 2)
+  unitPrice           Decimal?  @db.Decimal(20, 4)
+  overageAmount       Decimal   @default(0) @db.Decimal(20, 4)
   currencyCode        String?
   chargeTransactionId String?   @db.Uuid
   releasedAt          DateTime?
@@ -904,7 +904,7 @@ model ResellerQuotaUsage {
 /// Strict tenant RLS.
 model ResellerOverageCap {
   tenantId     String   @id @db.Uuid
-  amount       Decimal  @db.Decimal(18, 2)
+  amount       Decimal  @db.Decimal(20, 4)
   currencyCode String
   setByUserId  String   @db.Uuid
   updatedAt    DateTime @updatedAt

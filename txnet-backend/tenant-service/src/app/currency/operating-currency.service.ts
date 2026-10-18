@@ -30,7 +30,7 @@ import { RedisService } from '../redis/redis.service';
  * its own tenant, never in the platform's (AC-1-e).
  *
  * **Which.** Only a currency with a rate (part 8): active, at most two
- * decimals (money is `DECIMAL(18,2)`, part 6), and either the USD pivot or
+ * decimals (money leaves the API at two until F-116-r), and either the USD pivot or
  * holding an active rate row. The staleness ladder (F-0607-a) is not built;
  * when it is, "has a rate" is its answer.
  *
@@ -70,7 +70,7 @@ export class OperatingCurrencyRefused extends Error {
   }
 }
 
-/** Money columns are `DECIMAL(18,2)` (ADR-0098 part 6). */
+/** Columns hold four places (F-116-q), but money leaves the API at two until F-116-r (ADR-0153). */
 const MAX_DECIMALS = 2;
 
 /**

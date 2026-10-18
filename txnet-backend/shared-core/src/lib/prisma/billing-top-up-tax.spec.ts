@@ -100,8 +100,8 @@ describe('taxRatePercent — a two-level rate, and the rate a receipt was charge
 describe('payment_transaction.taxApplied — what was actually charged', () => {
   const payment = model(billing, 'PaymentTransaction');
 
-  it('is money at (18, 2), defaulting to 0 so a payment recorded under ADR-0038 reads as untaxed', () => {
-    expect(payment).toMatch(/^\s*taxApplied\s+Decimal\s+@default\(0\)\s+@db\.Decimal\(18, 2\)/m);
+  it('is money at (20, 4) (F-116-q), defaulting to 0 so a payment recorded under ADR-0038 reads as untaxed', () => {
+    expect(payment).toMatch(/^\s*taxApplied\s+Decimal\s+@default\(0\)\s+@db\.Decimal\(20, 4\)/m);
     expect(after).toMatch(/ADD COLUMN "taxApplied" DECIMAL\(18,2\) NOT NULL DEFAULT 0/);
   });
 

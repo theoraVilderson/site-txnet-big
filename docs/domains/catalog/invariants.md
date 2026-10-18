@@ -12,7 +12,7 @@ Held by the database since F-026-a; proved by
 
 | # | Invariant | Enforced by | Blast if violated |
 |---|---|---|---|
-| 1 | A price is `Decimal(18,2)` in its own `currencyCode` and never negative (ADR-0098) | column type, `price_amount_not_negative`, `price_currency_code_shape` | price drift, a sale that pays the buyer |
+| 1 | A price is `Decimal(20,4)` in its own `currencyCode` and never negative (ADR-0098) | column type, `price_amount_not_negative`, `price_currency_code_shape` | price drift, a sale that pays the buyer |
 | 2 | A price row is history: never deleted on its own, only `isActive` changes; it goes only with its variant (cascade; the trigger allows a delete once the variant is gone, F-026-h) | trigger `price_is_history` | yesterday's invoice recomputed at today's price (F-0602) |
 | 2b | A rate card is history on the same terms, and goes with its variant the same way (F-118-d; `metered_rate` before it) | trigger `rate_card_is_history` | a rate edit reprices traffic already sold, and blocks already bought (ADR-0072/0073) |
 | 3 | A variant carries its product's tenant, and a price and a rate card their variant's — so a tenant prices only its own variants (F-118-d); a product is filed (a link carrying its tenant) in its own tenant's categories or the platform's | triggers `same_tenant_as_parent`, `category_link_ok` | one tenant sells on another's catalog, or RLS shows the wrong rows |

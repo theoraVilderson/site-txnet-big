@@ -107,7 +107,7 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 
 | Rule | Why |
 |---|---|
-| A price is a base-currency decimal string, at most two places, positive; a number is refused | C-02; `DECIMAL(18,2)`; a free package is not a price |
+| A price is a base-currency decimal string, at most two places, positive; a number is refused | C-02; two places until F-116-r (ADR-0153); a free package is not a price |
 | At least one of `monthlyPrice` / `yearlyPrice`: the schema on create, the service on an edit that clears one, and CHECK `tenant_feature_package_priced` | a package sold for one period only is allowed; one sold for none is not |
 | Clearing a price while a subscriber that is not terminated is on that period is `package_price_in_use`, checked under the package's `FOR UPDATE` | the renewal would have nothing to charge (F-019-c, user 2026-09-17) |
 | `includedFeatureKeys` are members of `TENANT_FEATURE_KEYS` (shared-core), none repeated | the same set F-018-e turns into entitlements (C-09) |

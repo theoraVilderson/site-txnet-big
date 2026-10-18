@@ -55,6 +55,9 @@ settlement entry and its wallet credit take the payment's; a wallet takes its fi
 credit's. Never re-derived from the tenant afterwards: its currency may change
 (F-116-f). A `wallet_transaction` in another currency than its wallet's is refused
 by the trigger `wallet_transaction_in_wallet_currency`.
+Every money column — and the top-up preset arrays — is `DECIMAL(20,4)` (F-116-q,
+ADR-0153 point 6): room for a three-place currency; a row holds only its own
+currency's places, which the writer rounds to (`money-rounding.ts`, F-116-p).
 A payment's `exchangeRateSnapshot` is `currencyCode` -> the charge currency
 (`DECIMAL(30,18)`, F-116-e) through the USD pivot; `exchangeRateSnapshotId` is the
 charge currency's leg and `exchangeRateFromSnapshotId` the payment currency's, each

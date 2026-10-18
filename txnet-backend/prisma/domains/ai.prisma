@@ -169,7 +169,7 @@ model AiAction {
   renderedBy             AiRenderedBy   @default(template)
   renderedText           String?
   /// C-02: an amount always travels with its currency.
-  expectedMargin         Decimal?       @db.Decimal(18, 2)
+  expectedMargin         Decimal?       @db.Decimal(20, 4)
   expectedMarginCurrency String?
   scheduledFor           DateTime?
   deadline               DateTime?
@@ -178,7 +178,7 @@ model AiAction {
   /// F-038-i: what it suggested was bought or topped up within 7 days — a
   /// holdout row too, the control's — when, and what was paid (C-02: both or neither).
   convertedAt            DateTime?
-  convertedAmount        Decimal?       @db.Decimal(18, 2)
+  convertedAmount        Decimal?       @db.Decimal(20, 4)
   convertedCurrency      String?
   createdAt              DateTime       @default(now())
 
@@ -201,7 +201,7 @@ model AiOffer {
   couponTemplateId   String?      @db.Uuid
   variantId          String?      @db.Uuid
   maxDiscountPercent Decimal      @db.Decimal(5, 2)
-  dailyBudget        Decimal      @db.Decimal(18, 2)
+  dailyBudget        Decimal      @db.Decimal(20, 4)
   currencyCode       String
   isActive           Boolean      @default(true)
   createdByUserId    String       @db.Uuid

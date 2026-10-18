@@ -14,7 +14,7 @@ never reads as 100% margin. `catalog-cost.*` in `billing-service/src/app/catalog
 
 ## Storage
 
-`variant_cost` (`amount` per sale, `Decimal(18,2)`, ≥ 0) and `meter_cost`
+`variant_cost` (`amount` per sale, `Decimal(20,4)`, ≥ 0) and `meter_cost`
 (`unitCost` for `unitSize` units, `Decimal(18,8)`, ≥ 0), each with
 `currencyCode` and `effectiveFrom` — [data-model.md](data-model.md).
 
