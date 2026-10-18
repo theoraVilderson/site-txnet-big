@@ -34,6 +34,15 @@ export type SubjectDecisionInputs = {
 
 /** A candidate's expected margin; help with none (`usage_alert`, F-1516) ranks as zero. */
 const marginOf = (c: EngineCandidate) => new Prisma.Decimal(c.expectedMargin?.amount ?? 0);
+/**
+ * F-038-p2: which margins compare. A known cost first; then a sale whose cost
+ * is unknown, its price × P only an upper bound, never ranked as if it cost
+ * nothing; then help, which earns nothing (contract.candidates.md).
+ */
+const RANK_KNOWN_COST = 0;
+const RANK_UNKNOWN_COST = 1;
+const RANK_HELP = 2;
+const rankOf = (c: EngineCandidate) => (c.costKnown === undefined ? RANK_HELP : c.costKnown ? RANK_KNOWN_COST : RANK_UNKNOWN_COST);
 
 /**
  * F-038-e / ADR-0109 point 8 — one subject, in this order:
@@ -118,8 +127,8 @@ export class DecisionPipeline {
     }
     if (survivors.length === 0) return out;
 
-    // Margin, not revenue (point 8), compared as Decimal (C-02); a tie goes to the surer one.
-    survivors.sort((a, b) => marginOf(b).comparedTo(marginOf(a)) || b.confidence - a.confidence);
+    // Margin, not revenue (point 8), compared as Decimal (C-02) within a rank; a tie goes to the surer one.
+    survivors.sort((a, b) => rankOf(a) - rankOf(b) || marginOf(b).comparedTo(marginOf(a)) || b.confidence - a.confidence);
     const [best, ...rest] = survivors;
     for (const c of rest) await stop(c, 'margin');
 

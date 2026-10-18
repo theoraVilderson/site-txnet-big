@@ -301,7 +301,7 @@
   "site-pwa/src/lib/realtime.ts": 411,
   "site-pwa/src/lib/tenant-api.ts": 630,
   "sub-service/internal/sub/formats.go": 415,
-  "txnet-backend/ai-service/src/app/decision/candidates.ts": 512,
+  "txnet-backend/ai-service/src/app/decision/candidates.ts": 495,
   "txnet-backend/ai-service/src/app/profile/predictions.ts": 425,
   "txnet-backend/auth-service/src/app/account-switch/account-switch.service.ts": 618,
   "txnet-backend/auth-service/src/app/auth/auth.service.ts": 1298,

@@ -2,7 +2,8 @@ import { Prisma } from '@prisma/client';
 import { moneyText } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
-import { expectedMargin, SUGGEST_LEAD_DAYS, type EngineCandidate } from './candidates';
+import { SUGGEST_LEAD_DAYS, type EngineCandidate } from './candidates';
+import { expectedMargin } from './margin';
 
 const DAY_MS = 86_400_000;
 
@@ -108,6 +109,7 @@ export function packageUpgradeCandidate(input: ResellerUpgradeInputs, now: Date)
     templateKey: PACKAGE_UPGRADE_TEMPLATE_KEY,
     deadline,
     expectedMargin: { amount: margin.amount, currencyCode: margin.currencyCode },
+    costKnown: false,
     reasons: [
       {
         code: 'suggest_package',

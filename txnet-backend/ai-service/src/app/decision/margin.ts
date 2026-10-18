@@ -38,3 +38,24 @@ export function wholesaleCost(plan: Plan, rate: WholesaleRate | null): { cost: P
     reason: { code: 'wholesale_cost', meterKey: rate.meterKey, units: units.toString(), unitPrice: rate.unitPrice.toString(), cost: moneyText(cost), currencyCode: rate.currencyCode },
   };
 }
+
+export type Margin = { amount: string; currencyCode: string; reason: Reason };
+
+/** P(renewal) × (price − cost), in the price's currency (C-02). An unknown cost is told as `costKnown: false`; the amount is then an upper bound (F-038-p2). */
+export function expectedMargin(probability: number, price: { amount: Prisma.Decimal; currencyCode: string }, cost: Prisma.Decimal | null): Margin {
+  const p = new Prisma.Decimal(probability.toFixed(4));
+  const amount = price.amount.minus(cost ?? 0).times(p);
+  return {
+    amount: moneyText(amount),
+    currencyCode: price.currencyCode,
+    reason: {
+      code: 'expected_margin',
+      probability: p.toNumber(),
+      price: moneyText(price.amount),
+      cost: cost ? moneyText(cost) : null,
+      costKnown: cost !== null,
+      currencyCode: price.currencyCode,
+      losingMoney: amount.isNegative(),
+    },
+  };
+}

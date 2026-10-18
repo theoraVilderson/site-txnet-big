@@ -1,7 +1,8 @@
 import { Prisma } from '@prisma/client';
 
 import type { AiTenantMode } from '../policy/ai-defaults';
-import { candidatesFor, expectedMargin, SUGGEST_LEAD_DAYS, type CandidateInputs, type DecisionPrediction, type PlanOption } from './candidates';
+import { candidatesFor, SUGGEST_LEAD_DAYS, type CandidateInputs, type DecisionPrediction, type PlanOption } from './candidates';
+import { expectedMargin } from './margin';
 import { DecisionPipeline, type SubjectDecisionInputs } from './pipeline';
 import { scheduleAt } from './schedule';
 
@@ -124,7 +125,7 @@ describe('expected margin (F-038-e, ADR-0109 point 8)', () => {
     expect(m.reason).toMatchObject({ code: 'expected_margin', probability: 0.8, price: '200000.00', cost: '120000.00' });
   });
 
-  it('says so when the cost is not known, and counts it as nothing', () => {
+  it('says so when the cost is not known: the amount is only an upper bound, ranked after known costs (F-038-p2)', () => {
     const m = expectedMargin(0.5, { amount: new Prisma.Decimal(100_000), currencyCode: IRR }, null);
     expect(m.amount).toBe('50000.00');
     expect(m.reason).toMatchObject({ code: 'expected_margin', cost: null, costKnown: false });
@@ -282,6 +283,34 @@ describe('DecisionPipeline (F-038-e)', () => {
     await pipeline.decide(subject, MODE, decisionInputs({ candidates: inputs({ wholesale }) }), NOW);
     expect(deps.log.record).toHaveBeenCalledWith(subject, expect.anything(), { status: 'suppressed', suppressedBy: 'margin' }, NOW);
     expect(deps.log.record).toHaveBeenCalledTimes(1);
+  });
+
+  // F-038-p2: an unknown cost is no cost of zero — price × P is only an upper bound on what it earns.
+  const outcomesOf = (deps: ReturnType<typeof harness>['deps']) =>
+    deps.log.record.mock.calls.map(([, c, o]) => [(c as unknown as { grantId?: string; actionType: string }).grantId ?? (c as { actionType: string }).actionType, (o as { suppressedBy?: string }).suppressedBy ?? (o as { status: string }).status]);
+
+  it('ranks a known cost before an unknown one, however large the unknown one looks (F-038-p2)', async () => {
+    const OTHER = '00000000-0000-4000-8000-000000000002';
+    // GRANT has no wholesale leg: 0.8 × 600k = 480k if its cost were zero. OTHER is known: 0.9 × (200k − 120k) = 72k.
+    const candidates = inputs({
+      predictions: [renewal(0.8), { ...renewal(0.9), id: 'pr-2', reasons: [{ code: 'rule_defaults', grantId: OTHER }] }],
+      grants: new Map([
+        [GRANT, { id: GRANT, variantId: 'v200', endsAt: new Date(NOW.getTime() + 2 * DAY) }],
+        [OTHER, { id: OTHER, variantId: 'v50', endsAt: new Date(NOW.getTime() + 2 * DAY) }],
+      ]),
+      plans: new Map([['v50', plan('v50', 50, 200_000)], ['v200', plan('v200', 200, 600_000)]]),
+      wholesale: new Map([[OTHER, { meterKey: 'vpn.traffic', unitSize: GIB, unitPrice: new Prisma.Decimal(2_400), currencyCode: IRR }]]),
+    });
+    const { pipeline, deps } = harness();
+    await pipeline.decide(subject, MODE, decisionInputs({ candidates }), NOW);
+    expect(outcomesOf(deps)).toEqual(expect.arrayContaining([[OTHER, 'scheduled'], [GRANT, 'margin']]));
+  });
+
+  it('still ranks a sale of unknown cost above help, which earns nothing (F-038-p2)', async () => {
+    const checkouts = [{ paymentId: 'pay-1', status: 'failed' as const, at: new Date(NOW.getTime() - 3_600_000), amount: '200000.00', currencyCode: IRR }];
+    const { pipeline, deps } = harness();
+    await pipeline.decide(subject, { ...MODE, actionTypes: [...MODE.actionTypes, 'checkout_help'] }, decisionInputs({ candidates: inputs({ checkouts }) }), NOW);
+    expect(outcomesOf(deps)).toEqual(expect.arrayContaining([[GRANT, 'scheduled'], ['checkout_help', 'margin']]));
   });
 
   it('a candidate with no time left before its deadline outside quiet hours is stopped by schedule', async () => {

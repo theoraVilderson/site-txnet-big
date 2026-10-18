@@ -3,7 +3,7 @@ import { BackendI18nKeys, roundCredit, roundRatio, moneyText, percentText } from
 
 import type { Reason } from '../profile/predictions';
 import type { ActionCandidate } from './action-log';
-import { wholesaleCost, type WholesaleRate } from './margin';
+import { expectedMargin, wholesaleCost, type WholesaleRate } from './margin';
 
 /**
  * F-038-e / ADR-0109 point 8, the first step: candidates by rules, from the
@@ -172,6 +172,8 @@ export type EngineCandidate = ActionCandidate & {
   targetVariantId?: string;
   /** None for help that names nothing to buy (`usage_alert`, F-1516): ranked as zero, recorded with no currency (C-02). */
   expectedMargin?: { amount: string; currencyCode: string };
+  /** F-038-p2: a sale's — false when its cost is unknown, so its margin is only an upper bound. None on help. */
+  costKnown?: boolean;
   /** F-038-r: a season's window on the plan named — told inside it when a slot fits, else as usual. The deadline is unchanged. */
   notBefore?: Date;
   seasonEnd?: Date;
@@ -195,26 +197,6 @@ export function seasonOn(input: CandidateInputs, target: PlanOption, deadline: D
       s.endsAt.getTime() > now.getTime(),
   );
   return fits.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0] ?? null;
-}
-
-export type Margin = { amount: string; currencyCode: string; reason: Reason };
-
-export function expectedMargin(probability: number, price: { amount: Prisma.Decimal; currencyCode: string }, cost: Prisma.Decimal | null): Margin {
-  const p = new Prisma.Decimal(probability.toFixed(4));
-  const amount = price.amount.minus(cost ?? 0).times(p);
-  return {
-    amount: moneyText(amount),
-    currencyCode: price.currencyCode,
-    reason: {
-      code: 'expected_margin',
-      probability: p.toNumber(),
-      price: moneyText(price.amount),
-      cost: cost ? moneyText(cost) : null,
-      costKnown: cost !== null,
-      currencyCode: price.currencyCode,
-      losingMoney: amount.isNegative(),
-    },
-  };
 }
 
 const grantOf = (p: DecisionPrediction): string | null => {
@@ -490,6 +472,7 @@ function candidate(spec: CandidateSpec, input: CandidateInputs, now: Date): Engi
     targetVariantId: target.variantId,
     deadline,
     expectedMargin: { amount: margin.amount, currencyCode: margin.currencyCode },
+    costKnown: costed.cost !== null,
     ...(season ? { notBefore: season.startsAt, seasonEnd: season.endsAt } : {}),
     reasons: [
       {

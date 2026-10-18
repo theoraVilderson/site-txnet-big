@@ -94,6 +94,8 @@ holds nothing (its renewal is the sale it exists to start); help
 - **Expected margin**: P(renewal) × (price − cost) of the plan named. A
   top-up is worth the renewal it funds, so it carries the margin `renew`
   would have — never the amount topped up, which is the user's money, not a sale.
+  With the cost unknown the amount is only an upper bound, ranked after every
+  known one (F-038-p2, contract.md margin row).
 - Template key `notifications.suggestion.<type>`; auth-service's template
   per type is the worker's `SUGGESTION_TEMPLATE_OF` (F-038-g3).
 
