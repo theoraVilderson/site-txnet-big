@@ -20,6 +20,7 @@ import { Prisma } from '@prisma/client';
 import { contextOf } from './analytics-context';
 import { RESELLERS_SHOWN, resellersOf } from './analytics-resellers';
 import { analyticsQuerySchema } from './analytics.schema';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 const ACME = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BETA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -71,7 +72,7 @@ function across() {
 const platformTx = (rates: { code: string; day: string; rate: Prisma.Decimal }[] = []) => ({ $queryRaw: async () => rates });
 
 const ctx = (reader = across(), tx = platformTx()) =>
-  contextOf(tx as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false, across: reader as never });
+  contextOf(tx as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false, places: currencyPlaces, across: reader as never });
 
 describe('resellersOf', () => {
   it('answers every reseller with sales, largest net first, each with its totals and delta', async () => {
@@ -113,6 +114,6 @@ describe('resellersOf', () => {
   });
 
   it('cannot run without the cross-tenant reader', async () => {
-    await expect(resellersOf(contextOf({} as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false }))).rejects.toThrow(/cross-tenant/);
+    await expect(resellersOf(contextOf({} as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02' }), { operating: 'USD', hides: false, places: currencyPlaces }))).rejects.toThrow(/cross-tenant/);
   });
 });

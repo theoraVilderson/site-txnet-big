@@ -4,11 +4,9 @@ import {
   isResellerLimitKey,
   isResellerQuotaKey,
   lockQuotaTerms,
-  overageTermsOf,
   type QuotaLockScope,
   quotaTermsInEffectOf,
   platformCurrencyOf,
-  type QuotaOverageTerms,
   RESELLER_QUOTA_KEYS,
   type ResellerLimitKind,
   ResellerQuota,
@@ -26,15 +24,18 @@ import {
   productQuotaStatementsOf,
   type QuotaMeterStatement,
   isPlatformTenant,
+  moneyText,
+  inCurrency,
 } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
+import { held, overageView, viewOf } from './reseller-overage-view';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ResellerLimitsActor = { adminId: string; tenantId: string; ip: string };
 
-export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found' | 'not_a_quota' | 'product_not_found';
+export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | 'limit_out_of_range' | 'package_not_found' | 'reseller_not_found' | 'not_a_quota' | 'product_not_found' | 'amount_finer_than_currency';
 
 export class ResellerLimitsRefused extends Error {
   constructor(
@@ -92,13 +93,13 @@ export type OverageCapView = QuotaSpend;
 type Held = number | null | 'unset';
 
 /** What an overage audit row says a level held. */
-type HeldOverage = OverageView | 'unset';
+export type HeldOverage = OverageView | 'unset';
+
+/** The platform's currency, once `amount` is at its places: the reseller's billing ledger never rounds (F-116-r, contract.reseller-quota rule 8). */
+const platformMoney = async (tx: Prisma.TransactionClient, amount: Prisma.Decimal) =>
+  inCurrency(tx, await platformCurrencyOf(tx), { amount }, () => new ResellerLimitsRefused('amount_finer_than_currency', amount.toFixed()));
 
 const OVERAGE_SELECT = { mode: true, unitPrice: true, currencyCode: true } as const;
-
-export function overageView(terms: QuotaOverageTerms): OverageView {
-  return { mode: terms.mode, unitPrice: terms.unitPrice?.toFixed(2) ?? null, currencyCode: terms.currencyCode };
-}
 
 /**
  * The platform owner's reseller limits (F-019-m, ADR-0106): the platform's
@@ -166,9 +167,9 @@ export class ResellerLimitsService {
     return (key: ResellerQuotaKey): NonNullable<LimitRow['overage']> => {
       const p = platform.find((r) => r.key === key);
       return {
-        platform: p ? overageView(overageTermsOf(p)) : null,
-        packages: packages.filter((r) => r.key === key).map((r) => ({ packageId: r.packageId, name: r.package.name, ...overageView(overageTermsOf(r)) })),
-        resellers: resellers.filter((r) => r.key === key).map((r) => ({ tenantId: r.tenantId, slug: r.tenant.slug, reason: r.reason, ...overageView(overageTermsOf(r)) })),
+        platform: p ? viewOf(p) : null,
+        packages: packages.filter((r) => r.key === key).map((r) => ({ packageId: r.packageId, name: r.package.name, ...viewOf(r) })),
+        resellers: resellers.filter((r) => r.key === key).map((r) => ({ tenantId: r.tenantId, slug: r.tenant.slug, reason: r.reason, ...viewOf(r) })),
       };
     };
   }
@@ -245,10 +246,10 @@ export class ResellerLimitsService {
         if (!before) return;
         await tx.resellerOverageCap.delete({ where: { tenantId: reseller.id } });
       } else {
-        const data = { amount: new Prisma.Decimal(amount), currencyCode: await platformCurrencyOf(tx), setByUserId: actor.userId };
+        const data = { amount: new Prisma.Decimal(amount), currencyCode: await platformMoney(tx, new Prisma.Decimal(amount)), setByUserId: actor.userId };
         await tx.resellerOverageCap.upsert({ where: { tenantId: reseller.id }, create: { tenantId: reseller.id, ...data }, update: data });
       }
-      const view = (row: { amount: Prisma.Decimal; currencyCode: string } | null) => (row ? { amount: row.amount.toFixed(2), currencyCode: row.currencyCode } : null);
+      const view = (row: { amount: Prisma.Decimal; currencyCode: string } | null) => (row ? { amount: moneyText(row.amount), currencyCode: row.currencyCode } : null);
       await tx.adminAuditLog.create({
         data: {
           tenantId: reseller.id,
@@ -257,7 +258,7 @@ export class ResellerLimitsService {
           targetEntityType: AuditTargetType.tenant,
           targetEntityId: reseller.id,
           oldValue: { cap: view(before) },
-          newValue: { cap: amount === null ? null : { amount: new Prisma.Decimal(amount).toFixed(2), currencyCode: await platformCurrencyOf(tx) } },
+          newValue: { cap: amount === null ? null : { amount: moneyText(new Prisma.Decimal(amount)), currencyCode: await platformCurrencyOf(tx) } },
           adminIpAddress: actor.ip,
         },
       });
@@ -450,7 +451,7 @@ export class ResellerLimitsService {
   /** The row's terms: an overage price is stamped with the platform's currency now, which every reseller's billing wallet is kept in. */
   private async overageData(tx: Prisma.TransactionClient, input: OverageInput, adminId: string) {
     if (input.mode === 'stop') return { mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null, updatedByUserId: adminId };
-    return { mode: QuotaOverageMode.overage, unitPrice: new Prisma.Decimal(input.unitPrice), currencyCode: await platformCurrencyOf(tx), updatedByUserId: adminId };
+    return { mode: QuotaOverageMode.overage, unitPrice: new Prisma.Decimal(input.unitPrice), currencyCode: await platformMoney(tx, new Prisma.Decimal(input.unitPrice)), updatedByUserId: adminId };
   }
 
   /** A known key whose registry kind is `quota`; a guard is never sold past (ADR-0107 point 1). */
@@ -541,12 +542,4 @@ export class ResellerLimitsService {
  */
 async function freeze(tx: Prisma.TransactionClient, key: ResellerLimitKey, scope: QuotaLockScope): Promise<void> {
   if (isResellerQuotaKey(key)) await lockQuotaTerms(tx, scope, [key]);
-}
-
-function viewOf(row: { mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null }): OverageView {
-  return overageView(overageTermsOf(row));
-}
-
-function held(row: { mode: QuotaOverageMode; unitPrice: Prisma.Decimal | null; currencyCode: string | null } | null): HeldOverage {
-  return row ? viewOf(row) : 'unset';
 }

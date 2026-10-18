@@ -32,7 +32,7 @@ billing.grant.notFound`, like a missing id. Bucket `SPENDING_CAP` per user
 | Route | Body | Returns |
 |---|---|---|
 | `GET /api/billing/traffic/grants/:grantId/cap` | — | `{grantId, cap}`; `cap` null when none is set |
-| `PUT /api/billing/traffic/grants/:grantId/cap` | `{label, amount, period}` — label 1..40 characters, `amount` a decimal string > 0 with at most two places, `period` `none \| monthly`; anything else `400 billing.spendingCapInvalid` | `{grantId, cap}` |
+| `PUT /api/billing/traffic/grants/:grantId/cap` | `{label, amount, period}` — label 1..40 characters, `amount` a decimal string > 0 at the wallet currency's places (F-116-r), `period` `none \| monthly`; anything else `400 billing.spendingCapInvalid` | `{grantId, cap}` |
 | `DELETE /api/billing/traffic/grants/:grantId/cap` | — | `204`; no cap is `204` too |
 
 `cap` = `{grantId, label, amount, currencyCode, period, periodStartsAt, spent,

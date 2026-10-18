@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { LedgerCurrencyMismatch, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 
 import { WalletLedgerService } from './wallet-ledger.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * Every ledger row is in its wallet's currency (F-116-b, ADR-0098 part 3).
@@ -19,6 +20,7 @@ function fakeStore() {
   const ledger: Array<Record<string, unknown>> = [];
   const outbox: Array<Record<string, unknown>> = [];
   const tx = {
+    ...currencyRegistry,
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => {
         const row = wallets.get(where.ownerUserId);
@@ -103,6 +105,7 @@ describe('where a new money row takes its currency from (F-116-b)', () => {
     { id: 'reseller-eu', tenantType: 'reseller', operatingCurrencyCode: 'EUR' },
   ];
   const tx = {
+    ...currencyRegistry,
     tenant: {
       findUnique: async ({ where }: { where: { id: string } }) => tenants.find((t) => t.id === where.id) ?? null,
       findFirst: async ({ where }: { where: { tenantType: string } }) => tenants.find((t) => t.tenantType === where.tenantType) ?? null,

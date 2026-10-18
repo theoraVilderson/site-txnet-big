@@ -13,7 +13,7 @@ import {
   VariantVisibility,
 } from '@prisma/client';
 
-import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, refusedAudienceGroup, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { CATEGORY_MAX_DEPTH, DOOR_METERS, METER_KEYS, operatingCurrencyOf, PLATFORM_DEFAULT_TIMEZONE, platformTenantIdOf, refusedAudienceGroup, seasonOccurrences, servedByBytes, tenantTransaction, isPlatformTenant, moneyText, inCurrency } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,6 +23,7 @@ import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey,
 import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
 import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf, upcomingSeasonCampaigns } from './season-plan';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
+import { priceView, rateCardView } from './catalog-views';
 
 /**
  * Catalog management (F-026-d; D-34, ADR-0049): categories, products, variants
@@ -94,6 +95,7 @@ export type CatalogAdminRejection =
   | 'key_taken'
   | 'sku_taken'
   | 'price_in_the_past'
+  | 'amount_finer_than_currency'
   | 'text_key_invalid'
   | 'texts_unavailable'
   | 'lang_unknown'
@@ -303,7 +305,7 @@ function seasonView(s: SeasonRowWithPrices, zone: string, now: Date): SeasonView
     startMinute: s.startMinute,
     durationMinutes: s.durationMinutes,
     isActive: s.isActive,
-    prices: s.prices.map((p) => ({ variantId: p.variantId, amount: p.amount.toFixed(2) })).sort((a, b) => a.variantId.localeCompare(b.variantId)),
+    prices: s.prices.map((p) => ({ variantId: p.variantId, amount: moneyText(p.amount) })).sort((a, b) => a.variantId.localeCompare(b.variantId)),
     next: next ?? null,
   };
 }
@@ -318,14 +320,14 @@ function campaignView(
     id: c.id,
     tenantId: c.tenantId,
     variantId: c.variantId,
-    amount: c.amount.toFixed(2),
+    amount: moneyText(c.amount),
     currencyCode: c.currencyCode,
     startsAt: c.startsAt,
     endsAt: c.endsAt,
     cancelledAt: c.cancelledAt,
     priceId: own?.id ?? null,
     restorePriceId: restore?.id ?? null,
-    restoreAmount: restore ? restore.amount.toFixed(2) : null,
+    restoreAmount: restore ? moneyText(restore.amount) : null,
   };
 }
 /** A rate card as the routes answer it (F-118-m); quantities as strings — JSON has no BigInt. */
@@ -474,32 +476,12 @@ const productView = (r: Row, defaultLang: string, platformId: string, categoryId
 /**
  * The currency a new price is written in (F-116-d, ADR-0098 part 2): its
  * tenant's operating currency, the platform's for a platform row. An amount is
- * never converted on the way in — the admin typed it in that currency.
+ * never converted on the way in — the admin typed it in that currency — and
+ * `pricedIn` refuses one finer than that currency's places (F-116-r).
  */
 const pricingCurrencyOf = (tx: Prisma.TransactionClient, tenantId: string) => operatingCurrencyOf(tx, tenantId);
-
-const priceView = (r: Row): PriceView => ({
-  id: r['id'] as string,
-  variantId: r['variantId'] as string,
-  amount: new Prisma.Decimal(r['amount'] as Prisma.Decimal.Value).toFixed(2),
-  currencyCode: r['currencyCode'] as string,
-  effectiveFrom: r['effectiveFrom'] as Date,
-  isActive: r['isActive'] as boolean,
-});
-
-const rateCardView = (r: Row): RateCardView => ({
-  id: r['id'] as string,
-  variantId: r['variantId'] as string,
-  meterKey: r['meterKey'] as string,
-  unitSize: String(r['unitSize']),
-  unitPrice: new Prisma.Decimal(r['unitPrice'] as Prisma.Decimal.Value).toString(),
-  currencyCode: r['currencyCode'] as string,
-  mode: r['mode'] as RateCardMode,
-  includedQuantity: String(r['includedQuantity'] ?? 0),
-  afterIncluded: r['afterIncluded'] as RateCardAfterIncluded,
-  effectiveFrom: r['effectiveFrom'] as Date,
-  isActive: r['isActive'] as boolean,
-});
+export const pricedIn = async (tx: Prisma.TransactionClient, tenantId: string, amount: Prisma.Decimal) =>
+  inCurrency(tx, await pricingCurrencyOf(tx, tenantId), { amount }, () => new CatalogAdminRefused('amount_finer_than_currency', amount.toFixed()));
 
 const newestFirst = <T extends { effectiveFrom: Date }>(rows: T[]) => rows.sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
 
@@ -1246,7 +1228,7 @@ export class CatalogAdminService {
           tenantId,
           variantId: variant['id'] as string,
           amount: new Prisma.Decimal(input.price),
-          currencyCode: await pricingCurrencyOf(tx, tenantId),
+          currencyCode: await pricedIn(tx, tenantId, new Prisma.Decimal(input.price)),
           effectiveFrom,
           createdByAdminId: actor.adminId,
         },
@@ -1313,7 +1295,7 @@ export class CatalogAdminService {
           tenantId,
           variantId,
           amount: new Prisma.Decimal(input.amount),
-          currencyCode: await pricingCurrencyOf(tx, tenantId),
+          currencyCode: await pricedIn(tx, tenantId, new Prisma.Decimal(input.amount)),
           effectiveFrom,
           createdByAdminId: actor.adminId,
         },
@@ -1367,7 +1349,7 @@ export class CatalogAdminService {
   ): Promise<CampaignView> {
     const { tenantId, variantId, amount, startsAt, endsAt, seasonId } = c;
     await this.lockCampaigns(tx, variantId);
-    const currencyCode = await pricingCurrencyOf(tx, tenantId);
+    const currencyCode = await pricedIn(tx, tenantId, amount);
     const plan = campaignPlan({
       startsAt,
       endsAt,
@@ -1495,6 +1477,7 @@ export class CatalogAdminService {
       // One tenant's season prices its own variants only.
       if (variant['tenantId'] !== tenantId) throw new CatalogAdminRefused('variant_not_found', variantId);
       const value = new Prisma.Decimal(amount);
+      await pricedIn(tx, tenantId, value);
       await tx.seasonPrice.upsert({
         where: { seasonId_variantId: { seasonId, variantId } },
         create: { seasonId, variantId, tenantId, amount: value, updatedByAdminId: actor.adminId },
@@ -1502,7 +1485,7 @@ export class CatalogAdminService {
       });
       const row = await tx.season.findUniqueOrThrow({ where: { id: seasonId }, include: { prices: true } });
       const view = seasonView(row, await this.seasonZone(tx, tenantId), new Date());
-      await this.audit(tx, actor, tenantId, 'catalog_season_price_set', 'season', seasonId, null, { variantId, amount: value.toFixed(2) });
+      await this.audit(tx, actor, tenantId, 'catalog_season_price_set', 'season', seasonId, null, { variantId, amount: moneyText(value) });
       return view;
     });
   }

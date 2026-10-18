@@ -22,6 +22,7 @@ import { dayBounds } from './analytics-days';
 import { writeGrantEnds } from './analytics-rollup-customers';
 import { RENEWAL_WINDOW_DEFAULT_DAYS, analyticsSettingsSchema } from './analytics-settings';
 import { analyticsQuerySchema } from './analytics.schema';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 const PRODUCT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const PRODUCT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -53,7 +54,7 @@ function tx(window: number | null) {
 }
 
 const ctx = (how: { window?: number | null; hides?: boolean } = {}) =>
-  contextOf(tx(how.window ?? null) as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02', compare: 'none' }), { operating: 'USD', hides: how.hides ?? false });
+  contextOf(tx(how.window ?? null) as never, analyticsQuerySchema.parse({ from: '2026-09-01', to: '2026-09-02', compare: 'none' }), { operating: 'USD', hides: how.hides ?? false, places: currencyPlaces });
 
 describe('renewalOf', () => {
   it('is renewed over renewed and lapsed — pending is beside the rate, never in it', () => {

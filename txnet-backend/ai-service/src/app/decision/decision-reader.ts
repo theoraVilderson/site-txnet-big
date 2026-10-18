@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AiActionType } from '@prisma/client';
-import { resolveTimeZone, runWithTenant, tenantTransaction, wallClock, type QuietWindow } from '@txnet-backend/shared-core';
+import { resolveTimeZone, runWithTenant, tenantTransaction, wallClock, type QuietWindow, moneyText } from '@txnet-backend/shared-core';
 
 import { HOURS_OF_WEEK } from '../profile/active-hours';
 import type { Reason } from '../profile/predictions';
@@ -288,7 +288,7 @@ export class DecisionReader {
           kind: p.kind,
           value: p.value === null ? null : p.value.toNumber(),
           // An amount stays a decimal string with its currency (C-02, F-038-k).
-          amount: p.currencyCode && p.value !== null ? p.value.toFixed(2) : null,
+          amount: p.currencyCode && p.value !== null ? moneyText(p.value) : null,
           currencyCode: p.currencyCode,
           predictedAt: p.predictedAt,
           confidence: p.confidence.toNumber(),
@@ -301,7 +301,7 @@ export class DecisionReader {
       const paid = theirs.payments.filter((p) => p.userId === id && p.status === 'success').map((p) => p.createdAt.getTime());
       const checkouts: CheckoutAttempt[] = theirs.payments
         .filter((p) => p.userId === id && (p.status === 'failed' || p.status === 'expired'))
-        .map((p) => ({ paymentId: p.id, status: p.status as CheckoutAttempt['status'], at: p.createdAt, amount: p.amountRequested.toFixed(2), currencyCode: p.currencyCode }));
+        .map((p) => ({ paymentId: p.id, status: p.status as CheckoutAttempt['status'], at: p.createdAt, amount: moneyText(p.amountRequested), currencyCode: p.currencyCode }));
       const window = theirs.windows.find((w) => w.userId === id);
       const user = theirs.users.find((u) => u.id === id);
       const quiet: QuietWindow | null = window

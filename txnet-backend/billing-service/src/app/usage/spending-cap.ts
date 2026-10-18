@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, SpendingCap, SpendingCapPeriod } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { tenantTransaction, moneyText, finerThanCurrency } from '@txnet-backend/shared-core';
 
 import { reviveFundedGrants } from '../entitlement/revival';
 import { PrismaService } from '../prisma/prisma.service';
@@ -63,7 +63,8 @@ export type SpendingCapView = {
   left: string;
 };
 
-export type SpendingCapRejection = 'grant_not_found' | 'no_wallet';
+/** `amount_finer_than_currency`: a cap with more places than the wallet's currency has (F-116-r). */
+export type SpendingCapRejection = 'grant_not_found' | 'no_wallet' | 'amount_finer_than_currency';
 
 export class SpendingCapRefused extends Error {
   constructor(readonly reason: SpendingCapRejection) {
@@ -110,6 +111,7 @@ export class SpendingCapService {
     if (!wallet) throw new SpendingCapRefused('no_wallet');
 
     const amount = new Prisma.Decimal(input.amount);
+    if (await finerThanCurrency(tx, wallet.currencyCode, { amount })) throw new SpendingCapRefused('amount_finer_than_currency');
     const period = input.period as SpendingCapPeriod;
     const label = input.label.trim();
     const current = await REAL.of(tx, grantId, at);
@@ -156,13 +158,13 @@ export class SpendingCapService {
     return {
       grantId: cap.grantId,
       label: cap.label,
-      amount: cap.amount.toFixed(2),
+      amount: moneyText(cap.amount),
       currencyCode: cap.currencyCode,
       period: cap.period,
       periodStartsAt: cap.periodStartsAt.toISOString(),
-      spent: cap.spent.toFixed(2),
-      held: held.toFixed(2),
-      left: max0(cap.amount.minus(cap.spent)).toFixed(2),
+      spent: moneyText(cap.spent),
+      held: moneyText(held),
+      left: moneyText(max0(cap.amount.minus(cap.spent))),
     };
   }
 }

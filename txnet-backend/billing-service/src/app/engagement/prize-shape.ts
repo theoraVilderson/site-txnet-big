@@ -17,6 +17,9 @@ export type PrizeShape = {
   variantId?: string | null;
 };
 
+/** A prize's value is GB, days or a percentage — not money — told to two places. */
+export const PRIZE_PLACES = 2;
+
 /** `engagement.prize_shape_ok`: GB > 0; whole days; a coupon's template + percent + days; a free Grant's variant; an empty slot 0. */
 export function prizeShapeOk(p: PrizeShape): boolean {
   const template = p.couponTemplateId ?? null;

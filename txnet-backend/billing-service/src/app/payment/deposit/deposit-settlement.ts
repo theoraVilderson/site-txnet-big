@@ -7,7 +7,7 @@ import {
   TenantBillingReasonType,
   WalletReasonType,
 } from '@prisma/client';
-import { currencyPlacesOf, fromMinorUnits, OutboxEventType, roundCredit, TenantBillingLedger, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, fromMinorUnits, OutboxEventType, roundCredit, TenantBillingLedger, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -247,7 +247,7 @@ export class DepositSettlementService {
           referenceId: payment.id,
         });
         if (manual) await this.auditManual(tx, settled, verified.referenceId, manual);
-        this.logger.log(`payment ${payment.id} credited ${credited.toFixed(2)} to tenant ${billingTenantId}'s billing wallet`);
+        this.logger.log(`payment ${payment.id} credited ${moneyText(credited)} to tenant ${billingTenantId}'s billing wallet`);
         return true;
       }
 
@@ -370,7 +370,7 @@ export class DepositSettlementService {
           // What the payer was charged and the bank is returning, in the gateway
           // currency's minor unit — a string, as every amount on the wire.
           chargedAmountMinor: payment.chargedAmountMinor.toString(),
-          amountCredited: payment.amountCredited.toFixed(2),
+          amountCredited: moneyText(payment.amountCredited),
           // What `amountCredited` is in: the payment's own (F-116-h3).
           currencyCode: payment.currencyCode,
           gateway: { source: ref.source, id: ref.gatewayId },
@@ -405,7 +405,7 @@ export class DepositSettlementService {
         newValue: {
           status: PaymentStatus.success,
           gatewayReferenceId: referenceId,
-          amountCredited: payment.amountCredited.toFixed(2),
+          amountCredited: moneyText(payment.amountCredited),
           reason: manual.reason,
         },
         adminIpAddress: manual.ip,
@@ -443,8 +443,8 @@ export class DepositSettlementService {
     const amount = net.isNegative() ? new Prisma.Decimal(0) : net;
     if (net.isNegative()) {
       this.logger.warn(
-        `payment ${payment.id}: fee ${payment.feeApplied.toFixed(2)} exceeds the credit ` +
-          `${payment.amountCredited.toFixed(2)}; accruing 0 to tenant ${tenant.id}`,
+        `payment ${payment.id}: fee ${moneyText(payment.feeApplied)} exceeds the credit ` +
+          `${moneyText(payment.amountCredited)}; accruing 0 to tenant ${tenant.id}`,
       );
     }
 
@@ -497,12 +497,12 @@ export class DepositSettlementService {
           tenantId: tenant.id,
           userId: payment.userId,
           paymentId: payment.id,
-          amountCredited: payment.amountCredited.toFixed(2),
+          amountCredited: moneyText(payment.amountCredited),
           // What `amountCredited` and `amountAsked` are in: the payment's own (F-116-h3).
           currencyCode: payment.currencyCode,
           // Both figures (F-104-d): what was asked, and what the gateway says
           // arrived — in the gateway currency's minor unit, as strings.
-          amountAsked: amountAsked.toFixed(2),
+          amountAsked: moneyText(amountAsked),
           chargedAmountMinor: payment.chargedAmountMinor.toString(),
           ...(received
             ? { amountReceivedMinor: received.amountMinor.toString(), receivedCurrency: received.currency }

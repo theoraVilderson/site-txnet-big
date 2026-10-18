@@ -115,7 +115,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | `DELETE` the same | — | 204 — back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key` | `{tenantIds: 1..100 distinct, value, reason: 1..500}` | `{key, value, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/clear` | `{tenantIds}` | `{key, cleared}` — back to each one's package or the platform |
-| `PUT` / `DELETE /api/tenants/limits/settings/:key/overage` | `{mode: "stop"}` or `{mode: "overage", unitPrice: "0.50"}` (string, > 0, ≤ 2 places), strict | 204 — `DELETE`: back to `stop` |
+| `PUT` / `DELETE /api/tenants/limits/settings/:key/overage` | `{mode: "stop"}` or `{mode: "overage", unitPrice: "0.50"}` (string, > 0, at the platform currency's places — finer is `422 amount_finer_than_currency`, F-116-r), strict | 204 — `DELETE`: back to `stop` |
 | `PUT` / `DELETE /api/tenants/limits/packages/:packageId/:key/overage` | the same | 204 — `DELETE`: back to the platform's |
 | `PUT /api/tenants/limits/resellers/:key/overage` | the same + `{tenantIds, reason}` | `{key, mode, unitPrice, currencyCode, tenantIds}` |
 | `POST /api/tenants/limits/resellers/:key/overage/clear` | `{tenantIds}` | `{key, cleared}` |
@@ -126,7 +126,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 
 | `GET /api/tenants/:id/limits/products` (F-019-v10) | — | `[{productId, key, nameKey, listed, meter, windows: [{period: {kind, start, end}, included, includedUsed, overageQty, overageAmount}], overage: O}]` by product id — every platform product the reseller sells now (its package's listing, and one taken off but held this period: `listed: false`), each window counted by the engine (billing `productQuotaStatementsOf`); `[]` with no subscription. `ResellerAccess` `read`, the refusals above |
 | `GET /api/tenants/:id/limits/overage-cap` (F-019-v2) | — | `{month: {kind, start, end}, cap: "50.00" \| null, spent, currencyCode}` — `ResellerAccess` `read`, the refusals above |
-| `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, ≤ 2 places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |
+| `PUT` the same | `{amount: "50.00" \| null}` (≥ 0, at the platform currency's places; `0` = no overage at all; `null` removes it), strict | the same shape — `ResellerAccess` `tenantBilling`: its owner, its team, the platform's staff; audited `reseller_overage_cap_set` `{cap}` before/after in the **reseller's** log. Stamped with the platform's currency, converted by its change |
 
 | Rule | Why |
 |---|---|

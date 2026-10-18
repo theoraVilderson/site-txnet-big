@@ -24,6 +24,7 @@ import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { GIB } from './block-purchase';
 import { RemainderCreditRefused, RemainderCreditService, sizeRemainder } from './remainder-credit';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const D = (v: string | number) => new Prisma.Decimal(v);
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -90,6 +91,8 @@ function fakeTx(grant: Partial<GrantRow> & { id: string }, balance: Prisma.Decim
   const ledger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    ...currencyRegistry,
     // Every tenant here keeps its books in USD (F-116-b).
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {

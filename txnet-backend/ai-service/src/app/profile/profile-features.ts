@@ -1,4 +1,5 @@
 import type { GrantSource, GrantStatus, LedgerDirection, PaymentStatus, Prisma, VariantBillingMode, WalletReasonType } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import { activeHours } from './active-hours';
 
@@ -126,7 +127,7 @@ export function accountFeatures(input: AccountInputs, now: Date): { features: Ac
       lastUsedAt: iso(latest(used)),
     },
     wallet: input.wallet && {
-      available: input.wallet.balance.minus(input.wallet.held).toFixed(2),
+      available: moneyText(input.wallet.balance.minus(input.wallet.held)),
       currencyCode: input.wallet.currencyCode,
     },
     topUps180d: input.walletTransactions.filter(

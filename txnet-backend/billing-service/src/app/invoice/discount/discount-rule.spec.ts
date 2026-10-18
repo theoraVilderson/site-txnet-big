@@ -20,6 +20,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { DiscountRuleAdminService, DiscountRuleRefused } from './discount-rule-admin.service';
 import { DiscountRuleFacts, PurchaseFacts, bestDiscountRule, ruleDiscountOf, ruleMatches } from './discount-rule';
+import { currencyRegistry } from '../../../../../test-support/currency-registry';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '33333333-3333-4333-8333-333333333333';
@@ -132,6 +133,7 @@ describe('DiscountRuleAdminService', () => {
     const audits: Array<Record<string, unknown>> = [];
     const created: Array<Record<string, unknown>> = [];
     const tx = {
+      ...currencyRegistry,
       // Every tenant here keeps its books in USD (F-116-b).
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
       $executeRaw: async () => 0,

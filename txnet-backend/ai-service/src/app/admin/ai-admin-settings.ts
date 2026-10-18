@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AiActionType, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, percentText } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { TypeSwitch } from '../decision/type-switch';
@@ -66,7 +66,7 @@ export class AiAdminSettings {
     return {
       engineEnabled: row?.engineEnabled ?? AI_SETTING_DEFAULTS.engineEnabled,
       engineRuns: mode.engineRuns,
-      confidenceThreshold: (row?.confidenceThreshold ?? new Prisma.Decimal(AI_SETTING_DEFAULTS.confidenceThreshold)).toFixed(2),
+      confidenceThreshold: percentText(row?.confidenceThreshold ?? new Prisma.Decimal(AI_SETTING_DEFAULTS.confidenceThreshold)),
       holdoutPercent: row?.holdoutPercent ?? AI_SETTING_DEFAULTS.holdoutPercent,
       disabledActionTypes: row?.disabledActionTypes ?? [],
       actionTypes: [...AI_V1_ACTION_TYPES],

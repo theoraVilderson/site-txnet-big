@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { roundRatio } from '@txnet-backend/shared-core';
+import { roundConverted, roundRatio, type CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import type { Day } from './analytics-days';
 import { Amounts, FEWER_THAN, amountsOf, byCurrency, hiddenKeys } from './analytics-figures';
@@ -39,13 +39,12 @@ export type CohortGrid = { cohorts: CohortSize[]; cells: CohortCell[]; channels:
 export const CHANNEL_POINT_MIN_COHORTS = 3;
 /** A share is answered to four places, as a delta is. */
 const SHARE_PLACES = 4;
-/** Money per member to the cent, as every amount. */
-const MONEY_PLACES = 2;
-
-const perUser = (sums: Map<string, Prisma.Decimal>, users: number) => new Map([...sums].map(([c, v]) => [c, v.div(users).toDecimalPlaces(MONEY_PLACES)]));
+/** Money per member, rounded half up to each currency's places (ADR-0153). */
+const perUser = (sums: Map<string, Prisma.Decimal>, users: number, places: CurrencyPlaces) =>
+  new Map([...sums].map(([c, v]) => [c, roundConverted(v.div(users), places.of(c))]));
 
 /** The grid and the channels' curves, the small cells hidden from the platform's staff (ADR-0104 (3)). */
-export function cohortGridOf(input: CohortInput, how: { currencies: readonly string[]; hides: boolean }): CohortGrid {
+export function cohortGridOf(input: CohortInput, how: { currencies: readonly string[]; hides: boolean; places: CurrencyPlaces }): CohortGrid {
   const index = new Map(input.months.map((m, i) => [m, i]));
   const kOf = (cohort: Day, month: Day) => (index.get(month) ?? 0) - (index.get(cohort) ?? 0);
   const last = input.months.length - 1;
@@ -61,7 +60,7 @@ export function cohortGridOf(input: CohortInput, how: { currencies: readonly str
       const month = byCurrency(net.filter((r) => kOf(cohort, r.month) === k), (r) => r.net);
       for (const [c, v] of month) running.set(c, (running.get(c) ?? new Prisma.Decimal(0)).plus(v));
       const active = input.active.filter((r) => r.cohort === cohort && kOf(cohort, r.month) === k).reduce((n, r) => n + r.users, 0);
-      cells.push({ k, share: roundRatio(new Prisma.Decimal(active).div(users), SHARE_PLACES).toNumber(), netPerUser: amountsOf(perUser(month, users), how.currencies), ltv: amountsOf(perUser(running, users), how.currencies) });
+      cells.push({ k, share: roundRatio(new Prisma.Decimal(active).div(users), SHARE_PLACES).toNumber(), netPerUser: amountsOf(perUser(month, users, how.places), how.currencies), ltv: amountsOf(perUser(running, users, how.places), how.currencies) });
     }
     return { cohort, users, cells, currencies: new Set(net.map((r) => r.currencyCode)) };
   });
@@ -76,7 +75,7 @@ export function cohortGridOf(input: CohortInput, how: { currencies: readonly str
       const users = sizeOf((s) => s.source === source && old.includes(s.cohort));
       if (users === 0) return null;
       const sums = byCurrency(input.net.filter((r) => r.source === source && old.includes(r.cohort) && kOf(r.cohort, r.month) <= k), (r) => r.net);
-      return amountsOf(perUser(sums, users), how.currencies);
+      return amountsOf(perUser(sums, users, how.places), how.currencies);
     });
     return { source, users: sizeOf((s) => s.source === source), ltv, currencies: new Set(input.net.filter((r) => r.source === source).map((r) => r.currencyCode)) };
   });

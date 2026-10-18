@@ -24,6 +24,46 @@ import { Prisma } from '@prisma/client';
 
 type Dec = Prisma.Decimal;
 
+/**
+ * The scale of every money column, `DECIMAL(20,4)` (ADR-0153 point 6): the most
+ * places a registered currency may have (CHECK `currency_decimal_places_fit_money`)
+ * and the most an amount may arrive or leave with.
+ */
+export const MONEY_MAX_PLACES = 4;
+/** `DECIMAL(20,4)` leaves 16 whole digits. */
+const MONEY_WHOLE_DIGITS = 16;
+
+/**
+ * An amount as a request carries it: a decimal string the columns can hold,
+ * no sign, no leading zero, at most four places. The edge cannot know the
+ * currency; the service that does refuses one finer than it (`fitsPlaces`).
+ */
+export const MONEY_PATTERN = new RegExp(`^(0|[1-9]\\d{0,${MONEY_WHOLE_DIGITS - 1}})(\\.\\d{1,${MONEY_MAX_PLACES}})?$`);
+
+/** Whether `amount` has no more places than its currency's `places` — a rial takes no fraction, a dinar three. */
+export function fitsPlaces(amount: Dec, places: number): boolean {
+  checkPlaces(places);
+  return amount.decimalPlaces() <= places;
+}
+
+/**
+ * The first of `amounts` finer than its currency's `places`, by its field name —
+ * so a service refuses a price, a cap or a bound at its write, with its own
+ * refusal, instead of a ledger refusing a payment later. Null when all fit.
+ */
+export function finerThanPlaces(amounts: Record<string, Dec | readonly Dec[] | null | undefined>, places: number): string | null {
+  for (const [field, value] of Object.entries(amounts)) {
+    const all = value == null ? [] : Array.isArray(value) ? value : [value as Dec];
+    if (all.some((v) => !fitsPlaces(v, places))) return field;
+  }
+  return null;
+}
+
+/** What the API has always sent for an amount: two places, kept for every consumer of a currency of two or fewer. */
+const WIRE_MIN_PLACES = 2;
+/** A ratio — a percentage, a share — is told to two places: 12.50. */
+const RATIO_PLACES = 2;
+
 function checkPlaces(places: number): void {
   if (!Number.isInteger(places) || places < 0) throw new RangeError(`places must be a non-negative integer, got ${places}`);
 }
@@ -108,4 +148,30 @@ export function roundRateToStep(rate: Dec, step: Dec, direction: 'up' | 'nearest
 /** A ratio shown — a percentage, a share — half up. Not money: nothing is paid in it. */
 export function roundRatio(ratio: Dec, places: number): Dec {
   return at(ratio, places, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+/**
+ * An amount as the API sends it: every place it holds and never fewer than two,
+ * so `12.50` and `1000.00` read as they always did and a dinar's `1.234` keeps
+ * its third place (F-116-r). A stored amount is already at its currency's
+ * places; a computed one is rounded there first, by its intent. Past the
+ * columns' scale it is rounded half up, as a column would store it.
+ */
+export function moneyText(amount: Dec): string {
+  return amount.toFixed(Math.min(Math.max(amount.decimalPlaces(), WIRE_MIN_PLACES), MONEY_MAX_PLACES), Prisma.Decimal.ROUND_HALF_UP);
+}
+
+/** A converted figure as text at exactly its currency's `places` — `7500000` in rials, `12.50` in dollars: rounded half up there once. */
+export function convertedText(amount: Dec, places: number): string {
+  return roundConverted(amount, places).toFixed(places);
+}
+
+/** A ratio held as a JS number — a share of a period, a factor — to two places, half up, as a number. */
+export function roundShare(ratio: number): number {
+  return roundRatio(new Prisma.Decimal(ratio), RATIO_PLACES).toNumber();
+}
+
+/** A ratio — a percentage, a share — as text, to two places, half up. */
+export function percentText(ratio: Dec): string {
+  return roundRatio(ratio, RATIO_PLACES).toFixed(RATIO_PLACES);
 }

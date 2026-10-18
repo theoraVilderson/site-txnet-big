@@ -1,5 +1,6 @@
 import { TenantPackageRefused, TenantPackageService } from './tenant-package.service';
 import { type CreatePackageInput, createPackageSchema, updatePackageSchema } from './tenant-package.schema';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * The invariants F-018-d turns on, at the one surface that writes a package.
@@ -33,6 +34,7 @@ describe('TenantPackageService', () => {
   const build = (opts: { callerType?: string; existing?: ReturnType<typeof stored> | null; nameTaken?: boolean; subscribersOnPeriod?: number } = {}) => {
     const writes: string[] = [];
     const tx = {
+      ...currencyRegistry,
       $queryRaw: vi.fn(async () => []),
       // A package is priced in the platform's currency (F-116-f).
       tenant: { findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })) },
@@ -47,6 +49,7 @@ describe('TenantPackageService', () => {
       tenantSubscription: { count: vi.fn(async () => opts.subscribersOnPeriod ?? 0) },
     };
     const prisma = {
+      ...currencyRegistry,
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
       tenantFeaturePackage: {
@@ -137,7 +140,7 @@ describe('TenantPackageService', () => {
     await expect(service.update(actor, PKG, { isActive: false })).rejects.toMatchObject({ reason: 'package_not_found' });
   });
 
-  it.each([['1.5e6'], ['-10'], ['0'], ['0.00'], ['12.345'], [1500000]])('refuses %s as a price', (price) => {
+  it.each([['1.5e6'], ['-10'], ['0'], ['0.00'], ['12.34567'], [1500000]])('refuses %s as a price', (price) => {
     expect(createPackageSchema.safeParse({ ...input, monthlyPrice: price }).success).toBe(false);
   });
 

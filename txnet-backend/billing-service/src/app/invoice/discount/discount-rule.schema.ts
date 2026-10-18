@@ -1,4 +1,5 @@
 import { DiscountRuleKind } from '@prisma/client';
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -12,14 +13,13 @@ import { z } from 'zod';
  * from Prisma (C-09).
  */
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
 
 const fields = {
   name: z.string().trim().min(1).max(80),
   kind: z.nativeEnum(DiscountRuleKind),
-  value: z.string({ message: 'value must be a decimal string' }).regex(DECIMAL, { message: 'value must be a decimal string' }),
+  value: z.string({ message: 'value must be a decimal string' }).regex(MONEY_PATTERN, { message: 'value must be a decimal string' }),
   productId: uuid('productId').nullable(),
   categoryId: uuid('categoryId').nullable(),
   forNamedUsers: z.boolean(),

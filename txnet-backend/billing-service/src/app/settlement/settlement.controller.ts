@@ -16,7 +16,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, moneyText } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -34,7 +34,7 @@ import {
 import { Operator, SettlementRefused, SettlementRejection, SettlementService } from './settlement.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
-const STATUS: Record<SettlementRejection, 403 | 404 | 409> = {
+const STATUS: Record<SettlementRejection, 400 | 403 | 404 | 409> = {
   not_platform_owner: 403,
   gateway_not_found: 404,
   tenant_not_found: 404,
@@ -44,6 +44,7 @@ const STATUS: Record<SettlementRejection, 403 | 404 | 409> = {
   already_granted: 409,
   already_withdrawn: 409,
   amount_not_positive: 409,
+  amount_finer_than_currency: 400,
   exceeds_outstanding: 409,
 };
 
@@ -169,9 +170,9 @@ export class SettlementController {
       tenantId: r.tenantId,
       // The tenant's currency now: rows written before a change are converted into it (F-116-f).
       currencyCode: r.currencyCode,
-      accrued: r.accrued.toFixed(2),
-      paidOut: r.paidOut.toFixed(2),
-      outstanding: r.outstanding.toFixed(2),
+      accrued: moneyText(r.accrued),
+      paidOut: moneyText(r.paidOut),
+      outstanding: moneyText(r.outstanding),
     }));
   }
 
@@ -204,7 +205,7 @@ export class SettlementController {
     return {
       id: payout.id,
       tenantId: payout.tenantId,
-      amount: payout.amount.toFixed(2),
+      amount: moneyText(payout.amount),
       paidAt: payout.paidAt,
       proofAttachmentKey: payout.proofAttachmentKey,
     };

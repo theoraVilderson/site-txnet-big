@@ -26,6 +26,7 @@ import {
   productsClosedTo,
   sellsProduct,
   tenantSellsProduct,
+  moneyText,
 } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -178,7 +179,7 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
     qualityTier: v.qualityTier,
     visibility: v.visibility,
     panelGroupId: v.panelGroupId,
-    price: { id: price.id, amount: price.amount.toFixed(2), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
+    price: { id: price.id, amount: moneyText(price.amount), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
     campaignEndsAt: offerCampaignEndsAt(price, at),
     rateCards: offerRateCards(v.rateCards ?? [], at, currencyCode),
   };

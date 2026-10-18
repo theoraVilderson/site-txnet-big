@@ -24,6 +24,8 @@ import { contextOf } from './analytics-context';
 import { deltaOf } from './analytics-figures';
 import { AnalyticsRefused, AnalyticsService } from './analytics.service';
 import { AnalyticsQuery, analyticsQuerySchema } from './analytics.schema';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -73,6 +75,7 @@ function build(state: { version: number; refreshedAt: Date | null; rebuildingSin
     tenantStaffMember: { findFirst: async () => null },
   } as never);
   const tx = {
+    ...currencyRegistry,
     $executeRaw: async () => 1,
     $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const sql = Prisma.sql(strings, ...(values as Prisma.Sql[])).sql;
@@ -128,7 +131,7 @@ describe('buckets', () => {
     expect(previousRange('2026-09-01', '2026-09-30', 'year')).toEqual({ from: '2025-09-01', to: '2025-09-30' });
     expect(previousRange('2026-09-01', '2026-09-30', 'none')).toBeNull();
 
-    const c = contextOf({} as never, query({ from: '2026-09-01', to: '2026-09-03' }), { operating: 'USD', hides: false });
+    const c = contextOf({} as never, query({ from: '2026-09-01', to: '2026-09-03' }), { operating: 'USD', hides: false, places: currencyPlaces });
     expect(c.buckets).toEqual(['2026-09-01', '2026-09-02', '2026-09-03']);
     expect(c.previousMap).toEqual({ days: ['2026-08-29', '2026-08-30', '2026-08-31'], keys: ['2026-09-01', '2026-09-02', '2026-09-03'] });
   });

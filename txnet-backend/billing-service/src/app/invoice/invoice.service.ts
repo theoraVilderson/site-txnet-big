@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, GrantSource, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
-import { admitProductSale, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { admitProductSale, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
@@ -195,12 +195,12 @@ export class InvoiceService {
         sku: offer.sku,
         nameKey: offer.nameKey,
         status: InvoiceStatus.pending,
-        amount: amount.toFixed(2),
-        discount: ruleDiscount.plus(coupons.totalDiscount).toFixed(2),
-        total: coupons.payable.toFixed(2),
+        amount: moneyText(amount),
+        discount: moneyText(ruleDiscount.plus(coupons.totalDiscount)),
+        total: moneyText(coupons.payable),
         currencyCode: invoice.currencyCode,
-        automaticDiscount: rule ? { ruleId: rule.rule.id, name: rule.rule.name, discount: rule.discount.toFixed(2) } : null,
-        applied: coupons.applied.map((a) => ({ code: a.code, discount: a.discount.toFixed(2) })),
+        automaticDiscount: rule ? { ruleId: rule.rule.id, name: rule.rule.name, discount: moneyText(rule.discount) } : null,
+        applied: coupons.applied.map((a) => ({ code: a.code, discount: moneyText(a.discount) })),
         rejected: coupons.rejected,
         expiresAt: invoice.expiresAt,
       };
@@ -258,15 +258,15 @@ export class InvoiceService {
         sku: row.variant.sku,
         nameKey: row.variant.nameKey ?? row.variant.product.nameKey,
         status: lapsed ? InvoiceStatus.expired : row.status,
-        amount: row.amount.toFixed(2),
-        discount: row.discount.toFixed(2),
-        total: row.total.toFixed(2),
+        amount: moneyText(row.amount),
+        discount: moneyText(row.discount),
+        total: moneyText(row.total),
         currencyCode: row.currencyCode,
         automaticDiscount:
           row.discountRuleId && row.discountRule
-            ? { ruleId: row.discountRuleId, name: row.discountRule.name, discount: row.ruleDiscount.toFixed(2) }
+            ? { ruleId: row.discountRuleId, name: row.discountRule.name, discount: moneyText(row.ruleDiscount) }
             : null,
-        applied: held.map((h) => ({ code: h.coupon.code, discount: h.discountAppliedAmount.toFixed(2) })),
+        applied: held.map((h) => ({ code: h.coupon.code, discount: moneyText(h.discountAppliedAmount) })),
         expiresAt: row.expiresAt,
       };
     });

@@ -70,3 +70,7 @@ matching the stored ones.
   change; a payer pays at most one gateway minor unit more for point 2.
 - A new money path cannot pick its own rounding once F-116-p lands; until
   then, review holds it to this ADR.
+- Money leaves the API as every place it holds, never fewer than two
+  (`moneyText`, F-116-r); a write refuses an amount finer than its currency
+  with its own reason (`inCurrency`), and the ledgers refuse one the writer
+  did not round. The panel's forms follow the same places (F-116-s).

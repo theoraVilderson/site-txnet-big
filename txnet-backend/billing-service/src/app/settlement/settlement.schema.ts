@@ -1,3 +1,4 @@
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -18,7 +19,6 @@ import { z } from 'zod';
  */
 
 /** Base currency, a decimal string with at most 2 places — never a JSON number (C-02). */
-const AMOUNT = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 
@@ -43,8 +43,8 @@ export const recordPayoutSchema = z.object({
   /** The tenant being paid. */
   tenantId: uuid('tenantId'),
   amount: z
-    .string({ message: 'amount must be a decimal string with at most 2 places' })
-    .regex(AMOUNT, { message: 'amount must be a decimal string with at most 2 places' }),
+    .string({ message: 'amount must be a decimal string' })
+    .regex(MONEY_PATTERN, { message: 'amount must be a decimal string' }),
   method: z.string().trim().max(100).nullish(),
   reference: z.string().trim().max(200).nullish(),
   /**

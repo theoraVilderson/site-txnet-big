@@ -20,6 +20,7 @@
 import { Prisma } from '@prisma/client';
 
 import { CohortInput, cohortGridOf } from './analytics-cohort-grid';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 const [JUN, JUL, AUG, SEP, OCT, NOV] = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01'];
 const d = (v: string) => new Prisma.Decimal(v);
@@ -45,7 +46,7 @@ const input = (over: Partial<CohortInput> = {}): CohortInput => ({
   ],
   ...over,
 });
-const how = { currencies: ['USD'], hides: false };
+const how = { currencies: ['USD'], hides: false, places: currencyPlaces };
 
 describe('cohortGridOf', () => {
   it("judges month k by the cohort's size, net per member, and LTV as the running sum", () => {

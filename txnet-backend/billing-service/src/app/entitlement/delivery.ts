@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ActorType, ConfigStatus, FulfilmentKind, GrantSource, GrantStatus, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { OutboxEventType, productSaleRef, ResellerQuota, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, productSaleRef, ResellerQuota, runWithTenant, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -260,7 +260,7 @@ export class GrantDeliveryService {
         aggregate: GRANT_AGGREGATE,
         aggregateId: grantId,
         type: OutboxEventType.GRANT_REFUNDED,
-        payload: { tenantId: grant.tenantId, userId: grant.userId, grantId, invoiceId: invoice.id, amount: total.toFixed(2), reason },
+        payload: { tenantId: grant.tenantId, userId: grant.userId, grantId, invoiceId: invoice.id, amount: moneyText(total), reason },
       },
       select: { id: true },
     });

@@ -25,6 +25,7 @@ import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { giftGrantBytes } from './gift-bytes';
 import { RemainderCreditService } from './remainder-credit';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -75,6 +76,8 @@ function build(row: Partial<Row>, balance = D('1.00')) {
   const matches = (where: Record<string, unknown>) => Object.entries(where).every(([k, v]) => (grant as Record<string, unknown>)[k] === v);
 
   const tx = {
+
+    ...currencyRegistry,
     // Every tenant here keeps its books in USD (F-116-b).
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }), findFirst: async () => ({ operatingCurrencyCode: 'USD' }) },
     grant: {

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AiActionType, type AiOffer } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, moneyText, percentText, MONEY_PATTERN, inCurrency } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
@@ -30,7 +30,12 @@ export const OFFER_ACTION_TYPES = ['retain_offer'] as const satisfies readonly A
 /** The coupon types that are a discount on a purchase; a gift code and a free service are not. */
 const DISCOUNT_TYPES: readonly string[] = ['percentage', 'fixed_amount'];
 
-export type OfferRefusal = 'template_not_found' | 'template_not_a_discount' | 'variant_not_found' | 'offer_not_found';
+/** `budget_finer_than_currency`: a daily budget with more places than its currency has (F-116-r). */
+export type OfferRefusal = 'template_not_found' | 'template_not_a_discount' | 'variant_not_found' | 'offer_not_found' | 'budget_finer_than_currency';
+
+/** A daily budget is money in the offer's currency, at its places (F-116-r). */
+const budgetFits = (tx: Prisma.TransactionClient, currencyCode: string, budget: string) =>
+  inCurrency(tx, currencyCode, { dailyBudget: new Prisma.Decimal(budget) }, () => new OfferRefused('budget_finer_than_currency'));
 
 export class OfferRefused extends Error {
   constructor(readonly reason: OfferRefusal) {
@@ -43,7 +48,7 @@ const percent = z
   .string()
   .regex(/^\d{1,3}(\.\d{1,2})?$/)
   .refine((v) => Number(v) > 0 && new Prisma.Decimal(v).lte(100), 'between 0 (exclusive) and 100');
-const amount = z.string().regex(/^\d{1,16}(\.\d{1,2})?$/);
+const amount = z.string().regex(MONEY_PATTERN);
 const currency = z.string().regex(/^[A-Z]{3}$/);
 
 /** An offer's own fields — what the AI page sends (F-038-j1); the internal seam adds whose and who. */
@@ -100,8 +105,8 @@ export function offerView(o: AiOffer): OfferView {
     name: o.name,
     actionType: o.actionType,
     target: { couponTemplateId: o.couponTemplateId, variantId: o.variantId },
-    maxDiscountPercent: o.maxDiscountPercent.toFixed(2),
-    dailyBudget: o.dailyBudget.toFixed(2),
+    maxDiscountPercent: percentText(o.maxDiscountPercent),
+    dailyBudget: moneyText(o.dailyBudget),
     currencyCode: o.currencyCode,
     isActive: o.isActive,
     createdByUserId: o.createdByUserId,
@@ -121,8 +126,9 @@ export class Offers {
     const { tenantId } = body;
     await this.checkTarget(tenantId, body.couponTemplateId ?? null, body.variantId ?? null);
     const created = await runWithTenant({ id: tenantId }, () =>
-      tenantTransaction(this.prisma, (tx) =>
-        tx.aiOffer.create({
+      tenantTransaction(this.prisma, async (tx) => {
+        await budgetFits(tx, body.currencyCode, body.dailyBudget);
+        return tx.aiOffer.create({
           data: {
             tenantId,
             name: body.name,
@@ -134,8 +140,8 @@ export class Offers {
             currencyCode: body.currencyCode,
             createdByUserId: body.createdByUserId,
           },
-        }),
-      ),
+        });
+      }),
     );
     return offerView(created);
   }
@@ -144,8 +150,9 @@ export class Offers {
     const { tenantId, ...data } = patch;
     const updated = await runWithTenant({ id: tenantId }, () =>
       tenantTransaction(this.prisma, async (tx) => {
-        const found = await tx.aiOffer.findFirst({ where: { id: offerId, tenantId }, select: { id: true } });
+        const found = await tx.aiOffer.findFirst({ where: { id: offerId, tenantId }, select: { id: true, currencyCode: true } });
         if (!found) throw new OfferRefused('offer_not_found');
+        if (data.dailyBudget !== undefined) await budgetFits(tx, found.currencyCode, data.dailyBudget);
         const row = await tx.aiOffer.update({ where: { id: offerId }, data });
         if (data.isActive === false) {
           await tx.aiAction.updateMany({

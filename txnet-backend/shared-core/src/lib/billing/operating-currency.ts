@@ -1,5 +1,7 @@
 import { Prisma, TenantType } from '@prisma/client';
 
+import { finerThanPlaces } from './money-rounding';
+
 /**
  * The currency a new money row is written in (F-116-b, ADR-0098 parts 2-3).
  *
@@ -44,4 +46,59 @@ export async function currencyPlacesOf(tx: Pick<Prisma.TransactionClient, 'curre
   const row = await tx.currency.findUnique({ where: { code }, select: { decimalPlaces: true } });
   if (!row) throw new Error(`currency ${code} is not registered`);
   return row.decimalPlaces;
+}
+
+/** `currencyPlacesMap`'s answer: the places of each code asked, and a refusal for any it was not asked or does not know. */
+export type CurrencyPlaces = { of(code: string): number };
+
+type CurrencyRegistry = {
+  currency: { findMany(args: { where?: { code: { in: string[] } }; select: { code: true; decimalPlaces: true } }): Promise<Array<{ code: string; decimalPlaces: number }>> };
+};
+
+/**
+ * The places of several currencies in one query — a list or a report in many
+ * currencies asks once, not per row (C-28); with no codes, of every registered
+ * one (a reference table of a few dozen rows). Unregistered is a caller bug.
+ */
+export async function currencyPlacesMap(tx: CurrencyRegistry, codes?: Iterable<string>): Promise<CurrencyPlaces> {
+  const wanted = codes === undefined ? null : [...new Set(codes)];
+  const select = { code: true, decimalPlaces: true } as const;
+  const rows = wanted === null ? await tx.currency.findMany({ select }) : wanted.length ? await tx.currency.findMany({ where: { code: { in: wanted } }, select }) : [];
+  const places = new Map(rows.map((r) => [r.code, r.decimalPlaces]));
+  return {
+    of(code: string) {
+      const found = places.get(code);
+      if (found === undefined) throw new Error(`currency ${code} is not registered`);
+      return found;
+    },
+  };
+}
+
+/**
+ * The first of `amounts` finer than `currencyCode`'s places, by field name, or
+ * null — what a write refuses with its own reason before it stores money a
+ * ledger would later refuse (F-116-r).
+ */
+export async function finerThanCurrency(
+  tx: Pick<Prisma.TransactionClient, 'currency'>,
+  currencyCode: string,
+  amounts: Parameters<typeof finerThanPlaces>[0],
+): Promise<string | null> {
+  return finerThanPlaces(amounts, await currencyPlacesOf(tx, currencyCode));
+}
+
+/**
+ * `currencyCode`, once every one of `amounts` is at its places — else the
+ * write's own refusal for the first that is not (F-116-r). One line at the
+ * write: `currencyCode: await inCurrency(tx, code, { price }, (f) => new XRefused(f))`.
+ */
+export async function inCurrency(
+  tx: Pick<Prisma.TransactionClient, 'currency'>,
+  currencyCode: string,
+  amounts: Parameters<typeof finerThanPlaces>[0],
+  refuse: (field: string) => Error,
+): Promise<string> {
+  const finer = await finerThanCurrency(tx, currencyCode, amounts);
+  if (finer) throw refuse(finer);
+  return currencyCode;
 }

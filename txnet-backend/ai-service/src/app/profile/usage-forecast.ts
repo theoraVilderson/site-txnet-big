@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FORECAST_AHEAD_DAYS, FORECAST_RATE_DAYS, forecastSpanMs } from '@txnet-backend/shared-core';
+import { FORECAST_AHEAD_DAYS, FORECAST_RATE_DAYS, forecastSpanMs, moneyText } from '@txnet-backend/shared-core';
 
 import type { PredictionRow } from './predictions';
 
@@ -59,7 +59,7 @@ export function walletNeedPrediction(r: WalletRunOut, now: Date): PredictionRow 
     predictedAt: r.runsOutAt,
     currencyCode: r.currencyCode,
     confidence: Number((0.5 + 0.4 * Math.min(1, r.observedDays / FORECAST_RATE_DAYS)).toFixed(4)),
-    reasons: [{ code: 'wholesale_rate', perDay: r.perDay.toFixed(2), observedDays: r.observedDays, balance: r.balance.toFixed(2), currencyCode: r.currencyCode }],
+    reasons: [{ code: 'wholesale_rate', perDay: moneyText(r.perDay), observedDays: r.observedDays, balance: moneyText(r.balance), currencyCode: r.currencyCode }],
   };
 }
 

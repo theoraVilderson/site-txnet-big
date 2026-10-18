@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 import { expectedMargin, SUGGEST_LEAD_DAYS, type EngineCandidate } from './candidates';
@@ -112,7 +113,7 @@ export function packageUpgradeCandidate(input: ResellerUpgradeInputs, now: Date)
         code: 'suggest_package',
         fromPackageId: current.id,
         packageId: best.x.id,
-        price: best.price.toFixed(2),
+        price: moneyText(best.price),
         currencyCode: current.currencyCode,
         billingModel: input.billingModel,
         meter,
@@ -148,6 +149,6 @@ export function resellerTopUpCandidate(
     predictionId: p.id,
     templateKey: RESELLER_TOP_UP_TEMPLATE_KEY,
     deadline: p.predictedAt,
-    reasons: [{ code: 'suggest_top_up', amount: p.value.toFixed(2), currencyCode: p.currencyCode }, ...p.reasons],
+    reasons: [{ code: 'suggest_top_up', amount: moneyText(p.value), currencyCode: p.currencyCode }, ...p.reasons],
   };
 }

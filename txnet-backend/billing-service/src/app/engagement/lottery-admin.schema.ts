@@ -1,4 +1,5 @@
 import { LotteryEntryMode, SpinPrizeType } from '@prisma/client';
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -10,8 +11,7 @@ import { z } from 'zod';
  * its own reason. Decimals are strings (C-02); enums come from Prisma (C-09).
  */
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
-const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(DECIMAL, { message: `${what} must be a decimal string` });
+const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(MONEY_PATTERN, { message: `${what} must be a decimal string` });
 const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 
 const prizeSchema = z

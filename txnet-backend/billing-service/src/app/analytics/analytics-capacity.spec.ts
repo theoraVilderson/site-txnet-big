@@ -17,6 +17,7 @@
 import { Prisma } from '@prisma/client';
 
 import { forecastPanel, monthCostUsd, projectMonth } from './analytics-capacity-forecast';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 const TODAY = '2026-10-16';
 
@@ -109,14 +110,14 @@ describe('projectMonth: money to the month end', () => {
       ...days('2026-10-01', '2026-10-15', 0).map((x) => ({ day: x.day, currencyCode: 'IRR', amount: d('100') })),
       { day: '2026-10-15', currencyCode: 'USD', amount: d('7') },
     ];
-    const p = projectMonth(rows, '2026-09-01', TODAY);
+    const p = projectMonth(rows, { first: '2026-09-01', today: TODAY, places: currencyPlaces });
     // 1500 so far, 100 a day for the 16 days left.
-    expect(p?.get('IRR')?.toFixed(2)).toBe('3100.00');
+    expect(p?.get('IRR')?.toFixed()).toBe('3100');
     expect(p?.get('USD')?.toFixed(2)).toBe('23.00');
   });
 
   it('projects nothing under a day of history', () => {
-    expect(projectMonth([], TODAY, TODAY)).toBeNull();
+    expect(projectMonth([], { first: TODAY, today: TODAY, places: currencyPlaces })).toBeNull();
   });
 });
 
@@ -124,10 +125,10 @@ describe('monthCostUsd: the month at each day\'s price', () => {
   const price = (effectiveFrom: string, usd: string) => ({ monthlyCostUsd: new Prisma.Decimal(usd), effectiveFrom: new Date(`${effectiveFrom}T00:00:00Z`), createdByUserId: null, createdAt: new Date('2026-01-01T00:00:00Z') });
 
   it('prices each day by the row in effect on it', () => {
-    expect(monthCostUsd([price('2026-10-01', '31'), price('2026-10-16', '62')], TODAY)?.toFixed(2)).toBe('47.00');
+    expect(monthCostUsd([price('2026-10-01', '31'), price('2026-10-16', '62')], TODAY, 2)?.toFixed(2)).toBe('47.00');
   });
 
   it('is none with no price in the month', () => {
-    expect(monthCostUsd([], TODAY)).toBeNull();
+    expect(monthCostUsd([], TODAY, 2)).toBeNull();
   });
 });

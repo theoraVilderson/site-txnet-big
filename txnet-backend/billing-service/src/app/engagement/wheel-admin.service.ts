@@ -1,9 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, SpinPrizeType } from '@prisma/client';
-import { TenantContext, operatingCurrencyOf, refusedAudienceGroup, tenantTransaction } from '@txnet-backend/shared-core';
+import { TenantContext, operatingCurrencyOf, refusedAudienceGroup, tenantTransaction, moneyText, MONEY_MAX_PLACES, finerThanCurrency } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { missingPrizeRelation, prizeShapeOk } from './prize-shape';
+import { missingPrizeRelation, PRIZE_PLACES, prizeShapeOk } from './prize-shape';
 import { addDays, isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
 
 /**
@@ -172,10 +172,11 @@ export function expectedCostPerSpin(prizes: Array<{ weight: number; cost: Prisma
   return prizes.reduce((s, p) => s.add(p.cost.mul(p.weight)), new Prisma.Decimal(0)).div(total);
 }
 
-function decimal(v: string, reason: WheelAdminRejection = 'invalid_prize'): Prisma.Decimal {
+/** `places`: a prize value's two, or money's column scale — its currency's places are checked at the save (F-116-r). */
+function decimal(v: string, reason: WheelAdminRejection = 'invalid_prize', places = PRIZE_PLACES): Prisma.Decimal {
   try {
     const d = new Prisma.Decimal(v);
-    if (d.isNegative() || d.decimalPlaces() > 2) throw new Error();
+    if (d.isNegative() || d.decimalPlaces() > places) throw new Error();
     return d;
   } catch {
     throw new WheelAdminRefused(reason, v);
@@ -195,30 +196,30 @@ function viewOf(row: ConfigRow): WheelVersionView {
     version: row.version,
     effectiveFromDay: isoDay(row.effectiveFromDay),
     isActive: row.isActive,
-    dailyBudgetCapAmount: new Prisma.Decimal(row.dailyBudgetCapAmount).toFixed(2),
+    dailyBudgetCapAmount: moneyText(new Prisma.Decimal(row.dailyBudgetCapAmount)),
     currencyCode: row.currencyCode,
     perUserCooldownHours: row.perUserCooldownHours,
     maxSpinsPerAccountPerDay: row.maxSpinsPerAccountPerDay,
     requiresMinAccountAgeHours: row.requiresMinAccountAgeHours,
-    requiresMinTotalPurchaseAmount: row.requiresMinTotalPurchaseAmount === null ? null : new Prisma.Decimal(row.requiresMinTotalPurchaseAmount).toFixed(2),
+    requiresMinTotalPurchaseAmount: row.requiresMinTotalPurchaseAmount === null ? null : moneyText(new Prisma.Decimal(row.requiresMinTotalPurchaseAmount)),
     requiresMinCompletedOrdersCount: row.requiresMinCompletedOrdersCount,
     requiresActiveServiceAtSpinTime: row.requiresActiveServiceAtSpinTime,
     requiresPhoneVerified: row.requiresPhoneVerified,
     userGroupId: row.userGroupId,
     createdByAdminId: row.createdByAdminId,
     createdAt: row.createdAt,
-    expectedCostPerSpin: expectedCostPerSpin(prizes.map((p) => ({ weight: p.probabilityWeight, cost: new Prisma.Decimal(p.costAmount) }))).toFixed(2),
+    expectedCostPerSpin: moneyText(expectedCostPerSpin(prizes.map((p) => ({ weight: p.probabilityWeight, cost: new Prisma.Decimal(p.costAmount) })))),
     prizes: prizes.map((p) => ({
       id: p.id,
       position: p.position,
       label: p.label,
       prizeType: p.prizeType,
-      prizeValue: new Prisma.Decimal(p.prizeValue).toFixed(2),
+      prizeValue: moneyText(new Prisma.Decimal(p.prizeValue)),
       couponTemplateId: p.couponTemplateId,
       couponValidDays: p.couponValidDays,
       variantId: p.variantId,
       weight: p.probabilityWeight,
-      costAmount: new Prisma.Decimal(p.costAmount).toFixed(2),
+      costAmount: moneyText(new Prisma.Decimal(p.costAmount)),
       dailyStockLimit: p.dailyStockLimit,
     })),
   };
@@ -257,15 +258,15 @@ export class WheelAdminService {
   save(actor: WheelActor, input: WheelVersionInput): Promise<WheelVersionView> {
     const tenant = TenantContext.current('wheel version save');
     return tenantTransaction(this.prisma, async (tx) => {
-      const cap = decimal(input.dailyBudgetCapAmount, 'invalid_amount');
+      const cap = decimal(input.dailyBudgetCapAmount, 'invalid_amount', MONEY_MAX_PLACES);
       const prizes = input.prizes.map((p) => {
         const value = decimal(p.prizeValue);
-        const cost = decimal(p.costAmount);
+        const cost = decimal(p.costAmount, 'invalid_prize', MONEY_MAX_PLACES);
         checkPrize(p, value, cost);
         return { p, value, cost };
       });
       if (expectedCostPerSpin(prizes.map(({ p, cost }) => ({ weight: p.weight, cost }))).gt(cap)) {
-        throw new WheelAdminRefused('expected_cost_over_cap', cap.toFixed(2));
+        throw new WheelAdminRefused('expected_cost_over_cap', moneyText(cap));
       }
       const tooDear = prizes.find(({ cost }) => cost.gt(cap));
       if (tooDear) throw new WheelAdminRefused('prize_cost_over_cap', tooDear.p.label);
@@ -273,7 +274,10 @@ export class WheelAdminService {
 
       const today = tenantDayOf(this.now(), await tenantZoneOf(tx, tenant.id));
       const last = await tx.spinWheelConfig.findFirst({ where: { tenantId: tenant.id }, orderBy: { version: 'desc' }, select: { version: true } });
-      const minTotal = input.requiresMinTotalPurchaseAmount ? decimal(input.requiresMinTotalPurchaseAmount, 'invalid_amount') : null;
+      const minTotal = input.requiresMinTotalPurchaseAmount ? decimal(input.requiresMinTotalPurchaseAmount, 'invalid_amount', MONEY_MAX_PLACES) : null;
+      const currencyCode = await operatingCurrencyOf(tx, tenant.id);
+      const finer = await finerThanCurrency(tx, currencyCode, { dailyBudgetCapAmount: cap, requiresMinTotalPurchaseAmount: minTotal, costAmount: prizes.map((x) => x.cost) });
+      if (finer) throw new WheelAdminRefused(finer === 'costAmount' ? 'invalid_prize' : 'invalid_amount', finer);
       let config: { id: string };
       try {
         config = await tx.spinWheelConfig.create({
@@ -282,12 +286,12 @@ export class WheelAdminService {
             version: (last?.version ?? 0) + 1,
             effectiveFromDay: addDays(today, 1),
             isActive: input.isActive ?? true,
-            dailyBudgetCapAmount: cap.toFixed(2),
-            currencyCode: await operatingCurrencyOf(tx, tenant.id),
+            dailyBudgetCapAmount: moneyText(cap),
+            currencyCode,
             perUserCooldownHours: input.perUserCooldownHours ?? 24,
             maxSpinsPerAccountPerDay: input.maxSpinsPerAccountPerDay ?? 1,
             requiresMinAccountAgeHours: input.requiresMinAccountAgeHours ?? 24,
-            requiresMinTotalPurchaseAmount: minTotal?.toFixed(2) ?? null,
+            requiresMinTotalPurchaseAmount: minTotal ? moneyText(minTotal) : null,
             requiresMinCompletedOrdersCount: input.requiresMinCompletedOrdersCount ?? null,
             requiresActiveServiceAtSpinTime: input.requiresActiveServiceAtSpinTime ?? true,
             requiresPhoneVerified: input.requiresPhoneVerified ?? true,
@@ -309,12 +313,12 @@ export class WheelAdminService {
           position: i + 1,
           label: p.label,
           prizeType: p.prizeType,
-          prizeValue: value.toFixed(2),
+          prizeValue: moneyText(value),
           couponTemplateId: p.couponTemplateId ?? null,
           couponValidDays: p.couponValidDays ?? null,
           variantId: p.variantId ?? null,
           probabilityWeight: p.weight,
-          costAmount: cost.toFixed(2),
+          costAmount: moneyText(cost),
           dailyStockLimit: p.dailyStockLimit ?? null,
         })),
       });

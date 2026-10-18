@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   InsufficientFunds,
   RATE_LIMIT_KEY,
@@ -11,6 +12,7 @@ import { addBillingPeriod, periodChargeReference } from '../renewal/tenant-renew
 import { ResellerPurchaseController } from './reseller-purchase.controller';
 import { ResellerPurchaseService } from './reseller-purchase.service';
 import { slugFromName } from './slug-suggestion';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * The invariants F-019-h turns on (ADR-0061):
@@ -50,7 +52,7 @@ describe('ResellerPurchaseService', () => {
   const NOW = new Date('2026-09-18T10:00:00.000Z');
   const buyer = { userId: BUYER, tenantId: PLATFORM, ip: '127.0.0.1' };
   const input = { packageId: PACKAGE, billingModel: 'subscription_monthly' as const, name: 'Ali VPN' };
-  const pkg = { id: PACKAGE, name: 'Pro', isActive: true, monthlyPrice: { toFixed: () => '300000.00' }, yearlyPrice: null, includedFeatureKeys: ['bot', 'domain'] };
+  const pkg = { id: PACKAGE, name: 'Pro', isActive: true, monthlyPrice: new Prisma.Decimal('300000'), yearlyPrice: null, includedFeatureKeys: ['bot', 'domain'] };
   const person = { id: BUYER, fullName: 'Ali', username: 'ali', phoneNumber: '+989123456789', status: 'active' };
 
   const build = (
@@ -60,6 +62,7 @@ describe('ResellerPurchaseService', () => {
     const hosts: string[] = [];
     const appPrisma = { tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) } };
     const tx = {
+      ...currencyRegistry,
       $queryRaw: vi.fn(async () => (writes.push('lock package'), [])),
       tenantFeaturePackage: { findUnique: vi.fn(async () => (opts.package === null ? null : { ...pkg, ...opts.package })) },
       tenant: {
@@ -93,6 +96,7 @@ describe('ResellerPurchaseService', () => {
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => (writes.push(`status ${data.status}`), { id: NEW_TENANT, ownerUserId: BUYER, ...data })),
     });
     const all = {
+      ...currencyRegistry,
       tenant: {
         findFirst: vi.fn(async () => (opts.owns ? { id: 'old' } : null)),
         findMany: vi.fn(async ({ where }: { where: { slug: { in: string[] } } }) =>
@@ -122,7 +126,7 @@ describe('ResellerPurchaseService', () => {
       debit: vi.fn(async (_tx: unknown, entry: { amount: unknown }) => {
         if (opts.short) throw new InsufficientFunds(BUYER);
         writes.push('user wallet debit');
-        return { balanceAfter: { toFixed: () => '200000.00' }, amount: entry.amount };
+        return { balanceAfter: new Prisma.Decimal('200000'), amount: entry.amount };
       }),
     };
     const billing = {

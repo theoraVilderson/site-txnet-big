@@ -3,6 +3,7 @@ import { runInBoundTransaction, runWithTenant } from '@txnet-backend/shared-core
 
 import { CouponReservationService } from './coupon-reservation';
 import { applyCoupons, CouponFacts, CouponOrder, CouponValidationService } from './coupon-validation';
+import { currencyRegistry } from '../../../../../test-support/currency-registry';
 
 /**
  * A coupon applies only in its own currency (F-116-h6, ADR-0098 part 3).
@@ -136,6 +137,7 @@ describe('the loader reads a rate only for a coupon that needs one', () => {
       return { ...c, serviceScopes: [], allowedUsers: [], gateways: [], _count: { redemptions: 0 } };
     };
     const tx = {
+      ...currencyRegistry,
       coupon: {
         findMany: vi.fn().mockResolvedValue([
           row('A', {}),
@@ -166,6 +168,7 @@ describe('the redemption records the rate it was converted at', () => {
   it('passes the rate and both snapshots to reserve_coupon, and nulls for a coupon in the order currency', async () => {
     const calls: unknown[][] = [];
     const tx = {
+      ...currencyRegistry,
       $queryRaw: vi.fn((_: TemplateStringsArray, ...values: unknown[]) => {
         calls.push(values);
         return Promise.resolve([{ outcome: 'reserved' }]);

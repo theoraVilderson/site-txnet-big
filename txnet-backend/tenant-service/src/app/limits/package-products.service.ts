@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode } from '@prisma/client';
-import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant } from '@txnet-backend/shared-core';
+import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { SetPackageProductInput } from './reseller-limits.schema';
-import { overageView, ResellerLimitsRefused, type OverageView, type ResellerLimitsActor } from './reseller-limits.service';
+import { ResellerLimitsRefused, type OverageView, type ResellerLimitsActor } from './reseller-limits.service';
+import { overageView } from './reseller-overage-view';
 
 /** A listing's sales quota (F-019-v6): included per window (`null` = no bound), and past any of them. */
 export type ProductQuotaView = { day: number | null; week: number | null; month: number | null; overage: OverageView };
@@ -121,7 +122,7 @@ export class PackageProductsService {
 type Held = ProductQuotaView | 'unlisted';
 
 function sameTerms(a: QuotaColumns, b: QuotaColumns): boolean {
-  const price = (r: QuotaColumns) => r.unitPrice?.toFixed(2) ?? null;
+  const price = (r: QuotaColumns) => r.unitPrice ? moneyText(r.unitPrice) : null;
   return (
     a.dayIncluded === b.dayIncluded &&
     a.weekIncluded === b.weekIncluded &&

@@ -1,4 +1,5 @@
 import { DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import { RemainderCreditRefused } from '../traffic/remainder-credit';
 import { EntitlementRefused } from './grant';
@@ -129,7 +130,7 @@ export async function deleteGrant(
     statusBefore: grant.status,
     configsReleased: released.count,
     refund: input.refund,
-    refundedAmount: credited ? credited.amount.toFixed(2) : null,
+    refundedAmount: credited ? moneyText(credited.amount) : null,
     currencyCode,
     walletTransactionId: credited?.walletTransactionId ?? null,
     refundSkipped,

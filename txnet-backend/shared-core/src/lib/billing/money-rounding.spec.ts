@@ -13,9 +13,16 @@
  */
 import { Prisma } from '@prisma/client';
 
+import { currencyPlacesMap } from './operating-currency';
 import {
   fromMinorUnits,
   minorUnit,
+  MONEY_PATTERN,
+  finerThanPlaces,
+  convertedText,
+  fitsPlaces,
+  moneyText,
+  percentText,
   roundCharge,
   roundConverted,
   roundCredit,
@@ -91,5 +98,45 @@ describe('money rounding (ADR-0153)', () => {
 
   it('rounds a ratio shown half up', () => {
     expect(s(roundRatio(d('33.335'), 2))).toBe('33.34');
+  });
+});
+
+describe('money on the wire (F-116-r)', () => {
+  it('keeps two places for what has two or fewer, as the API always sent', () => {
+    expect(moneyText(d('12.5'))).toBe('12.50');
+    expect(moneyText(d('1000'))).toBe('1000.00');
+  });
+
+  it('never drops a place a three- or four-place currency holds', () => {
+    expect(moneyText(d('1.234'))).toBe('1.234');
+    expect(moneyText(d('0.0005'))).toBe('0.0005');
+  });
+
+  it('sends at most the four places a column holds, as the column would store it', () => {
+    expect(moneyText(d('3.33335'))).toBe('3.3334');
+  });
+
+  it('takes at the edge what a column holds, and leaves the currency to the service', () => {
+    expect(['1.234', '0.5', '1234567890123456.1234'].every((s) => MONEY_PATTERN.test(s))).toBe(true);
+    expect(['1.23456', '01', '-1', '12345678901234567'].some((s) => MONEY_PATTERN.test(s))).toBe(false);
+    expect([fitsPlaces(d('1000.5'), 0), fitsPlaces(d('1.234'), 3), fitsPlaces(d('1.2'), 2)]).toEqual([false, true, true]);
+    expect(finerThanPlaces({ min: d('1'), presets: [d('5'), d('5.5')], cap: null }, 0)).toBe('presets');
+    expect(finerThanPlaces({ min: d('1.25'), cap: undefined }, 2)).toBeNull();
+  });
+
+  it('writes a converted figure at exactly its currency’s places', () => {
+    expect([convertedText(d('7499999.6'), 0), convertedText(d('12.5'), 2)]).toEqual(['7500000', '12.50']);
+  });
+
+  it('tells a ratio to two places, half up', () => {
+    expect(percentText(d('33.335'))).toBe('33.34');
+  });
+
+  it('reads the places of several currencies in one query, and refuses an unregistered one', async () => {
+    const db = { currency: { findMany: vi.fn().mockResolvedValue([{ code: 'USD', decimalPlaces: 2 }, { code: 'KWD', decimalPlaces: 3 }]) } };
+    const places = await currencyPlacesMap(db, ['USD', 'KWD', 'USD']);
+    expect([places.of('USD'), places.of('KWD')]).toEqual([2, 3]);
+    expect(db.currency.findMany).toHaveBeenCalledTimes(1);
+    expect(() => places.of('XYZ')).toThrow(/not registered/);
   });
 });

@@ -2,7 +2,7 @@ import { randomInt } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma } from '@prisma/client';
-import { currencyPlacesOf, quotaPeriodAt, resolveTimeZone, roundCredit, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, quotaPeriodAt, resolveTimeZone, roundCredit, runWithTenant, tenantTransaction, moneyText, percentText, MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { sellableOfferById } from '../../catalog/catalog-reads';
@@ -38,7 +38,8 @@ const CODE_LENGTH = 10;
 /** What the panel and the AI page call it; never shown to the user (D-33). */
 const LABEL = 'AI offer';
 
-const amount = z.string().regex(/^\d{1,16}(\.\d{1,2})?$/);
+/** A percentage, 0..100 at two places, as the AI engine sends it. */
+const percent = z.string().regex(/^\d{1,3}(\.\d{1,2})?$/);
 
 export const aiOfferCouponSchema = z
   .object({
@@ -51,8 +52,8 @@ export const aiOfferCouponSchema = z
     /** The plan the suggestion names — the coupon's only scope. */
     variantId: z.string().uuid(),
     couponTemplateId: z.string().uuid().nullable(),
-    maxDiscountPercent: amount,
-    dailyBudget: amount,
+    maxDiscountPercent: percent,
+    dailyBudget: z.string().regex(MONEY_PATTERN),
     currencyCode: z.string().regex(/^[A-Z]{3}$/),
     expiresAt: z.string().datetime(),
   })
@@ -83,15 +84,15 @@ export function personalCouponTerms(
   const capped = down(price.times(maxPercent).dividedBy(100));
   let terms: PersonalTerms;
   if (!template) {
-    terms = { discountType: DiscountType.percentage, discountValue: maxPercent.toFixed(2), maxDiscountCap: null, charge: capped.toFixed(2) };
+    terms = { discountType: DiscountType.percentage, discountValue: percentText(maxPercent), maxDiscountCap: null, charge: moneyText(capped) };
   } else if (template.discountType === DiscountType.percentage) {
     const percent = Prisma.Decimal.min(template.discountValue, maxPercent);
     let charge = down(price.times(percent).dividedBy(100));
     if (template.maxDiscountCap !== null) charge = Prisma.Decimal.min(charge, template.maxDiscountCap);
-    terms = { discountType: DiscountType.percentage, discountValue: percent.toFixed(2), maxDiscountCap: template.maxDiscountCap?.toFixed(2) ?? null, charge: charge.toFixed(2) };
+    terms = { discountType: DiscountType.percentage, discountValue: percentText(percent), maxDiscountCap: template.maxDiscountCap ? moneyText(template.maxDiscountCap) : null, charge: moneyText(charge) };
   } else if (template.discountType === DiscountType.fixed_amount) {
     const value = Prisma.Decimal.min(template.discountValue, capped);
-    terms = { discountType: DiscountType.fixed_amount, discountValue: value.toFixed(2), maxDiscountCap: null, charge: value.toFixed(2) };
+    terms = { discountType: DiscountType.fixed_amount, discountValue: moneyText(value), maxDiscountCap: null, charge: moneyText(value) };
   } else {
     return null;
   }
@@ -133,7 +134,7 @@ export class AiOfferCouponService {
         if (!plan) return { refused: 'plan_unavailable' };
         const price = new Prisma.Decimal(plan.price.amount);
         const currencyCode = plan.price.currencyCode;
-        const after = (discount: Prisma.Decimal): Money => ({ amount: Prisma.Decimal.max(price.minus(discount), 0).toFixed(2), currencyCode });
+        const after = (discount: Prisma.Decimal): Money => ({ amount: moneyText(Prisma.Decimal.max(price.minus(discount), 0)), currencyCode });
 
         const existing = await tx.coupon.findFirst({
           where: { aiActionId: body.actionId },
@@ -143,7 +144,7 @@ export class AiOfferCouponService {
           return {
             issued: {
               code: existing.code,
-              discount: { amount: existing.aiBudgetCharge.toFixed(2), currencyCode: existing.currencyCode },
+              discount: { amount: moneyText(existing.aiBudgetCharge), currencyCode: existing.currencyCode },
               priceAfter: after(existing.aiBudgetCharge),
               expiresAt: (existing.expiresAt ?? new Date(body.expiresAt)).toISOString(),
             },

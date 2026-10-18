@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { LotteryEntryMode, LotteryStatus, Prisma, SpinPrizeType, UserGroupMemberType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -115,7 +115,7 @@ export class LotteryEntryService {
           open: isOpen(l, now),
           prizes: [...l.prizes]
             .sort((a, b) => a.rank - b.rank)
-            .map((p) => ({ rank: p.rank, label: p.label, prizeType: p.prizeType, prizeValue: new Prisma.Decimal(p.prizeValue).toFixed(2), winnersCount: p.winnersCount })),
+            .map((p) => ({ rank: p.rank, label: p.label, prizeType: p.prizeType, prizeValue: moneyText(new Prisma.Decimal(p.prizeValue)), winnersCount: p.winnersCount })),
           entry: e ? { optedInAt: e.optedInAt, ticketNumber: e.ticketNumber, excludedReason: e.excludedReason } : null,
         };
       });

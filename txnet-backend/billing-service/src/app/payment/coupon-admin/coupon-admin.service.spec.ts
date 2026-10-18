@@ -24,6 +24,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { createCouponSchema, generateBatchSchema, updateCouponSchema } from './coupon-admin.schema';
 import { CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
+import { currencyRegistry } from '../../../../../test-support/currency-registry';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -173,6 +174,7 @@ function build(seed: { redemptions?: Row[]; coupons?: Row[]; grants?: Row[] } = 
   const audit: Row[] = [];
   const types: Record<string, TenantType> = { [OWNER]: TenantType.platform_owner, [RESELLER]: TenantType.reseller, [OTHER]: TenantType.reseller };
   const db = {
+    ...currencyRegistry,
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
     // ADR-0106's levels, read for the discount cap (F-904): none set here.
     tenantSubscription: table([], 'tenantSubscription', writes),

@@ -134,8 +134,13 @@ const withTied = (r: RollupRange, fx: FxTable) => Prisma.sql`
     ) pn ON sold."grantId" IS NOT NULL
   )`;
 
-/** A rollup money column's places: `DECIMAL(18,2)`. */
-const MONEY_PLACES = 2;
+/**
+ * A rollup amount rounded once, half up, to its row currency's places (ADR-0153
+ * point 1): a sum converted by a currency change's factor has more digits than
+ * the currency has, and the column, `DECIMAL(20,4)`, no longer rounds them away.
+ */
+const moneyAt = (amount: Prisma.Sql, currencyCode: Prisma.Sql) =>
+  Prisma.sql`round(${amount}, (SELECT cu."decimalPlaces" FROM currency.currency cu WHERE cu."code" = ${currencyCode}))`;
 
 /** Package orders net of the package refunds that undo them. */
 const NET_ORDERS = Prisma.sql`(COUNT(*) FILTER (WHERE t."package" AND t."sale") - COUNT(*) FILTER (WHERE t."package" AND NOT t."sale"))::int`;
@@ -155,11 +160,11 @@ export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange, f
     FROM (
       SELECT t."day", t."currencyCode", t."productId", t."variantId", t."panelId",
              (CASE WHEN t."package" THEN 'package' ELSE 'usage' END)::billing."AnalyticsSaleKind" AS "kind",
-             round(COALESCE(SUM(t."amount") FILTER (WHERE t."sale"), 0), ${MONEY_PLACES}::int) AS "gross",
-             round(COALESCE(SUM(t."amount") FILTER (WHERE NOT t."sale"), 0), ${MONEY_PLACES}::int) AS "refunds",
+             ${moneyAt(Prisma.sql`COALESCE(SUM(t."amount") FILTER (WHERE t."sale"), 0)`, Prisma.sql`t."currencyCode"`)} AS "gross",
+             ${moneyAt(Prisma.sql`COALESCE(SUM(t."amount") FILTER (WHERE NOT t."sale"), 0)`, Prisma.sql`t."currencyCode"`)} AS "refunds",
              ${NET_ORDERS} AS "orders",
              SUM(CASE WHEN NOT t."package" THEN 0 WHEN t."sale" THEN t."bytes" ELSE -t."bytes" END)::bigint AS "bytesSold",
-             COALESCE(SUM(t."discount") FILTER (WHERE t."sale"), 0) AS "discounts"
+             ${moneyAt(Prisma.sql`COALESCE(SUM(t."discount") FILTER (WHERE t."sale"), 0)`, Prisma.sql`t."currencyCode"`)} AS "discounts"
       FROM tied t
       GROUP BY t."day", t."currencyCode", t."productId", t."variantId", t."panelId", t."package"
     ) x`;
@@ -173,7 +178,7 @@ export async function writeSales(tx: Prisma.TransactionClient, r: RollupRange, f
  * settled, and never a reseller's own payment to the platform.
  */
 export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange, fx: FxTable): Promise<void> {
-  const [f, p] = [Prisma.sql`f`, Prisma.sql`p`];
+  const [f, p, A] = [Prisma.sql`f`, Prisma.sql`p`, Prisma.sql`a."currencyCode"`];
   const paidDay = dayIn(Prisma.sql`p."createdAt"`, r.zone);
   const firstDay = dayIn(Prisma.sql`wt."createdAt"`, r.zone);
   await tx.$executeRaw`
@@ -201,7 +206,7 @@ export async function writeUsers(tx: Prisma.TransactionClient, r: RollupRange, f
         AND w."ownerUserId" IN (SELECT "userId" FROM sold)
       ORDER BY w."ownerUserId", wt."createdAt", wt."id"
     )
-    SELECT public.current_tenant_id(), a."day", a."currencyCode", a."userId", a."productId", a."panelId", SUM(a."net"), SUM(a."orders")::int, SUM(a."topUps"),
+    SELECT public.current_tenant_id(), a."day", a."currencyCode", a."userId", a."productId", a."panelId", ${moneyAt(Prisma.sql`SUM(a."net")`, A)}, SUM(a."orders")::int, ${moneyAt(Prisma.sql`SUM(a."topUps")`, A)},
            EXISTS (SELECT 1 FROM firsts f WHERE f."userId" = a."userId" AND f."day" = a."day" AND f."currencyCode" = a."currencyCode")
     FROM (SELECT * FROM sold UNION ALL SELECT * FROM paid) a
     GROUP BY a."day", a."currencyCode", a."userId", a."productId", a."panelId"`;
@@ -237,7 +242,8 @@ export async function writePayments(tx: Prisma.TransactionClient, r: RollupRange
         AND wt."createdAt" >= ${r.from} AND wt."createdAt" < ${r.to}
     )
     SELECT public.current_tenant_id(), a."day", a."currencyCode", a."kind",
-           SUM(a."started")::int, SUM(a."settled")::int, SUM(a."failed")::int, SUM(a."amount"), SUM(a."gift")
+           SUM(a."started")::int, SUM(a."settled")::int, SUM(a."failed")::int,
+           ${moneyAt(Prisma.sql`SUM(a."amount")`, Prisma.sql`a."currencyCode"`)}, ${moneyAt(Prisma.sql`SUM(a."gift")`, Prisma.sql`a."currencyCode"`)}
     FROM att a GROUP BY a."day", a."currencyCode", a."kind"`;
 }
 

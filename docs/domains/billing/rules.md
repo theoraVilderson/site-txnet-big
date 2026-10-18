@@ -27,7 +27,7 @@ while `pending`; `usedCount` increments on `confirmed`.
 | 3 | Coupon `minPurchaseAmount` / `maxDiscountCap` (percentage only) bound the discount | redeem | — |
 | 4 | Targeted coupon (`visibility = targeted`) requires a `coupon_allowed_user` row | redeem | — |
 | 5 | Affiliate commission is separate from `identity.user.referredByUserId` — it needs its own status ledger | payment success by referred user | — |
-| 6 | Money is rounded once, at the write, to the row currency's `decimalPlaces` (`currencyPlacesOf`), by `shared-core`'s `money-rounding.ts`: a charge up, a credit, discount or hold down, a price or conversion half up and never to nothing, parts summing to their whole (ADR-0153, F-116-p; C-02 check) | every money write | analytics' shown averages, until F-116-r |
+| 6 | Money is rounded once, at the write, to the row currency's `decimalPlaces` (`currencyPlacesOf`), by `shared-core`'s `money-rounding.ts`: a charge up, a credit, discount or hold down, a price or conversion half up and never to nothing, parts summing to their whole (ADR-0153, F-116-p; C-02 check) | every money write; money leaves as `moneyText`, every place it holds (F-116-r) | — |
 
 ## Edge cases decided
 | Case | Decision | Date |

@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import { Calendar, Granularity, bucketsOf, granularityFor, previousRange } from './analytics-buckets';
 import { Day, addDays } from './analytics-days';
@@ -30,6 +31,8 @@ export type TabContext = {
   across?: CrossTenantReader;
   /** The tenant read is the platform's own (F-1001-l: its panels' "no cost set"). */
   platform: boolean;
+  /** Each currency's places: an average or a forecast is rounded there before it is answered (ADR-0153). */
+  places: CurrencyPlaces;
 };
 
 /** What the `resellers` tab reads every reseller's rollup through: the cross-tenant pool, raw SQL only. */
@@ -47,7 +50,7 @@ export function dayMap(w: Window, keyOf: (day: Day) => Day | undefined): DayMap 
   return map;
 }
 
-export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: { operating: string; hides: boolean; across?: CrossTenantReader; platform?: boolean }): TabContext {
+export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: { operating: string; hides: boolean; places: CurrencyPlaces; across?: CrossTenantReader; platform?: boolean }): TabContext {
   const window = { from: q.from, to: q.to };
   const granularity = granularityFor(q.from, q.to);
   const current = bucketsOf(q.from, q.to, granularity, q.calendar);
@@ -75,5 +78,6 @@ export function contextOf(tx: Prisma.TransactionClient, q: AnalyticsQuery, how: 
     hides: how.hides,
     across: how.across,
     platform: how.platform === true,
+    places: how.places,
   };
 }

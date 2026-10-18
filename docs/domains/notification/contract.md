@@ -89,7 +89,7 @@ a reseller's owner's session names the platform's tenant, never the reseller's
 - **`audience` is a closed shape** (`campaign-admin.schema.ts`); unknown key 400.
   Keys AND, a list is any of its values, `{}` is everyone in scope: `statuses`
   (`UserStatus`, absent = `active`), `languages`, `registeredFrom`/`To` (ISO,
-  `from` < `to`, `user.createdAt`), `minBalance`/`maxBalance` (decimal ≤2 places,
+  `from` < `to`, `user.createdAt`), `minBalance`/`maxBalance` (decimal, ≤ 4 places — a bound compared, not money stored,
   C-02, inclusive, `wallet.cachedBalance`; no wallet = 0), `groupId` (GR-1-y: a
   group of the campaign's tenant, its members live at the send's start; a new
   one the caller may not pick is 403 `audience_not_allowed`, ADR-0143; absent 404

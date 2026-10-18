@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponChannel, CouponVisibility, DiscountType, Prisma } from '@prisma/client';
 
-import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant } from '@txnet-backend/shared-core';
+import { productCategoriesInclude, productCategoriesLive, tenantTransaction, type TenantTransactionOptions, operatingCurrencyOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import { assertUnderDiscountCap } from './coupon-discount-cap';
+import { couponInCurrency } from './coupon-money-places';
+import { frozenBy, statusOf } from './coupon-status';
 
 /** Who is acting, as the gate proved it. Never taken from a body. */
 export type CouponActor = { adminId: string; tenantId: string; ip: string };
@@ -146,6 +148,8 @@ export class CouponAdminRefused extends Error {
 }
 
 type Row = Record<string, unknown>;
+/** Money finer than its currency, refused like any other bad value (F-116-r). */
+const invalidValue = (field: string) => new CouponAdminRefused('invalid_value', field);
 type Tx = Prisma.TransactionClient;
 
 const CODE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
@@ -282,7 +286,7 @@ export class CouponAdminService {
           ...this.columns(next),
           tenantId,
           // A platform coupon is in the platform's currency, a tenant's in its own (F-116-b).
-          currencyCode: tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx),
+          currencyCode: await couponInCurrency(tx, tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx), next, invalidValue),
           createdByAdminId: actor.adminId,
         } as Prisma.CouponUncheckedCreateInput,
       })) as unknown as Row;
@@ -317,6 +321,7 @@ export class CouponAdminService {
       const relations = await this.checkRelations(tx, actor, tenantId, next, patch, before);
 
       const fresh = (await tx.coupon.findUnique({ where: { id } })) as unknown as Row;
+      await couponInCurrency(tx, fresh['currencyCode'] as string, next, invalidValue);
       const redemptions = await tx.couponRedemption.count({ where: { couponId: id } });
       if (frozenBy(fresh, redemptions > 0)) {
         if (next['discountType'] !== fresh['discountType']) throw new CouponAdminRefused('used_coupon_frozen', 'discountType');
@@ -726,30 +731,8 @@ export class CouponAdminService {
     const out: Record<string, unknown> = { ...view };
     for (const k of ['id', 'usedCount', 'reservedCount', 'frozen', 'createdAt', 'updatedAt', 'status']) delete out[k];
     for (const k of DATE_COLUMNS) out[k] = view[k] ? view[k]!.toISOString() : null;
-    for (const k of DECIMAL_COLUMNS) out[k] = view[k] === null ? null : new Prisma.Decimal(view[k]!).toFixed(2);
+    for (const k of DECIMAL_COLUMNS) out[k] = view[k] === null ? null : moneyText(new Prisma.Decimal(view[k]!));
     out['deletedAt'] = view.deletedAt ? view.deletedAt.toISOString() : null;
     return out;
   }
-}
-
-/**
- * A coupon whose type, value and grant variant are settled (F-502-c, F-502-o).
- * A released redemption (`cancelled`/`expired`) leaves no counter behind, so the
- * row alone freezes the coupon: its receipt already names what it took.
- */
-export function frozenBy(row: Row, hasRedemption: boolean): boolean {
-  return Number(row['usedCount'] ?? 0) > 0 || Number(row['reservedCount'] ?? 0) > 0 || hasRedemption;
-}
-
-/** What an admin sees at a glance; the first that holds wins. */
-export function statusOf(row: Row, now: number): CouponStatus {
-  if (row['deletedAt'] != null) return 'deleted';
-  if (!row['isActive']) return 'inactive';
-  const until = date(row['expiresAt']);
-  if (until && until.getTime() <= now) return 'expired';
-  const from = date(row['validFrom']);
-  if (from && from.getTime() > now) return 'scheduled';
-  const total = row['totalUsageLimit'] as number | null | undefined;
-  if (total !== null && total !== undefined && Number(row['usedCount'] ?? 0) + Number(row['reservedCount'] ?? 0) >= total) return 'exhausted';
-  return 'active';
 }

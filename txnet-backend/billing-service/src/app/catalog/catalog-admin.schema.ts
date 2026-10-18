@@ -1,4 +1,5 @@
 import { FulfilmentKind, QualityTier, QuotaMetric, RateCardAfterIncluded, RateCardMode, VariantBillingMode, VariantVisibility } from '@prisma/client';
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -32,7 +33,6 @@ const CREATABLE_FULFILMENT_KINDS = Object.values(FulfilmentKind).filter(
   (k) => !RETIRED.includes(k),
 ) as [FulfilmentKind, ...FulfilmentKind[]];
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 /** A stable string key referenced elsewhere: `vpn`, `vpn_basic`. */
 const KEY = /^[a-z][a-z0-9_]{1,63}$/;
 /** An i18n key (§4.3): `catalog.product.vpn_basic.name`. */
@@ -42,7 +42,7 @@ const FEATURE_KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 /** A SKU travels in a link (`?start=buy_<sku>`, F-314). */
 const SKU = /^[A-Z0-9][A-Z0-9_-]{1,39}$/;
 
-export const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(DECIMAL, { message: `${what} must be a decimal string` });
+export const decimal = (what: string) => z.string({ message: `${what} must be a decimal string` }).regex(MONEY_PATTERN, { message: `${what} must be a decimal string` });
 export const uuid = (what: string) => z.string({ message: `${what} must be a uuid` }).uuid({ message: `${what} must be a uuid` });
 export const instant = (what: string) => z.string().datetime({ offset: true, message: `${what} must be an ISO instant` });
 const i18nKey = (what: string) => z.string().regex(I18N_KEY, { message: `${what} must be an i18n key` });

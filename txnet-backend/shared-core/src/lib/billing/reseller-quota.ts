@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { Logger } from '@nestjs/common';
-
 import { Prisma, TenantBillingReasonType, type ResellerQuotaUsage } from '@prisma/client';
 
 import { isResellerLimitKey, isResellerQuotaKey, RESELLER_LIMITS, type QuotaOverageTerms, type ResellerQuotaKey } from '../tenant/reseller-limits';
@@ -10,6 +9,7 @@ import { platformCurrencyOf } from './operating-currency';
 import { alertQuotaCrossings, type QuotaRefusal, type QuotaWindowUse } from './quota-alerts';
 import { quotaTermsInEffectOf } from './quota-terms-lock';
 import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod, type QuotaPeriodKind } from './quota-period';
+import { moneyText } from './money-rounding';
 
 /**
  * The quota engine (ADR-0107 point 4, F-019-v2): what a reseller's package
@@ -427,12 +427,12 @@ async function windowStatement(tx: Prisma.TransactionClient, tenantId: string, m
     included: window.included,
     includedUsed: sums._sum.includedQty ?? 0,
     overageQty: sums._sum.overageQty ?? 0,
-    overageAmount: (sums._sum.overageAmount ?? new Prisma.Decimal(0)).toFixed(2),
+    overageAmount: moneyText(sums._sum.overageAmount ?? new Prisma.Decimal(0)),
   };
 }
 
 function overageOut(o: QuotaOverageTerms): QuotaStatement['overage'] {
-  return { mode: o.mode, unitPrice: o.unitPrice?.toFixed(2) ?? null, currencyCode: o.currencyCode };
+  return { mode: o.mode, unitPrice: o.unitPrice ? moneyText(o.unitPrice) : null, currencyCode: o.currencyCode };
 }
 
 /** What overage cost the reseller this subscription month, against its own cap (point 6); `cap` null = none. */
@@ -444,8 +444,8 @@ async function spendOf(tx: Prisma.TransactionClient, tenantId: string, now = new
   const cap = await tx.resellerOverageCap.findUnique({ where: { tenantId }, select: { amount: true } });
   return {
     month: quotaPeriodAt('month', now, clock.zone, clock.subscriptionEnd),
-    cap: cap?.amount.toFixed(2) ?? null,
-    spent: (await spentThisMonth(tx, tenantId, currencyCode, now, clock)).toFixed(2),
+    cap: cap ? moneyText(cap.amount) : null,
+    spent: moneyText(await spentThisMonth(tx, tenantId, currencyCode, now, clock)),
     currencyCode,
   };
 }

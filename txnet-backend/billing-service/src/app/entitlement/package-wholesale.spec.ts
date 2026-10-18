@@ -20,6 +20,7 @@
 import { GrantStatus, PanelOwnershipType, Prisma, TenantBillingReasonType, TenantType, VariantBillingMode } from '@prisma/client';
 
 import { PackageWholesale } from './package-wholesale';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const D = (v: string | number) => new Prisma.Decimal(v);
 const GIB = BigInt(1073741824);
@@ -77,6 +78,8 @@ function world(w: World = {}) {
   const resellerLedger: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    ...currencyRegistry,
     tenant: { findUnique: async () => ({ tenantType: w.tenantType ?? TenantType.reseller }) },
     tenantSubscription: { findUnique: async () => ({ package: { id: PACKAGE, currencyCode: 'USD' } }) },
     tenantPackageMeterRate: {

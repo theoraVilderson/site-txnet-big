@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import type { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
 import { OFFER_ACTION_TYPES, OfferRefused, Offers, offerBodySchema, offerPatchSchema } from './offers';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * F-038-f1 (ADR-0110 point 4, ADR-0109 point 9): the offers a tenant defines —
@@ -34,6 +35,7 @@ const row = (over: Record<string, unknown> = {}) => ({
 
 function fake(opts: { coupon?: unknown; variant?: unknown; offer?: unknown } = {}) {
   const tx = {
+    ...currencyRegistry,
     $executeRaw: vi.fn(async () => 1),
     aiOffer: {
       create: vi.fn(async (a: { data: Record<string, unknown> }) => row({ ...a.data, maxDiscountPercent: new Prisma.Decimal(a.data['maxDiscountPercent'] as string), dailyBudget: new Prisma.Decimal(a.data['dailyBudget'] as string) })),
@@ -72,7 +74,7 @@ describe('offer bodies (F-038-f1)', () => {
     expect(offerBodySchema.safeParse(base).success).toBe(false);
     for (const maxDiscountPercent of ['0', '100.01', '-5', 20]) expect(offerBodySchema.safeParse({ ...base, couponTemplateId: COUPON, maxDiscountPercent }).success).toBe(false);
     expect(offerBodySchema.safeParse({ ...base, couponTemplateId: COUPON, maxDiscountPercent: '100' }).success).toBe(true);
-    for (const dailyBudget of [1000, '-1', '1.005', 'lots']) expect(offerBodySchema.safeParse({ ...base, couponTemplateId: COUPON, dailyBudget }).success).toBe(false);
+    for (const dailyBudget of [1000, '-1', '1.00005', 'lots']) expect(offerBodySchema.safeParse({ ...base, couponTemplateId: COUPON, dailyBudget }).success).toBe(false);
     expect(offerBodySchema.safeParse({ ...base, couponTemplateId: COUPON, currencyCode: 'irr' }).success).toBe(false);
   });
 
@@ -138,8 +140,8 @@ describe('Offers.update and list (F-038-f1)', () => {
 
   it('an edit that leaves it on touches no action', async () => {
     const { offers, tx } = fake();
-    await offers.update(OFFER, offerPatchSchema.parse({ tenantId: TENANT, dailyBudget: '500000.50' }));
-    expect(tx.aiOffer.update).toHaveBeenCalledWith({ where: { id: OFFER }, data: { dailyBudget: '500000.50' } });
+    await offers.update(OFFER, offerPatchSchema.parse({ tenantId: TENANT, dailyBudget: '500000' }));
+    expect(tx.aiOffer.update).toHaveBeenCalledWith({ where: { id: OFFER }, data: { dailyBudget: '500000' } });
     expect(tx.aiAction.updateMany).not.toHaveBeenCalled();
   });
 

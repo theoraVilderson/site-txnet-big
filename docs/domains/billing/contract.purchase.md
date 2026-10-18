@@ -123,7 +123,7 @@ a code held by the old one counts as a use (`per_user_limit_reached` counts
 | Rule | Why |
 |---|---|
 | `missing` = `total - balance` rounded **up** to the invoice currency's minor unit (`roundCharge`, ADR-0153) — never half-up — and only for a balance short of `total` | spec §5.9: the user must never come back from a top-up a fraction of a unit short; a rial invoice asks whole rials |
-| `missing` has at most 2 places | a deposit `amount` takes at most 2 (`deposit.schema.ts`, `priceAtGateway`); a longer one would be refused |
+| `missing` is at the invoice currency's places | a deposit `amount` takes no more than its currency's (`payerPlaces`, F-116-r); a longer one would be refused |
 | A top-up of exactly `missing` covers the invoice | a top-up credits `amount + gap`; fee and tax are on top of it, never taken from it (`contract.deposit.md`) |
 | The panel pre-fills `missing` raised to the chosen gateway's `minAmount` (the gateway list), and returns to the same invoice (F-111-e) | below its minimum a gateway refuses the top-up `400 billing.amountOutOfRange`, and only the panel knows which gateway the user picks; a larger top-up credits whole, so it still covers |
 | The shortfall is not held: the invoice's 30-minute clock runs on while the user tops up | a top-up that outlives it pays into the wallet, and the user starts a new invoice |

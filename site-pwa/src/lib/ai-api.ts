@@ -183,7 +183,7 @@ export interface AiOfferBody {
 export type AiOfferPatch = Partial<Pick<AiOffer, "name" | "maxDiscountPercent" | "dailyBudget" | "currencyCode" | "isActive">>;
 
 /** ai's offer refusals (`error.reason`), each worded under `common.ai.refused`. */
-export const AI_OFFER_REFUSALS = ["template_not_found", "template_not_a_discount", "variant_not_found", "offer_not_found"] as const;
+export const AI_OFFER_REFUSALS = ["template_not_found", "template_not_a_discount", "variant_not_found", "offer_not_found", "budget_finer_than_currency"] as const;
 
 export const aiAdminApi = {
   settings(): Promise<{ settings: AiSettings }> {

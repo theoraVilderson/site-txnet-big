@@ -1,4 +1,5 @@
 import { PaymentProviderName, Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import { PROVIDER_FIELDS, type GatewaySecretName } from '../gateway/provider-fields';
@@ -68,7 +69,7 @@ export type GatewayView = {
 /** A nullable column as a string — decimals keep their scale (C-02). */
 export const str = (v: unknown): string | null => (v === null || v === undefined ? null : String(v));
 /** Quick amounts as stored, at 2 places (F-092-v). */
-export const presetStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((d) => new Prisma.Decimal(String(d)).toFixed(2)) : []);
+export const presetStrings = (v: unknown): string[] => (Array.isArray(v) ? v.map((d) => moneyText(new Prisma.Decimal(String(d)))) : []);
 
 /**
  * A gateway row as every answer shows it. Secrets never: only their state

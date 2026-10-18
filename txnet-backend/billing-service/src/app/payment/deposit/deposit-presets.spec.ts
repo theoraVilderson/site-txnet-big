@@ -29,7 +29,7 @@ describe('normalizePresets', () => {
   it.each([
     ['zero', ['0']],
     ['a negative', ['-1']],
-    ['three decimals', ['1.005']],
+    ['more places than a column holds', ['1.00005']],
     ['not a number', ['abc']],
     ['an empty string', ['']],
   ])('refuses %s', (_label, values) => {

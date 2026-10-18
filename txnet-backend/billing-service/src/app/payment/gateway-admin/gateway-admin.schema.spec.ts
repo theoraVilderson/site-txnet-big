@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createGatewaySchema, depositTaxSchema, updateGatewaySchema } from './gateway-admin.schema';
 
 /**
- * The wire refuses money finer than the column that stores it (F-104-ad).
+ * The wire refuses a decimal finer than the column that stores it (F-104-ad).
  *
- * `payment_gateway.feeFloor` is money, held at two places until F-116-r
- * (ADR-0153), and `feeValue` is `numeric(18, 4)`. Postgres does not refuse a finer value, it rounds it —
- * so `0.125` was accepted, written as `0.13`, and the operator who typed it
- * was told nothing. The scales below are that table's, not a guess.
+ * Money — `payment_gateway.feeFloor` and the bounds — is `numeric(20, 4)`, and
+ * `feeValue` is `numeric(18, 4)`. Postgres does not refuse a finer value, it
+ * rounds it — so `0.125` was once accepted, written as `0.13`, and the operator
+ * who typed it was told nothing. The schema holds the columns' scale; the
+ * gateway currency's own places (a cent, a whole rial) are the service's
+ * (`gateway-fields.ts`, F-116-r).
  */
 
 const at = (body: Record<string, unknown>) => updateGatewaySchema.safeParse(body);
@@ -18,13 +20,14 @@ const errorOf = (body: Record<string, unknown>) => {
 };
 
 describe('gateway admin schema decimals', () => {
-  it('takes a cent, refuses anything under one, on every 2-place column', () => {
+  it('takes the four places a money column holds and refuses a fifth, on every money column', () => {
     for (const k of ['minAcceptAmount', 'maxAcceptAmount', 'feeFloor', 'feeCeiling']) {
       expect(at({ [k]: '12.50' }).success).toBe(true);
       expect(at({ [k]: '12' }).success).toBe(true);
       // A bound may be dropped entirely; that is not a precision question.
       expect(at({ [k]: null }).success).toBe(true);
-      expect(errorOf({ [k]: '0.125' })).toBe(`${k} must be a decimal string with at most 2 places`);
+      expect(at({ [k]: '0.125' }).success).toBe(true);
+      expect(errorOf({ [k]: '0.12345' })).toBe(`${k} must be a decimal string with at most 4 places`);
     }
   });
 
@@ -72,6 +75,6 @@ describe('gateway admin schema decimals', () => {
   it('holds on create as it does on update', () => {
     const body = { source: 'platform', displayName: 'Zarinpal', feeValue: '1.5' } as const;
     expect(createGatewaySchema.safeParse(body).success).toBe(true);
-    expect(createGatewaySchema.safeParse({ ...body, feeCeiling: '0.125' }).success).toBe(false);
+    expect(createGatewaySchema.safeParse({ ...body, feeCeiling: '0.12345' }).success).toBe(false);
   });
 });

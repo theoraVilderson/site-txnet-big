@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { Prisma, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { OutboxEventType, findKeyHolders, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, findKeyHolders, tenantTransaction, moneyText, percentText } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { ENGAGEMENT_MANAGE } from './engagement-permission.guard';
@@ -42,7 +42,7 @@ export async function alertCapCrossing(
         aggregate: TENANT_ENGAGEMENT_AGGREGATE,
         aggregateId: a.tenantId,
         type: OutboxEventType.TENANT_WHEEL_CAP_NEARING,
-        payload: { tenantId: a.tenantId, userId: adminId, day: isoDay(a.tenantDay), spent: a.spent.toFixed(2), cap: a.cap.toFixed(2), currencyCode: a.currencyCode },
+        payload: { tenantId: a.tenantId, userId: adminId, day: isoDay(a.tenantDay), spent: moneyText(a.spent), cap: moneyText(a.cap), currencyCode: a.currencyCode },
       },
       select: { id: true },
     });
@@ -150,7 +150,7 @@ export class WheelReportService {
             nothing += n;
             continue;
           }
-          given.push({ prizeId: prize.id, position: prize.position, label: prize.label, prizeType: prize.prizeType, count: n, cost: new Prisma.Decimal(g._sum.costAmount ?? 0).toFixed(2) });
+          given.push({ prizeId: prize.id, position: prize.position, label: prize.label, prizeType: prize.prizeType, count: n, cost: moneyText(new Prisma.Decimal(g._sum.costAmount ?? 0)) });
         }
         const cap = new Prisma.Decimal(d.wheelConfig.dailyBudgetCapAmount);
         const spent = new Prisma.Decimal(d.costSpent);
@@ -162,10 +162,10 @@ export class WheelReportService {
           refusals,
           nothing,
           prizes: given.sort((a, b) => a.position - b.position),
-          costSpent: spent.toFixed(2),
-          cap: cap.toFixed(2),
+          costSpent: moneyText(spent),
+          cap: moneyText(cap),
           currencyCode: d.currencyCode,
-          capUsedPercent: cap.gt(0) ? spent.mul(100).div(cap).toFixed(2) : '0.00',
+          capUsedPercent: percentText(cap.gt(0) ? spent.mul(100).div(cap) : new Prisma.Decimal(0)),
           alertedAt: d.capAlertedAt?.toISOString() ?? null,
         };
       });

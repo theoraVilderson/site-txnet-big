@@ -1,13 +1,12 @@
-import { BackendI18nKeys, GATEWAY_CREDENTIAL_SOURCES } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, GATEWAY_CREDENTIAL_SOURCES, MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 import { CHAT_PLATFORMS } from './chat-platform';
 
 const E = BackendI18nKeys.errors.billing;
 
-/** Base currency, a decimal string with at most 2 places — never a JSON number (C-02). `Decimal(18, 2)` bounds the digits. */
-const AMOUNT = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
-const ZERO = /^0(\.0{1,2})?$/;
+/** In the payer's currency, a decimal string — never a JSON number (C-02); its places are the currency's, checked by the service (F-116-r). */
+const ZERO = /^0(\.0+)?$/;
 
 export const depositQuoteSchema = z.object({
   gatewayId: z.string({ message: E.gatewayInvalid }).uuid({ message: E.gatewayInvalid }),
@@ -15,7 +14,7 @@ export const depositQuoteSchema = z.object({
   source: z.enum(GATEWAY_CREDENTIAL_SOURCES, { message: E.gatewayInvalid }).default('tenant'),
   amount: z
     .string({ message: E.amountInvalid })
-    .regex(AMOUNT, { message: E.amountInvalid })
+    .regex(MONEY_PATTERN, { message: E.amountInvalid })
     .refine((v) => !ZERO.test(v), { message: E.amountInvalid }),
   couponCodes: z
     .array(z.string({ message: E.couponCodesInvalid }).max(64, { message: E.couponCodesInvalid }), {

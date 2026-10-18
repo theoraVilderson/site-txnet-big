@@ -22,6 +22,7 @@ import { ResellerQuota, ResellerQuotaExhausted, runWithTenant } from '@txnet-bac
 
 import { audienceFilterSchema } from './campaign-admin.schema';
 import { CampaignAdminRefused, CampaignAdminService } from './campaign-admin.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const TENANT = '22222222-2222-4222-8222-222222222222';
@@ -66,6 +67,7 @@ function transactionOf(client: Record<string, unknown>) {
 
 function fakes(callerType: TenantType = TenantType.reseller, ownSmsLine = false) {
   const prisma: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
+    ...currencyRegistry,
     tenant: { findUnique: vi.fn().mockResolvedValue({ tenantType: callerType }) },
     notificationCampaign: campaignDelegate(),
     notificationCampaignText: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -73,6 +75,7 @@ function fakes(callerType: TenantType = TenantType.reseller, ownSmsLine = false)
   };
   prisma['$transaction'] = transactionOf(prisma);
   const all: Record<string, unknown> & { notificationCampaign: ReturnType<typeof campaignDelegate>; adminAuditLog: { create: ReturnType<typeof vi.fn> } } = {
+    ...currencyRegistry,
     tenant: { findUnique: vi.fn().mockResolvedValue({ id: OTHER_TENANT }) },
     notificationCampaign: campaignDelegate(),
     notificationCampaignText: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -113,7 +116,7 @@ describe('audienceFilterSchema', () => {
     ['an unknown key, which the worker would ignore and so widen the audience', { lastConfigDays: { gt: 30 } }],
     ['a raw query operator', { minBalance: { gt: '0' } }],
     ['a float balance (C-02)', { minBalance: 10.5 }],
-    ['more than two decimals', { minBalance: '1.005' }],
+    ['more places than a column holds', { minBalance: '1.00005' }],
     ['a negative balance', { minBalance: '-1' }],
     ['min above max', { minBalance: '20', maxBalance: '10' }],
     ['from after to', { registeredFrom: '2026-06-01T00:00:00Z', registeredTo: '2026-01-01T00:00:00Z' }],

@@ -26,6 +26,7 @@ export const GRANT_REFUSAL_KEYS: Record<SettlementRejection, string> = {
   grant_not_found: R.grant_not_found,
   already_withdrawn: R.already_withdrawn,
   amount_not_positive: R.amount_not_positive,
+  amount_finer_than_currency: R.amount_finer_than_currency,
   exceeds_outstanding: R.exceeds_outstanding,
 };
 

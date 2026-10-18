@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LedgerDirection, PaymentStatus, Prisma, WalletReasonType, WalletTransactionNote } from '@prisma/client';
-import { BackendI18nKeys, TenantContext, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, TenantContext, operatingCurrencyOf, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { LocaleService } from '../locale/locale.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -193,7 +193,7 @@ export type PaymentPage = {
   rows: PaymentRow[];
 };
 
-const money = (v: Prisma.Decimal) => v.toFixed(2);
+const money = (v: Prisma.Decimal) => moneyText(v);
 
 type Money = Pick<LedgerPage, 'balance' | 'held' | 'available'>;
 const NO_MONEY: Money = { balance: '0.00', held: '0.00', available: '0.00' };

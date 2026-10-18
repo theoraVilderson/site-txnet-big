@@ -29,9 +29,10 @@ import { RedisService } from '../redis/redis.service';
  * admits resellers alone, and a reseller's member holds `settings.manage` in
  * its own tenant, never in the platform's (AC-1-e).
  *
- * **Which.** Only a currency with a rate (part 8): active, at most two
- * decimals (money leaves the API at two until F-116-r), and either the USD pivot or
- * holding an active rate row. The staleness ladder (F-0607-a) is not built;
+ * **Which.** Only a currency with a rate (part 8): active, and either the USD
+ * pivot or holding an active rate row. Its places are any the registry admits
+ * — at most the columns' four (F-116-q) — and money leaves at all of them
+ * (`moneyText`, F-116-r). The staleness ladder (F-0607-a) is not built;
  * when it is, "has a rate" is its answer.
  *
  * **What a change does** (F-116-f, part 5): the pair old -> new is read once,
@@ -69,9 +70,6 @@ export class OperatingCurrencyRefused extends Error {
     this.name = 'OperatingCurrencyRefused';
   }
 }
-
-/** Columns hold four places (F-116-q), but money leaves the API at two until F-116-r (ADR-0153). */
-const MAX_DECIMALS = 2;
 
 /**
  * The whole change runs in one transaction (user, 2026-09-28): set-based, so
@@ -167,7 +165,7 @@ export class TenantOperatingCurrencyService {
     // A tied currency (the toman, F-116-m) has no row of its own: it has a rate while its root does.
     const rated = new Set(rows.filter((c) => c.isBaseCurrency || c.exchangeRates.length > 0).map((c) => c.code));
     return rows
-      .filter((c) => c.isActive && c.decimalPlaces <= MAX_DECIMALS && rated.has(DERIVED_CURRENCIES[c.code]?.of ?? c.code))
+      .filter((c) => c.isActive && rated.has(DERIVED_CURRENCIES[c.code]?.of ?? c.code))
       .map(({ code, name, symbol, decimalPlaces }) => ({ code, name, symbol, decimalPlaces }))
       .sort((a, b) => a.code.localeCompare(b.code));
   }

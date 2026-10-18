@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { moneyText, MONEY_PATTERN } from '@txnet-backend/shared-core';
 
 /**
  * Quick amounts on the top-up page (F-092-v): the tenant's default list
@@ -9,8 +10,6 @@ import { Prisma } from '@prisma/client';
 
 export const MAX_DEPOSIT_PRESETS = 8;
 
-/** Base currency, two places (ADR-0019), as the top-up amount itself takes it. */
-const AMOUNT = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 
 export class InvalidDepositPresets extends Error {
   constructor(detail: string) {
@@ -19,20 +18,20 @@ export class InvalidDepositPresets extends Error {
   }
 }
 
-/** A list as it is stored: positive, two decimals, no repeats, ascending. Empty means "inherit". */
+/** A list as it is stored: positive, no repeats, ascending — its currency's places checked where it is saved (F-116-r). Empty means "inherit". */
 export function normalizePresets(values: readonly string[]): string[] {
   const amounts = values.map((v) => {
     const trimmed = v.trim();
-    if (!AMOUNT.test(trimmed)) throw new InvalidDepositPresets(`"${trimmed}" is not an amount`);
+    if (!MONEY_PATTERN.test(trimmed)) throw new InvalidDepositPresets(`"${trimmed}" is not an amount`);
     const amount = new Prisma.Decimal(trimmed);
     if (amount.lte(0)) throw new InvalidDepositPresets('an amount must be positive');
     return amount;
   });
-  const unique = [...new Map(amounts.map((a) => [a.toFixed(2), a])).values()].sort((a, b) => a.comparedTo(b));
+  const unique = [...new Map(amounts.map((a) => [moneyText(a), a])).values()].sort((a, b) => a.comparedTo(b));
   if (unique.length > MAX_DEPOSIT_PRESETS) {
     throw new InvalidDepositPresets(`at most ${MAX_DEPOSIT_PRESETS} amounts`);
   }
-  return unique.map((a) => a.toFixed(2));
+  return unique.map((a) => moneyText(a));
 }
 
 /**
@@ -53,9 +52,9 @@ export function automaticPresets(range: { min: Prisma.Decimal | null; max: Prism
   if (max !== null && (max.lte(0) || (min !== null && min.gt(max)))) return [];
   const base = min !== null && min.gt(0) ? min : new Prisma.Decimal(1);
   const steps = LADDER_STEPS.map((step) => base.mul(step));
-  if (max === null) return steps.map((a) => a.toFixed(2));
+  if (max === null) return steps.map((a) => moneyText(a));
   const ladder = steps.filter((a) => a.lte(max)).slice(0, LADDER_STEPS.length - 1);
-  return [...new Map([...ladder, max].map((a) => [a.toFixed(2), a])).values()].sort((a, b) => a.comparedTo(b)).map((a) => a.toFixed(2));
+  return [...new Map([...ladder, max].map((a) => [moneyText(a), a])).values()].sort((a, b) => a.comparedTo(b)).map((a) => moneyText(a));
 }
 
 /**
@@ -72,7 +71,7 @@ export function resolvePresets(
   const list = gateway && gateway.length > 0 ? gateway : (tenantDefault ?? []);
   const fits = list
     .filter((a) => (range.min == null || a.gte(range.min)) && (range.max == null || a.lte(range.max)))
-    .map((a) => new Prisma.Decimal(a).toFixed(2));
+    .map((a) => moneyText(new Prisma.Decimal(a)));
   // Nothing configured that fits: the ladder, so every surface offers the same buttons (2026-10-15).
   return fits.length > 0 ? fits : automaticPresets(range);
 }

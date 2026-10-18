@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, type AiAction, type AiOffer } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, moneyText, percentText } from '@txnet-backend/shared-core';
 
 import { SafetyFloor } from '../floor/safety-floor';
 import { ResellerReader } from '../profile/reseller-reader';
@@ -100,8 +100,8 @@ export function deliveryItem(row: DueRow, terms?: OfferTerms, live?: ResellerLiv
             ...(terms && terms.id === offer['offerId']
               ? {
                   couponTemplateId: terms.couponTemplateId,
-                  maxDiscountPercent: terms.maxDiscountPercent.toFixed(2),
-                  dailyBudget: terms.dailyBudget.toFixed(2),
+                  maxDiscountPercent: percentText(terms.maxDiscountPercent),
+                  dailyBudget: moneyText(terms.dailyBudget),
                   budgetCurrencyCode: terms.currencyCode,
                   createdByUserId: terms.createdByUserId,
                 }
@@ -240,9 +240,9 @@ export class ActionDelivery {
         currentPackageId: reseller.packageId,
         packageName: pkg?.name ?? null,
         packageActive: pkg?.isActive ?? false,
-        livePrice: price && pkg?.currencyCode === reason?.['currencyCode'] ? price.toFixed(2) : null,
+        livePrice: price && pkg?.currencyCode === reason?.['currencyCode'] ? moneyText(price) : null,
         productNameKey: meter.startsWith('product:') ? (nameKeys.get(meter.slice('product:'.length)) ?? null) : null,
-        walletBalance: reseller.walletBalance?.toFixed(2) ?? null,
+        walletBalance: reseller.walletBalance ? moneyText(reseller.walletBalance) : null,
       });
     }
     return out;

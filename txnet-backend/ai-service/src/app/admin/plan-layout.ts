@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { METER_KEYS, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { METER_KEYS, runWithTenant, tenantTransaction, roundShare } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
@@ -74,7 +74,7 @@ function roundSize(bytes: bigint): bigint {
 }
 
 const scale = (b: bigint, factor: number) => (b * BigInt(Math.round(factor * 10_000))) / BigInt(10_000);
-const share = (n: number, of: number) => Number((n / of).toFixed(2));
+const share = (n: number, of: number) => roundShare(n / of);
 const byBigint = (a: bigint, b: bigint) => (a < b ? -1 : a > b ? 1 : 0);
 
 export function planLayout(plans: readonly LayoutPlan[], grants: readonly LayoutGrant[], now: Date): { families: LayoutFamily[] } {

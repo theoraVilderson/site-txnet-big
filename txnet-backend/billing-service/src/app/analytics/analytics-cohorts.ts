@@ -60,5 +60,5 @@ export async function cohortsOf(c: TabContext): Promise<CohortsTab> {
   const cut = bucketsOf(c.window.from, c.window.to, 'month', c.calendar);
   const rows = await readCohorts(c, dayMap(c.window, cut.keyOf));
   const currencies = currenciesOf(c.operating, rows.net.map((r) => r.currencyCode));
-  return { currencies, months: cut.keys, ...cohortGridOf({ months: cut.keys, ...rows }, { currencies, hides: c.hides }) };
+  return { currencies, months: cut.keys, ...cohortGridOf({ months: cut.keys, ...rows }, { currencies, hides: c.hides, places: c.places }) };
 }

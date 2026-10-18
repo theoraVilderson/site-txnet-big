@@ -50,6 +50,8 @@ export type SystemsRejection =
   | 'job_not_found'
   // A panel's monthly cost (F-1002-a): a price never lands in a closed month.
   | 'cost_in_closed_month'
+  // ...nor finer than USD's minor unit (F-116-r).
+  | 'cost_finer_than_currency'
   // Acknowledging with a choice (F-027-fa).
   | 'resolution_required'
   | 'resolution_not_for_event';

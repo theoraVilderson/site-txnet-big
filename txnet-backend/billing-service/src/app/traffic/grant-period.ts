@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { LedgerDirection, Prisma, RateCardMode, VariantBillingMode, WalletReasonType } from '@prisma/client';
-import { tenantTransaction } from '@txnet-backend/shared-core';
+import { tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { periodBounds, SpendingCaps } from '../usage/cap-funding';
@@ -87,7 +87,7 @@ export class GrantPeriodService {
         from: from.toISOString(),
         to: to.toISOString(),
         consumedBytes: (bytes > NO_BYTES ? bytes : NO_BYTES).toString(),
-        spent: (wallet ? await spentIn(tx, wallet, grantId, from, to) : ZERO).toFixed(2),
+        spent: moneyText(wallet ? await spentIn(tx, wallet, grantId, from, to) : ZERO),
       });
 
       const cur = periodBounds(grant.startsAt, now);

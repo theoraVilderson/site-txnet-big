@@ -15,9 +15,10 @@ vi.mock('@txnet-backend/shared-core', async (original) => ({
  *
  * - Every tenant, the platform owner's included, has an operating currency;
  *   the column's default is `USD`.
- * - Only a currency with a rate may be chosen: active, at most two decimals
- *   (money leaves the API at two until F-116-r), and either the USD pivot or holding an
- *   active rate row.
+ * - Only a currency with a rate may be chosen: active, and either the USD pivot
+ *   or holding an active rate row. Any registered places are money the columns
+ *   hold — the registry refuses more than four (F-116-q, F-116-r).
+
  * - A change converts the tenant's money at the rate old -> new, read once, in
  *   one transaction (F-116-f; what is converted is `currency-change.int.spec.ts`'s).
  *   No rate refuses it, and so does losing a race to another change.
@@ -91,8 +92,8 @@ describe('TenantOperatingCurrencyService', () => {
   it('reads USD for a tenant that never chose, with only the currencies that have a rate as choices', async () => {
     const view = await build().service.read(owner, RESELLER);
     expect(view.code).toBe('USD');
-    // EUR has no rate, TRY is inactive, KWD has three decimals.
-    expect(view.choices.map((c) => c.code)).toEqual(['IRR', 'IRT', 'USD']);
+    // EUR has no rate, TRY is inactive; KWD's three decimals are money the columns hold (F-116-r).
+    expect(view.choices.map((c) => c.code)).toEqual(['IRR', 'IRT', 'KWD', 'USD']);
   });
 
   it("lets the reseller's owner and the platform's staff change it, converting at the rate from the old currency to the new", async () => {
@@ -144,9 +145,9 @@ describe('TenantOperatingCurrencyService', () => {
     expect(tx.outboxEvent.create).not.toHaveBeenCalled();
   });
 
-  it('refuses a currency with no rate, an inactive one, one with three decimals and an unknown code', async () => {
+  it('refuses a currency with no rate, an inactive one and an unknown code', async () => {
     const { service, all } = build();
-    for (const code of ['EUR', 'TRY', 'KWD', 'XYZ']) expect(await refusal(service.set(owner, RESELLER, code, '10.0.0.1'))).toBe('currency_unavailable');
+    for (const code of ['EUR', 'TRY', 'XYZ']) expect(await refusal(service.set(owner, RESELLER, code, '10.0.0.1'))).toBe('currency_unavailable');
     expect(all['$transaction']).not.toHaveBeenCalled();
   });
 

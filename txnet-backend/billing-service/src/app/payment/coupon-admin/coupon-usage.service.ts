@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, RedemptionStatus } from '@prisma/client';
-import { convertedByChanges, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { convertedByChanges, operatingCurrencyOf, moneyText, currencyPlacesOf, convertedText } from '@txnet-backend/shared-core';
 
 import { CouponActor, CouponAdminService } from './coupon-admin.service';
 import { CouponBatchService } from './coupon-batch.service';
@@ -127,7 +127,7 @@ export class CouponUsageService {
         username: user?.username ?? null,
         paymentTransactionId: (r['paymentTransactionId'] as string | null) ?? null,
         paymentStatus: payment?.status ?? null,
-        discountAmount: new Prisma.Decimal(String(r['discountAppliedAmount'])).toFixed(2),
+        discountAmount: moneyText(new Prisma.Decimal(String(r['discountAppliedAmount']))),
         currencyCode: r['currencyCode'] as string,
         status: r['status'] as string,
         redeemedAt: r['redeemedAt'] as Date,
@@ -161,8 +161,7 @@ export class CouponUsageService {
     sums: Map<string, Prisma.Decimal>,
   ): Promise<Pick<UsageTotals, 'discountGiven' | 'currencyCode' | 'discountGivenByCurrency'>> {
     const currencyCode = await operatingCurrencyOf(db, tenantId);
-    const target = await db.currency.findUnique({ where: { code: currencyCode }, select: { decimalPlaces: true } });
-    const places = target?.decimalPlaces ?? 2;
+    const places = await currencyPlacesOf(db, currencyCode);
     let total: Prisma.Decimal | null = new Prisma.Decimal(0);
     for (const [code, sum] of sums) {
       const converted = code === currencyCode ? sum : await convertedByChanges(db, tenantId, sum, code, currencyCode);
@@ -170,7 +169,7 @@ export class CouponUsageService {
     }
     const discountGivenByCurrency = [...sums.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([code, amount]) => ({ currencyCode: code, amount: amount.toFixed(2) }));
-    return { discountGiven: total ? total.toFixed(places) : null, currencyCode, discountGivenByCurrency };
+      .map(([code, amount]) => ({ currencyCode: code, amount: moneyText(amount) }));
+    return { discountGiven: total ? convertedText(total, places) : null, currencyCode, discountGivenByCurrency };
   }
 }

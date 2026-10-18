@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { METER_KEYS, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { METER_KEYS, runWithTenant, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { pricesInForce } from '../decision/decision-reader';
 import { wholesaleCost, type WholesaleRate } from '../decision/margin';
@@ -66,7 +66,7 @@ export type PlanMargin = {
   grants: { active: number; losing: number; costUnknown: number };
 };
 
-const money = (amount: Prisma.Decimal, currencyCode: string): Money => ({ amount: amount.toFixed(2), currencyCode });
+const money = (amount: Prisma.Decimal, currencyCode: string): Money => ({ amount: moneyText(amount), currencyCode });
 
 /** The newest row at or before `now` for the meter; two from one instant by the one written last. */
 export function rateInForce(rows: readonly PackageRate[], meterKey: string, now: Date): WholesaleRate | null {

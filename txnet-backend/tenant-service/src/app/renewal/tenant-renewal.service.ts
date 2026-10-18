@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, TenantBillingModel, TenantBillingReasonType, TenantStatus, TenantSuspensionCause, TenantType } from '@prisma/client';
-import { OutboxEventType, TenantBillingLedger } from '@txnet-backend/shared-core';
+import { OutboxEventType, TenantBillingLedger, moneyText } from '@txnet-backend/shared-core';
 import { createHash } from 'node:crypto';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { applyTenantStatus } from '../status/tenant-status.transition';
@@ -208,7 +208,7 @@ export class TenantRenewalService {
 
       if (tenant.status === TenantStatus.suspended) return 'waiting';
       const suspendsAt = renewalDeadline(current.currentPeriodEnd, settings.renewalGraceDays, current.graceUntil);
-      const notice = { tenantId, ownerUserId: tenant.ownerUserId, amount: price.toFixed(2), balance: balance.toFixed(2) };
+      const notice = { tenantId, ownerUserId: tenant.ownerUserId, amount: moneyText(price), balance: moneyText(balance) };
 
       if (now >= suspendsAt) {
         await applyTenantStatus(tx, tenantId, {

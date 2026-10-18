@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { AiReaderPrisma, PrismaService } from '../prisma/prisma.service';
 import { matchOutcome, matchResellerOutcome, measured, OUTCOME_WINDOW_DAYS, outcomeWrite, UNMEASURED_STEPS, upliftReport, type Outcome, type OutcomeEvent, type ResellerEvent, type UpliftReport } from './outcome';
@@ -128,7 +128,7 @@ export class OutcomeRun {
       tenantTransaction(this.reader, async (tx) => {
         const rows = await tx.$queryRaw<Array<{ id: string; kind: 'upgrade' | 'top_up'; amount: Prisma.Decimal; currencyCode: string; createdAt: Date }>>`
           SELECT "id", "kind", "amount", "currencyCode", "createdAt" FROM ai.reader_billing_event`;
-        return rows.map((r) => ({ kind: r.kind, ref: r.id, tenantId: resellerId, at: r.createdAt, amount: new Prisma.Decimal(r.amount).toFixed(2), currencyCode: r.currencyCode }));
+        return rows.map((r) => ({ kind: r.kind, ref: r.id, tenantId: resellerId, at: r.createdAt, amount: moneyText(new Prisma.Decimal(r.amount)), currencyCode: r.currencyCode }));
       }),
     );
   }
@@ -166,7 +166,7 @@ export class OutcomeRun {
       }),
     );
     return upliftReport(
-      rows.map((r) => ({ ...r, convertedAmount: r.convertedAmount ? r.convertedAmount.toFixed(2) : null })),
+      rows.map((r) => ({ ...r, convertedAmount: r.convertedAmount ? moneyText(r.convertedAmount) : null })),
       { from, to },
     );
   }

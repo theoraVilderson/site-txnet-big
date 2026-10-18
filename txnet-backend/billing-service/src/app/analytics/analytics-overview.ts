@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { roundRatio } from '@txnet-backend/shared-core';
+import { roundRatio, type CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import type { TabContext } from './analytics-context';
 import { dayMap } from './analytics-context';
@@ -62,7 +62,8 @@ export type Overview = {
   usage: UsageCard[];
 };
 
-function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[], renewal: RenewalFigures): Overview['kpis'] {
+function kpisOf(now: Totals, before: Totals | null, how: { currencies: readonly string[]; places: CurrencyPlaces; renewal: RenewalFigures }): Overview['kpis'] {
+  const { currencies, places, renewal } = how;
   const money = (pick: (t: Totals) => Totals['net']) => moneyKpi(pick(now), before ? pick(before) : null, currencies);
   const count = (pick: (t: Totals) => number) => countKpi(pick(now), before ? pick(before) : null);
   return {
@@ -70,8 +71,8 @@ function kpisOf(now: Totals, before: Totals | null, currencies: readonly string[
     gross: money((t) => t.gross),
     refunds: money((t) => t.refunds),
     topUps: money((t) => t.topUps),
-    aov: money((t) => perUnit(t.net, t.orders)),
-    arpu: money((t) => perUnit(t.net, t.buyers)),
+    aov: money((t) => perUnit(t.net, t.orders, places)),
+    arpu: money((t) => perUnit(t.net, t.buyers, places)),
     orders: count((t) => t.orders),
     buyers: count((t) => t.buyers),
     newBuyers: count((t) => t.newBuyers),
@@ -131,7 +132,7 @@ async function calendarOf(c: TabContext, currencies: readonly string[]): Promise
 export async function overviewOf(c: TabContext): Promise<Overview> {
   const { now, before } = await totalsPair(c);
   const currencies = currenciesOf(c.operating, now.currencies, before?.currencies ?? []);
-  const kpis = kpisOf(now, before, currencies, await renewalFiguresOf(c));
+  const kpis = kpisOf(now, before, { currencies, places: c.places, renewal: await renewalFiguresOf(c) });
   const series = await seriesPair(c, currencies);
   // The buckets the series hide from the platform's staff hide usage too.
   const hidden = new Set(c.buckets.filter((_, i) => series.series.orders[i] === null));

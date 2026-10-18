@@ -149,7 +149,7 @@ expiresAt}}` or `{refused: plan_unavailable | offer_unavailable}` or
 
 | Rule | Why |
 |---|---|
-| A batch is 1..5000 `wallet_credit` codes, each `totalUsageLimit=1`, `perUserUsageLimit=1`, public, one value (> 0, 2 places) and one expiry; ownership as a coupon's (`ownerOfNew`) | ADR-0048 decision 7 |
+| A batch is 1..5000 `wallet_credit` codes, each `totalUsageLimit=1`, `perUserUsageLimit=1`, public, one value (> 0, at its currency's places (`fitsPlaces`, F-116-r)) and one expiry; ownership as a coupon's (`ownerOfNew`) | ADR-0048 decision 7 |
 | A code is `[PREFIX-]` + 10 characters from `crypto.randomInt` over `ABCDEFGHJKMNPQRSTUVWXYZ23456789` (no 0/O/1/I/L) | a person types it off a card |
 | A candidate live in the same scope or already drawn is drawn again, up to 8 rounds; the partial unique index decides a race and the whole batch rolls back | N asked is N made |
 | No code is ever written to an audit row or a log; `coupon_batch_create` records count, value, prefix, expiry, tenants | a code is a bearer credit |
@@ -180,7 +180,7 @@ Migration `20260915000100_coupon_free_grant`; `coupon-admin.service.ts`,
 
 | Rule | Why |
 |---|---|
-| Per coupon or per batch: each redemption with code, user id, full name and username, payment id and status, discount (2 places) and its `currencyCode`, status, time; newest first, paginated (≤ 100), filtered by status and an inclusive `redeemedAt` range | D-33 |
+| Per coupon or per batch: each redemption with code, user id, full name and username, payment id and status, discount (every place it holds, `moneyText`) and its `currencyCode`, status, time; newest first, paginated (≤ 100), filtered by status and an inclusive `redeemedAt` range | D-33 |
 | Totals over the date range, ignoring status filter and page: `redemptions`, `used` (confirmed), `reserved` (pending), `released` (expired + cancelled), and what confirmed ones gave | a hold gave nothing yet; a released one never will |
 | What was given is summed **per currency** (`discountGivenByCurrency`, as written), then totalled in the owner tenant's currency now (`currencyCode`; the platform's for a platform coupon): a sum in an earlier one is converted through the tenant's `currency_change` rows (`convertedByChanges`), as settlement's owed is. No chain from a currency: `discountGiven: null`, never summed as written (F-116-h5) | a tenant that moved USD -> IRR reported 5.50 dollars and 1,500,000 rials as 1,500,005.50 |
 | A redemption records `currencyCode`: the order's (invoice or top-up) for a held discount — `reserve_coupon` takes it from the caller, which priced the order — and the coupon's own for a gift code (F-116-h5) | the discount is part of the order's amount |

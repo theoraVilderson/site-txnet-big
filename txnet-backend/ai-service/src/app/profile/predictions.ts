@@ -1,5 +1,5 @@
 import { Prisma, type AiPredictionKind } from '@prisma/client';
-import { FORECAST_MIN_OBSERVED_MS, FORECAST_WINDOW_MS, METER_KEYS } from '@txnet-backend/shared-core';
+import { FORECAST_MIN_OBSERVED_MS, FORECAST_WINDOW_MS, METER_KEYS, moneyText, roundShare } from '@txnet-backend/shared-core';
 
 import { ACTIVE_HOURS_HALF_LIFE_DAYS, HOURS_OF_WEEK, hourOfWeek } from './active-hours';
 import { utcHour } from './meter-readings';
@@ -175,8 +175,8 @@ export function renewalProbability(input: AccountInputs, now: Date): PredictionR
     const share = bag > 0 ? Number(g.consumedBytes - g.usagePeriodFromBytes) / bag : 0;
     const start = (g.activatedAt ?? g.startsAt).getTime();
     const elapsed = (now.getTime() - start) / (g.endsAt.getTime() - start);
-    if (share >= 0.5) add(0.1, { code: 'used_most_of_period', share: Number(share.toFixed(2)) });
-    else if (share < 0.1 && elapsed >= 0.5) add(-0.15, { code: 'barely_used', share: Number(share.toFixed(2)) });
+    if (share >= 0.5) add(0.1, { code: 'used_most_of_period', share: roundShare(share) });
+    else if (share < 0.1 && elapsed >= 0.5) add(-0.15, { code: 'barely_used', share: roundShare(share) });
   }
 
   const usedLately = trafficReadings(input).some((r) => r.delta > BigInt(0) && r.hour.getTime() > now.getTime() - 7 * DAY_MS);
@@ -276,8 +276,8 @@ export function walletNeed(input: AccountInputs, ctx: PredictionContext, now: Da
   if (need.lte(0)) return null;
 
   const reasons: Reason[] = [
-    { code: 'next_two_renewals', grantId: g.id, variantId: g.variantId, price: price.amount.toFixed(2), currencyCode: price.currencyCode },
-    { code: 'available', amount: available.toFixed(2), currencyCode: wallet.currencyCode },
+    { code: 'next_two_renewals', grantId: g.id, variantId: g.variantId, price: moneyText(price.amount), currencyCode: price.currencyCode },
+    { code: 'available', amount: moneyText(available), currencyCode: wallet.currencyCode },
   ];
   let amount = need;
   const presets = ctx.presets?.currencyCode === wallet.currencyCode ? [...ctx.presets.amounts].filter((a) => a.gt(0)).sort((a, b) => a.comparedTo(b)) : [];
@@ -285,13 +285,13 @@ export function walletNeed(input: AccountInputs, ctx: PredictionContext, now: Da
     const fits = presets.find((a) => a.gte(need));
     const largest = presets[presets.length - 1];
     amount = fits ?? need.dividedBy(largest).ceil().times(largest);
-    reasons.push({ code: 'rounded_to_preset', need: need.toFixed(2), preset: (fits ?? largest).toFixed(2) });
+    reasons.push({ code: 'rounded_to_preset', need: moneyText(need), preset: moneyText(fits ?? largest) });
   } else {
-    reasons.push({ code: 'no_preset', need: need.toFixed(2) });
+    reasons.push({ code: 'no_preset', need: moneyText(need) });
   }
   return {
     kind: 'wallet_need',
-    value: new Prisma.Decimal(amount.toFixed(2)),
+    value: amount,
     predictedAt: g.endsAt && g.endsAt.getTime() > now.getTime() ? g.endsAt : null,
     currencyCode: wallet.currencyCode,
     confidence: 0.7,
@@ -321,7 +321,7 @@ export function trialConversion(input: AccountInputs, now: Date): PredictionRow 
   if (live.consumedBytes === BigInt(0)) add(-0.1, { code: 'never_connected' });
   else {
     add(0.05, { code: 'connected' });
-    if (share >= 0.3) add(0.2, { code: 'used_trial', share: Number(share.toFixed(2)) });
+    if (share >= 0.3) add(0.2, { code: 'used_trial', share: roundShare(share) });
   }
   const days = new Set(input.signIns.map((d) => Math.floor(d.getTime() / DAY_MS)));
   if (days.size >= 2) add(0.1, { code: 'came_back', days: days.size });
@@ -391,7 +391,7 @@ export function usageSpike(input: AccountInputs, now: Date): PredictionRow | nul
     const usual = sum(baselineFrom, windowStart) / BigInt(days);
     const last = sum(windowStart, anchor);
     if (usual <= BigInt(0) || last < USAGE_SPIKE_MIN_BYTES || last < usual * BigInt(USAGE_SPIKE_FACTOR)) continue;
-    const factor = Number((Number(last) / Number(usual)).toFixed(2));
+    const factor = roundShare(Number(last) / Number(usual));
     if (best && best.factor >= factor) continue;
     best = {
       factor,

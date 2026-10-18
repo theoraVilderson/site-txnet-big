@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, TenantBillingReasonType, TenantLedgerDirection } from '@prisma/client';
-import { platformCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
+import { platformCurrencyOf, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { TopupActor, admitResellerBilling } from './tenant-topup.service';
@@ -48,7 +48,7 @@ export type TenantWalletPage = {
   rows: TenantWalletRow[];
 };
 
-const money = (v: Prisma.Decimal) => v.toFixed(2);
+const money = (v: Prisma.Decimal) => moneyText(v);
 
 @Injectable()
 export class TenantWalletService {

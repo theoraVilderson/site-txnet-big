@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import { createPackageSchema, updatePackageSchema } from './tenant-package.schema';
 import { TenantPackageService } from './tenant-package.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * The invariants F-118-n1 turns on: the wholesale price list on a reseller
@@ -63,6 +64,7 @@ describe('a package prices platform meters (F-118-n1)', () => {
     };
     const meter = { findMany: vi.fn(async () => (opts.meters ?? ['vpn.traffic']).map((key) => ({ key }))) };
     const tx = {
+      ...currencyRegistry,
       $queryRaw: vi.fn(async () => []),
       tenant: { findFirst: vi.fn(async () => ({ operatingCurrencyCode: 'USD' })) },
       tenantFeaturePackage: {
@@ -76,6 +78,7 @@ describe('a package prices platform meters (F-118-n1)', () => {
       tenantSubscription: { count: vi.fn(async () => 0) },
     };
     const prisma = {
+      ...currencyRegistry,
       tenant: { findUnique: vi.fn(async () => ({ tenantType: 'platform_owner' })) },
       tenantFeaturePackage: {
         findUnique: vi.fn(async ({ where }: { where: { id?: string; name?: string } }) => (where.name !== undefined ? null : pkg)),

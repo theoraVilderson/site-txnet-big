@@ -8,7 +8,8 @@ import {
 } from '@prisma/client';
 import { OutboxEventType } from '../../automation/routing-keys';
 import { convertedByChanges } from '../../billing/currency-change-credit';
-import { platformCurrencyOf } from '../../billing/operating-currency';
+import { currencyPlacesOf, platformCurrencyOf } from '../../billing/operating-currency';
+import { fitsPlaces, moneyText } from '../../billing/money-rounding';
 
 /**
  * The one place a reseller's billing balance changes (F-019-a, D-41; tenant
@@ -60,9 +61,6 @@ export type TenantBillingEntry = {
   referenceId?: string;
 };
 
-/** `tenant_billing_transaction.amount` / `balanceAfter` are `Decimal(18, 2)`. */
-const LEDGER_SCALE = 2;
-
 /** Of two writers that read the same `version`, this is the one that lost. */
 export class TenantBillingVersionConflict extends Error {
   constructor(readonly tenantId: string) {
@@ -82,7 +80,7 @@ export class TenantBillingInsufficientBalance extends Error {
 /** Zero, negative, or finer than the column — refused rather than rounded, as in billing's ledger. */
 export class TenantBillingInvalidAmount extends Error {
   constructor(amount: Prisma.Decimal) {
-    super(`billing amount must be > 0 with at most ${LEDGER_SCALE} decimal places, got ${amount.toString()}`);
+    super(`billing amount must be > 0 at its currency's decimal places (ADR-0153), got ${amount.toString()}`);
     this.name = 'TenantBillingInvalidAmount';
   }
 }
@@ -115,7 +113,7 @@ export class TenantBillingLedger {
         aggregate: 'tenant.billing_wallet',
         aggregateId: moved.walletId,
         type: OutboxEventType.TENANT_BILLING_CREDITED,
-        payload: { tenantId: entry.tenantId, transactionId: moved.id, balanceAfter: moved.balanceAfter.toFixed(2) },
+        payload: { tenantId: entry.tenantId, transactionId: moved.id, balanceAfter: moneyText(moved.balanceAfter) },
       },
       select: { id: true },
     });
@@ -132,9 +130,7 @@ export class TenantBillingLedger {
     direction: TenantLedgerDirection,
   ): Promise<TenantBillingTransaction> {
     const { tenantId, reasonType, referenceId } = entry;
-    if (entry.amount.lte(0) || entry.amount.decimalPlaces() > LEDGER_SCALE) {
-      throw new TenantBillingInvalidAmount(entry.amount);
-    }
+    if (entry.amount.lte(0)) throw new TenantBillingInvalidAmount(entry.amount);
 
     if (referenceId !== undefined) {
       const existing = await tx.tenantBillingTransaction.findFirst({
@@ -155,6 +151,7 @@ export class TenantBillingLedger {
     }
 
     const currencyCode = entry.currencyCode ?? wallet.currencyCode;
+    if (!fitsPlaces(entry.amount, await currencyPlacesOf(tx, currencyCode))) throw new TenantBillingInvalidAmount(entry.amount);
     let amount = entry.amount;
     let source: { sourceAmount: Prisma.Decimal; sourceCurrencyCode: string } | null = null;
     if (wallet.currencyCode !== currencyCode) {

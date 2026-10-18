@@ -19,6 +19,7 @@ import { Prisma } from '@prisma/client';
 
 import { quotaPeriodAt } from './quota-period';
 import { ResellerQuota, ResellerQuotaExhausted, ResellerQuotaSourceReleased, type QuotaMeterTerms } from './reseller-quota';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
 const TEHRAN = 'Asia/Tehran';
@@ -94,6 +95,7 @@ function world(opts: { balance?: string; cap?: { amount: string; currencyCode?: 
     );
   let n = 0;
   const tx = {
+    ...currencyRegistry,
     $executeRaw: async () => 1,
     tenant: {
       findUnique: async () => ({ tenantType: opts.tenantType ?? 'reseller' }),

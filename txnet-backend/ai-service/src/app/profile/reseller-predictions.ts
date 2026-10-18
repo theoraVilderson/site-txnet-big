@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import type { PredictionRow, Reason } from './predictions';
 
@@ -109,7 +110,7 @@ export function churnRisk(input: ResellerInputs, now: Date): PredictionRow | nul
   const w = input.wallet;
   if (sub.renewalPrice && w && w.currencyCode === sub.priceCurrency && daysLeft <= CHURN_WALLET_HORIZON_DAYS && w.balance.lt(sub.renewalPrice)) {
     p += 0.3;
-    reasons.push({ code: 'wallet_short', balance: w.balance.toFixed(2), price: sub.renewalPrice.toFixed(2), currencyCode: w.currencyCode, daysLeft: Math.round(daysLeft * 10) / 10 });
+    reasons.push({ code: 'wallet_short', balance: moneyText(w.balance), price: moneyText(sub.renewalPrice), currencyCode: w.currencyCode, daysLeft: Math.round(daysLeft * 10) / 10 });
   }
   const inGrace = sub.graceUntil !== null && sub.graceUntil.getTime() > now.getTime();
   if (sub.renewalWarnedAt !== null || inGrace) {

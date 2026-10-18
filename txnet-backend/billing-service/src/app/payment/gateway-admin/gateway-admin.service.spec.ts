@@ -34,6 +34,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { GatewayAdminRefused } from './gateway-admin.refusal';
 import { GatewayAdminService, GatewaySecretWriter } from './gateway-admin.service';
+import { currencyRegistry } from '../../../../../test-support/currency-registry';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -146,6 +147,8 @@ function build(seed: { payments?: Row[]; grants?: Row[]; blocked?: boolean; onDe
   const paymentGatewayGrant = table(seed.grants ?? [], 'paymentGatewayGrant', writes);
 
   const db = {
+
+    ...currencyRegistry,
     tenant: tenants,
     paymentGateway,
     tenantGatewayConfig,

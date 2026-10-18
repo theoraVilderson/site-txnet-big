@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { OutboxEventType, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, moneyText, OutboxEventType, operatingCurrencyOf, roundConverted } from '@txnet-backend/shared-core';
 
 import { Day, addDays, dayOf } from './analytics-days';
 import { analyticsStaffOf } from './analytics-staff';
@@ -42,8 +42,8 @@ export function lossNoticesOf(claim: LossClaim, recipients: readonly string[]) {
     userId,
     lossUserId: claim.userId,
     name: claim.name,
-    net: claim.net.toFixed(2),
-    cost: claim.cost.toFixed(2),
+    net: moneyText(claim.net),
+    cost: moneyText(claim.cost),
     currencyCode: claim.currencyCode,
     percent: String(claim.percent),
   }));
@@ -84,10 +84,14 @@ export async function tellLosses(tx: Prisma.TransactionClient, tenantId: string,
   if (over.length === 0) return 0;
 
   const month = monthOf(today);
+  // A cost is kept to six places (`analytics_cost_day`); the claim is money in the operating currency, at its places (ADR-0153).
+  const places = await currencyPlacesOf(tx, operating);
+  const round = (v: Prisma.Decimal) => roundConverted(v, places);
+  const at = (v: Prisma.Decimal) => moneyText(round(v));
   const claimed = await tx.$queryRaw<{ userId: string }[]>`
     INSERT INTO billing.analytics_loss_alert ("tenantId", "userId", "month", "net", "cost", "currencyCode")
     SELECT public.current_tenant_id(), x."userId", ${month}::date, x."net", x."cost", ${operating}
-    FROM unnest(${over.map((u) => u.userId)}::text[]::uuid[], ${over.map((u) => u.net.toFixed(2))}::numeric[], ${over.map((u) => u.cost.toFixed(2))}::numeric[]) AS x("userId", "net", "cost")
+    FROM unnest(${over.map((u) => u.userId)}::text[]::uuid[], ${over.map((u) => at(u.net))}::numeric[], ${over.map((u) => at(u.cost))}::numeric[]) AS x("userId", "net", "cost")
     ON CONFLICT DO NOTHING
     RETURNING "userId"::text AS "userId"`;
   if (claimed.length === 0) return 0;
@@ -97,7 +101,7 @@ export async function tellLosses(tx: Prisma.TransactionClient, tenantId: string,
   const people = await tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, fullName: true, username: true } });
   const nameOf = new Map(people.map((p) => [p.id, p.fullName ?? p.username ?? null]));
   for (const user of over.filter((u) => ids.includes(u.userId))) {
-    const claim = { tenantId, userId: user.userId, name: nameOf.get(user.userId) ?? `#${user.userId.slice(0, SHORT_ID)}`, net: user.net, cost: user.cost, currencyCode: operating, percent };
+    const claim = { tenantId, userId: user.userId, name: nameOf.get(user.userId) ?? `#${user.userId.slice(0, SHORT_ID)}`, net: round(user.net), cost: round(user.cost), currencyCode: operating, percent };
     for (const payload of lossNoticesOf(claim, recipients)) {
       await tx.outboxEvent.create({ data: { aggregate: 'billing.analytics', aggregateId: user.userId, type: OutboxEventType.ANALYTICS_USER_LOSS, payload }, select: { id: true } });
     }

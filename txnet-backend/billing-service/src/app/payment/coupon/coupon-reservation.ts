@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, RedemptionStatus } from '@prisma/client';
-import { TenantContext, TenantScopeConflict } from '@txnet-backend/shared-core';
+import { TenantContext, TenantScopeConflict, moneyText, currencyPlacesOf, fitsPlaces } from '@txnet-backend/shared-core';
 
 import { AppliedCoupon, CouponRejection, InvalidCouponInput } from './coupon-validation';
 
@@ -72,14 +72,15 @@ export class CouponReservationService {
 
     // Coupon id order, so two orders stacking the same codes lock them alike and never deadlock.
     const byLockOrder = [...reservation.applied].sort((a, b) => a.couponId.localeCompare(b.couponId));
+    const places = byLockOrder.length ? await currencyPlacesOf(tx, currencyCode) : 0;
     for (const { couponId, code, discount, fx } of byLockOrder) {
-      if (discount.lte(0) || discount.decimalPlaces() > 2) {
-        throw new InvalidCouponInput(`coupon ${code}: a held discount must be > 0 in cents`);
+      if (discount.lte(0) || !fitsPlaces(discount, places)) {
+        throw new InvalidCouponInput(`coupon ${code}: a held discount must be > 0 at ${currencyCode}'s places`);
       }
       const [{ outcome }] = await tx.$queryRaw<Array<{ outcome: string }>>`
         SELECT billing.reserve_coupon(
           ${couponId}::uuid, ${userId}::uuid, ${orderReferenceId}::uuid,
-          ${paymentTransactionId}::uuid, ${discount.toFixed(2)}::numeric, ${currencyCode}::text,
+          ${paymentTransactionId}::uuid, ${moneyText(discount)}::numeric, ${currencyCode}::text,
           ${fx ? fx.rate.toFixed() : null}::numeric, ${fx?.snapshotId ?? null}::uuid, ${fx?.fromSnapshotId ?? null}::uuid
         ) AS outcome`;
       if (outcome === 'reserved') continue;

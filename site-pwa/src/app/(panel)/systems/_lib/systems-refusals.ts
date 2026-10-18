@@ -44,6 +44,7 @@ export type SystemsRefusal =
   | "job_not_found"
   // A panel's monthly cost never lands in a closed month (F-1002-a).
   | "cost_in_closed_month"
+  | "cost_finer_than_currency"
   | "resolution_required"
   | "resolution_not_for_event";
 
@@ -80,6 +81,7 @@ export const REFUSAL_KEYS: Record<SystemsRefusal, string> = {
   selection_too_large: K.refusals.selection_too_large,
   job_not_found: K.refusals.job_not_found,
   cost_in_closed_month: K.refusals.cost_in_closed_month,
+  cost_finer_than_currency: K.refusals.cost_finer_than_currency,
   resolution_required: K.refusals.resolution_required,
   resolution_not_for_event: K.refusals.resolution_not_for_event,
 };

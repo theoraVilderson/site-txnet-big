@@ -9,6 +9,8 @@ import {
 
 import { OutboxEventType } from '../automation/routing-keys';
 import { convertedByChanges } from './currency-change-credit';
+import { fitsPlaces } from './money-rounding';
+import { currencyPlacesOf } from './operating-currency';
 
 /**
  * The one place a wallet balance changes (F-092-b, billing invariants 1-4, C-02).
@@ -88,9 +90,6 @@ export class LedgerCurrencyMismatch extends Error {
   }
 }
 
-/** `wallet_transaction.amount` / `balanceAfter` are `Decimal(18, 2)`. */
-const LEDGER_SCALE = 2;
-
 /** Of two writers that read the same `version`, this is the one that lost. */
 export class WalletVersionConflict extends Error {
   constructor(readonly userId: string) {
@@ -111,23 +110,21 @@ export class InsufficientFunds extends Error {
 }
 
 /**
- * Zero, negative, or finer than the column. The last is refused rather than
- * rounded: Postgres would round the stored amount while `balanceAfter` was
- * computed from the unrounded one, and the two would disagree by a fraction
- * forever.
+ * Zero, negative, or finer than its currency's minor unit (ADR-0153). The last
+ * is refused rather than rounded: a writer that did not round to its currency
+ * has a bug, and a ledger that rounds for it would hide one direction or the
+ * other — and the column would round again on write.
  */
 export class InvalidLedgerAmount extends Error {
-  constructor(amount: Prisma.Decimal) {
-    super(
-      `ledger amount must be > 0 with at most ${LEDGER_SCALE} decimal places, got ${amount.toString()}`,
-    );
+  constructor(amount: Prisma.Decimal, currencyCode: string) {
+    super(`ledger amount must be > 0 at ${currencyCode}'s decimal places, got ${amount.toString()}`);
     this.name = 'InvalidLedgerAmount';
   }
 }
 
-/** Throws {@link InvalidLedgerAmount} unless `amount` fits the ledger's column. */
-export function assertLedgerAmount(amount: Prisma.Decimal): void {
-  if (amount.lte(0) || amount.decimalPlaces() > LEDGER_SCALE) throw new InvalidLedgerAmount(amount);
+/** Throws {@link InvalidLedgerAmount} unless `amount` is positive and at `currencyCode`'s places (`currency.decimalPlaces`). */
+export async function assertLedgerAmount(tx: Pick<Prisma.TransactionClient, 'currency'>, amount: Prisma.Decimal, currencyCode: string): Promise<void> {
+  if (amount.lte(0) || !fitsPlaces(amount, await currencyPlacesOf(tx, currencyCode))) throw new InvalidLedgerAmount(amount, currencyCode);
 }
 
 @Injectable()
@@ -157,7 +154,7 @@ export class WalletLedgerService {
     releasing: Prisma.Decimal = new Prisma.Decimal(0),
   ): Promise<WalletTransaction> {
     const { userId } = entry;
-    assertLedgerAmount(entry.amount);
+    await assertLedgerAmount(tx, entry.amount, entry.currencyCode);
 
     let wallet = await tx.wallet.findUnique({ where: { ownerUserId: userId } });
     if (!wallet) {

@@ -21,6 +21,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import type { CouponValidation } from '../coupon/coupon-validation';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
+import { AmountFinerThanCurrency } from './payer-places';
 import { OtherGatewayService } from './other-gateway';
 import { HAS_DESTINATION_IF_MANUAL } from '../manual/manual-setting';
 
@@ -272,6 +273,14 @@ describe('DepositQuoteService.quote', () => {
     await expect(
       asTenant(() => service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.00'), couponCodes: [] })),
     ).rejects.toBeInstanceOf(DepositGatewayNotFound);
+  });
+
+  it('refuses an amount finer than the payer currency as the payer’s mistake, before a coupon or the calculator reads it (F-116-r)', async () => {
+    const service = build();
+
+    await expect(
+      asTenant(() => service.quote({ userId: USER, gatewayId: GATEWAY, source: 'tenant', amount: d('10.005'), couponCodes: ['HALF'] })),
+    ).rejects.toBeInstanceOf(AmountFinerThanCurrency);
   });
 });
 

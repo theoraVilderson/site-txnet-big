@@ -9,6 +9,7 @@ import {
   convertedByChanges,
   operatingCurrencyOf,
   tenantTransaction,
+  moneyText, currencyPlacesOf, convertedText,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -159,7 +160,7 @@ export const REFUND_REASONS = (Object.keys(UNDOES) as WalletReasonType[]).filter
 /** The sale each of `REFUND_REASONS` undoes, position for position. */
 const UNDONE_SALES = REFUND_REASONS.map((r) => UNDOES[r] as WalletReasonType);
 
-const money = (v: Prisma.Decimal | null | undefined) => (v ? v.toFixed(2) : '0.00');
+const money = (v: Prisma.Decimal | null | undefined) => (v ? moneyText(v) : '0.00');
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -422,11 +423,10 @@ export class ResellerRevenueService {
    */
   private async converter(tx: Prisma.TransactionClient, tenantId: string) {
     const currencyCode = await operatingCurrencyOf(tx, tenantId);
-    const target = await tx.currency.findUnique({ where: { code: currencyCode }, select: { decimalPlaces: true } });
-    const places = target?.decimalPlaces ?? 2;
+    const places = await currencyPlacesOf(tx, currencyCode);
     return {
       currencyCode,
-      show: (v: Prisma.Decimal | null) => (v ? v.toFixed(places) : null),
+      show: (v: Prisma.Decimal | null) => (v ? convertedText(v, places) : null),
       sum: async (sums: ByCurrency): Promise<Prisma.Decimal | null> => {
         let total: Prisma.Decimal | null = ZERO;
         for (const [code, amount] of sums) {

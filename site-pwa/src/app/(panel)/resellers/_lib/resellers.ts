@@ -56,6 +56,7 @@ export type ResellerRefusal =
   | "package_not_sold_for_period"
   | "package_name_taken"
   | "package_unpriced"
+  | "package_price_finer_than_currency"
   | "package_price_in_use"
   | "meter_not_found"
   | "status_unchanged"

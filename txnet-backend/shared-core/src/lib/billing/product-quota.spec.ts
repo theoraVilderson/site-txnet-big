@@ -21,6 +21,7 @@ import { Prisma, QuotaOverageMode } from '@prisma/client';
 
 import { admitProductSale, consumeProductSale, lockProductQuotaTerms, productQuotaLockKey, productQuotaMeter, productQuotaStatementsOf, termsFrom, type ProductQuotaRow } from './product-quota';
 import { ResellerQuotaExhausted } from './reseller-quota';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const RESELLER = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
@@ -52,6 +53,7 @@ function world(opts: { row?: ProductQuotaRow | null; locks?: Array<Record<string
   const locksWritten: Array<{ tenantId: string; key: string; included: number | null }> = [];
   let n = 0;
   const tx = {
+    ...currencyRegistry,
     $executeRaw: async () => 1,
     tenant: {
       findUnique: async () => ({ tenantType: opts.tenantType ?? 'reseller' }),

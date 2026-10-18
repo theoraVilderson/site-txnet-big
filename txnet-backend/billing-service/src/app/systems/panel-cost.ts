@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 
-import { platformTenantIdOf } from '@txnet-backend/shared-core';
+import { platformTenantIdOf, MONEY_PATTERN, finerThanCurrency } from '@txnet-backend/shared-core';
 
 import { restateCostsFrom } from '../analytics/analytics-rollup-own-cost';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { calendarDaySchema as day } from '../request/calendar-day.schema';
-import { costOn, dayOf, viewOf, type PanelCostView } from './panel-cost-on';
+import { PANEL_CURRENCY, costOn, dayOf, viewOf, type PanelCostView } from './panel-cost-on';
 import { SystemsActor, panelScopeOf } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
@@ -20,7 +21,7 @@ import { SystemsRefused } from './systems-read';
  */
 export const panelCostSchema = z
   .object({
-    monthlyCostUsd: z.string().regex(/^\d{1,10}(\.\d{1,2})?$/),
+    monthlyCostUsd: z.string().regex(MONEY_PATTERN),
     monthlyTrafficBytes: z.string().regex(/^[1-9]\d{0,18}$/).optional(),
     effectiveFrom: day.optional(),
   })
@@ -62,6 +63,7 @@ export class PanelCostService {
     if (effectiveFrom < openMonthOf(now)) throw new SystemsRefused('cost_in_closed_month');
     const from = new Date(`${effectiveFrom}T00:00:00Z`);
     await this.all.$transaction(async (tx) => {
+      if (await finerThanCurrency(tx, PANEL_CURRENCY, { monthlyCostUsd: new Prisma.Decimal(body.monthlyCostUsd) })) throw new SystemsRefused('cost_finer_than_currency');
       await tx.panelCost.create({
         data: {
           panelId,

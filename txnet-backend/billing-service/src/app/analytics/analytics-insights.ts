@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { moneyText, roundConverted } from '@txnet-backend/shared-core';
 
 import type { TabContext } from './analytics-context';
 import { dayMap } from './analytics-context';
@@ -66,7 +67,7 @@ export function productInsight(
     if (hidden.has(id) || c.isZero() || c.isNegative() !== total.isNegative()) continue;
     if (!best || c.abs().greaterThan(best.change.abs())) best = { productId: id, change: c };
   }
-  return best && { key: 'productDrove', params: { productId: best.productId, change: best.change.toFixed(2), currency: operating } };
+  return best && { key: 'productDrove', params: { productId: best.productId, change: moneyText(best.change), currency: operating } };
 }
 
 /**
@@ -75,7 +76,7 @@ export function productInsight(
  * A flat baseline (σ 0) judges nothing: a first sale after quiet weeks is not
  * news worth a line.
  */
-export function unusualDayInsight(days: readonly { day: Day; net: Prisma.Decimal }[], windowStart: number, operating: string): Insight | null {
+export function unusualDayInsight(days: readonly { day: Day; net: Prisma.Decimal }[], windowStart: number, operating: { code: string; places: number }): Insight | null {
   let best: { day: Day; net: Prisma.Decimal; mean: Prisma.Decimal; z: Prisma.Decimal } | null = null;
   for (let i = Math.max(windowStart, BASELINE_DAYS); i < days.length; i++) {
     const base = days.slice(i - BASELINE_DAYS, i).map((x) => x.net);
@@ -85,7 +86,7 @@ export function unusualDayInsight(days: readonly { day: Day; net: Prisma.Decimal
     const z = days[i].net.minus(mean).div(sigma).abs();
     if (z.greaterThan(UNUSUAL_SIGMAS) && (!best || z.greaterThan(best.z))) best = { day: days[i].day, net: days[i].net, mean, z };
   }
-  return best && { key: 'unusualDay', params: { day: best.day, net: best.net.toFixed(2), mean: best.mean.toFixed(2), currency: operating } };
+  return best && { key: 'unusualDay', params: { day: best.day, net: moneyText(best.net), mean: moneyText(roundConverted(best.mean, operating.places)), currency: operating.code } };
 }
 
 /** Net per product in the operating currency, and the products the platform's staff may not see. */
@@ -125,6 +126,6 @@ export async function insightsOf(c: TabContext, kpis: Record<string, Kpi | null>
     const before = await productNet(c, c.previous);
     out.push(productInsight(now.net, before.net, new Set([...now.hidden, ...before.hidden]), c.operating));
   }
-  if (!c.hides) out.push(unusualDayInsight(await dailyNet(c), BASELINE_DAYS, c.operating));
+  if (!c.hides) out.push(unusualDayInsight(await dailyNet(c), BASELINE_DAYS, { code: c.operating, places: c.places.of(c.operating) }));
   return out.filter((i): i is Insight => i !== null);
 }

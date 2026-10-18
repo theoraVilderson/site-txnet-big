@@ -35,6 +35,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 import { RETIRED_FULFILMENT_KINDS, createProductSchema, createVariantSchema, setRateCardSchema, updateCapabilitySchema, updateCategorySchema } from './catalog-admin.schema';
 import { CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { CatalogTextService, catalogTextKey } from './catalog-texts';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -102,6 +103,7 @@ function pools(db: object) {
   const pool = (name: string) => {
     // A raw statement is only ever a row lock here; logged with its SQL, so a test can see which rows and how.
     const client: Record<string, unknown> = {
+      ...currencyRegistry,
       $executeRaw: async (sql: TemplateStringsArray) => (calls.push(`${name}:$executeRaw ${sql.join('?').replace(/\s+/g, ' ')}`), 0),
     };
     for (const [model, delegate] of Object.entries(db)) {
@@ -203,6 +205,7 @@ function build() {
     { id: OTHER_CATEGORY, tenantId: OTHER, parentId: null, key: 'followers', nameKey: catalogTextKey(OTHER, 'category', 'followers', 'name'), isActive: true },
   ];
   const db = {
+    ...currencyRegistry,
     tenant: table(Object.entries(types).map(([id, tenantType]) => ({ id, tenantType })), 'tenant', writes),
     productCategory: table(
       categories,

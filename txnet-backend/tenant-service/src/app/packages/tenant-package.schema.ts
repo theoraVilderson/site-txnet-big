@@ -1,4 +1,4 @@
-import { TENANT_FEATURE_KEYS } from '@txnet-backend/shared-core';
+import { TENANT_FEATURE_KEYS, MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -15,11 +15,10 @@ import { z } from 'zod';
  * `unitPrice` to 8 places. On an edit `unitPrice: null` switches a meter off.
  */
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 
 const price = z
   .string({ message: 'price must be a decimal string' })
-  .regex(DECIMAL, { message: 'price must be a decimal string' })
+  .regex(MONEY_PATTERN, { message: 'price must be a decimal string' })
   .refine((s) => /[1-9]/.test(s), { message: 'price must be positive' });
 
 const featureKeys = z

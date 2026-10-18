@@ -1,4 +1,5 @@
 import { TenantPackageService } from './tenant-package.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * The invariants F-018-o turns on: what a package's subscribers see when its
@@ -34,6 +35,7 @@ describe('TenantPackageService — subscribers', () => {
     const writes: string[] = [];
     let keys = opts.keys ?? ['spin_wheel', 'coupon_engine'];
     const tx = {
+      ...currencyRegistry,
       $queryRaw: vi.fn(async (sql: TemplateStringsArray) => {
         const text = sql.join('?');
         if (text.includes('tenant_subscription')) return writes.push('lock.subscribers'), (opts.subscribers ?? [ACME, BETA]).map((tenantId) => ({ tenantId }));
@@ -57,6 +59,7 @@ describe('TenantPackageService — subscribers', () => {
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
     };
     const prisma = {
+      ...currencyRegistry,
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
       tenantFeaturePackage: { findUnique: vi.fn(async ({ where }: { where: { name?: string } }) => (where.name ? null : stored(keys))) },

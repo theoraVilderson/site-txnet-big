@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { OutboxEventType } from '../automation/routing-keys';
 import { isResellerLimitKey, type QuotaOverageTerms } from '../tenant/reseller-limits';
 import { DEFAULT_QUOTA_TIME_ZONE, isTimeZone, quotaPeriodAt, type QuotaPeriod } from './quota-period';
+import { moneyText } from './money-rounding';
 
 /**
  * A reseller is told about its quotas (F-019-v8, ADR-0107 point 11). Who is
@@ -127,7 +128,7 @@ export async function quotaDigests(db: DigestDb, now = new Date()): Promise<Quot
   for (const s of sold) {
     const t = of(s.tenantId);
     t.overageUnits += s._sum.overageQty ?? 0;
-    if (s.currencyCode && s._sum.overageAmount) t.cost.push(`${s._sum.overageAmount.toFixed(2)} ${s.currencyCode}`);
+    if (s.currencyCode && s._sum.overageAmount) t.cost.push(`${moneyText(s._sum.overageAmount)} ${s.currencyCode}`);
   }
   if (byTenant.size === 0) return { resellers: 0, told: 0 };
 
@@ -180,7 +181,7 @@ async function tell(
     included: String(a.included),
     mode: a.overage.mode,
     ...(a.stoppedBy ? { stoppedBy: a.stoppedBy } : {}),
-    ...(a.overage.mode === 'overage' && a.overage.unitPrice ? { unitPrice: a.overage.unitPrice.toFixed(2), currencyCode: a.overage.currencyCode ?? '' } : {}),
+    ...(a.overage.mode === 'overage' && a.overage.unitPrice ? { unitPrice: moneyText(a.overage.unitPrice), currencyCode: a.overage.currencyCode ?? '' } : {}),
     ...(await nameOf(tx, a.meter)),
   };
   await tx.outboxEvent.create({

@@ -1,5 +1,5 @@
 import { CampaignStatus, Language, NotificationChannel, Prisma, UserStatus } from '@prisma/client';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -9,8 +9,8 @@ import { z } from 'zod';
  */
 const invalid = BackendI18nKeys.errors.validation.failed;
 
-/** Base-currency money as text, never a float (C-02): `wallet.cachedBalance` is `Decimal(18,2)`. */
-const money = z.string({ message: invalid }).regex(/^\d{1,16}(\.\d{1,2})?$/, { message: invalid });
+/** Money as text, never a float (C-02): compared with a balance, so any amount a column holds is a bound. */
+const money = z.string({ message: invalid }).regex(MONEY_PATTERN, { message: invalid });
 
 /** A non-empty set: empty would read as "nobody" to one reader and "anybody" to another. */
 const setOf = <T extends z.ZodTypeAny>(item: T) =>

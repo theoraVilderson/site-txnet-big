@@ -1,4 +1,8 @@
 import type { Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
+
+/** Panels are bought in dollars (network `contract.panel-cost.md` rule 5). */
+export const PANEL_CURRENCY = 'USD';
 
 /**
  * Which of a panel's prices is in effect on a day (F-1002-a) — pure, so the
@@ -15,7 +19,7 @@ export type PanelCostView = { monthlyCostUsd: string; monthlyTrafficBytes: strin
 export const dayOf = (at: Date) => at.toISOString().slice(0, 10);
 /** A price as answered. */
 export const viewOf = (r: CostRow): PanelCostView => ({
-  monthlyCostUsd: r.monthlyCostUsd.toFixed(2),
+  monthlyCostUsd: moneyText(r.monthlyCostUsd),
   // Bytes as a decimal string: a month's allowance passes 2^53 on a large server.
   monthlyTrafficBytes: r.monthlyTrafficBytes?.toString() ?? null,
   effectiveFrom: dayOf(r.effectiveFrom),

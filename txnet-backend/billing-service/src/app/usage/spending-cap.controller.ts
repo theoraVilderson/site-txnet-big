@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, BadRequestException, NotFoundException, Param, ParseUUIDPipe, Put, Req } from '@nestjs/common';
 import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
@@ -56,6 +56,9 @@ export class SpendingCapController {
       return await work();
     } catch (e) {
       // A user with no wallet has no Grant to fund either: the same answer.
+      if (e instanceof SpendingCapRefused && e.reason === 'amount_finer_than_currency') {
+        throw new BadRequestException({ i18nKey: E.spendingCapInvalid, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
       if (e instanceof SpendingCapRefused) {
         throw new NotFoundException({ i18nKey: E.grant.notFound, reason: e.reason, message: `${e.name}: ${e.message}` });
       }

@@ -1,4 +1,5 @@
 import { Prisma, WalletReasonType } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import type { CurrencyTotal } from './reseller-revenue.service';
 
@@ -229,7 +230,7 @@ export function suppressSplit<C extends { count: number }, H>(
 }
 
 const ZERO = new Prisma.Decimal(0);
-const money = (v: Prisma.Decimal | null) => (v ?? ZERO).toFixed(2);
+const money = (v: Prisma.Decimal | null) => moneyText(v ?? ZERO);
 
 /**
  * The rows as cells. For the platform's staff (`staff`) a cell under

@@ -33,7 +33,7 @@ const CONFLICTS: ReadonlySet<SystemsRejection> = new Set([
 ]);
 
 /** The refusals that are a body the event cannot take (F-027-fa): 400. */
-const BAD_REQUESTS: ReadonlySet<SystemsRejection> = new Set(['resolution_required', 'resolution_not_for_event', 'cost_in_closed_month', 'selection_too_large']);
+const BAD_REQUESTS: ReadonlySet<SystemsRejection> = new Set(['resolution_required', 'resolution_not_for_event', 'cost_in_closed_month', 'cost_finer_than_currency', 'selection_too_large']);
 
 /**
  * The service's refusals as HTTP: the scope is a 403, a panel, group or event

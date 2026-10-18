@@ -82,7 +82,7 @@ export class WalletHoldService {
 
   /** Opens a hold, or tops up this owner's open one, from the balance not already held. */
   async hold(tx: Prisma.TransactionClient, entry: HoldEntry): Promise<WalletHold> {
-    assertLedgerAmount(entry.amount);
+    await assertLedgerAmount(tx, entry.amount, entry.currencyCode);
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: entry.userId } });
     if (!wallet) throw new InsufficientFunds(entry.userId);
     if (wallet.currencyCode !== entry.currencyCode) {
@@ -112,7 +112,7 @@ export class WalletHoldService {
    * and `heldAmount` under one `version`. The free balance does not change.
    */
   async capture(tx: Prisma.TransactionClient, entry: CaptureEntry): Promise<WalletTransaction> {
-    assertLedgerAmount(entry.amount);
+    await assertLedgerAmount(tx, entry.amount, entry.currencyCode);
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: entry.userId } });
     const open = wallet ? await openHold(tx, wallet.id, entry.ownerRef) : null;
     if (!open || open.amount.lt(entry.amount)) throw new HoldExceeded(entry.userId, entry.ownerRef, entry.amount);
@@ -129,8 +129,8 @@ export class WalletHoldService {
 
   /** Gives held money back to the free balance; with no `amount`, all of it, and the hold closes. */
   async release(tx: Prisma.TransactionClient, entry: ReleaseEntry): Promise<WalletHold> {
-    if (entry.amount) assertLedgerAmount(entry.amount);
     const wallet = await tx.wallet.findUnique({ where: { ownerUserId: entry.userId } });
+    if (entry.amount && wallet) await assertLedgerAmount(tx, entry.amount, wallet.currencyCode);
     const open = wallet ? await openHold(tx, wallet.id, entry.ownerRef) : null;
     const amount = entry.amount ?? open?.amount;
     if (!wallet || !open || !amount || open.amount.lt(amount)) {

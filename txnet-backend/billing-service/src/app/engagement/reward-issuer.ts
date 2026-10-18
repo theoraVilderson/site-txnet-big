@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 
 import { CouponChannel, CouponVisibility, DiscountType, GrantSource, GrantStatus, Prisma, RewardSource, SpinPrizeType, VariantBillingMode } from '@prisma/client';
+import { moneyText, percentText } from '@txnet-backend/shared-core';
 
 import { issueGrantByAdmin } from '../entitlement/admin-issue';
 import { changeGrantDuration } from '../entitlement/duration';
@@ -158,8 +159,8 @@ async function issueCoupon(tx: Prisma.TransactionClient, input: RewardInput) {
       tenantId: input.tenantId,
       code: couponCode(),
       discountType: DiscountType.percentage,
-      discountValue: percent.toFixed(2),
-      maxDiscountCap: cap?.toFixed(2) ?? null,
+      discountValue: percentText(percent),
+      maxDiscountCap: cap ? moneyText(cap) : null,
       currencyCode: template.currencyCode,
       totalUsageLimit: 1,
       perUserUsageLimit: 1,
@@ -175,7 +176,7 @@ async function issueCoupon(tx: Prisma.TransactionClient, input: RewardInput) {
     },
     select: { id: true, code: true, expiresAt: true },
   });
-  return { id: coupon.id, code: coupon.code, percent: percent.toFixed(2), expiresAt };
+  return { id: coupon.id, code: coupon.code, percent: percentText(percent), expiresAt };
 }
 
 export async function issueReward(tx: Prisma.TransactionClient, grants: GrantService, input: RewardInput): Promise<RewardIssued> {
@@ -197,7 +198,7 @@ export async function issueReward(tx: Prisma.TransactionClient, grants: GrantSer
       prizeType: prior.prizeType,
       replay: true,
       grantId: prior.grantId,
-      coupon: coupon ? { id: coupon.id, code: coupon.code, percent: new Prisma.Decimal(coupon.discountValue).toFixed(2), expiresAt: coupon.expiresAt as Date } : null,
+      coupon: coupon ? { id: coupon.id, code: coupon.code, percent: percentText(new Prisma.Decimal(coupon.discountValue)), expiresAt: coupon.expiresAt as Date } : null,
     };
   }
 

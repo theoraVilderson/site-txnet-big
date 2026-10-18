@@ -22,6 +22,7 @@ import { ResellerAccessRefused, type ResellerAccessRejection } from '@txnet-back
 import { PackageProductsService } from './package-products.service';
 import { ResellerLimitsRefused, ResellerLimitsService } from './reseller-limits.service';
 import { setLimitSchema, setOverageCapSchema, setPackageProductSchema, setOverageSchema, setResellersLimitSchema, setResellersOverageSchema, clearResellersLimitSchema } from './reseller-limits.schema';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const OWNER_TENANT = '11111111-1111-4111-8111-111111111111';
 const RESELLER_A = '22222222-2222-4222-8222-222222222222';
@@ -68,6 +69,8 @@ function build(
   });
 
   const tx = {
+
+    ...currencyRegistry,
     resellerLimitSetting: {
       findUnique: async ({ where }: { where: { key: string } }) => (setting.has(where.key) ? { value: setting.get(where.key) } : null),
       findMany: async (args?: { where?: { key?: { in: string[] } } }) =>
@@ -385,12 +388,12 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
 });
 
 describe('the bodies', () => {
-  it('overage: stop, or overage with a positive price of at most 2 places, as a string', () => {
+  it('overage: stop, or overage with a positive price a money column holds, as a string', () => {
     expect(setOverageSchema.safeParse({ mode: 'stop' }).success).toBe(true);
     expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0.50' }).success).toBe(true);
     expect(setOverageSchema.safeParse({ mode: 'overage' }).success).toBe(false);
     expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0' }).success).toBe(false);
-    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0.001' }).success).toBe(false);
+    expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: '0.00001' }).success).toBe(false);
     expect(setOverageSchema.safeParse({ mode: 'overage', unitPrice: 1 }).success).toBe(false);
     expect(setOverageSchema.safeParse({ mode: 'stop', unitPrice: '1' }).success).toBe(false);
     expect(setOverageSchema.safeParse({ mode: 'bill_later' }).success).toBe(false);
@@ -427,6 +430,7 @@ describe('PackageProductsService — the platform products a package sells (F-01
     const audit: Array<Record<string, unknown>> = [];
     const order: string[] = [];
     const tx = {
+      ...currencyRegistry,
       tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === PKG ? { id: PKG } : null) },
       product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: OWNER_TENANT }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
       packageProduct: {

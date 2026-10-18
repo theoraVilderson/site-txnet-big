@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DiscountRuleKind, Prisma } from '@prisma/client';
-import { TenantContext, refusedAudienceGroup, tenantTransaction, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { TenantContext, refusedAudienceGroup, tenantTransaction, operatingCurrencyOf, moneyText, currencyPlacesOf, fitsPlaces } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -117,7 +117,7 @@ function viewOf(row: RuleRow, userIds: string[], now = Date.now()): DiscountRule
     id: row.id,
     name: row.name,
     kind: row.kind,
-    value: row.value.toFixed(2),
+    value: moneyText(row.value),
     currencyCode: row.currencyCode,
     productId: row.productId,
     categoryId: row.categoryId,
@@ -139,9 +139,15 @@ function snapshot(v: DiscountRuleView): Record<string, unknown> {
   return { ...rest, startsAt: v.startsAt.toISOString(), endsAt: v.endsAt ? v.endsAt.toISOString() : null };
 }
 
-/** The shape rules the database also holds (CHECKs), answered here with a reason instead of a 500. */
-function checkShape(m: Merged): void {
-  if (m.value.decimalPlaces() > 2 || m.value.lte(0)) throw new DiscountRuleRefused('invalid_value');
+/** A percentage rule's value is told to two places: 12.50%. */
+const PERCENT_PLACES = 2;
+
+/**
+ * The shape rules the database also holds (CHECKs), answered here with a reason
+ * instead of a 500. A fixed value is money at its currency's `places` (F-116-r).
+ */
+function checkShape(m: Merged, places: number): void {
+  if (!fitsPlaces(m.value, m.kind === DiscountRuleKind.percentage ? PERCENT_PLACES : places) || m.value.lte(0)) throw new DiscountRuleRefused('invalid_value');
   if (m.kind === DiscountRuleKind.percentage && m.value.gt(100)) throw new DiscountRuleRefused('invalid_value');
   if (m.productId !== null && m.categoryId !== null) throw new DiscountRuleRefused('one_target');
   if (Number.isNaN(m.startsAt.getTime()) || (m.endsAt && (Number.isNaN(m.endsAt.getTime()) || m.endsAt.getTime() <= m.startsAt.getTime()))) {
@@ -188,11 +194,12 @@ export class DiscountRuleAdminService {
         endsAt: input.endsAt ? new Date(input.endsAt) : null,
         isActive: input.isActive ?? true,
       };
-      checkShape(m);
+      const currencyCode = await operatingCurrencyOf(tx, tenant.id);
+      checkShape(m, await currencyPlacesOf(tx, currencyCode));
       await this.checkRelations(tx, tenant.id, m, { target: true, users: true, group: true, acting: actor.permissions, keptGroup: null });
 
       const { userIds, ...columns } = m;
-      const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, currencyCode: await operatingCurrencyOf(tx, tenant.id), createdByAdminId: actor.adminId } });
+      const row = await tx.discountRule.create({ data: { ...columns, tenantId: tenant.id, currencyCode, createdByAdminId: actor.adminId } });
       if (m.forNamedUsers) {
         await tx.discountRuleUser.createMany({ data: userIds.map((userId) => ({ ruleId: row.id, userId, tenantId: tenant.id })) });
       }
@@ -223,7 +230,7 @@ export class DiscountRuleAdminService {
         endsAt: patch.endsAt !== undefined ? (patch.endsAt ? new Date(patch.endsAt) : null) : row.endsAt,
         isActive: patch.isActive ?? row.isActive,
       };
-      checkShape(m);
+      checkShape(m, await currencyPlacesOf(tx, row.currencyCode));
       await this.checkRelations(tx, tenant.id, m, {
         target: patch.productId !== undefined || patch.categoryId !== undefined,
         users: patch.userIds !== undefined,

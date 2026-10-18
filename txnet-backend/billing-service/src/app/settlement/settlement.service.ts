@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PaymentProviderName, Prisma, TenantType } from '@prisma/client';
-import { convertedByChanges, operatingCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
+import { convertedByChanges, operatingCurrencyOf, isPlatformTenant, moneyText, inCurrency } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -61,6 +61,7 @@ export type SettlementRejection =
   | 'grant_not_found'
   | 'already_withdrawn'
   | 'amount_not_positive'
+  | 'amount_finer_than_currency'
   | 'exceeds_outstanding';
 
 /** A refusal with a reason the controller can turn into a message. */
@@ -474,17 +475,14 @@ export class SettlementService {
 
       const outstanding = await this.outstandingFor(input.tenantId, tx);
       if (input.amount.greaterThan(outstanding)) {
-        throw new SettlementRefused(
-          'exceeds_outstanding',
-          `${input.amount.toFixed(2)} > ${outstanding.toFixed(2)}`,
-        );
+        throw new SettlementRefused('exceeds_outstanding', `${moneyText(input.amount)} > ${moneyText(outstanding)}`);
       }
 
       const created = await tx.gatewaySettlementPayout.create({
         data: {
           tenantId: input.tenantId,
           amount: input.amount,
-          currencyCode: await operatingCurrencyOf(tx, input.tenantId),
+          currencyCode: await inCurrency(tx, await operatingCurrencyOf(tx, input.tenantId), { amount: input.amount }, () => new SettlementRefused('amount_finer_than_currency', input.amount.toFixed())),
           recordedByAdminId: operator.adminId,
           method: input.method ?? null,
           reference: input.reference ?? null,
@@ -499,10 +497,10 @@ export class SettlementService {
           action: 'gateway_settlement_payout',
           targetEntityType: 'settlement_payout',
           targetEntityId: created.id,
-          oldValue: { outstanding: outstanding.toFixed(2) },
+          oldValue: { outstanding: moneyText(outstanding) },
           newValue: {
-            amount: input.amount.toFixed(2),
-            outstanding: outstanding.minus(input.amount).toFixed(2),
+            amount: moneyText(input.amount),
+            outstanding: moneyText(outstanding.minus(input.amount)),
             method: input.method ?? null,
             reference: input.reference ?? null,
             proofAttachmentKey: input.proofAttachmentKey ?? null,
@@ -514,7 +512,7 @@ export class SettlementService {
     });
 
     this.logger.log(
-      `payout ${payout.id} of ${input.amount.toFixed(2)} to ${input.tenantId} by ${operator.adminId}`,
+      `payout ${payout.id} of ${moneyText(input.amount)} to ${input.tenantId} by ${operator.adminId}`,
     );
     return payout;
   }

@@ -20,6 +20,7 @@ const PLATFORM_TENANT = '10000000-0000-4000-8000-000000000001';
 import { costOn } from './panel-cost-on';
 import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const PLATFORM = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -39,12 +40,14 @@ const row = (effectiveFrom: string, amount: string, createdAt = '2026-10-01T00:0
 function build(history = [row('2026-09-01', '40.00')]) {
   const created: unknown[] = [];
   const prisma = {
+    ...currencyRegistry,
     tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === PLATFORM ? 'platform_owner' : 'reseller' }) },
     panel: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === PANEL ? { id: PANEL, retiredAt: null } : null) },
     panelCost: { findMany: async () => [...history].sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime() || b.createdAt.getTime() - a.createdAt.getTime()) },
   };
   const restated: unknown[][] = [];
   const all = {
+    ...currencyRegistry,
     panelCost: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
         created.push(data);
@@ -66,10 +69,10 @@ function build(history = [row('2026-09-01', '40.00')]) {
 const platform = { adminId: ADMIN, tenantId: PLATFORM };
 
 describe('the cost body', () => {
-  it('takes USD as a decimal string of at most two places, and a real day', () => {
+  it('takes USD as a decimal string a money column holds, and a real day — the cent is the service’s to hold', () => {
     expect(panelCostSchema.safeParse({ monthlyCostUsd: '12.50' }).success).toBe(true);
     expect(panelCostSchema.safeParse({ monthlyCostUsd: '0', effectiveFrom: '2026-11-01' }).success).toBe(true);
-    for (const monthlyCostUsd of ['12.505', '-1', '1e3', 12.5]) expect(panelCostSchema.safeParse({ monthlyCostUsd }).success).toBe(false);
+    for (const monthlyCostUsd of ['12.50005', '-1', '1e3', 12.5]) expect(panelCostSchema.safeParse({ monthlyCostUsd }).success).toBe(false);
     expect(panelCostSchema.safeParse({ monthlyCostUsd: '1', effectiveFrom: '2026-02-30' }).success).toBe(false);
   });
 });

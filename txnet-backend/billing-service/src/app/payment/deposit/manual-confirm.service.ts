@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ConfirmationSource, PaymentStatus, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction, isPlatformTenant, type ObjectDriver } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, isPlatformTenant, type ObjectDriver, moneyText } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
@@ -190,8 +190,8 @@ export class ManualConfirmService {
         gatewayId: r.gatewayId ?? r.tenantGatewayConfigId,
         gatewayName: gw?.displayName ?? null,
         providerName: gw?.providerName ?? null,
-        amountRequested: r.amountRequested.toFixed(2),
-        amountCredited: r.amountCredited.toFixed(2),
+        amountRequested: moneyText(r.amountRequested),
+        amountCredited: moneyText(r.amountCredited),
         currencyCode: r.currencyCode,
         chargedAmountMinor: r.chargedAmountMinor.toString(),
         authority: r.gatewayTrackingCode,

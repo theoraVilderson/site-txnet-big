@@ -6,7 +6,7 @@ import {
   PaymentProviderName,
   RateRoundingMode,
 } from '@prisma/client';
-import { GATEWAY_CREDENTIAL_SOURCES } from '@txnet-backend/shared-core';
+import { GATEWAY_CREDENTIAL_SOURCES, MONEY_MAX_PLACES } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -28,7 +28,7 @@ import { z } from 'zod';
  * A `numeric` column does not refuse a place past its scale, it rounds it away —
  * so a `feeCeiling` of `0.125` was accepted here, stored as `0.13`, and the
  * operator was never told. Each field below names the scale of the column it
- * lands in — money at two until F-116-r (ADR-0153) — and anything finer is refused, as a rate outside its range is
+ * lands in — money at the columns' four, its currency's places checked by the service (F-116-r) — and anything finer is refused, as a rate outside its range is
  * (`gateway-pricing.ts`), because money nobody asked for is not ours to round.
  */
 const decimalAt = (places: number) => new RegExp(`^(0|[1-9]\\d{0,15})(\\.\\d{1,${places}})?$`);
@@ -55,13 +55,13 @@ const fields = {
   gatewayCategory: z.nativeEnum(GatewayCategory),
   isActive: z.boolean(),
   // Either bound may be null: no limit on that side.
-  minAcceptAmount: decimal('minAcceptAmount', 2).nullable(),
-  maxAcceptAmount: decimal('maxAcceptAmount', 2).nullable(),
+  minAcceptAmount: decimal('minAcceptAmount', MONEY_MAX_PLACES).nullable(),
+  maxAcceptAmount: decimal('maxAcceptAmount', MONEY_MAX_PLACES).nullable(),
   feeCalculationMode: z.nativeEnum(FeeCalcMode),
   feeType: z.nativeEnum(FeeType),
   feeValue: decimal('feeValue', 4),
-  feeFloor: decimal('feeFloor', 2).nullable(),
-  feeCeiling: decimal('feeCeiling', 2).nullable(),
+  feeFloor: decimal('feeFloor', MONEY_MAX_PLACES).nullable(),
+  feeCeiling: decimal('feeCeiling', MONEY_MAX_PLACES).nullable(),
   useLiveRate: z.boolean(),
   staticRate: rate('staticRate').nullable(),
   // A modifier may be a markdown, so it takes a sign.

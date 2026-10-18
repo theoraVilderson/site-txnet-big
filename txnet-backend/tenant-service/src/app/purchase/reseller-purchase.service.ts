@@ -9,6 +9,7 @@ import {
   WalletVersionConflict,
   operatingCurrencyOf,
   isPlatformTenant,
+  moneyText,
 } from '@txnet-backend/shared-core';
 import { randomBytes } from 'node:crypto';
 
@@ -132,8 +133,8 @@ export class ResellerPurchaseService {
     return rows.map((p) => ({
       id: p.id,
       name: p.name,
-      monthlyPrice: p.monthlyPrice?.toFixed(2) ?? null,
-      yearlyPrice: p.yearlyPrice?.toFixed(2) ?? null,
+      monthlyPrice: p.monthlyPrice ? moneyText(p.monthlyPrice) : null,
+      yearlyPrice: p.yearlyPrice ? moneyText(p.yearlyPrice) : null,
       currencyCode: p.currencyCode,
       includedFeatureKeys: p.includedFeatureKeys as string[],
     }));
@@ -235,8 +236,8 @@ export class ResellerPurchaseService {
           billingBalance: '0.00',
           packageId: input.packageId,
           currentPeriodEnd,
-          charged: price.toFixed(2),
-          walletBalance: paid.balanceAfter.toFixed(2),
+          charged: moneyText(price),
+          walletBalance: moneyText(paid.balanceAfter),
           currencyCode,
         };
       });

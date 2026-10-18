@@ -236,15 +236,22 @@ literal 2), by a function in `shared-core/src/lib/billing/money-rounding.ts`
 named for its intent — `roundCharge` up, `roundCredit` and `roundHold` down,
 `roundConverted` half up and never to nothing, `splitWhole` summing to the
 whole; `roundRate` and `roundRatio` for what is not money. Anything else that
-calls `toDecimalPlaces` or names a rounding mode chose a direction by hand. The
-three analytics files below still show money at two places; F-116-r takes them
-off the list.
+calls `toDecimalPlaces` or names a rounding mode chose a direction by hand.
+Money leaves as `moneyText` — every place it holds, never fewer than two
+(F-116-r) — and a ratio as `percentText`; a `toFixed(2)` is a 2 chosen by hand.
 
 ```check C-02
 forbid: \.(toDecimalPlaces|toDP)\(|\bROUND_(UP|DOWN|CEIL|FLOOR|HALF_UP|HALF_DOWN|HALF_EVEN|HALF_CEIL|HALF_FLOOR)\b
 in: txnet-backend/*/src/**/*.ts
-except: txnet-backend/**/*.spec.ts, txnet-backend/shared-core/src/lib/billing/money-rounding.ts, txnet-backend/billing-service/src/app/analytics/analytics-figures.ts, txnet-backend/billing-service/src/app/analytics/analytics-capacity-forecast.ts, txnet-backend/billing-service/src/app/analytics/analytics-cohort-grid.ts
+except: txnet-backend/**/*.spec.ts, txnet-backend/shared-core/src/lib/billing/money-rounding.ts
 message: round through shared-core's money-rounding (roundCharge / roundCredit / roundHold / roundConverted / splitWhole, roundRate / roundRatio) at the currency's places — never a direction or a 2 chosen here (C-02, ADR-0153)
+```
+
+```check C-02
+forbid: \.toFixed\(2\)
+in: txnet-backend/*/src/**/*.ts
+except: txnet-backend/**/*.spec.ts
+message: send money as moneyText(amount) and a ratio as percentText(ratio) (shared-core money-rounding) — two places drop a dinar's third (C-02, F-116-r)
 ```
 
 ## C-03 — Redis keys go through `RedisKeys` only

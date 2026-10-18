@@ -1,5 +1,5 @@
 import { Body, ConflictException, Controller, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
-import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability, moneyText } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -68,8 +68,8 @@ export class GiftController {
       return {
         kind: result.kind,
         code: result.code,
-        credited: result.credited.toFixed(2),
-        balance: result.balanceAfter.toFixed(2),
+        credited: moneyText(result.credited),
+        balance: moneyText(result.balanceAfter),
         currencyCode: result.currencyCode,
       };
     } catch (e) {

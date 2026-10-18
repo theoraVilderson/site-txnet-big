@@ -43,43 +43,7 @@ export type ResetPolicy = (typeof RESET_POLICIES)[number];
 
 export type Quotas = Partial<Record<QuotaMetric, { limit: number; resetPolicy: ResetPolicy }>>;
 
-/** Every reason `/catalog` can refuse with (`catalog/contract.md` "HTTP surface"); a product's audience adds two (PT-1-b, ADR-0143). */
-export type CatalogRejection =
-  | "not_platform_owner"
-  | "tenant_not_found"
-  | "category_not_found"
-  | "product_not_found"
-  | "variant_not_found"
-  | "price_not_found"
-  | "key_taken"
-  | "sku_taken"
-  | "price_in_the_past"
-  | "panel_group_not_found"
-  | "text_key_invalid"
-  | "texts_unavailable"
-  | "lang_unknown"
-  | "source_text_missing"
-  | "category_cycle"
-  | "category_too_deep"
-  | "capability_not_found"
-  | "capability_unknown"
-  | "capability_in_use"
-  | "group_not_found"
-  | "audience_not_allowed"
-  | "traffic_quota_required"
-  | "meter_not_found"
-  | "rate_card_not_found"
-  | "rate_card_not_served"
-  /** F-503-a campaigns, F-505-a seasons. */
-  | "campaign_not_found"
-  | "campaign_overlaps"
-  | "campaign_started"
-  | "campaign_pending"
-  | "no_price_to_restore"
-  | "price_scheduled_in_campaign"
-  | "price_in_campaign"
-  | "season_not_found"
-  | "season_date_invalid";
+export type { CatalogRejection } from "./catalog-rejections";
 
 /** Text by language code (F-1533-d/f); at least the item's source language. The key is billing's. */
 export type Texts = Record<string, string>;

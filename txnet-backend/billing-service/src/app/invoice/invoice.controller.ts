@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel } from '@prisma/client';
-import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, presentsServiceToken, RateLimitBucket, rateLimitBucketKey, ResellerLimitReached, ResellerQuotaExhausted, TenantCapability, moneyText } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { LocaleService } from '../locale/locale.service';
@@ -58,12 +58,12 @@ function toHttp(e: unknown): unknown {
     if (e.reason === 'not_found') return new NotFoundException(body);
     // The shortfall rides along as the envelope's `error.facts` so the panel can
     // offer the top-up for exactly it (F-111-c, F-111-e) — any other field the
-    // exception filter drops. `missing` is already whole cents, rounded up —
-    // toFixed(2) only formats it.
+    // exception filter drops. `missing` is already at the invoice currency's
+    // places, rounded up — `moneyText` only formats it.
     const facts = e.shortfall && {
-      total: e.shortfall.total.toFixed(2),
-      balance: e.shortfall.balance.toFixed(2),
-      missing: e.shortfall.missing.toFixed(2),
+      total: moneyText(e.shortfall.total),
+      balance: moneyText(e.shortfall.balance),
+      missing: moneyText(e.shortfall.missing),
       currencyCode: e.shortfall.currencyCode,
     };
     return new ConflictException(facts ? { ...body, facts } : body);

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { MeterCost, Prisma, VariantCost } from '@prisma/client';
-import { METER_KEYS, operatingCurrencyOf } from '@txnet-backend/shared-core';
+import { METER_KEYS, operatingCurrencyOf, moneyText } from '@txnet-backend/shared-core';
 
 import { restateCostsFrom } from '../analytics/analytics-rollup-own-cost';
-import { CatalogActor, CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
+import { CatalogActor, CatalogAdminRefused, CatalogAdminService, pricedIn } from './catalog-admin.service';
 
 /** The most cost rows one list answers, newest first (C-28): a cost changes a few times a year. */
 export const COST_HISTORY_SHOWN = 50;
@@ -39,7 +39,7 @@ const NEWEST = [{ effectiveFrom: 'desc' as const }, { createdAt: 'desc' as const
 
 const variantCostView = (r: VariantCost): VariantCostView => ({
   id: r.id,
-  amount: r.amount?.toFixed(2) ?? null,
+  amount: r.amount ? moneyText(r.amount) : null,
   currencyCode: r.currencyCode,
   effectiveFrom: r.effectiveFrom.toISOString(),
   createdAt: r.createdAt.toISOString(),
@@ -125,7 +125,8 @@ export class CatalogCostService {
           tenantId,
           variantId,
           amount: write.amount,
-          currencyCode: await operatingCurrencyOf(tx, tenantId),
+          // A cost taken back has no amount; one set is at its currency's places (F-116-r).
+          currencyCode: write.amount ? await pricedIn(tx, tenantId, write.amount) : await operatingCurrencyOf(tx, tenantId),
           effectiveFrom: startOf(write.effectiveFrom),
           createdByAdminId: actor.adminId,
         },

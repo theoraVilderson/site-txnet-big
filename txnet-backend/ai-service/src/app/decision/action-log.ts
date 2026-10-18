@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import type { AiAction, AiActionType, Prisma } from '@prisma/client';
-import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { Prisma, type AiAction, type AiActionType } from '@prisma/client';
+import { currencyPlacesOf, roundConverted, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import type { BudgetSubject } from '../attention/attention-budget.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,6 +53,10 @@ export class ActionLog {
         const setting = await tx.aiSetting.findUnique({ where: { tenantId }, select: { disabledActionTypes: true } });
         const switchedOff = outcome.status !== 'suppressed' && !!setting?.disabledActionTypes.includes(candidate.actionType);
         const final: ActionOutcome = switchedOff ? { status: 'suppressed', suppressedBy: 'type_disabled' } : outcome;
+        // An expected margin is an estimate (a probability times a price) until it is written here, as
+        // money in its currency: rounded once, to that currency's places (ADR-0153 point 1).
+        const margin = candidate.expectedMargin;
+        const expectedMargin = margin ? roundConverted(new Prisma.Decimal(margin.amount), await currencyPlacesOf(tx, margin.currencyCode)) : null;
         return tx.aiAction.create({
           data: {
             tenantId,
@@ -68,7 +72,7 @@ export class ActionLog {
             templateKey: candidate.templateKey,
             renderedBy: final.status === 'awaiting_approval' ? 'model' : 'template',
             renderedText: final.status === 'awaiting_approval' ? final.renderedText : null,
-            expectedMargin: candidate.expectedMargin?.amount ?? null,
+            expectedMargin,
             expectedMarginCurrency: candidate.expectedMargin?.currencyCode ?? null,
             scheduledFor: final.status === 'scheduled' ? final.scheduledFor : null,
             deadline: candidate.deadline ?? null,

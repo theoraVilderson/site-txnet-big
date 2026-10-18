@@ -1,5 +1,5 @@
 import { Prisma, type AiActionType, type AiPredictionKind, type VariantBillingMode } from '@prisma/client';
-import { BackendI18nKeys, roundCredit, roundRatio } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, roundCredit, roundRatio, moneyText, percentText } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 import type { ActionCandidate } from './action-log';
@@ -203,13 +203,13 @@ export function expectedMargin(probability: number, price: { amount: Prisma.Deci
   const p = new Prisma.Decimal(probability.toFixed(4));
   const amount = price.amount.minus(cost ?? 0).times(p);
   return {
-    amount: amount.toFixed(2),
+    amount: moneyText(amount),
     currencyCode: price.currencyCode,
     reason: {
       code: 'expected_margin',
       probability: p.toNumber(),
-      price: price.amount.toFixed(2),
-      cost: cost ? cost.toFixed(2) : null,
+      price: moneyText(price.amount),
+      cost: cost ? moneyText(cost) : null,
       costKnown: cost !== null,
       currencyCode: price.currencyCode,
       losingMoney: amount.isNegative(),
@@ -429,7 +429,7 @@ export function candidatesFor(input: CandidateInputs, now: Date): EngineCandidat
     const discount = input.prizeCoupon ? null : offered;
     if (discount && renewal) {
       const { offer, amount, percent } = discount;
-      const reason = { code: 'suggest_offer', grantId, offerId: offer.id, discountPercent: percent.toFixed(2), discount: amount.toFixed(2), currencyCode: offer.currencyCode };
+      const reason = { code: 'suggest_offer', grantId, offerId: offer.id, discountPercent: percentText(percent), discount: moneyText(amount), currencyCode: offer.currencyCode };
       out.push(candidate({ type: 'retain_offer', prediction: renewal, grantId, current, target: current, deadline, probability, offerId: offer.id, discount: amount, extra: [reason] }, input, now));
       continue;
     }
@@ -497,13 +497,13 @@ function candidate(spec: CandidateSpec, input: CandidateInputs, now: Date): Engi
         grantId,
         fromVariantId: current.variantId,
         variantId: target.variantId,
-        price: price.amount.toFixed(2),
+        price: moneyText(price.amount),
         currencyCode: price.currencyCode,
       },
       costed.reason,
       margin.reason,
       ...(season
-        ? [{ code: 'season', seasonId: season.seasonId, name: season.name, price: season.amount.toFixed(2), currencyCode: season.currencyCode, startsAt: season.startsAt.toISOString(), endsAt: season.endsAt.toISOString() }]
+        ? [{ code: 'season', seasonId: season.seasonId, name: season.name, price: moneyText(season.amount), currencyCode: season.currencyCode, startsAt: season.startsAt.toISOString(), endsAt: season.endsAt.toISOString() }]
         : []),
       ...extra,
       ...prediction.reasons,

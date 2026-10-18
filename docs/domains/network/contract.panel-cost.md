@@ -20,7 +20,7 @@ code `billing-service/src/app/systems/panel-cost*.ts`, on the systems surface.
 | Operation | Input | Output | Errors |
 |---|---|---|---|
 | `GET /api/billing/systems/panels/:id/cost` | — | `{current, history}`: the price in effect today (or `null`) and every row, newest first, each `{monthlyCostUsd, monthlyTrafficBytes, effectiveFrom, createdByUserId, createdAt}` | 403 `not_platform_owner`; 404 `not_found` |
-| `POST /api/billing/systems/panels/:id/cost` | `{monthlyCostUsd, monthlyTrafficBytes?, effectiveFrom?}` — USD as a decimal string, ≤ 2 places, ≥ 0; the month's traffic that price buys, whole bytes as a string > 0, left out = none set (F-1005-a); a UTC day, default today | the same as `GET`, the new row in it | 400 `cost_in_closed_month`; 404 `not_found`; 409 `panel_retired` |
+| `POST /api/billing/systems/panels/:id/cost` | `{monthlyCostUsd, monthlyTrafficBytes?, effectiveFrom?}` — USD as a decimal string at a cent at most (`400 cost_finer_than_currency`, F-116-r), ≥ 0; the month's traffic that price buys, whole bytes as a string > 0, left out = none set (F-1005-a); a UTC day, default today | the same as `GET`, the new row in it | 400 `cost_in_closed_month`; 404 `not_found`; 409 `panel_retired` |
 
 The panel list (`GET …/systems/panels`) carries each panel's `monthlyCost` —
 the price in effect today, or `null`.

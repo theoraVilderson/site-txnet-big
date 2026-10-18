@@ -16,6 +16,7 @@ import { runWithTenant } from '@txnet-backend/shared-core';
 
 import { tenantDayOf } from './tenant-day';
 import { WheelAdminRefused, WheelAdminService, WheelVersionInput } from './wheel-admin.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const ADMIN = '99999999-9999-4999-8999-999999999999';
@@ -34,6 +35,7 @@ function build(o: { versions?: Row[] } = {}) {
   const prizes: Record<string, unknown>[] = [];
   const audits: Record<string, unknown>[] = [];
   const tx = {
+    ...currencyRegistry,
     $executeRaw: async () => 0,
     tenant: { findUnique: async () => ({ timezone: 'Asia/Tehran', operatingCurrencyCode: 'IRT' }) },
     coupon: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === TEMPLATE ? { id: TEMPLATE } : null) },

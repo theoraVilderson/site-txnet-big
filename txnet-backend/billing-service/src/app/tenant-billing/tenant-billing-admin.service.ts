@@ -15,6 +15,7 @@ import {
   TenantBillingVersionConflict,
   platformCurrencyOf,
   isPlatformTenant,
+  moneyText,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -45,7 +46,7 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 
 /** The platform's currency as the wire carries it: two decimals, as a string (C-02). */
-const money = (v: Prisma.Decimal) => v.toFixed(2);
+const money = (v: Prisma.Decimal) => moneyText(v);
 
 export type TenantBillingActor = { adminId: string; tenantId: string; ip: string };
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Grant, GrantSource, InvoiceStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { currencyPlacesOf, OutboxEventType, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, OutboxEventType, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import { GrantService } from '../entitlement/grant';
@@ -176,7 +176,7 @@ export class InvoicePaymentService {
             status: issued.grant.status,
             source: GrantSource.purchase,
             invoiceId: invoice.id,
-            total: total.toFixed(2),
+            total: moneyText(total),
           },
         },
         select: { id: true },
@@ -185,9 +185,9 @@ export class InvoicePaymentService {
       return {
         id: invoice.id,
         status: InvoiceStatus.paid,
-        total: total.toFixed(2),
+        total: moneyText(total),
         currencyCode: invoice.currencyCode,
-        balanceAfter: balanceAfter.toFixed(2),
+        balanceAfter: moneyText(balanceAfter),
         walletTransactionId,
         grants: [{ id: issued.grant.id, status: issued.grant.status }],
       };

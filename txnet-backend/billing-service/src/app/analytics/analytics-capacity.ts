@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
-import { FORECAST_RATE_DAYS } from '@txnet-backend/shared-core';
+import { FORECAST_RATE_DAYS, moneyText } from '@txnet-backend/shared-core';
 
 import type { CostRow } from '../systems/panel-cost-on';
-import { costOn } from '../systems/panel-cost-on';
+import { PANEL_CURRENCY, costOn } from '../systems/panel-cost-on';
 import { PanelForecast, forecastPanel, monthCostUsd, projectMonth } from './analytics-capacity-forecast';
 import type { TabContext } from './analytics-context';
 import { Day, addDays, dayOf } from './analytics-days';
@@ -100,18 +100,18 @@ export async function capacityOf(c: TabContext, now = new Date()): Promise<Capac
       clients: f ? of(f.clients, p.id) : [],
       maxClients: p.maxClients,
     });
-    const monthCost = monthCostUsd(prices, today);
+    const monthCost = monthCostUsd(prices, today, c.places.of(PANEL_CURRENCY));
     const price = costOn(prices, today);
     const cell =
       monthCost === null || !f
         ? null
-        : marginCellOf(p.id, asRows(p.id, projectMonth(of(f.net, p.id), first, today)), asRows(p.id, projectMonth(of(f.cost, p.id), first, today)), { currencies, operating: c.operating });
+        : marginCellOf(p.id, asRows(p.id, projectMonth(of(f.net, p.id), { first, today, places: c.places })), asRows(p.id, projectMonth(of(f.cost, p.id), { first, today, places: c.places })), { currencies, operating: c.operating });
     return {
       panelId: p.id,
       name: p.name,
       ...forecast,
-      monthlyCostUsd: price?.monthlyCostUsd.toFixed(2) ?? null,
-      projectedCostUsd: monthCost?.toFixed(2) ?? null,
+      monthlyCostUsd: price ? moneyText(price.monthlyCostUsd) : null,
+      projectedCostUsd: monthCost ? moneyText(monthCost) : null,
       net: cell?.net ?? null,
       cost: cell?.cost ?? null,
       margin: cell?.margin ?? null,

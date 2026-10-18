@@ -192,6 +192,7 @@ export type SettlementRejection =
   | "grant_not_found"
   | "already_withdrawn"
   | "amount_not_positive"
+  | "amount_finer_than_currency"
   | "exceeds_outstanding";
 
 /** A link of one gateway to one borrowing tenant (`audit/contract.settlement.md`). */

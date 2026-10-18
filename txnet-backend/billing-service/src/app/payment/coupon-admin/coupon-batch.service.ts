@@ -2,9 +2,10 @@ import { randomInt } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
 import { CouponVisibility, DiscountType, Prisma } from '@prisma/client';
-import { operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { operatingCurrencyOf, platformCurrencyOf, moneyText, MONEY_MAX_PLACES, finerThanCurrency } from '@txnet-backend/shared-core';
 
-import { CouponActor, CouponAdminRefused, CouponAdminService, statusOf } from './coupon-admin.service';
+import { CouponActor, CouponAdminRefused, CouponAdminService } from './coupon-admin.service';
+import { statusOf } from './coupon-status';
 import { assertUnderDiscountCap } from './coupon-discount-cap';
 
 /** No 0/O, no 1/I/L: a code is read off a card and typed by a person. */
@@ -82,7 +83,7 @@ export class CouponBatchService {
     if (grantVariantId) {
       // A free-service batch gives a Grant, never money.
       if (!value.isZero()) throw new CouponAdminRefused('invalid_value', 'value');
-    } else if (!value.isPositive() || value.isZero() || value.decimalPlaces() > 2) {
+    } else if (!value.isPositive() || value.isZero() || value.decimalPlaces() > MONEY_MAX_PLACES) {
       throw new CouponAdminRefused('invalid_value', 'value');
     }
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
@@ -97,6 +98,8 @@ export class CouponBatchService {
         const codes = await this.draw(tx, tenantId, prefix, count);
         // A platform batch is in the platform's currency, a tenant's in its own (F-116-b).
         const currencyCode = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
+        // A gift code's value is money in that currency, at its places (F-116-r).
+        if (await finerThanCurrency(tx, currencyCode, { value })) throw new CouponAdminRefused('invalid_value', 'value');
         const row = await tx.couponBatch.create({ data: { tenantId, label, note: input.note?.trim() || null, createdByAdminId: actor.adminId } });
         for (let i = 0; i < codes.length; i += CHUNK) {
           await tx.coupon.createMany({
@@ -126,7 +129,7 @@ export class CouponBatchService {
             targetEntityId: row.id,
             oldValue: Prisma.DbNull,
             // The count and the terms — never a code.
-            newValue: { label, count, value: value.toFixed(2), grantVariantId, prefix, expiresAt: expiresAt?.toISOString() ?? null },
+            newValue: { label, count, value: moneyText(value), grantVariantId, prefix, expiresAt: expiresAt?.toISOString() ?? null },
             adminIpAddress: actor.ip,
           },
         });
@@ -178,7 +181,7 @@ export class CouponBatchService {
       const lines = ['code,value,expires_at,status,used'];
       for (const r of rows) {
         const expires = r['expiresAt'] ? new Date(r['expiresAt'] as Date).toISOString() : '';
-        lines.push([r['code'], new Prisma.Decimal(String(r['discountValue'])).toFixed(2), expires, statusOf(r, now), Number(r['usedCount'] ?? 0)].join(','));
+        lines.push([r['code'], moneyText(new Prisma.Decimal(String(r['discountValue']))), expires, statusOf(r, now), Number(r['usedCount'] ?? 0)].join(','));
       }
       await db.adminAuditLog.create({
         data: {

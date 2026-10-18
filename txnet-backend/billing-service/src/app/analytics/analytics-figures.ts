@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { roundRatio } from '@txnet-backend/shared-core';
+import { roundRatio, moneyText, roundConverted, type CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import { FEWER_THAN, hiddenCells } from '../revenue/revenue-breakdown';
 
@@ -47,7 +47,7 @@ export function byCurrency<R extends { currencyCode: string }>(rows: readonly R[
 
 /** A per-currency figure as answered: every currency of the answer, a missing one at zero. */
 export function amountsOf(sums: ByCurrency, currencies: readonly string[]): Amounts {
-  return Object.fromEntries(currencies.map((c) => [c, (sums.get(c) ?? ZERO).toFixed(2)]));
+  return Object.fromEntries(currencies.map((c) => [c, moneyText(sums.get(c) ?? ZERO)]));
 }
 
 export function moneyKpi(value: ByCurrency, previous: ByCurrency | null, currencies: readonly string[]): MoneyKpi {
@@ -58,9 +58,12 @@ export function moneyKpi(value: ByCurrency, previous: ByCurrency | null, currenc
   };
 }
 
-/** `sums` divided by `by` per currency (an average order, revenue per buyer); nothing where `by` is 0. */
-export function perUnit(sums: ByCurrency, by: number): ByCurrency {
-  return new Map(by > 0 ? [...sums].map(([c, v]) => [c, v.div(by).toDecimalPlaces(2)]) : []);
+/**
+ * `sums` divided by `by` per currency (an average order, revenue per buyer),
+ * rounded half up to each currency's places (ADR-0153); nothing where `by` is 0.
+ */
+export function perUnit(sums: ByCurrency, by: number, places: CurrencyPlaces): ByCurrency {
+  return new Map(by > 0 ? [...sums].map(([c, v]) => [c, roundConverted(v.div(by), places.of(c))]) : []);
 }
 
 /** Every currency the figures hold, the tenant's operating currency first (principle 6). */

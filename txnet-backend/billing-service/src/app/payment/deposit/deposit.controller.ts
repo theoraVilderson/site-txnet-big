@@ -27,6 +27,7 @@ import { CouponReservationRefused } from '../coupon/coupon-reservation';
 import type { CouponRejection } from '../coupon/coupon-validation';
 import { GatewayFailure, ProviderNotSupported } from '../gateway/payment-provider';
 import { AmountOutOfGatewayRange, RateOutOfRange, RateUnavailable } from '../pricing/gateway-pricing';
+import { AmountFinerThanCurrency } from './payer-places';
 import { DepositAbandonService } from './deposit-abandon.service';
 import { DepositTransferService } from './deposit-transfer.service';
 import { DepositGatewayNotFound, DepositQuoteService } from './deposit-quote.service';
@@ -78,6 +79,8 @@ export function toHttp(e: unknown): unknown {
   const message = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
   if (e instanceof DepositGatewayNotFound) return new NotFoundException({ i18nKey: E.gatewayNotFound, message });
   if (e instanceof AmountOutOfGatewayRange) return new BadRequestException({ i18nKey: E.amountOutOfRange, message });
+  // Finer than the payer's currency (F-116-r): the schema takes any money, the currency decides.
+  if (e instanceof AmountFinerThanCurrency) return new BadRequestException({ i18nKey: E.amountInvalid, message });
   // A top-up method staff barred for this payer (F-030-e): theirs to know, so they pick another.
   if (e instanceof UserRestricted) return new ConflictException({ i18nKey: RESTRICTED_I18N_KEY[e.key], reason: e.reason, message, facts: e.facts });
   // A coupon that validated a moment ago and can no longer be held is a state

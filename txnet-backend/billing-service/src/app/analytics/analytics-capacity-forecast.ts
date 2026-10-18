@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { forecastSpanMs } from '@txnet-backend/shared-core';
+import { forecastSpanMs, roundConverted, type CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import { type CostRow, costOn } from '../systems/panel-cost-on';
 import { Day, addDays } from './analytics-days';
@@ -115,10 +115,14 @@ export function forecastPanel(i: CapacityInput): PanelForecast {
 
 /**
  * Money to the month's end, per currency and never across two (principle 6):
- * the month's days before today, plus the same 7-day rate for the days left.
- * Null under a day of history.
+ * the month's days before today, plus the same 7-day rate for the days left,
+ * rounded half up to each currency's places (ADR-0153). Null under a day of history.
  */
-export function projectMonth(rows: readonly { day: Day; currencyCode: string; amount: Prisma.Decimal }[], first: Day | null, today: Day): Map<string, Prisma.Decimal> | null {
+export function projectMonth(
+  rows: readonly { day: Day; currencyCode: string; amount: Prisma.Decimal }[],
+  at: { first: Day | null; today: Day; places: CurrencyPlaces },
+): Map<string, Prisma.Decimal> | null {
+  const { first, today } = at;
   const span = rateDays(first, today);
   if (span === null) return null;
   const since = addDays(today, -span);
@@ -127,13 +131,16 @@ export function projectMonth(rows: readonly { day: Day; currencyCode: string; am
   for (const currency of new Set(rows.map((r) => r.currencyCode))) {
     const mine = rows.filter((r) => r.currencyCode === currency && r.day < today);
     const sum = (from: Day) => mine.filter((r) => r.day >= from).reduce((n, r) => n.plus(r.amount), new Prisma.Decimal(0));
-    out.set(currency, sum(monthStart).plus(sum(since).div(span).times(daysLeft(today))));
+    out.set(currency, roundConverted(sum(monthStart).plus(sum(since).div(span).times(daysLeft(today))), at.places.of(currency)));
   }
   return out;
 }
 
-/** The month's whole cost in USD, each day at the price in effect on it (`costOn`); null when no day has one. */
-export function monthCostUsd(history: readonly CostRow[], today: Day): Prisma.Decimal | null {
+/**
+ * The month's whole cost in USD, each day at the price in effect on it
+ * (`costOn`), rounded half up to USD's `places`; null when no day has one.
+ */
+export function monthCostUsd(history: readonly CostRow[], today: Day, places: number): Prisma.Decimal | null {
   const end = monthEndOf(today);
   const daysInMonth = Number(end.slice(8, 10));
   let total: Prisma.Decimal | null = null;
@@ -141,5 +148,5 @@ export function monthCostUsd(history: readonly CostRow[], today: Day): Prisma.De
     const price = costOn(history, day);
     if (price) total = (total ?? new Prisma.Decimal(0)).plus(price.monthlyCostUsd.div(daysInMonth));
   }
-  return total?.toDecimalPlaces(2) ?? null;
+  return total ? roundConverted(total, places) : null;
 }

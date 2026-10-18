@@ -21,6 +21,7 @@ import { Prisma, TenantBillingReasonType, TenantType } from '@prisma/client';
 import { TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { TenantBillingAdminRefused, TenantBillingAdminService } from './tenant-billing-admin.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -54,6 +55,8 @@ function store() {
   };
 
   const tx = {
+
+    ...currencyRegistry,
     tenant,
     tenantBillingWallet: {
       findUnique: async ({ where }: { where: { tenantId: string } }) => {

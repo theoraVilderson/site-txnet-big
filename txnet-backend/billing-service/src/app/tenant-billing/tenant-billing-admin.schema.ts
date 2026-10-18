@@ -1,4 +1,5 @@
 import { TenantLedgerDirection } from '@prisma/client';
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /**
@@ -8,12 +9,11 @@ import { z } from 'zod';
  * string (C-02); the direction comes from the Prisma enum (C-09).
  */
 
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 
 export const adjustSchema = z
   .object({
     direction: z.nativeEnum(TenantLedgerDirection),
-    amount: z.string().regex(DECIMAL, { message: 'amount must be a decimal string' }),
+    amount: z.string().regex(MONEY_PATTERN, { message: 'amount must be a decimal string' }),
     requestId: z.string().uuid({ message: 'requestId must be a uuid' }),
     note: z.string().trim().min(1).max(500).optional(),
   })

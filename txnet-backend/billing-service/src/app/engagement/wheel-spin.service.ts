@@ -2,7 +2,7 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { FraudSubjectType, GrantStatus, InvoiceStatus, Prisma, RewardSource, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { liveMembership, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
+import { liveMembership, runWithTenant, tenantTransaction, moneyText, percentText } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
 import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, fingerprintVerdict, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
@@ -131,8 +131,8 @@ export function checkEligibility(cfg: SpinConfig, f: EligibilityFacts, at: Date)
     ['activeService', 'no_active_service', SpinAttemptStatus.rejected_ineligible, { ok: !cfg.requiresActiveServiceAtSpinTime || f.activeGrants > 0, required: cfg.requiresActiveServiceAtSpinTime, value: f.activeGrants }],
     ['totalPaid', 'paid_too_little', SpinAttemptStatus.rejected_ineligible, {
       ok: cfg.requiresMinTotalPurchaseAmount === null || f.totalPaid.gte(cfg.requiresMinTotalPurchaseAmount),
-      required: cfg.requiresMinTotalPurchaseAmount?.toFixed(2) ?? null,
-      value: f.totalPaid.toFixed(2),
+      required: cfg.requiresMinTotalPurchaseAmount ? moneyText(cfg.requiresMinTotalPurchaseAmount) : null,
+      value: moneyText(f.totalPaid),
     }],
     ['paidOrders', 'too_few_orders', SpinAttemptStatus.rejected_ineligible, { ok: cfg.requiresMinCompletedOrdersCount === null || f.paidOrders >= cfg.requiresMinCompletedOrdersCount, required: cfg.requiresMinCompletedOrdersCount, value: f.paidOrders }],
     ['group', 'not_in_group', SpinAttemptStatus.rejected_ineligible, { ok: cfg.userGroupId === null || f.inGroup === true, required: cfg.userGroupId, value: f.inGroup }],
@@ -211,7 +211,7 @@ type Tx = Prisma.TransactionClient;
 const D = (v: Prisma.Decimal.Value) => new Prisma.Decimal(v);
 
 function prizeOf(p: SpinPrize): SpinResult['prize'] {
-  return { position: p.position, label: p.label, prizeType: p.prizeType, prizeValue: D(p.prizeValue).toFixed(2) };
+  return { position: p.position, label: p.label, prizeType: p.prizeType, prizeValue: moneyText(D(p.prizeValue)) };
 }
 
 /** Where a pick that became nothing lands: the first empty slot, if the wheel has one. */
@@ -255,7 +255,7 @@ export class WheelSpinService {
         currencyCode: cfg.currencyCode,
         prizes: [...cfg.prizes]
           .sort((a, b) => a.position - b.position)
-          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), oddsPercent: D(p.probabilityWeight).mul(100).div(total).toFixed(2) })),
+          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), oddsPercent: percentText(D(p.probabilityWeight).mul(100).div(total)) })),
         eligible: refusal === null,
         refusalReason: refusal?.reason ?? null,
         spinsLeftToday: Math.max(0, cfg.maxSpinsPerAccountPerDay - facts.awardedToday),
@@ -303,7 +303,7 @@ export class WheelSpinService {
         tenantDay: isoDay(r.tenantDay),
         status: r.status,
         refusalReason: r.refusalReason as SpinRefusalReason | null,
-        prize: r.prizeAwarded ? { label: r.prizeAwarded.label, prizeType: r.prizeAwarded.prizeType, prizeValue: D(r.prizeAwarded.prizeValue).toFixed(2) } : null,
+        prize: r.prizeAwarded ? { label: r.prizeAwarded.label, prizeType: r.prizeAwarded.prizeType, prizeValue: moneyText(D(r.prizeAwarded.prizeValue)) } : null,
         coupon: couponOf(r.id),
       }));
     });
@@ -375,7 +375,7 @@ export class WheelSpinService {
 
     await tx.spinWheelDay.update({
       where: { tenantId_tenantDay: { tenantId: actor.tenantId, tenantDay: day } },
-      data: { costSpent: { increment: cost.toFixed(2) }, spins: { increment: 1 } },
+      data: { costSpent: { increment: moneyText(cost) }, spins: { increment: 1 } },
     });
     if (given && given.dailyStockLimit !== null) {
       await tx.spinWheelPrizeDay.update({ where: { prizeId_tenantDay: { prizeId: given.id, tenantDay: day } }, data: { awardedCount: { increment: 1 } } });
@@ -385,7 +385,7 @@ export class WheelSpinService {
       await alertCapCrossing(tx, { tenantId: actor.tenantId, tenantDay: day, spent, cap: D(cfg.dailyBudgetCapAmount), currencyCode: cfg.currencyCode, alertedAt: dayRow.capAlertedAt ?? null, at });
     }
     await tx.spinWheelAttempt.create({
-      data: { ...base, status: SpinAttemptStatus.awarded, seq, pickedPrizeId: picked.id, prizeAwardedId: given?.id ?? null, costAmount: cost.toFixed(2) },
+      data: { ...base, status: SpinAttemptStatus.awarded, seq, pickedPrizeId: picked.id, prizeAwardedId: given?.id ?? null, costAmount: moneyText(cost) },
     });
     this.logger.log(`spin ${id}: v${cfg.version} picked ${picked.position}, given ${given?.position ?? 'nothing'}`);
     return {

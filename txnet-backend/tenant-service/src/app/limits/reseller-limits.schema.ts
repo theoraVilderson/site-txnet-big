@@ -1,3 +1,4 @@
+import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /** A limit's value (ADR-0106): a whole number ≥ 0, or `null` for no limit. Required, so an empty body changes nothing. The key's own bound is the service's check. */
@@ -27,7 +28,7 @@ export type ClearResellersLimitInput = z.infer<typeof clearResellersLimitSchema>
  */
 const unitPrice = z
   .string()
-  .regex(/^\d{1,16}(\.\d{1,2})?$/, 'unitPrice must be a decimal with at most 2 places')
+  .regex(MONEY_PATTERN, 'unitPrice must be a decimal string')
   .refine((v) => Number(v) > 0, { message: 'unitPrice must be above zero' });
 
 const overage = z.discriminatedUnion('mode', [z.object({ mode: z.literal('stop') }).strict(), z.object({ mode: z.literal('overage'), unitPrice }).strict()]);
@@ -45,7 +46,7 @@ export type SetResellersOverageInput = SetOverageInput & { tenantIds: string[]; 
 
 /** The reseller's own overage cap per subscription month (F-019-v2): an amount ≥ 0 with at most 2 places, or `null` for none. `0` = no overage at all. */
 export const setOverageCapSchema = z
-  .object({ amount: z.string().regex(/^\d{1,16}(\.\d{1,2})?$/, 'amount must be a decimal with at most 2 places').nullable() })
+  .object({ amount: z.string().regex(MONEY_PATTERN, 'amount must be a decimal string').nullable() })
   .strict();
 
 export type SetOverageCapInput = { amount: string | null };

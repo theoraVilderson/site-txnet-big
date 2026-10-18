@@ -1,10 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { LotteryEntryMode, LotteryStatus, Prisma, SpinPrizeType } from '@prisma/client';
-import { OutboxEventType, refusedAudienceGroup, tenantTransaction } from '@txnet-backend/shared-core';
+import { OutboxEventType, refusedAudienceGroup, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { LOTTERY_AGGREGATE } from './lottery-delivery.service';
-import { missingPrizeRelation, prizeShapeOk } from './prize-shape';
+import { missingPrizeRelation, PRIZE_PLACES, prizeShapeOk } from './prize-shape';
 
 /**
  * A tenant's lotteries (F-707-i, ADR-0111 points 5, 6):
@@ -141,7 +141,7 @@ const WITH_PARTS = { prizes: true, _count: { select: { entrants: true } } } as c
 function decimal(v: string): Prisma.Decimal {
   try {
     const d = new Prisma.Decimal(v);
-    if (d.isNegative() || d.decimalPlaces() > 2) throw new Error();
+    if (d.isNegative() || d.decimalPlaces() > PRIZE_PLACES) throw new Error();
     return d;
   } catch {
     throw new LotteryAdminRefused('invalid_prize', v);
@@ -174,7 +174,7 @@ function viewOf(row: LotteryRow): LotteryView {
       rank: p.rank,
       label: p.label,
       prizeType: p.prizeType,
-      prizeValue: new Prisma.Decimal(p.prizeValue).toFixed(2),
+      prizeValue: moneyText(new Prisma.Decimal(p.prizeValue)),
       couponTemplateId: p.couponTemplateId,
       couponValidDays: p.couponValidDays,
       variantId: p.variantId,
@@ -367,7 +367,7 @@ export class LotteryAdminService {
         rank: i + 1,
         label: p.label.trim(),
         prizeType: p.prizeType,
-        prizeValue: value.toFixed(2),
+        prizeValue: moneyText(value),
         couponTemplateId: p.couponTemplateId ?? null,
         couponValidDays: p.couponValidDays ?? null,
         variantId: p.variantId ?? null,

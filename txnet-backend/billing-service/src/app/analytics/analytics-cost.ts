@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { roundRate, splitWhole } from '@txnet-backend/shared-core';
 
-import { CostRow, costOn } from '../systems/panel-cost-on';
+import { CostRow, PANEL_CURRENCY, costOn } from '../systems/panel-cost-on';
 import { Day, addDays } from './analytics-days';
 
 /**
@@ -33,8 +33,6 @@ export type CostDayRow = {
 
 /** A cost is kept to six places — a unit-price scale, where precision lives (ADR-0153 point 5) — so a split rounds below a cent and a month's sum stays whole. */
 const COST_PLACES = 6;
-/** Panels are bought in dollars (network `contract.panel-cost.md` rule 5). */
-const PANEL_CURRENCY = 'USD';
 
 const ZERO = new Prisma.Decimal(0);
 

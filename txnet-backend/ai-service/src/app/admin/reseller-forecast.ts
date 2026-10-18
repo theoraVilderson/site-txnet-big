@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { runWithTenant, tenantTransaction, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { refusal } from '../envelope';
 import type { Reason } from '../profile/predictions';
@@ -69,7 +69,7 @@ export class ResellerForecasts {
         tenantId: r.subjectId,
         slug: slugs.get(r.subjectId) ?? null,
         // An amount is money: two places with its currency (C-02); anything else as stored.
-        value: r.value === null ? null : r.currencyCode ? r.value.toFixed(2) : r.value.toFixed(4),
+        value: r.value === null ? null : r.currencyCode ? moneyText(r.value) : r.value.toFixed(4),
         currencyCode: r.currencyCode,
         predictedAt: r.predictedAt ? r.predictedAt.toISOString() : null,
         confidence: r.confidence.toFixed(4),

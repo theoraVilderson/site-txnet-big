@@ -29,6 +29,7 @@ import { contextOf } from './analytics-context';
 import { marginOf } from './analytics-margin';
 import { AnalyticsRollupService } from './analytics-rollup.service';
 import { analyticsQuerySchema } from './analytics.schema';
+import { currencyPlaces } from '../../../../test-support/currency-registry';
 
 vi.setConfig({ testTimeout: HARNESS_TIMEOUT_MS, hookTimeout: HARNESS_TIMEOUT_MS });
 
@@ -146,7 +147,7 @@ async function story() {
 
 const marginOver = (from: number, to: number) =>
   runWithTenant({ id: RESELLER }, () =>
-    tenantTransaction(app, (tx) => marginOf(contextOf(tx, analyticsQuerySchema.parse({ from: DAY(from), to: DAY(to) }), { operating: 'IRR', hides: false }))),
+    tenantTransaction(app, (tx) => marginOf(contextOf(tx, analyticsQuerySchema.parse({ from: DAY(from), to: DAY(to) }), { operating: 'IRR', hides: false, places: currencyPlaces }))),
   );
 
 const costRows = () =>

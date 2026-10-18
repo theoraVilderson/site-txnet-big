@@ -6,6 +6,7 @@ import {
   WalletLedgerService,
   WalletVersionConflict,
 } from './wallet-ledger.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * The wallet credit/debit primitive (F-092-b).
@@ -39,6 +40,8 @@ function fakeStore() {
   let barrier: { waiting: number; release: () => void; ready: Promise<void> } | null = null;
 
   const tx = {
+
+    ...currencyRegistry,
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => {
         const row = wallets.get(where.ownerUserId);

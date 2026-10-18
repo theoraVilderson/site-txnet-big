@@ -50,6 +50,7 @@ const STATUS: Record<ResellerLimitsRejection, 403 | 404 | 422> = {
   reseller_not_found: 404,
   limit_out_of_range: 422,
   not_a_quota: 422,
+  amount_finer_than_currency: 422,
   product_not_found: 404,
 };
 

@@ -81,14 +81,14 @@ describe('an unusual day', () => {
     [...history, ...window].map((net, i) => ({ day: new Date(Date.UTC(2026, 8, 1) + i * 86_400_000).toISOString().slice(0, 10), net: d(net) }));
 
   it('names the window day furthest past 2σ of its own previous 28 days, high or low', () => {
-    expect(unusualDayInsight(days(['13']), 28, 'USD')).toEqual({ key: 'unusualDay', params: { day: '2026-09-29', net: '13.00', mean: '10.00', currency: 'USD' } });
-    expect(unusualDayInsight(days(['5', '13']), 28, 'USD')).toMatchObject({ params: { day: '2026-09-29', net: '5.00' } });
+    expect(unusualDayInsight(days(['13']), 28, { code: 'USD', places: 2 })).toEqual({ key: 'unusualDay', params: { day: '2026-09-29', net: '13.00', mean: '10.00', currency: 'USD' } });
+    expect(unusualDayInsight(days(['5', '13']), 28, { code: 'USD', places: 2 })).toMatchObject({ params: { day: '2026-09-29', net: '5.00' } });
   });
 
   it('says nothing for a day inside 2σ, a flat history (σ 0), or a day before the window', () => {
-    expect(unusualDayInsight(days(['11.5']), 28, 'USD')).toBeNull();
+    expect(unusualDayInsight(days(['11.5']), 28, { code: 'USD', places: 2 })).toBeNull();
     const flat = Array.from({ length: 29 }, (_, i) => ({ day: new Date(Date.UTC(2026, 8, 1) + i * 86_400_000).toISOString().slice(0, 10), net: d(i === 28 ? '40' : '0') }));
-    expect(unusualDayInsight(flat, 28, 'USD')).toBeNull();
-    expect(unusualDayInsight(days([]), 28, 'USD')).toBeNull();
+    expect(unusualDayInsight(flat, 28, { code: 'USD', places: 2 })).toBeNull();
+    expect(unusualDayInsight(days([]), 28, { code: 'USD', places: 2 })).toBeNull();
   });
 });

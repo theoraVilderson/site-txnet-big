@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfirmationMode, CouponChannel, Prisma } from '@prisma/client';
-import { currencyPlacesOf, operatingCurrencyOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { operatingCurrencyOf, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -10,6 +10,7 @@ import { PaymentProviderRegistry } from '../gateway/payment-provider.registry';
 import { automaticFirst, isAutomatic } from '../manual/manual-transfer';
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { defaultTaxRate, type GatewayOffer, offeredInCurrency, offeredInThisChat, priceDeposit, selectableGateways, type SelectOptions } from './deposit-pricing';
+import { payerPlaces } from './payer-places';
 import { offeredToPayer, selectPayerGateway } from './payer-gateway';
 import { resolvePresets } from './deposit-presets';
 
@@ -132,7 +133,7 @@ export class DepositGatewayNotFound extends Error {
   }
 }
 
-export const money = (v: Prisma.Decimal) => v.toFixed(2);
+export const money = (v: Prisma.Decimal) => moneyText(v);
 
 @Injectable()
 export class DepositQuoteService {
@@ -212,6 +213,7 @@ export class DepositQuoteService {
 
     const { gateway, coupons, defaultTaxRatePercent, currencyCode, places } = await tenantTransaction(this.prisma, async (tx) => {
       const currencyCode = await operatingCurrencyOf(tx, tenant.id);
+      const places = await payerPlaces(tx, currencyCode, amount);
       const gateway = await selectPayerGateway(tx, this.crossTenant, tenant.id, gatewayId, request.source, { canTest: request.canTest, userId });
       if (!gateway || !this.offeredHere(gateway, request.chatPlatform) || !offeredInCurrency(gateway, currencyCode)) {
         throw new DepositGatewayNotFound(gatewayId, request.source);
@@ -229,7 +231,7 @@ export class DepositQuoteService {
         // A user's top-up is inside this tenant's books: its own pin prices it (F-116-j).
         ratesTenantId: tenant.id,
       });
-      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode, places: await currencyPlacesOf(tx, currencyCode) };
+      return { gateway, coupons, defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id), currencyCode, places };
     });
 
     const { price, charge } = await priceDeposit(

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import {
   AdmittedReseller,
+  currencyPlacesMap,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -139,7 +140,7 @@ export class AnalyticsService {
     const body = await tenantTransaction(
       this.prisma,
       async (tx) => {
-        const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides: how.hides, across: across ? this.all : undefined, platform: how.platform });
+        const c = contextOf(tx, q, { operating: await operatingCurrencyOf(tx, tenantId), hides: how.hides, places: await currencyPlacesMap(tx), across: across ? this.all : undefined, platform: how.platform });
         return { granularity: c.granularity, buckets: c.buckets, suppressed: how.hides, names: await namesOf(tx, c.window), ...(await TABS[tab](c)) };
       },
       { timeout: READ_TIMEOUT_MS },

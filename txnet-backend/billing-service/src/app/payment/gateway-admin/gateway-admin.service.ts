@@ -19,6 +19,7 @@ import type { GatewaySource } from '../gateway/gateway-merchant';
 import { GATEWAY_SECRET_NAMES, type GatewaySecretName, PROVIDER_FIELDS } from '../gateway/provider-fields';
 import { checkManualShape, MANUAL_SETTING_SELECT, type ManualSettingInput, type ManualSettingRow, manualSettingView, saveManualSetting } from '../manual/manual-setting';
 import { GatewayAdminRefused } from './gateway-admin.refusal';
+import { assertGatewayMoneyPlaces, callbackAddress, dec, taxRate } from './gateway-fields';
 import { gatewayView, type GatewayView, presetStrings, str } from './gateway-view';
 
 /** What the vault writer says about one secret. Never a value. */
@@ -125,39 +126,6 @@ type Tx = Prisma.TransactionClient;
 type GatewayUsage = { payments: number; open_payments: number; grants: number };
 
 /**
- * A callback address as stored: trimmed, absolute, http or https — anything a
- * browser could be sent to that is not a web page (`javascript:`, `data:`) is
- * refused. Empty clears it. Which host it names is the operator's call: it is
- * the one their provider terminal is registered on.
- */
-function callbackAddress(value: string | null): string | null {
-  const trimmed = value?.trim() ?? '';
-  if (!trimmed) return null;
-  let url: URL;
-  try {
-    url = new URL(trimmed);
-  } catch {
-    throw new GatewayAdminRefused('invalid_callback', 'not an absolute address');
-  }
-  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || trimmed.length > 500) {
-    throw new GatewayAdminRefused('invalid_callback', 'only http(s), at most 500 characters');
-  }
-  return trimmed;
-}
-
-const dec = (v: unknown): Prisma.Decimal | null => (v === null || v === undefined || v === '' ? null : new Prisma.Decimal(String(v)));
-
-/**
- * A tax rate as stored (ADR-0076): a percentage, 0..100. The migration's CHECK
- * stands behind it, but a CHECK answers the operator's typo with a 500.
- */
-function taxRate(v: unknown): Prisma.Decimal | null {
-  const d = dec(v);
-  if (d && (d.isNegative() || d.greaterThan(100))) throw new GatewayAdminRefused('invalid_range', 'taxRatePercent must be 0..100');
-  return d;
-}
-
-/**
  * Managing payment gateways (F-102-b, D-31): create, change and delete the
  * platform's `payment_gateway` rows and every tenant's `tenant_gateway_config`
  * rows. Linking a gateway to a tenant is not here — that is the grant, and it
@@ -224,7 +192,9 @@ export class GatewayAdminService {
   async setPresets(actor: GatewayActor, values: string[]): Promise<DepositPresetList> {
     const presets = this.presetDecimals(values);
     const saved = await tenantTransaction(this.prisma, async (tx) => {
-      const before = presetStrings((await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } }))?.presets);
+      const setting = await tx.depositSetting.findUnique({ where: { tenantId: actor.tenantId } });
+      await assertGatewayMoneyPlaces(tx, setting?.currencyCode ?? (await operatingCurrencyOf(tx, actor.tenantId)), { depositPresets: presets });
+      const before = presetStrings(setting?.presets);
       const row = await tx.depositSetting.upsert({
         where: { tenantId: actor.tenantId },
         create: { tenantId: actor.tenantId, currencyCode: await operatingCurrencyOf(tx, actor.tenantId), presets, updatedByUserId: actor.adminId },
@@ -366,6 +336,7 @@ export class GatewayAdminService {
       // platform's for a platform gateway, the tenant's for its own. Set here,
       // under the cast, because `data` is assembled untyped.
       data['currencyCode'] = tenantId ? await operatingCurrencyOf(tx, tenantId) : await platformCurrencyOf(tx);
+      await assertGatewayMoneyPlaces(tx, data['currencyCode'] as string, data);
       const row = (input.source === 'platform'
         ? await tx.paymentGateway.create({ data: data as Prisma.PaymentGatewayUncheckedCreateInput })
         : await tx.tenantGatewayConfig.create({ data: data as Prisma.TenantGatewayConfigUncheckedCreateInput })) as unknown as Row;
@@ -443,6 +414,7 @@ export class GatewayAdminService {
         throw new GatewayAdminRefused('block_is_platform_owners');
       }
       this.assertRanges({ ...this.snapshot(row), ...patch });
+      await assertGatewayMoneyPlaces(tx, row['currencyCode'] as string, { ...this.snapshot(row), ...patch });
       checkManualShape({ ...this.snapshot(row), ...patch }, patch.manual, row['providerName'] as string);
       const providerColumns = this.providerRules({ ...this.snapshot(row), ...patch });
 

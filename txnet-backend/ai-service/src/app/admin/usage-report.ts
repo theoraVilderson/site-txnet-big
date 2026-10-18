@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { FORECAST_RATE_DAYS, runWithTenant, tenantTransaction, isPlatformTenant } from '@txnet-backend/shared-core';
+import { FORECAST_RATE_DAYS, runWithTenant, tenantTransaction, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { refusal } from '../envelope';
 import { PrismaService } from '../prisma/prisma.service';
@@ -37,7 +37,7 @@ export class UsageReport {
     return {
       meters,
       wallet: r
-        ? { balance: r.balance.toFixed(2), perDay: r.perDay.toFixed(2), runsOutAt: r.runsOutAt.toISOString(), topUp: r.topUp.toFixed(2), currencyCode: r.currencyCode, observedDays: r.observedDays }
+        ? { balance: moneyText(r.balance), perDay: moneyText(r.perDay), runsOutAt: r.runsOutAt.toISOString(), topUp: moneyText(r.topUp), currencyCode: r.currencyCode, observedDays: r.observedDays }
         : null,
     };
   }

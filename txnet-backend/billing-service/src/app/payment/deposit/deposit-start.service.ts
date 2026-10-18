@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouponChannel, PaymentStatus, Prisma, WalletReasonType } from '@prisma/client';
-import { currencyPlacesOf, TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
+import { TenantContext, tenantTransaction, operatingCurrencyOf, platformCurrencyOf } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
 import type { EnvConfig } from '../../config/env.validation';
@@ -17,6 +17,7 @@ import { startTransfer, transferDetailData, type TransferBody } from '../manual/
 import { FxRateReader } from '../pricing/fx-rate.reader';
 import { Chat } from './chat-platform';
 import { defaultTaxRate, offeredInCurrency, offeredInThisChat, priceDeposit } from './deposit-pricing';
+import { payerPlaces } from './payer-places';
 import { selectPayerGateway } from './payer-gateway';
 import { DepositGatewayNotFound, money } from './deposit-quote.service';
 import { InvoiceLinkClient } from './invoice-link.client';
@@ -147,8 +148,7 @@ export class DepositCallbackUnavailable extends Error {
 }
 
 /** What a driver is told the payment is for. English (C-01); legacy carried the user's phone in a Persian sentence. */
-const description = (paymentId: string, billing: boolean) =>
-  billing ? `Billing wallet top-up ${paymentId}` : `Wallet top-up ${paymentId}`;
+const description = (paymentId: string, billing: boolean) => (billing ? `Billing wallet top-up ${paymentId}` : `Wallet top-up ${paymentId}`);
 
 @Injectable()
 export class DepositStartService {
@@ -176,6 +176,7 @@ export class DepositStartService {
       // platform, so it is in the platform's (ADR-0098 part 4, F-116-b). Read
       // before pricing: the price is computed in it (F-116-e).
       const currencyCode = request.billingTenantId ? await platformCurrencyOf(tx) : await operatingCurrencyOf(tx, tenant.id);
+      const places = await payerPlaces(tx, currencyCode, amount);
       const gateway = await selectPayerGateway(tx, this.crossTenant, tenant.id, gatewayId, source, {
         canTest: request.canTest,
         // A user's top-up is offered by their groups (F-102-g); a reseller's billing top-up is tenant-level.
@@ -204,8 +205,7 @@ export class DepositStartService {
         callbackUrl: gateway.callbackUrl ?? (await callbackUrlOf(tx, this.config, tenant.id)),
         returnOrigin: await returnOriginOf(tx, this.config, tenant.id, request.origin),
         defaultTaxRatePercent: await defaultTaxRate(tx, tenant.id),
-        currencyCode,
-        places: await currencyPlacesOf(tx, currencyCode),
+        currencyCode, places,
       };
     });
 

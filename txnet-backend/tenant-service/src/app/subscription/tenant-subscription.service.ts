@@ -10,7 +10,7 @@ import {
   TenantSuspensionCause,
   TenantType,
 } from '@prisma/client';
-import { currencyPlacesOf, OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor, isPlatformTenant } from '@txnet-backend/shared-core';
+import { currencyPlacesOf, OutboxEventType, ResellerAccess, TenantBillingLedger, lockProductQuotaTerms, lockQuotaTerms, platformCurrencyOf, type ResellerActor, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { renewalDeadline } from '../renewal/tenant-renewal.service';
@@ -153,9 +153,9 @@ export class TenantSubscriptionService {
       const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId: reseller.id }, select: { cachedBalance: true } });
       return {
         when: plan.when,
-        charge: plan.when === 'now' && plan.charge.gt(0) ? plan.charge.toFixed(2) : null,
+        charge: plan.when === 'now' && plan.charge.gt(0) ? moneyText(plan.charge) : null,
         currencyCode: await platformCurrencyOf(tx),
-        balance: (wallet?.cachedBalance ?? new Prisma.Decimal(0)).toFixed(2),
+        balance: moneyText(wallet?.cachedBalance ?? new Prisma.Decimal(0)),
         currentPeriodEnd: plan.when === 'now' ? plan.periodEnd : state.current.currentPeriodEnd,
       };
     });
@@ -221,7 +221,7 @@ export class TenantSubscriptionService {
       if (plan.charge.gt(0)) {
         const wallet = await tx.tenantBillingWallet.findUnique({ where: { tenantId }, select: { cachedBalance: true } });
         const balance = wallet?.cachedBalance ?? new Prisma.Decimal(0);
-        if (balance.lt(plan.charge)) throw new TenantSubscriptionRefused('insufficient_balance', `${plan.charge.toFixed(2)} needed, ${balance.toFixed(2)} held`);
+        if (balance.lt(plan.charge)) throw new TenantSubscriptionRefused('insufficient_balance', `${moneyText(plan.charge)} needed, ${moneyText(balance)} held`);
         await this.ledger.debit(tx, {
           tenantId,
           amount: plan.charge,
@@ -257,7 +257,7 @@ export class TenantSubscriptionService {
         startedAt: row.createdAt,
         includedFeatureKeys: keys,
         next: null,
-        charged: plan.charge.gt(0) ? plan.charge.toFixed(2) : null,
+        charged: plan.charge.gt(0) ? moneyText(plan.charge) : null,
       });
     });
     this.logger.log(`reseller ${tenantId} package ${pkg.id} (${input.billingModel}) by ${by.userId}: ${view.next ? 'at renewal' : view.charged ? `now, ${view.charged}` : 'now'}`);

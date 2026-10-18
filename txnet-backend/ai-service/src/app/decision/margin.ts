@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { METER_KEYS } from '@txnet-backend/shared-core';
+import { METER_KEYS, moneyText } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 
@@ -35,6 +35,6 @@ export function wholesaleCost(plan: Plan, rate: WholesaleRate | null): { cost: P
   const cost = rate.unitPrice.times(units.toString());
   return {
     cost,
-    reason: { code: 'wholesale_cost', meterKey: rate.meterKey, units: units.toString(), unitPrice: rate.unitPrice.toString(), cost: cost.toFixed(2), currencyCode: rate.currencyCode },
+    reason: { code: 'wholesale_cost', meterKey: rate.meterKey, units: units.toString(), unitPrice: rate.unitPrice.toString(), cost: moneyText(cost), currencyCode: rate.currencyCode },
   };
 }

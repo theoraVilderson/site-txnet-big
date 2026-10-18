@@ -18,6 +18,7 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 import { CatalogActor, CatalogAdminRefused, CatalogAdminService } from './catalog-admin.service';
 import { setMeterCostSchema, setVariantCostSchema, unsetMeterCostSchema, unsetVariantCostSchema } from './catalog-cost.schema';
 import { CatalogCostService } from './catalog-cost.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
@@ -30,6 +31,7 @@ function harness(variantTenant: string) {
   const audits: string[] = [];
   const restated: unknown[][] = [];
   const tx = {
+    ...currencyRegistry,
     $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => (restated.push(values), 1),
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'IRT' }) },
     variantCost: { create: async ({ data }: { data: Record<string, unknown> }) => (written.push(data), { id: 'c1', createdAt: AT, ...data }) },
@@ -57,10 +59,15 @@ function harness(variantTenant: string) {
 }
 
 describe('CatalogCostService', () => {
+  it('refuses a cost finer than its currency: a toman takes no fraction (F-116-r)', async () => {
+    await expect(harness(TENANT).costs.setVariantCost(actor, VARIANT, { amount: '2.50' })).rejects.toMatchObject({ reason: 'amount_finer_than_currency' });
+  });
+
   it("writes a variant's cost per sale in its tenant's pricing currency, audited", async () => {
     const h = harness(TENANT);
-    const view = await h.costs.setVariantCost(actor, VARIANT, { amount: '2.50' });
-    expect(view).toMatchObject({ amount: '2.50', currencyCode: 'IRT' });
+    // A toman has no minor unit: the cost is whole (F-116-r).
+    const view = await h.costs.setVariantCost(actor, VARIANT, { amount: '2500' });
+    expect(view).toMatchObject({ amount: '2500.00', currencyCode: 'IRT' });
     expect(h.written[0]).toMatchObject({ tenantId: TENANT, variantId: VARIANT, currencyCode: 'IRT', createdByAdminId: actor.adminId });
     expect(h.audits).toEqual(['catalog_variant_cost_set']);
     // Its days already rolled are restated from the day before it took effect (F-1002-e).

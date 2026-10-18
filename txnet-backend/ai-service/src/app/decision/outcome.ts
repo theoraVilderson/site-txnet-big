@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { moneyText } from '@txnet-backend/shared-core';
 
 import type { Reason } from '../profile/predictions';
 
@@ -152,7 +153,7 @@ type Sums = Map<string, Prisma.Decimal>;
 const rate = (n: number, d: number) => (d === 0 ? null : Math.round((n / d) * 10_000) / 10_000);
 const add = (sums: Sums, currency: string, amount: Prisma.Decimal) => sums.set(currency, (sums.get(currency) ?? new Prisma.Decimal(0)).plus(amount));
 const money = (sums: Sums): Money[] =>
-  [...sums.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currencyCode, amount]) => ({ amount: amount.toFixed(2), currencyCode }));
+  [...sums.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currencyCode, amount]) => ({ amount: moneyText(amount), currencyCode }));
 
 function arm(units: Unit[]): { arm: Arm; revenue: Sums; margin: Sums } {
   const revenue: Sums = new Map();

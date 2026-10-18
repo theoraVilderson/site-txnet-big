@@ -45,6 +45,7 @@ const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
   package_not_found: 404,
   package_name_taken: 409,
   package_unpriced: 422,
+  package_price_finer_than_currency: 422,
   package_price_in_use: 409,
   meter_not_found: 422,
 };

@@ -7,6 +7,7 @@ import {
   WalletHoldService,
   WalletLedgerService,
 } from './wallet-ledger.service';
+import { currencyRegistry } from '../../../../test-support/currency-registry';
 
 /**
  * Wallet holds (F-118-a, ADR-0105 (6), billing invariant 21).
@@ -57,6 +58,8 @@ function fakeStore() {
   const outbox: Array<Record<string, unknown>> = [];
 
   const tx = {
+
+    ...currencyRegistry,
     wallet: {
       findUnique: async ({ where }: { where: { ownerUserId: string } }) => {
         const row = wallets.get(where.ownerUserId);

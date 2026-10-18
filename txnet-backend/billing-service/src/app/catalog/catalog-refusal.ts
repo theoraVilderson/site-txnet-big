@@ -18,6 +18,7 @@ export const CATALOG_REFUSAL_STATUS: Record<CatalogAdminRejection, CatalogRefusa
   key_taken: 409,
   sku_taken: 409,
   price_in_the_past: 400,
+  amount_finer_than_currency: 400,
   text_key_invalid: 400,
   texts_unavailable: 503,
   lang_unknown: 400,

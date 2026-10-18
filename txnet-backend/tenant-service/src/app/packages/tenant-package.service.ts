@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus } from '@prisma/client';
-import { platformCurrencyOf, isPlatformTenant } from '@txnet-backend/shared-core';
+import { platformCurrencyOf, isPlatformTenant, inCurrency } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
@@ -49,7 +49,15 @@ export type PackageView = {
   meterRates: MeterRateView[];
 };
 
-export type TenantPackageRejection = 'not_platform_owner' | 'package_not_found' | 'package_name_taken' | 'package_unpriced' | 'package_price_in_use' | 'meter_not_found';
+/** `package_price_finer_than_currency`: a price with more places than the platform's currency has (F-116-r). */
+export type TenantPackageRejection =
+  | 'not_platform_owner'
+  | 'package_not_found'
+  | 'package_name_taken'
+  | 'package_unpriced'
+  | 'package_price_finer_than_currency'
+  | 'package_price_in_use'
+  | 'meter_not_found';
 
 export class TenantPackageRefused extends Error {
   constructor(
@@ -60,6 +68,10 @@ export class TenantPackageRefused extends Error {
     this.name = 'TenantPackageRefused';
   }
 }
+
+/** `currencyCode`, once every price given is at its places (F-116-r) — refused otherwise. */
+const pricesFit = (tx: Prisma.TransactionClient, currencyCode: string, prices: ReadonlyArray<string | null | undefined>) =>
+  inCurrency(tx, currencyCode, { price: prices.filter((p): p is string => typeof p === 'string').map((p) => new Prisma.Decimal(p)) }, () => new TenantPackageRefused('package_price_finer_than_currency', currencyCode));
 
 const PACKAGE_SELECT = {
   id: true,
@@ -96,7 +108,7 @@ export class TenantPackageService {
             yearlyPrice: input.yearlyPrice ?? null,
             includedFeatureKeys: input.includedFeatureKeys,
             // Priced in the platform's currency (ADR-0098 part 4); converted with it (F-116-f).
-            currencyCode: await platformCurrencyOf(tx),
+            currencyCode: await pricesFit(tx, await platformCurrencyOf(tx), [input.monthlyPrice, input.yearlyPrice]),
           },
           select: PACKAGE_SELECT,
         });
@@ -146,6 +158,7 @@ export class TenantPackageService {
     return this.writing(patch.name ?? before.name, () =>
       this.all.$transaction(async (tx) => {
         await lockPackage(tx, id, 'update');
+        await pricesFit(tx, before.currencyCode, [patch.monthlyPrice, patch.yearlyPrice]);
         await this.pricesStillSold(tx, id, before, patch);
         await this.metersKnown(tx, patch.meterRates ?? []);
         const held = patch.includedFeatureKeys === undefined ? null : await tx.tenantFeaturePackage.findUnique({ where: { id }, select: { includedFeatureKeys: true } });
