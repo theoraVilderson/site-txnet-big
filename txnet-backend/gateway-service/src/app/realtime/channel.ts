@@ -1,4 +1,5 @@
 import {
+  PLATFORM_CATALOG_ID,
   RealtimeChannelFamily,
   holdsPermission,
 } from '@txnet-backend/shared-core';
@@ -136,7 +137,11 @@ export type ChannelRefusal =
  *   connection holding the token is as entitled as an anonymous one, and a
  *   signed-in connection without it is not entitled at all.
  *
- * `user:`, `tenant:` and `members:` refuse an anonymous connection by construction: there is no
+ * - `catalog:<tenantId>` / `catalog:platform` — what a shop shows of a
+ *   catalog (RT-1-p): a member's own tenant, or the platform's, which every
+ *   tenant sells from.
+ *
+ * `user:`, `tenant:`, `members:` and `catalog:` refuse an anonymous connection by construction: there is no
  * id to match, and "no id" must never compare equal to a channel's.
  *
  * A name with no colon, an empty id, or an unknown prefix is
@@ -173,6 +178,13 @@ export async function channelRefusal(
       // something changed, nothing a member could not read for themselves.
       if (!identity) return 'realtime.channelForbidden';
       return id === identity.tenantId ? null : 'realtime.channelForbidden';
+
+    case RealtimeChannelFamily.catalog:
+      // RT-1-p: a tenant's own catalog is its members'. The platform's is sold
+      // in every tenant's shop, so any signed-in connection hears it; the body
+      // is a type and a variant id, re-read through the reader's own RLS.
+      if (!identity) return 'realtime.channelForbidden';
+      return id === identity.tenantId || id === PLATFORM_CATALOG_ID ? null : 'realtime.channelForbidden';
 
     case RealtimeChannelFamily.otp: {
       if (!proof || !OTP_CHANNEL_ID.test(id)) {

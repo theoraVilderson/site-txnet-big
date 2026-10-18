@@ -134,6 +134,8 @@ export const RealtimeChannelFamily = {
   tenant: 'tenant',
   /** RT-1-k: every signed-in member of one tenant, no permission — the body is a type and ids. */
   members: 'members',
+  /** RT-1-p: what a shop shows of one tenant's catalog — `catalog:<tenantId>`, or `catalog:platform` for the platform's. */
+  catalog: 'catalog',
   /** One OTP send's delivery result, authorized by a minted token. */
   otp: 'otp',
   /**
@@ -145,6 +147,13 @@ export const RealtimeChannelFamily = {
 
 export type RealtimeChannelFamily =
   (typeof RealtimeChannelFamily)[keyof typeof RealtimeChannelFamily];
+
+/**
+ * The id of the platform's catalog channel (RT-1-p). Every tenant's shop sells
+ * the platform's products, and the gateway holds no database to learn the
+ * platform's tenant id from, so its catalog is named by this word instead.
+ */
+export const PLATFORM_CATALOG_ID = 'platform';
 
 /**
  * What arrives on that channel: the end state of one OTP send, and never the

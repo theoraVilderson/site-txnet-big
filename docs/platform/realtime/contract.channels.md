@@ -21,7 +21,7 @@ events to a stranger, with no error anywhere. `channel.spec.ts` is the spec
 that pins it.
 
 A channel name is `<family>:<id>`. The id is everything after the **first**
-colon, so extra colons cannot widen a match. Five families exist; anything
+colon, so extra colons cannot widen a match. Six families exist; anything
 else is `realtime.channelUnknown`, because an unknown prefix is not a channel
 with no rule yet.
 
@@ -32,8 +32,9 @@ with no rule yet.
 | `otp:<channelId>` | anyone presenting the `proof` minted with that delivery — signed in or not |
 | `support:<conversationId>` | a signed-in connection presenting the `proof` support-service minted **for that user** (F-034, ADR-0114) |
 | `members:<tenantId>` | any signed-in connection whose tenant is that id — no permission; body is `type` + ids only (RT-1-k, [contract.live-events.md](contract.live-events.md)) |
+| `catalog:<tenantId>` / `catalog:platform` | the first: any signed-in connection whose tenant is that id; the second (`PLATFORM_CATALOG_ID`): any signed-in connection — no permission; body is `type` + a variant id (RT-1-p) |
 
-**`user:`, `tenant:` and `members:` refuse an anonymous connection by
+**`user:`, `tenant:`, `members:` and `catalog:` refuse an anonymous connection by
 construction.** There is no id to compare, and "no id" must never compare
 equal to a channel's.
 
@@ -42,6 +43,14 @@ equal to a channel's.
 not — the body says only that something changed. The platform's members
 include its resellers' accounts on the platform domain; a reseller's own users
 are another tenant and never hear the platform's channel, nor it theirs.
+
+**`catalog:platform` is open to every signed-in connection** (RT-1-p, user
+2026-10-18). Every tenant's shop sells the platform's products, so a move on one
+of them is one event however many resellers sell it — a row per reseller would
+grow with the platform, on the purchase path. The gateway holds no database, so
+the platform's catalog is named by a fixed word, not its tenant id. What leaks
+is that a platform variant's counts moved, by id; the page re-reads through its
+own RLS, which hides a product the reseller's package does not list.
 
 **`otp:` is authorized by a proof, not by an identity** (F-067-j, ADR-0031).
 The three routes that issue an OTP have no session, so there is nothing to

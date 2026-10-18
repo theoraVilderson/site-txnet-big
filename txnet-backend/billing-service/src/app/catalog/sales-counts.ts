@@ -10,7 +10,7 @@
  * variants, whose rows a reseller's transaction may read but not write.
  */
 import { GrantSource, Prisma } from '@prisma/client';
-import { OutboxEventType, TenantContext } from '@txnet-backend/shared-core';
+import { OutboxEventType, PLATFORM_CATALOG_ID, platformTenantIdOf } from '@txnet-backend/shared-core';
 
 /** The outbox aggregate of a variant's sales event. */
 export const VARIANT_SALES_AGGREGATE = 'catalog.variant';
@@ -47,11 +47,11 @@ type MoveRow = { outcome: string; tenantId: string | null; salesCap: number | nu
 
 /**
  * Moves the variant's counts by one, or throws {@link VariantSoldOut}. A
- * capped variant's move is announced to the seller's members and, when the
- * variant is another tenant's (the platform's), to that tenant's too (C-14).
+ * capped variant's move is announced once, on its owner's catalog channel
+ * (C-14, RT-1-p): `catalog:platform` for the platform's, which every shop
+ * hears however many resellers sell it, else `catalog:<ownerTenantId>`.
  */
 export async function moveSales(tx: Prisma.TransactionClient, variantId: string, move: SalesMove): Promise<void> {
-  const tenant = TenantContext.current('variant sales');
   const m = SALES_MOVES[move];
   const [row] = await tx.$queryRaw<MoveRow[]>`
     SELECT outcome, "tenantId", "salesCap"
@@ -59,14 +59,17 @@ export async function moveSales(tx: Prisma.TransactionClient, variantId: string,
   if (row.outcome === 'sold_out') throw new VariantSoldOut(variantId);
   if (row.outcome !== 'moved') throw new Error(`move_variant_sales(${variantId}, ${move}) answered ${row.outcome}`);
   // An uncapped variant shows nothing as left, so no open page needs the move.
-  if (row.salesCap === null) return;
-  const tenants = new Set([tenant.id, row.tenantId ?? tenant.id]);
-  for (const tenantId of tenants) {
-    await tx.outboxEvent.create({
-      data: { aggregate: VARIANT_SALES_AGGREGATE, aggregateId: variantId, type: OutboxEventType.CATALOG_VARIANT_SALES_CHANGED, payload: { tenantId, variantId } },
-      select: { id: true },
-    });
-  }
+  if (row.salesCap === null || row.tenantId === null) return;
+  const catalogId = row.tenantId === (await platformTenantIdOf(tx)) ? PLATFORM_CATALOG_ID : row.tenantId;
+  await tx.outboxEvent.create({
+    data: {
+      aggregate: VARIANT_SALES_AGGREGATE,
+      aggregateId: variantId,
+      type: OutboxEventType.CATALOG_VARIANT_SALES_CHANGED,
+      payload: { catalogId, tenantId: row.tenantId, variantId },
+    },
+    select: { id: true },
+  });
 }
 
 /**

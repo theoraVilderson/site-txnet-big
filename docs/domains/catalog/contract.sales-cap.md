@@ -72,10 +72,9 @@ sale) move nothing at issue. A give-back past zero is the CHECK's error, a bug,
 never floored. Counts move for an uncapped variant too, so a cap set later
 starts from what was sold since F-513-b.
 
-**The event (C-14).** A move of a **capped** variant writes
-`catalog.variant.sales_changed` `{tenantId, variantId}` (`aggregate:
-'catalog.variant'`) on `members:` — one row for the seller and one for the
-variant's own tenant when that is another (the platform). An uncapped move
-writes none: no page shows it as left. Another reseller selling the same
-platform variant is not told; its shop is right on the next read, and the
-`reserve` refusal holds the cap either way.
+**The event (C-14).** A move of a **capped** variant writes one
+`catalog.variant.sales_changed` `{catalogId, tenantId, variantId}` (`aggregate:
+'catalog.variant'`) on its owner's catalog channel (realtime RT-1-p):
+`catalog:platform` for a platform variant, which every reseller's shop hears,
+else `catalog:<ownerTenantId>`. One row however many resellers sell it. An
+uncapped move writes none: no page shows it as left.

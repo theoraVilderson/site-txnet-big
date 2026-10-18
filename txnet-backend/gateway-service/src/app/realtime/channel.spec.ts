@@ -4,6 +4,7 @@ import {
   TENANT_CHANNEL_PERMISSION,
   type ChannelProofs,
 } from './channel';
+import { PLATFORM_CATALOG_ID } from '@txnet-backend/shared-core';
 
 /**
  * The invariant this gateway turns on: **a connection hears its own channels
@@ -135,6 +136,22 @@ describe('channelRefusal', () => {
   });
 
   /**
+   * RT-1-p: what a shop shows of a catalog moved — type and ids only. A
+   * tenant's own catalog is its members' (exact match); the platform's is
+   * sold by every tenant, so any signed-in connection hears `catalog:platform`.
+   */
+  describe('catalog channels', () => {
+    it("allows a member its own tenant's catalog, and nobody another tenant's", async () => {
+      await expect(refuse(identity(), 'catalog:tenant-1')).resolves.toBeNull();
+      await expect(refuse(identity({ permissions: ['*'] }), 'catalog:tenant-2')).resolves.toBe('realtime.channelForbidden');
+    });
+
+    it("allows any signed-in connection the platform's catalog", async () => {
+      await expect(refuse(identity({ tenantId: 'reseller-9' }), `catalog:${PLATFORM_CATALOG_ID}`)).resolves.toBeNull();
+    });
+  });
+
+  /**
    * The half ADR-0031 added. An anonymous connection is a real connection —
    * it just proved nothing at the upgrade — so every channel whose rule is
    * "compare this against who you are" has to refuse it rather than read a
@@ -145,6 +162,8 @@ describe('channelRefusal', () => {
       ['a user channel', 'user:user-1'],
       ['a tenant channel', 'tenant:tenant-1'],
       ['a members channel', 'members:tenant-1'],
+      ['a catalog channel', 'catalog:tenant-1'],
+      ["the platform's catalog channel", `catalog:${PLATFORM_CATALOG_ID}`],
     ])('is refused %s', async (_label, channel) => {
       await expect(refuse(null, channel)).resolves.toBe(
         'realtime.channelForbidden',

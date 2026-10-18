@@ -10,8 +10,11 @@ import { EventNoticeSender } from './event-notice';
 /** This consumer's segment of its per-channel markers (F-067-o). */
 const CONSUMER = 'live-push';
 
-/** Whose page re-reads: one user's, the operators' of one tenant (RT-1-b), or every member of it (RT-1-k). */
-export type LiveAudience = 'user' | 'tenant' | 'members';
+/** Whose page re-reads: one user's, the operators' of one tenant (RT-1-b), every member of it (RT-1-k), or every shop of one catalog (RT-1-p). */
+export type LiveAudience = 'user' | 'tenant' | 'members' | 'catalog';
+
+/** The payload field each audience's channel id is read from. */
+const AUDIENCE_ID_FIELD: Record<LiveAudience, string> = { user: 'userId', tenant: 'tenantId', members: 'tenantId', catalog: 'catalogId' };
 
 /**
  * Each live-only type: whose channels it goes to, and the payload fields its
@@ -63,8 +66,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   /** RT-1-f: a drain sweep retired a draining member's configs or removed it — the member tenant's open systems page re-reads its groups. */
   [OutboxEventType.PANEL_DRAINED]: { audience: ['tenant'], fields: ['panelId', 'groupId'] },
   [OutboxEventType.GRANT_BULK_PROGRESSED]: { audience: ['user', 'tenant'], fields: ['resellerId', 'jobId'] },
-  /** F-513-b: a capped variant's counts moved — every member's shop and the staff's catalog re-read what is left; one row per tenant that shows it. */
-  [OutboxEventType.CATALOG_VARIANT_SALES_CHANGED]: { audience: ['members'], fields: ['variantId'] },
+  /** F-513-b, RT-1-p: a capped variant's counts moved — every shop of its catalog re-reads what is left; one row, the platform's catalog included. */
+  [OutboxEventType.CATALOG_VARIANT_SALES_CHANGED]: { audience: ['catalog'], fields: ['variantId'] },
 };
 
 /**
@@ -73,7 +76,7 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
  * channel instead.
  */
 export function liveChannel(audience: LiveAudience, payload: Record<string, unknown>, eventId: string): `${LiveAudience}:${string}` {
-  const key = audience === 'user' ? 'userId' : 'tenantId';
+  const key = AUDIENCE_ID_FIELD[audience];
   const id = payload[key];
   if (typeof id !== 'string' || id === '') throw new Error(`outbox event ${eventId} has a payload without its ${audience}`);
   return `${audience}:${id}`;

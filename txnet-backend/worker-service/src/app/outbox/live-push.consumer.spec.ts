@@ -10,7 +10,7 @@
  *  - a payload that does not say whose Grant it is is refused, never guessed;
  *  - the body carries the Grant and nothing the producer did not mean to share.
  */
-import { OutboxEventType, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, PLATFORM_CATALOG_ID, type OutboxMessage } from '@txnet-backend/shared-core';
 
 import { LIVE_PUSH_FIELDS, LivePushConsumer, liveChannel } from './live-push.consumer';
 
@@ -242,6 +242,14 @@ describe('liveChannel', () => {
     expect(() => liveChannel('tenant', { userId: USER }, EVENT)).toThrow(/tenant/);
     expect(() => liveChannel('members', { userId: USER }, EVENT)).toThrow(/members/);
     expect(() => liveChannel('user', { tenantId: TENANT, userId: '' }, EVENT)).toThrow(/user/);
+    expect(() => liveChannel('catalog', { tenantId: TENANT }, EVENT)).toThrow(/catalog/);
+  });
+
+  // RT-1-p: a catalog row names the catalog, never a tenant — the platform's is one channel for every shop.
+  it("names a catalog's channel from `catalogId`, the platform's included", () => {
+    expect(liveChannel('catalog', { catalogId: TENANT, tenantId: USER }, EVENT)).toBe(`catalog:${TENANT}`);
+    expect(liveChannel('catalog', { catalogId: PLATFORM_CATALOG_ID }, EVENT)).toBe(`catalog:${PLATFORM_CATALOG_ID}`);
+    expect(LIVE_PUSH_FIELDS[OutboxEventType.CATALOG_VARIANT_SALES_CHANGED]).toEqual({ audience: ['catalog'], fields: ['variantId'] });
   });
 
   it('keeps every existing row on its owner: a balance or a Grant is nobody else’s', () => {

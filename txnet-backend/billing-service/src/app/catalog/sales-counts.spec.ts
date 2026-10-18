@@ -8,13 +8,13 @@
  *    sale past the cap;
  *  - an admin's or a reseller's issue refused by a full cap — it counts and is
  *    never refused (user, 2026-10-18);
- *  - a page left stale: a capped variant's move writes one event per tenant
- *    whose shop or catalog shows it — the seller's, and the owner's when that
- *    is the platform;
+ *  - a page left stale: a capped variant's move writes one event on its
+ *    owner's catalog channel — `platform` for the platform's, which every
+ *    reseller's shop hears, however many there are (RT-1-p);
  *  - a socket push on every sale of an uncapped variant, which shows nothing.
  */
 import { GrantSource } from '@prisma/client';
-import { OutboxEventType, runWithTenant } from '@txnet-backend/shared-core';
+import { OutboxEventType, PLATFORM_CATALOG_ID, runWithTenant } from '@txnet-backend/shared-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { countSaleOf, moveSales, SALE_COUNTING, VARIANT_SALES_AGGREGATE, VariantSoldOut } from './sales-counts';
@@ -33,6 +33,7 @@ function fakeTx(row: Row) {
       return [row];
     }),
     outboxEvent: { create: vi.fn(async () => ({ id: 'e' })) },
+    tenant: { findFirst: vi.fn(async () => ({ id: PLATFORM })) },
   };
   return { tx, sql };
 }
@@ -62,14 +63,24 @@ describe('moveSales (F-513-b)', () => {
     }
   });
 
-  it('a capped move tells the seller, and the platform too when the variant is its', async () => {
+  const eventsOf = (tx: ReturnType<typeof fakeTx>['tx']) => tx.outboxEvent.create.mock.calls.map((c: unknown[]) => (c[0] as { data: unknown }).data);
+  const sales = (catalogId: string, tenantId: string) => ({
+    aggregate: VARIANT_SALES_AGGREGATE,
+    aggregateId: VARIANT,
+    type: OutboxEventType.CATALOG_VARIANT_SALES_CHANGED,
+    payload: { catalogId, tenantId, variantId: VARIANT },
+  });
+
+  it("a platform variant's move is one event on the platform's catalog, whoever sold it (RT-1-p)", async () => {
     const { tx } = fakeTx(moved({ tenantId: PLATFORM }));
     await asTenant(() => moveSales(tx as never, VARIANT, 'reserve'));
-    const events = tx.outboxEvent.create.mock.calls.map((c: unknown[]) => (c[0] as { data: unknown }).data);
-    expect(events).toEqual([
-      { aggregate: VARIANT_SALES_AGGREGATE, aggregateId: VARIANT, type: OutboxEventType.CATALOG_VARIANT_SALES_CHANGED, payload: { tenantId: RESELLER, variantId: VARIANT } },
-      { aggregate: VARIANT_SALES_AGGREGATE, aggregateId: VARIANT, type: OutboxEventType.CATALOG_VARIANT_SALES_CHANGED, payload: { tenantId: PLATFORM, variantId: VARIANT } },
-    ]);
+    expect(eventsOf(tx)).toEqual([sales(PLATFORM_CATALOG_ID, PLATFORM)]);
+  });
+
+  it("a reseller's own variant's move is one event on that reseller's catalog", async () => {
+    const { tx } = fakeTx(moved({ tenantId: RESELLER }));
+    await asTenant(() => moveSales(tx as never, VARIANT, 'release'));
+    expect(eventsOf(tx)).toEqual([sales(RESELLER, RESELLER)]);
   });
 
   it('a variant with no cap moves its counts and pushes nothing — no page shows them as left', async () => {
