@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma, SpinPrizeType } from '@prisma/client';
-import { TenantContext, operatingCurrencyOf, refusedAudienceGroup, tenantTransaction, moneyText, MONEY_MAX_PLACES, finerThanCurrency } from '@txnet-backend/shared-core';
+import { TenantContext, operatingCurrencyOf, refusedAudienceGroup, tenantTransaction, moneyText, MONEY_MAX_PLACES, finerThanCurrency, currencyPlacesMap, roundConverted, type CurrencyPlaces } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { missingPrizeRelation, PRIZE_PLACES, prizeShapeOk } from './prize-shape';
@@ -189,7 +189,7 @@ function checkPrize(p: WheelPrizeInput, value: Prisma.Decimal, cost: Prisma.Deci
   if (!ok || !Number.isInteger(p.weight) || p.weight < 1) throw new WheelAdminRefused('invalid_prize', `${p.prizeType} "${p.label}"`);
 }
 
-function viewOf(row: ConfigRow): WheelVersionView {
+function viewOf(row: ConfigRow, places: CurrencyPlaces): WheelVersionView {
   const prizes = [...row.prizes].sort((a, b) => a.position - b.position);
   return {
     id: row.id,
@@ -208,7 +208,8 @@ function viewOf(row: ConfigRow): WheelVersionView {
     userGroupId: row.userGroupId,
     createdByAdminId: row.createdByAdminId,
     createdAt: row.createdAt,
-    expectedCostPerSpin: moneyText(expectedCostPerSpin(prizes.map((p) => ({ weight: p.probabilityWeight, cost: new Prisma.Decimal(p.costAmount) })))),
+    // An average of the prizes' costs: money in the wheel's currency, to its minor unit, half up (F-116-r).
+    expectedCostPerSpin: moneyText(roundConverted(expectedCostPerSpin(prizes.map((p) => ({ weight: p.probabilityWeight, cost: new Prisma.Decimal(p.costAmount) }))), places.of(row.currencyCode))),
     prizes: prizes.map((p) => ({
       id: p.id,
       position: p.position,
@@ -251,7 +252,8 @@ export class WheelAdminService {
       const inForce = versionOn(rows, today);
       const later = rows.filter((v) => v.effectiveFromDay.getTime() > today.getTime());
       const next = versionOn(later, addDays(today, 1));
-      return { today: isoDay(today), inForce: inForce && viewOf(inForce), next: next && viewOf(next), history: rows.map(viewOf) };
+      const places = await currencyPlacesMap(tx, rows.map((r) => r.currencyCode));
+      return { today: isoDay(today), inForce: inForce && viewOf(inForce, places), next: next && viewOf(next, places), history: rows.map((r) => viewOf(r, places)) };
     });
   }
 
@@ -324,7 +326,7 @@ export class WheelAdminService {
       });
 
       const rows = (await tx.spinWheelConfig.findMany({ where: { tenantId: tenant.id, id: config.id }, include: WITH_PRIZES })) as ConfigRow[];
-      const view = viewOf(rows.find((r) => r.id === config.id) as ConfigRow);
+      const view = viewOf(rows.find((r) => r.id === config.id) as ConfigRow, await currencyPlacesMap(tx, [currencyCode]));
       const { id: _id, createdAt: _c, prizes: savedPrizes, ...rest } = view;
       await tx.adminAuditLog.create({
         data: {
@@ -348,7 +350,7 @@ export class WheelAdminService {
       const rows = (await tx.spinWheelConfig.findMany({ where: { tenantId: actor.tenantId, version }, include: WITH_PRIZES })) as ConfigRow[];
       const row = rows.find((r) => r.version === version);
       if (!row) throw new WheelAdminRefused('version_not_found', String(version));
-      return viewOf(row);
+      return viewOf(row, await currencyPlacesMap(tx, [row.currencyCode]));
     });
   }
 

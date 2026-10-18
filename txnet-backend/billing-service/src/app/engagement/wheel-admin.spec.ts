@@ -99,7 +99,8 @@ describe('WheelAdminService.save', () => {
       [3, SpinPrizeType.empty, TENANT],
     ]);
     // (10*5 + 20*2 + 70*0) / 100 = 0.90 per spin.
-    expect(view.expectedCostPerSpin).toBe('0.90');
+    // 0.9 toman a spin on average, told to the toman — a toman has no minor unit (F-116-r).
+    expect(view.expectedCostPerSpin).toBe('1.00');
     expect(view.effectiveFromDay).toBe('2026-10-05');
     expect(audits).toEqual([expect.objectContaining({ tenantId: TENANT, adminId: ADMIN, action: 'spin_wheel_version_create', targetEntityType: 'spin_wheel_config' })]);
   });
