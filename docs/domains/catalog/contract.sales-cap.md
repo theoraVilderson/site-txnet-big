@@ -46,8 +46,7 @@ cap (catalog F-514, user decisions 2026-10-18). `product_variant.activeCap`
 | A4 | A read asks the count only for capped variants, in one query; an uncapped read asks nothing | `liveGrantsOf`; partial index `grant_variant_live_idx` |
 | A5 | A move that takes a unit and refuses (`reserve`, `sell`) is refused `sold_out` when `live + held >= activeCap`, as for a full sales cap — same refusals, same sources (F-514-b). `sellReserved`, `count` and every give-back never are; a renewal is the same Grant (F-027-dg) and makes no move | `catalog.move_variant_sales` (migration `20261018000900`) |
 | A6 | No moment leaves a slot neither held nor live: payment releases the hold and inserts the `pending` Grant in one transaction, and the live count is its own statement **after** the row lock, so a buyer queued behind a payment counts its Grant (READ COMMITTED takes the count's snapshot under the lock). Counted in the locking statement, the slot would be given twice | the function's header; raced on dev 2026-10-18 — the queued hold answered `sold_out` |
-
-Pushing "available again" when a Grant leaves the live set is F-514-c.
+| A7 | A Grant entering or leaving the live set of a variant with `activeCap` — insert, a status move out of or into the set, a delete, a change of variant — writes `catalog.variant.sales_changed` as a move does ("The event" below), from any writer in any language. A move inside the set (pending → active → suspended) writes none. At most one per variant per transaction, so a bulk expiry of one variant writes one row (F-514-c) | trigger `grant_live_set_announced` → `catalog.announce_live_grant_change` (SECURITY DEFINER; migration `20261018001000`); proved on dev 2026-10-18 — a reseller's transaction expiring two Grants of a capped platform variant wrote one `catalog:platform` event, an uncapped one none |
 
 ## HTTP surface
 
