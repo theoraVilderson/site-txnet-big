@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 20
-updated: 2026-09-25
+updated: 2026-10-18
 ---
 
 # Contract — panel-web: coupons, gift codes and discounts with no code (F-502-g, F-502-h, F-114-k)
@@ -109,6 +109,20 @@ The routes, the scope and every rule are
     `UserSearch`, through the caller's own door (`memberSearchOf`), else typed.
     One sentence per `DiscountRuleRejection` (`RULE_REFUSAL_KEYS`, test-checked).
 
+14. **Pickers, never typed ids (UX-3-a).** Each id field is picked by what a
+    person knows; the form still holds the ids as text and billing gets the
+    same body. Whose coupon or batch: `ResellerPicker` — `/tenants` a page
+    (100, its maximum) at a time with "more", filtered on the page by slug,
+    owner or domain, since the route has no search. Named users (a targeted
+    coupon, a rule's users): `UsersPicker` — `UserSearch` through the door of
+    the coupon's owner tenant (`memberSearchOf(me, owner)`), each pick a chip
+    with the name; a saved id shows its first 8 characters. Products and
+    variants of a coupon's scope: `IdsPicker` over the product list and
+    `useVariantOptions` (the free-service list, labels "product › sku ·
+    duration"). Every list is read once (`useChoiceList`); a refused read —
+    and "by id" on purpose — leaves the old ids box, so a caller without
+    `catalog.manage` or `/tenants` is never stuck.
+
 ## Proof
 
 `coupons/coupons.test.ts` — refusal and status unions against the service
@@ -119,6 +133,8 @@ statuses against Prisma), every key in `en` and `fa`.
 `coupons/gift-codes.test.ts` — `validateGiftBatch` per rule and against
 `GIFT_BATCH_MAX` in the service, `giftBatchBody` (reseller vs owner, prefix,
 inclusive day), every gift key in `en` and `fa`.
+`coupons/pickers.test.tsx` — each picker writes the same ids text: a pick
+adds, a chip removes, a saved unknown id stays, a refused list types ids.
 `coupons/discount-rules.test.ts` — refusal and status unions against
 `discount-rule-admin.service.ts`, the schema's bounds, `validateRuleForm` per
 rule, `createRuleBody` (defaults, Tehran today, exclusive end, audiences),

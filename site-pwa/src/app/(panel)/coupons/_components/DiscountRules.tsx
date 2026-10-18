@@ -6,7 +6,6 @@ import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import type { Me } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
-import { catalogApi } from "@/lib/catalog-api";
 import { formatMoney } from "../../_lib/money";
 import { formatInstant } from "../../_lib/datetime";
 import { COUPON_KEYS } from "../_lib/coupon-form";
@@ -16,27 +15,15 @@ import { DiscountRuleForm, type RuleChoices } from "./DiscountRuleForm";
 import { ListSkeleton } from "./ListSkeleton";
 import { Button } from "../../_components/kit";
 import { useAudienceGroups } from "../../_hooks/useAudienceGroups";
+import { readCategoryChoices, readProductChoices, useChoiceList } from "../_hooks/useChoiceList";
 
 const L = K.list;
 
-/** Read a picker's list once; a caller without the route's permission gets `"failed"` and types ids. */
+/** The rule form's lists; a caller without a route's permission gets `"failed"` and types ids. */
 function useChoices(): RuleChoices {
-  const [products, setProducts] = useState<Choices>(null);
-  const [categories, setCategories] = useState<Choices>(null);
+  const products = useChoiceList(readProductChoices);
+  const categories = useChoiceList(readCategoryChoices);
   const groups = useAudienceGroups(null);
-  useEffect(() => {
-    let live = true;
-    const load = (read: () => Promise<{ value: string; label: string }[]>, put: (c: Choices) => void) =>
-      read().then(
-        (c) => live && put(c),
-        () => live && put("failed"),
-      );
-    void load(async () => (await catalogApi.products()).filter((p) => p.isActive && !p.archivedAt).map((p) => ({ value: p.id, label: p.key })), setProducts);
-    void load(async () => (await catalogApi.categories()).filter((c) => c.isActive && !c.archivedAt).map((c) => ({ value: c.id, label: c.key })), setCategories);
-    return () => {
-      live = false;
-    };
-  }, []);
   return useMemo(() => ({ products, categories, groups }), [products, categories, groups]);
 }
 

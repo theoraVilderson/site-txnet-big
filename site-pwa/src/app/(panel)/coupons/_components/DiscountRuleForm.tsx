@@ -3,19 +3,17 @@
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import type { Me, UserSearchHit } from "@/lib/auth-api";
+import type { Me } from "@/lib/auth-api";
 import { billingApi, type DiscountRule } from "@/lib/billing-api";
 import { DatePicker } from "../../_components/kit/DatePicker";
 import { Field, Sheet } from "../../catalog/_components/catalog-ui";
 import { Toggle } from "../../_components/kit/Toggle";
-import { UserSearch } from "../../groups/_components/UserSearch";
 import { memberSearchOf } from "../../groups/_lib/user-groups";
 import {
   RULE_KEYS as K,
   createRuleBody,
   emptyRuleForm,
   formFromRule,
-  idsOf,
   ruleRefusalKey,
   updateRuleBody,
   validateRuleForm,
@@ -27,7 +25,8 @@ import {
 import { AudiencePicker } from "../../_components/AudiencePicker";
 import type { AudienceGroups } from "../../_hooks/useAudienceGroups";
 import { ChoicePicker, type Choices } from "./ChoicePicker";
-import { Alert, Button, Input, Textarea, useConfirm } from "../../_components/kit";
+import { UsersPicker } from "./UsersPicker";
+import { Alert, Button, Input, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const F = K.form;
@@ -65,8 +64,6 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
     if (touched && !(await confirm({ title: t("common", F.confirmClose), confirmLabel: t("common", FrontendI18nKeys.common.kit.unsaved.leave) }))) return;
     onClose();
   };
-
-  const addUser = (hit: UserSearchHit) => set("userIds", idsOf(`${form.userIds}\n${hit.id}`).join("\n"));
 
   const submit = async () => {
     const found = validateRuleForm(form);
@@ -197,9 +194,8 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
       </div>
       {form.audience === "named" && (
         <>
-          {search !== "ids" && <UserSearch via={search} tenantId={me?.tenant?.id ?? ""} onAdd={addUser} busy={saving} />}
           <Field label={t("common", F.userIds)} error={errors.userIds} hint={t("common", F.userIdsHint)}>
-            <Textarea className="min-h-24 font-mono text-xs" dir="ltr" value={form.userIds} onChange={(e) => set("userIds", e.target.value)} />
+            <UsersPicker value={form.userIds} onChange={(v) => set("userIds", v)} via={search} tenantId={me?.tenant?.id ?? ""} invalid={!!errors.userIds} busy={saving} />
           </Field>
         </>
       )}

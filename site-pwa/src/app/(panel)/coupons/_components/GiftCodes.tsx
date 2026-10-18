@@ -16,6 +16,7 @@ import { GIFT_KEYS as G, emptyGiftBatchForm, giftBatchBody, validateGiftBatch, t
 import { variantOwnerTenant } from "../_lib/variant-choices";
 import { CouponUsage } from "./CouponUsage";
 import { ListSkeleton } from "./ListSkeleton";
+import { ResellerPicker } from "./ResellerPicker";
 import { VariantPicker } from "./VariantPicker";
 import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -297,7 +298,11 @@ function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onClose: ()
                   ]}
                 />,
               )}
-              {form.owner === "tenant" && field("tenantId", t("common", F.tenantId), text("tenantId", { ltr: true }))}
+              {form.owner === "tenant" && (
+                <div className="sm:col-span-2">
+                  {field("tenantId", t("common", F.tenantId), <ResellerPicker id="gb-tenantId" value={form.tenantId} onChange={(v) => set("tenantId", v)} invalid={Boolean(errors.tenantId)} />)}
+                </div>
+              )}
             </div>
           )}
           {field("label", t("common", F.label), text("label"))}

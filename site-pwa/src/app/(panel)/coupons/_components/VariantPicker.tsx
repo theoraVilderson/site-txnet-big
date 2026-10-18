@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import { catalogApi, type CatalogProductDetail } from "@/lib/catalog-api";
 import { Select } from "../../_components/kit/Select";
 import { COUPON_KEYS } from "../_lib/coupon-form";
 import { variantChoices } from "../_lib/variant-choices";
+import { readCatalogDetails, useChoiceList } from "../_hooks/useChoiceList";
+import type { Choices } from "./ChoicePicker";
 import { Button, Input } from "../../_components/kit";
 
 const P = COUPON_KEYS.form.variantPicker;
@@ -37,24 +38,10 @@ export function VariantPicker({
   disabled?: boolean;
 }) {
   const { t } = useLocale();
-  const [catalog, setCatalog] = useState<CatalogProductDetail[] | null | "failed">(null);
+  const catalog = useVariantOptions(ownerTenant);
   const [manual, setManual] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    catalogApi
-      .products()
-      .then((products) => Promise.all(products.map((p) => catalogApi.product(p.id))))
-      .then(
-        (details) => live && setCatalog(details),
-        () => live && setCatalog("failed"),
-      );
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  const choices = useMemo(() => (Array.isArray(catalog) ? variantChoices(catalog, ownerTenant) : []), [catalog, ownerTenant]);
+  const choices = Array.isArray(catalog) ? catalog : [];
   const unknownValue = Array.isArray(catalog) && value.trim() !== "" && !choices.some((c) => c.value === value.trim());
   const byHand = catalog === "failed" || manual || unknownValue;
 
@@ -91,7 +78,6 @@ export function VariantPicker({
       </div>
     );
 
-  const duration = (d: number | null) => (d === null ? t("common", P.permanent) : t("common", P.days, { n: d }));
   return (
     <div className="flex flex-col gap-1">
       {choices.length === 0 ? (
@@ -104,10 +90,26 @@ export function VariantPicker({
           invalid={invalid}
           disabled={disabled}
           placeholder={t("common", P.placeholder)}
-          options={choices.map((c) => ({ value: c.value, label: `${c.product} › ${c.sku} · ${duration(c.durationDays)}` }))}
+          options={choices}
         />
       )}
       {toggle(t("common", P.manual), true)}
     </div>
   );
+}
+
+/**
+ * The live variants `ownerTenant` may name (`variantChoices`), each labelled
+ * "product › sku · duration" — the free-service picker's list and a coupon's
+ * variant scope (UX-3-a). `null` while the catalog loads, `"failed"` when the
+ * caller may not read it.
+ */
+export function useVariantOptions(ownerTenant: string | null): Choices {
+  const { t } = useLocale();
+  const catalog = useChoiceList(readCatalogDetails);
+  return useMemo(() => {
+    if (!Array.isArray(catalog)) return catalog;
+    const duration = (d: number | null) => (d === null ? t("common", P.permanent) : t("common", P.days, { n: d }));
+    return variantChoices(catalog, ownerTenant).map((c) => ({ value: c.value, label: `${c.product} › ${c.sku} · ${duration(c.durationDays)}` }));
+  }, [catalog, ownerTenant, t]);
 }

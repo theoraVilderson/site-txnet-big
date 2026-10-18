@@ -25,7 +25,13 @@ import {
   type CouponFormErrors,
 } from "../_lib/coupon-form";
 import { variantOwnerTenant } from "../_lib/variant-choices";
-import { VariantPicker } from "./VariantPicker";
+import { VariantPicker, useVariantOptions } from "./VariantPicker";
+import type { Choices } from "./ChoicePicker";
+import { IdsPicker } from "./IdsPicker";
+import { ResellerPicker } from "./ResellerPicker";
+import { UsersPicker } from "./UsersPicker";
+import { readProductChoices, useChoiceList } from "../_hooks/useChoiceList";
+import { memberSearchOf } from "../../groups/_lib/user-groups";
 import { Button, Dialog, Input, Textarea, useConfirm } from "../../_components/kit";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -63,6 +69,12 @@ export function CouponForm({
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [gateways, setGateways] = useState<AdminGateway[] | null>(null);
+
+  // Whose users a targeted coupon names: its owner's, through the caller's own door (UX-3-a).
+  const ownerTenant = coupon ? coupon.tenantId : variantOwnerTenant(form.owner, form.tenantId, me);
+  const userDoor = ownerTenant === "" ? { via: "ids" as const, tenantId: "" } : { via: memberSearchOf(me, ownerTenant), tenantId: ownerTenant ?? me?.tenant?.id ?? "" };
+  const products = useChoiceList(readProductChoices);
+  const variants = useVariantOptions(ownerTenant);
 
   useEffect(() => {
     billingApi.adminGateways().then(setGateways, () => setGateways([]));
@@ -165,6 +177,10 @@ export function CouponForm({
     </section>
   );
 
+  const ids = (k: "productIds" | "variantIds", choices: Choices) => (
+    <IdsPicker id={`cp-${k}`} value={form[k]} onChange={(v) => set(k, v)} choices={choices} invalid={Boolean(errors[k])} />
+  );
+
   const platformCoupon = coupon ? coupon.tenantId === null : owner && form.owner === "platform";
   const gatewayChoices = (gateways ?? []).filter((g) => !platformCoupon || g.source === "platform");
 
@@ -214,7 +230,11 @@ export function CouponForm({
                       ]}
                     />,
                   )}
-                  {form.owner === "tenant" && field("tenantId", t("common", F.tenantId), text("tenantId", { ltr: true }))}
+                  {form.owner === "tenant" && (
+                    <div className="sm:col-span-2">
+                      {field("tenantId", t("common", F.tenantId), <ResellerPicker id="cp-tenantId" value={form.tenantId} onChange={(v) => set("tenantId", v)} invalid={Boolean(errors.tenantId)} />)}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="grid gap-3 sm:grid-cols-2">
@@ -246,7 +266,7 @@ export function CouponForm({
                         id="cp-grantVariantId"
                         value={form.grantVariantId}
                         onChange={(v) => set("grantVariantId", v)}
-                        ownerTenant={coupon ? coupon.tenantId : variantOwnerTenant(form.owner, form.tenantId, me)}
+                        ownerTenant={ownerTenant}
                         invalid={Boolean(errors.grantVariantId)}
                         disabled={frozen}
                       />,
@@ -308,7 +328,13 @@ export function CouponForm({
                   ]}
                 />,
               )}
-              {form.visibility === "targeted" && field("allowedUserIds", t("common", F.userIds), text("allowedUserIds", { ltr: true, area: true }), t("common", F.userIdsHint))}
+              {form.visibility === "targeted" &&
+                field(
+                  "allowedUserIds",
+                  t("common", F.userIds),
+                  <UsersPicker id="cp-allowedUserIds" value={form.allowedUserIds} onChange={(v) => set("allowedUserIds", v)} {...userDoor} invalid={Boolean(errors.allowedUserIds)} />,
+                  t("common", F.userIdsHint),
+                )}
               <Toggle checked={form.firstPurchaseOnly} onChange={(v) => set("firstPurchaseOnly", v)} label={t("common", F.firstPurchaseOnly)} />
               {field("newUserWithinDays", t("common", F.newUserWithinDays), text("newUserWithinDays", { ltr: true }))}
             </>,
@@ -341,8 +367,8 @@ export function CouponForm({
                 t("common", F.gatewaysHint),
               )}
               <div className="grid gap-3 sm:grid-cols-2">
-                {field("productIds", t("common", F.productIds), text("productIds", { ltr: true, area: true }), t("common", F.scopeHint))}
-                {field("variantIds", t("common", F.variantIds), text("variantIds", { ltr: true, area: true }))}
+                {field("productIds", t("common", F.productIds), ids("productIds", products), t("common", F.scopeHint))}
+                {field("variantIds", t("common", F.variantIds), ids("variantIds", variants))}
               </div>
             </>,
           )}
