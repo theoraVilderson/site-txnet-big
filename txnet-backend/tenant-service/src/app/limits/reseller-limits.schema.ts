@@ -2,9 +2,9 @@ import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
 /** A limit's value (ADR-0106): a whole number ≥ 0, or `null` for no limit. Required, so an empty body changes nothing. The key's own bound is the service's check. */
-const value = z.number().int().min(0).nullable();
+export const limitValue = z.number().int().min(0).nullable();
 
-export const setLimitSchema = z.object({ value }).strict();
+export const setLimitSchema = z.object({ value: limitValue }).strict();
 
 const tenantIds = z
   .array(z.string().uuid())
@@ -13,7 +13,7 @@ const tenantIds = z
   .refine((ids) => new Set(ids).size === ids.length, { message: 'tenantIds must not repeat' });
 
 /** One or several resellers at once; the reason is kept on each row and its audit. */
-export const setResellersLimitSchema = z.object({ tenantIds, value, reason: z.string().trim().min(1).max(500) }).strict();
+export const setResellersLimitSchema = z.object({ tenantIds, value: limitValue, reason: z.string().trim().min(1).max(500) }).strict();
 
 export const clearResellersLimitSchema = z.object({ tenantIds }).strict();
 
@@ -31,14 +31,16 @@ const unitPrice = z
   .regex(MONEY_PATTERN, 'unitPrice must be a decimal string')
   .refine((v) => Number(v) > 0, { message: 'unitPrice must be above zero' });
 
-const overage = z.discriminatedUnion('mode', [z.object({ mode: z.literal('stop') }).strict(), z.object({ mode: z.literal('overage'), unitPrice }).strict()]);
+/** `stop` or `overage` at a price, plus the fields of `shape` — one definition for every body that carries overage terms. */
+export function overageTermsWith<T extends z.ZodRawShape>(shape: T) {
+  return z.discriminatedUnion('mode', [z.object({ mode: z.literal('stop'), ...shape }).strict(), z.object({ mode: z.literal('overage'), unitPrice, ...shape }).strict()]);
+}
+
+const overage = overageTermsWith({});
 
 export const setOverageSchema = overage;
 
-export const setResellersOverageSchema = z.discriminatedUnion('mode', [
-  z.object({ mode: z.literal('stop'), tenantIds, reason: z.string().trim().min(1).max(500) }).strict(),
-  z.object({ mode: z.literal('overage'), unitPrice, tenantIds, reason: z.string().trim().min(1).max(500) }).strict(),
-]);
+export const setResellersOverageSchema = overageTermsWith({ tenantIds, reason: z.string().trim().min(1).max(500) });
 
 /** Written out rather than inferred: this project's tsconfig infers every field optional, and `mode` is the union's tag. */
 export type SetOverageInput = { mode: 'stop' } | { mode: 'overage'; unitPrice: string };

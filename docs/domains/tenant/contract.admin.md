@@ -94,7 +94,7 @@ it; the audit row carries the platform owner's tenant.
 
 | Route | Body / query | Answer |
 |---|---|---|
-| `POST /api/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys, meterRates?}`, `.strict()` | `201` a package view |
+| `POST /api/tenant-packages` | `{name, monthlyPrice?, yearlyPrice?, includedFeatureKeys, meterRates?, limits?, quotaOverages?, products?}`, `.strict()` | `201` a package view |
 | `GET /api/tenant-packages` | `active` `true`/`false` (absent: all) | packages by name |
 | `GET /api/tenant-packages/:id` | — | one package view |
 | `PATCH /api/tenant-packages/:id` | any of the create fields, a price may be `null`, `isActive`; a `meterRates` entry may be `{meterKey, unitPrice: null}` | the package view after |
@@ -103,7 +103,8 @@ it; the audit row carries the platform owner's tenant.
 A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 `null`, C-02), `currencyCode` (the package's, the platform's — F-116-h3), `includedFeatureKeys, isActive`,
 `meterRates: [{meterKey, unitSize, unitPrice, currencyCode, effectiveFrom}]` (the rates in force, by key). Refusals: `not_platform_owner`
-403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422, `meter_not_found` 422.
+403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422, `meter_not_found` 422;
+a create's part: `unknown_limit`, `limit_out_of_range`, `not_a_quota`, `product_not_found`, `amount_finer_than_currency`, all 422 with `field`.
 
 | Rule | Why |
 |---|---|
@@ -118,6 +119,7 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | **`apply` forces the list now:** every subscriber's `package_included` entitlements are replaced by the package's, removals included; one audit row `tenant_package_apply` with the keys and the tenant ids. An inactive package may be applied | sometimes a removal must be immediate (user, 2026-09-17) |
 | **`meterRates` is the wholesale price list** (F-118-n1, ADR-0105 (10)): per platform meter, what the platform charges a reseller on this package for `unitSize` of it (2^30 = a GiB of `vpn.traffic` — on its metered Grants and, from F-118-p, the bags of its package plans; `vpn.unlimited.time` is an unlimited plan's flat price per `unitSize` seconds, F-118-z), strings as a rate card takes them — a whole `unitSize` ≥ 1, a positive `unitPrice` to 8 places — each meter once. Written to `tenant_package_meter_rate` in the edit's transaction, in the package's currency | the price lives on the package, so a tier or a negotiated deal (a package of its own) prices every reseller on it (user, 2026-09-29) |
 | A rate is history: a new price is a new row from now, the old one kept; the same price again writes nothing; `null` switches every active row of that meter off; a meter left out is left alone. A meter not in `catalog.meter` is `meter_not_found` before anything is written. `meterRates` is audited before and after when it changed | a Grant that locked a price (F-118-n2) is traced to the row it came from; the trigger `package_meter_rate_is_history` lets only `isActive` change |
+| **Create takes the whole package** (ADR-0154 (4), PK-1-a): `limits: [{key, value}]`, `quotaOverages: [{key, mode, unitPrice?}]`, `products: [{productId, day?, week?, month?, overage?}]` — each entry the body of its own route in contract.limits.md, each key or product once — written in the package's transaction with one `tenant_package_create` audit row holding them; checked by the same functions (`limits/package-terms.ts`). Any refusal writes nothing, not even the package, and names the field (`limits.2.value`), as a schema refusal's `fieldErrors` path does. The body without them is unchanged | a package that sells nothing cannot be half-saved; the wizard returns to the step the field is on |
 | Lock order everywhere (edit, `apply`, subscription `PUT`): the package row, then subscription / tenant rows (`package-entitlements.ts`) | an edit and a subscription change on one package serialise, never deadlock, and a tenant that just left a package is not granted its keys |
 
 ## A reseller's subscription (F-018-e)

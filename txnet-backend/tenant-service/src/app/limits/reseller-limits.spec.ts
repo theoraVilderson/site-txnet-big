@@ -432,7 +432,10 @@ describe('PackageProductsService — the platform products a package sells (F-01
     const tx = {
       ...currencyRegistry,
       tenantFeaturePackage: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === PKG ? { id: PKG } : null) },
-      product: { findUnique: async ({ where }: { where: { id: string } }) => ({ [PLATFORM_PRODUCT]: { tenantId: OWNER_TENANT }, [OWN_PRODUCT]: { tenantId: RESELLER_A } })[where.id] ?? null },
+      product: {
+        findMany: async ({ where }: { where: { id: { in: string[] }; tenantId: string } }) =>
+          where.id.in.filter((id) => ({ [PLATFORM_PRODUCT]: OWNER_TENANT, [OWN_PRODUCT]: RESELLER_A })[id] === where.tenantId).map((id) => ({ id })),
+      },
       packageProduct: {
         findUnique: async ({ where }: { where: { packageId_productId: { productId: string } } }) => listed.get(where.packageId_productId.productId) ?? null,
         findMany: async () => [],

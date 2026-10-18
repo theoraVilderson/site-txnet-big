@@ -1,5 +1,7 @@
-import { TENANT_FEATURE_KEYS, MONEY_PATTERN } from '@txnet-backend/shared-core';
+import { TENANT_FEATURE_KEYS, MONEY_PATTERN, RESELLER_LIMIT_KEYS, RESELLER_QUOTA_KEYS } from '@txnet-backend/shared-core';
 import { z } from 'zod';
+
+import { limitValue, overageTermsWith, setPackageProductSchema, type SetOverageInput, type SetPackageProductInput } from '../limits/reseller-limits.schema';
 
 /**
  * The wire shape of a package the platform sells resellers (F-018-d).
@@ -13,6 +15,10 @@ import { z } from 'zod';
  * `unitSize` of it — 2^30 for a GiB of `vpn.traffic`. Strings, as a rate card
  * takes them (F-118-m): a whole `unitSize` of at least 1, a positive
  * `unitPrice` to 8 places. On an edit `unitPrice: null` switches a meter off.
+ *
+ * On create only, the rest of the package may ride along (ADR-0154 decision
+ * 4): `limits`, `quotaOverages` and `products`, each entry the body its own
+ * endpoint takes (contract.limits.md) plus the key or product it is for.
  */
 
 
@@ -45,9 +51,37 @@ const meterRate = z
 /** Only on an edit: the meter's rates are switched off. */
 const meterRateOff = z.object({ meterKey, unitPrice: z.null() }).strict();
 
-const eachMeterOnce = (rates: { meterKey: string }[]) => new Set(rates.map((r) => r.meterKey)).size === rates.length;
+const eachOnce =
+  <T>(idOf: (entry: T) => string) =>
+  (entries: T[]) =>
+    new Set(entries.map(idOf)).size === entries.length;
+const eachMeterOnce = eachOnce((r: { meterKey: string }) => r.meterKey);
 const meterRates = z.array(meterRate).max(50).refine(eachMeterOnce, { message: 'a meter is repeated' });
 const meterRateEdits = z.array(z.union([meterRate, meterRateOff])).max(50).refine(eachMeterOnce, { message: 'a meter is repeated' });
+
+/** More platform products than one package could list; a bound on the body, not a business rule. */
+const MAX_PACKAGE_PRODUCTS = 500;
+
+// A key is any string here: an unknown one is the service's `unknown_limit`, as on the limits endpoints.
+const limitKey = z.string().min(1).max(100);
+const eachKeyOnce = eachOnce((entry: { key: string }) => entry.key);
+const packageLimits = z
+  .array(z.object({ key: limitKey, value: limitValue }).strict())
+  .max(RESELLER_LIMIT_KEYS.length)
+  .refine(eachKeyOnce, { message: 'a limit is repeated' });
+const packageOverages = z
+  .array(overageTermsWith({ key: limitKey }))
+  .max(RESELLER_QUOTA_KEYS.length)
+  .refine(eachKeyOnce, { message: 'a limit is repeated' });
+const packageProducts = z
+  .array(setPackageProductSchema.extend({ productId: z.string().uuid() }))
+  .max(MAX_PACKAGE_PRODUCTS)
+  .refine(eachOnce((p: { productId: string }) => p.productId), { message: 'a product is repeated' });
+
+/** Written out, as the limits schema's: this project's tsconfig infers every field optional. */
+export type PackageLimitInput = { key: string; value: number | null };
+export type PackageOverageInput = SetOverageInput & { key: string };
+export type PackageProductInput = SetPackageProductInput & { productId: string };
 
 export type MeterRateInput = z.infer<typeof meterRate>;
 export type MeterRateEdit = z.infer<typeof meterRate> | z.infer<typeof meterRateOff>;
@@ -59,13 +93,20 @@ export const createPackageSchema = z
     yearlyPrice: price.optional(),
     includedFeatureKeys: featureKeys,
     meterRates: meterRates.optional(),
+    limits: packageLimits.optional(),
+    quotaOverages: packageOverages.optional(),
+    products: packageProducts.optional(),
   })
   .strict()
   .refine((p) => p.monthlyPrice !== undefined || p.yearlyPrice !== undefined, {
     message: 'a package needs a monthly or a yearly price',
   });
 
-export type CreatePackageInput = z.infer<typeof createPackageSchema>;
+export type CreatePackageInput = Omit<z.infer<typeof createPackageSchema>, 'limits' | 'quotaOverages' | 'products'> & {
+  limits?: PackageLimitInput[];
+  quotaOverages?: PackageOverageInput[];
+  products?: PackageProductInput[];
+};
 
 /** `null` clears a price; the service refuses an edit that leaves none. `isActive: false` deactivates. */
 export const updatePackageSchema = z

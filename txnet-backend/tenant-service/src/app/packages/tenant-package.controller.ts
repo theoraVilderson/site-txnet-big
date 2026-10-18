@@ -48,6 +48,12 @@ const STATUS: Record<TenantPackageRejection, 403 | 404 | 409 | 422> = {
   package_price_finer_than_currency: 422,
   package_price_in_use: 409,
   meter_not_found: 422,
+  // A part of a create (ADR-0154 decision 4): the body is wrong, whatever the limits route says for a path.
+  unknown_limit: 422,
+  limit_out_of_range: 422,
+  not_a_quota: 422,
+  product_not_found: 422,
+  amount_finer_than_currency: 422,
 };
 
 /**
@@ -112,7 +118,7 @@ export class TenantPackageController {
       return await work();
     } catch (e) {
       if (!(e instanceof TenantPackageRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
+      const payload = { reason: e.reason, message: e.message, ...(e.field ? { field: e.field } : {}) };
       switch (STATUS[e.reason]) {
         case 403:
           throw new ForbiddenException(payload);

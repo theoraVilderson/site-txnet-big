@@ -3,6 +3,7 @@ import { AdminAction, AuditTargetType, Prisma, TenantBillingModel, TenantStatus 
 import { platformCurrencyOf, isPlatformTenant, inCurrency } from '@txnet-backend/shared-core';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { checkPackageParts, type PackagePartRejection, writePackageParts } from './package-parts';
 import { addPackageEntitlements, lockPackage, lockSubscribers, replacePackageEntitlements } from './package-entitlements';
 import { type MeterRateView, ratesOf, unknownMeters, writeMeterRates } from './package-meter-rates';
 import type { CreatePackageInput, ListPackagesInput, MeterRateEdit, UpdatePackageInput } from './tenant-package.schema';
@@ -57,12 +58,15 @@ export type TenantPackageRejection =
   | 'package_unpriced'
   | 'package_price_finer_than_currency'
   | 'package_price_in_use'
-  | 'meter_not_found';
+  | 'meter_not_found'
+  | PackagePartRejection;
 
+/** `field`: the request field refused, `limits.2.value`, when a create's part is (ADR-0154 decision 4). */
 export class TenantPackageRefused extends Error {
   constructor(
     readonly reason: TenantPackageRejection,
     detail = '',
+    readonly field?: string,
   ) {
     super(`tenant package refused: ${reason}${detail ? ` (${detail})` : ''}`);
     this.name = 'TenantPackageRefused';
@@ -94,9 +98,11 @@ export class TenantPackageService {
     private readonly all: CrossTenantPrismaService,
   ) {}
 
+  /** The package and, when given, its limits, overage modes and products — all in one transaction, or none (ADR-0154 decision 4). */
   async create(actor: TenantPackageActor, input: CreatePackageInput): Promise<PackageView> {
     await this.access(actor);
     await this.nameFree(input.name);
+    checkPackageParts(input);
     // The cross-tenant pool, as `update` and `apply`: RLS refuses this audit row on the app pool.
     const view = await this.writing(input.name, () =>
       this.all.$transaction(async (tx) => {
@@ -113,8 +119,10 @@ export class TenantPackageService {
           select: PACKAGE_SELECT,
         });
         await writeMeterRates(tx, row, [], input.meterRates ?? [], actor.adminId);
+        await writePackageParts(tx, row, { input, adminId: actor.adminId });
         const created = toView(row, await this.ratesOne(tx, row));
-        await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.tenant_package_create, created.id, null, created) });
+        const parts = { limits: input.limits ?? [], quotaOverages: input.quotaOverages ?? [], products: input.products ?? [] };
+        await tx.adminAuditLog.create({ data: this.audit(actor, AdminAction.tenant_package_create, created.id, null, { ...created, ...parts }) });
         return created;
       }),
     );

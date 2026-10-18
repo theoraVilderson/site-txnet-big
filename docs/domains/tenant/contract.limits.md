@@ -134,6 +134,7 @@ path has three segments or more, so none is read as `GET /api/tenants/:id`.
 | Several resellers are **all or none**: every id is checked to be a live reseller first; one that is not is **404** `reseller_not_found` naming it, and nothing is written | half a request applied is a state nobody asked for |
 | Every write is audited in its transaction: `reseller_limit_set` / `reseller_limit_clear`, `{level, key, value}` before and after (`'unset'` = no row) — and for overage `reseller_overage_set` / `reseller_overage_clear`, `{level, key, overage: O \| 'unset'}` — against the platform's tenant, the package, or each reseller (one row each, with the reason). Clearing what has no row writes nothing | who raised whom, and why |
 | Writes go through the cross-tenant pool | a reseller's row is that reseller's (RLS) |
+| A package's create may carry its limits, overage modes and products (contract.admin.md "Packages", PK-1-a), checked by the same functions as these routes (`package-terms.ts`); there a refusal is 422 with `field` | one rule, whichever route writes it |
 
 Proved by `shared-core/.../reseller-limits.spec.ts` and
 `tenant-service/src/app/limits/reseller-limits.spec.ts`.

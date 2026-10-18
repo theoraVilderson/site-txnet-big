@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode } from '@prisma/client';
+import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 import { lockProductQuotaTerms, overageTermsOf, platformCurrencyOf, platformTenantIdOf, isPlatformTenant, moneyText } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { firstNotPlatformProduct, productQuotaColumns } from './package-terms';
 import type { SetPackageProductInput } from './reseller-limits.schema';
 import { ResellerLimitsRefused, type OverageView, type ResellerLimitsActor } from './reseller-limits.service';
 import { overageView } from './reseller-overage-view';
@@ -60,9 +61,8 @@ export class PackageProductsService {
     await this.access(actor);
     await this.all.$transaction(async (tx) => {
       await this.packageExists(tx, packageId);
-      const product = await tx.product.findUnique({ where: { id: productId }, select: { tenantId: true } });
-      if (!product || product.tenantId !== (await platformTenantIdOf(tx))) throw new ResellerLimitsRefused('product_not_found', productId);
-      const terms = await this.termsOf(tx, input);
+      if (await firstNotPlatformProduct(tx, await platformTenantIdOf(tx), [productId])) throw new ResellerLimitsRefused('product_not_found', productId);
+      const terms = await productQuotaColumns(input, () => platformCurrencyOf(tx));
       const where = { packageId_productId: { packageId, productId } };
       const before = await tx.packageProduct.findUnique({ where, select: QUOTA_SELECT });
       if (before && sameTerms(before, terms)) return;
@@ -95,13 +95,6 @@ export class PackageProductsService {
   private async access(actor: ResellerLimitsActor): Promise<void> {
     const tenant = await this.prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
     if (!isPlatformTenant(tenant?.tenantType)) throw new ResellerLimitsRefused('not_platform_owner', 'package products');
-  }
-
-  /** The row's quota columns; an overage price is stamped with the platform's currency, as every overage price. */
-  private async termsOf(tx: Prisma.TransactionClient, input: SetPackageProductInput): Promise<QuotaColumns> {
-    const windows = { dayIncluded: input.day ?? null, weekIncluded: input.week ?? null, monthIncluded: input.month ?? null };
-    if (input.overage?.mode !== 'overage') return { ...windows, mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null };
-    return { ...windows, mode: QuotaOverageMode.overage, unitPrice: new Prisma.Decimal(input.overage.unitPrice), currencyCode: await platformCurrencyOf(tx) };
   }
 
   private audit(actor: ResellerLimitsActor, action: AdminAction, packageId: string, productId: string, before: Held, after: Held): Prisma.AdminAuditLogUncheckedCreateInput {

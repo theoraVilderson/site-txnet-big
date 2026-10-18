@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AdminAction, AuditTargetType, Prisma, QuotaOverageMode, TenantType } from '@prisma/client';
 import {
-  isResellerLimitKey,
   isResellerQuotaKey,
   lockQuotaTerms,
   type QuotaLockScope,
@@ -29,6 +28,7 @@ import {
 } from '@txnet-backend/shared-core';
 
 import type { SetOverageInput as OverageInput } from './reseller-limits.schema';
+import { limitKeyOf, limitWithin, overageColumns, quotaKeyOf } from './package-terms';
 import { held, overageView, viewOf } from './reseller-overage-view';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -40,7 +40,7 @@ export type ResellerLimitsRejection = 'not_platform_owner' | 'unknown_limit' | '
 export class ResellerLimitsRefused extends Error {
   constructor(
     readonly reason: ResellerLimitsRejection,
-    detail = '',
+    readonly detail = '',
   ) {
     super(`reseller limits refused: ${reason}${detail ? ` (${detail})` : ''}`);
     this.name = 'ResellerLimitsRefused';
@@ -450,15 +450,12 @@ export class ResellerLimitsService {
 
   /** The row's terms: an overage price is stamped with the platform's currency now, which every reseller's billing wallet is kept in. */
   private async overageData(tx: Prisma.TransactionClient, input: OverageInput, adminId: string) {
-    if (input.mode === 'stop') return { mode: QuotaOverageMode.stop, unitPrice: null, currencyCode: null, updatedByUserId: adminId };
-    return { mode: QuotaOverageMode.overage, unitPrice: new Prisma.Decimal(input.unitPrice), currencyCode: await platformMoney(tx, new Prisma.Decimal(input.unitPrice)), updatedByUserId: adminId };
+    return { ...(await overageColumns(input, (price) => platformMoney(tx, price))), updatedByUserId: adminId };
   }
 
-  /** A known key whose registry kind is `quota`; a guard is never sold past (ADR-0107 point 1). */
   private async quota(actor: ResellerLimitsActor, key: string): Promise<ResellerQuotaKey> {
-    const k = await this.known(actor, key);
-    if (!isResellerQuotaKey(k)) throw new ResellerLimitsRefused('not_a_quota', k);
-    return k;
+    await this.access(actor);
+    return quotaKeyOf(key);
   }
 
   private overageAudit(
@@ -494,15 +491,13 @@ export class ResellerLimitsService {
 
   /** The caller may write limits, the key exists, and the value is within its bound. */
   private async writable(actor: ResellerLimitsActor, key: string, value: number | null): Promise<ResellerLimitKey> {
-    const k = await this.known(actor, key);
-    if (value !== null && value > RESELLER_LIMITS[k].max) throw new ResellerLimitsRefused('limit_out_of_range', `${k} ≤ ${RESELLER_LIMITS[k].max}`);
-    return k;
+    await this.access(actor);
+    return limitWithin(key, value);
   }
 
   private async known(actor: ResellerLimitsActor, key: string): Promise<ResellerLimitKey> {
     await this.access(actor);
-    if (!isResellerLimitKey(key)) throw new ResellerLimitsRefused('unknown_limit', key);
-    return key;
+    return limitKeyOf(key);
   }
 
   /** The platform owner's tenant — the same check as package and reseller administration. */
