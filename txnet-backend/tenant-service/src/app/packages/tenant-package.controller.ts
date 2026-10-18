@@ -17,11 +17,13 @@ import {
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
+import { BackendI18nKeys } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { PlatformPermissionGuard, PlatformRoute } from '../request/platform-permission.guard';
 import { ZodValidationPipe } from '../request/zod-validation.pipe';
+import { isPartRejection, type PackagePartRejection } from './package-parts';
 import {
   CreatePackageInput,
   ListPackagesInput,
@@ -118,7 +120,7 @@ export class TenantPackageController {
       return await work();
     } catch (e) {
       if (!(e instanceof TenantPackageRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message, ...(e.field ? { field: e.field } : {}) };
+      const payload = { reason: e.reason, message: e.message, ...fieldOf(e) };
       switch (STATUS[e.reason]) {
         case 403:
           throw new ForbiddenException(payload);
@@ -131,6 +133,20 @@ export class TenantPackageController {
       }
     }
   }
+}
+
+/** What the panel reads for a refused part of a create: the field, said in words — the envelope's `fieldErrors` (PK-1-j). */
+const PART_TEXT: Record<PackagePartRejection, string> = {
+  unknown_limit: BackendI18nKeys.errors.tenant.package.limitUnknown,
+  limit_out_of_range: BackendI18nKeys.errors.tenant.package.limitOutOfRange,
+  not_a_quota: BackendI18nKeys.errors.tenant.package.notAQuota,
+  product_not_found: BackendI18nKeys.errors.tenant.package.productNotPlatforms,
+  amount_finer_than_currency: BackendI18nKeys.errors.tenant.package.priceFinerThanCurrency,
+};
+
+function fieldOf(e: TenantPackageRefused): { fieldErrors?: { path: string; i18nKey: string }[] } {
+  if (!e.field || !isPartRejection(e.reason)) return {};
+  return { fieldErrors: [{ path: e.field, i18nKey: PART_TEXT[e.reason] }] };
 }
 
 function actorOf(req: Request, ip: string): TenantPackageActor {

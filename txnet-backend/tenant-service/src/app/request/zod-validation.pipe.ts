@@ -1,11 +1,11 @@
 import { BadRequestException, PipeTransform } from '@nestjs/common';
-import { BackendI18nKeys } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, isSafeKey } from '@txnet-backend/shared-core';
 import type { ZodError, ZodSchema } from 'zod';
 
 /**
  * Parses a request body with a zod schema, or refuses it with the envelope's
- * field errors (`shared-core` `sanitizeError`). Each schema message must be an
- * i18n key in `errors` — a zod default message is not one, and is dropped.
+ * field errors (`shared-core` `sanitizeError`). A schema message is an i18n key
+ * in `errors`; any other message — a zod default — becomes `validation.invalidValue`.
  *
  * `auth-service`'s `common/pipes/zod-validation.pipe.ts` is the twin; an app
  * cannot import an app. `billing-service` and `notification-service` hold the others.
@@ -25,6 +25,11 @@ export class ZodValidationPipe implements PipeTransform {
   }
 }
 
+// A message that is not a locale key (zod's own English default) is answered
+// with a generic one, so the envelope keeps the path the client goes to (PK-1-j).
 function fieldErrors(error: ZodError) {
-  return error.issues.map((issue) => ({ path: issue.path.join('.'), i18nKey: issue.message }));
+  return error.issues.map((issue) => ({
+    path: issue.path.join('.'),
+    i18nKey: isSafeKey(issue.message) ? issue.message : BackendI18nKeys.errors.validation.invalidValue,
+  }));
 }

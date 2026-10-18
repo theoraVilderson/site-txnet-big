@@ -62,7 +62,8 @@ export interface SanitizedError {
 const E = BackendI18nKeys.errors;
 
 const KEY_RE = /^[a-zA-Z][a-zA-Z0-9]*(?:\.[a-zA-Z0-9_]+){1,5}$/;
-const isSafeKey = (v: unknown): v is string =>
+/** A value the envelope forwards as an i18n key — a pipe that maps messages asks the same question (PK-1-j). */
+export const isSafeKey = (v: unknown): v is string =>
   typeof v === 'string' && v.length > 0 && v.length <= 64 && KEY_RE.test(v);
 
 const newRef = (): string => randomBytes(5).toString('hex'); // 10 hex chars
@@ -193,6 +194,9 @@ export function sanitizeError(exception: unknown): SanitizedError {
           ? (obj['i18nKey'] as string)
           : E.system.validationFailed,
         fieldErrors,
+        // A refusal about one field still says which refusal it is (PK-1-j): the
+        // panel goes to the field by `path` and acts on the cause by `reason`.
+        ...(isSafeReason(obj['reason']) ? { reason: obj['reason'] } : {}),
         ref,
         detail,
         logLevel,

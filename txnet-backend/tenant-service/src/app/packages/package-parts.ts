@@ -30,7 +30,8 @@ const FIELD_OF: Record<PackagePartRejection, string> = {
   amount_finer_than_currency: 'unitPrice',
 };
 
-const isPartRejection = (reason: string): reason is PackagePartRejection => (PACKAGE_PART_REJECTIONS as readonly string[]).includes(reason);
+/** A reason a create's part was refused for, so the field it names is answered. */
+export const isPartRejection = (reason: string): reason is PackagePartRejection => (PACKAGE_PART_REJECTIONS as readonly string[]).includes(reason);
 
 /** Runs a limits check on the entry at `at`, its refusal raised as the package's with the field it names. */
 function asEntry<T>(at: string, check: () => T): T {

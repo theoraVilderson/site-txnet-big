@@ -166,7 +166,14 @@
     "featureNotEntitled": "This feature is not part of this service’s plan.",
     "onboarding": "This service is not open yet: its operator is still setting it up and has not connected its own address.",
     "suspended": "This service is suspended. You can sign in and view your account, but this action is unavailable until it is reactivated.",
-    "terminated": "This service has been closed."
+    "terminated": "This service has been closed.",
+    "package": {
+      "limitUnknown": "There is no such limit.",
+      "limitOutOfRange": "This value is above the highest this limit allows.",
+      "notAQuota": "This limit is a safeguard; it cannot be sold past.",
+      "productNotPlatforms": "Only the platform's own products can be listed on a package.",
+      "priceFinerThanCurrency": "This price has more decimal places than the currency allows."
+    }
   },
   "automation": {
     "invalidSchedule": "That schedule could never run — see the reason.",
@@ -186,7 +193,8 @@
   },
   "validation": {
     "failed": "Some of the submitted information is invalid.",
-    "nothingToChange": "Change at least one field."
+    "nothingToChange": "Change at least one field.",
+    "invalidValue": "This value is not valid."
   },
   "billing": {
     "gatewayNotFound": "That payment gateway is not available.",
