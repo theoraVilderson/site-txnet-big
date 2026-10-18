@@ -1,5 +1,6 @@
 import type { CostRow } from "@/lib/catalog-cost-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /**
  * The cost forms' rules (F-1002-g, ADR-0151) — billing's, said before the
@@ -9,7 +10,6 @@ import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 const E = FrontendI18nKeys.common.catalog.cost.errors;
 /** Billing's `decimal`: 0 or more, at most two places. */
-const PER_SALE = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 /** Billing's `UNIT_PRICE`: at most eight places. */
 const PER_UNITS = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 const WHOLE = /^[1-9]\d{0,17}$/;
@@ -20,7 +20,7 @@ export type CostFrom = (typeof COST_FROM)[number];
 
 /** The error key for a cost per sale, or null. */
 export function validateVariantCost(amount: string): string | null {
-  return PER_SALE.test(amount.trim()) ? null : E.amount;
+  return MONEY_PATTERN.test(amount.trim()) ? null : E.amount;
 }
 
 /** The error keys of a meter cost form, by field. */

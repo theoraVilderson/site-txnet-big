@@ -32,7 +32,7 @@ and `_hooks/useWalletBalance.ts` (the top bar), `lib/billing-api.ts`
 3. **One form sets, raises or lowers** — `PUT` with `{label, amount, period}`.
    The label is trimmed, 1..40; the amount is read with Persian or Arabic
    digits, `٫` and thousands separators, and must be above zero with at most
-   two places, or the form says so and sends nothing. Billing checks the same
+   the columns' four places (F-116-s), or the form says so and sends nothing. Billing checks the same
    and its sentence (`billing.spendingCapInvalid`) is what a refusal shows,
    with its `ref`, keeping what was typed. The amount is in the wallet's
    currency (billing rule 7), named in the box's label. A changed period says

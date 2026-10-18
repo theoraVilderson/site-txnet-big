@@ -129,10 +129,10 @@ describe("includedReading / capAmountOf / compareAmounts / changeVerdict", () =>
     expect(includedReading(null, 99)).toEqual({ share: null, full: false });
   });
 
-  it("a cap is 0 or more with two places at most", () => {
+  it("a cap is 0 or more with at most the places a money column holds", () => {
     expect(capAmountOf(" 0 ")).toBe("0");
     expect(capAmountOf("50.5")).toBe("50.5");
-    for (const bad of ["", "-1", "1.234", "x"]) expect(capAmountOf(bad)).toBeUndefined();
+    for (const bad of ["", "-1", "1.23456", "x"]) expect(capAmountOf(bad)).toBeUndefined();
   });
 
   it("compares money exactly and says what a change would do", () => {
@@ -215,7 +215,7 @@ describe("the workspace's quota cards (F-019-v10)", () => {
     render(<OverageCapCard tenantId={RESELLER} />);
     const box = await screen.findByLabelText(`${Q}.cap.amount`);
     const save = screen.getByRole("button", { name: `${Q}.cap.save` });
-    fireEvent.change(box, { target: { value: "1.234" } });
+    fireEvent.change(box, { target: { value: "1.23456" } });
     expect(save).toBeDisabled();
     fireEvent.change(box, { target: { value: "80" } });
     fireEvent.click(save);

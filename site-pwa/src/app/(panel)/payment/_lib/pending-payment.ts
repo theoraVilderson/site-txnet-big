@@ -1,6 +1,7 @@
 import { RealtimeEvents } from "@/generated/wire";
 import type { WalletPaymentRow } from "@/lib/billing-api";
 import { readSuccess } from "./payment-result";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /**
  * What `/payment/pending` shows for the payment it waits on (F-093-l,
@@ -62,7 +63,7 @@ function readPaymentEvent(payload: unknown, type: string): PaymentEvent | null {
   const p = payload as Record<string, unknown>;
   if (p.type !== type) return null;
   if (typeof p.paymentId !== "string" || !p.paymentId) return null;
-  if (typeof p.amountCredited !== "string" || !/^\d{1,16}(\.\d{1,2})?$/.test(p.amountCredited)) return null;
+  if (typeof p.amountCredited !== "string" || !MONEY_PATTERN.test(p.amountCredited)) return null;
   if (typeof p.currencyCode !== "string" || !/^[A-Z]{3}$/.test(p.currencyCode)) return null;
   return { paymentId: p.paymentId, amountCredited: p.amountCredited, currencyCode: p.currencyCode };
 }

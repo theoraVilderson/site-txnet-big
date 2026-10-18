@@ -6,7 +6,7 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { PANEL_DEPOSIT } from "@/lib/routes";
 import { useWalletBalance } from "../../../_hooks/useWalletBalance";
-import { formatMoney, isNonZero } from "../../../_lib/money";
+import { currencyDecimals, formatMoney, isNonZero } from "../../../_lib/money";
 import { usePanelUiStore } from "../../../_stores/panel-ui-store";
 import { AnimatedNumber, Button } from "../../kit";
 import type { WidgetSource } from "../useWidgetSource";
@@ -37,7 +37,7 @@ export default function WalletWidget() {
       {(w) => (
         <div className="flex h-full flex-col gap-3">
           <p className="text-2xl font-black tabular-nums text-text-primary" dir="ltr">
-            <AnimatedNumber value={Number(w.balance)} format={(n) => formatMoney(n.toFixed(2), w.currencyCode, { lang, t })} />
+            <AnimatedNumber value={Number(w.balance)} format={(n) => formatMoney(n.toFixed(currencyDecimals(w.currencyCode)), w.currencyCode, { lang, t })} />
           </p>
           {isNonZero(w.held) && (
             <p className="text-xs text-text-secondary">{t("common", D.wallet.held, { amount: formatMoney(w.held, w.currencyCode, { lang, t }) })}</p>

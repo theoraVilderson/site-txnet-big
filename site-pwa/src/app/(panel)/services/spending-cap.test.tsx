@@ -92,13 +92,13 @@ beforeEach(() => {
 });
 
 describe("an amount typed as a cap", () => {
-  it("is billing's shape: above zero, at most two places", () => {
+  it("is billing's shape: above zero, at most the places a money column holds", () => {
     expect(capAmount("20")).toBe("20");
     expect(capAmount(" 012.5 ")).toBe("12.5");
     expect(capAmount("150,000")).toBe("150000");
     expect(capAmount("0")).toBeNull();
     expect(capAmount("0.00")).toBeNull();
-    expect(capAmount("1.005")).toBeNull();
+    expect(capAmount("1.00005")).toBeNull();
     expect(capAmount("-3")).toBeNull();
     expect(capAmount("")).toBeNull();
   });

@@ -106,10 +106,10 @@ describe("validatePackage", () => {
     expect(validatePackage(filled())).toEqual({});
   });
 
-  it("refuses what the schema would: no name, no price, three places, zero, a rate past 8 places", () => {
+  it("refuses what the schema would: no name, no price, five places, zero, a rate past 8 places", () => {
     expect(validatePackage(filled({ name: "  " })).name).toBeTruthy();
     expect(validatePackage(filled({ monthlyPrice: "" })).monthlyPrice).toBeTruthy();
-    expect(validatePackage(filled({ monthlyPrice: "1.234" })).monthlyPrice).toBeTruthy();
+    expect(validatePackage(filled({ monthlyPrice: "1.23456" })).monthlyPrice).toBeTruthy();
     expect(validatePackage(filled({ yearlyPrice: "0" })).yearlyPrice).toBeTruthy();
     expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.traffic": "0.000000001" } })).rates).toBeTruthy();
     expect(validatePackage(filled({ rates: { ...emptyPackageForm().rates, "vpn.traffic": "0" } })).rates).toBeTruthy();

@@ -27,6 +27,7 @@ import type {
 } from "@/lib/catalog-api";
 import { isPlatformTenant } from "@/lib/tenant-type";
 import { toEnglishDigits } from "@/util/helper";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 export { BILLING_MODES, CREATABLE_FULFILMENT_KINDS, FULFILMENT_KINDS, QUALITY_TIERS, RATE_CARD_MODES, RETIRED_FULFILMENT_KINDS, QUOTA_METRICS, RESET_POLICIES, VISIBILITIES } from "@/lib/catalog-api";
 
@@ -63,7 +64,6 @@ export const surfaceActor = (me: Me | null, tenantId: string | null): Me | null 
 const KEY = /^[a-z][a-z0-9_]{1,63}$/;
 const FEATURE_KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 const SKU = /^[A-Z0-9][A-Z0-9_-]{1,39}$/;
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const WHOLE = /^\d{1,19}$/;
 
@@ -488,7 +488,7 @@ const firstPrice = (f: VariantForm) => (f.billingMode === "metered" && blank(f.p
 export function validateVariantForm(f: VariantForm): Errors<VariantForm> {
   const errors: Errors<VariantForm> = {};
   if (!SKU.test(f.sku.trim().toUpperCase())) errors.sku = E.sku;
-  if (!DECIMAL.test(firstPrice(f))) errors.price = E.decimal;
+  if (!MONEY_PATTERN.test(firstPrice(f))) errors.price = E.decimal;
   if (!blank(f.durationDays)) {
     const days = Number(f.durationDays.trim());
     if (!/^\d+$/.test(f.durationDays.trim()) || days < 1 || days > 3650) errors.durationDays = E.duration;
@@ -677,7 +677,7 @@ export interface PriceForm {
 /** A day already past would reprice an invoice issued under the old price: billing refuses it, so this does first. */
 export function validatePriceForm(f: PriceForm, today: string): Errors<PriceForm> {
   const errors: Errors<PriceForm> = {};
-  if (!DECIMAL.test(f.amount.trim())) errors.amount = E.decimal;
+  if (!MONEY_PATTERN.test(f.amount.trim())) errors.amount = E.decimal;
   if (!blank(f.day) && f.day < today) errors.day = E.pastDay;
   return errors;
 }

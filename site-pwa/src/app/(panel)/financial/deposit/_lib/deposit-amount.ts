@@ -1,3 +1,5 @@
+import { amountPattern } from "../../../_lib/money";
+
 /**
  * The amount box's arithmetic (F-093-e), and the only arithmetic on this page.
  *
@@ -6,39 +8,33 @@
  * `POST /deposit/quote`'s answer and the panel derives none of it (F-0612,
  * `billing/contract.deposit.md`). What is left is the input control itself: a
  * slider and a set of preset buttons need a *number* to work with, and the
- * wire wants an exact decimal string in the base currency (ADR-0019, C-02).
+ * wire wants an exact decimal string in the payer's currency (C-02).
  *
- * So the number is **integer cents**. A slider that emits a float is how
- * `0.1 + 0.2` reaches a payment route as `0.30000000000000004`; a `Number`
- * holds every cent exactly up to about 90 trillion base-currency units, which
- * is well past `Decimal(18, 2)`.
+ * So the number is **integer minor units of that currency** — cents for a
+ * dollar, whole rials, thousandths of a dinar (`currencyDecimals`, F-116-s). A
+ * slider that emits a float is how `0.1 + 0.2` reaches a payment route as
+ * `0.30000000000000004`; a `Number` holds every minor unit exactly well past
+ * any top-up a gateway takes.
  */
-
-/** Two decimal places, because the base currency has two (ADR-0019). */
-const DECIMALS = 2;
-const SCALE = 100;
-
-/** The wire format: an unsigned decimal with at most two places, as `deposit.schema.ts` takes it. */
-const AMOUNT = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 
 /**
- * A decimal string as whole cents, or `null` when it is not an amount this
- * currency can hold. `null` rather than `NaN`: a caller has to decide what an
- * unreadable box means, and `NaN` silently becomes a zero on the way to a
- * comparison.
+ * A decimal string as whole minor units at `decimals` places, or `null` when it
+ * is not an amount this currency can hold (a fraction of a rial, a third cent).
+ * `null` rather than `NaN`: a caller has to decide what an unreadable box
+ * means, and `NaN` silently becomes a zero on the way to a comparison.
  */
-export function toCents(amount: string): number | null {
+export function toMinor(amount: string, decimals: number): number | null {
   const trimmed = amount.trim();
-  if (!AMOUNT.test(trimmed)) return null;
+  if (!amountPattern(decimals).test(trimmed)) return null;
   const [whole, fraction = ""] = trimmed.split(".");
-  return Number(whole) * SCALE + Number(fraction.padEnd(DECIMALS, "0"));
+  return Number(whole) * 10 ** decimals + Number(fraction.padEnd(decimals, "0") || "0");
 }
 
-/** Whole cents back as the decimal string the API takes. */
-export function fromCents(cents: number): string {
-  const whole = Math.trunc(cents / SCALE);
-  const fraction = Math.abs(cents % SCALE);
-  return `${whole}.${String(fraction).padStart(DECIMALS, "0")}`;
+/** Whole minor units back as the decimal string the API takes. */
+export function fromMinorNumber(minor: number, decimals: number): string {
+  const scale = 10 ** decimals;
+  const whole = Math.trunc(minor / scale);
+  return decimals === 0 ? String(whole) : `${whole}.${String(Math.abs(minor % scale)).padStart(decimals, "0")}`;
 }
 
 /**

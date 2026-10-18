@@ -207,7 +207,7 @@ export interface LotteryFormCheck {
   overall: Key | null;
 }
 
-/** billing's `DECIMAL`: no sign, no leading zero, at most two places. */
+/** A prize's value — GB, days or a percent, not money — at two places, as billing's `PRIZE_PLACES`. */
 const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const WHOLE = /^(0|[1-9]\d{0,8})$/;
 

@@ -15,6 +15,7 @@ import type {
 } from "@/lib/billing-api";
 import { REDEMPTION_STATUSES } from "@/lib/billing-api";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { amountPattern, MONEY_PATTERN } from "../../_lib/money";
 
 /** Every string the coupons page can show (C-06). */
 export const COUPON_KEYS = FrontendI18nKeys.common.coupons;
@@ -248,7 +249,8 @@ export function formFromCoupon(c: AdminCoupon): CouponForm {
 }
 
 const CODE = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
+/** A percentage at two places; money is any amount a column holds — billing refuses one finer than its currency (F-116-s). */
+const PERCENT = amountPattern(2);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const INT = /^\d{1,7}$/;
 
@@ -283,12 +285,12 @@ export function validateCouponForm(f: CouponForm, me: Me | null, original: Admin
     for (const k of ["productIds", "variantIds"] as const) if (ids(f[k]).length > 0) put(k, E.notForFreeService);
   } else {
     const value = f.discountValue.trim();
-    if (!DECIMAL.test(value) || Number(value) <= 0) put("discountValue", E.decimal);
+    if (!(f.discountType === "percentage" ? PERCENT : MONEY_PATTERN).test(value) || Number(value) <= 0) put("discountValue", E.decimal);
     else if (f.discountType === "percentage" && Number(value) > 100) put("discountValue", E.percentMax);
   }
 
   for (const k of ["maxDiscountCap", "minPurchaseAmount", "maxPurchaseAmount"] as const) {
-    if (!blank(f[k]) && !DECIMAL.test(f[k].trim())) put(k, E.decimal);
+    if (!blank(f[k]) && !MONEY_PATTERN.test(f[k].trim())) put(k, E.decimal);
   }
   if (!blank(f.maxDiscountCap) && f.discountType !== "percentage") put("maxDiscountCap", E.capPercentOnly);
   if (!blank(f.maxDiscountCap) && Number(f.maxDiscountCap) <= 0) put("maxDiscountCap", E.decimal);

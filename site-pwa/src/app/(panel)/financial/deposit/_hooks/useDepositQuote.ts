@@ -7,7 +7,8 @@ import {
   type DepositQuote,
   type DepositQuoteBody,
 } from "@/lib/billing-api";
-import { toCents } from "../_lib/deposit-amount";
+import { currencyDecimals } from "../../../_lib/money";
+import { toMinor } from "../_lib/deposit-amount";
 
 /**
  * How long the page waits after the last change before pricing it.
@@ -48,8 +49,8 @@ export interface DepositQuoteState {
  * inputs costs no second call, and nothing has to be read from a ref mid-render.
  */
 function quoteKey(inputs: DepositInputs, asked: number): string | null {
-  const cents = toCents(inputs.amount);
-  if (!inputs.gateway || cents === null || cents <= 0) return null;
+  const minor = inputs.gateway ? toMinor(inputs.amount, currencyDecimals(inputs.gateway.currencyCode)) : null;
+  if (!inputs.gateway || minor === null || minor <= 0) return null;
   const body: DepositQuoteBody = {
     gatewayId: inputs.gateway.id,
     source: inputs.gateway.source,

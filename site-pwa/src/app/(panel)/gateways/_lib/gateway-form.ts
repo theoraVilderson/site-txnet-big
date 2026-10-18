@@ -4,6 +4,7 @@ import { CONFIRM_WITHIN_MINUTES, CONFIRMED_BY_PERSON, isManualProvider, WINDOW_M
 import { samePresets } from "./presets";
 import { PROVIDER_FIELDS, secretFields, takesStaticRate, type Provider } from "./provider-fields";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { MONEY_MAX_PLACES } from "../../_lib/money";
 
 /** The values billing's enums accept. Shown as they are: a provider name is a logo, not a sentence. */
 export const PROVIDERS = Object.keys(PROVIDER_FIELDS) as Provider[];
@@ -69,16 +70,18 @@ const RATE = /^(0|[1-9]\d{0,11})(\.\d+)?$/;
  * The scale of the column each decimal lands in (`billing.payment_gateway`,
  * and the identical columns on `tenant.tenant_gateway_config`).
  *
- * `numeric(18, 2)` does not refuse a third place, it rounds it away: a
- * `feeCeiling` of `0.125` was saved as `0.13` and the operator who typed it was
- * told nothing. The wire refuses the same values (`gateway-admin.schema.ts`);
- * this names the field the refusal belongs to before a request is made.
+ * A `numeric` column does not refuse a place past its scale, it rounds it away:
+ * a `feeCeiling` of `0.125` was once saved as `0.13` and the operator who typed
+ * it was told nothing. The wire refuses the same values (`gateway-admin.schema.ts`);
+ * this names the field the refusal belongs to before a request is made. Money
+ * takes the columns' four places; the gateway currency's own are billing's to
+ * refuse, naming the field (F-116-s).
  */
 const PLACES: Partial<Record<keyof GatewayForm, number>> = {
-  minAcceptAmount: 2,
-  maxAcceptAmount: 2,
-  feeFloor: 2,
-  feeCeiling: 2,
+  minAcceptAmount: MONEY_MAX_PLACES,
+  maxAcceptAmount: MONEY_MAX_PLACES,
+  feeFloor: MONEY_MAX_PLACES,
+  feeCeiling: MONEY_MAX_PLACES,
   feeValue: 4,
   taxRatePercent: 4,
   // `numeric(30, 18)`: a currency change divides a rate (F-116-f), and the editor saves back what it read.

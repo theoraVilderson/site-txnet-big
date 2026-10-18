@@ -1,6 +1,7 @@
 import { ApiError } from "@/lib/api-error";
 import type { ShopOffer } from "@/lib/billing-api";
 import { StorageKeys, readStored, writeStored } from "@/lib/storage";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /**
  * The shop's rules that are not layout (F-111-e, F-114-d, `panel-web/contract.shop.md`).
@@ -127,7 +128,7 @@ export const hasOwnName = (offer: ShopOffer) => offer.nameKey !== offer.productN
 /** The shop's hand-off to the top-up page (`panelDepositForInvoicePath`). */
 export interface ForInvoice {
   invoiceId: string;
-  /** Billing's shortfall, at most two places — what a deposit amount takes. */
+  /** Billing's shortfall, at the invoice currency's places — what a deposit amount takes. */
   missing: string;
   /** What `missing` is in: the invoice's (F-116-h3). */
   currency: string;
@@ -136,7 +137,7 @@ export interface ForInvoice {
 /** The hand-off read off the top-up page's query, or `null` when it is not a well-formed one. */
 export function forInvoiceOf(invoiceId: string | null, missing: string | null, currency: string | null): ForInvoice | null {
   if (!invoiceId || !/^[0-9a-f-]{36}$/i.test(invoiceId)) return null;
-  if (!missing || !/^\d{1,12}(\.\d{1,2})?$/.test(missing)) return null;
+  if (!missing || !MONEY_PATTERN.test(missing)) return null;
   if (!currency || !/^[A-Z]{3}$/.test(currency)) return null;
   return { invoiceId, missing, currency };
 }

@@ -82,7 +82,9 @@ route returns the whole breakdown instead of the pieces of one.
    `_util/constants.ts` — one tenant's pricing compiled into the app. Either
    bound may be `null` (no limit): the box checks only the side that is set,
    and the slider needs both.
-8. **The amount box works in integer cents and speaks ASCII.** A slider that
+8. **The amount box works in the currency's integer minor units and speaks ASCII**
+   (`toMinor` / `fromMinorNumber` at `currencyDecimals`: whole rials, cents,
+   thousandths of a dinar — F-116-s), and types no more places than it has. A slider that
    emits a float is how `0.1 + 0.2` reaches a payment route as
    `0.30000000000000004`; Persian digits typed into the box are converted at
    the boundary, because the route's own regex takes ASCII only and a `fa` user

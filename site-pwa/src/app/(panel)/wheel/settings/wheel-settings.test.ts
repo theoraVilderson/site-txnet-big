@@ -106,39 +106,42 @@ describe("the odds and the cost, as billing counts them", () => {
     expect(oddsPercents(["1", "x"])).toBeNull();
   });
 
-  it("is Σ weight × cost / Σ weight in whole cents, half up", () => {
-    expect(expectedCostPerSpin([{ weight: "30", costAmount: "4" }, { weight: "70", costAmount: "0" }])).toBe("1.20");
-    expect(expectedCostPerSpin([{ weight: "1", costAmount: "1" }, { weight: "2", costAmount: "0" }])).toBe("0.33");
-    expect(expectedCostPerSpin([{ weight: "1", costAmount: "0.01" }, { weight: "1", costAmount: "0" }])).toBe("0.01");
-    expect(expectedCostPerSpin([{ weight: "1", costAmount: "abc" }])).toBeNull();
+  it("is Σ weight × cost / Σ weight in the currency's minor units, half up", () => {
+    expect(expectedCostPerSpin([{ weight: "30", costAmount: "4" }, { weight: "70", costAmount: "0" }], 2)).toBe("1.20");
+    expect(expectedCostPerSpin([{ weight: "1", costAmount: "1" }, { weight: "2", costAmount: "0" }], 2)).toBe("0.33");
+    expect(expectedCostPerSpin([{ weight: "1", costAmount: "0.01" }, { weight: "1", costAmount: "0" }], 2)).toBe("0.01");
+    expect(expectedCostPerSpin([{ weight: "1", costAmount: "abc" }], 2)).toBeNull();
+    // A toman has no minor unit: 0.33 toman a spin is told as 0, a cost of 0.5 is not one (F-116-s).
+    expect(expectedCostPerSpin([{ weight: "1", costAmount: "1" }, { weight: "2", costAmount: "0" }], 0)).toBe("0");
+    expect(expectedCostPerSpin([{ weight: "1", costAmount: "0.5" }], 0)).toBeNull();
   });
 
   it("says how many average spins the cap pays for", () => {
-    expect(capLastsSpins("10", "1.20")).toBe(8);
-    expect(capLastsSpins("10", "0.00")).toBeNull();
+    expect(capLastsSpins("10", "1.20", 2)).toBe(8);
+    expect(capLastsSpins("10", "0.00", 2)).toBeNull();
   });
 });
 
 describe("the form", () => {
   it("passes a wheel billing would take", () => {
-    expect(validateWheelForm(form()).ok).toBe(true);
+    expect(validateWheelForm(form(), 2).ok).toBe(true);
   });
 
   it("stops a wheel whose average spin costs more than the cap, exactly as billing compares", () => {
-    const v = validateWheelForm(form({ cap: "1.19" }));
+    const v = validateWheelForm(form({ cap: "1.19" }), 2);
     expect(v.ok).toBe(false);
     expect(v.overall).toBe(WHEEL_SETTINGS_KEYS.errors.expectedOverCap);
     // Equal is allowed. (The 4.00 prize is still over a 1.20 cap: an average never passes the dearest slot.)
-    expect(validateWheelForm(form({ cap: "1.20" })).overall).toBeNull();
+    expect(validateWheelForm(form({ cap: "1.20" }), 2).overall).toBeNull();
   });
 
   it("stops one prize that costs more than the whole cap", () => {
-    const v = validateWheelForm(form({ cap: "3", prizes: [{ ...form().prizes[0], weight: "1" }, { ...form().prizes[1], weight: "1000" }] }));
+    const v = validateWheelForm(form({ cap: "3", prizes: [{ ...form().prizes[0], weight: "1" }, { ...form().prizes[1], weight: "1000" }] }), 2);
     expect(v.prizes[0].costAmount).toBe(WHEEL_SETTINGS_KEYS.errors.prizeOverCap);
   });
 
   it("holds each kind to its own shape", () => {
-    const one = (p: Partial<WheelForm["prizes"][number]>) => validateWheelForm(form({ prizes: [{ ...form().prizes[0], ...p }, form().prizes[1]] })).prizes[0];
+    const one = (p: Partial<WheelForm["prizes"][number]>) => validateWheelForm(form({ prizes: [{ ...form().prizes[0], ...p }, form().prizes[1]] }), 2).prizes[0];
     expect(one({ prizeType: "extra_days", prizeValue: "1.5" }).prizeValue).toBeDefined();
     expect(one({ prizeType: "extra_days", prizeValue: "3" })).toEqual({});
     expect(one({ prizeType: "discount_coupon", prizeValue: "20" }).couponTemplateId).toBeDefined();
@@ -151,8 +154,8 @@ describe("the form", () => {
   });
 
   it("counts the slots", () => {
-    expect(validateWheelForm(form({ prizes: [form().prizes[0]] })).overall).toBe(WHEEL_SETTINGS_KEYS.errors.tooFewPrizes);
-    expect(validateWheelForm(form({ prizes: Array(PRIZES_MAX + 1).fill(form().prizes[1]) })).overall).toBe(WHEEL_SETTINGS_KEYS.errors.tooManyPrizes);
+    expect(validateWheelForm(form({ prizes: [form().prizes[0]] }), 2).overall).toBe(WHEEL_SETTINGS_KEYS.errors.tooFewPrizes);
+    expect(validateWheelForm(form({ prizes: Array(PRIZES_MAX + 1).fill(form().prizes[1]) }), 2).overall).toBe(WHEEL_SETTINGS_KEYS.errors.tooManyPrizes);
   });
 
   it("sends the schema's keys only, each prize with its kind's fields and no other", () => {

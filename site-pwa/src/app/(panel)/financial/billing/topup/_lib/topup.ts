@@ -1,5 +1,6 @@
 import type { DepositGateway, TenantTopupBody } from "@/lib/billing-api";
-import { fromCents, toCents } from "../../../deposit/_lib/deposit-amount";
+import { currencyDecimals } from "../../../../_lib/money";
+import { fromMinorNumber, toMinor } from "../../../deposit/_lib/deposit-amount";
 
 /**
  * The body for a billing top-up (F-019-e), or `null` when there is nothing
@@ -13,11 +14,13 @@ import { fromCents, toCents } from "../../../deposit/_lib/deposit-amount";
  */
 export function topupBody(gateway: DepositGateway | null, amount: string): TenantTopupBody | null {
   if (!gateway) return null;
-  const cents = toCents(amount);
-  if (cents === null || cents <= 0) return null;
-  const min = gateway.minAmount ? toCents(gateway.minAmount) : null;
-  const max = gateway.maxAmount ? toCents(gateway.maxAmount) : null;
-  if (min !== null && cents < min) return null;
-  if (max !== null && cents > max) return null;
-  return { gatewayId: gateway.id, amount: fromCents(cents) };
+  // In the gateway currency's minor units: a rial takes no fraction, a dinar three (F-116-s).
+  const decimals = currencyDecimals(gateway.currencyCode);
+  const minor = toMinor(amount, decimals);
+  if (minor === null || minor <= 0) return null;
+  const min = gateway.minAmount ? toMinor(gateway.minAmount, decimals) : null;
+  const max = gateway.maxAmount ? toMinor(gateway.maxAmount, decimals) : null;
+  if (min !== null && minor < min) return null;
+  if (max !== null && minor > max) return null;
+  return { gatewayId: gateway.id, amount: fromMinorNumber(minor, decimals) };
 }

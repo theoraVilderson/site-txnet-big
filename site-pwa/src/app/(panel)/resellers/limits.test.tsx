@@ -10,7 +10,7 @@
  *    both, as tenant-service does;
  *  - **a number the page made up.** Every value shown is the table's answer;
  *  - **a price past a quota sent as a number, as 0, or on a guard** (F-019-v9).
- *    It is a string with two places, positive, and only a quota has one;
+ *    It is a string a money column holds, positive, and only a quota has one;
  *  - **a blank product window sent as 0.** Blank is no bound; 0 includes
  *    nothing — every sale overage or refused (F-019-v9, ADR-0107 point 3).
  */
@@ -106,10 +106,10 @@ describe("limitValueOf", () => {
 });
 
 describe("unitPriceOf / overageBodyOf / productQuotaBodyOf", () => {
-  it("a price is a positive string with at most two places", () => {
+  it("a price is a positive string with at most the places a money column holds", () => {
     expect(unitPriceOf(" 0.50 ")).toBe("0.50");
     expect(unitPriceOf("12")).toBe("12");
-    for (const bad of ["", "0", "0.00", "-1", "1.234", "1,5", "x"]) expect(unitPriceOf(bad)).toBeUndefined();
+    for (const bad of ["", "0", "0.00", "-1", "1.23456", "1,5", "x"]) expect(unitPriceOf(bad)).toBeUndefined();
   });
 
   it("stop needs no price; overage needs a valid one", () => {

@@ -1,5 +1,6 @@
 import type { OverageBody, PackageProductBody, ProductQuota, QuotaOverageMode } from "@/lib/tenant-api";
 import { RESELLER_KEYS } from "./resellers";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /** The limits page's strings (C-06). */
 export const LIMIT_KEYS = RESELLER_KEYS.limits;
@@ -30,7 +31,7 @@ export const PRODUCT_WINDOW_MAX = 10_000_000;
  */
 export function unitPriceOf(typed: string): string | undefined {
   const v = typed.trim();
-  if (!/^\d{1,16}(\.\d{1,2})?$/.test(v)) return undefined;
+  if (!MONEY_PATTERN.test(v)) return undefined;
   return /[1-9]/.test(v) ? v : undefined;
 }
 

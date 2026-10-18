@@ -1,5 +1,6 @@
 import type { CreatePackageBody, MeterRateEdit, MeterRateInput, PackageMeterRate, TenantPackage, UpdatePackageBody } from "@/lib/tenant-api";
 import { RESELLER_KEYS, type Errors } from "./resellers";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /** The packages page's strings (C-06). */
 export const PACKAGE_KEYS = RESELLER_KEYS.packages;
@@ -47,7 +48,6 @@ export const WHOLESALE_METERS = [
 type WholesaleMeter = (typeof WHOLESALE_METERS)[number]["meterKey"];
 
 // tenant-package.schema.ts's shapes, so a refusal is caught before the call.
-const PRICE = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 const NAME_MAX = 80;
 const positive = (s: string) => /[1-9]/.test(s);
@@ -98,7 +98,7 @@ export function validatePackage(form: PackageForm): Errors<PackageForm> {
   if (!name || name.length > NAME_MAX) errors.name = K.errors.name;
   const bad = (raw: string) => {
     const v = raw.trim();
-    return v !== "" && (!PRICE.test(v) || !positive(v));
+    return v !== "" && (!MONEY_PATTERN.test(v) || !positive(v));
   };
   if (bad(form.monthlyPrice)) errors.monthlyPrice = K.errors.price;
   if (bad(form.yearlyPrice)) errors.yearlyPrice = K.errors.price;

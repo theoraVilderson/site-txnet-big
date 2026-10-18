@@ -94,7 +94,7 @@ The routes, the scope and every rule are
     `DiscountRuleStatus`); no owner scope filter, since a rule never serves
     another tenant. **No delete** — an invoice may name a rule, so a row only
     switches off and on. The form mirrors `checkShape` and the schema
-    (`validateRuleForm`): a name ≤ 80, a value > 0 with ≤ 2 decimals and a
+    (`validateRuleForm`): a name ≤ 80, a value > 0 — a percentage at two places, money at most the columns' four (F-116-s; billing refuses one finer than its currency, with its sentence) — and a
     percentage ≤ 100, one target (everything / a product / a category), one
     audience (everyone / named users ≤ 1000 / a user group), days as rule 4 —
     `endsAt` the day after the last day picked, which billing reads as

@@ -2,6 +2,7 @@ import type { Me } from "@/lib/auth-api";
 import { WHEEL_PRIZE_TYPES, type WheelPrizeType, type WheelVersion, type WheelVersionBody } from "@/lib/engagement-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { amountPattern } from "../../../_lib/money";
 
 /** The page's strings as generated constants (C-06). */
 export const WHEEL_SETTINGS_KEYS = FrontendI18nKeys.common.wheelSettings;
@@ -48,26 +49,30 @@ export const PRIZE_TYPE_KEYS: Record<WheelPrizeType, string> = K.prizeTypes;
 
 // ------------------------------------------------------------- money, exactly
 
-/** billing's `DECIMAL`: no sign, no leading zero, at most two places. */
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
+/** A prize's value and an odd are told to two places — GB, days, a percent, not money. */
+const HUNDREDTHS = amountPattern(2);
 const WHOLE = /^(0|[1-9]\d{0,8})$/;
 
-/** A decimal string as whole cents, or `null` when billing would refuse it. Never a float (C-02). */
-function cents(v: string): bigint | null {
+/** A decimal string as whole units at `places`, or `null` when billing would refuse it. Never a float (C-02). */
+function unitsAt(v: string, places: number, pattern: RegExp): bigint | null {
   const s = v.trim();
-  if (!DECIMAL.test(s)) return null;
+  if (!pattern.test(s)) return null;
   const [whole, fraction = ""] = s.split(".");
-  return BigInt(whole) * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
+  return BigInt(whole) * BigInt(10) ** BigInt(places) + BigInt(fraction.padEnd(places, "0") || "0");
 }
+/** Money in the wheel currency's minor units: a toman has none, a dollar two (F-116-s). */
+const moneyUnits = (v: string, decimals: number) => unitsAt(v, decimals, amountPattern(decimals));
+const hundredths = (v: string) => unitsAt(v, 2, HUNDREDTHS);
 
 function whole(v: string): number | null {
   const s = v.trim();
   return WHOLE.test(s) ? Number(s) : null;
 }
 
-const fromCents = (c: bigint) => `${c / BigInt(100)}.${(c % BigInt(100)).toString().padStart(2, "0")}`;
+const fromUnits = (u: bigint, places: number) =>
+  places === 0 ? String(u) : `${u / BigInt(10) ** BigInt(places)}.${(u % BigInt(10) ** BigInt(places)).toString().padStart(places, "0")}`;
 
-/** `n / d` to two places, half up; both positive. */
+/** `n / d` to the unit, half up; both positive. */
 const divided = (n: bigint, d: bigint) => (BigInt(2) * n + d) / (BigInt(2) * d);
 
 /** Each slot's chance as a percent to two places, as the user's wheel shows it; `null` while a weight is unreadable. */
@@ -75,21 +80,21 @@ export function oddsPercents(weights: readonly string[]): string[] | null {
   const ws = weights.map(whole);
   if (ws.some((w) => w === null || w < 1)) return null;
   const total = BigInt(ws.reduce((s: number, w) => s + (w as number), 0));
-  return ws.map((w) => fromCents(divided(BigInt(w as number) * BigInt(10_000), total)));
+  return ws.map((w) => fromUnits(divided(BigInt(w as number) * BigInt(10_000), total), 2));
 }
 
-/** Σ weight × cost / Σ weight to the cent, half up: billing's `expectedCostPerSpin`. `null` while a figure is unreadable. */
-export function expectedCostPerSpin(prizes: ReadonlyArray<{ weight: string; costAmount: string }>): string | null {
-  const sums = costSums(prizes);
-  return sums && fromCents(divided(sums.weighted, sums.total));
+/** Σ weight × cost / Σ weight to the currency's minor unit, half up: billing's `expectedCostPerSpin`. `null` while a figure is unreadable. */
+export function expectedCostPerSpin(prizes: ReadonlyArray<{ weight: string; costAmount: string }>, decimals: number): string | null {
+  const sums = costSums(prizes, decimals);
+  return sums && fromUnits(divided(sums.weighted, sums.total), decimals);
 }
 
-function costSums(prizes: ReadonlyArray<{ weight: string; costAmount: string }>): { weighted: bigint; total: bigint } | null {
+function costSums(prizes: ReadonlyArray<{ weight: string; costAmount: string }>, decimals: number): { weighted: bigint; total: bigint } | null {
   let weighted = BigInt(0);
   let total = BigInt(0);
   for (const p of prizes) {
     const w = whole(p.weight);
-    const c = cents(p.costAmount);
+    const c = moneyUnits(p.costAmount, decimals);
     if (w === null || w < 1 || c === null) return null;
     weighted += BigInt(w) * c;
     total += BigInt(w);
@@ -98,9 +103,9 @@ function costSums(prizes: ReadonlyArray<{ weight: string; costAmount: string }>)
 }
 
 /** How many average spins the cap pays for in a day; `null` when a spin costs nothing on average. */
-export function capLastsSpins(cap: string, expected: string): number | null {
-  const c = cents(cap);
-  const e = cents(expected);
+export function capLastsSpins(cap: string, expected: string, decimals: number): number | null {
+  const c = moneyUnits(cap, decimals);
+  const e = moneyUnits(expected, decimals);
   if (c === null || e === null || e === BigInt(0)) return null;
   return Number(c / e);
 }
@@ -214,7 +219,7 @@ function inRange(v: string, min: number, max: number, optional = false): boolean
 }
 
 /** Each kind's own fields, the shape billing's `checkPrize` and the database hold. */
-function checkPrize(p: PrizeForm, cap: bigint | null): Errors<PrizeForm> {
+function checkPrize(p: PrizeForm, cap: bigint | null, decimals: number): Errors<PrizeForm> {
   const e: Errors<PrizeForm> = {};
   const label = p.label.trim();
   if (!label) e.label = K.errors.labelRequired;
@@ -222,12 +227,12 @@ function checkPrize(p: PrizeForm, cap: bigint | null): Errors<PrizeForm> {
   if (!inRange(p.weight, 1, 1_000_000)) e.weight = K.errors.weight;
   if (!inRange(p.dailyStockLimit, 0, 1_000_000, true)) e.dailyStockLimit = K.errors.wholeNumber;
 
-  const cost = cents(p.costAmount);
+  const cost = moneyUnits(p.costAmount, decimals);
   if (cost === null) e.costAmount = K.errors.amount;
   else if (p.prizeType === "empty" && cost !== BigInt(0)) e.costAmount = K.errors.emptyCostsNothing;
   else if (cap !== null && cost > cap) e.costAmount = K.errors.prizeOverCap;
 
-  const value = cents(p.prizeValue);
+  const value = hundredths(p.prizeValue);
   switch (p.prizeType) {
     case "bonus_traffic_gb":
       if (value === null || value <= BigInt(0)) e.prizeValue = K.errors.positive;
@@ -255,22 +260,22 @@ function checkPrize(p: PrizeForm, cap: bigint | null): Errors<PrizeForm> {
  * prize's shape, the cap. Billing checks all of it again; this keeps a sure
  * refusal off the wire and says which field.
  */
-export function validateWheelForm(form: WheelForm): WheelFormCheck {
+export function validateWheelForm(form: WheelForm, decimals: number): WheelFormCheck {
   const fields: Errors<WheelFields> = {};
-  const cap = cents(form.cap);
+  const cap = moneyUnits(form.cap, decimals);
   if (cap === null) fields.cap = K.errors.amount;
   if (!inRange(form.cooldownHours, 0, 24 * 30)) fields.cooldownHours = K.errors.wholeNumber;
   if (!inRange(form.maxSpins, 1, 24)) fields.maxSpins = K.errors.maxSpins;
   if (!inRange(form.minAgeHours, 0, 24 * 365)) fields.minAgeHours = K.errors.wholeNumber;
-  if (form.minPaid.trim() !== "" && cents(form.minPaid) === null) fields.minPaid = K.errors.amount;
+  if (form.minPaid.trim() !== "" && moneyUnits(form.minPaid, decimals) === null) fields.minPaid = K.errors.amount;
   if (!inRange(form.minOrders, 0, 10_000, true)) fields.minOrders = K.errors.wholeNumber;
 
-  const prizes = form.prizes.map((p) => checkPrize(p, cap));
+  const prizes = form.prizes.map((p) => checkPrize(p, cap, decimals));
   let overall: Key | null = null;
   if (form.prizes.length < PRIZES_MIN) overall = K.errors.tooFewPrizes;
   else if (form.prizes.length > PRIZES_MAX) overall = K.errors.tooManyPrizes;
   else {
-    const sums = costSums(form.prizes);
+    const sums = costSums(form.prizes, decimals);
     // Exactly billing's comparison: Σ w·c / Σ w > cap, without dividing.
     if (sums && cap !== null && sums.weighted > cap * sums.total) overall = K.errors.expectedOverCap;
   }

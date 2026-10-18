@@ -11,6 +11,7 @@ import type {
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerUsersPath, panelResellerPath } from "@/lib/routes";
 import { isPlatformTenant } from "@/lib/tenant-type";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /** The page's strings as generated constants (C-06). */
 export const RESELLER_KEYS = FrontendI18nKeys.common.resellers;
@@ -122,7 +123,6 @@ export function resellerTab(raw: string | null, tabs: readonly ResellerTab[]): R
 // Each service's own shapes, so a refusal is caught before the call.
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
 const TEXT_MAX = 500;
 
 export type Errors<F> = Partial<Record<keyof F | "confirm", string>>;
@@ -233,7 +233,7 @@ export const emptyAdjustForm = (): AdjustForm => ({ direction: "credit", amount:
 export function validateAdjust(form: AdjustForm): Errors<AdjustForm> {
   const errors: Errors<AdjustForm> = {};
   const amount = form.amount.trim();
-  if (!DECIMAL.test(amount) || Number(amount) <= 0) errors.amount = K.errors.amount;
+  if (!MONEY_PATTERN.test(amount) || Number(amount) <= 0) errors.amount = K.errors.amount;
   if (form.note.trim().length > TEXT_MAX) errors.note = K.errors.note;
   return errors;
 }

@@ -34,12 +34,12 @@ beforeEach(() => {
 });
 
 describe("the cost form", () => {
-  it("takes a cost per sale of 0 or more to the cent, and a unit cost to 8 places", () => {
+  it("takes a cost per sale of 0 or more a money column holds, and a unit cost to 8 places", () => {
     expect(validateVariantCost("2.50")).toBeNull();
     expect(validateVariantCost("0")).toBeNull();
     expect(validateVariantCost("")).not.toBeNull();
     expect(validateVariantCost("-1")).not.toBeNull();
-    expect(validateVariantCost("1.234")).not.toBeNull();
+    expect(validateVariantCost("1.23456")).not.toBeNull();
     expect(validateMeterCost({ unitSize: "1000", unitCost: "0.00004" })).toEqual({});
     expect(Object.keys(validateMeterCost({ unitSize: "0", unitCost: "0.000000001" })).sort()).toEqual(["unitCost", "unitSize"]);
   });

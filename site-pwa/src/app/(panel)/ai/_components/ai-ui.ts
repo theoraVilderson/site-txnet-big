@@ -1,6 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { ApiError } from "@/lib/api-error";
 import { AI_OFFER_REFUSALS } from "@/lib/ai-api";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 export const K = FrontendI18nKeys.common.ai;
 
@@ -15,5 +16,6 @@ export function refusalKey(e: unknown): string | null {
 /** The server's bounds, held here too so a value it would refuse is never sent (ai contract.admin.md rule 4). */
 export const THRESHOLD_RE = /^(0(\.\d{1,2})?|1(\.0{1,2})?)$/;
 export const PERCENT_RE = /^\d{1,3}(\.\d{1,2})?$/;
-export const AMOUNT_RE = /^\d{1,16}(\.\d{1,2})?$/;
+/** A budget a money column holds; its currency's places are billing's to check (F-116-s). */
+export const AMOUNT_RE = MONEY_PATTERN;
 export const HOLDOUT = { min: 5, max: 20 } as const;

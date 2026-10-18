@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { billingApi, type DepositGateway, type DepositQuote } from "@/lib/billing-api";
 import { ApiError } from "@/lib/api-error";
 import { QUOTE_DEBOUNCE_MS, useDepositQuote, type DepositInputs } from "./_hooks/useDepositQuote";
-import { fromCents, fromMinor, offeredPresets, tomanFromRial, toCents } from "./_lib/deposit-amount";
+import { fromMinor, fromMinorNumber, offeredPresets, tomanFromRial, toMinor } from "./_lib/deposit-amount";
 
 /**
  * The top-up page (F-093-e), and the one thing about it that has to be true:
@@ -206,25 +206,29 @@ describe("useDepositQuote", () => {
   });
 });
 
-describe("the amount box works in cents", () => {
-  it("reads a decimal string and writes one back", () => {
-    expect(toCents("10")).toBe(1000);
-    expect(toCents("10.5")).toBe(1050);
-    expect(toCents("0.07")).toBe(7);
-    expect(fromCents(1050)).toBe("10.50");
-    expect(fromCents(7)).toBe("0.07");
+describe("the amount box works in the currency's minor units (F-116-s)", () => {
+  it("reads a decimal string and writes one back, at the currency's places", () => {
+    expect(toMinor("10", 2)).toBe(1000);
+    expect(toMinor("10.5", 2)).toBe(1050);
+    expect(toMinor("0.07", 2)).toBe(7);
+    expect(fromMinorNumber(1050, 2)).toBe("10.50");
+    expect(fromMinorNumber(7, 2)).toBe("0.07");
+    // A rial has no minor unit, a dinar three.
+    expect([toMinor("150000", 0), fromMinorNumber(150000, 0)]).toEqual([150000, "150000"]);
+    expect([toMinor("1.234", 3), fromMinorNumber(1234, 3)]).toEqual([1234, "1.234"]);
   });
 
-  it("refuses what is not an amount rather than answering NaN", () => {
-    expect(toCents("")).toBeNull();
-    expect(toCents("abc")).toBeNull();
-    expect(toCents("1.234")).toBeNull();
-    expect(toCents("-1")).toBeNull();
+  it("refuses what is not an amount in that currency rather than answering NaN", () => {
+    expect(toMinor("", 2)).toBeNull();
+    expect(toMinor("abc", 2)).toBeNull();
+    expect(toMinor("1.234", 2)).toBeNull();
+    expect(toMinor("1000.5", 0)).toBeNull();
+    expect(toMinor("-1", 2)).toBeNull();
   });
 
   it("survives the round trip a slider makes of a third of a dollar", () => {
     // 0.1 + 0.2 in floats is the reason this is integer arithmetic.
-    expect(fromCents(toCents("0.10")! + toCents("0.20")!)).toBe("0.30");
+    expect(fromMinorNumber(toMinor("0.10", 2)! + toMinor("0.20", 2)!, 2)).toBe("0.30");
   });
 });
 

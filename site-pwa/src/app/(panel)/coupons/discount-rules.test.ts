@@ -101,7 +101,8 @@ describe("validateRuleForm", () => {
   it.each([
     ["0", "percentage", RULE_KEYS.errors.value],
     ["-5", "percentage", RULE_KEYS.errors.value],
-    ["1.005", "fixed_amount", RULE_KEYS.errors.value],
+    ["1.00005", "fixed_amount", RULE_KEYS.errors.value],
+    ["12.345", "percentage", RULE_KEYS.errors.value],
     ["100.01", "percentage", RULE_KEYS.errors.percent],
   ] as const)("refuses value %s as a %s", (value, kind, key) => {
     expect(validateRuleForm(form({ value, kind })).value).toBe(key);

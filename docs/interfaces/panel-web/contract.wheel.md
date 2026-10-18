@@ -44,7 +44,7 @@ ADR-0111), both through `lib/engagement-api.ts`:
    before the save, and opens the editor on the newest version (the upcoming
    one, else the one in force), so a save restates what it does not change.
    Any version in the list can start the next one. There is no edit and no delete.
-3. **Odds and cost are counted as billing counts them**, in whole cents
+3. **Odds and cost are counted as billing counts them** — odds in hundredths, money in the wheel currency's minor units (F-116-s)
    (`BigInt`, never a float — C-02): odds = weight / Σ weight; average per spin
    = Σ weight × cost / Σ weight, half up; how many average spins the cap pays
    for. A form whose average passes the cap is stopped with billing's exact
@@ -67,5 +67,5 @@ ADR-0111), both through `lib/engagement-api.ts`:
 on every slot of 2..16 from any start, no randomness under `wheel/`, the tap's
 key, the result sentence, every key in `en` and `fa`.
 `wheel/settings/wheel-settings.test.ts` — the refusal unions, the guard's key
-and schema bounds, the menu, odds and average in cents, the cap rules, each
+and schema bounds, the menu, odds in hundredths and the average in the currency's minor units, the cap rules, each
 kind's shape, the strict body, the form opened on a version, every key.

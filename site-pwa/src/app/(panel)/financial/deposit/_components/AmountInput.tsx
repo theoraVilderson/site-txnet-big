@@ -6,8 +6,8 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { DepositGateway } from "@/lib/billing-api";
 import { toEnglishDigits } from "@/util/helper";
-import { amountInWords, formatMoney, rialInTomanWords } from "../../../_lib/money";
-import { fromCents, offeredPresets, toCents } from "../_lib/deposit-amount";
+import { amountInWords, currencyDecimals, formatMoney, MONEY_MAX_PLACES, rialInTomanWords } from "../../../_lib/money";
+import { fromMinorNumber, offeredPresets, toMinor } from "../_lib/deposit-amount";
 
 const D = FrontendI18nKeys.common.deposit.amount;
 
@@ -23,11 +23,12 @@ interface AmountInputProps {
 }
 
 /**
- * What the box will accept: digits, one separator, at most two places. A
- * trailing `.` survives so a user can type `10.` on the way to `10.50` — the
- * value is only ever *read* through `toCents`, which refuses it.
+ * What the box will accept: digits, one separator, at most the currency's
+ * places (none for a rial, three for a dinar). A trailing `.` survives so a
+ * user can type `10.` on the way to `10.50` — the value is only ever *read*
+ * through `toMinor`, which refuses it.
  */
-const TYPING = /^\d{0,16}(\.\d{0,2})?$/;
+const typingPattern = (decimals: number) => (decimals === 0 ? /^\d{0,16}$/ : new RegExp(`^\\d{0,16}(\\.\\d{0,${decimals}})?$`));
 
 /**
  * The amount box (F-093-e): a number, the same number in words, the gateway's
@@ -54,10 +55,12 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
   const words =
     currency === "IRR" ? rialInTomanWords(amount, { lang, t }) : currency ? amountInWords(amount, currency, { lang, t }) : null;
 
-  const cents = toCents(amount);
+  // The currency's minor units (F-116-s); a currency not known yet reads as the columns' widest.
+  const decimals = currency ? currencyDecimals(currency) : MONEY_MAX_PLACES;
+  const minor = toMinor(amount, decimals);
   // A bound the gateway left open is `null`: no check on that side, and no slider without both.
-  const min = gateway?.minAmount ? toCents(gateway.minAmount) : null;
-  const max = gateway?.maxAmount ? toCents(gateway.maxAmount) : null;
+  const min = gateway?.minAmount ? toMinor(gateway.minAmount, decimals) : null;
+  const max = gateway?.maxAmount ? toMinor(gateway.maxAmount, decimals) : null;
   const presets = gateway ? offeredPresets(gateway) : [];
 
   // A hundred stops across whatever range this gateway takes. A slider is a
@@ -67,7 +70,7 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
 
   function handleTyped(raw: string) {
     const next = toEnglishDigits(raw).replace(/[٫,\s]/g, "").replace(/^\./, "0.");
-    if (next === "" || TYPING.test(next)) onAmountChange(next);
+    if (next === "" || typingPattern(decimals).test(next)) onAmountChange(next);
   }
 
   return (
@@ -118,10 +121,10 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
               key={preset}
               type="button"
               disabled={disabled}
-              aria-pressed={cents !== null && cents === toCents(preset)}
+              aria-pressed={minor !== null && minor === toMinor(preset, decimals)}
               onClick={() => onAmountChange(preset)}
               className={`rounded-xl border px-2 py-2.5 text-xs font-bold transition-colors ${
-                cents !== null && cents === toCents(preset)
+                minor !== null && minor === toMinor(preset, decimals)
                   ? "border-primary bg-primary text-on-accent"
                   : "border-card-border bg-bg-inner text-text-secondary hover:border-text-primary"
               }`}
@@ -141,13 +144,13 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
             min={min}
             max={sliderMax}
             step={sliderStep}
-            value={Math.min(Math.max(cents ?? min, min), sliderMax)}
-            onChange={(e) => onAmountChange(fromCents(Number(e.target.value)))}
+            value={Math.min(Math.max(minor ?? min, min), sliderMax)}
+            onChange={(e) => onAmountChange(fromMinorNumber(Number(e.target.value), decimals))}
             className="range-slider"
           />
           <div className="mt-3 flex justify-between text-3xs font-bold text-text-secondary">
-            <span>{t("common", D.min, { amount: money(fromCents(min)) })}</span>
-            <span>{t("common", D.max, { amount: money(fromCents(max)) })}</span>
+            <span>{t("common", D.min, { amount: money(fromMinorNumber(min, decimals)) })}</span>
+            <span>{t("common", D.max, { amount: money(fromMinorNumber(max, decimals)) })}</span>
           </div>
         </div>
       )}
@@ -155,10 +158,10 @@ export function AmountInput({ amount, onAmountChange, gateway, currency, disable
       {/* The gateway refuses these itself with a 400; saying so here saves the
           user a round trip, and the server is still the one that decides. */}
       <p className="mt-3 min-h-[1.25rem] text-2xs font-bold text-error" role="status">
-        {cents !== null && min !== null && cents > 0 && cents < min
-          ? t("common", D.belowMin, { amount: money(fromCents(min)) })
-          : cents !== null && max !== null && cents > max
-            ? t("common", D.aboveMax, { amount: money(fromCents(max)) })
+        {minor !== null && min !== null && minor > 0 && minor < min
+          ? t("common", D.belowMin, { amount: money(fromMinorNumber(min, decimals)) })
+          : minor !== null && max !== null && minor > max
+            ? t("common", D.aboveMax, { amount: money(fromMinorNumber(max, decimals)) })
             : ""}
       </p>
     </section>

@@ -9,7 +9,7 @@ import { useRowKeys } from "../../../_hooks/useRowKeys";
 import { usePrizeSources } from "../../../_hooks/usePrizeSources";
 import { PrizeFields, PrizeRowHeader } from "../../../_components/prizes/PrizeFields";
 import { moveRow } from "../../../_lib/rows";
-import { formatMoney } from "../../../_lib/money";
+import { currencyDecimals, formatMoney, MONEY_MAX_PLACES } from "../../../_lib/money";
 import { formatDay, plainNumber } from "../../_lib/wheel";
 import {
   PRIZES_MAX,
@@ -62,10 +62,12 @@ export function WheelEditor({
   const { templates } = usePrizeSources();
   const groups = useAudienceGroups(null);
 
-  const check = useMemo(() => validateWheelForm(form), [form]);
+  // The wheel's money is in its currency's minor units; until it is known, the columns' widest (F-116-s).
+  const decimals = currency ? currencyDecimals(currency) : MONEY_MAX_PLACES;
+  const check = useMemo(() => validateWheelForm(form, decimals), [form, decimals]);
   const odds = oddsPercents(form.prizes.map((p) => p.weight));
-  const expected = expectedCostPerSpin(form.prizes);
-  const lasts = expected && capLastsSpins(form.cap, expected);
+  const expected = expectedCostPerSpin(form.prizes, decimals);
+  const lasts = expected && capLastsSpins(form.cap, expected, decimals);
   const cur = currency ?? "—";
   const money = (amount: string) => (currency ? formatMoney(amount, currency, { lang, t }) : amount);
   const shown = (key: string | undefined) => (tried ? key : undefined);

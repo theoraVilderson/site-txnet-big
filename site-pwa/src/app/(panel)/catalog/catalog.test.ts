@@ -452,7 +452,7 @@ describe("the variant form", () => {
     [{ sku: "bad sku!" }, "sku"],
     [{ price: "" }, "price"],
     [{ price: "-1" }, "price"],
-    [{ price: "1.234" }, "price"],
+    [{ price: "1.23456" }, "price"],
     [{ durationDays: "0" }, "durationDays"],
     [{ durationDays: "3651" }, "durationDays"],
     [{ quotas: [{ metric: "traffic_bytes" as const, limit: "lots", resetPolicy: "none" as const }] }, "quotas"],

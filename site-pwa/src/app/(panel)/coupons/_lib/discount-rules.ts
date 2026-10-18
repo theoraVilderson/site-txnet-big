@@ -2,6 +2,7 @@ import type { CreateDiscountRuleBody, DiscountRule, DiscountRuleRejection, Disco
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { COUPON_KEYS, dayToInstant, instantToDay } from "./coupon-form";
 import { platformToday } from "../../_lib/datetime";
+import { amountPattern, MONEY_PATTERN } from "../../_lib/money";
 
 /**
  * Tab 3 of the coupons page — discounts with no code (F-114-k, ADR-0087).
@@ -100,8 +101,8 @@ export function formFromRule(r: DiscountRule): RuleForm {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** billing's `DECIMAL`: up to 16 whole digits and 2 decimals, no sign. */
-const DECIMAL = /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/;
+/** A percentage at two places; money is any amount a column holds — billing refuses one finer than its currency (F-116-s). */
+const PERCENT = amountPattern(2);
 
 /** The ids typed or picked, de-duplicated, in order. */
 export const idsOf = (text: string) => [...new Set(text.split(/[\s,]+/).map((x) => x.trim()).filter(Boolean))];
@@ -116,7 +117,7 @@ export function validateRuleForm(f: RuleForm): RuleFormErrors {
   else if (name.length > RULE_NAME_MAX) put("name", E.nameTooLong);
 
   const value = f.value.trim();
-  if (!DECIMAL.test(value) || Number(value) <= 0) put("value", E.value);
+  if (!(f.kind === "percentage" ? PERCENT : MONEY_PATTERN).test(value) || Number(value) <= 0) put("value", E.value);
   else if (f.kind === "percentage" && Number(value) > 100) put("value", E.percent);
 
   if (f.target === "product" && !UUID.test(f.productId.trim())) put("productId", E.pickProduct);

@@ -29,7 +29,7 @@ scope and every rule are [catalog/contract.md](../../domains/catalog/contract.md
    `RESET_POLICIES`.
 4. **The forms mirror billing's schema** (`validateProductForm`,
    `validateVariantForm`): key, names, feature keys, SKU (sent
-   upper-cased), a price of at most 2 places and never negative, a duration of
+   upper-cased), a price of at most the columns' four places (F-116-s; billing refuses one finer than its currency, with its sentence) and never negative, a duration of
    1..3650 days or blank for permanent, a whole-number limit once per metric.
 5. **A price is history.** A new price is a new row. Today or blank means from
    now; a later day starts at its first instant in Tehran (`+03:30`); a day

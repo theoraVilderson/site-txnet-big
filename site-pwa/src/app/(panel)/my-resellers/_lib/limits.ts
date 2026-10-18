@@ -1,5 +1,6 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import type { ResellerLimitInEffect, SubscriptionChangePreview } from "@/lib/tenant-api";
+import { MONEY_PATTERN } from "../../_lib/money";
 
 /** The workspace's limits card strings (C-06). */
 export const MY_LIMIT_KEYS = FrontendI18nKeys.common.resellerOnboarding.limits;
@@ -45,7 +46,7 @@ export function includedReading(included: number | null, used: number): { share:
 /** A spend cap typed: 0 or more, at most two places (`0` = no extras at all); `undefined` keeps save off. */
 export function capAmountOf(typed: string): string | undefined {
   const v = typed.trim();
-  return /^\d{1,16}(\.\d{1,2})?$/.test(v) ? v : undefined;
+  return MONEY_PATTERN.test(v) ? v : undefined;
 }
 
 /** Two decimal strings compared exactly (C-02): negative, zero or positive; `null` if either is unreadable. */

@@ -150,7 +150,8 @@ describe("gateway form — validation", () => {
     // `feeValue` is numeric(18, 4). Postgres rounds a finer value instead of refusing it,
     // so 0.125 was saved as 0.13 and nobody was told (F-104-ad).
     for (const k of ["minAcceptAmount", "maxAcceptAmount", "feeFloor", "feeCeiling"] as const) {
-      expect(validateForm({ ...base, [k]: "0.125" })[k]).toEqual({ kind: "precision", places: 2 });
+      expect(validateForm({ ...base, [k]: "0.125" })[k]).toBeUndefined();
+      expect(validateForm({ ...base, [k]: "0.12345" })[k]).toEqual({ kind: "precision", places: 4 });
       expect(validateForm({ ...base, [k]: "0.12" })[k]).toBeUndefined();
     }
     expect(validateForm({ ...base, feeValue: "2.34567" }).feeValue).toEqual({ kind: "precision", places: 4 });
@@ -239,11 +240,13 @@ describe("linking gateways to tenants", () => {
  * a list that looks saved is a list billing stored.
  */
 describe("quick amounts", () => {
-  it("adds an amount sorted and in two decimals, and refuses what billing would", () => {
+  it("adds an amount sorted and written as billing writes it, and refuses what billing would", () => {
     expect(addPreset(["5.00"], " 2.5 ")).toEqual({ list: ["2.50", "5.00"] });
     expect(addPreset(["2.50"], "2.5")).toEqual({ error: "duplicate" });
     expect(addPreset([], "0")).toEqual({ error: "positive" });
-    expect(addPreset([], "1.005")).toEqual({ error: "decimal" });
+    expect(addPreset([], "1.00005")).toEqual({ error: "decimal" });
+    // A dinar keeps its third place, and orders among two-place amounts (F-116-s).
+    expect(addPreset(["1.50"], "1.234")).toEqual({ list: ["1.234", "1.50"] });
     expect(addPreset([], "abc")).toEqual({ error: "decimal" });
     const full = Array.from({ length: MAX_PRESETS }, (_, i) => `${i + 1}.00`);
     expect(addPreset(full, "99")).toEqual({ error: "limit" });

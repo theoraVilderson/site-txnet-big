@@ -179,9 +179,9 @@ describe("status", () => {
 });
 
 describe("adjusting the billing wallet", () => {
-  it("takes a positive decimal of at most two places and a note of at most 500", () => {
+  it("takes a positive decimal a money column holds and a note of at most 500", () => {
     expect(validateAdjust({ direction: "credit", amount: "250.50", note: "" })).toEqual({});
-    for (const amount of ["", "0", "0.00", "-1", "1.234", "1e3", "01"]) {
+    for (const amount of ["", "0", "0.00", "-1", "1.23456", "1e3", "01"]) {
       expect(validateAdjust({ direction: "credit", amount, note: "" }), amount).toHaveProperty("amount");
     }
     expect(validateAdjust({ direction: "debit", amount: "1", note: "x".repeat(501) })).toHaveProperty("note");

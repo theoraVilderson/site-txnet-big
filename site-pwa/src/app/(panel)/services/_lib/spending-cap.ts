@@ -24,7 +24,8 @@ export function capAmount(raw: string): string | null {
   const latin = toEnglishDigits(raw.trim())
     .replace(/٫/g, ".")
     .replace(/[,٬\s]/g, "");
-  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(latin);
+  // The wallet currency's places are billing's to check; the box takes what a column holds (F-116-s).
+  const match = /^(\d+)(?:\.(\d{1,4}))?$/.exec(latin);
   if (!match) return null;
   const whole = match[1].replace(/^0+(?=\d)/, "");
   const fraction = match[2] ?? "";

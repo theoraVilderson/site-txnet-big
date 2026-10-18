@@ -85,6 +85,33 @@ const SCALES = [W.scales.thousand, W.scales.million, W.scales.billion, W.scales.
 /** The locale `Intl` is asked a currency's decimals in: the answer is the same in every language, and no person reads it (C-17). */
 const MACHINE_LOCALE = "en-US";
 
+/** The most places an amount may carry: the money columns' scale, `DECIMAL(20,4)` (ADR-0153). */
+export const MONEY_MAX_PLACES = 4;
+
+/**
+ * An unsigned decimal string with at most `places` places, as the API takes
+ * an amount: `amountPattern(currencyDecimals(code))` for one currency's own,
+ * `MONEY_PATTERN` for the columns' four when the form does not know it.
+ */
+export function amountPattern(places: number): RegExp {
+  return places === 0 ? /^(0|[1-9]\d{0,15})$/ : new RegExp(`^(0|[1-9]\\d{0,15})(\\.\\d{1,${places}})?$`);
+}
+
+/** Any amount a money column holds; the server refuses one finer than its currency, with its own message (F-116-r). */
+export const MONEY_PATTERN = amountPattern(MONEY_MAX_PLACES);
+
+/** An amount as the API writes it (billing's `moneyText`): every place it has, never fewer than two — `2.5` is `2.50`, `1.234` stays. */
+export function moneyTextOf(amount: string): string {
+  const [whole, fraction = ""] = amount.split(".");
+  return `${whole}.${fraction.padEnd(2, "0")}`;
+}
+
+/** An amount as an integer at the columns' four places, to order and compare amounts of any places without a float (C-02). */
+export function moneyUnits(amount: string): bigint {
+  const [whole, fraction = ""] = amount.split(".");
+  return BigInt(whole) * BigInt(10) ** BigInt(MONEY_MAX_PLACES) + BigInt(fraction.padEnd(MONEY_MAX_PLACES, "0").slice(0, MONEY_MAX_PLACES) || "0");
+}
+
 /** The number of decimals a currency is shown with. */
 export function currencyDecimals(currency: string, options: MoneyOptions = {}): number {
   if (options.decimals !== undefined) return options.decimals;
