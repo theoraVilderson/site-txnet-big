@@ -7,7 +7,7 @@ import {
   TenantType,
 } from '@prisma/client';
 import { OutboxEventType } from '../../automation/routing-keys';
-import { convertedByChanges } from '../../billing/currency-change';
+import { convertedByChanges } from '../../billing/currency-change-credit';
 import { platformCurrencyOf } from '../../billing/operating-currency';
 
 /**

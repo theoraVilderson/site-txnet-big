@@ -71,6 +71,7 @@ export * from './lib/billing/quota-alerts';
 export * from './lib/billing/quota-terms-lock';
 export * from './lib/billing/product-quota';
 export * from './lib/billing/currency-change';
+export * from './lib/billing/currency-change-credit';
 export * from './lib/currency/fx-rate';
 export * from './lib/catalog/offers';
 export * from './lib/catalog/package-products';

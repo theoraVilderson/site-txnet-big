@@ -6,6 +6,16 @@ import { OutboxEventType } from '../automation/routing-keys';
 import type { FxPair } from '../currency/fx-rate';
 import { isPlatformTenant } from '../tenant/platform-tenant';
 
+import {
+  convertBillingWallets,
+  convertPackages,
+  convertQuotaOverages,
+  convertUsageMeters,
+  convertWholesaleMeters,
+  repricePackageRates,
+} from './currency-change-platform';
+import { balance, type Conversion, money, moneyList, owned, RATE_COLUMN_SCALE } from './currency-change-sql';
+
 /**
  * F-116-f (ADR-0098 part 5) — a tenant's operating currency changes, and what
  * is live changes with it; history keeps the currency it was written in.
@@ -19,8 +29,9 @@ import { isPlatformTenant } from '../tenant/platform-tenant';
  * **Live, converted:**
  * - every wallet of the tenant's users in the old currency: a `currency_change`
  *   debit of its balance (old currency, to zero), the wallet relabelled and
- *   its balance converted, a `currency_change` credit of the new balance. An
- *   empty wallet only changes its label. Its open holds and `heldAmount`
+ *   its balance converted — a positive one never to nothing (ADR-0153) — and a
+ *   `currency_change` credit of the new balance. An empty wallet only changes
+ *   its label. Its open holds and `heldAmount`
  *   convert with it, rounded down (F-118-a) — no ledger row: a hold is not one;
  * - the price and metered rate in effect for each variant, and every one
  *   scheduled after it: a **new** row in the new currency (a price is never
@@ -43,7 +54,7 @@ import { isPlatformTenant } from '../tenant/platform-tenant';
  *
  * **In flight:** a payment asked in the old currency is not rewritten. When it
  * settles, the ledger sees a credit in another currency than the wallet's and
- * converts it through this row ({@link convertedByChanges}).
+ * converts it through this row (`convertedByChanges`, `currency-change-credit.ts`).
  *
  * **Safe to retry:** the tenant row is locked first and its currency re-read;
  * a tenant already in the target currency is a no-op (`changeId: null`), and
@@ -106,8 +117,6 @@ export class CurrencyChangeConflict extends Error {
 
 /** `rate` is stored as `DECIMAL(30,18)` — the same scale as a payment's (F-116-e). */
 const RATE_SCALE = 18;
-/** A metered rate is `DECIMAL(18,8)`. */
-const RATE_COLUMN_SCALE = 8;
 /**
  * A gateway's rate columns are `DECIMAL(30,18)`: divided by the rate, an
  * inverse pair (USD -> IRR) lands near 1e-6 and needs the places.
@@ -192,68 +201,6 @@ export async function convertOperatingCurrency(
   return { changeId, fromCode: pair.fromCode, toCode, rate: rate.toString(), summary };
 }
 
-/**
- * `amount` in `fromCode`, in `toCode` through the tenant's recorded changes —
- * or `null` when no chain of them leads there. Walked newest first from the
- * currency the money is in now back to the one it was priced in, so money
- * priced before a change and landing after it (an in-flight payment, a refund
- * of an older invoice) is converted at the rate(s) the wallet itself was.
- * Rounded once, to `toCode`'s decimals — and a positive amount never to
- * nothing: one that converts to less than a minor unit (1,000 IRR into a USD
- * wallet) is one minor unit. Rounded to zero, the ledger refused it and the
- * payment's settlement retried it forever; the unit is at most a cent more.
- */
-export async function convertedByChanges(
-  tx: Prisma.TransactionClient,
-  tenantId: string,
-  amount: Prisma.Decimal,
-  fromCode: string,
-  toCode: string,
-): Promise<Prisma.Decimal | null> {
-  const changes = await tx.currencyChange.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' }, select: { fromCode: true, toCode: true, rate: true } });
-  let code = toCode;
-  let factor = new Prisma.Decimal(1);
-  for (const change of changes) {
-    if (change.toCode !== code) continue;
-    factor = factor.mul(change.rate);
-    code = change.fromCode;
-    if (code === fromCode) {
-      const target = await tx.currency.findUnique({ where: { code: toCode }, select: { decimalPlaces: true } });
-      if (!target) return null;
-      const converted = amount.mul(factor).toDecimalPlaces(target.decimalPlaces, Prisma.Decimal.ROUND_HALF_UP);
-      return converted.isZero() && amount.gt(0) ? new Prisma.Decimal(10).pow(-target.decimalPlaces) : converted;
-    }
-  }
-  return null;
-}
-
-type Conversion = {
-  tx: Prisma.TransactionClient;
-  tenantId: string;
-  changeId: string;
-  from: string;
-  to: string;
-  /** Old -> new, as text, cast to `numeric` in SQL so no float is involved (C-02). */
-  rate: string;
-  /** The new currency's decimals: every amount is rounded to them once. */
-  dp: number;
-  platform: boolean;
-  actor: string;
-};
-
-/** Rows owned by the tenant; for the platform, also the platform-wide ones (`tenantId` null). */
-const owned = (c: Conversion, column: Prisma.Sql) =>
-  c.platform
-    ? Prisma.sql`(${column} = ${c.tenantId}::uuid OR ${column} IS NULL)`
-    : Prisma.sql`${column} = ${c.tenantId}::uuid`;
-
-/** An amount column, converted and rounded to the new currency's decimals. */
-const money = (c: Conversion, column: Prisma.Sql) => Prisma.sql`round(${column} * ${c.rate}::numeric, ${c.dp}::int)`;
-
-/** A list of amounts, each converted, in its order. */
-const moneyList = (c: Conversion, column: Prisma.Sql) =>
-  Prisma.sql`ARRAY(SELECT round(x * ${c.rate}::numeric, ${c.dp}::int) FROM unnest(${column}) WITH ORDINALITY AS t(x, i) ORDER BY i)`;
-
 async function convertWallets(c: Conversion): Promise<number> {
   const scope = Prisma.sql`u."tenantId" = ${c.tenantId}::uuid AND w."currencyCode" = ${c.from}`;
   // Lock first: the closing row must carry the balance the update then converts.
@@ -280,7 +227,7 @@ async function convertWallets(c: Conversion): Promise<number> {
      WHERE h."walletId" = w.id AND h.status = 'open' AND ${scope}`;
   const wallets = await c.tx.$executeRaw`
     UPDATE billing.wallet w
-       SET "currencyCode" = ${c.to}, "cachedBalance" = ${money(c, Prisma.sql`w."cachedBalance"`)},
+       SET "currencyCode" = ${c.to}, "cachedBalance" = ${balance(c, Prisma.sql`w."cachedBalance"`)},
            "heldAmount" = (SELECT coalesce(sum(h.amount), 0) FROM billing.wallet_hold h WHERE h."walletId" = w.id AND h.status = 'open'),
            version = w.version + 1
       FROM identity."user" u
@@ -418,96 +365,4 @@ async function cancelPendingInvoices(c: Conversion): Promise<number> {
     )
     SELECT (SELECT count(*) FROM cancelled)::int AS n`;
   return n;
-}
-
-/** Every reseller's wallet with the platform (part 4): the same closing / opening pair as a user's. */
-async function convertBillingWallets(c: Conversion): Promise<number> {
-  await c.tx.$queryRaw`
-    SELECT count(*)::int AS n FROM (SELECT 1 FROM tenant.tenant_billing_wallet WHERE "currencyCode" = ${c.from} FOR UPDATE) locked`;
-  await c.tx.$executeRaw`
-    INSERT INTO tenant.tenant_billing_transaction (id, "walletId", amount, direction, "reasonType", "referenceId", "balanceAfter", "currencyCode", "createdAt")
-    SELECT gen_random_uuid(), id, "cachedBalance", 'debit'::tenant."TenantLedgerDirection", 'currency_change'::tenant."TenantBillingReasonType", ${c.changeId}::uuid, 0, "currencyCode", clock_timestamp()
-      FROM tenant.tenant_billing_wallet WHERE "currencyCode" = ${c.from} AND "cachedBalance" > 0`;
-  const wallets = await c.tx.$executeRaw`
-    UPDATE tenant.tenant_billing_wallet
-       SET "currencyCode" = ${c.to}, "cachedBalance" = ${money(c, Prisma.sql`"cachedBalance"`)}, version = version + 1
-     WHERE "currencyCode" = ${c.from}`;
-  // No `tenant.billing.credited` event: nothing was paid in, so no unpaid renewal should be retried on it.
-  await c.tx.$executeRaw`
-    INSERT INTO tenant.tenant_billing_transaction (id, "walletId", amount, direction, "reasonType", "referenceId", "balanceAfter", "currencyCode", "createdAt")
-    SELECT gen_random_uuid(), w.id, w."cachedBalance", 'credit'::tenant."TenantLedgerDirection", 'currency_change'::tenant."TenantBillingReasonType", ${c.changeId}::uuid, w."cachedBalance", w."currencyCode", clock_timestamp()
-      FROM tenant.tenant_billing_transaction closing JOIN tenant.tenant_billing_wallet w ON w.id = closing."walletId"
-     WHERE closing."referenceId" = ${c.changeId}::uuid AND closing."reasonType" = 'currency_change' AND closing.direction = 'debit'
-       AND w."cachedBalance" > 0`;
-  return wallets;
-}
-
-const convertPackages = (c: Conversion) => c.tx.$executeRaw`
-  UPDATE tenant.tenant_feature_package
-     SET "monthlyPrice" = ${money(c, Prisma.sql`"monthlyPrice"`)}, "yearlyPrice" = ${money(c, Prisma.sql`"yearlyPrice"`)}, "currencyCode" = ${c.to}
-   WHERE "currencyCode" = ${c.from}`;
-
-/**
- * The wholesale price list (F-118-n1) is history, like a rate card: each rate
- * in force in the old money is written again in the new one, from now, and the
- * old row stays — read by nothing, since a package reads rates in its own
- * currency. Never rounded to nothing: the smallest price the column holds.
- */
-const repricePackageRates = (c: Conversion) => c.tx.$executeRaw`
-  INSERT INTO tenant.tenant_package_meter_rate (id, "packageId", "meterKey", "unitSize", "unitPrice", "currencyCode",
-                                                "effectiveFrom", "isActive", "createdByAdminId", "createdAt")
-  SELECT gen_random_uuid(), p."packageId", p."meterKey", p."unitSize",
-         greatest(round(p."unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), power(10::numeric, -${RATE_COLUMN_SCALE}::int)),
-         ${c.to}, greatest(p."effectiveFrom", now()), true, ${c.actor}::uuid, now()
-    FROM tenant.tenant_package_meter_rate p
-   WHERE p."currencyCode" = ${c.from} AND p."isActive"
-     AND (p."effectiveFrom" > now() OR p."effectiveFrom" = (
-           SELECT max(q."effectiveFrom") FROM tenant.tenant_package_meter_rate q
-            WHERE q."packageId" = p."packageId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
-              AND q."isActive" AND q."effectiveFrom" <= now()))`;
-
-/**
- * A reseller's open Grant keeps its locked wholesale rate (F-118-n2), and it is
- * paid from the reseller's billing wallet, which converts with the platform:
- * the same price in the new money, the one change `grant_meter_terms_are_locked`
- * allows the wholesale leg. Every tenant's rows — this is the platform's change.
- */
-const convertWholesaleMeters = (c: Conversion) => c.tx.$executeRaw`
-  UPDATE entitlement.grant_meter m
-     SET "wholesaleUnitPrice" = greatest(round(m."wholesaleUnitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
-                                         power(10::numeric, -${RATE_COLUMN_SCALE}::int)),
-         "wholesaleCurrencyCode" = ${c.to}, "updatedAt" = now()
-    FROM entitlement."grant" g
-   WHERE g.id = m."grantId" AND m."wholesaleCurrencyCode" = ${c.from}
-     AND g.status IN ('pending', 'active', 'suspended', 'exhausted')`;
-
-const convertUsageMeters = (c: Conversion) => c.tx.$executeRaw`
-  UPDATE tenant.tenant_usage_meter
-     SET "unitPrice" = round("unitPrice" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), "currencyCode" = ${c.to}
-   WHERE "currencyCode" = ${c.from} AND NOT "isBilled"`;
-
-/**
- * A quota's overage price (F-019-v1, ADR-0107 point 2) is paid from the
- * reseller's billing wallet, so it is in the platform's money and converts
- * with it, at every level and where a period locked it (F-019-v3) — and so does the reseller's cap on it. Never to nothing: a price the column rounds to zero
- * is one minor unit — a free overage is a decision, not a rounding.
- */
-async function convertQuotaOverages(c: Conversion): Promise<number> {
-  const price = Prisma.sql`greatest(round("unitPrice" * ${c.rate}::numeric, ${c.dp}::int), power(10::numeric, -${c.dp}::int))`;
-  const platform = await c.tx.$executeRaw`
-    UPDATE tenant.quota_overage_setting SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  const packages = await c.tx.$executeRaw`
-    UPDATE tenant.package_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  // A product's overage on a package (F-019-v6) is the same kind of price.
-  const products = await c.tx.$executeRaw`
-    UPDATE tenant.package_product SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  const resellers = await c.tx.$executeRaw`
-    UPDATE tenant.reseller_quota_overage SET "unitPrice" = ${price}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  // A price frozen for a reseller's paid period (F-019-v3) is the same price, so it converts the same way.
-  const locked = await c.tx.$executeRaw`
-    UPDATE tenant.reseller_quota_terms_lock SET "unitPrice" = ${price}, "currencyCode" = ${c.to} WHERE "currencyCode" = ${c.from}`;
-  // A reseller's own ceiling on overage (F-019-v2): plain rounding — a cap of 0 stays "no overage at all".
-  const caps = await c.tx.$executeRaw`
-    UPDATE tenant.reseller_overage_cap SET amount = ${money(c, Prisma.sql`amount`)}, "currencyCode" = ${c.to}, "updatedAt" = now() WHERE "currencyCode" = ${c.from}`;
-  return platform + packages + products + resellers + locked + caps;
 }

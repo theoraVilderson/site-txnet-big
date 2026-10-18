@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 1
-updated: 2026-09-29
+updated: 2026-10-18
 ---
 
 # Contract — billing / a tenant's currency change
@@ -12,7 +12,9 @@ A topic file of `contract.md` (§10). What happens to a tenant's money when its
 operating currency changes (F-116-f, ADR-0098 part 5). The route and who may
 call it are tenant's: `tenant/contract.currency.md`. Code:
 `txnet-backend/shared-core/src/lib/billing/currency-change.ts`
-(`convertOperatingCurrency`, `convertedByChanges`). Proof:
+(`convertOperatingCurrency`; the SQL fragments in `currency-change-sql.ts`,
+the platform's part in `currency-change-platform.ts`), `convertedByChanges` in
+`currency-change-credit.ts`. Proof:
 `billing-service/src/app/wallet/currency-change.int.spec.ts`.
 
 ## The change
@@ -28,7 +30,7 @@ call it are tenant's: `tenant/contract.currency.md`. Code:
 
 | Converted (live) | How |
 |---|---|
-| Every wallet of the tenant's users in the old currency | a `currency_change` **debit** of the balance in the old currency (to zero), then the wallet relabelled with its balance converted and `version + 1`, then a `currency_change` **credit** of the new balance in the new currency; both rows' `referenceId` is the change. An empty wallet is relabelled and writes nothing. Each opened wallet writes `billing.wallet.changed`. Its **open** holds convert with it, each rounded **down**, and `heldAmount` becomes their sum — no ledger row, a hold is not one (F-118-a, [contract.holds.md](contract.holds.md)) |
+| Every wallet of the tenant's users in the old currency | a `currency_change` **debit** of the balance in the old currency (to zero), then the wallet relabelled with its balance converted — a positive one never to nothing, one minor unit at least (rule 6a, ADR-0153) — and `version + 1`, then a `currency_change` **credit** of the new balance in the new currency; both rows' `referenceId` is the change. An empty wallet is relabelled and writes nothing. Each opened wallet writes `billing.wallet.changed`. Its **open** holds convert with it, each rounded **down**, and `heldAmount` becomes their sum — no ledger row, a hold is not one (F-118-a, [contract.holds.md](contract.holds.md)) |
 | The price and metered rate **in effect** for each variant, and each one **scheduled** after it | a **new** row in the new currency, from now or from its own date — a price is never updated (F-0602). The old rows stay; a reader offers only rows in the tenant's currency (catalog invariant 11) |
 | A Grant not closed (`pending`, `active`, `suspended`, `exhausted`) with a meter | each `grant_meter`'s `unitPrice` and `currencyCode` (F-118-l) — it debits or holds on the converted wallet. The one change `grant_meter_terms_are_locked` allows: the price moves only with its currency (user 2026-09-29) |
 | A spending cap (F-118-i) | `amount` rounded to the new decimals, never below one minor unit; `spent` rounded **down**, so rounding never shrinks the owner's room ([contract.spending-cap.md](contract.spending-cap.md)) |
@@ -47,7 +49,7 @@ payouts, closed Grants, deleted coupons. Each keeps the currency it records.
 |---|---|
 | 5. A **credit** whose `currencyCode` is not the wallet's is converted through the tenant's `currency_change` rows (`convertedByChanges`): newest first, from the wallet's currency back to the entry's, multiplying the rates; rounded once to the wallet's decimals. The row is written in the wallet's currency with `sourceAmount` / `sourceCurrencyCode` (both or neither, CHECK) | part 5: an in-flight payment "credits in the currency it asked in, converted at that snapshot" — and so does a refund of an invoice paid before the change |
 | 6. No chain of changes leads there: `LedgerCurrencyMismatch` as before (invariant 10) | a credit in a currency the tenant never left is a bug, not a conversion |
-| 6a. A positive amount never converts to nothing: one under a minor unit of the wallet's currency (1,000 IRR into a USD wallet) is credited **one minor unit** | rounded to zero it was refused, and its payment's settlement retried forever; the unit is at most a cent more than owed (2026-09-28) |
+| 6a. A positive amount never converts to nothing: one under a minor unit of the wallet's currency (1,000 IRR into a USD wallet) is credited **one minor unit** — and so is a user's or a reseller's balance converted by the change itself (ADR-0153) | rounded to zero it was refused, and its payment's settlement retried forever; a balance rounded to zero left the books with a closing row and no opening one. The unit is at most a cent more than owed (2026-09-28, 2026-10-18) |
 | 7. A **debit** in another currency is always refused | a debit priced in the old currency is a stale quote; the caller re-prices it |
 | 8. `TenantBillingLedger` does the same against the **platform's** changes; `TenantBillingEntry.currencyCode` is optional, omitted = the platform's currency now. A billing top-up names its payment's | a reseller's top-up asked before the platform changed currency |
 | 9. What a lent gateway's borrower is **owed** (`gateway_settlement_entry` minus `gateway_settlement_payout`, both history) is summed per currency and converted the same way into the tenant's currency now — `audit/contract.settlement.md` | summed as written, a tenant that changed currency was owed two currencies added together |

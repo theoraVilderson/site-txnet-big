@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 
 import { OutboxEventType } from '../automation/routing-keys';
-import { convertedByChanges } from './currency-change';
+import { convertedByChanges } from './currency-change-credit';
 
 /**
  * The one place a wallet balance changes (F-092-b, billing invariants 1-4, C-02).

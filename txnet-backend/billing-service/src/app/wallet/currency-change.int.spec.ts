@@ -64,6 +64,8 @@ const PLATFORM_PRICE = '10000000-0000-4000-8000-000000000013';
 const ROUND_TRIP = '10000000-0000-4000-8000-000000000014';
 const ROUND_TRIP_USER = '10000000-0000-4000-8000-000000000015';
 const IRR_RATE = '10000000-0000-4000-8000-000000000016';
+const TINY = '10000000-0000-4000-8000-000000000017';
+const TINY_USER = '10000000-0000-4000-8000-000000000018';
 
 /** One USD is 0.92 EUR: the pair the change crosses at. */
 const usdToEur = (): FxPair => ({
@@ -350,5 +352,28 @@ describe('a reseller goes USD -> IRR and back: currencies six orders of magnitud
     }));
     expect([moved.amount.toFixed(2), moved.currencyCode, moved.sourceAmount?.toFixed(0), moved.sourceCurrencyCode, moved.balanceAfter.toFixed(2)])
       .toEqual(['0.01', 'USD', '1000', 'IRR', '0.01']);
+  });
+});
+
+describe('a reseller in rials goes to dollars holding a balance worth under half a cent (ADR-0153)', () => {
+  beforeAll(async () => {
+    await sql(`INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "operatingCurrencyCode", "updatedAt")
+      VALUES ('${TINY}', 'reseller', '${ADMIN}', 'gamma', 'active', 'pay_as_you_go_metered', 'IRR', now())`);
+    await sql(`INSERT INTO identity."user" (id, "tenantId", "fullName", "passwordHash", "roleId", "updatedAt")
+      VALUES ('${TINY_USER}', '${TINY}', 'Someone', 'x', '${ROLE}', now())`);
+    await sql(`INSERT INTO billing.wallet (id, "ownerUserId", "cachedBalance", version, "currencyCode") VALUES (gen_random_uuid(), '${TINY_USER}', 1000, 1, 'IRR')`);
+    await change(TINY, irrToUsd());
+  });
+
+  it('keeps one minor unit: the closing row is answered by an opening one, never by nothing', async () => {
+    // 1,000 IRR is 0.00095 USD: rounded, the wallet was emptied with no credit to show for it.
+    expect(await one(`SELECT "cachedBalance"::text AS b, "currencyCode" AS c FROM billing.wallet WHERE "ownerUserId" = '${TINY_USER}'`)).toEqual({ b: '0.01', c: 'USD' });
+    const rows = await owner.$queryRawUnsafe<Array<{ amount: string; direction: string; currencyCode: string }>>(`
+      SELECT t.amount::text, t.direction::text, t."currencyCode" FROM billing.wallet_transaction t
+        JOIN billing.wallet w ON w.id = t."walletId" WHERE w."ownerUserId" = '${TINY_USER}' ORDER BY t."createdAt"`);
+    expect(rows).toEqual([
+      { amount: '1000.00', direction: 'debit', currencyCode: 'IRR' },
+      { amount: '0.01', direction: 'credit', currencyCode: 'USD' },
+    ]);
   });
 });
