@@ -51,6 +51,14 @@ describe('money holds four places (F-116-q)', () => {
     await expect(register('ZZF', 5)).rejects.toThrow(/currency_decimal_places_fit_money/);
   });
 
+  it('lets the AI reader read a currency as Prisma reads it — its id too, which any select includes (F-116-p)', async () => {
+    const [can] = await rows<{ id: boolean; code: boolean; places: boolean }>(`
+      SELECT has_column_privilege('txnet_ai_reader', 'currency.currency', 'id', 'SELECT') AS id,
+             has_column_privilege('txnet_ai_reader', 'currency.currency', 'code', 'SELECT') AS code,
+             has_column_privilege('txnet_ai_reader', 'currency.currency', 'decimalPlaces', 'SELECT') AS places`);
+    expect(can).toEqual({ id: true, code: true, places: true });
+  });
+
   it('keeps the rebuilt AI reader views the reader’s alone', async () => {
     for (const view of READER_VIEWS) {
       const [rights] = await rows<{ reads: boolean; app: boolean; cross: boolean }>(`
