@@ -2,6 +2,8 @@ import { FulfilmentKind, QualityTier, QuotaMetric, RateCardAfterIncluded, RateCa
 import { MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { MAX_SALES_CAP } from './sales-cap';
+
 /**
  * The wire shapes of catalog management (F-026-d).
  *
@@ -189,6 +191,8 @@ const variantFields = {
   visibility: z.nativeEnum(VariantVisibility).optional(),
   panelGroupId: uuid('panelGroupId').nullable().optional(),
   qualityTier: z.nativeEnum(QualityTier).optional(),
+  /** F-513-a: at most this many sold; null clears it. */
+  salesCap: z.number().int().min(1).max(MAX_SALES_CAP).nullable().optional(),
 };
 
 /** `Decimal(18, 8)`: at most 10 whole digits and 8 places — a GiB can cost a fraction of a cent. */

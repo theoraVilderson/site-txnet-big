@@ -31,6 +31,7 @@ import {
 
 import { PrismaService } from '../prisma/prisma.service';
 import { offerCampaignEndsAt } from './price-campaign';
+import { salesOf, type SalesCounts } from './sales-cap';
 
 /**
  * What the catalog offers a tenant's users, and at what price (F-026-c).
@@ -82,6 +83,10 @@ export type CatalogOffer = {
   campaignEndsAt: Date | null;
   /** The card in effect for each meter, by meter key (F-118-ae): what a sale now would lock. */
   rateCards: OfferRateCard[];
+  /** F-513-a: units left under the variant's sales cap, `null` with no cap. */
+  remaining: number | null;
+  /** Shown as sold out, never hidden; the invoice refuses it (F-513-b). */
+  soldOut: boolean;
 };
 
 /** A rate card as an offer names it; quantities and money as strings (C-02, bytes pass 2^53). */
@@ -144,6 +149,12 @@ const tenantCurrency = (tx: Prisma.TransactionClient) => operatingCurrencyOf(tx,
 /** The platform products the caller's tenant may sell (F-019-v5, ADR-0107 point 3); `null` bounds nothing. */
 const listedForTenant = (tx: Prisma.TransactionClient) => platformProductsSoldBy(tx, TenantContext.current('catalog offer').id);
 
+/** An offer's share of {@link salesOf}: what is left and whether it is sold out. */
+const soldOutOf = (v: SalesCounts) => {
+  const { remaining, soldOut } = salesOf(v);
+  return { remaining, soldOut };
+};
+
 function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: OfferFacts) => boolean): CatalogOffer | null {
   const facts = {
     visibility: v.visibility,
@@ -182,6 +193,7 @@ function toOffer(v: VariantRow, at: Date, currencyCode: string, offered: (f: Off
     price: { id: price.id, amount: moneyText(price.amount), currencyCode: price.currencyCode, effectiveFrom: price.effectiveFrom },
     campaignEndsAt: offerCampaignEndsAt(price, at),
     rateCards: offerRateCards(v.rateCards ?? [], at, currencyCode),
+    ...soldOutOf(v),
   };
 }
 

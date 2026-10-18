@@ -23,7 +23,7 @@ import { CatalogTextKind, CatalogTextService, ReviewItem, Texts, catalogTextKey,
 import { campaignPlan, cancelVerdict, priceWriteVerdict, type CampaignRow } from './price-campaign';
 import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf, upcomingSeasonCampaigns } from './season-plan';
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
-import { priceView, rateCardView } from './catalog-views';
+import { priceView, rateCardView, variantView, type VariantView } from './catalog-views';
 
 /**
  * Catalog management (F-026-d; D-34, ADR-0049): categories, products, variants
@@ -199,6 +199,8 @@ export type VariantFields = {
   visibility?: VariantVisibility;
   panelGroupId?: string | null;
   qualityTier?: QualityTier;
+  /** F-513-a: null clears it. */
+  salesCap?: number | null;
 };
 /** A rate card's terms (F-118-m). Quantities are strings in the meter's unit: bytes pass 2^53. */
 export type RateCardTerms = {
@@ -390,27 +392,6 @@ export type ProductView = {
 };
 /** A product as a list or an editor reads it: with the groups it is sold to — none = every user (PT-1-b). */
 export type AudiencedProductView = ProductView & { userGroupIds: string[] };
-export type VariantView = {
-  id: string;
-  tenantId: string;
-  /** The platform's row (ADR-0142): seen by every tenant, managed by the platform owner alone. */
-  platform: boolean;
-  productId: string;
-  sku: string;
-  nameKey: string | null;
-  quotas: unknown;
-  durationDays: number | null;
-  billingMode: VariantBillingMode;
-  visibility: VariantVisibility;
-  panelGroupId: string | null;
-  qualityTier: QualityTier;
-  isActive: boolean;
-  /** Newest `effectiveFrom` first. */
-  prices: PriceView[];
-  /** Every meter's card history, newest `effectiveFrom` first (F-118-m). */
-  rateCards: RateCardView[];
-};
-
 type Row = Record<string, unknown>;
 
 /** Clock skew tolerated between the admin's "now" and ours before a price counts as backdated. */
@@ -482,26 +463,6 @@ const productView = (r: Row, defaultLang: string, platformId: string, categoryId
 const pricingCurrencyOf = (tx: Prisma.TransactionClient, tenantId: string) => operatingCurrencyOf(tx, tenantId);
 export const pricedIn = async (tx: Prisma.TransactionClient, tenantId: string, amount: Prisma.Decimal) =>
   inCurrency(tx, await pricingCurrencyOf(tx, tenantId), { amount }, () => new CatalogAdminRefused('amount_finer_than_currency', amount.toFixed()));
-
-const newestFirst = <T extends { effectiveFrom: Date }>(rows: T[]) => rows.sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime());
-
-const variantView = (r: Row, platformId: string, prices: Row[], cards: Row[] = []): VariantView => ({
-  id: r['id'] as string,
-  tenantId: r['tenantId'] as string,
-  platform: r['tenantId'] === platformId,
-  productId: r['productId'] as string,
-  sku: r['sku'] as string,
-  nameKey: (r['nameKey'] as string | null) ?? null,
-  quotas: r['quotas'] ?? {},
-  durationDays: (r['durationDays'] as number | null) ?? null,
-  billingMode: r['billingMode'] as VariantBillingMode,
-  visibility: r['visibility'] as VariantVisibility,
-  panelGroupId: (r['panelGroupId'] as string | null) ?? null,
-  qualityTier: r['qualityTier'] as QualityTier,
-  isActive: r['isActive'] as boolean,
-  prices: newestFirst(prices.map(priceView)),
-  rateCards: newestFirst(cards.map(rateCardView)),
-});
 
 /** The row a text key names, and how a review of it is refused and audited. */
 const TEXT_ITEMS = {
@@ -1220,6 +1181,7 @@ export class CatalogAdminService {
             visibility: input.visibility,
             panelGroupId: input.panelGroupId ?? null,
             qualityTier: input.qualityTier ?? QualityTier.standard,
+            salesCap: input.salesCap ?? null,
           },
         }),
       )) as unknown as Row;
@@ -1262,6 +1224,7 @@ export class CatalogAdminService {
         ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
         ...(patch.panelGroupId !== undefined ? { panelGroupId: patch.panelGroupId } : {}),
         ...(patch.qualityTier !== undefined ? { qualityTier: patch.qualityTier } : {}),
+        ...(patch.salesCap !== undefined ? { salesCap: patch.salesCap } : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
       };
       const row = (await tx.productVariant.update({ where: { id }, data })) as unknown as Row;

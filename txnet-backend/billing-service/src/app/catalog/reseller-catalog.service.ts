@@ -41,8 +41,8 @@ import {
   UpdateCategoryInput,
   UpdateProductInput,
   UpdateVariantInput,
-  VariantView,
 } from './catalog-admin.service';
+import type { VariantView } from './catalog-views';
 import type { ReviewItem } from './catalog-texts';
 
 /** The caller, as `forward-auth` proved them, plus the address a write is audited from. */

@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: active
-version: 12
+version: 13
 updated: 2026-10-17
 ---
 

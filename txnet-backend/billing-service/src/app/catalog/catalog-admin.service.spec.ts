@@ -480,6 +480,16 @@ describe('CatalogAdminService — variants and prices', () => {
     await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { panelGroupId: null })).resolves.toMatchObject({ panelGroupId: null });
   });
 
+  it('writes a sales cap on create, lowers it under what is sold without undoing a sale, and clears it (F-513-a)', async () => {
+    const { service, db } = build();
+    await expect(service.createVariant(actor(RESELLER), RESELLER_PRODUCT, { ...NEW_VARIANT, salesCap: 100 })).resolves.toMatchObject({ sales: { cap: 100, remaining: 100, soldOut: false } });
+    const row = db.productVariant.rows.find((r) => r['id'] === RESELLER_VARIANT);
+    Object.assign(row ?? {}, { soldCount: 7, reservedCount: 2 });
+    await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { salesCap: 5 })).resolves.toMatchObject({ sales: { cap: 5, sold: 7, reserved: 2, remaining: 0, soldOut: true } });
+    await expect(service.updateVariant(actor(RESELLER), RESELLER_VARIANT, { salesCap: null })).resolves.toMatchObject({ sales: { cap: null, remaining: null, soldOut: false } });
+    expect(row?.['soldCount']).toBe(7);
+  });
+
   it('refuses a prepaid network variant that states no traffic, on create and on a quotas edit, and writes nothing (F-111-p)', async () => {
     const { service, db, writes } = build();
     const variants = db.productVariant.rows.length;

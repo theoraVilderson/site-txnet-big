@@ -251,6 +251,11 @@ model ProductVariant {
   panelGroupId String?            @db.Uuid
   qualityTier  QualityTier        @default(standard)
   isActive     Boolean            @default(true)
+  /// F-513-a: at most this many sold; null = no cap (CHECK > 0). The counts are
+  /// paid sales and units a pending invoice holds — F-513-b writes both.
+  salesCap      Int?
+  soldCount     Int               @default(0)
+  reservedCount Int               @default(0)
   createdAt    DateTime           @default(now())
   updatedAt    DateTime           @default(now()) @updatedAt
 
