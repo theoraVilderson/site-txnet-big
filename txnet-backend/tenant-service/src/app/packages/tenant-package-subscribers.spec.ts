@@ -61,10 +61,12 @@ describe('TenantPackageService — subscribers', () => {
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
       // No wholesale rates (F-118-n1).
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
+      packageProduct: { groupBy: vi.fn(async () => []) },
     };
     const prisma = {
       ...currencyRegistry,
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
+      packageProduct: { groupBy: vi.fn(async () => []) },
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
       tenantFeaturePackage: { findUnique: vi.fn(async ({ where }: { where: { name?: string } }) => (where.name ? null : stored(keys))) },
     };

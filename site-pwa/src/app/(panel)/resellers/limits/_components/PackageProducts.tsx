@@ -10,6 +10,7 @@ import { Alert, useMessage } from "../../_components/resellers-ui";
 import { LIMIT_KEYS as K, productQuotaBodyOf, productQuotaFormOf, type ProductQuotaForm } from "../../_lib/limits";
 import { ModeRadios, useOverageHeld } from "./QuotaOverage";
 import { Button, useConfirm } from "../../../_components/kit";
+import { useOneWrite } from "../../_hooks/useOneWrite";
 
 const P = K.products;
 const WINDOWS = ["day", "week", "month"] as const;
@@ -19,55 +20,13 @@ const box = "w-24 rounded-xl border border-card-border bg-bg-inner px-3 py-2 tex
  * What one package lets its resellers sell of the platform's products, and
  * each product's sales quota (F-019-v9; tenant `contract.limits.md`, F-019-v5,
  * F-019-v6): included per fixed day / week / month — blank is no bound — and
- * one answer past them. Every platform product is listed, sold by the package
- * or not; a reseller's own products are not the platform's to list.
+ * one answer past them. The limits page picks the package here; a package's
+ * own page shows {@link ProductTermsList} in its products sheet (PK-1-f).
  */
 export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
-  const { t, lang } = useLocale();
+  const { t } = useLocale();
   const packageTexts = usePackageTexts();
-  const message = useMessage();
   const [packageId, setPackageId] = useState("");
-  const [products, setProducts] = useState<CatalogProduct[] | null>(null);
-  const [texts, setTexts] = useState<Record<string, string>>({});
-  const [listed, setListed] = useState<PackageProduct[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const [asked, setAsked] = useState(0);
-  const reload = useCallback(() => setAsked((n) => n + 1), []);
-
-  useEffect(() => {
-    let alive = true;
-    catalogApi.products().then(
-      (list) => alive && setProducts(list.filter((p) => p.platform)),
-      (e) => alive && setError(e),
-    );
-    catalogApi
-      .texts(lang)
-      .then(flattenTexts)
-      .catch(() => ({}))
-      .then((flat) => alive && setTexts(flat));
-    return () => {
-      alive = false;
-    };
-  }, [lang]);
-
-  useEffect(() => {
-    if (!packageId) return;
-    let alive = true;
-    setListed(null);
-    resellerLimitsApi.packageProducts(packageId).then(
-      (rows) => {
-        if (!alive) return;
-        setListed(rows);
-        setError(null);
-      },
-      (e) => alive && setError(e),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [packageId, asked]);
-
-  const byId = new Map((listed ?? []).map((l) => [l.productId, l]));
 
   return (
     <section aria-label={t("common", P.title)} className="space-y-4 rounded-2xl border border-card-border bg-card-bg p-4">
@@ -86,27 +45,81 @@ export function PackageProducts({ packages }: { packages: TenantPackage[] }) {
           ))}
         </select>
       </label>
-      {error !== null && <Alert>{message(error)}</Alert>}
-      {packageId && listed !== null && products !== null && (
-        <div className="space-y-3">
-          {products.map((p) => {
-            const name = texts[p.nameKey] || p.key;
-            const row = byId.get(p.id) ?? null;
-            return (
-              <ProductTerms
-                key={`${p.id}:${JSON.stringify(row?.quota ?? null)}`}
-                packageId={packageId}
-                productId={p.id}
-                name={name}
-                isActive={p.isActive}
-                row={row}
-                onSaved={reload}
-              />
-            );
-          })}
-        </div>
-      )}
+      {packageId && <ProductTermsList key={packageId} packageId={packageId} />}
     </section>
+  );
+}
+
+/**
+ * Every platform product, sold by package `packageId` or not, each with its
+ * terms there; a reseller's own products are not the platform's to list.
+ * `onSaved` hears every list and unlist, after the list is read again.
+ */
+export function ProductTermsList({ packageId, onSaved }: { packageId: string; onSaved?: () => void }) {
+  const { lang } = useLocale();
+  const message = useMessage();
+  const [products, setProducts] = useState<CatalogProduct[] | null>(null);
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const [listed, setListed] = useState<PackageProduct[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [asked, setAsked] = useState(0);
+  const reload = useCallback(() => {
+    setAsked((n) => n + 1);
+    onSaved?.();
+  }, [onSaved]);
+
+  useEffect(() => {
+    let alive = true;
+    catalogApi.products().then(
+      (list) => alive && setProducts(list.filter((p) => p.platform)),
+      (e) => alive && setError(e),
+    );
+    catalogApi
+      .texts(lang)
+      .then(flattenTexts)
+      .catch(() => ({}))
+      .then((flat) => alive && setTexts(flat));
+    return () => {
+      alive = false;
+    };
+  }, [lang]);
+
+  useEffect(() => {
+    let alive = true;
+    resellerLimitsApi.packageProducts(packageId).then(
+      (rows) => {
+        if (!alive) return;
+        setListed(rows);
+        setError(null);
+      },
+      (e) => alive && setError(e),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [packageId, asked]);
+
+  const byId = new Map((listed ?? []).map((l) => [l.productId, l]));
+
+  if (error !== null) return <Alert>{message(error)}</Alert>;
+  if (listed === null || products === null) return null;
+  return (
+    <div className="space-y-3">
+      {products.map((p) => {
+        const row = byId.get(p.id) ?? null;
+        return (
+          <ProductTerms
+            key={`${p.id}:${JSON.stringify(row?.quota ?? null)}`}
+            packageId={packageId}
+            productId={p.id}
+            name={texts[p.nameKey] || p.key}
+            isActive={p.isActive}
+            row={row}
+            onSaved={reload}
+          />
+        );
+      })}
+    </div>
   );
 }
 
@@ -127,28 +140,12 @@ function ProductTerms({
 }) {
   const { t } = useLocale();
   const confirm = useConfirm();
-  const message = useMessage();
   const held = useOverageHeld();
   const radios = useId();
   const [form, setForm] = useState<ProductQuotaForm>(() => productQuotaFormOf(row?.quota ?? null));
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { busy, failure, run } = useOneWrite(onSaved);
   const body = productQuotaBodyOf(form);
   const set = (patch: Partial<ProductQuotaForm>) => setForm((f) => ({ ...f, ...patch }));
-
-  const run = async (work: () => Promise<unknown>) => {
-    if (busy) return;
-    setBusy(true);
-    setFailure(null);
-    try {
-      await work();
-      onSaved();
-    } catch (e) {
-      setFailure(message(e));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const windowText = (v: number | null) => (v === null ? t("common", K.noLimit) : String(v));
 

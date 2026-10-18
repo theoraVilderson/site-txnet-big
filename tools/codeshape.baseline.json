@@ -293,7 +293,7 @@
   "site-pwa/src/app/(panel)/systems/_lib/systems.ts": 417,
   "site-pwa/src/lib/catalog-api.ts": 452,
   "site-pwa/src/lib/realtime.ts": 411,
-  "site-pwa/src/lib/tenant-api.ts": 625,
+  "site-pwa/src/lib/tenant-api.ts": 621,
   "sub-service/internal/sub/formats.go": 415,
   "txnet-backend/ai-service/src/app/decision/candidates.ts": 495,
   "txnet-backend/ai-service/src/app/profile/predictions.ts": 425,

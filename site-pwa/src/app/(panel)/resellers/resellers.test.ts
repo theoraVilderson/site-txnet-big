@@ -146,6 +146,7 @@ describe("package and period", () => {
   const pkg = (id: string, over: Partial<TenantPackage> = {}): TenantPackage => ({
     currencyCode: "USD",
     meterRates: [],
+    productCount: 1,
     id,
     name: id,
     nameKey: `packages.p_${id}.name`,

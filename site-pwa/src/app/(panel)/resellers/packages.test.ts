@@ -49,6 +49,7 @@ const PKG: TenantPackage = {
   includedFeatureKeys: ["coupon_engine", "own_gateway"],
   isActive: true,
   meterRates: [{ meterKey: "vpn.traffic", unitSize: String(GIB), unitPrice: "0.12", currencyCode: "USD", effectiveFrom: "2026-09-29T00:00:00.000Z" }],
+  productCount: 1,
 };
 
 const filled = (patch: Partial<PackageForm> = {}): PackageForm => ({

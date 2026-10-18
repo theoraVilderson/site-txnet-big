@@ -103,7 +103,8 @@ it; the audit row carries the platform owner's tenant.
 
 A package view: `id, name, sourceLang, nameKey, descriptionKey` (`null`: no description), `monthlyPrice, yearlyPrice` (decimal strings or
 `null`, C-02), `currencyCode` (the package's, the platform's — F-116-h3), `includedFeatureKeys, isActive`,
-`meterRates: [{meterKey, unitSize, unitPrice, currencyCode, effectiveFrom}]` (the rates in force, by key). Refusals: `not_platform_owner`
+`meterRates: [{meterKey, unitSize, unitPrice, currencyCode, effectiveFrom}]` (the rates in force, by key), `productCount` (the platform
+products it lists in `package_product`, one grouped read for a list; 0 sells nothing — ADR-0154 (8), PK-1-f). Refusals: `not_platform_owner`
 403, `package_not_found` 404, `package_name_taken` 409, `package_price_in_use` 409, `package_unpriced` 422, `meter_not_found` 422, `lang_unknown` / `text_key_invalid` 422, `texts_unavailable` 503;
 a create's part: `unknown_limit`, `limit_out_of_range`, `not_a_quota`, `product_not_found`, `amount_finer_than_currency`, all 422 — `error.reason` beside a `fieldErrors` entry `{path, message}` for the field (PK-1-j).
 

@@ -54,7 +54,10 @@ describe('TenantPackageService — create, the whole package in one transaction'
       },
       packageLimit: { createMany: vi.fn(async ({ data }: { data: unknown[] }) => (write(`limits:${data.length}`), { count: data.length })) },
       packageQuotaOverage: { createMany: vi.fn(async ({ data }: { data: unknown[] }) => (write(`overages:${data.length}`), { count: data.length })) },
-      packageProduct: { createMany: vi.fn(async ({ data }: { data: unknown[] }) => (write(`products:${data.length}`), { count: data.length })) },
+      packageProduct: {
+        createMany: vi.fn(async ({ data }: { data: unknown[] }) => (write(`products:${data.length}`), { count: data.length })),
+        groupBy: vi.fn(async () => []),
+      },
       product: {
         findMany: vi.fn(async ({ where }: { where: { id: { in: string[] }; tenantId: string } }) =>
           where.id.in.filter((id) => id === PLATFORM_PRODUCT && where.tenantId === OWNER_TENANT).map((id) => ({ id })),

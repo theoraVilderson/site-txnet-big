@@ -51,10 +51,13 @@ describe('TenantPackageService', () => {
       // No wholesale rates (F-118-n1).
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
       tenantSubscription: { count: vi.fn(async () => opts.subscribersOnPeriod ?? 0) },
+      packageProduct: { groupBy: vi.fn(async () => []) },
     };
     const prisma = {
       ...currencyRegistry,
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
+      // PK-1-f: two products listed on the package, one grouped read for every package.
+      packageProduct: { groupBy: vi.fn(async () => [{ packageId: PKG, _count: { _all: 2 } }]) },
       tenant: { findUnique: vi.fn(async () => ({ tenantType: opts.callerType ?? 'platform_owner' })) },
       tenantFeaturePackage: {
         findUnique: vi.fn(async ({ where }: { where: { id?: string; name?: string } }) =>
@@ -136,6 +139,15 @@ describe('TenantPackageService', () => {
 
     const free = build({ existing: both });
     await expect(free.service.update(actor, PKG, { monthlyPrice: null })).resolves.toMatchObject({ monthlyPrice: null });
+  });
+
+  it('counts the platform products each package lists, in one read for the list; one listing none counts 0 (PK-1-f)', async () => {
+    const { service, prisma, tx } = build({ existing: stored() });
+    expect((await service.list(actor, {}))[0].productCount).toBe(2);
+    expect(prisma.packageProduct.groupBy).toHaveBeenCalledTimes(1);
+    expect((await service.read(actor, PKG)).productCount).toBe(2);
+    expect((await service.create(actor, input)).productCount).toBe(0);
+    expect(tx.packageProduct.groupBy).toHaveBeenCalled();
   });
 
   it('answers package_not_found for an unknown id', async () => {

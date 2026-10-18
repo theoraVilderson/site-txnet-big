@@ -56,6 +56,8 @@ export interface TenantPackage extends PackageTexts {
   isActive: boolean;
   /** The wholesale rates in force, one per meter (F-118-n1), in `currencyCode`. */
   meterRates: PackageMeterRate[];
+  /** The platform products it lists; 0 sells nothing (ADR-0154 (8)). */
+  productCount: number;
 }
 
 /**
@@ -118,7 +120,7 @@ export interface TenantSubscription {
  * a buyer is not shown — `GET /tenants/purchase/packages` lists the active
  * ones only, so no `isActive`, and no wholesale rates.
  */
-export type PackageOffer = Omit<TenantPackage, "isActive" | "meterRates">;
+export type PackageOffer = Omit<TenantPackage, "isActive" | "meterRates" | "productCount">;
 
 /** `POST /tenants/purchase`'s body. The route is `.strict()`: `slug` is sent only when the buyer kept one. */
 export interface PurchaseBody {
@@ -200,19 +202,13 @@ export const tenantApi = {
     return call<StatusChange>(`/tenants/${encodeURIComponent(id)}/status`, { method: "PUT", body: JSON.stringify(body) });
   },
   /** Every package, active or not: a reseller may stay on a deactivated one. */
-  async packages(): Promise<TenantPackage[]> {
-    return call<TenantPackage[]>("/tenant-packages", { method: "GET" });
-  },
-  async createPackage(body: CreatePackageBody): Promise<TenantPackage> {
-    return call<TenantPackage>("/tenant-packages", { method: "POST", body: JSON.stringify(body) });
-  },
-  async updatePackage(id: string, body: UpdatePackageBody): Promise<TenantPackage> {
-    return call<TenantPackage>(`/tenant-packages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
-  },
+  packages: () => call<TenantPackage[]>("/tenant-packages", { method: "GET" }),
+  package: (id: string) => call<TenantPackage>(`/tenant-packages/${encodeURIComponent(id)}`, { method: "GET" }),
+  createPackage: (body: CreatePackageBody) => call<TenantPackage>("/tenant-packages", { method: "POST", body: JSON.stringify(body) }),
+  updatePackage: (id: string, body: UpdatePackageBody) =>
+    call<TenantPackage>(`/tenant-packages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) }),
   /** Every subscriber's package features replaced by the package's now, removals included (F-018-o). */
-  async applyPackage(id: string): Promise<PackageApplied> {
-    return call<PackageApplied>(`/tenant-packages/${encodeURIComponent(id)}/apply`, { method: "POST" });
-  },
+  applyPackage: (id: string) => call<PackageApplied>(`/tenant-packages/${encodeURIComponent(id)}/apply`, { method: "POST" }),
 };
 
 /** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */

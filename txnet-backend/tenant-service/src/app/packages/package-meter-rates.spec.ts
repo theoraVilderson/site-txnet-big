@@ -77,6 +77,7 @@ describe('a package prices platform meters (F-118-n1)', () => {
         update: vi.fn(async () => (writes.push('update'), pkg)),
       },
       tenantPackageMeterRate: rateTable,
+      packageProduct: { groupBy: vi.fn(async () => []) },
       meter,
       adminAuditLog: { create: vi.fn(async () => (writes.push('audit'), {})) },
       tenantSubscription: { count: vi.fn(async () => 0) },
@@ -89,6 +90,7 @@ describe('a package prices platform meters (F-118-n1)', () => {
         findMany: vi.fn(async () => [pkg]),
       },
       tenantPackageMeterRate: rateTable,
+      packageProduct: { groupBy: vi.fn(async () => []) },
       $transaction: vi.fn(async (fn: (t: typeof tx) => unknown) => fn(tx)),
     };
     return { service: new TenantPackageService(prisma as never, prisma as never, packageTexts()), tx, writes };

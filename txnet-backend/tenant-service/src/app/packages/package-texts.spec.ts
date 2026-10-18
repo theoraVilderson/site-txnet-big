@@ -57,6 +57,7 @@ describe('TenantPackageService — name and description in locale-service', () =
       },
       adminAuditLog: { create: vi.fn(async () => ({})) },
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
+      packageProduct: { groupBy: vi.fn(async () => []) },
     };
     const prisma = {
       tenant: { findUnique: vi.fn(async () => ({ tenantType: 'platform_owner' })) },
@@ -65,6 +66,7 @@ describe('TenantPackageService — name and description in locale-service', () =
         findMany: vi.fn(async () => [...rows.values()]),
       },
       tenantPackageMeterRate: { findMany: vi.fn(async () => []) },
+      packageProduct: { groupBy: vi.fn(async () => []) },
     };
     const all = {
       ...prisma,

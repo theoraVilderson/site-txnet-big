@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Package, Plus, RotateCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { usePackageTexts } from "../../../_hooks/usePackageTexts";
 import { operatingCurrencyApi, tenantApi, type TenantPackage } from "@/lib/tenant-api";
+import { panelResellerPackagePath } from "@/lib/routes";
 import { usePanelSession } from "../../../_context/PanelSessionContext";
 import { formatMoney } from "../../../_lib/money";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
@@ -12,16 +15,20 @@ import { DataTable } from "../../../_components/kit/DataTable";
 import { Alert, useMessage } from "../../_components/resellers-ui";
 import { RESELLER_KEYS, canAdministerResellers } from "../../_lib/resellers";
 import { PACKAGE_KEYS as K, WHOLESALE_METERS, packageFormOf } from "../../_lib/packages";
+import { sellsNothing } from "../../_lib/package-page";
+import { usePackageActions } from "../_hooks/usePackageActions";
 import { PackageSheet } from "./PackageSheet";
 import { PageHeader } from "../../../_components/kit/PageHeader";
-import { Button, useConfirm } from "../../../_components/kit";
+import { Badge, Button } from "../../../_components/kit";
 import { formatList } from "../../../_lib/digits";
 
 /**
  * The packages the platform sells resellers (F-118-n5, `tenant/contract.admin.md`
  * "Packages"): every one, active or withdrawn, with its prices, features and
- * wholesale VPN rate. Create and edit are one sheet; withdraw / offer again is
- * `isActive`; "apply" forces the package's features on every subscriber now.
+ * wholesale VPN rate, and a flag on one that lists no product. A package opens
+ * its own page, where each section is edited (PK-1-f); create is a sheet;
+ * withdraw / offer again is `isActive`; "apply" forces the package's features
+ * on every subscriber now.
  *
  * Who may see it is tenant-service's to decide (`platform.plan.assign` + the platform
  * owner); the check here only spares a reseller who typed the path.
@@ -29,7 +36,7 @@ import { formatList } from "../../../_lib/digits";
 export function PackagesView() {
   const { lang, t } = useLocale();
   const packageTexts = usePackageTexts();
-  const confirm = useConfirm();
+  const router = useRouter();
   const { me, isLoading: sessionLoading } = usePanelSession();
   const message = useMessage();
   const allowed = canAdministerResellers(me);
@@ -41,10 +48,8 @@ export function PackagesView() {
   const [asked, setAsked] = useState(0);
   const reload = useCallback(() => setAsked((n) => n + 1), []);
   const [loaded, setLoaded] = useState<number | null>(null);
-  const [editing, setEditing] = useState<TenantPackage | "new" | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const { busy, notice, failure, setNotice, setFailure, toggleActive, apply } = usePackageActions(reload);
 
   useEffect(() => {
     if (!allowed || !tenantId) return;
@@ -68,34 +73,6 @@ export function PackagesView() {
       alive = false;
     };
   }, [allowed, tenantId, asked]);
-
-  async function act(p: TenantPackage, run: () => Promise<string>) {
-    setBusy(p.id);
-    setFailure(null);
-    setNotice(null);
-    try {
-      setNotice(await run());
-      reload();
-    } catch (e) {
-      setFailure(message(e));
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  const toggleActive = (p: TenantPackage) =>
-    act(p, async () => {
-      const saved = await tenantApi.updatePackage(p.id, { isActive: !p.isActive });
-      return t("common", K.saved, { name: saved.name });
-    });
-
-  const apply = async (p: TenantPackage) => {
-    if (!(await confirm({ title: t("common", K.applyConfirm), confirmLabel: t("common", K.apply) }))) return;
-    return act(p, async () => {
-      const answer = await tenantApi.applyPackage(p.id);
-      return t("common", K.applyDone, { count: answer.subscribers });
-    });
-  };
 
   if (sessionLoading) return null;
   if (!allowed) {
@@ -126,7 +103,7 @@ export function PackagesView() {
         subtitle={t("common", K.subtitle)}
         actions={
           <>
-            <Button variant="primary" size="sm" disabled={!currency} onClick={() => setEditing("new")} icon={<Plus size={14} aria-hidden />}>
+            <Button variant="primary" size="sm" disabled={!currency} onClick={() => setCreating(true)} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.new)}
             </Button>
           </>
@@ -155,7 +132,18 @@ export function PackagesView() {
           minWidth="min-w-[860px]"
           rowClassName="align-top"
           columns={[
-            { id: "name", header: t("common", K.columns.name), cell: (p) => packageTexts.name(p), className: "font-bold text-text-primary" },
+            {
+              id: "name",
+              header: t("common", K.columns.name),
+              cell: (p) => (
+                <span className="flex flex-wrap items-center gap-2">
+                  <Link href={panelResellerPackagePath(p.id)} className="font-bold text-primary hover:underline">
+                    {packageTexts.name(p)}
+                  </Link>
+                  {sellsNothing(p) && <Badge tone="warning">{t("common", K.sellsNothingBadge)}</Badge>}
+                </span>
+              ),
+            },
             { id: "monthly", header: t("common", K.columns.monthly), cell: (p) => money(p.monthlyPrice, p.currencyCode), dir: "ltr" },
             { id: "yearly", header: t("common", K.columns.yearly), cell: (p) => money(p.yearlyPrice, p.currencyCode), dir: "ltr" },
             { id: "rate", header: t("common", K.columns.rate), cell: rateOf, className: "text-text-secondary" },
@@ -174,22 +162,21 @@ export function PackagesView() {
             },
           ]}
           actions={(p) => [
-            { id: "edit", label: t("common", K.edit), disabled: busy === p.id, onSelect: () => setEditing(p) },
-            { id: "toggle", label: t("common", p.isActive ? K.deactivate : K.activate), disabled: busy === p.id, onSelect: () => void toggleActive(p) },
+            { id: "open", label: t("common", K.open), onSelect: () => router.push(panelResellerPackagePath(p.id)) },
+            { id: "toggle", label: t("common", p.isActive ? K.deactivate : K.activate), disabled: busy === p.id, onSelect: () => void toggleActive(p, packageTexts.name(p)) },
             { id: "apply", label: t("common", K.apply), disabled: busy === p.id, onSelect: () => void apply(p) },
           ]}
         />
       )}
 
-      {editing && (
+      {creating && (
         <PackageSheet
-          pkg={editing === "new" ? null : editing}
           currency={currency}
-          onClose={() => setEditing(null)}
-          onSaved={(p, created) => {
-            setEditing(null);
+          onClose={() => setCreating(false)}
+          onSaved={(p) => {
+            setCreating(false);
             setFailure(null);
-            setNotice(t("common", created ? K.created : K.saved, { name: packageTexts.name(p) }));
+            setNotice(t("common", K.created, { name: packageTexts.name(p) }));
             reload();
           }}
         />

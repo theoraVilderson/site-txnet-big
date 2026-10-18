@@ -58,6 +58,8 @@ export type PackageView = PackageTextView & {
   isActive: boolean;
   /** The wholesale rates in force, by meter key (F-118-n1), in `currencyCode`. */
   meterRates: MeterRateView[];
+  /** The platform products it lists (`package_product`); 0 sells nothing (ADR-0107 point 3, ADR-0154 (8)). */
+  productCount: number;
 };
 
 /** `currencyCode`, once every price given is at its places (F-116-r) — refused otherwise. */
@@ -112,7 +114,7 @@ export class TenantPackageService {
         await writeMeterRates(tx, row, [], input.meterRates ?? [], actor.adminId);
         await writePackageParts(tx, row, { input, adminId: actor.adminId });
         // Its text is published below, so the view cannot ask locale-service whether it has a description yet.
-        const created = { ...this.view(row, await this.ratesOne(tx, row)), descriptionKey: input.description ? packageTextKey(row.id, 'description') : null };
+        const created = { ...this.view(row, await this.partsOne(tx, row)), descriptionKey: input.description ? packageTextKey(row.id, 'description') : null };
         const parts = { limits: input.limits ?? [], quotaOverages: input.quotaOverages ?? [], products: input.products ?? [] };
         await tx.adminAuditLog.create({
           data: packageAudit(actor, AdminAction.tenant_package_create, created.id, null, { ...created, description: input.description ?? null, ...parts }),
@@ -146,7 +148,7 @@ export class TenantPackageService {
   async update(actor: TenantPackageActor, id: string, patch: UpdatePackageInput): Promise<PackageView> {
     await platformOwnerOnly(this.prisma, actor);
     const found = await this.find(id);
-    const before = this.view(found, await this.ratesOne(this.prisma, found));
+    const before = this.view(found, await this.partsOne(this.prisma, found));
     const monthly = patch.monthlyPrice === undefined ? before.monthlyPrice : patch.monthlyPrice;
     const yearly = patch.yearlyPrice === undefined ? before.yearlyPrice : patch.yearlyPrice;
     if (monthly === null && yearly === null) throw new TenantPackageRefused('package_unpriced', id);
@@ -173,7 +175,7 @@ export class TenantPackageService {
         const row = await tx.tenantFeaturePackage.update({ where: { id }, data, select: PACKAGE_SELECT });
         const repriced = await writeMeterRates(tx, row, before.meterRates, patch.meterRates ?? [], actor.adminId);
         const descriptionKey = patch.description === undefined ? before.descriptionKey : patch.description && packageTextKey(id, 'description');
-        const after = { ...this.view(row, await this.ratesOne(tx, row)), descriptionKey };
+        const after = { ...this.view(row, await this.partsOne(tx, row)), descriptionKey };
         if (held) {
           const had = new Set(held.includedFeatureKeys as string[]);
           const added = after.includedFeatureKeys.filter((k) => !had.has(k));
@@ -224,18 +226,18 @@ export class TenantPackageService {
       orderBy: { name: 'asc' },
       select: PACKAGE_SELECT,
     });
-    const rates = await ratesOf(this.prisma, rows);
-    return rows.map((row) => this.view(row, rates.get(row.id) ?? []));
+    const [rates, counts] = await Promise.all([ratesOf(this.prisma, rows), productCountsOf(this.prisma, rows)]);
+    return rows.map((row) => this.view(row, { meterRates: rates.get(row.id) ?? [], productCount: counts.get(row.id) ?? 0 }));
   }
 
   async read(actor: TenantPackageActor, id: string): Promise<PackageView> {
     await platformOwnerOnly(this.prisma, actor);
     const row = await this.find(id);
-    return this.view(row, await this.ratesOne(this.prisma, row));
+    return this.view(row, await this.partsOne(this.prisma, row));
   }
 
-  private view(row: PackageRow, meterRates: MeterRateView[]): PackageView {
-    return toView(row, meterRates, this.texts.viewOf(row.id, row.sourceLang));
+  private view(row: PackageRow, parts: ViewParts): PackageView {
+    return toView(row, parts, this.texts.viewOf(row.id, row.sourceLang));
   }
 
   private async find(id: string): Promise<PackageRow> {
@@ -244,8 +246,9 @@ export class TenantPackageService {
     return row;
   }
 
-  private async ratesOne(db: Pick<Prisma.TransactionClient, 'tenantPackageMeterRate'>, row: PackageRow): Promise<MeterRateView[]> {
-    return (await ratesOf(db, [row])).get(row.id) ?? [];
+  private async partsOne(db: Pick<Prisma.TransactionClient, 'tenantPackageMeterRate' | 'packageProduct'>, row: PackageRow): Promise<ViewParts> {
+    const [rates, counts] = await Promise.all([ratesOf(db, [row]), productCountsOf(db, [row])]);
+    return { meterRates: rates.get(row.id) ?? [], productCount: counts.get(row.id) ?? 0 };
   }
 
   /** A rate for a meter the catalog does not have is refused before anything is written (the FK would say it as a 500). */
@@ -270,7 +273,17 @@ export class TenantPackageService {
   }
 }
 
-function toView(row: PackageRow, meterRates: MeterRateView[], texts: PackageTextView): PackageView {
+/** What a view reads beside the package row: its rates and how many products it lists. */
+type ViewParts = Pick<PackageView, 'meterRates' | 'productCount'>;
+
+/** How many platform products each package lists, one grouped read for the page. */
+async function productCountsOf(db: Pick<Prisma.TransactionClient, 'packageProduct'>, rows: readonly { id: string }[]): Promise<Map<string, number>> {
+  if (rows.length === 0) return new Map();
+  const counts = await db.packageProduct.groupBy({ by: ['packageId'], where: { packageId: { in: rows.map((r) => r.id) } }, _count: { _all: true } });
+  return new Map(counts.map((c) => [c.packageId, c._count._all]));
+}
+
+function toView(row: PackageRow, { meterRates, productCount }: ViewParts, texts: PackageTextView): PackageView {
   return {
     id: row.id,
     name: row.name,
@@ -281,6 +294,7 @@ function toView(row: PackageRow, meterRates: MeterRateView[], texts: PackageText
     includedFeatureKeys: row.includedFeatureKeys as string[],
     isActive: row.isActive,
     meterRates,
+    productCount,
   };
 }
 

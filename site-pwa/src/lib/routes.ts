@@ -119,6 +119,8 @@ export const panelResellerPath = (id: string) => `${PANEL_RESELLERS}/${encodeURI
  * the static segment wins over `[id]`, as `/buy` does.
  */
 export const PANEL_RESELLER_PACKAGES = `${PANEL_RESELLERS}/packages`;
+/** One package's page (PK-1-f, ADR-0154 (2)): everything it sells and holds, each part edited in its own sheet. */
+export const panelResellerPackagePath = (id: string) => `${PANEL_RESELLER_PACKAGES}/${encodeURIComponent(id)}`;
 /**
  * What a reseller may spend of the platform's (F-019-r, ADR-0106): each limit
  * for every reseller, per package, and for one or several resellers. Under

@@ -2358,7 +2358,6 @@
       },
       "form": {
         "createTitle": "New package",
-        "editTitle": "Edit {{name}}",
         "name": "Name",
         "monthly": "Monthly price ({{currency}})",
         "yearly": "Yearly price ({{currency}})",
@@ -2401,7 +2400,29 @@
         "multi_currency": "Several currencies",
         "dedicated_node_pool": "Dedicated servers"
       },
-      "perUse": "{{price}} {{currency}} per new link"
+      "perUse": "{{price}} {{currency}} per new link",
+      "open": "Open",
+      "sellsNothingBadge": "Sells no product",
+      "page": {
+        "back": "All packages",
+        "notFound": "No such package.",
+        "basics": "Name and prices",
+        "features": "Features",
+        "noFeatures": "No feature included.",
+        "products": "Products it sells",
+        "productsHint": "A reseller on this package sells only the platform products listed here, each within its sales quota.",
+        "sells": "Sells {{count}} product(s): {{names}}",
+        "sellsNothing": "This package sells no product, so a reseller on it can sell none of the platform’s products. List the ones it sells.",
+        "toProducts": "Go to products",
+        "limits": "Limits",
+        "limitsHint": "This package’s own value beside the platform’s. Where the package sets none, the platform’s applies.",
+        "own": "This package: {{value}}",
+        "platform": "Platform: {{value}}",
+        "overage": "Past a quota",
+        "overageHint": "What happens past each quota’s included amount on this package: refused, or each extra unit sold at a price.",
+        "rates": "Wholesale rates",
+        "sheetTitle": "{{section}}: {{name}}"
+      }
     },
     "limits": {
       "link": "Limits",

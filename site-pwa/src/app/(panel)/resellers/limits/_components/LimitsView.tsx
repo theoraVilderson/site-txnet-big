@@ -96,7 +96,7 @@ export function LimitsView() {
 }
 
 /** What a level holds, in words: a number, no limit, or not set (the next level applies). */
-function useHeld() {
+export function useHeld() {
   const { t } = useLocale();
   return (value: number | null | undefined) =>
     value === undefined ? t("common", K.notSet) : value === null ? t("common", K.noLimit) : String(value);
@@ -202,7 +202,7 @@ function LimitCard({ row, packages, resellers, onSaved }: { row: ResellerLimitRo
 }
 
 /** A number or "no limit", and a save; "back" only when this level has a row. */
-function ValueEditor({
+export function ValueEditor({
   label,
   max,
   busy,
