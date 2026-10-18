@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 216
+- features: 217
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -59,7 +59,7 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 4.5 Quota Types | 13 |  |  |  |
 | `App-Features.md` · 4.6 One Package, Five Configs, One Shared Quota | 9 |  |  |  |
 | `App-Features.md` · 4.7 Discount Coupons | 14 |  |  |  |
-| `App-Features.md` · 4.8 Pricing and Campaign Engine | 22 | F-408 F-501 F-502 F-503 F-504 F-505 F-506 F-507 F-508 F-509 F-510 F-511 F-512 |  |  |
+| `App-Features.md` · 4.8 Pricing and Campaign Engine | 23 | F-408 F-501 F-502 F-503 F-504 F-505 F-506 F-507 F-508 F-509 F-510 F-511 F-512 F-513 |  |  |
 | `App-Features.md` Wallet, Ledger and Payment | 2 |  |  |  |
 | `App-Features.md` · 5.1 Double-Entry Ledger | 25 |  | C-13 | LedgerAccount LedgerTransaction |
 | `App-Features.md` · 5.2 Two Separate Account Trees | 8 |  |  |  |
@@ -258,6 +258,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-510 | Auto-renewal from the wallet with explicit consent | new | 4.8 Pricing and Campaign Engine |
 | F-511 | Invoice/receipt PDF with tenant branding | new | 4.8 Pricing and Campaign Engine |
 | F-512 | Toman price display with live rate + rate lock at invoice time | core | 4.8 Pricing and Campaign Engine |
+| F-513 | Sales cap per variant: at most N sold, then "sold out" in the shop and the bot and the pur | new | 4.8 Pricing and Campaign Engine |
 | F-601 | Multi-threshold usage notifications (50% / 80% / 95%) and time (7 / 3 / 1 days) | partial | 9.5 Retention Notifications |
 | F-602 | Exhaustion prediction: "at this rate, your volume runs out in 4 days" | new | 9.5 Retention Notifications |
 | F-603 | 24-hour post-expiry grace period with a notice, instead of an abrupt cutoff | changed | 9.5 Retention Notifications |

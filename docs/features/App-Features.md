@@ -498,6 +498,7 @@ The discount always subtracts from the **dollar** amount first, and the toman am
 | F-510 | **Auto-renewal from the wallet with explicit consent**                       | new     | ⭐ the single biggest LTV lever. Consent revocable with one tap, 48-hour notice before every withdrawal |
 | F-511 | Invoice/receipt PDF with tenant branding                                     | new     | Server-side render, from a template we own                                                              |
 | F-512 | Toman price display with live rate + rate lock at invoice time               | base    | §6                                                                                                      |
+| F-513 | Sales cap per variant: at most N sold, then "sold out" in the shop and the bot and the purchase refused | new | A pending invoice reserves a unit, paid consumes it, expired/cancelled releases it (the coupon `reservedCount` pattern). Free coupon and wheel grants count and are refused when full; an admin or reseller issue counts but is never refused. Null = no cap |
 | F-408 | Node quality tiers: `standard` / `premium` with a different price multiplier | new     | The multiplier applies to traffic-wallet debiting, not as a catalog price matrix                        |
 
 > **Rule:** F-505 and F-503 never overwrite an old `Price`. They create a new `Price` row with an `effectiveFrom` (§6.1). Yesterday's invoice is computed at yesterday's price.
