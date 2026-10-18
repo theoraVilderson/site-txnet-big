@@ -72,7 +72,7 @@ export function CouponForm({ me, coupon, onClose, onSaved }: { me: Me | null; co
               <h3 className="text-sm font-bold text-text-primary">{t("common", F.sections[id].title)}</h3>
               <p className="text-2xs text-text-secondary">{t("common", F.sections[id].subtitle)}</p>
             </div>
-            <CouponStepFields step={id} form={form} set={set} errors={errors} me={me} coupon={coupon} />
+            <CouponStepFields step={id} form={form} set={set} errors={errors} me={me} coupon={coupon} currency={coupon.currencyCode} />
           </section>
         ))}
       </div>

@@ -24,6 +24,7 @@ import {
 } from "../_lib/discount-rules";
 import { AudiencePicker } from "../../_components/AudiencePicker";
 import type { AudienceGroups } from "../../_hooks/useAudienceGroups";
+import { useCouponCurrency } from "../_hooks/useCouponCurrency";
 import { ChoicePicker, type Choices } from "./ChoicePicker";
 import { UsersPicker } from "./UsersPicker";
 import { Alert, Button, Input, useConfirm } from "../../_components/kit";
@@ -53,6 +54,9 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const search = memberSearchOf(me);
+  // A rule never serves another tenant: an edit is in its own currency, a new one in the caller's tenant's (F-116-h11).
+  const asked = useCouponCurrency(rule ? null : me, me?.tenant?.id ?? null);
+  const currency = rule?.currencyCode ?? asked;
 
   const set = <Key extends keyof RuleForm>(k: Key, v: RuleForm[Key]) => {
     setTouched(true);
@@ -145,9 +149,8 @@ export function DiscountRuleForm({ me, rule, choices, onClose, onSaved }: { me: 
           hint={
             form.kind === "percentage"
               ? t("common", F.valueHintPercent)
-              : // An edit is in the rule's own currency; a new rule takes the tenant's, which this form is not told (F-116-h3).
-                rule
-                ? t("common", F.valueHintAmount, { currency: rule.currencyCode })
+              : currency
+                ? t("common", F.valueHintAmount, { currency })
                 : t("common", F.valueHintAmountUnknown)
           }
         >

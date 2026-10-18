@@ -19,6 +19,8 @@ export interface CouponFields {
   me: Me | null;
   /** The coupon being edited; `null` in the wizard. */
   coupon: AdminCoupon | null;
+  /** What its money is written in (F-116-h11): the coupon's own, or billing's for a new one; `null` until known. */
+  currency: string | null;
 }
 
 /** Whether the coupon is the platform's — it may then name platform gateways only (rule 6). */

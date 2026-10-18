@@ -7,6 +7,7 @@ import { CHANNELS, COUPON_KEYS, WEEKDAY_KEYS, type CouponForm } from "../_lib/co
 import { idsOf } from "../_lib/discount-rules";
 import { FIELD_STEPS, STEP_FIELDS, hourLabel, setFields, type FieldStep } from "../_lib/coupon-steps";
 import { formatPlatformDay } from "../../_lib/datetime";
+import { formatMoney } from "../../_lib/money";
 import { formatList } from "../../_lib/digits";
 import { ReviewRows, type ReviewRow } from "../../_components/kit";
 import { SHORT_ID } from "./PickedChips";
@@ -29,10 +30,10 @@ const NOT_FOR: Record<CouponForm["discountType"], (keyof CouponForm)[]> = {
  * it — only what was set, so the defaults do not read as decisions. The code,
  * its type and value, and its end ("never expires") always show.
  */
-export function CouponReview({ form, onEdit }: { form: CouponForm; onEdit: (step: FieldStep) => void }) {
+export function CouponReview({ form, currency, onEdit }: { form: CouponForm; currency: string | null; onEdit: (step: FieldStep) => void }) {
   const { t, lang } = useLocale();
   const gateways = useAdminGateways();
-  const value = useValueText(form, lang, (key) => (gateways ?? []).find((g) => gatewayKey(g) === key)?.displayName ?? key);
+  const value = useValueText(form, lang, currency, (key) => (gateways ?? []).find((g) => gatewayKey(g) === key)?.displayName ?? key);
 
   const rowsOf = (step: FieldStep): ReviewRow[] =>
     STEP_FIELDS[step]
@@ -87,12 +88,13 @@ const LABELS: Record<keyof CouponForm, string> = {
   variantIds: F.variantIds,
 };
 
-/** One field's value as the review says it. */
-function useValueText(form: CouponForm, lang: string, gatewayName: (key: string) => string) {
+/** One field's value as the review says it; money in `currency` once billing has named it (F-116-h11). */
+function useValueText(form: CouponForm, lang: string, currency: string | null, gatewayName: (key: string) => string) {
   const { t } = useLocale();
   const yes = (on: boolean) => t("common", on ? W.yes : W.no);
   const count = (text: string) => t("common", W.count, { count: idsOf(text).length });
   const short = (id: string) => <span dir="ltr">{id.trim().slice(0, SHORT_ID)}</span>;
+  const money = (amount: string) => <span dir="ltr">{currency ? formatMoney(amount.trim(), currency, { lang, t }) : amount.trim()}</span>;
   const TYPES = { percentage: F.percentage, fixed_amount: F.fixed, free_grant: F.freeService } as const;
   const OWNERS = { own: F.ownerOwn, platform: F.ownerPlatform, tenant: F.ownerTenant } as const;
 
@@ -100,6 +102,13 @@ function useValueText(form: CouponForm, lang: string, gatewayName: (key: string)
     switch (k) {
       case "owner":
         return t("common", OWNERS[form.owner]);
+      case "discountValue":
+        // A percentage is not money; a fixed value is.
+        return form.discountType === "fixed_amount" ? money(form.discountValue) : <span dir="ltr">{form.discountValue.trim()}</span>;
+      case "maxDiscountCap":
+      case "minPurchaseAmount":
+      case "maxPurchaseAmount":
+        return money(form[k]);
       case "tenantId":
       case "grantVariantId":
         return short(form[k]);

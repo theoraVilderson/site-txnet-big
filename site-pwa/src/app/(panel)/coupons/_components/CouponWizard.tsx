@@ -7,9 +7,10 @@ import { billingApi } from "@/lib/billing-api";
 import { COUPON_KEYS as K, createBody, emptyCouponForm, validateCouponForm } from "../_lib/coupon-form";
 import { COUPON_STEPS, firstStepWithError, refusalStep, stepErrors, type CouponStep } from "../_lib/coupon-steps";
 import { useCouponForm } from "../_hooks/useCouponForm";
+import { useCouponCurrency } from "../_hooks/useCouponCurrency";
 import { Alert, Wizard, useWizard } from "../../_components/kit";
 import { CouponReview } from "./CouponReview";
-import { CouponStepFields } from "./CouponSections";
+import { CouponStepFields, couponTenant } from "./CouponSections";
 
 const F = K.form;
 const W = F.wizard;
@@ -24,6 +25,7 @@ const W = F.wizard;
 export function CouponWizard({ me, onClose, onSaved }: { me: Me | null; onClose: () => void; onSaved: (notice: string) => void | Promise<void> }) {
   const { t } = useLocale();
   const { form, set, errors, setErrors, touched, saving, failure, setFailure, save } = useCouponForm(emptyCouponForm);
+  const currency = useCouponCurrency(me, couponTenant({ form, me, coupon: null }));
 
   const check = (step: CouponStep) => {
     const found = stepErrors(step, validateCouponForm(form, me, null));
@@ -68,7 +70,7 @@ export function CouponWizard({ me, onClose, onSaved }: { me: Me | null; onClose:
       onClose={onClose}
       error={failure ? <Alert tone="error">{failure}</Alert> : undefined}
     >
-      {step === "review" ? <CouponReview form={form} onEdit={goTo} /> : <CouponStepFields step={step} form={form} set={set} errors={errors} me={me} coupon={null} />}
+      {step === "review" ? <CouponReview form={form} currency={currency} onEdit={goTo} /> : <CouponStepFields step={step} form={form} set={set} errors={errors} me={me} coupon={null} currency={currency} />}
     </Wizard>
   );
 }

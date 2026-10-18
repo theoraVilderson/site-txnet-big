@@ -142,6 +142,15 @@ The routes, the scope and every rule are
     `CouponForm` edits with the same five steps as sections. The hour window
     is two hour pickers (00:00–23:00, 01:00–24:00, or any hour).
 
+16. **Money names its currency (F-116-h11).** A new coupon, batch or rule
+    asks billing's `GET /coupons/currency` for its owner (`useCouponCurrency`,
+    `currencyOwnerQuery`: a platform one is `platform`) — under `coupon.manage`,
+    which the tenant operating-currency route does not admit. An edit uses
+    its row's `currencyCode`. Named: a gift value and the review's total, a
+    coupon's fixed value, cap and purchase bounds and its review, a rule's
+    value. Nothing is named until billing answers; a gift value is then held
+    to that currency's places (`validateGiftBatch`).
+
 ## Proof
 
 `coupons/coupons.test.ts` — refusal and status unions against the service
@@ -154,7 +163,8 @@ statuses against Prisma), every key in `en` and `fa`.
 inclusive day), every gift key in `en` and `fa`.
 `coupons/gift-batch-review.test.tsx` — sample codes against billing's
 alphabet and length, `batchTotal` without a float, the sheet held on an error,
-nothing generated before the review's button, back keeps the fields.
+nothing generated before the review's button, back keeps the fields; the
+value's currency asked for the owner, named, and its places held.
 `coupons/coupon-wizard.test.tsx` — every field on one step, a step's errors
 alone, refusal → step, the review's "only what was set", Next held on step 1.
 `coupons/pickers.test.tsx` — each picker writes the same ids text: a pick

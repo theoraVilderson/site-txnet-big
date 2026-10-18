@@ -333,6 +333,11 @@ export const couponCalls = {
     return call<CouponUsageReport>(`/coupons/${encodeURIComponent(id)}/usage${queryString(query)}`, { method: "GET" });
   },
 
+  /** The currency a new coupon or batch of `owner` (a tenant id, or `platform`) is written in (F-116-h11a). */
+  async couponCurrency(owner: string): Promise<{ code: string }> {
+    return call<{ code: string }>(`/coupons/currency?tenantId=${encodeURIComponent(owner)}`, { method: "GET" });
+  },
+
   /** Gift-code batches the caller may manage, newest first (F-502-d). */
   async giftBatches(query: { tenantId?: string; page?: number; pageSize?: number } = {}): Promise<GiftBatchPage> {
     return call<GiftBatchPage>(`/coupons/batches${queryString(query)}`, { method: "GET" });

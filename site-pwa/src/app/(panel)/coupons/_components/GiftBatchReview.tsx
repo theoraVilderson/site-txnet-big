@@ -7,6 +7,7 @@ import type { Me } from "@/lib/auth-api";
 import { isPlatformTenant } from "@/lib/tenant-type";
 import { Alert, ReviewRows, type ReviewRow } from "../../_components/kit";
 import { formatPlatformDay } from "../../_lib/datetime";
+import { formatMoney } from "../../_lib/money";
 import { GIFT_KEYS, batchTotal, sampleGiftCodes, type GiftBatchForm } from "../_lib/gift-batch";
 import { variantOwnerTenant } from "../_lib/variant-choices";
 import { SHORT_ID } from "./PickedChips";
@@ -19,9 +20,11 @@ const R = F.review;
  * The batch as it will be made (UX-3-e): who owns it, how many codes, what
  * each gives and the total, its end ("never expires"), and a few codes in
  * its shape — invented, since a batch's codes are never on screen (rule 10).
+ * Money is in `currency`, billing's for this owner; as typed until it answers.
  */
-export function GiftBatchReview({ form, me, onEdit }: { form: GiftBatchForm; me: Me | null; onEdit: () => void }) {
+export function GiftBatchReview({ form, me, currency, onEdit }: { form: GiftBatchForm; me: Me | null; currency: string | null; onEdit: () => void }) {
   const { t, lang } = useLocale();
+  const money = (amount: string) => (currency ? formatMoney(amount, currency, { lang, t }) : amount);
   const count = Number(form.count.trim());
   const samples = useMemo(() => sampleGiftCodes(form.prefix, count), [form.prefix, count]);
   const OWNERS = { own: F.ownerOwn, platform: F.ownerPlatform, tenant: F.ownerTenant } as const;
@@ -35,7 +38,7 @@ export function GiftBatchReview({ form, me, onEdit }: { form: GiftBatchForm; me:
   if (form.kind === "service") {
     rows.push([t("common", F.kindService), <ServiceName key="service" form={form} me={me} />]);
   } else {
-    rows.push([t("common", F.value), <span key="value" dir="ltr">{form.value.trim()}</span>]);
+    rows.push([t("common", F.value), <span key="value" dir="ltr">{money(form.value.trim())}</span>]);
   }
   rows.push([t("common", F.expiresAt), form.expiresAt ? formatPlatformDay(form.expiresAt, lang) : t("common", R.neverExpires)]);
   if (form.note.trim()) rows.push([t("common", F.note), <span key="note" dir="auto">{form.note.trim()}</span>]);
@@ -46,7 +49,7 @@ export function GiftBatchReview({ form, me, onEdit }: { form: GiftBatchForm; me:
         <ReviewRows icon={Gift} title={t("common", R.batch)} editLabel={t("common", R.edit)} onEdit={onEdit} rows={rows} />
         {form.kind === "credit" && (
           <p className="mt-3 border-t border-card-border pt-3 text-sm font-bold text-text-primary">
-            {t("common", R.total, { total: batchTotal(form.value, count) })}
+            {t("common", R.total, { total: money(batchTotal(form.value, count)) })}
           </p>
         )}
       </section>

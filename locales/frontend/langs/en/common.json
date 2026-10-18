@@ -1320,7 +1320,8 @@
         "yes": "Yes",
         "no": "No",
         "count": "{{count}} chosen"
-      }
+      },
+      "moneyHint": "In {{currency}}"
     },
     "errors": {
       "required": "Required",
@@ -1448,7 +1449,8 @@
           "samples": "What the codes will look like",
           "samplesHint": "Examples of the shape only. The real codes are made when you generate, and are only in the CSV.",
           "irreversible": "A batch cannot be undone. Once generated, the codes exist; you can only switch the batch off later, and codes already redeemed keep what they gave."
-        }
+        },
+        "valueHint": "In {{currency}}"
       },
       "errors": {
         "label": "Name the batch",

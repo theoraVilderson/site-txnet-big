@@ -42,9 +42,16 @@ export function CouponStepFields({ step, ...c }: CouponFields & { step: FieldSte
   }
 }
 
+/** "In USD" under a money field, once the currency is known (F-116-h11). */
+function useMoneyHint(currency: string | null) {
+  const { t } = useLocale();
+  return currency ? t("common", F.moneyHint, { currency }) : undefined;
+}
+
 function Basics(c: CouponFields) {
   const { t } = useLocale();
   const { form, set, errors, coupon, me } = c;
+  const moneyHint = useMoneyHint(c.currency);
   const { field, text } = useFieldKit(c);
   const frozen = coupon ? isFrozen(coupon) : false;
   return (
@@ -100,8 +107,8 @@ function Basics(c: CouponFields) {
               <VariantPicker id="cp-grantVariantId" value={form.grantVariantId} onChange={(v) => set("grantVariantId", v)} ownerTenant={couponTenant(c)} invalid={Boolean(errors.grantVariantId)} disabled={frozen} />,
               t("common", F.grantVariantHint),
             )
-          : field("discountValue", t("common", F.value), text("discountValue", { ltr: true, decimal: true, disabled: frozen }))}
-        {form.discountType === "percentage" && field("maxDiscountCap", t("common", F.cap), text("maxDiscountCap", { ltr: true, decimal: true }))}
+          : field("discountValue", t("common", F.value), text("discountValue", { ltr: true, decimal: true, disabled: frozen }), form.discountType === "fixed_amount" ? moneyHint : undefined)}
+        {form.discountType === "percentage" && field("maxDiscountCap", t("common", F.cap), text("maxDiscountCap", { ltr: true, decimal: true }), moneyHint)}
       </div>
       <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label={t("common", F.isActive)} />
       {field("note", t("common", F.note), text("note", { area: true }), t("common", F.noteHint))}
@@ -112,10 +119,11 @@ function Basics(c: CouponFields) {
 function Limits(c: CouponFields) {
   const { t } = useLocale();
   const { field, text } = useFieldKit(c);
+  const moneyHint = useMoneyHint(c.currency);
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {field("minPurchaseAmount", t("common", F.minPurchase), text("minPurchaseAmount", { ltr: true, decimal: true }))}
-      {field("maxPurchaseAmount", t("common", F.maxPurchase), text("maxPurchaseAmount", { ltr: true, decimal: true }))}
+      {field("minPurchaseAmount", t("common", F.minPurchase), text("minPurchaseAmount", { ltr: true, decimal: true }), moneyHint)}
+      {field("maxPurchaseAmount", t("common", F.maxPurchase), text("maxPurchaseAmount", { ltr: true, decimal: true }), moneyHint)}
       {field("totalUsageLimit", t("common", F.totalLimit), text("totalUsageLimit", { ltr: true }), t("common", F.totalLimitHint))}
       {field("perUserUsageLimit", t("common", F.perUserLimit), text("perUserUsageLimit", { ltr: true }), t("common", F.perUserHint))}
       {field("periodUsageLimit", t("common", F.periodUsageLimit), text("periodUsageLimit", { ltr: true }))}

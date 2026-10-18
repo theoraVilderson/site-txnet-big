@@ -12,6 +12,7 @@ import { Button, Dialog, Input, Textarea } from "../../_components/kit";
 import { refusalKey } from "../_lib/coupon-form";
 import { GIFT_KEYS as G, emptyGiftBatchForm, giftBatchBody, validateGiftBatch, type GiftBatchErrors, type GiftBatchForm } from "../_lib/gift-batch";
 import { variantOwnerTenant } from "../_lib/variant-choices";
+import { useCouponCurrency } from "../_hooks/useCouponCurrency";
 import { GiftBatchReview } from "./GiftBatchReview";
 import { ResellerPicker } from "./ResellerPicker";
 import { VariantPicker } from "./VariantPicker";
@@ -32,6 +33,7 @@ export function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onCl
   const [reviewing, setReviewing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const currency = useCouponCurrency(me, variantOwnerTenant(form.owner, form.tenantId, me));
 
   const set = <K extends keyof GiftBatchForm>(k: K, v: GiftBatchForm[K]) => {
     setForm((f) => ({ ...f, [k]: v }));
@@ -39,7 +41,7 @@ export function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onCl
   };
 
   const review = () => {
-    const found = validateGiftBatch(form, me);
+    const found = validateGiftBatch(form, me, currency);
     setErrors(found);
     setFailure(null);
     if (Object.keys(found).length === 0) setReviewing(true);
@@ -112,7 +114,7 @@ export function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onCl
   return (
     <Dialog open size="md" onClose={onClose} title={t("common", reviewing ? F.review.title : F.title)} footer={footer}>
       {reviewing ? (
-        <GiftBatchReview form={form} me={me} onEdit={() => setReviewing(false)} />
+        <GiftBatchReview form={form} me={me} currency={currency} onEdit={() => setReviewing(false)} />
       ) : (
         <div className="flex flex-col gap-4">
           {owner && (
@@ -167,7 +169,7 @@ export function GiftBatchSheet({ me, onClose, onCreated }: { me: Me | null; onCl
                   />,
                   t("common", F.grantVariantHint),
                 )
-              : field("value", t("common", F.value), text("value", { ltr: true }))}
+              : field("value", t("common", F.value), text("value", { ltr: true }), currency ? t("common", F.valueHint, { currency }) : undefined)}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {field("prefix", t("common", F.prefix), text("prefix", { ltr: true }), t("common", F.prefixHint))}

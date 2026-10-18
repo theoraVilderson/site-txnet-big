@@ -2,7 +2,7 @@ import type { Me } from "@/lib/auth-api";
 import type { GenerateGiftBatchBody } from "@/lib/billing-api";
 import { COUPON_KEYS, dayToInstant, type CouponOwnerChoice } from "./coupon-form";
 import { isPlatformTenant } from "@/lib/tenant-type";
-import { MONEY_MAX_PLACES, MONEY_PATTERN, moneyUnits } from "../../_lib/money";
+import { MONEY_MAX_PLACES, MONEY_PATTERN, amountPattern, currencyDecimals, moneyUnits } from "../../_lib/money";
 
 /** Every string the gift tab can show (C-06). */
 export const GIFT_KEYS = COUPON_KEYS.gift;
@@ -39,17 +39,18 @@ export function emptyGiftBatchForm(): GiftBatchForm {
   return { owner: "own", tenantId: "", label: "", note: "", count: "10", kind: "credit", value: "", grantVariantId: "", prefix: "", expiresAt: "" };
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A tenant or catalog id as billing's schemas take it. */
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** `CouponBatchService.generate`'s rules, mirrored. */
-export function validateGiftBatch(f: GiftBatchForm, me: Me | null): GiftBatchErrors {
+/** `CouponBatchService.generate`'s rules, mirrored; the value at `currency`'s places once billing has named it (F-116-h11). */
+export function validateGiftBatch(f: GiftBatchForm, me: Me | null, currency: string | null = null): GiftBatchErrors {
   const errors: GiftBatchErrors = {};
   if (!f.label.trim()) errors.label = GIFT_KEYS.errors.label;
   const count = f.count.trim();
   if (!/^\d{1,4}$/.test(count) || Number(count) < 1 || Number(count) > GIFT_BATCH_MAX) errors.count = GIFT_KEYS.errors.count;
   if (f.kind === "service") {
     if (!UUID.test(f.grantVariantId.trim())) errors.grantVariantId = COUPON_KEYS.errors.uuid;
-  } else if (!MONEY_PATTERN.test(f.value.trim()) || Number(f.value) <= 0) {
+  } else if (!(currency ? amountPattern(currencyDecimals(currency)) : MONEY_PATTERN).test(f.value.trim()) || moneyUnits(f.value.trim()) <= BigInt(0)) {
     errors.value = COUPON_KEYS.errors.decimal;
   }
   if (f.prefix.trim() && !/^[A-Za-z0-9]{1,8}$/.test(f.prefix.trim())) errors.prefix = GIFT_KEYS.errors.prefix;
