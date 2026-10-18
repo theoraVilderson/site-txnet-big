@@ -328,9 +328,6 @@ model TenantFeaturePackage {
   /// The platform's currency (ADR-0098 part 4); converted with it (F-116-f).
   currencyCode        String
   includedFeatureKeys Json // Array of TENANT_FEATURE_KEYS (shared-core)
-  // D-41: no metering, so the two below stay `{}` and unused.
-  usageIncludedJson   Json     @default("{}")
-  overageRuleJson     Json     @default("{}")
   // Deactivated: not offered any more; its subscribers keep it until renewal.
   isActive            Boolean  @default(true)
 
@@ -546,7 +543,7 @@ model TenantUsageMeter {
   periodStart         DateTime
   periodEnd           DateTime
   quantity            Decimal        @db.Decimal(18, 4)
-  unitPrice           Decimal        @db.Decimal(18, 8) // از TenantFeaturePackage.overageRuleJson
+  unitPrice           Decimal        @db.Decimal(18, 8)
   /// The platform's currency when written (F-116-f); an unbilled row is converted with it.
   currencyCode        String
   isBilled            Boolean        @default(false)

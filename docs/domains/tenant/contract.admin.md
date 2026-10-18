@@ -111,7 +111,6 @@ A package view: `id, name, monthlyPrice, yearlyPrice` (decimal strings or
 | At least one of `monthlyPrice` / `yearlyPrice`: the schema on create, the service on an edit that clears one, and CHECK `tenant_feature_package_priced` | a package sold for one period only is allowed; one sold for none is not |
 | Clearing a price while a subscriber that is not terminated is on that period is `package_price_in_use`, checked under the package's `FOR UPDATE` | the renewal would have nothing to charge (F-019-c, user 2026-09-17) |
 | `includedFeatureKeys` are members of `TENANT_FEATURE_KEYS` (shared-core), none repeated | the same set F-018-e turns into entitlements (C-09) |
-| `usageIncludedJson` / `overageRuleJson` are not accepted and stay `{}` | D-41: no metering |
 | `name` is unique; a taken name is `package_name_taken` before the transaction and on the unique index (`P2002`) | the platform owner picks a package by name |
 | **No delete.** `isActive: false` deactivates and writes nothing else; `true` offers it again | a deactivated package takes no new subscriber; its current ones keep renewing on it (F-019-c, user 2026-09-17) |
 | Each write and its audit row (`tenant_package_create` / `tenant_package_update`, target `tenant_feature_package`) are one transaction; an update audits only the fields it changed, before and after | the trail says who re-priced or withdrew a package |

@@ -148,8 +148,7 @@ describe('TenantPackageService', () => {
     expect(createPackageSchema.safeParse({ ...input, monthlyPrice: undefined, yearlyPrice: undefined }).success).toBe(false);
     expect(createPackageSchema.safeParse({ ...input, includedFeatureKeys: ['not_a_feature'] }).success).toBe(false);
     expect(createPackageSchema.safeParse({ ...input, includedFeatureKeys: ['spin_wheel', 'spin_wheel'] }).success).toBe(false);
-    // D-41: no metering — the unused JSON columns are not the caller's to fill.
-    expect(createPackageSchema.safeParse({ ...input, usageIncludedJson: {} }).success).toBe(false);
+    expect(createPackageSchema.safeParse({ ...input, isDefault: true }).success).toBe(false);
     expect(createPackageSchema.safeParse({ ...input, yearlyPrice: undefined }).success).toBe(true);
     expect(updatePackageSchema.safeParse({}).success).toBe(false);
   });

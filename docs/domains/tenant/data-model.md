@@ -78,6 +78,9 @@ RLS on `tenant_subscription`, the settings row and its CHECKs.
 with strict RLS and its append-only trigger, `suspensionHoldDays` and its CHECK,
 and the `tenant_status_changed` NOTIFY trigger on `tenant.tenant`.
 
+`20261018001100_a_package_drops_its_unused_metering_columns` (PK-1-i, ADR-0154) drops
+`tenant_feature_package.usageIncludedJson` / `overageRuleJson`, unused since D-41 and `{}` on every row.
+
 `20260919000300_tenant_staff_member` (F-018-j) drops `roleWithinTenant`, the
 `TenantStaffRole` enum and `isActive`, adds `invitedByUserId` / `accessExpiresAt`
 / `revokedAt` and the unique `(tenantId, userId)`. The table was never written by
