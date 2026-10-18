@@ -15,8 +15,9 @@ ADR-0111), both through `lib/engagement-api.ts`:
 - `/wheel` (`PANEL_WHEEL`), under `(panel)/wheel/`: `WheelView.tsx` the page,
   `WheelDisc.tsx` the drawn wheel, `_lib/wheel.ts` the rules.
 - `/wheel/settings` (`PANEL_WHEEL_SETTINGS`), under `(panel)/wheel/settings/`:
-  `WheelSettingsView.tsx` (today, tomorrow, the tabs), `WheelEditor.tsx` (a new
-  version), `WheelVersions.tsx`, `WheelReport.tsx`; `_lib/wheel-settings.ts` the rules.
+  `WheelSettingsView.tsx` (today, tomorrow, the tabs), `WheelWizard.tsx` (a new
+  version: `WheelSteps.tsx`, `WheelReview.tsx`), `WheelVersions.tsx`, `WheelReport.tsx`;
+  `_lib/wheel-settings.ts` the rules, `_lib/wheel-steps.ts` the steps.
 
 ## The user's wheel (F-707-g)
 
@@ -60,6 +61,15 @@ ADR-0111), both through `lib/engagement-api.ts`:
    failing (its permission missing) opens an id box instead.
 6. **One sentence per refusal**: `REFUSAL_KEYS` over `WheelAdminRejection` and
    `WheelReportRejection`. The report's refusal reasons reuse the user page's sentences.
+7. **A new version is a kit `Wizard`** (UX-3-c, [contract.ux.md](contract.ux.md) K12):
+   cap and on/off → who may spin → prizes, with the disc drawn by `WheelDisc`
+   and each slot's odds → review (the cap, the average per spin, how many
+   spins the cap pays for, the day it starts). Next checks only the step's part
+   of `validateWheelForm` (`WHEEL_STEP_HOLDS`); a refusal returns to the step
+   holding what it names (`WHEEL_REFUSAL_STEP`). A first wheel is offered a
+   starter set (`starterPrizes`) while no slot is touched: misses cost 0, and
+   each prize's cost is left blank for the admin to type. Closing a changed
+   wizard asks first.
 
 ## Proof
 
@@ -69,3 +79,6 @@ key, the result sentence, every key in `en` and `fa`.
 `wheel/settings/wheel-settings.test.ts` — the refusal unions, the guard's key
 and schema bounds, the menu, odds in hundredths and the average in the currency's minor units, the cap rules, each
 kind's shape, the strict body, the form opened on a version, every key.
+`wheel/settings/wheel-wizard.test.tsx` — every checked field on one step, a step
+stops only on its own errors, the starter set billing takes once priced, Next
+held on the cap, the starter drawn, the review's cost and day, one save.

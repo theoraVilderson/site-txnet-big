@@ -5376,6 +5376,47 @@
       "version_not_found": "That version was not found.",
       "version_taken": "Someone saved a version at the same moment. Reload and try again.",
       "invalid_range": "Pick a range of at most 31 days."
+    },
+    "wizard": {
+      "steps": {
+        "basics": {
+          "title": "Cap and on/off",
+          "subtitle": "What a day may cost"
+        },
+        "eligibility": {
+          "title": "Who may spin",
+          "subtitle": "Limits and conditions"
+        },
+        "prizes": {
+          "title": "Prizes",
+          "subtitle": "Slots, odds and costs"
+        },
+        "review": {
+          "title": "Review"
+        }
+      },
+      "confirmClose": "Close without saving this version?",
+      "edit": "Edit",
+      "preview": "The wheel as users will see it",
+      "odds": "Each slot's chance",
+      "starter": {
+        "title": "Is this your first wheel?",
+        "hint": "Fill it with a ready set: misses between small prizes. Then type what each prize costs you.",
+        "use": "Use the ready set",
+        "tryAgain": "Try again",
+        "gb": "{{n}} GB",
+        "days": "{{n}} day(s)"
+      },
+      "review": {
+        "state": "State",
+        "on": "On",
+        "off": "Off",
+        "everyone": "Every user",
+        "none": "None",
+        "yes": "Yes",
+        "no": "No",
+        "slots": "{{n}} slots"
+      }
     }
   },
   "lotteries": {

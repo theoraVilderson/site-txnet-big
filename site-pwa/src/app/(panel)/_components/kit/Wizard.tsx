@@ -40,19 +40,23 @@ export interface WizardState {
  * Where a wizard is (UX-1-f). The host owns its form; this owns the step
  * index, the furthest step reached and the slide direction. `validate` is the
  * host's per-step check (K12: before Next); `onMove` runs on every move, the
- * place a host clears a failure that belonged to the step it left.
+ * place a host clears a failure that belonged to the step it left. `start`
+ * opens on a later step with every step before it reachable — a saved
+ * draft reopened on its review (UX-3-d).
  */
 export function useWizard({
   count,
   validate,
   onMove,
+  start = 0,
 }: {
   count: number;
   validate?: (index: number) => boolean;
   onMove?: (to: number) => void;
+  start?: number;
 }): WizardState {
-  const [index, setIndex] = useState(0);
-  const [reached, setReached] = useState(0);
+  const [index, setIndex] = useState(start);
+  const [reached, setReached] = useState(start);
   const [direction, setDirection] = useState<1 | -1>(1);
 
   const goTo = (to: number) => {

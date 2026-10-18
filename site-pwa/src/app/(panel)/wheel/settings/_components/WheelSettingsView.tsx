@@ -10,9 +10,9 @@ import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { formatDay } from "../../_lib/wheel";
 import { WHEEL_SETTINGS_KEYS as K, canManageWheel } from "../_lib/wheel-settings";
 import { Alert, useMessage } from "./wheel-settings-ui";
-import { WheelEditor } from "./WheelEditor";
 import { WheelReport } from "./WheelReport";
 import { WheelVersions } from "./WheelVersions";
+import { WheelWizard } from "./WheelWizard";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { Button, Tabs } from "../../../_components/kit";
 
@@ -139,20 +139,21 @@ export function WheelSettingsView() {
             {state.next && <p className="text-xs text-text-secondary">{t("common", K.next, { version: state.next.version, day: formatDay(state.next.effectiveFromDay, lang) })}</p>}
           </section>
 
-          {editing ? (
-            <WheelEditor
+          {editing && (
+            <WheelWizard
               key={editing === "blank" ? "blank" : editing.id}
               from={editing === "blank" ? null : editing}
               today={state.today}
               currency={latest?.currencyCode ?? state.inForce?.currencyCode ?? null}
-              onCancel={() => setEditing(null)}
+              onClose={() => setEditing(null)}
               onSaved={(v) => {
                 setEditing(null);
                 setNotice(t("common", K.saved, { version: v.version, day: formatDay(v.effectiveFromDay, lang) }));
                 reload();
               }}
             />
-          ) : !latest ? (
+          )}
+          {!editing && !latest ? (
             <Button variant="primary" size="sm" onClick={() => startFrom(null)} icon={<Plus size={14} aria-hidden />}>
               {t("common", K.newVersion)}
             </Button>
