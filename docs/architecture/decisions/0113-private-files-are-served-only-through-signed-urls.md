@@ -58,3 +58,12 @@ already said: no URL stored, a 5-minute one minted on read.
 A file must be fetched by someone the owner cannot name at signing time, or
 an S3 driver should serve private files straight from the bucket with its own
 presigned URLs.
+
+## Amendment 2026-10-19 — the platform's Host
+
+Decision 2's Host rule had one gap: a reseller's workspace (F-093-w) is on the
+platform's panel, so its customers' receipts, keyed under the reseller, were a
+404 there. `private-files` now also serves a signed key of **any** tenant on
+the platform's Host, read in the key's tenant's scope; another reseller's Host
+still answers 404. The signature stays the permission (decision 3) — billing
+mints it only for a reviewer it has already checked.

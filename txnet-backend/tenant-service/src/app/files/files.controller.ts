@@ -94,8 +94,10 @@ const INLINE_TYPES = new Set(['image/png', 'image/webp', 'image/jpeg']);
  * `GET /api/public/tenant/private-files/<key>?e=&n=&s=` (F-033-c, ADR-0113):
  * a private file, to whoever holds an unexpired URL its owner's service
  * signed. The signature is the permission — the owner checked who may see the
- * file when it minted the URL — and the Host still bounds it to its tenant, so
- * a URL from one reseller's panel does not open on another's.
+ * file when it minted the URL — and the Host still bounds it: its own tenant's,
+ * or the platform's, whose panel hosts every reseller's workspace (F-093-w) —
+ * a reseller's customer's receipt is reviewed there. A URL from one reseller's
+ * panel still does not open on another's.
  *
  * Every refusal — a bad or expired signature, another tenant's key, no file —
  * is the same neutral 404.
@@ -105,6 +107,7 @@ export class PrivateFilesController {
   constructor(
     private readonly storage: ObjectStorage,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly platform: PlatformTenant,
   ) {}
 
   @Get('*key')
@@ -122,7 +125,7 @@ export class PrivateFilesController {
     });
     if (!signed) throw new NotFoundException();
 
-    const file = await ownFile(this.storage, key);
+    const file = await this.signedFile(key);
     if (!file.private) throw new NotFoundException();
 
     const disposition = INLINE_TYPES.has(file.contentType) ? 'inline' : 'attachment';
@@ -134,6 +137,16 @@ export class PrivateFilesController {
       ...UNRUNNABLE,
     });
     res.status(200).send(file.bytes);
+  }
+
+  /** The Host's own file, or — on the platform's Host — any tenant's, read in that tenant's scope as the port requires. */
+  private async signedFile(key: string): Promise<StoredObjectRow & { bytes: Buffer }> {
+    const parsed = parseObjectKey(key);
+    const door = TenantContext.current('private file route').id;
+    if (parsed && parsed.tenantId !== door && door === (await this.platform.id())) {
+      return runWithTenant({ id: parsed.tenantId }, () => ownFile(this.storage, key));
+    }
+    return ownFile(this.storage, key);
   }
 }
 

@@ -198,8 +198,9 @@ Both routes are the payment's owner's, on `DEPOSIT_PROOF_RATE_LIMIT` (20 / 15 mi
 - `POST /api/billing/deposit/:paymentId/proof/upload`, multipart `file`: JPEG,
   PNG or WebP, ≤ 5 MB (multer cuts it off while it streams), scanned, private,
   at `transfers/<paymentId>/receipt` under the **gateway owner's** prefix
-  (corrected: `private-files` serves a Host's own keys only, so the receipt
-  lives where its reviewers' panel is). A second upload replaces the first.
+  (corrected: `private-files` serves a Host's own keys — and, since
+  2026-10-19, any tenant's on the platform's Host, where a reseller reviews
+  its customers' receipts in its workspace; ADR-0113 amendment). A second upload replaces the first.
   Answers `{key}`.
 - `POST /api/billing/deposit/:paymentId/proof`: the gateway's `requiredProof`,
   each checked by its kind (`parseProof`); `receiptImage` must be exactly this

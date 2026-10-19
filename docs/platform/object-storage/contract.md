@@ -27,7 +27,7 @@ a private key is served only through a 5-minute signed URL (ADR-0113).
 | `ObjectStorage.get(key)` | key | the row + bytes | `ObjectNotFound`; `TenantScopeConflict` |
 | `ObjectStorage.delete(key)` | key | — | `ObjectNotFound`; `TenantScopeConflict` |
 | `GET /api/public/tenant/files/<key>` (tenant-service; `/api/files/<key>` **@deprecated since 2026-09-19**, remove after the next release) | the Host, the key | the file | a neutral 404 for everything else |
-| `GET /api/public/tenant/private-files/<key>?e=&n=&s=` (tenant-service, F-033-c) | the Host, the key, a signature | a **private** file, saved as `n` | a neutral 404 for a bad/expired signature, a public file and everything else |
+| `GET /api/public/tenant/private-files/<key>?e=&n=&s=` (tenant-service, F-033-c) | the Host, the key, a signature | a **private** file, saved as `n`, on the key's tenant's Host or the platform's (it hosts every reseller's workspace, F-093-w; ADR-0113 amendment) | a neutral 404 for a bad/expired signature, a public file and everything else |
 | `signedObjectUrl({key, fileName, ttlSec, secret})` / `verifySignedObject` | key, name, lifetime, `OBJECT_STORAGE_SIGNING_SECRET` | `{url, expiresAt}` — a path on the caller's Host / `true` | a secret under 32 characters throws |
 | `scannerFromEnv(env).scan(bytes)` | `VIRUS_SCAN_DRIVER` (`clamd`/`none`), `CLAMD_ADDR` | `clean`, `infected` + signature, or `failed` + reason | an unknown driver or clamd with no address throws at boot |
 | `objectKey` / `parseObjectKey` | tenant id + path / key | key / `{ tenantId, path }` or `null` | — |
