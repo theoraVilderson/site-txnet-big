@@ -32,11 +32,14 @@ export function ManualPaymentItem({
   row,
   api,
   onSettled,
+  onStale,
 }: {
   row: VerifyingPayment;
   /** The queue this row is in (F-093-w): the session's own, or a workspace's reseller. */
   api: ManualQueueApi;
   onSettled: (answer: ManualAnswer) => Promise<void>;
+  /** Re-read the list: something it carries (the receipt's signed link) ran out. */
+  onStale: () => void;
 }) {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
@@ -108,7 +111,7 @@ export function ManualPaymentItem({
         </div>
       </div>
 
-      {row.transfer && <TransferDetails row={row} transfer={row.transfer} />}
+      {row.transfer && <TransferDetails row={row} transfer={row.transfer} onReceiptExpired={onStale} />}
 
       {answer && (
         <p role="status" className={`text-xs font-bold ${settledOutcome ? "text-primary" : "text-text-primary"}`}>

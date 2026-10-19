@@ -28,7 +28,16 @@ const reasonTone = (reason: TransferReviewReason): Tone => (reason === "proof_on
  * what should have arrived against what the wallet gets, the payer's proof,
  * the receipt and why billing left it to a person.
  */
-export function TransferDetails({ row, transfer }: { row: VerifyingPayment; transfer: TransferView }) {
+export function TransferDetails({
+  row,
+  transfer,
+  onReceiptExpired,
+}: {
+  row: VerifyingPayment;
+  transfer: TransferView;
+  /** The receipt link ran out while the list was open: re-read it for a fresh one. */
+  onReceiptExpired: () => void;
+}) {
   const { lang, t } = useLocale();
   const [receiptOpen, setReceiptOpen] = useState(false);
   const expected = fromMinor(transfer.expectedAmountMinor, transfer.decimals);
@@ -74,7 +83,16 @@ export function TransferDetails({ row, transfer }: { row: VerifyingPayment; tran
         </div>
       )}
 
-      {transfer.receiptUrl && <ReceiptLightbox key={transfer.receiptUrl} url={transfer.receiptUrl} open={receiptOpen} onClose={() => setReceiptOpen(false)} />}
+      {transfer.receiptUrl && (
+        <ReceiptLightbox
+          key={transfer.receiptUrl}
+          url={transfer.receiptUrl}
+          expiresAt={transfer.receiptUrlExpiresAt}
+          open={receiptOpen}
+          onClose={() => setReceiptOpen(false)}
+          onExpired={onReceiptExpired}
+        />
+      )}
     </div>
   );
 }

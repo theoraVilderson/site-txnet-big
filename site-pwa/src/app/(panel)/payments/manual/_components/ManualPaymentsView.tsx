@@ -85,7 +85,7 @@ export function ManualPaymentsView({ resellerId = null }: { resellerId?: string 
         ) : (
           <ul className="divide-y divide-card-border">
             {rows.map((row) => (
-              <ManualPaymentItem key={row.id} row={row} api={api} onSettled={settled} />
+              <ManualPaymentItem key={row.id} row={row} api={api} onSettled={settled} onStale={() => void reload()} />
             ))}
           </ul>
         )}

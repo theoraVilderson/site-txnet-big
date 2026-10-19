@@ -21,12 +21,28 @@ const clamp = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
  * A transfer's receipt, full size (F-803-k): scroll or pinch to zoom, drag to
  * pan when zoomed, and buttons for a keyboard. Pinch is two pointers' distance,
  * so it needs no gesture library (C-34).
+ *
+ * The link is signed for five minutes and the dialog asks for the image only
+ * when opened, so a list left open longer holds a dead one: a failure past
+ * `expiresAt` calls `onExpired` (the list re-reads, and a new `url` remounts
+ * this). A failure while the link is in date is shown — renewing it would loop.
  */
-export function ReceiptLightbox({ url, open, onClose }: { url: string; open: boolean; onClose: () => void }) {
+export function ReceiptLightbox({
+  url,
+  expiresAt,
+  open,
+  onClose,
+  onExpired,
+}: {
+  url: string;
+  expiresAt: string | null;
+  open: boolean;
+  onClose: () => void;
+  onExpired: () => void;
+}) {
   const { t } = useLocale();
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  // The URL is signed for five minutes; a list left open longer needs a reload, and says so.
   const [failed, setFailed] = useState(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchFrom = useRef<{ distance: number; zoom: number } | null>(null);
@@ -99,7 +115,7 @@ export function ReceiptLightbox({ url, open, onClose }: { url: string; open: boo
             alt={t("common", K.receipt)}
             draggable={false}
             className="size-full select-none object-contain"
-            onError={() => setFailed(true)}
+            onError={() => (expiresAt !== null && Date.parse(expiresAt) <= Date.now() ? onExpired() : setFailed(true))}
             style={{ transform: `scale(${zoom}) translate(${pan.x}px, ${pan.y}px)` }}
           />
         )}

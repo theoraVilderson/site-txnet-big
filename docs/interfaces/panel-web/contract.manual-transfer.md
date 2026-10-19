@@ -162,7 +162,7 @@ Proof: `manual-gateways.test.tsx`.
   forms, reject gaining "let them send it again".
 - **Built 2026-10-15 (F-803-k).** `payments/manual/_components/`:
   `ManualPaymentItem.tsx` (one row), `TransferDetails.tsx`, `ReceiptLightbox.tsx`
-  (wheel, pinch, buttons; a lapsed signed URL says reload), `ManualForms.tsx`
+  (wheel, pinch, buttons; a lapsed signed URL re-reads the list for a fresh one; an in-date one that fails says so), `ManualForms.tsx`
   (authority, confirm, reject). A transfer has no gateway to ask, so its row
   offers confirm and reject at once and neither "ask the gateway" nor an
   authority; confirm's reference starts as the proof's `refProofField`. Rules in
