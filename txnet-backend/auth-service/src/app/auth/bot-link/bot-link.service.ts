@@ -14,9 +14,10 @@ import {
   BotClientRegistry,
   BotPlatform,
 } from '@txnet-backend/messenger';
+import { cooldownLeftSince } from '../otp/otp-answer';
 import { BotLinkStore } from './bot-link.store';
 import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
-import { BotContact, BotUpdate, PendingBotLink } from './bot-link.types';
+import { BotContact, BotLinkStatus, BotUpdate, PendingBotLink } from './bot-link.types';
 import { normalizeMessengerPhone } from './messenger-phone';
 import { TenantContext } from '../../tenant-context/tenant-context';
 import { BackendI18nKeys, type BotLinkEvent, otpRealtimeChannel } from '@txnet-backend/shared-core';
@@ -36,12 +37,6 @@ export interface StartedBotLink {
   /** `otp:<channelId>` and its proof: the waiting screen hears the outcome there (RT-1-h). */
   channel: string;
   channelToken: string;
-}
-
-export interface BotLinkStatus {
-  state: PendingBotLink['state'];
-  otpSent: boolean;
-  failureKey?: string;
 }
 
 /**
@@ -223,6 +218,7 @@ export class BotLinkService {
     return {
       state: link.state,
       otpSent: link.otpSent,
+      ...(link.otpSent && link.codeSentAt ? { resendIn: cooldownLeftSince(link.codeSentAt) } : {}),
       ...(link.failureKey ? { failureKey: link.failureKey } : {}),
     };
   }
@@ -440,6 +436,7 @@ export class BotLinkService {
       }
     }
     link.otpSent = sent;
+    if (sent) link.codeSentAt = Date.now();
     await this.store.update(link);
     await this.store.releaseChat(platform, chatId);
     await this.tell(link, { state: 'linked', otpSent: sent });

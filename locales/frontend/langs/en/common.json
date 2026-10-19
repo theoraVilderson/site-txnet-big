@@ -771,7 +771,6 @@
       "title": "Sign in to {{name}}",
       "body": "This account runs the whole platform: it opens only with its own password and then a code.",
       "codeSent": "The verification code was sent.",
-      "codePlaceholder": "6-digit code",
       "badge": "Password and code",
       "channelLabel": "Where should the code go?",
       "linkBody": "This messenger is not connected to the account yet. Open the bot and confirm the number; the code arrives there.",
@@ -831,6 +830,7 @@
   },
   "errors": {
     "unreachable": "Could not reach the server. Check your connection and try again.",
+    "otpCooldown": "A code was just sent to this number. You can ask for another in {{seconds}} seconds.",
     "resellerLimitReached": "The limit on “{{name}}” is reached: {{used}} of {{limit}}.",
     "resellerLimitAbove": "“{{name}}” allows at most {{limit}}; this asks for {{used}}.",
     "resellerQuotaExhausted": {

@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, KeyRound, Loader2, MessageSquare } from "lucide-react";
+import { ArrowRight, KeyRound, MessageSquare } from "lucide-react";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
 import { OTPInput } from "@auth/auth/_components/OTPInput";
+import { OtpChannelChoice } from "@auth/auth/_components/OtpChannelPicker";
 import { PhoneField } from "@auth/auth/_components/PhoneField";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
@@ -17,14 +18,16 @@ import { OTP_LENGTH } from "@/lib/otp";
 import { PANEL_HOME } from "@/lib/routes";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
+import { SegmentedControl } from "../../_components/kit";
+import { ResendCountdown } from "../../_components/ResendCountdown";
 
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The `common` namespace as generated constants (F-083, C-06). */
 const C = FrontendI18nKeys.common;
 
-/** `RedisTtl.otpCooldown` in auth-service — the server's own resend interval. */
-const OTP_RESEND_SECONDS = 60;
+const PROOF_OPTIONS: readonly Proof[] = ["otp", "password"];
+const PROOF_ICON: Record<Proof, typeof KeyRound> = { otp: MessageSquare, password: KeyRound };
 
 /**
  * Adding another account to the switch group (F-0205, rendered for F-0209).
@@ -38,10 +41,9 @@ const OTP_RESEND_SECONDS = 60;
  *
  * Both proofs are captcha-gated server-side (F-0201), so the slider is not
  * decoration here: without a pass the request is refused, exactly as on the
- * login screen. The resend countdown is the *server's* own number —
- * `RedisTtl.otpCooldown`, 60s — rather than the 120s the login screen counts,
- * because a button that re-enables before the cooldown lifts only produces an
- * error, which is what this screen did with no timer at all.
+ * login screen. The resend countdown is the *server's* own number — the
+ * `resendIn` of a sent code, or the `retryAfter` of a refusal — because a
+ * button that re-enables before the cooldown lifts only produces an error.
  */
 export default function AddAccountPage() {
   const { t, lang, isRtl } = useLocale();
@@ -49,8 +51,8 @@ export default function AddAccountPage() {
   const { reload } = usePanelSession();
   const channels = useOtpChannels();
   const captcha = useCaptcha();
-  // == RedisTtl.otpCooldown in auth-service: the interval the server actually
-  // enforces between two codes for one number.
+  // Counts the server's own wait: `resendIn` on a sent code, `retryAfter` on a
+  // refusal for a code this number was sent elsewhere a moment ago.
   const resendTimer = useOtpTimer();
 
   const [proof, setProof] = useState<Proof>("otp");
@@ -77,6 +79,16 @@ export default function AddAccountPage() {
     }),
     [t],
   );
+  // The two-factor switch's question fits here as well: where the code goes.
+  const channelLabels = useMemo(
+    () => ({
+      title: t("common", C.accounts.twoFactor.channelLabel),
+      sms: t("common", CHANNEL_LABEL.sms),
+      telegram: t("common", CHANNEL_LABEL.telegram),
+      bale: t("common", CHANNEL_LABEL.bale),
+    }),
+    [t],
+  );
   const [codeSent, setCodeSent] = useState(false);
   const [botLink, setBotLink] = useState<BotLinkRequired | null>(null);
   const [pending, setPending] = useState(false);
@@ -90,6 +102,7 @@ export default function AddAccountPage() {
     try {
       await action();
     } catch (e) {
+      resendTimer.holdFor(e);
       setError(toMessage(e));
     } finally {
       setPending(false);
@@ -123,7 +136,7 @@ export default function AddAccountPage() {
         return;
       }
       setCodeSent(true);
-      resendTimer.start(OTP_RESEND_SECONDS);
+      resendTimer.startFrom(result);
     });
 
   const pollBotLink = (linkToken: string) =>
@@ -132,7 +145,7 @@ export default function AddAccountPage() {
       if (status.otpSent) {
         setBotLink(null);
         setCodeSent(true);
-        resendTimer.start(OTP_RESEND_SECONDS);
+        resendTimer.startFrom(status);
         return;
       }
       setError(t("common", C.accounts.linkPending));
@@ -230,30 +243,22 @@ export default function AddAccountPage() {
         {t("common", C.accounts.addSubtitle)}
       </p>
 
-      <div className="mb-6 flex gap-1 rounded-2xl border border-card-border bg-tab-bg p-1.5">
-        {(["otp", "password"] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => {
-              setProof(option);
-              setError(null);
-            }}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-colors ${
-              proof === option
-                ? "text-primary"
-                : "text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            {option === "otp" ? (
-              <MessageSquare size={16} />
-            ) : (
-              <KeyRound size={16} />
-            )}
-            {t("common", PROOF_LABEL[option])}
-          </button>
-        ))}
-      </div>
+      {/* The kit's pill, so the chosen proof is plain to see (2026-10-19:
+          the tabs changed only their text colour). */}
+      <SegmentedControl
+        ariaLabel={t("common", C.accounts.addTitle)}
+        value={proof}
+        onChange={(option) => {
+          setProof(option);
+          setError(null);
+        }}
+        options={PROOF_OPTIONS.map((option) => ({
+          value: option,
+          label: t("common", PROOF_LABEL[option]),
+          icon: PROOF_ICON[option],
+        }))}
+        className="mb-6 flex w-full [&>button]:h-10 [&>button]:flex-1"
+      />
 
       {proof === "otp" && (
         // A form so a full code submits itself, as on the login screen:
@@ -265,7 +270,7 @@ export default function AddAccountPage() {
             if (pending || botLink) return;
             if (codeSent) {
               if (otpCode.length === OTP_LENGTH) verifyCode();
-            } else if (phoneNumber && captcha.verified) {
+            } else if (phoneNumber && captcha.verified && !resendTimer.isRunning) {
               requestCode();
             }
           }}
@@ -283,22 +288,12 @@ export default function AddAccountPage() {
           />
 
           {channels.hasChoice && !codeSent && !botLink && (
-            <div className="flex gap-1 rounded-2xl border border-card-border bg-tab-bg p-1.5">
-              {channels.channels.map(({ channel }) => (
-                <button
-                  key={channel}
-                  type="button"
-                  onClick={() => channels.select(channel)}
-                  className={`flex-1 rounded-xl py-2 text-sm font-bold transition-colors ${
-                    channels.selected === channel
-                      ? "text-primary"
-                      : "text-text-secondary hover:text-text-primary"
-                  }`}
-                >
-                  {t("common", CHANNEL_LABEL[channel])}
-                </button>
-              ))}
-            </div>
+            <OtpChannelChoice
+              channels={channels.channels}
+              selected={channels.selected}
+              onSelect={channels.select}
+              labels={channelLabels}
+            />
           )}
 
           {botLink && (
@@ -336,19 +331,11 @@ export default function AddAccountPage() {
           )}
 
           {/* Before the first code, and again before every resend: the pass is
-              single-use, so a second request needs a second slide. */}
-          {!botLink && (!codeSent || !resendTimer.isRunning) && captchaBlock}
+              single-use, so a second request needs a second slide — not while
+              the server's wait runs, when a send would only be refused. */}
+          {!botLink && !resendTimer.isRunning && captchaBlock}
 
-          {codeSent && resendTimer.isRunning && (
-            <div className="flex items-center justify-center gap-2 text-sm text-text-secondary">
-              <Loader2 size={16} className="animate-spin text-primary" aria-hidden />
-              {t("common", C.accounts.resendCodeIn)}{" "}
-              <span className="inline-block min-w-[40px] text-center font-mono font-bold text-text-primary" dir="ltr">
-                {resendTimer.formatted}
-              </span>{" "}
-              {t("common", C.accounts.seconds)}
-            </div>
-          )}
+          {resendTimer.isRunning && <ResendCountdown formatted={resendTimer.formatted} />}
 
           {!botLink && (
             <button
@@ -356,7 +343,7 @@ export default function AddAccountPage() {
               className={button}
               disabled={
                 pending ||
-                (codeSent ? otpCode.length < OTP_LENGTH : !phoneNumber || !captcha.verified)
+                (codeSent ? otpCode.length < OTP_LENGTH : !phoneNumber || !captcha.verified || resendTimer.isRunning)
               }
               onClick={codeSent ? verifyCode : requestCode}
             >

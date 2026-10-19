@@ -222,7 +222,6 @@ export const FrontendI18nKeys = {
         "badge": "accounts.twoFactor.badge",
         "body": "accounts.twoFactor.body",
         "channelLabel": "accounts.twoFactor.channelLabel",
-        "codePlaceholder": "accounts.twoFactor.codePlaceholder",
         "codeSent": "accounts.twoFactor.codeSent",
         "linkBody": "accounts.twoFactor.linkBody",
         "openBot": "accounts.twoFactor.openBot",
@@ -1909,6 +1908,7 @@ export const FrontendI18nKeys = {
       },
     },
     "errors": {
+      "otpCooldown": "errors.otpCooldown",
       "resellerLimitAbove": "errors.resellerLimitAbove",
       "resellerLimitReached": "errors.resellerLimitReached",
       "resellerQuotaExhausted": {

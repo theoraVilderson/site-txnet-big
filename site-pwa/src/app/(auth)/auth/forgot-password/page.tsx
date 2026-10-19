@@ -48,9 +48,9 @@ export default function ForgotPasswordPage() {
   // The bot delivers the code itself once the user confirms their number
   // there, so linking lands the flow straight on the code step.
   const delivery = useOtpDelivery();
-  const botLink = useBotLink(() => {
+  const botLink = useBotLink((status) => {
     setStep(2);
-    otpTimer.start(120);
+    otpTimer.startFrom(status);
   });
 
   const [phone, setPhone] = useState("");
@@ -89,7 +89,7 @@ export default function ForgotPasswordPage() {
           // A code was queued: from here the screen hears what became of it.
           delivery.start(result);
           setStep(2);
-          otpTimer.start(120);
+          otpTimer.startFrom(result);
         }
       }
       else if (step === 2) { const result = await authApi.verifyForgot(phone, otp); setResetToken(result.resetToken); setStep(3); }

@@ -1,9 +1,9 @@
 import type { Mock } from 'vitest';
 import { HttpException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { CaptchaGuard } from './captcha.guard';
+import { CaptchaGuard, SignedInCaptchaGuard } from './captcha.guard';
 import { CaptchaService } from '../../auth/captcha/captcha.service';
-import { REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
+import { CAPTCHA_AFTER_AUTH_KEY, REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
 import { RateLimiter } from '../rate-limit/rate-limiter';
 import { ConfigService } from '@nestjs/config';
 import { fakeExecutionContext } from '../../../test-support/execution-context';
@@ -16,7 +16,7 @@ describe('CaptchaGuard', () => {
   let guard: CaptchaGuard;
 
   beforeEach(() => {
-    reflector = { getAllAndOverride: vi.fn().mockReturnValue(true) };
+    reflector = { getAllAndOverride: vi.fn((key: string) => (key === REQUIRE_CAPTCHA_KEY ? true : undefined)) };
     captcha = { consumePass: vi.fn().mockResolvedValue(true) };
     limiter = {
       hit: vi.fn().mockResolvedValue({ allowed: true, current: 1, limit: 120 }),
@@ -215,4 +215,47 @@ describe('CaptchaGuard', () => {
     });
   });
 
+
+  describe('a signed-in route (@RequireCaptcha({ afterAuth: true }))', () => {
+    let signedIn: SignedInCaptchaGuard;
+    const marked = (afterAuth: boolean) =>
+      reflector.getAllAndOverride.mockImplementation((key: string) =>
+        key === REQUIRE_CAPTCHA_KEY ? true : key === CAPTCHA_AFTER_AUTH_KEY ? afterAuth : undefined,
+      );
+
+    beforeEach(() => {
+      signedIn = new SignedInCaptchaGuard(
+        reflector as unknown as Reflector,
+        captcha as unknown as CaptchaService,
+        limiter as unknown as RateLimiter,
+        config as unknown as ConfigService,
+      );
+    });
+
+    it('is left to the route: the global guard spends nothing before AuthGuard has run', async () => {
+      marked(true);
+      const { context } = fakeExecutionContext({ headers: { 'x-captcha-token': 'tok-1' } });
+
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+      expect(captcha.consumePass).not.toHaveBeenCalled();
+    });
+
+    it('is spent by the route guard, which refuses a dead pass as the global one does', async () => {
+      marked(true);
+      const { context } = fakeExecutionContext({ headers: { 'x-captcha-token': 'tok-1' } });
+
+      await expect(signedIn.canActivate(context)).resolves.toBe(true);
+      expect(captcha.consumePass).toHaveBeenCalledWith('tok-1');
+      captcha.consumePass.mockResolvedValue(false);
+      await expect(signedIn.canActivate(context)).rejects.toThrow(HttpException);
+    });
+
+    it('leaves an ordinary gated route to the global guard, so no pass is spent twice', async () => {
+      marked(false);
+      const { context } = fakeExecutionContext({ headers: { 'x-captcha-token': 'tok-1' } });
+
+      await expect(signedIn.canActivate(context)).resolves.toBe(true);
+      expect(captcha.consumePass).not.toHaveBeenCalled();
+    });
+  });
 });

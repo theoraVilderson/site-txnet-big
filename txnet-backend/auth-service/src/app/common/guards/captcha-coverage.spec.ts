@@ -20,13 +20,15 @@
  * inside `CaptchaGuard` and covered by `captcha.guard.spec.ts`. This file only
  * asks which routes the guard is asked about at all.
  */
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { GUARDS_METADATA, METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
 
 import { AuthController } from '../../auth/auth.controller';
 import { RegisterController } from '../../auth/register/register.controller';
 import { AccountSwitchController } from '../../account-switch/account-switch.controller';
-import { REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
+import { CAPTCHA_AFTER_AUTH_KEY, REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
+import { AuthGuard } from '../../auth/auth.guard';
+import { SignedInCaptchaGuard } from './captcha.guard';
 
 /** Importing a controller pulls in its whole Nest module graph — see the
  *  budget `billing-service`'s `rate-limit-coverage.spec.ts` explains. */
@@ -55,7 +57,7 @@ const MUST_BE_GATED = [
   'POST auth/accounts/switch/password',
 ];
 
-type Route = { name: string; gated: boolean };
+type Route = { name: string; gated: boolean; afterAuth: boolean; guards: unknown[] };
 
 function routesOf(controller: new (...args: any[]) => unknown): Route[] {
   const prefix = Reflect.getMetadata(PATH_METADATA, controller) ?? '';
@@ -73,6 +75,8 @@ function routesOf(controller: new (...args: any[]) => unknown): Route[] {
       return {
         name: `${verb} ${full}`,
         gated: Reflect.getMetadata(REQUIRE_CAPTCHA_KEY, handler) === true,
+        afterAuth: Reflect.getMetadata(CAPTCHA_AFTER_AUTH_KEY, handler) === true,
+        guards: Reflect.getMetadata(GUARDS_METADATA, handler) ?? [],
       };
     });
 }
@@ -94,5 +98,16 @@ describe('captcha coverage', () => {
   it('gates nothing else — the list is the whole gated surface', () => {
     const gated = routes.filter((r) => r.gated).map((r) => r.name).sort();
     expect(gated).toEqual([...MUST_BE_GATED].sort());
+  });
+
+  // A global guard runs before a route's own, so on a signed-in route the pass
+  // was spent before `AuthGuard` refused an expired token — and the panel's
+  // refresh-and-retry then re-sent a dead pass (2026-10-19, the add-account
+  // slider "starting over"). There the pass is checked after the sign-in.
+  it.each(MUST_BE_GATED)('%s, if signed in, spends the pass only after AuthGuard', (name) => {
+    const route = routes.find((r) => r.name === name);
+    if (!route?.guards.includes(AuthGuard)) return;
+    expect(route.afterAuth).toBe(true);
+    expect(route.guards.indexOf(SignedInCaptchaGuard)).toBeGreaterThan(route.guards.indexOf(AuthGuard));
   });
 });

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
+import { CAPTCHA_AFTER_AUTH_KEY, REQUIRE_CAPTCHA_KEY } from '../../auth/decorators/require-captcha.decorator';
 import { CaptchaService } from '../../auth/captcha/captcha.service';
 import { isServiceCaller, rateLimitSubject } from '../security/service-caller';
 import { RateLimiter } from '../rate-limit/rate-limiter';
@@ -25,6 +25,9 @@ const BOT_UNPROVEN_WINDOW_SEC = 900;
 
 @Injectable()
 export class CaptchaGuard implements CanActivate {
+  /** Which half of the gated routes this instance checks — see `SignedInCaptchaGuard`. */
+  protected readonly checksSignedInRoutes: boolean = false;
+
   constructor(
     private readonly reflector: Reflector,
     private readonly captcha: CaptchaService,
@@ -85,6 +88,13 @@ export class CaptchaGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
     if (!required) return true;
+    const afterAuth = this.reflector.getAllAndOverride<boolean>(
+      CAPTCHA_AFTER_AUTH_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    // Each gated route is checked exactly once: by the global instance, or by
+    // the route's own one listed after `AuthGuard`.
+    if (!!afterAuth !== this.checksSignedInRoutes) return true;
 
     const request = context.switchToHttp().getRequest();
 
@@ -106,4 +116,16 @@ export class CaptchaGuard implements CanActivate {
     }
     return true;
   }
+}
+
+/**
+ * The same check for a route behind `AuthGuard`, listed after it in that
+ * route's `@UseGuards` (`@RequireCaptcha({ afterAuth: true })`). A global guard
+ * runs before a route's own, so there the pass was spent before an expired
+ * access token was refused; the panel then refreshed and retried with the dead
+ * pass and the slider "started over" (2026-10-19, `/accounts/add`).
+ */
+@Injectable()
+export class SignedInCaptchaGuard extends CaptchaGuard {
+  protected override readonly checksSignedInRoutes = true;
 }

@@ -3,6 +3,7 @@
 import { useLocale } from "@/context/LocaleContext";
 import { ApiError } from "@/lib/api-error";
 import { resellerLimitReachedOf, resellerQuotaExhaustedOf } from "@/lib/reseller-limits";
+import { otpCooldownOf } from "@/lib/otp";
 
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
@@ -35,6 +36,9 @@ export function useApiErrorMessage(): (e: unknown) => string {
       const name = quota.key ? t("common", C.resellers.limits.keys[quota.key].name) : t("common", C.errors.resellerQuotaExhausted.aProduct);
       return t("common", C.errors.resellerQuotaExhausted[quota.stoppedBy], { name });
     }
+    // The seconds left come as a figure (2026-10-19), so the sentence that names them is said here.
+    const cooldown = otpCooldownOf(e);
+    if (cooldown !== null) return t("common", C.errors.otpCooldown, { seconds: cooldown });
     if (e instanceof ApiError && !e.unreachable) return e.message;
     return t("common", C.errors.unreachable);
   };

@@ -1,7 +1,7 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { RateLimitGuard } from '../common/guards/rate-limit.guard';
-import { CaptchaGuard } from '../common/guards/captcha.guard';
+import { CaptchaGuard, SignedInCaptchaGuard } from '../common/guards/captcha.guard';
 import { ServiceOnlyGuard } from '../common/guards/service-only.guard';
 import { RegisterController } from './register/register.controller';
 import { RegisterService } from './register/register.service';
@@ -118,6 +118,7 @@ import { ConfigService } from '@nestjs/config';
     KeyWindowInternalController,
   ],
   providers: [
+    SignedInCaptchaGuard,
     UserNotifier,
     NoticeMailer,
     NotificationInboxClient,
@@ -207,7 +208,8 @@ import { ConfigService } from '@nestjs/config';
   ],
   // PermissionStateStore is exported with AuthGuard for the reason TokenService
   // and SessionStore are: a module that puts AuthGuard on a controller has to
-  // be able to resolve every one of its dependencies (F-031-b).
-  exports: [AuthGuard, TokenService, OTP_SERVICE, SessionService, SessionStore, PermissionStateStore, AccessReader, AuthService, SurfaceOwnerService],
+  // be able to resolve every one of its dependencies (F-031-b); CaptchaService
+  // and RateLimiter likewise for SignedInCaptchaGuard.
+  exports: [AuthGuard, SignedInCaptchaGuard, CaptchaService, RateLimiter, TokenService, OTP_SERVICE, SessionService, SessionStore, PermissionStateStore, AccessReader, AuthService, SurfaceOwnerService],
 })
 export class AuthModule {}

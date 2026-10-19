@@ -140,10 +140,13 @@ export class OtpService implements IOtpService {
     }
 
     try {
-      // Cooldown between two requests
-      if (await this.store.isCoolingDown(phoneNumber, purpose)) {
+      // Cooldown between two requests. The seconds left ride on the refusal,
+      // so a screen counts down the server's figure — a code sent to this
+      // number from another screen included — rather than a guess of its own.
+      const retryAfter = await this.store.cooldownLeft(phoneNumber, purpose);
+      if (retryAfter > 0) {
         throw new HttpException(
-          'please wait before requesting another code',
+          { i18nKey: 'otp.cooldownActive', reason: 'otpCooldown', facts: { retryAfter } },
           429,
         );
       }

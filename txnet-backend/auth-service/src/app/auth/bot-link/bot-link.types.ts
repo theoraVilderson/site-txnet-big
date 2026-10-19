@@ -21,6 +21,8 @@ export interface PendingBotLink {
   failureKey?: string;
   /** Whether the OTP went out after linking. */
   otpSent: boolean;
+  /** When it went out (ms): the cooldown the waiting screen counts starts here. */
+  codeSentAt?: number;
   createdAt: number;
   /**
    * The `otp:` channel the waiting screen hears the outcome on (RT-1-h).
@@ -33,3 +35,12 @@ export interface PendingBotLink {
 // The wire shapes (`BotUpdate`, `BotMessage`, `BotContact`) live in
 // `messenger` — one definition, read by both this flow and `bot-service`.
 export type { BotUpdate, BotMessage, BotContact } from '@txnet-backend/messenger';
+
+/** What the waiting client reads (`BotLinkService.status`). */
+export interface BotLinkStatus {
+  state: PendingBotLink['state'];
+  otpSent: boolean;
+  /** With `otpSent`: seconds until another code may be asked for, counted from the bot's send. */
+  resendIn?: number;
+  failureKey?: string;
+}

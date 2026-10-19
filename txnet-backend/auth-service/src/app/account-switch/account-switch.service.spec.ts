@@ -1,6 +1,7 @@
 import type { Mock } from 'vitest';
 import { AccountSwitchService } from './account-switch.service';
 import { TenantContext } from '../tenant-context/tenant-context';
+import { RedisTtl } from '../redis/redis.keys';
 
 /** The two surfaces every test below keeps apart (ADR-0015). */
 const BROWSER = 'device:browser-a';
@@ -75,7 +76,7 @@ describe('AccountSwitchService.addByPassword', () => {
 
     service = new AccountSwitchService(
       prisma,
-      { proveAccountByPassword: proveByPassword } as any,
+      { proveAccountByPassword: proveByPassword, issueAccountProofOtp: async () => null } as any,
       {} as any,
       { surface: () => door } as any,
     );
@@ -95,6 +96,12 @@ describe('AccountSwitchService.addByPassword', () => {
     await service.addByPassword(BROWSER, CALLER, input);
 
     expect(seen).toEqual(door);
+  });
+
+  it('says how long until another code, as every code-sent answer does', async () => {
+    const res = await service.requestAddOtp(CALLER, '09121112233', undefined, '1.2.3.4', 'fa');
+
+    expect(res).toMatchObject({ ok: true, data: { accepted: true, resendIn: RedisTtl.otpCooldown } });
   });
 
   it('creates the group with BOTH the founder and the joiner', async () => {

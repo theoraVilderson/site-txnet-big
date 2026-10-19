@@ -3,7 +3,7 @@ import type { UiPreferences, UiPreferencesPatch } from "@/stores/ui-preferences-
 import type { ResolvedTimeZone, TimeZoneSource } from "../time-zone";
 import type { TenantType } from "../tenant-type";
 import { request, setAccessToken } from "./credential";
-import type { AuthResult, BotLinkRequired, OtpChannel, OtpQueued, OtpRequestResult } from "./sign-in";
+import type { AuthResult, BotLinkRequired, OtpChannel, OtpQueued, OtpRequestResult, ResendIn } from "./sign-in";
 
 /**
  * One account in the caller's switch group (F-0206). The phone arrives already
@@ -157,7 +157,7 @@ export const accountCalls = {
    */
   /** Two-factor switch, step 1 (ADR-0145): the member's own password; a code goes to their number. */
   /** The code goes by `channel` (SA-1-f); a messenger not yet connected answers the bot link, with the token for the code it sends. */
-  async switchByPassword(userId: string, password: string, captchaToken: string, channel?: OtpChannel) { return request<{ otpToken: string } & ({ requiresOtp: true; linkRequired?: undefined } | BotLinkRequired)>("/auth/accounts/switch/password", { method: "POST", body: JSON.stringify({ userId, password, ...(channel ? { channel } : {}) }) }, captchaToken); },
+  async switchByPassword(userId: string, password: string, captchaToken: string, channel?: OtpChannel) { return request<{ otpToken: string } & ResendIn & ({ requiresOtp: true; linkRequired?: undefined } | BotLinkRequired)>("/auth/accounts/switch/password", { method: "POST", body: JSON.stringify({ userId, password, ...(channel ? { channel } : {}) }) }, captchaToken); },
   /** Step 2: the code; the session this tab holds is replaced, as by `switchAccount`. */
   async switchByCode(otpToken: string, otpCode: string) { const result = await request<AuthResult>("/auth/accounts/switch/code", { method: "POST", body: JSON.stringify({ otpToken, otpCode }) }); setAccessToken(result.accessToken); return result; },
   async switchAccount(userId: string) { const result = await request<AuthResult & { userId: string; fullName: string }>("/auth/accounts/switch", { method: "POST", body: JSON.stringify({ userId }) }); setAccessToken(result.accessToken); return result; },

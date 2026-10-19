@@ -30,11 +30,8 @@ import {
   OTP_SERVICE,
 } from './otp/otp.interface';
 import { OtpChannelRegistry } from './otp/otp-channels.service';
-import { otpRealtimeChannel } from '@txnet-backend/shared-core';
-import {
-  OtpDeliveryStore,
-  type OtpDeliveryHandles,
-} from './otp/otp-delivery.store';
+import { OtpDeliveryStore } from './otp/otp-delivery.store';
+import { deliveryHandles } from './otp/otp-answer';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { BotLinkService } from './bot-link/bot-link.service';
 import { AccessReader } from './permissions/access.reader';
@@ -70,27 +67,6 @@ const LOGIN_FAILURE_LOCK_DEFAULT = 10;
  * entry existed and only its own snapshot ever referenced it.
  */
 const LOGIN_FAILURE_WINDOW_SEC = RedisTtl.loginFailureWindow;
-
-/**
- * The three fields a 202 hands back (F-067-j).
- *
- * `deliveryId` reads the status; `channel` and `channelToken` hear the result
- * live. A client uses whichever it can and the two are not alternatives it has
- * to choose between — the socket is the fast path and the status is the record
- * (D-15), so a client that opened one and missed an event still reads the
- * other.
- *
- * Built in one place because three routes answer this shape and a fourth will;
- * a field added to two of them and forgotten in the third is the kind of drift
- * only a client discovers.
- */
-export function deliveryHandles(delivery: OtpDeliveryHandles) {
-  return {
-    deliveryId: delivery.deliveryId,
-    channel: otpRealtimeChannel(delivery.channelId),
-    channelToken: delivery.channelToken,
-  };
-}
 
 /**
  * ADR-0133: who may hold a session. A restricted (`suspended`) account signs

@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, safeExecute } from '@txnet-backend/shared-core';
 import { PrismaService } from '../../prisma/prisma.service';
-import { deliveryHandles } from '../auth.service';
+import { deliveryHandles } from '../otp/otp-answer';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import {
   IOtpService,

@@ -1,4 +1,5 @@
 import type { Mock } from 'vitest';
+import { RedisTtl } from '../../redis/redis.keys';
 import { OtpPurpose } from '../otp/otp.interface';
 import { BotLinkService } from './bot-link.service';
 import { normalizeMessengerPhone } from './messenger-phone';
@@ -158,6 +159,19 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     // The screen re-reads on this, so the record already says `linked` when it lands.
     expect(notify).toHaveBeenCalledWith('e'.repeat(32), { state: 'linked', otpSent: true });
     await expect(notify.mock.results[0].value).resolves.toBe('linked');
+  });
+
+  // 2026-10-19: the waiting screen started a timer of its own guess here; it
+  // now reads the server's seconds left, counted from when the bot sent.
+  it('tells the waiting screen how long until another code, counted from the send', async () => {
+    const sentAt = 1_000_000;
+    link.state = 'linked';
+    link.otpSent = true;
+    link.codeSentAt = sentAt;
+    vi.spyOn(Date, 'now').mockReturnValue(sentAt + 15_000);
+
+    await expect(service.status('tok')).resolves.toMatchObject({ otpSent: true, resendIn: RedisTtl.otpCooldown - 15 });
+    vi.mocked(Date.now).mockRestore();
   });
 
   it('refuses a forged contact card describing somebody else', async () => {

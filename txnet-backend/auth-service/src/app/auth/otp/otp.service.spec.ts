@@ -1,5 +1,5 @@
 import type { Mock, Mocked } from 'vitest';
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, HttpException, ServiceUnavailableException } from '@nestjs/common';
 import { OtpService } from './otp.service';
 import { OtpStore } from './otp.store';
 import { OtpDeliveryStore } from './otp-delivery.store';
@@ -43,7 +43,7 @@ vi.setConfig({ testTimeout: 30_000 });
 
 describe('OtpService — delivery leaves the request path', () => {
   const sender = { send: vi.fn() };
-  let store: Mocked<Pick<OtpStore, 'acquireLock' | 'releaseLock' | 'isCoolingDown' | 'startCooldown' | 'save'>>;
+  let store: Mocked<Pick<OtpStore, 'acquireLock' | 'releaseLock' | 'cooldownLeft' | 'startCooldown' | 'save'>>;
   let delivery: { mark: Mock; read: Mock };
   let publisher: { publishDelivery: Mock };
   let prisma: { otpCode: { create: Mock } };
@@ -69,7 +69,7 @@ describe('OtpService — delivery leaves the request path', () => {
     store = {
       acquireLock: vi.fn().mockResolvedValue(true),
       releaseLock: vi.fn().mockResolvedValue(undefined),
-      isCoolingDown: vi.fn().mockResolvedValue(false),
+      cooldownLeft: vi.fn().mockResolvedValue(0),
       startCooldown: vi.fn().mockResolvedValue(undefined),
       save: vi.fn().mockResolvedValue(undefined),
     } as never;
@@ -129,6 +129,23 @@ describe('OtpService — delivery leaves the request path', () => {
     expect(store.startCooldown).toHaveBeenCalled();
     expect(store.releaseLock).toHaveBeenCalled();
     expect(delivery.mark).toHaveBeenCalledWith(DELIVERY, CHANNEL_ID, { state: 'queued' });
+  });
+
+  // 2026-10-19: no screen knew of a code sent to the number from another
+  // screen, so its timer ran out early and the next send was refused blind.
+  it('refuses inside the cooldown with the seconds left, by reason', async () => {
+    store.cooldownLeft.mockResolvedValue(42);
+
+    const refusal = await issue().catch((e: unknown) => e);
+
+    expect(refusal).toBeInstanceOf(HttpException);
+    expect((refusal as HttpException).getStatus()).toBe(429);
+    expect((refusal as HttpException).getResponse()).toEqual({
+      i18nKey: 'otp.cooldownActive',
+      reason: 'otpCooldown',
+      facts: { retryAfter: 42 },
+    });
+    expect(publisher.publishDelivery).not.toHaveBeenCalled();
   });
 
   it('leaves no cooldown behind when the broker did not confirm', async () => {

@@ -169,11 +169,14 @@ export function PhoneField({
         </div>
       </div>
 
+      {/* `bg-bg-inner`, not `bg-card-bg`: the card colour is translucent, and
+          over the captcha slider below it the slider read through the list
+          (2026-10-19, `/accounts/add`). */}
       {open && (
         <div
           role="listbox"
           aria-label={countryLabel}
-          className="absolute z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-card-border bg-card-bg p-2 shadow-lg"
+          className="absolute z-50 mt-2 max-h-72 w-full overflow-y-auto rounded-2xl border border-card-border bg-bg-inner p-2 shadow-lg"
         >
           <div className="sticky top-0 mb-1 flex items-center gap-2 rounded-xl bg-tab-bg px-2">
             <Search size={14} aria-hidden className="text-text-secondary" />

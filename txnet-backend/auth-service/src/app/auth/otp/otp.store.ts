@@ -52,8 +52,10 @@ export class OtpStore {
     return this.redis.del(RedisKeys.otpLock(purpose, phone));
   }
 
-  isCoolingDown(phone: string, purpose: OtpPurpose): Promise<boolean> {
-    return this.redis.exists(RedisKeys.otpCooldown(purpose, phone));
+  /** Seconds until another code may be asked for this number and purpose; 0 when it may now. */
+  async cooldownLeft(phone: string, purpose: OtpPurpose): Promise<number> {
+    // -2 (no key) and -1 (no expiry, which `startCooldown` never writes) both mean none.
+    return Math.max(0, await this.redis.client.ttl(RedisKeys.otpCooldown(purpose, phone)));
   }
 
   startCooldown(phone: string, purpose: OtpPurpose): Promise<void> {

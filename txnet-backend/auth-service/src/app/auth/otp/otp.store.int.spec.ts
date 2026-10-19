@@ -265,11 +265,11 @@ describe('OtpStore (real Redis)', () => {
 
   describe('cooldown', () => {
     it('is off until started, then on', async () => {
-      expect(await store.isCoolingDown(PHONE, PURPOSE)).toBe(false);
+      expect(await store.cooldownLeft(PHONE, PURPOSE)).toBe(0);
 
       await store.startCooldown(PHONE, PURPOSE);
 
-      expect(await store.isCoolingDown(PHONE, PURPOSE)).toBe(true);
+      expect(await store.cooldownLeft(PHONE, PURPOSE)).toBeGreaterThan(0);
     });
 
     it('expires on its own', async () => {
@@ -280,7 +280,7 @@ describe('OtpStore (real Redis)', () => {
       await fx.raw.pexpire(key, 60);
       await new Promise((resolve) => setTimeout(resolve, 150));
 
-      expect(await store.isCoolingDown(PHONE, PURPOSE)).toBe(false);
+      expect(await store.cooldownLeft(PHONE, PURPOSE)).toBe(0);
     });
   });
 });

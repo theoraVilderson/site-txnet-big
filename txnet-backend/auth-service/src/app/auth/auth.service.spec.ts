@@ -5,6 +5,7 @@ import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { normalizePhone } from '../common/validation/phone.schema';
 import { TenantContext } from '../tenant-context/tenant-context';
+import { RedisTtl } from '../redis/redis.keys';
 
 /**
  * The canonical stored form is whatever `phone.schema` says it is (E.164 —
@@ -489,6 +490,7 @@ describe('AuthService.loginWithPassword — two-factor', () => {
         // needs (F-067-j).
         channel: `otp:${'c'.repeat(32)}`,
         channelToken: 'd'.repeat(32),
+        resendIn: RedisTtl.otpCooldown,
       },
     });
     expect(h.otp.issueOtp).toHaveBeenCalledWith(
@@ -716,7 +718,9 @@ describe("AuthService OTP login — a reseller's owner on its domain (F-061-d, A
       expect.anything(),
     );
     expect(issuedIn).toEqual(['tenant-platform']);
-    expect(res).toMatchObject({ ok: true, data: { accepted: true } });
+    // The server's own wait, on every answer alike — a number with no account
+    // is told the same, or the field would say which numbers exist.
+    expect(res).toMatchObject({ ok: true, data: { accepted: true, resendIn: RedisTtl.otpCooldown } });
   });
 
   it('answers the same when neither the domain nor its owner holds the number', async () => {
@@ -1204,7 +1208,9 @@ describe("AuthService password reset — a reseller's owner on its domain (F-061
       expect.anything(),
     );
     expect(issuedIn).toEqual(['tenant-platform']);
-    expect(res).toMatchObject({ ok: true, data: { accepted: true } });
+    // The server's own wait, on every answer alike — a number with no account
+    // is told the same, or the field would say which numbers exist.
+    expect(res).toMatchObject({ ok: true, data: { accepted: true, resendIn: RedisTtl.otpCooldown } });
   });
 
   it('answers the same when neither the domain nor its owner holds the number', async () => {

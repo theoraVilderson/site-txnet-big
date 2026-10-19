@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { NatureCaptchaUI } from "@auth/auth/_components/NatureCaptchaUI";
+import { OTPInput } from "@auth/auth/_components/OTPInput";
 import { useCaptcha } from "@auth/auth/_hooks/useCaptcha";
 import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
+import { useOtpTimer } from "@auth/auth/_hooks/useOtpTimer";
 import { OtpChannelChoice } from "@auth/auth/_components/OtpChannelPicker";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -12,6 +14,7 @@ import { authApi } from "@/lib/auth-api";
 import type { SwitchAccount } from "@/lib/auth/account";
 import { OTP_LENGTH } from "@/lib/otp";
 import { Alert, Button, Dialog, Input } from "./kit";
+import { ResendCountdown } from "./ResendCountdown";
 
 const C = FrontendI18nKeys.common.accounts;
 
@@ -25,6 +28,9 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
   const toMessage = useApiErrorMessage();
   const captcha = useCaptcha();
   const channels = useOtpChannels();
+  // The server's wait before another code (`resendIn` / `retryAfter`): "send
+  // again" inside it would spend the password and the slide on a refusal.
+  const resendTimer = useOtpTimer();
   const [password, setPassword] = useState("");
   const [otpToken, setOtpToken] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -56,6 +62,7 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
     try {
       await work();
     } catch (e) {
+      resendTimer.holdFor(e);
       setError(toMessage(e));
     } finally {
       setPending(false);
@@ -69,6 +76,7 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
         const sent = await authApi.switchByPassword(member.userId, password, captcha.token, channels.selected);
         setDeepLink(sent.linkRequired ? sent.deepLink : null);
         setOtpToken(sent.otpToken);
+        resendTimer.startFrom(sent);
       } finally {
         // Single-use on the server, refused or not (F-0201).
         captcha.spend();
@@ -103,7 +111,7 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
             {t("common", C.confirm)}
           </Button>
         ) : (
-          <Button variant="primary" loading={pending} disabled={!password || !captcha.verified} onClick={() => void sendCode()}>
+          <Button variant="primary" loading={pending} disabled={!password || !captcha.verified || resendTimer.isRunning} onClick={() => void sendCode()}>
             {t("common", C.sendCode)}
           </Button>
         )
@@ -123,18 +131,24 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
             ) : (
               <p className="text-sm text-text-secondary">{t("common", C.twoFactor.codeSent)}</p>
             )}
-            <Input
+            {/* The login screen's boxes, in a form: `OTPInput` submits the form
+                its boxes are in once the code is full, as it does there. */}
+            <form
               dir="ltr"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={OTP_LENGTH}
-              placeholder={t("common", C.twoFactor.codePlaceholder)}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            />
-            <Button variant="quiet" disabled={pending} onClick={startOver}>
-              {t("common", C.twoFactor.sendAgain)}
-            </Button>
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!pending && code.length === OTP_LENGTH) void confirm();
+              }}
+            >
+              <OTPInput length={OTP_LENGTH} value={code} onChange={setCode} />
+            </form>
+            {resendTimer.isRunning ? (
+              <ResendCountdown formatted={resendTimer.formatted} />
+            ) : (
+              <Button variant="quiet" disabled={pending} onClick={startOver}>
+                {t("common", C.twoFactor.sendAgain)}
+              </Button>
+            )}
           </>
         ) : (
           <>
@@ -148,7 +162,11 @@ export function TwoFactorSwitchDialog({ member, onClose }: { member: SwitchAccou
             {channels.hasChoice && (
               <OtpChannelChoice channels={channels.channels} selected={channels.selected} onSelect={channels.select} labels={channelLabels} />
             )}
-            <NatureCaptchaUI isVerified={captcha.verified} onVerify={captcha.complete} isRtl={isRtl} t={captchaLabels} />
+            {resendTimer.isRunning ? (
+              <ResendCountdown formatted={resendTimer.formatted} />
+            ) : (
+              <NatureCaptchaUI isVerified={captcha.verified} onVerify={captcha.complete} isRtl={isRtl} t={captchaLabels} />
+            )}
           </>
         )}
       </div>

@@ -120,7 +120,7 @@ An access change and a signup are outbox rows (below). Impersonation start/end w
   only by *confirm email*, after a code mailed to it. The request reads no
   other account; "taken" is answered after the code. `email` is an OTP channel
   reserved to `email_verify` and never a login channel (invariant #15).
-- OTP: one active code per (phone, purpose); 5 attempts; 60s request cooldown;
+- OTP: one active code per (phone, purpose); 5 attempts; 60s request cooldown, told to the caller as `resendIn` on a send and `retryAfter` on a refusal (auth-api v56);
   300s code TTL. Redis is the source of truth (ADR-0007).
 - **The send is not in the request (v11).** Asking for a code takes the lock,
   the cooldown and the channel check and then stops; the code itself is drawn

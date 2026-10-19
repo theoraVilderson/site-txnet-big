@@ -43,9 +43,9 @@ export default function RegisterPage() {
   const otpTimer = useOtpTimer();
   const channels = useOtpChannels();
   const delivery = useOtpDelivery();
-  const botLink = useBotLink(() => {
+  const botLink = useBotLink((status) => {
     setStep(2);
-    otpTimer.start(120);
+    otpTimer.startFrom(status);
   });
 
   const [fullName, setFullName] = useState("");
@@ -92,7 +92,7 @@ export default function RegisterPage() {
           setStep("link");
         } else {
           // A code was queued: from here the screen hears what became of it.
-          delivery.start(result); setStep(2); otpTimer.start(120);
+          delivery.start(result); setStep(2); otpTimer.startFrom(result);
         }
       } else if (step === 2) {
         await authApi.verifyPhone(phone, otp);

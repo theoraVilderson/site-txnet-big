@@ -16,6 +16,7 @@ import { Request, Response } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { RateLimit } from '../auth/decorators/rate-limit.decorator';
 import { RequireCaptcha } from '../auth/decorators/require-captcha.decorator';
+import { SignedInCaptchaGuard } from '../common/guards/captcha.guard';
 import { AccountSwitchService } from './account-switch.service';
 import type { AuthClaims } from '../auth/token.service';
 import { LocaleService } from '../locale/locale.service';
@@ -91,9 +92,9 @@ export class AccountSwitchController {
   @TenantCapability('signIn')
   @Post('add/otp/request')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, SignedInCaptchaGuard)
   @UsePipes(new ZodValidationPipe(addByOtpRequestSchema))
-  @RequireCaptcha()
+  @RequireCaptcha({ afterAuth: true })
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_OTP_REQUEST, req?.user?.sub ?? req?.ip),
     configKey: 'ACCOUNTS_ADD_OTP_REQUEST_RATE_LIMIT',
@@ -130,9 +131,9 @@ export class AccountSwitchController {
   @TenantCapability('signIn')
   @Post('add/password')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, SignedInCaptchaGuard)
   @UsePipes(new ZodValidationPipe(addByPasswordSchema))
-  @RequireCaptcha()
+  @RequireCaptcha({ afterAuth: true })
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_PASSWORD, req?.user?.sub ?? req?.ip),
     configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',
@@ -208,9 +209,9 @@ export class AccountSwitchController {
   @TenantCapability('signIn')
   @Post('switch/password')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, SignedInCaptchaGuard)
   @UsePipes(new ZodValidationPipe(twoFactorSwitchPasswordSchema))
-  @RequireCaptcha()
+  @RequireCaptcha({ afterAuth: true })
   @RateLimit({
     key: (req) => rateLimitBucketKey(RateLimitBucket.ACCOUNTS_ADD_PASSWORD, req?.user?.sub ?? req?.ip),
     configKey: 'ACCOUNTS_ADD_PASSWORD_RATE_LIMIT',

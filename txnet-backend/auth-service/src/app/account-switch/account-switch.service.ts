@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SessionRevokedReason } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService, mayHoldSession } from '../auth/auth.service';
+import { otpResendIn } from '../auth/otp/otp-answer';
 import { roleGivesEverything } from '../auth/owner-factors';
 import { SessionService } from '../auth/session/session.service';
 import { OtpChannel } from '../auth/otp/otp.interface';
@@ -11,10 +12,7 @@ import { maskPhone } from '../common/validation/phone.schema';
 import { leaveGroup } from './leave-group';
 import { SurfaceOwnerService } from '../auth/surface-owner/surface-owner.service';
 import { runWithTenant } from '../tenant-context/tenant-context';
-import {
-  AddByOtpVerifyInput,
-  AddByPasswordInput,
-} from './account-switch.schema';
+import { AddByOtpVerifyInput, AddByPasswordInput } from './account-switch.schema';
 
 /**
  * What a member looks like on a page anyone standing behind the user can read
@@ -109,7 +107,7 @@ export class AccountSwitchService {
         this.auth.issueAccountProofOtp(phoneNumber, channel, ip, lang),
       );
       if (link) return link;
-      return ok({ accepted: true }, 'accountSwitch.otpSent');
+      return ok({ accepted: true, ...otpResendIn() }, 'accountSwitch.otpSent');
     });
   }
 

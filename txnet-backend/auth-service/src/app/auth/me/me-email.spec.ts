@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { OtpChannel, OtpPurpose } from '@prisma/client';
 import { MeEmailService } from './me-email.service';
 import type { AuthClaims } from '../token.service';
+import { RedisTtl } from '../../redis/redis.keys';
 
 /**
  * A user's email address (F-035-g, D-39). One rule carries the feature and
@@ -64,7 +65,7 @@ describe('MeEmailService — asking for a code', () => {
     );
     expect(res).toMatchObject({
       ok: true,
-      data: { accepted: true, deliveryId: 'd-1', channelToken: 't-1' },
+      data: { accepted: true, deliveryId: 'd-1', channelToken: 't-1', resendIn: RedisTtl.otpCooldown },
     });
   });
 

@@ -145,6 +145,7 @@ describe('RegisterService.register — the pending record', () => {
         // hears the delivery result here instead of polling for it.
         channel: `otp:${'c'.repeat(32)}`,
         channelToken: 'd'.repeat(32),
+        resendIn: RedisTtl.otpCooldown,
       },
     });
     expect(h.redis.setJson).toHaveBeenCalledWith(

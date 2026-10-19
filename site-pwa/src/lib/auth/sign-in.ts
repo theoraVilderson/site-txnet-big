@@ -30,7 +30,10 @@ export type BotLinkRequired = {
   channelToken: string;
 };
 
-export type OtpRequested = { accepted: boolean; linkRequired?: undefined };
+/** Seconds until another code may be asked for — on every code-sent answer, the server's own cooldown (`otpResendIn`). */
+export type ResendIn = { resendIn?: number };
+
+export type OtpRequested = { accepted: boolean; linkRequired?: undefined } & ResendIn;
 
 export type OtpRequestResult = OtpRequested | BotLinkRequired;
 
@@ -50,7 +53,7 @@ export type OtpDeliveryHandles = {
   channel: string;
   /** The proof `gateway-service` demands before it will serve that channel. */
   channelToken: string;
-};
+} & ResendIn;
 
 export type OtpDeliveryState = "queued" | "sent" | "failed";
 
@@ -71,7 +74,7 @@ export type BotLinkStatus = {
   state: "pending" | "linked" | "failed";
   otpSent: boolean;
   failureKey?: string;
-};
+} & ResendIn;
 
 /** Sign-in and sign-out calls — spread into `authApi` (`lib/auth-api.ts`). */
 export const signInCalls = {

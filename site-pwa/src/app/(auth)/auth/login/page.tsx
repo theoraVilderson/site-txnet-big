@@ -48,9 +48,9 @@ export default function LoginPage() {
   const otpTimer = useOtpTimer();
   const channels = useOtpChannels();
   const delivery = useOtpDelivery();
-  const botLink = useBotLink(() => {
+  const botLink = useBotLink((status) => {
     setStep(2);
-    otpTimer.start(120);
+    otpTimer.startFrom(status);
   });
 
   const [username, setUsername] = useState("");
@@ -77,7 +77,7 @@ export default function LoginPage() {
     // A code was queued: from here the screen hears what became of it.
     delivery.start(result);
     setStep(2);
-    otpTimer.start(120);
+    otpTimer.startFrom(result);
   };
   const sendSecondFactor = async (token: string) => {
     const result = await authApi.sendSecondFactor(token, channels.selected);

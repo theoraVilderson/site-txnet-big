@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { OTP_LENGTH } from "@/lib/otp";
 import { TwoFactorSwitchDialog } from "./TwoFactorSwitchDialog";
 
 const C = FrontendI18nKeys.common.accounts;
@@ -35,7 +36,7 @@ const assign = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks();
   Object.defineProperty(window, "location", { value: { assign }, writable: true });
-  api.switchByPassword.mockResolvedValue({ requiresOtp: true, otpToken: "tok" });
+  api.switchByPassword.mockResolvedValue({ requiresOtp: true, otpToken: "tok", resendIn: 60 });
   api.switchByCode.mockResolvedValue({ accessToken: "at" });
 });
 
@@ -51,10 +52,14 @@ describe("TwoFactorSwitchDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: C.sendCode }));
     await waitFor(() => expect(api.switchByPassword).toHaveBeenCalledWith("u-star", "s3cret", "pass", "telegram"));
 
-    fireEvent.change(await screen.findByPlaceholderText(C.twoFactor.codePlaceholder), { target: { value: "123456" } });
-    fireEvent.click(screen.getByRole("button", { name: C.confirm }));
+    // The login screen's digit boxes (2026-10-19: this was one plain field),
+    // and a full code submits itself as it does there.
+    const boxes = await screen.findAllByRole("textbox");
+    expect(boxes).toHaveLength(OTP_LENGTH);
+    fireEvent.paste(boxes[0], { clipboardData: { getData: () => "123456" } });
 
     await waitFor(() => expect(api.switchByCode).toHaveBeenCalledWith("tok", "123456"));
+    expect(api.switchByCode).toHaveBeenCalledTimes(1);
     expect(assign).toHaveBeenCalledWith("/");
     expect(api.switchAccount).not.toHaveBeenCalled();
   });
@@ -67,7 +72,7 @@ describe("TwoFactorSwitchDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: C.sendCode }));
 
     expect(await screen.findByText("wrong password")).toBeTruthy();
-    expect(screen.queryByPlaceholderText(C.twoFactor.codePlaceholder)).toBeNull();
+    expect(screen.queryAllByRole("textbox")).toHaveLength(0);
   });
 
   it("hands over the bot link for a messenger not yet connected, and still takes the code (SA-1-f)", async () => {
@@ -80,5 +85,25 @@ describe("TwoFactorSwitchDialog", () => {
     expect((await screen.findByRole("link", { name: C.twoFactor.openBot })).getAttribute("href")).toBe("https://t.me/bot?start=x");
     fireEvent.click(screen.getByRole("button", { name: C.twoFactor.sendAgain }));
     expect(await screen.findByPlaceholderText(C.passwordPlaceholder)).toBeTruthy();
+  });
+
+  // 2026-10-19: "send again" was offered at once, so a second code inside the
+  // server's cooldown was refused after the password and slide were spent.
+  it("offers send-again only once the server's wait is over", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<TwoFactorSwitchDialog member={member} onClose={vi.fn()} />);
+      fireEvent.change(screen.getByPlaceholderText(C.passwordPlaceholder), { target: { value: "s3cret" } });
+      fireEvent.click(screen.getByRole("button", { name: C.sendCode }));
+
+      expect(await screen.findByText(C.resendCodeIn, { exact: false })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: C.twoFactor.sendAgain })).toBeNull();
+
+      // One tick per render: the timer re-arms after each second it counts.
+      for (let i = 0; i < 61; i++) await act(async () => { vi.advanceTimersByTime(1_000); });
+      expect(await screen.findByRole("button", { name: C.twoFactor.sendAgain })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

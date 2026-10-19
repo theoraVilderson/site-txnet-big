@@ -15,7 +15,7 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
-import { OutboxEventType, otpRealtimeChannel, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
+import { OutboxEventType, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
@@ -25,6 +25,7 @@ import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 import { TenantContext } from '../../tenant-context/tenant-context';
+import { deliveryHandles } from '../otp/otp-answer';
 
 /**
  * Registration data held in Redis between `register` and a successful
@@ -208,9 +209,7 @@ export class RegisterService {
       {
         phoneNumber,
         requiresPhoneVerification: true,
-        deliveryId: delivery.deliveryId,
-        channel: otpRealtimeChannel(delivery.channelId),
-        channelToken: delivery.channelToken,
+        ...deliveryHandles(delivery),
       },
       'register.success',
     );
