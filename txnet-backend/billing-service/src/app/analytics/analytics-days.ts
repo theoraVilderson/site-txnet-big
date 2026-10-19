@@ -31,3 +31,10 @@ export function daysBetween(fromDay: Day, toDay: Day): Day[] {
   for (let day = fromDay; day <= toDay; day = addDays(day, 1)) days.push(day);
   return days;
 }
+
+/** `day` moved by `months` calendar months, the day of month clamped to the target month's last (31 January + 1 = 28 February): a month bought stays in its months (F-1001-t). */
+export function addMonths(day: Day, months: number): Day {
+  const [y, m, d] = day.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 1 + months, Math.min(d, last))).toISOString().slice(0, 10);
+}

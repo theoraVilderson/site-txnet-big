@@ -2,7 +2,7 @@ import { Prisma, WalletReasonType } from '@prisma/client';
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { addDays, dayOf, type Day } from './analytics-days';
-import { CostDayRow, SaleCost, UsageCost, ownCosts } from './analytics-cost';
+import { CostDayRow, Expense, SaleCost, UsageCost, ownCosts, spreadExpenses } from './analytics-cost';
 import { RollupRange, dayIn } from './analytics-rollup';
 
 /**
@@ -65,9 +65,19 @@ function readUsageCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<U
     GROUP BY 1, 2, 4, 5, 6, 7, 8`;
 }
 
-/** The tenant's sale and usage costs in `r`, as cost rows. */
+/** The tenant's general expenses still standing whose months reach into `r` (F-1001-t): none taken back. */
+function readExpenses(tx: Prisma.TransactionClient, r: RollupRange): Promise<Expense[]> {
+  return tx.$queryRaw`
+    SELECT to_char(e."spentOn", 'YYYY-MM-DD') AS "spentOn", e."months"::int AS "months", e."amount", e."currencyCode"
+    FROM billing.general_expense e
+    WHERE e."tenantId" = public.current_tenant_id() AND e."spentOn" <= ${r.toDay}::date
+      AND (e."spentOn" + make_interval(months => e."months"))::date > ${r.fromDay}::date
+      AND NOT EXISTS (SELECT 1 FROM billing.general_expense_take_back t WHERE t."expenseId" = e."id")`;
+}
+
+/** The tenant's sale and usage costs in `r`, and its general expenses spread over their days, as cost rows. */
 export async function readOwnCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<CostDayRow[]> {
-  return ownCosts(await readSaleCosts(tx, r), await readUsageCosts(tx, r));
+  return [...ownCosts(await readSaleCosts(tx, r), await readUsageCosts(tx, r)), ...spreadExpenses(await readExpenses(tx, r), { from: r.fromDay, to: r.toDay })];
 }
 
 /**

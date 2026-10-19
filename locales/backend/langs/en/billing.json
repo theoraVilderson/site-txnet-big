@@ -92,6 +92,8 @@
       "margin": "Margin",
       "marginRate": "Margin %",
       "previousMarginRate": "Previous margin %",
+      "overhead": "General expenses",
+      "netProfit": "Net profit",
       "costParts": "Cost by part",
       "attributed": "Attributed by use",
       "idle": "Idle panels",

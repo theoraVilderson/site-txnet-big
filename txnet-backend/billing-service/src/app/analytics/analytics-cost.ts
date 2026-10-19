@@ -2,7 +2,7 @@ import { Prisma } from '@prisma/client';
 import { roundRate, splitWhole } from '@txnet-backend/shared-core';
 
 import { CostRow, PANEL_CURRENCY, costOn } from '../systems/panel-cost-on';
-import { Day, addDays } from './analytics-days';
+import { Day, addDays, addMonths } from './analytics-days';
 
 /**
  * Cost attribution (F-1002-b, billing/contract.analytics.md "Cost and margin")
@@ -13,9 +13,10 @@ import { Day, addDays } from './analytics-days';
 /**
  * What a cost row is: a panel's day split by bytes, a panel's day with no
  * traffic, what a reseller pays the platform per use, its subscription — and
- * the tenant's own costs (ADR-0151): a sale's variant cost, a meter's use.
+ * the tenant's own costs (ADR-0151): a sale's variant cost, a meter's use —
+ * and a general expense no product carries (F-1001-t).
  */
-export type CostKind = 'panel' | 'idle' | 'wholesale' | 'subscription' | 'sale' | 'usage';
+export type CostKind = 'panel' | 'idle' | 'wholesale' | 'subscription' | 'sale' | 'usage' | 'overhead';
 
 export type CostDayRow = {
   day: Day;
@@ -167,4 +168,26 @@ export function ownCosts(sales: readonly SaleCost[], usage: readonly UsageCost[]
     ...sales.map((s) => ({ ...s, kind: 'sale' as const, cost: s.sale ? s.cost : s.cost.neg() })),
     ...usage.map((u) => ({ ...u, kind: 'usage' as const, cost: u.unitCost.mul(u.quantity.toString()).div(u.unitSize.toString()) })),
   ]);
+}
+
+/** A general expense still standing (none taken back): what was paid, in its currency, from its tenant day over its months. */
+export type Expense = { spentOn: Day; months: number; amount: Prisma.Decimal; currencyCode: string };
+
+/**
+ * General expenses (F-1001-t, contract.analytics-expenses.md): each spread
+ * evenly over the days from its day to the same day `months` later, split at
+ * six places so its days sum to what was paid exactly; only the days inside
+ * `window` answered, a day's expenses summed per currency (the grain is
+ * unique). `overhead` names no product, panel or user: it is no sale's cost.
+ */
+export function spreadExpenses(expenses: readonly Expense[], window: { from: Day; to: Day }): CostDayRow[] {
+  const parts = expenses.flatMap((e) => {
+    const days: Day[] = [];
+    for (let day = e.spentOn, end = addMonths(e.spentOn, e.months); day < end; day = addDays(day, 1)) days.push(day);
+    const shares = splitWhole(e.amount, days.map(() => BigInt(1)), COST_PLACES);
+    return days
+      .map((day, i) => ({ day, kind: 'overhead' as const, productId: null, panelId: null, userId: null, currencyCode: e.currencyCode, cost: shares[i] }))
+      .filter((p) => p.day >= window.from && p.day <= window.to);
+  });
+  return sumByCell(parts);
 }

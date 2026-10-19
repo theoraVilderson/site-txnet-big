@@ -151,7 +151,7 @@ flagged them again; `20261017001100_analytics_cost_grain_has_sale_currency`
 `analytics_loss_alert` (key tenant · user · month) — the claim that tells a
 loss once a month: **not** derived, never deleted by a rebuild. `20261016000700_panel_capacity` (F-1005-a) added
 `_panel_traffic_day` (a flow) and `_panel_clients_day` (a stock), unique tenant · UTC date · panel —
-[contract.analytics-capacity.md](contract.analytics-capacity.md) — and flagged every tenant again. `20261016000800_analytics_report_schedule` (F-1006-a) added `analytics_report_schedule` — a person's schedule, **not** derived ([contract.analytics-reports.md](contract.analytics-reports.md)). The rest is written only by the rollup,
+[contract.analytics-capacity.md](contract.analytics-capacity.md) — and flagged every tenant again. `20261016000800_analytics_report_schedule` (F-1006-a) added `analytics_report_schedule` — a person's schedule, **not** derived ([contract.analytics-reports.md](contract.analytics-reports.md)). `20261019000100_a_general_expense_is_spread_as_overhead` (F-1001-t) added `general_expense` and `general_expense_take_back` — history (a trigger refuses an edit), **not** derived — and the cost kind `overhead` ([contract.analytics-expenses.md](contract.analytics-expenses.md)). The rest is written only by the rollup,
 derived wholly from the ledgers (a stock from the Grants), so any of it may be
 deleted and rebuilt; what each column means is
 [contract.analytics.md](contract.analytics.md). Proof:

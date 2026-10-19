@@ -1575,6 +1575,8 @@ enum AnalyticsCostKind {
   /// F-1002-e (ADR-0151): a sale at its variant's cost; a meter's use at its unit cost.
   sale
   usage
+  /// F-1001-t: a general expense, spread over its months' days; no product, panel or user.
+  overhead
 
   @@schema("billing")
 }
@@ -1601,6 +1603,54 @@ model AnalyticsCostDay {
   saleCost       Decimal?          @db.Decimal(18, 6)
 
   @@map("analytics_cost_day")
+  @@schema("billing")
+}
+
+/// F-1001-t: what a general expense was for — a category the panel names, never free text.
+enum GeneralExpenseCategory {
+  equipment
+  advertising
+  staff
+  domain
+  rent
+  other
+
+  @@schema("billing")
+}
+
+/// F-1001-t: a cost no panel or product carries, paid by its tenant on
+/// `spentOn` (a tenant day) and spread over `months`. History: a trigger
+/// refuses an edit; a mistake is taken back (`GeneralExpenseTakeBack`) and
+/// added again. Its tenant's only (RLS).
+model GeneralExpense {
+  id              String                  @id @default(uuid()) @db.Uuid
+  tenantId        String                  @db.Uuid
+  category        GeneralExpenseCategory
+  amount          Decimal                 @db.Decimal(20, 4)
+  currencyCode    String
+  spentOn         DateTime                @db.Date
+  months          Int                     @db.SmallInt
+  note            String?
+  createdByUserId String?                 @db.Uuid
+  createdAt       DateTime                @default(now())
+  takeBack        GeneralExpenseTakeBack?
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, spentOn])
+  @@map("general_expense")
+  @@schema("billing")
+}
+
+/// F-1001-t: an expense that no longer counts, from the day it was paid —
+/// one row per expense, never edited.
+model GeneralExpenseTakeBack {
+  expenseId       String         @id @db.Uuid
+  tenantId        String         @db.Uuid
+  createdByUserId String?        @db.Uuid
+  createdAt       DateTime       @default(now())
+  expense         GeneralExpense @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+
+  @@map("general_expense_take_back")
   @@schema("billing")
 }
 

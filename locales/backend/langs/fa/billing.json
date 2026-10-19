@@ -92,6 +92,8 @@
       "margin": "سود",
       "marginRate": "درصد سود",
       "previousMarginRate": "درصد سود دورهٔ قبل",
+      "overhead": "هزینه‌های عمومی",
+      "netProfit": "سود خالص",
       "costParts": "هزینه به تفکیک",
       "attributed": "تقسیم‌شده بر اساس مصرف",
       "idle": "پنل‌های بی‌مصرف",
