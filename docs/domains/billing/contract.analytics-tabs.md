@@ -139,7 +139,8 @@ by `margin` (below).
    from it, bumps the version, and clears it unless a newer ask came in.
 8. **General expenses** (F-1001-t): each standing one spread over its months'
    days as `kind overhead`, no product, panel or user —
-   [contract.analytics-expenses.md](contract.analytics-expenses.md).
+   [contract.analytics-expenses.md](contract.analytics-expenses.md). A settled
+   payment's provider commission less its fee is `kind gateway` (F-1001-v), the same.
 
 ## Margin (F-1001-l)
 
@@ -158,7 +159,7 @@ user); cost is `saleCost`, else `cost` in its own currency. It answers:
 | `noCostPanels` | the platform's own only: its panels with a sale or a service in the window and no monthly cost on or before its end |
 | `noCostProducts` | every tenant: the ids of `products` cells with `noCost` — its margin is not a margin until a cost is set (F-1002-f) |
 | `lossAlertPercent` | the tenant's threshold for the loss alert (F-1003, below), for the form beside the users |
-| `totals.overhead`, `totals.netProfit` | the window's general expenses and margin − them (F-1001-t, [contract.analytics-expenses.md](contract.analytics-expenses.md) rule 5); `null` under a product, panel or fulfilment filter and to the platform's staff on a reseller. Every other cost figure here leaves `overhead` out |
+| `totals.overhead`, `totals.gatewayCommission`, `totals.netProfit` | the window's general expenses, its gateways' commission, and margin − both (F-1001-t, F-1001-v, [contract.analytics-expenses.md](contract.analytics-expenses.md) rule 5); `null` under a product, panel or fulfilment filter and to the platform's staff on a reseller. Every other cost figure here leaves `overhead` and `gateway` out |
 
 1. **A tenant's margin is its own.** Totals and lists count the cost of its
    own Grants and idle panels; on the platform, serving a reseller's users is

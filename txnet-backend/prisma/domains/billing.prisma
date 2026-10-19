@@ -584,6 +584,8 @@ model PaymentGateway {
   audience     GatewayAudience[]
   /// A `manual_transfer` gateway's kind, proof and window (F-803-a).
   manualSetting ManualGatewaySetting?
+  /// What its provider deducts, from a day on (F-1001-v).
+  commissions  GatewayCommission[]
 
   @@map("payment_gateway")
   @@schema("billing")
@@ -1577,6 +1579,8 @@ enum AnalyticsCostKind {
   usage
   /// F-1001-t: a general expense, spread over its months' days; no product, panel or user.
   overhead
+  /// F-1001-v: a settled payment's provider commission less the fee its payer was charged; no product, panel or user.
+  gateway
 
   @@schema("billing")
 }
@@ -1638,6 +1642,30 @@ model GeneralExpense {
   @@index([tenantId, createdAt])
   @@index([tenantId, spentOn])
   @@map("general_expense")
+  @@schema("billing")
+}
+
+/// F-1001-v: what a gateway's provider deducts from its merchant — `percent`
+/// of what was charged plus `fixedAmount` in the gateway's currency — from
+/// `effectiveFrom` (a tenant day) on. Exactly one gateway column (CHECK);
+/// `tenantId` the gateway's owner. History: a change is a new row (trigger).
+model GatewayCommission {
+  id                    String               @id @default(uuid()) @db.Uuid
+  tenantId              String               @db.Uuid
+  gatewayId             String?              @db.Uuid
+  tenantGatewayConfigId String?              @db.Uuid
+  percent               Decimal              @db.Decimal(9, 4)
+  fixedAmount           Decimal              @db.Decimal(20, 4)
+  currencyCode          String
+  effectiveFrom         DateTime             @db.Date
+  createdByUserId       String?              @db.Uuid
+  createdAt             DateTime             @default(now())
+  gateway               PaymentGateway?      @relation(fields: [gatewayId], references: [id], onDelete: Restrict)
+  tenantGatewayConfig   TenantGatewayConfig? @relation(fields: [tenantGatewayConfigId], references: [id], onDelete: Restrict)
+
+  @@index([gatewayId, effectiveFrom])
+  @@index([tenantGatewayConfigId, effectiveFrom])
+  @@map("gateway_commission")
   @@schema("billing")
 }
 

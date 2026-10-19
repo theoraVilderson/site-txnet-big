@@ -32,6 +32,7 @@ import {
   updateGatewaySchema,
 } from './gateway-admin.schema';
 import { gatewaySource, refusing } from './gateway-admin.http';
+import { CommissionBody, commissionSchema } from './gateway-commission';
 import { ResellerCreateGatewayInput, ResellerGatewayActor, ResellerGatewayService } from './reseller-gateway.service';
 
 /**
@@ -142,6 +143,34 @@ export class ResellerGatewayController {
     return refusing(() =>
       this.gateways.setAudience(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }, body.userGroupIds),
     );
+  }
+
+  /** What its provider deducts, newest day first (F-1001-v); the reseller's own people only. */
+  @Get(':source/:id/commission')
+  @RateLimit(READ)
+  async commission(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('source') source: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return refusing(() => this.gateways.commission(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }));
+  }
+
+  /** A new commission from a day on — never an edit (F-1001-v). */
+  @Post(':source/:id/commission')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async addCommission(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('source') source: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(commissionSchema)) body: CommissionBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return refusing(() => this.gateways.addCommission(this.actor(req, ip), tenantId, { source: gatewaySource(source), id }, body));
   }
 
   @Delete(':source/:id')

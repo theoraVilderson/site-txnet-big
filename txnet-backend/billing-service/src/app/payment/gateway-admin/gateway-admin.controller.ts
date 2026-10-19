@@ -37,6 +37,8 @@ import {
 } from './gateway-admin.schema';
 import { gatewaySource, refusing } from './gateway-admin.http';
 import { CreateGatewayInput, GatewayActor, GatewayAdminService } from './gateway-admin.service';
+import { CommissionBody, commissionSchema } from './gateway-commission';
+import { GatewayCommissionService } from './gateway-commission.service';
 import { GatewayPermissionGuard } from './gateway-permission.guard';
 
 /**
@@ -61,7 +63,10 @@ import { GatewayPermissionGuard } from './gateway-permission.guard';
 @Controller('billing/gateways')
 @UseGuards(GatewayPermissionGuard)
 export class GatewayAdminController {
-  constructor(private readonly gateways: GatewayAdminService) {}
+  constructor(
+    private readonly gateways: GatewayAdminService,
+    private readonly commissions: GatewayCommissionService,
+  ) {}
 
   private actor(req: Request, ip: string): GatewayActor {
     const { userId, tenantId, permissions } = identityOf(req);
@@ -140,6 +145,27 @@ export class GatewayAdminController {
     @Ip() ip: string,
   ) {
     return refusing(() => this.gateways.setAudience(this.actor(req, ip), { source: gatewaySource(source), id }, body.userGroupIds));
+  }
+
+  /** What its provider deducts, newest day first (F-1001-v); the caller's own gateway only. */
+  @Get(':source/:id/commission')
+  @RateLimit(READ)
+  async commission(@Param('source') source: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return refusing(() => this.commissions.history(this.actor(req, ip), { source: gatewaySource(source), id }));
+  }
+
+  /** A new commission from a day on — never an edit (F-1001-v). */
+  @Post(':source/:id/commission')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit(WRITE)
+  async addCommission(
+    @Param('source') source: string,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body(new ZodValidationPipe(commissionSchema)) body: CommissionBody,
+    @Req() req: Request,
+    @Ip() ip: string,
+  ) {
+    return refusing(() => this.commissions.add(this.actor(req, ip), { source: gatewaySource(source), id }, body));
   }
 
   @Delete(':source/:id')

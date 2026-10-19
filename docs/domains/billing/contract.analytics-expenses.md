@@ -2,11 +2,11 @@
 id: billing
 layer: domain
 status: active
-version: 1
+version: 2
 updated: 2026-10-19
 ---
 
-# Contract — billing / analytics: general expenses (F-1001-t)
+# Contract — billing / analytics: general expenses and gateway commission (F-1001-t, F-1001-v)
 
 A topic file of [contract.analytics.md](contract.analytics.md). Asked for by
 the user on 2026-10-19: profit until now was gross — what a tenant pays for
@@ -70,3 +70,59 @@ months, note, createdByUserId, createdAt, takenBackAt}`. Refusals:
    `totals.netProfit` (margin − overhead), both `null` under a product, panel
    or fulfilment filter (an expense is no product's) and to the platform's
    staff on a reseller (rule 1).
+
+## Gateway commission (F-1001-v)
+
+Asked for by the user on 2026-10-19: a gateway's `feeApplied` is passed to
+the payer, and what the provider itself deducts from the merchant was
+recorded nowhere — so a fee the tenant absorbed was invisible. Code:
+`payment/gateway-admin/gateway-commission*.ts`, the arithmetic in
+`analytics-cost.ts` (`gatewayCommissionCosts`), the read in
+`analytics-rollup-own-cost.ts`. The field is panel-web's gateway editor (F-1001-w).
+
+**Storage** (`20261019000200_a_gateway_carries_its_providers_commission`):
+`gateway_commission` — exactly one of `gatewayId` / `tenantGatewayConfigId`
+(CHECK), `tenantId` the gateway's owner, `percent` (0..100, four places),
+`fixedAmount` (≥ 0) in `currencyCode` — the gateway's own, set by the
+service — `effectiveFrom` (a tenant day), who and when. History as an
+expense: the same trigger refuses an UPDATE, no DELETE grant, strict RLS.
+
+**Routes** — `…/gateways/:source/:id/commission` on both gateway surfaces,
+`/api/billing/gateways` and the named reseller's `/api/billing/tenants/:tenantId/gateways`
+(where a reseller's owner works — it signs in on the platform's tenant),
+behind `gateway.manage` and the gateway-admin buckets:
+
+| route | answers |
+|---|---|
+| `GET` | `{commissions, inEffect, currencyCode}` — the newest 50 by `effectiveFrom` then created; `inEffect` the id a payment made today is costed by, `null` before the first; `currencyCode` the gateway's |
+| `POST` | the row added — `{percent, fixedAmount, effectiveFrom}`, decimal strings, `.strict()`; one `gateway_update` audit row `{source, commission}` |
+
+A row is `{id, percent, fixedAmount, currencyCode, effectiveFrom,
+createdByUserId, createdAt}`. Refusals as gateway management's:
+`gateway_not_found` (404), `invalid_range` (400, a fixed amount finer than
+the gateway currency's places).
+
+6. **The caller's own gateway only.** A platform gateway is the platform
+   owner's; a tenant's gateway its tenant's — **not** the platform owner's,
+   who manages every gateway but whose report a reseller's costs are not
+   (rule 1). Anything else is `gateway_not_found`; on the named reseller's
+   surface the platform's staff, whom its door admits, are `not_allowed`.
+7. **No edit.** A change is a row from its day on; `0` and `0` stops
+   counting. A payment is costed by the row with the latest `effectiveFrom`
+   on or before its tenant day (the later-added on a tie); none before a
+   gateway's first row — no row is "not set", never 0.
+8. **What a payment costs.** Every `success` payment of the tenant on a
+   gateway it owns, no grant, something charged: the percent of what the
+   payer was charged — `amountCredited − discountApplied + feeApplied +
+   taxApplied`, `payable` as `gateway-pricing.ts` built it — plus the fixed
+   amount, less `feeApplied`. Below zero is a gain and stays (a fee charged
+   above what the provider takes). A granted gateway's payment is left out:
+   it landed in the lender's account, and the settlement nets the fee there
+   (ADR-0041 §4).
+9. **One row per day and currency**, `kind gateway`, no product, panel or
+   user — a top-up is no sale; the fixed part in the gateway's currency, apart
+   from the percent's when the two differ; converted as every cost row is.
+   An add asks the next pass to restate from `effectiveFrom` (rule 4).
+10. **Below the margin**, as overhead (rule 5): the Profit tab answers it as
+   `totals.gatewayCommission`, and `totals.netProfit` is margin − overhead −
+   it; both `null` where `overhead` is.

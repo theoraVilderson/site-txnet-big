@@ -16,7 +16,7 @@ lending one to another tenant is `domains/audit/contract.settlement.md`.
 
 `/api/billing/coupons` (`payment/coupon-admin/`): coupons, gift-code batches, usage — `contract.coupon.md`.
 `/api/billing/gateways` (`payment/gateway-admin/`): `GET` list, `POST` create,
-`PATCH` / `DELETE :source/:id`, `GET` / `PUT presets` — the caller's own
+`PATCH` / `DELETE :source/:id`, `GET` / `POST :source/:id/commission` — what its provider deducts, the caller's own gateway only, on both surfaces ([contract.analytics-expenses.md](contract.analytics-expenses.md) "Gateway commission", F-1001-v), `GET` / `PUT presets` — the caller's own
 default quick amounts (F-092-v), `{presets, currencyCode}` — and `GET` / `PUT tax` — its default tax on a
 top-up, `{taxRatePercent}` (F-104-ag). Behind `gateway.manage`; the permission is not
 the boundary. Linking a gateway to another tenant is the settlement grant

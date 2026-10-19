@@ -2,7 +2,7 @@ import { Prisma, WalletReasonType } from '@prisma/client';
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { addDays, dayOf, type Day } from './analytics-days';
-import { CostDayRow, Expense, SaleCost, UsageCost, ownCosts, spreadExpenses } from './analytics-cost';
+import { CommissionedPayment, CostDayRow, Expense, SaleCost, UsageCost, gatewayCommissionCosts, ownCosts, spreadExpenses } from './analytics-cost';
 import { RollupRange, dayIn } from './analytics-rollup';
 
 /**
@@ -75,9 +75,37 @@ function readExpenses(tx: Prisma.TransactionClient, r: RollupRange): Promise<Exp
       AND NOT EXISTS (SELECT 1 FROM billing.general_expense_take_back t WHERE t."expenseId" = e."id")`;
 }
 
-/** The tenant's sale and usage costs in `r`, and its general expenses spread over their days, as cost rows. */
+/**
+ * Each payment settled in `r` on a gateway the tenant owns, with the
+ * commission its provider was set to deduct on the payment's tenant day
+ * (F-1001-v) — none before a gateway's first. A granted gateway's payment is
+ * left out: the money landed in its lender's merchant account, and the
+ * settlement already nets the fee there (ADR-0041 §4). A free top-up was
+ * charged nothing.
+ */
+function readCommissionedPayments(tx: Prisma.TransactionClient, r: RollupRange): Promise<CommissionedPayment[]> {
+  const day = dayIn(Prisma.sql`p."createdAt"`, r.zone);
+  return tx.$queryRaw`
+    SELECT to_char(${day}, 'YYYY-MM-DD') AS "day", p."currencyCode", p."amountCredited" AS "credited", p."discountApplied" AS "discount",
+           p."feeApplied" AS "fee", p."taxApplied" AS "tax", gc."percent", gc."fixedAmount", gc."currencyCode" AS "fixedCurrencyCode"
+    FROM billing.payment_transaction p
+    JOIN LATERAL (
+      SELECT c."percent", c."fixedAmount", c."currencyCode" FROM billing.gateway_commission c
+      WHERE (c."gatewayId" = p."gatewayId" OR c."tenantGatewayConfigId" = p."tenantGatewayConfigId")
+        AND c."tenantId" = public.current_tenant_id() AND c."effectiveFrom" <= ${day}::date
+      ORDER BY c."effectiveFrom" DESC, c."createdAt" DESC LIMIT 1
+    ) gc ON true
+    WHERE p."tenantId" = public.current_tenant_id() AND p."status" = 'success' AND p."grantId" IS NULL AND p."chargedAmountMinor" > 0
+      AND p."createdAt" >= ${r.from} AND p."createdAt" < ${r.to}`;
+}
+
+/** The tenant's sale and usage costs in `r`, its general expenses spread over their days, and its gateways' commissions, as cost rows. */
 export async function readOwnCosts(tx: Prisma.TransactionClient, r: RollupRange): Promise<CostDayRow[]> {
-  return [...ownCosts(await readSaleCosts(tx, r), await readUsageCosts(tx, r)), ...spreadExpenses(await readExpenses(tx, r), { from: r.fromDay, to: r.toDay })];
+  return [
+    ...ownCosts(await readSaleCosts(tx, r), await readUsageCosts(tx, r)),
+    ...spreadExpenses(await readExpenses(tx, r), { from: r.fromDay, to: r.toDay }),
+    ...gatewayCommissionCosts(await readCommissionedPayments(tx, r)),
+  ];
 }
 
 /**

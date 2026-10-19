@@ -17,7 +17,7 @@ export type ResellerMargin = MarginCell & { name: string };
 
 export type MarginTab = {
   currencies: string[];
-  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null; overhead: MoneyKpi | null; netProfit: MoneyKpi | null };
+  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null; overhead: MoneyKpi | null; gatewayCommission: MoneyKpi | null; netProfit: MoneyKpi | null };
   /** The window's cost by what it is: split by use, a panel's day with no traffic, a charge for nothing a row shows. */
   costParts: { attributed: Amounts; idle: Amounts; unallocated: Amounts };
   series: { net: Amounts[]; cost: Amounts[]; margin: Amounts[] };
@@ -56,8 +56,10 @@ function readNet(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, s
     GROUP BY 1, 2`;
 }
 
-/** The gross cost: everything but a general expense, which no sale carries (F-1001-t) — it is `overhead`, under the margin. */
-const gross = (k: Prisma.Sql) => Prisma.sql`${k}."kind" <> 'overhead'`;
+/** The costs no sale carries, answered under the margin: a general expense (F-1001-t) and a gateway's commission on a top-up (F-1001-v). */
+type BelowMargin = 'overhead' | 'gateway';
+/** The gross cost: everything but what is below the margin. */
+const gross = (k: Prisma.Sql) => Prisma.sql`${k}."kind" NOT IN ('overhead', 'gateway')`;
 
 /** The tenant's own cost per split (or bucket, or cost part) and currency. */
 function readCost(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, split: Split | 'bucket' | 'part' | null, map?: DayMap): Promise<MoneyRow[]> {
@@ -72,13 +74,13 @@ function readCost(tx: Prisma.TransactionClient, w: Window, f: AnalyticsFilters, 
     GROUP BY 1, 2`;
 }
 
-/** The tenant's general expenses spread over the window's days, per currency (F-1001-t). */
-function readOverhead(tx: Prisma.TransactionClient, w: Window): Promise<MoneyRow[]> {
+/** One cost below the margin over the window's days, per currency. */
+function readBelowMargin(tx: Prisma.TransactionClient, w: Window, kind: BelowMargin): Promise<MoneyRow[]> {
   const k = Prisma.sql`k`;
   return tx.$queryRaw<MoneyRow[]>`
     SELECT NULL AS "key", ${costCurrency(k)} AS "currencyCode", SUM(${costAmount(k)}) AS "amount"
     FROM billing.analytics_cost_day k
-    WHERE ${in_(k, w)} AND k."kind" = 'overhead'
+    WHERE ${in_(k, w)} AND k."kind"::text = ${kind}
     GROUP BY 2`;
 }
 
@@ -162,12 +164,14 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
   const [net, cost] = [await readNet(c.tx, c.window, f, null), await readCost(c.tx, c.window, f, null)];
   const prev = c.previous ? { net: await readNet(c.tx, c.previous, f, null), cost: await readCost(c.tx, c.previous, f, null) } : null;
   const reseller = c.across ? await readResellers(c, c.across) : null;
-  // A general expense is its own tenant's (F-1001-t): never the platform's staff's to read on a reseller, and no product's or panel's.
-  const overheadShown = !c.hides && !f.product && !f.panel && !f.fulfilment;
-  const overhead = overheadShown ? { now: await readOverhead(c.tx, c.window), prev: c.previous ? await readOverhead(c.tx, c.previous) : null } : null;
+  // A general expense and a gateway's commission are their own tenant's (F-1001-t, F-1001-v): never the platform's staff's to read on a reseller, and no product's or panel's.
+  const belowShown = !c.hides && !f.product && !f.panel && !f.fulfilment;
+  const below = async (kind: BelowMargin) => ({ now: await readBelowMargin(c.tx, c.window, kind), prev: c.previous ? await readBelowMargin(c.tx, c.previous, kind) : null });
+  const overhead = belowShown ? await below('overhead') : null;
+  const commission = belowShown ? await below('gateway') : null;
   const currencies = currenciesOf(
     c.operating,
-    [...net, ...cost, ...(prev?.net ?? []), ...(prev?.cost ?? []), ...(reseller ? [...reseller.paid, ...reseller.served] : []), ...(overhead?.now ?? []), ...(overhead?.prev ?? [])].map(
+    [...net, ...cost, ...(prev?.net ?? []), ...(prev?.cost ?? []), ...(reseller ? [...reseller.paid, ...reseller.served] : []), ...(overhead?.now ?? []), ...(overhead?.prev ?? []), ...(commission?.now ?? []), ...(commission?.prev ?? [])].map(
       (r) => r.currencyCode,
     ),
   );
@@ -202,9 +206,15 @@ export async function marginOf(c: TabContext): Promise<MarginTab> {
       marginRate: marginCellOf(null, net, cost, how).marginRate,
       previousMarginRate: prev ? marginCellOf(null, prev.net, prev.cost, how).marginRate : null,
       overhead: overhead ? moneyKpi(sum(overhead.now), overhead.prev ? sum(overhead.prev) : null, currencies) : null,
-      netProfit: overhead
-        ? moneyKpi(marginOfRows(net, cost, overhead.now), prev && overhead.prev ? marginOfRows(prev.net, prev.cost, overhead.prev) : null, currencies)
-        : null,
+      gatewayCommission: commission ? moneyKpi(sum(commission.now), commission.prev ? sum(commission.prev) : null, currencies) : null,
+      netProfit:
+        overhead && commission
+          ? moneyKpi(
+              marginOfRows(net, cost, overhead.now, commission.now),
+              prev && overhead.prev && commission.prev ? marginOfRows(prev.net, prev.cost, overhead.prev, commission.prev) : null,
+              currencies,
+            )
+          : null,
     },
     costParts: { attributed: partOf('attributed'), idle: partOf('idle'), unallocated: partOf('unallocated') },
     series: { net: buckets.map((b) => b.net), cost: buckets.map((b) => b.cost), margin: buckets.map((b) => b.margin) },

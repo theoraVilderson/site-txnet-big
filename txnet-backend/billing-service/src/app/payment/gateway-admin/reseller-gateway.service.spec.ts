@@ -36,6 +36,7 @@ const GATEWAY = '66666666-6666-4666-8666-666666666666';
 
 const owner = { userId: OWNER_USER, tenantId: PLATFORM, permissions: [] as string[], ip: '10.0.0.9' };
 const stranger = { userId: STRANGER, tenantId: PLATFORM, permissions: [] as string[], ip: '10.0.0.9' };
+const platformStaff = { userId: STRANGER, tenantId: PLATFORM, permissions: ['platform.tenant.manage'], ip: '10.0.0.9' };
 
 /** What the call saw: the actor `GatewayAdminService` was given, and the tenant in scope when it was. */
 type Seen = { actor: GatewayActor; scope: string | undefined; args: unknown[] };
@@ -73,7 +74,9 @@ function build() {
     remove: record({ id: GATEWAY, mode: 'deleted' }),
   };
 
-  return { seen, gateways, service: new ResellerGatewayService(new ResellerAccess(appPrisma as never), gateways as never) };
+  const commissions = { history: record({ commissions: [] }), add: record({ id: 'c' }) };
+
+  return { seen, gateways, service: new ResellerGatewayService(new ResellerAccess(appPrisma as never), gateways as never, commissions as never) };
 }
 
 describe('a named reseller’s gateways', () => {
@@ -129,5 +132,27 @@ describe('a named reseller’s gateways', () => {
     const refusal = await service.list(stranger, RESELLER).catch((e) => e);
     expect(refusal).toBeInstanceOf(ResellerGatewayRefused);
     expect(refusal.reason).toBe('not_allowed');
+  });
+});
+
+describe('a named reseller’s gateway commission (F-1001-v)', () => {
+  const ref = { source: 'tenant' as const, id: GATEWAY };
+  const body = { percent: '1.5', fixedAmount: '0', effectiveFrom: '2026-10-01' };
+
+  it('reads and adds as the reseller, in its scope', async () => {
+    const { service, seen } = build();
+    await service.commission(owner, RESELLER, ref);
+    await service.addCommission(owner, RESELLER, ref, body);
+    expect(seen.map((c) => [c.actor.tenantId, c.scope])).toEqual([
+      [RESELLER, RESELLER],
+      [RESELLER, RESELLER],
+    ]);
+  });
+
+  it("refuses the platform's staff, whom the door lets in to configure the reseller — its costs are its own", async () => {
+    const { service, seen } = build();
+    await expect(service.commission(platformStaff, RESELLER, ref)).rejects.toMatchObject({ reason: 'not_allowed' });
+    await expect(service.addCommission(platformStaff, RESELLER, ref, body)).rejects.toMatchObject({ reason: 'not_allowed' });
+    expect(seen).toHaveLength(0);
   });
 });

@@ -14,9 +14,10 @@ import { Day, addDays, addMonths } from './analytics-days';
  * What a cost row is: a panel's day split by bytes, a panel's day with no
  * traffic, what a reseller pays the platform per use, its subscription — and
  * the tenant's own costs (ADR-0151): a sale's variant cost, a meter's use —
- * and a general expense no product carries (F-1001-t).
+ * and a general expense no product carries (F-1001-t), and what a gateway's
+ * provider took beyond the fee the payer covered (F-1001-v).
  */
-export type CostKind = 'panel' | 'idle' | 'wholesale' | 'subscription' | 'sale' | 'usage' | 'overhead';
+export type CostKind = 'panel' | 'idle' | 'wholesale' | 'subscription' | 'sale' | 'usage' | 'overhead' | 'gateway';
 
 export type CostDayRow = {
   day: Day;
@@ -190,4 +191,42 @@ export function spreadExpenses(expenses: readonly Expense[], window: { from: Day
       .filter((p) => p.day >= window.from && p.day <= window.to);
   });
   return sumByCell(parts);
+}
+
+/**
+ * A settled payment on the tenant's own gateway (F-1001-v), in its currency:
+ * what was credited, the coupon's discount, the fee and tax the payer paid on
+ * top — and the commission the gateway's provider was set to deduct on its
+ * day, `fixedAmount` in the gateway's currency.
+ */
+export type CommissionedPayment = {
+  day: Day;
+  currencyCode: string;
+  credited: Prisma.Decimal;
+  discount: Prisma.Decimal;
+  fee: Prisma.Decimal;
+  tax: Prisma.Decimal;
+  percent: Prisma.Decimal;
+  fixedAmount: Prisma.Decimal;
+  fixedCurrencyCode: string;
+};
+
+/**
+ * Gateway commission as cost (F-1001-v, contract.analytics-expenses.md
+ * "Gateway commission"): the provider's percent of what the payer was charged
+ * — credited less the discount plus fee and tax, `payable` as
+ * `gateway-pricing.ts` built it — plus its fixed amount, less the fee the
+ * payer already covered. Negative when the fee charged was more than the
+ * provider took: a gain. Summed per day and currency; no product, panel or
+ * user — a top-up is no sale.
+ */
+export function gatewayCommissionCosts(payments: readonly CommissionedPayment[]): CostDayRow[] {
+  const owner = { kind: 'gateway' as const, productId: null, panelId: null, userId: null };
+  return sumByCell(
+    payments.flatMap((p) => {
+      const charged = p.credited.minus(p.discount).plus(p.fee).plus(p.tax);
+      const percentPart = { ...owner, day: p.day, currencyCode: p.currencyCode, cost: charged.mul(p.percent).div(100).minus(p.fee) };
+      return p.fixedAmount.isZero() ? [percentPart] : [percentPart, { ...owner, day: p.day, currencyCode: p.fixedCurrencyCode, cost: p.fixedAmount }];
+    }),
+  );
 }

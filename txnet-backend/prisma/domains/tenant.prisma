@@ -625,6 +625,8 @@ model TenantGatewayConfig {
   audience     GatewayAudience[]
   /// A `manual_transfer` gateway's kind, proof and window (F-803-a).
   manualSetting ManualGatewaySetting?
+  /// What its provider deducts, from a day on (F-1001-v, `billing.gateway_commission`).
+  commissions  GatewayCommission[]
 
   // One gateway per provider per tenant (D-20), except `manual_transfer`: the
   // index is partial (`WHERE "providerName" <> 'manual_transfer'`, user

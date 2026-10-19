@@ -3,6 +3,7 @@ import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { GatewayAdminController } from './gateway-admin.controller';
 import { GATEWAY_SECRET_WRITER, GatewayAdminService } from './gateway-admin.service';
+import { GatewayCommissionService } from './gateway-commission.service';
 import { ManualDestinationController, ResellerManualDestinationController } from './manual-destination.controller';
 import { ManualDestinationService } from './manual-destination.service';
 import { ResellerGatewayController } from './reseller-gateway.controller';
@@ -26,6 +27,7 @@ import { VaultSecretClient } from './vault-secret.client';
   controllers: [GatewayAdminController, ResellerGatewayController, ManualDestinationController, ResellerManualDestinationController],
   providers: [
     GatewayAdminService,
+    GatewayCommissionService,
     ResellerGatewayService,
     ManualDestinationService,
     ResellerAccess,

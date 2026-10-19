@@ -11,6 +11,8 @@ import {
 import type { GatewaySource } from '../gateway/gateway-merchant';
 import { type FieldRefusalDetail, GatewayAdminRefused, GatewayAdminRejection } from './gateway-admin.refusal';
 import { CreateGatewayInput, DepositPresetList, GatewayActor, GatewayAdminService, GatewayRef, UpdateGatewayInput } from './gateway-admin.service';
+import type { CommissionBody, CommissionHistory, CommissionView } from './gateway-commission';
+import { GatewayCommissionService } from './gateway-commission.service';
 import type { GatewayView } from './gateway-view';
 
 /** The caller, as `forward-auth` proved them, plus the address a write is audited from. */
@@ -74,6 +76,7 @@ export class ResellerGatewayService {
   constructor(
     private readonly access: ResellerAccess,
     private readonly gateways: GatewayAdminService,
+    private readonly commissions: GatewayCommissionService,
   ) {}
 
   list(actor: ResellerGatewayActor, tenantId: string): Promise<GatewayView[]> {
@@ -110,6 +113,15 @@ export class ResellerGatewayService {
     return this.run(actor, tenantId, 'staffWrite', (as) => this.gateways.setAudience(as, ref, groupIds));
   }
 
+  /** What a gateway's provider deducts (F-1001-v): the reseller's own people only — its costs are no report for the platform's staff. */
+  commission(actor: ResellerGatewayActor, tenantId: string, ref: GatewayRef): Promise<CommissionHistory> {
+    return this.run(actor, tenantId, 'read', (as) => this.commissions.history(as, ref), { ownPeopleOnly: true });
+  }
+
+  addCommission(actor: ResellerGatewayActor, tenantId: string, ref: GatewayRef, body: CommissionBody): Promise<CommissionView> {
+    return this.run(actor, tenantId, 'staffWrite', (as) => this.commissions.add(as, ref, body), { ownPeopleOnly: true });
+  }
+
   remove(
     actor: ResellerGatewayActor,
     tenantId: string,
@@ -126,17 +138,21 @@ export class ResellerGatewayService {
    *
    * The work `await`s inside itself, as `runWithTenant` requires: a Prisma
    * promise returned unawaited would run after the scope has closed.
+   * `ownPeopleOnly` refuses the platform's staff, whom this door admits: what
+   * the reseller's business costs it is not theirs to read or set (F-1001-v).
    */
   async run<T>(
     actor: ResellerGatewayActor,
     tenantId: string,
     capability: TenantCapabilityName,
     work: (as: GatewayActor) => Promise<T>,
+    how: { ownPeopleOnly?: boolean } = {},
   ): Promise<T> {
     try {
-      return await this.access.for('gateway.manage').run(actor, tenantId, capability, (reseller) =>
-        work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip, permissions: keysActingIn(reseller.as, actor.permissions) }),
-      );
+      return await this.access.for('gateway.manage').run(actor, tenantId, capability, (reseller) => {
+        if (how.ownPeopleOnly && reseller.as === 'staff') throw new ResellerGatewayRefused('not_allowed', tenantId);
+        return work({ adminId: actor.userId, tenantId: reseller.id, ip: actor.ip, permissions: keysActingIn(reseller.as, actor.permissions) });
+      });
     } catch (e) {
       if (e instanceof ResellerAccessRefused) throw new ResellerGatewayRefused(e.reason, tenantId);
       if (e instanceof GatewayAdminRefused) throw new ResellerGatewayRefused(e.reason, e.message, e.refusals);
