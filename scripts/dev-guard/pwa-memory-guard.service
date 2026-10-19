@@ -1,0 +1,8 @@
+[Unit]
+Description=Restart the dev panel (txnet-dev-site-pwa) before its memory cap
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/root/site-txnet-big/scripts/dev-guard/pwa-memory-guard.sh
