@@ -181,6 +181,8 @@ export const myResellerDomainsPath = (id: string, self = false) => `${resellerWo
  * and never the session tenant's.
  */
 export const myResellerGatewaysPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/gateways`;
+/** A reseller's payments to confirm (F-093-w): the `/payments/manual` screen over the route that names the reseller (F-093-v). */
+export const myResellerPaymentsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/payments`;
 /**
  * A reseller's bot (F-066-w6): connect a Telegram or Bale bot from a pasted
  * token, and retire one. Singular — a reseller has one bot per messenger

@@ -24,7 +24,7 @@ top-up.
    owner every tenant's payments, a tenant its own users' on its own gateway
    configs — is billing's answer, never a filter here.
 2. **Inquire, then confirm.** Every payment offers "ask the gateway" first
-   (`billingApi.manualInquire`). The hand-confirm form appears only after that
+   (`ManualQueueApi.inquire`). The hand-confirm form appears only after that
    answered `unsettled` on this screen (`canConfirmByHand`). Billing asks once
    more itself before crediting, so a payment settled in between is the
    gateway's, not the person's.
@@ -52,7 +52,7 @@ top-up.
 7. **A lost authority is typed in, then asked about.** Only a payment with no
    authority offers "enter authority" (`canAttachAuthority`); the form takes
    the gateway's authority (1–64, trimmed — `validateAuthority` mirrors
-   `manualAuthoritySchema`) and `billingApi.manualAttachAuthority` answers the
+   `manualAuthoritySchema`) and `ManualQueueApi.attachAuthority` answers the
    gateway's word, handled like an inquire.
 8. **The payer's pending page** (`pendingStateOf`) keeps waiting on an
    `expired` payment — billing still asks the gateway for a week — and says
@@ -66,6 +66,15 @@ top-up.
    bank, or the gateway's own word; each has its sentence, and all reload the
    list like any settled answer. Error-toned theme tokens, never gold.
 
+10. **A reseller's queue is the same screen** (F-093-w): `ManualPaymentsView
+    resellerId` at `/my-resellers/:id/payments` and `/reseller/payments`, one
+    `RESELLER_MENU` row keyed `payment.confirm_manual`. Every call goes through
+    `manualQueueApi(resellerId)` — billing's `/tenants/:id/payments/manual`
+    (F-093-v) — never the ambient path, which is the platform's for an owner
+    (ADR-0059). It re-reads per `manualLiveOf`: the owner's `user:` channel
+    for `billing.payment.reseller_open_changed` of this reseller, and the
+    session's `tenant:` for `open_changed`.
+
 ## Proof
 
 `payments/manual/manual-payments.test.ts` — the outcome union against the
@@ -73,4 +82,6 @@ service source, `validateConfirm`'s limits, `canConfirmByHand` for every
 outcome, `stateBadges` per state, `canAttachAuthority` and
 `validateAuthority`, `canRejectByHand` for every outcome and `validateReject`'s
 limits, the menu entry's permission, every key in `en` and `fa`.
+`my-resellers/payments.test.ts` — the reseller's path, its menu row, and its
+live channels (F-093-w).
 `payment/_lib/pending-payment.test.ts` — expired waits, reversed reads so.

@@ -9,7 +9,7 @@ import { RealtimeEvents } from "@/generated/wire";
 import { useLiveReread } from "@/hooks/useLiveReread";
 import { supportAgentApi, supportApi } from "@/lib/support-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
-import { OPEN_PAYMENT_EVENTS } from "../payments/manual/_hooks/useOpenPayments";
+import { OPEN_PAYMENT_EVENTS } from "../payments/manual/_lib/manual-live";
 import { INBOX_EVENTS } from "../support/_lib/support-agent";
 
 /** The menu entries that carry a count (N4), by menu id. */

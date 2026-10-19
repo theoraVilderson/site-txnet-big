@@ -16,7 +16,7 @@ import {
   validateReject,
 } from "./_lib/manual-confirm";
 import type { VerifyingPayment } from "@/lib/billing-api";
-import { OPEN_PAYMENT_EVENTS } from "./_hooks/useOpenPayments";
+import { OPEN_PAYMENT_EVENTS } from "./_lib/manual-live";
 
 /**
  * The manual confirmation screen (F-093-n, ADR-0044 decision 6). What breaks
@@ -194,7 +194,7 @@ describe("the open list moves without a reload (RT-1-j)", () => {
   });
 
   it("the screen, its widget and the menu badge listen; none of them polls", () => {
-    expect(read("_components/ManualPaymentsView.tsx")).toMatch(/useOpenPayments\(\)/);
+    expect(read("_components/ManualPaymentsView.tsx")).toMatch(/useOpenPayments\(resellerId\)/);
     expect(read("../../_components/dashboard/widgets/ManualPaymentsWidget.tsx")).toMatch(/useOpenPaymentsLive\(/);
     const badges = read("../../_hooks/useMenuBadges.ts");
     expect(badges).not.toMatch(/setInterval\(/);

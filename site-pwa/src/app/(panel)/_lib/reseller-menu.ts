@@ -1,4 +1,4 @@
-import { Bot, ChartColumn, Globe, History, Landmark, ListChecks, Package, Palette, Settings2, Store, UserCog, UsersRound, type LucideIcon } from "lucide-react";
+import { Bot, ChartColumn, Globe, History, Landmark, ListChecks, Package, Palette, Settings2, ShieldCheck, Store, UserCog, UsersRound, type LucideIcon } from "lucide-react";
 import type { Me } from "@/lib/auth-api";
 import { holdsPermission } from "@/lib/permissions";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
@@ -15,6 +15,7 @@ import {
   myResellerConsolePath,
   myResellerDomainsPath,
   myResellerGatewaysPath,
+  myResellerPaymentsPath,
   myResellerAccessLogPath,
   myResellerGroupsPath,
   myResellerSettingsPath,
@@ -45,7 +46,7 @@ interface ResellerMenuLink extends PanelMenuLink {
  * `account` that opens to its pages** (user, 2026-10-08 — first merged into
  * the sections they belong to, which spread "reseller …" and a slug over
  * five sections). In working order: home, then what a shop needs (catalog,
- * gateways, users, domains, bot), then brand and settings. Gateways are only
+ * gateways and the payments they leave to a person, users, domains, bot), then brand and settings. Gateways are only
  * those it sells with — its billing with the platform is the session's
  * tenant (`PANEL_TENANT_BILLING`). The handoff is not an entry: the sidebar
  * draws it after them, inside (`contract.reseller-workspace.md`).
@@ -55,6 +56,8 @@ export const RESELLER_MENU: readonly ResellerMenuLink[] = [
   { id: "reseller-analytics", label: R.menu.analytics, short: R.short.analytics, icon: ChartColumn, href: myResellerAnalyticsPath, key: "analytics.read" },
   { id: "reseller-catalog", label: R.menu.catalog, short: R.short.catalog, icon: Package, href: myResellerCatalogPath, key: "catalog.manage" },
   { id: "reseller-gateways", label: R.menu.gateways, short: R.short.gateways, icon: Landmark, href: myResellerGatewaysPath, key: "gateway.manage" },
+  // F-093-w: its customers' payments to confirm — a card-to-card gateway needs a person.
+  { id: "reseller-payments", label: R.menu.payments, short: R.short.payments, icon: ShieldCheck, href: myResellerPaymentsPath, key: "payment.confirm_manual" },
   { id: "reseller-users", label: R.menu.users, short: R.short.users, icon: UserCog, href: myResellerUsersPath, key: "user.read" },
   { id: "reseller-groups", label: R.menu.groups, short: R.short.groups, icon: UsersRound, href: myResellerGroupsPath, key: "user_group.manage" },
   { id: "reseller-access-log", label: R.menu.accessLog, short: R.short.accessLog, icon: History, href: myResellerAccessLogPath, key: "audit.read" },

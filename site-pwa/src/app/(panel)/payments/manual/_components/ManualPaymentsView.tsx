@@ -27,11 +27,14 @@ import { ManualPaymentItem } from "./ManualPaymentItem";
  * confirm the list is read again, because billing decides what the payment
  * became. A manual transfer skips the asking — it has no gateway — and is
  * judged by its proof (F-803-k, `ManualPaymentItem`).
+ *
+ * `resellerId`: a reseller's workspace (F-093-w) — the same screen over that
+ * reseller's queue (F-093-v); absent, the session's own.
  */
-export function ManualPaymentsView() {
+export function ManualPaymentsView({ resellerId = null }: { resellerId?: string | null }) {
   const { t } = useLocale();
   const errorMessage = useApiErrorMessage();
-  const { rows, isLoading, error, reload } = useOpenPayments();
+  const { api, rows, isLoading, error, reload } = useOpenPayments(resellerId);
   // The row a settled answer was about leaves the list on reload; its sentence stays here.
   const [notice, setNotice] = useState<ManualAnswer | null>(null);
 
@@ -82,7 +85,7 @@ export function ManualPaymentsView() {
         ) : (
           <ul className="divide-y divide-card-border">
             {rows.map((row) => (
-              <ManualPaymentItem key={row.id} row={row} onSettled={settled} />
+              <ManualPaymentItem key={row.id} row={row} api={api} onSettled={settled} />
             ))}
           </ul>
         )}

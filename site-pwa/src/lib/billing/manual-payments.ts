@@ -81,46 +81,47 @@ export interface ManualAnswer {
   referenceId: string | null;
 }
 
-/** Manual-confirmation calls — spread into `billingApi` (`lib/billing-api.ts`). */
-export const manualPaymentCalls = {
-  /**
-   * Every gateway the caller may manage (F-102-d): the platform owner all of
-   * them, a tenant its own. Billing decides which; this sends no tenant.
-   */
-  /** Payments waiting on a person, in the caller's scope (F-093-n → F-092-z). */
-  async manualPayments(): Promise<VerifyingPayment[]> {
-    return call<VerifyingPayment[]>("/payments/manual", { method: "GET" });
-  },
+/**
+ * Where a queue lives: the session's own (`null`, F-092-z), or the reseller a
+ * workspace page names (F-093-v). A reseller's owner signs in to the platform's
+ * tenant (ADR-0059), so their reseller's queue is never the ambient one.
+ */
+export const manualQueuePrefix = (tenantId: string | null) =>
+  tenantId === null ? "/payments/manual" : `/tenants/${encodeURIComponent(tenantId)}/payments/manual`;
 
+/** The calls both queues answer. `ManualPaymentsView` takes one of these, not `billingApi`. */
+export interface ManualQueueApi {
+  /** Payments waiting on a person, in the queue's scope (F-093-n → F-092-z). */
+  list(): Promise<VerifyingPayment[]>;
   /** Ask the gateway now; whatever it settles is settled by billing's ordinary path. */
-  async manualInquire(id: string): Promise<ManualAnswer> {
-    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/inquire`, { method: "POST" });
-  },
-
-  /** Billing asks the gateway once more first; it credits by hand only if that stays unsettled. */
+  inquire(id: string): Promise<ManualAnswer>;
   /** Attach an authority whose write was lost, then ask the gateway (F-092-af). */
-  async manualAttachAuthority(id: string, authority: string): Promise<ManualAnswer> {
-    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/authority`, {
-      method: "POST",
-      body: JSON.stringify({ authority }),
-    });
-  },
-
-  async manualConfirm(id: string, body: { referenceId: string; reason: string }): Promise<ManualAnswer> {
-    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/confirm`, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-  },
-
+  attachAuthority(id: string, authority: string): Promise<ManualAnswer>;
+  /** Billing asks the gateway once more first; it credits by hand only if that stays unsettled. */
+  confirm(id: string, body: { referenceId: string; reason: string }): Promise<ManualAnswer>;
   /**
    * End a payment nobody paid (F-092-ak). Billing asks the gateway first and never rejects money it can see.
    * `resubmit` on a transfer sends its proof back to the payer once instead (F-805-a).
    */
-  async manualReject(id: string, reason: string, resubmit = false): Promise<ManualAnswer> {
-    return call<ManualAnswer>(`/payments/manual/${encodeURIComponent(id)}/reject`, {
-      method: "POST",
-      body: JSON.stringify(resubmit ? { reason, resubmit } : { reason }),
-    });
-  },
+  reject(id: string, body: { reason: string; resubmit: boolean }): Promise<ManualAnswer>;
+}
+
+/** One queue's calls, over {@link manualQueuePrefix}. */
+export function manualQueueApi(tenantId: string | null): ManualQueueApi {
+  const prefix = manualQueuePrefix(tenantId);
+  const act = (id: string, verb: string, body?: object) =>
+    call<ManualAnswer>(`${prefix}/${encodeURIComponent(id)}/${verb}`, { method: "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
+  return {
+    list: () => call<VerifyingPayment[]>(prefix, { method: "GET" }),
+    inquire: (id) => act(id, "inquire"),
+    attachAuthority: (id, authority) => act(id, "authority", { authority }),
+    confirm: (id, body) => act(id, "confirm", body),
+    reject: (id, { reason, resubmit }) => act(id, "reject", resubmit ? { reason, resubmit } : { reason }),
+  };
+}
+
+/** The session's own queue — spread into `billingApi` (`lib/billing-api.ts`) for its badge and widget. */
+export const manualPaymentCalls = {
+  /** How many wait in the caller's scope; the screen itself reads through {@link manualQueueApi}. */
+  manualPayments: (): Promise<VerifyingPayment[]> => manualQueueApi(null).list(),
 };
