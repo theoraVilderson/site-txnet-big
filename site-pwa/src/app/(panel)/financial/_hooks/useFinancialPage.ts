@@ -1,18 +1,32 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { RealtimeEvents } from "@/generated/wire";
+import { useLiveReread } from "@/hooks/useLiveReread";
 import {
   billingApi,
   type WalletBalance,
   type WalletLedgerRow,
   type WalletPaymentRow,
 } from "@/lib/billing-api";
+import { userChannel } from "@/lib/realtime";
+import { usePanelSession } from "../../_context/PanelSessionContext";
 import {
   DEFAULT_PAGE_SIZE,
   ledgerQuery,
   paymentsQuery,
   type FinancialFilters,
 } from "../_lib/filters";
+
+/**
+ * What moves a row, on the payer's `user:` channel. A payment attempt moves on
+ * `paymentChanged` — written for every status move (paid, rejected,
+ * expired, failed; `announceOpenPayment`) — and only the one named; a ledger
+ * page shifts on any wallet movement, since a new row pushes every older one
+ * down a place.
+ */
+const PAYMENT_EVENTS = [RealtimeEvents.paymentChanged] as const;
+const LEDGER_EVENTS = [RealtimeEvents.walletChanged] as const;
 
 export interface FinancialPageState {
   /** Ledger rows, or `null` while the payments tab is open. */
@@ -52,6 +66,12 @@ export interface FinancialPageState {
  * Racing is handled the way `useWalletBalance` handles it: one effect, keyed to
  * the query and a retry counter, with an `alive` flag — so a fast answer to an
  * abandoned filter cannot land after a slow answer to the current one.
+ *
+ * **Live, and quiet** (RT-1, C-14): the open page is re-read on its tab's
+ * events — on the payments tab only for a payment it is showing, so a payment
+ * confirmed on page 1 costs page 4 nothing. `fresh` is outside `key`, so the rows stay on screen while they
+ * are asked again — a skeleton over the list because one row changed would be
+ * worse than the stale "pending" it replaces.
  */
 export function useFinancialPage(filters: FinancialFilters): FinancialPageState {
   const [ledger, setLedger] = useState<WalletLedgerRow[] | null>(null);
@@ -64,6 +84,16 @@ export function useFinancialPage(filters: FinancialFilters): FinancialPageState 
   const retry = useCallback(() => setAsked((n) => n + 1), []);
 
   const { tab } = filters;
+  const { group } = usePanelSession();
+  const userId = group?.current.userId ?? null;
+  const [fresh, setFresh] = useState(0);
+  useLiveReread(
+    userId ? userChannel(userId) : null,
+    tab === "ledger" ? LEDGER_EVENTS : PAYMENT_EVENTS,
+    () => setFresh((n) => n + 1),
+    tab === "ledger" ? undefined : (body) => payments?.some((row) => row.id === body.paymentId) ?? false,
+  );
+
   // The query string, not the object: a new object with the same filters in it
   // is the same page and must not cost a second read.
   const query = tab === "ledger" ? ledgerQuery(filters) : paymentsQuery(filters);
@@ -112,7 +142,7 @@ export function useFinancialPage(filters: FinancialFilters): FinancialPageState 
     return () => {
       alive = false;
     };
-  }, [tab, query, key]);
+  }, [tab, query, key, fresh]);
 
   return { ledger, payments, balance, total, pageSize: DEFAULT_PAGE_SIZE, isLoading, error, retry };
 }

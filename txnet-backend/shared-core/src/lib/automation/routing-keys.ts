@@ -59,6 +59,8 @@ export const RealtimeEventType = {
   PAYMENT_OPEN_CHANGED: 'billing.payment.open_changed',
   /** F-093-v: the same, for a reseller's payment — its owner's `user:` channel, since they sit in the platform's tenant (`announceOpenPayment`). */
   PAYMENT_RESELLER_OPEN_CHANGED: 'billing.payment.reseller_open_changed',
+  /** The same, to the payer's own `user:` channel — any status move of their payment, so their financial page re-reads that row (`announceOpenPayment`). */
+  PAYMENT_CHANGED: 'billing.payment.changed',
   /** F-1001-a: a rollup pass changed a tenant's analytics rows for `{from, to}` — the analytics page re-reads (`AnalyticsRollupService`). */
   ANALYTICS_REFRESHED: 'billing.analytics.refreshed',
   /** The same pass, for a reseller's workspace: its owner's `user:` and the platform's `tenant:` (F-1001-p, RT-1-e's pair). */
@@ -234,6 +236,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: 'worker-service',
   [OutboxEventType.PAYMENT_RESELLER_OPEN_CHANGED]: 'worker-service',
+  [OutboxEventType.PAYMENT_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_CURRENCY_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED]: 'worker-service',
   [OutboxEventType.ANALYTICS_REFRESHED]: 'worker-service',

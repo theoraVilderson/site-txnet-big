@@ -192,3 +192,4 @@ paymentId}`, routed to `tenant:<tenantId>` by live-push.
 | Both tenants, always: a reseller re-reads a list that may not hold the row | the platform owner lists every tenant's payments; deciding who lists a row would repeat billing's scope in the producer |
 | Ageing out of the lookback writes nothing | time moves no row; the next read drops it |
 | A reseller's payment writes a third row, `billing.payment.reseller_open_changed` `{userId: owner, resellerId, paymentId}`, to `user:<owner>` (F-093-v) | its owner sits in the platform's tenant, so neither `tenant:` row reaches their workspace page |
+| Every announcement also writes `billing.payment.changed` `{userId: payer, paymentId}` to `user:<payer>` (2026-10-19) | a rejection, an expiry or a gateway failure has no other event for the payer, and their financial page showed "pending" until a reload |

@@ -27,6 +27,7 @@
     "analyticsReport": "billing.analytics.report",
     "analyticsResellerRefreshed": "billing.analytics.reseller_refreshed",
     "paymentResellerOpenChanged": "billing.payment.reseller_open_changed",
+    "paymentChanged": "billing.payment.changed",
     "supportInboxChanged": "support.inbox.changed",
     "configMoveJobProgress": "network.config_move_job.progress",
     "grantBulkProgressed": "billing.grant_bulk.progressed",

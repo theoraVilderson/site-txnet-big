@@ -12,10 +12,15 @@ import { OutboxEventType, platformTenantIdOf } from '@txnet-backend/shared-core'
  * A reseller's payment tells its owner as well (F-093-v): they are a user of
  * the platform's tenant, so neither `tenant:` row reaches their workspace page,
  * and theirs goes to `user:<owner>`.
+ *
+ * The payer is told too, on `user:<payer>` (`billing.payment.changed`): every
+ * status move of a payment passes through here, and a rejection, an expiry or
+ * a gateway failure has no other event for them — their financial page would
+ * show "pending" until a reload.
  */
 export async function announceOpenPayment(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
   const [row, platformId] = await Promise.all([
-    tx.paymentTransaction.findUnique({ where: { id: paymentId }, select: { tenantId: true } }),
+    tx.paymentTransaction.findUnique({ where: { id: paymentId }, select: { tenantId: true, userId: true } }),
     platformTenantIdOf(tx),
   ]);
   const tenants = new Set([row?.tenantId ?? platformId, platformId]);
@@ -33,6 +38,11 @@ export async function announceOpenPayment(tx: Prisma.TransactionClient, paymentI
         type: OutboxEventType.PAYMENT_RESELLER_OPEN_CHANGED,
         payload: { userId: ownerUserId, resellerId: row?.tenantId, paymentId },
       },
+    });
+  }
+  if (row?.userId) {
+    await tx.outboxEvent.create({
+      data: { aggregate: 'billing.payment', aggregateId: paymentId, type: OutboxEventType.PAYMENT_CHANGED, payload: { userId: row.userId, paymentId } },
     });
   }
 }

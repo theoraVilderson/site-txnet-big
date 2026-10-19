@@ -56,6 +56,7 @@ corrected, per "Decide once".
 | `support.message` / `read` / `typing` / `status` | `support:<id>` | support-service, direct (`SupportRealtime`) | thread views |
 | `billing.payment.open_changed` | `tenant:` | billing (`announceOpenPayment`, RT-1-j) → live-push | ManualPaymentsView, ManualPaymentsWidget, useMenuBadges |
 | `billing.payment.reseller_open_changed` | `user:` | billing (`announceOpenPayment`, a reseller's payment with an owner, F-093-v) → live-push; body `{type, resellerId, paymentId}` | the workspace twins `/reseller/payments`, `/my-resellers/:id/payments`, filtered by `resellerId` |
+| `billing.payment.changed` | `user:` | billing (`announceOpenPayment`, every status move, to the payer) → live-push; body `{type, paymentId}` | useFinancialPage's payments tab, filtered to the rows it shows |
 | `support.inbox.changed` | `tenant:` | support-service, direct (`SupportRealtime.tenant`, RT-1-g) | SupportInboxView |
 | `billing.analytics.refreshed` | `tenant:` | billing (`AnalyticsRollupService`, a pass that changed a row, F-1001-a) → live-push; body `{type, from, to}` | `/analytics` (F-1001-d, `useAnalyticsRead`; the session's tenant only) |
 | `billing.analytics.report` | `user:` | billing (`AnalyticsReportSender`, a scheduled report sent, F-1006-a) → live-push; body `{type, scheduleId}` | `/analytics?tab=reports` (F-1006-b), the person's own schedules |
