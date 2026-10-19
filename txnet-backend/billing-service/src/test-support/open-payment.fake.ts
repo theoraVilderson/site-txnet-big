@@ -21,7 +21,8 @@ export function openPaymentFakes(announced: string[] = []) {
   });
   return {
     announced,
-    tenant: { findFirst: async () => ({ id: 'platform-tenant' }) },
+    // No reseller owner, so no `reseller_open_changed` row (F-093-v); `open-payment.spec.ts` proves that one.
+    tenant: { findFirst: async () => ({ id: 'platform-tenant' }), findUnique: async () => null },
     paymentTransferDetail: { findUnique: async () => null },
     findUnique: async () => ({ tenantId: null }),
     outboxEvent,

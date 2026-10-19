@@ -163,6 +163,20 @@ with a login JWT no gateway holds (`contract.webhook.md`).
 | `cannot_ask` counts as `unchanged`, not an error, and lets a person confirm **or** reject by hand | a webhook-settled gateway is working as meant; every unpaid crypto invoice counted as an error, on every sweep of the lookback, would bury the errors that are |
 | An offered authority (F-092-ag) is neither proven nor disowned: all are kept, the first non-answer ends the loop | a gateway that cannot be asked says nothing about any candidate |
 
+## A named reseller's queue (built — F-093-v)
+
+`ResellerManualConfirmController` + `ResellerManualConfirmService`:
+`/api/billing/tenants/:tenantId/payments/manual` — `GET`, and `POST
+…/:id/inquire`, `…/confirm`, `…/authority`, `…/reject`, bodies and answers
+exactly the ambient routes'. The receipt-bytes route stays ambient (the bot's).
+
+| Rule | Why |
+|---|---|
+| **No permission guard; `ResellerAccess.for('payment.confirm_manual')` is the door** — the reseller's owner, a seat of it holding the key, or the platform's staff; `read` for the list, `staffWrite` for every act | the owner is a user of the platform's tenant and holds no key (ADR-0059), as on its gateways (F-066-w3) |
+| The work is `ManualConfirmService` with the **path's** reseller as the actor's tenant, inside its scope — never the session's | the scope rule above applies unchanged; nothing is restated or elevated |
+| Door refusals: `not_allowed` / `reseller_suspended` 403, `reseller_not_found` 404, `reseller_terminated` 409 (`manual-confirm.http.ts`, with the ambient ones) | one map, exhaustive over both reason types |
+| The same rate-limit buckets as the ambient routes | one person, one budget, whichever surface |
+
 ## The open list moves live (built — RT-1-j)
 
 The manual list is every open payment, so every write that adds, moves or
@@ -177,3 +191,4 @@ paymentId}`, routed to `tenant:<tenantId>` by live-push.
 | `settleOpen` is the one pending-then-expired flip: it answers which status matched (the coupon holds turn on it) and announces | the two copies in `deposit-settlement.ts` are one now, so a new close cannot skip the event |
 | Both tenants, always: a reseller re-reads a list that may not hold the row | the platform owner lists every tenant's payments; deciding who lists a row would repeat billing's scope in the producer |
 | Ageing out of the lookback writes nothing | time moves no row; the next read drops it |
+| A reseller's payment writes a third row, `billing.payment.reseller_open_changed` `{userId: owner, resellerId, paymentId}`, to `user:<owner>` (F-093-v) | its owner sits in the platform's tenant, so neither `tenant:` row reaches their workspace page |

@@ -8,6 +8,10 @@ import { OutboxEventType, platformTenantIdOf } from '@txnet-backend/shared-core'
  * own transaction, to the payment's tenant and to the platform owner: one
  * outbox row each, routed to `tenant:<id>` by live-push. Ids only — the page
  * re-reads its own list (ADR-0121).
+ *
+ * A reseller's payment tells its owner as well (F-093-v): they are a user of
+ * the platform's tenant, so neither `tenant:` row reaches their workspace page,
+ * and theirs goes to `user:<owner>`.
  */
 export async function announceOpenPayment(tx: Prisma.TransactionClient, paymentId: string): Promise<void> {
   const [row, platformId] = await Promise.all([
@@ -20,6 +24,23 @@ export async function announceOpenPayment(tx: Prisma.TransactionClient, paymentI
       data: { aggregate: 'billing.payment', aggregateId: paymentId, type: OutboxEventType.PAYMENT_OPEN_CHANGED, payload: { tenantId, paymentId } },
     });
   }
+  const ownerUserId = row?.tenantId && row.tenantId !== platformId ? await resellerOwnerOf(tx, row.tenantId) : null;
+  if (ownerUserId) {
+    await tx.outboxEvent.create({
+      data: {
+        aggregate: 'billing.payment',
+        aggregateId: paymentId,
+        type: OutboxEventType.PAYMENT_RESELLER_OPEN_CHANGED,
+        payload: { userId: ownerUserId, resellerId: row?.tenantId, paymentId },
+      },
+    });
+  }
+}
+
+/** A reseller's owner (the caller has ruled out the platform's tenant); `tenant.tenant` has no RLS, so any pool answers. */
+async function resellerOwnerOf(tx: Prisma.TransactionClient, tenantId: string): Promise<string | null> {
+  const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { ownerUserId: true } });
+  return tenant?.ownerUserId ?? null;
 }
 
 /**

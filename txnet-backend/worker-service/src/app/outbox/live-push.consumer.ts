@@ -54,6 +54,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.TENANT_RESELLER_CURRENCY_CHANGED]: { audience: ['user', 'tenant'], fields: ['resellerId'] },
   /** RT-1-j: one row per tenant that lists it — the payment's and the platform owner's; the page re-reads. */
   [OutboxEventType.PAYMENT_OPEN_CHANGED]: { audience: ['tenant'], fields: ['paymentId'] },
+  /** F-093-v: a reseller's payment, to its owner — the workspace's payments page re-reads when `resellerId` is its own. */
+  [OutboxEventType.PAYMENT_RESELLER_OPEN_CHANGED]: { audience: ['user'], fields: ['resellerId', 'paymentId'] },
   /** F-1001-a: a rollup pass changed the tenant's analytics days `from`..`to`; the analytics page re-reads. */
   [OutboxEventType.ANALYTICS_REFRESHED]: { audience: ['tenant'], fields: ['from', 'to'] },
   /** F-1001-p: the same pass, for a reseller's workspace on the platform's panel — its owner and the platform's staff (as RT-1-e). */

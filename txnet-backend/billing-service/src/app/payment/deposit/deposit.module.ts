@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { TenantBillingLedger } from '@txnet-backend/shared-core';
+import { ResellerAccess, TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { LocaleModule } from '../../locale/locale.module';
 import { WalletModule } from '../../wallet/wallet.module';
@@ -28,6 +28,8 @@ import { DepositWebhookService } from './deposit-webhook.service';
 import { DepositProofModule } from './deposit-proof.module';
 import { ManualConfirmController } from './manual-confirm.controller';
 import { ManualConfirmService } from './manual-confirm.service';
+import { ResellerManualConfirmController } from './reseller-manual-confirm.controller';
+import { ResellerManualConfirmService } from './reseller-manual-confirm.service';
 
 /**
  * The top-up page (F-092-o, F-092-i): the gateway list, the quote, and starting
@@ -52,11 +54,15 @@ import { ManualConfirmService } from './manual-confirm.service';
  * `DepositInChatController` is service-to-service too (F-104-k, F-104-ab):
  * the bot relays a messenger's payment with the sender's id, and the payment,
  * not a chat session, says whose it is.
+ *
+ * `ResellerManualConfirmController` is the manual-payments queue of the
+ * reseller its path names (F-093-v); `ResellerAccess` is its door, as on that
+ * reseller's gateways.
  */
 @Module({
   imports: [LocaleModule, CouponModule, GatewayModule, WalletModule, DepositProofModule],
-  controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController, ChargeCurrenciesController],
-  providers: [OtherGatewayService, DepositQuoteService, DepositStartService, DepositAbandonService, DepositTransferService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
+  controllers: [DepositController, DepositInChatController, DepositCallbackController, DepositWebhookController, DepositInternalController, ManualConfirmController, ResellerManualConfirmController, ChargeCurrenciesController],
+  providers: [OtherGatewayService, DepositQuoteService, DepositStartService, DepositAbandonService, DepositTransferService, DepositCallbackService, DepositSettlementService, DepositFollowOnService, DepositExpiryService, DepositReconciliationService, ManualConfirmService, ResellerManualConfirmService, ResellerAccess, DepositWebhookService, DepositInChatService, FxRateReader, InvoiceLinkClient, TenantBillingLedger],
   exports: [DepositQuoteService, DepositStartService, DepositCallbackService, DepositExpiryService, DepositReconciliationService],
 })
 export class DepositModule {}

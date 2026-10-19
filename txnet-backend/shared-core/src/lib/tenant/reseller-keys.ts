@@ -12,7 +12,8 @@ import type { RegisteredPermission } from '../http/permission-registry.generated
  *
  * Three have no reseller route yet — `wallet.manual_adjust`, `credential.manage`,
  * `export.request`. They are grantable now so a role made today already
- * carries them when their route lands. `audit.read` opens the access log (AC-1-p).
+ * carries them when their route lands. `audit.read` opens the access log (AC-1-p);
+ * `payment.confirm_manual` its customers' payments to confirm (F-093-v).
  */
 export const RESELLER_KEYS = [
   'analytics.read',
@@ -28,6 +29,7 @@ export const RESELLER_KEYS = [
   'grant.compensate',
   'grant.read',
   'grant.repair',
+  'payment.confirm_manual',
   'report.read',
   'restriction.assign',
   'role.manage',

@@ -1,8 +1,6 @@
 import {
-  BadRequestException,
   Body,
   CanActivate,
-  ConflictException,
   Controller,
   ExecutionContext,
   ForbiddenException,
@@ -11,7 +9,6 @@ import {
   HttpStatus,
   Injectable,
   Ip,
-  NotFoundException,
   Param,
   ParseUUIDPipe,
   Post,
@@ -19,7 +16,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, holdsPermission, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
+import { holdsPermission, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request, Response } from 'express';
 
 import { identityOf } from '../../request/identity.middleware';
@@ -32,7 +29,7 @@ import {
   manualConfirmSchema,
   manualRejectSchema,
 } from './manual-confirm.schema';
-import { ManualConfirmRefused } from './manual-confirm.refusals';
+import { MANUAL_READ, MANUAL_WRITE, manualRefusing } from './manual-confirm.http';
 import { ManualActor, ManualConfirmService } from './manual-confirm.service';
 
 
@@ -50,17 +47,6 @@ export class ManualConfirmPermissionGuard implements CanActivate {
     return true;
   }
 }
-
-const READ = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.PAYMENT_MANUAL_READ, identityOf(req).userId),
-  configKey: 'PAYMENT_MANUAL_READ_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-const WRITE = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.PAYMENT_MANUAL_WRITE, identityOf(req).userId),
-  configKey: 'PAYMENT_MANUAL_WRITE_RATE_LIMIT' as const,
-  windowSec: 900,
-};
 
 /**
  * Manual payment confirmation (F-092-z): `/api/billing/payments/manual`.
@@ -81,21 +67,21 @@ export class ManualConfirmController {
   }
 
   @Get()
-  @RateLimit(READ)
+  @RateLimit(MANUAL_READ)
   async list(@Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.manual.list(this.actor(req, ip)));
+    return manualRefusing(() => this.manual.list(this.actor(req, ip)));
   }
 
   @Post(':id/inquire')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(WRITE)
+  @RateLimit(MANUAL_WRITE)
   async inquire(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.manual.inquire(this.actor(req, ip), id));
+    return manualRefusing(() => this.manual.inquire(this.actor(req, ip), id));
   }
 
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(WRITE)
+  @RateLimit(MANUAL_WRITE)
   async confirm(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(manualConfirmSchema)) body: ManualConfirmBody,
@@ -103,7 +89,7 @@ export class ManualConfirmController {
     @Ip() ip: string,
   ) {
     // The schema requires the reason; the cast is for the non-strict tsconfig.
-    return this.refusing(() => this.manual.confirm(this.actor(req, ip), id, { referenceId: body.referenceId, reason: body.reason as string }));
+    return manualRefusing(() => this.manual.confirm(this.actor(req, ip), id, { referenceId: body.referenceId, reason: body.reason as string }));
   }
 
   /**
@@ -112,9 +98,9 @@ export class ManualConfirmController {
    * image; a refusal is the ordinary envelope.
    */
   @Get(':id/receipt')
-  @RateLimit(READ)
+  @RateLimit(MANUAL_READ)
   async receipt(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string, @Res() res: Response): Promise<void> {
-    const file = await this.refusing(() => this.manual.receipt(this.actor(req, ip), id));
+    const file = await manualRefusing(() => this.manual.receipt(this.actor(req, ip), id));
     res.set({ 'Content-Type': file.contentType, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
     res.status(200).send(file.bytes);
   }
@@ -126,7 +112,7 @@ export class ManualConfirmController {
    */
   @Post(':id/authority')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(WRITE)
+  @RateLimit(MANUAL_WRITE)
   async attachAuthority(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(manualAuthoritySchema)) body: ManualAuthorityBody,
@@ -134,7 +120,7 @@ export class ManualConfirmController {
     @Ip() ip: string,
   ) {
     // The schema requires the key; the cast is for the non-strict tsconfig.
-    return this.refusing(() => this.manual.attachAuthority(this.actor(req, ip), id, body.authority as string));
+    return manualRefusing(() => this.manual.attachAuthority(this.actor(req, ip), id, body.authority as string));
   }
 
   /**
@@ -143,7 +129,7 @@ export class ManualConfirmController {
    */
   @Post(':id/reject')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(WRITE)
+  @RateLimit(MANUAL_WRITE)
   async reject(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(manualRejectSchema)) body: ManualRejectBody,
@@ -151,18 +137,6 @@ export class ManualConfirmController {
     @Ip() ip: string,
   ) {
     // The schema requires the key; the cast is for the non-strict tsconfig.
-    return this.refusing(() => this.manual.reject(this.actor(req, ip), id, { reason: body.reason as string, resubmit: body.resubmit === true }));
-  }
-
-  private async refusing<T>(run: () => Promise<T>): Promise<T> {
-    try {
-      return await run();
-    } catch (e) {
-      if (!(e instanceof ManualConfirmRefused)) throw e;
-      const payload = { reason: e.reason, message: e.message };
-      if (e.reason === 'payment_not_found' || e.reason === 'receipt_missing') throw new NotFoundException(payload);
-      if (e.reason === 'reference_required') throw new BadRequestException(payload);
-      throw new ConflictException(payload);
-    }
+    return manualRefusing(() => this.manual.reject(this.actor(req, ip), id, { reason: body.reason as string, resubmit: body.resubmit === true }));
   }
 }

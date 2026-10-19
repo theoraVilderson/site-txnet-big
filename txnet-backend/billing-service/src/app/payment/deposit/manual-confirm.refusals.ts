@@ -1,3 +1,5 @@
+import type { ResellerAccessRejection } from '@txnet-backend/shared-core';
+
 /** Why a person's act on an open payment was refused (F-092-z, F-092-af, F-805-a/b) — `ManualConfirmService`'s, mapped to a status by its controller. */
 
 /**
@@ -23,5 +25,16 @@ export class ManualConfirmRefused extends Error {
   constructor(readonly reason: ManualConfirmRejection, detail?: string) {
     super(detail ? `${reason}: ${detail}` : reason);
     this.name = 'ManualConfirmRefused';
+  }
+}
+
+/** The named-reseller door's refusal (F-093-v); a refusal of the work itself stays {@link ManualConfirmRefused}. */
+export class ResellerManualConfirmRefused extends Error {
+  constructor(
+    readonly reason: ResellerAccessRejection,
+    tenantId: string,
+  ) {
+    super(`${reason}: ${tenantId}`);
+    this.name = 'ResellerManualConfirmRefused';
   }
 }

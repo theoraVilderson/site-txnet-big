@@ -100,6 +100,8 @@ describe('ResellerAccess keys (AC-1-e)', () => {
       'role.manage',
       'settings.manage',
       'report.read',
+      // F-093-v: a reseller's own customers' payments to confirm.
+      'payment.confirm_manual',
     ]) {
       expect(RESELLER_KEYS, key).toContain(key);
     }
