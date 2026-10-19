@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "@/context/LocaleContext";
@@ -209,6 +209,15 @@ describe("ProfitTab's net-profit line", () => {
     expect(within(line).getByText("analytics.profit.kpis.netProfit")).toBeTruthy();
     expect(within(line).getByText("analytics.profit.loss")).toBeTruthy();
     expect(within(line).getByRole("link").getAttribute("href")).toBe("/analytics?tab=expenses");
+  });
+
+  it("draws the gateways' commission beside the expenses once billing answers it (F-1001-v), none on an answer from before it", () => {
+    draw({ gatewayCommission: money("1.25") });
+    const line = screen.getByRole("region", { name: "analytics.profit.netProfit.title" });
+    expect(within(line).getByText("analytics.profit.kpis.gatewayCommission")).toBeTruthy();
+    cleanup();
+    draw({});
+    expect(screen.queryByText("analytics.profit.kpis.gatewayCommission")).toBeNull();
   });
 
   it("says why there is no net profit under a filter, and draws nothing where billing answers none for the view", () => {

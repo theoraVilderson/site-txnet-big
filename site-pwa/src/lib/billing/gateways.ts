@@ -34,6 +34,10 @@ export interface GatewayAdminApi {
   setTax(taxRatePercent: string | null): Promise<{ taxRatePercent: string | null }>;
   /** Who it is offered to (F-102-g): the owner's groups, replaced whole; `[]` = everyone. */
   setAudience(source: GatewaySource, id: string, userGroupIds: string[]): Promise<{ userGroupIds: string[] }>;
+  /** What its provider deducts, newest day first (F-1001-v); the owner's own people only. */
+  commission(source: GatewaySource, id: string): Promise<CommissionHistory>;
+  /** A new commission from a day on — billing keeps no edit. */
+  addCommission(source: GatewaySource, id: string, body: CommissionBody): Promise<GatewayCommission>;
   /** A manual gateway's cards or wallets (F-803-c), in their sort order, private fields included. */
   destinations(source: GatewaySource, id: string): Promise<ManualDestination[]>;
   /** `fields` is checked by the gateway's kind: `invalid_destination` names each refused field in `error.facts`. */
@@ -64,6 +68,8 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
       call<{ taxRatePercent: string | null }>(`${at}/tax`, { method: "PUT", body: JSON.stringify({ taxRatePercent }) }),
     setAudience: (source, id, userGroupIds) =>
       call<{ userGroupIds: string[] }>(`${row(source, id)}/audience`, { method: "PUT", body: JSON.stringify({ userGroupIds }) }),
+    commission: (source, id) => call<CommissionHistory>(`${row(source, id)}/commission`, { method: "GET" }),
+    addCommission: (source, id, body) => call<GatewayCommission>(`${row(source, id)}/commission`, { method: "POST", body: JSON.stringify(body) }),
     destinations: (source, id) => call<ManualDestination[]>(`${row(source, id)}/destinations`, { method: "GET" }),
     createDestination: (source, id, body) =>
       call<ManualDestination>(`${row(source, id)}/destinations`, { method: "POST", body: JSON.stringify(body) }),
@@ -76,6 +82,28 @@ export function gatewayAdminApi(tenantId: string | null): GatewayAdminApi {
 
 /** The caller's own gateways — what `billingApi`'s six gateway calls have always been. */
 export const ambientGatewayApi = gatewayAdminApi(null);
+
+/** A provider commission as billing takes it (F-1001-v): a percent 0..100 and a fixed amount in the gateway's currency, decimal strings (C-02), from a tenant day. */
+export interface CommissionBody {
+  percent: string;
+  fixedAmount: string;
+  effectiveFrom: string;
+}
+
+/** One row of a gateway's commission history. */
+export interface GatewayCommission extends CommissionBody {
+  id: string;
+  currencyCode: string;
+  createdByUserId: string | null;
+  createdAt: string;
+}
+
+/** A gateway's commissions, newest day first; `inEffect` the row a payment made today is costed by, `null` before the first. */
+export interface CommissionHistory {
+  commissions: GatewayCommission[];
+  inEffect: string | null;
+  currencyCode: string;
+}
 
 /** Which table a gateway row is in — the pair `source` + `id` names a row (D-25). */
 export type GatewaySource = "platform" | "tenant";

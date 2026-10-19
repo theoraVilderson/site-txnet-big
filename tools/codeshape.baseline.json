@@ -273,7 +273,7 @@
   "site-pwa/src/app/(panel)/accounts/add/page.tsx": 417,
   "site-pwa/src/app/(panel)/catalog/_components/ProductWizard.tsx": 409,
   "site-pwa/src/app/(panel)/catalog/_lib/catalog-form.ts": 888,
-  "site-pwa/src/app/(panel)/gateways/_components/GatewayEditor.tsx": 501,
+  "site-pwa/src/app/(panel)/gateways/_components/GatewayEditor.tsx": 498,
   "site-pwa/src/app/(panel)/guides/_components/GuideEditor.tsx": 603,
   "site-pwa/src/app/(panel)/my-resellers/[id]/domains/_components/ResellerDomainsView.tsx": 441,
   "site-pwa/src/app/(panel)/my-resellers/[id]/setup/_components/SetupWizardView.tsx": 430,

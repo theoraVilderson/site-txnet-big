@@ -49,8 +49,9 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
    — the one form both settings use; billing answers the current one as
    `lossAlertPercent`, and a change re-reads the tab.
 7. **Net profit** (F-1001-u, `NetProfitLine`): under the tiles, billing's
-   `totals.overhead` (down is good) and `totals.netProfit` — margin minus the
-   general expenses — a loss as a `Badge` with its word, and a link to the
+   `totals.overhead` (down is good), `totals.gatewayCommission` when answered
+   (F-1001-w, down is good) and `totals.netProfit` — margin minus both — a loss
+   as a `Badge` with its word, and a link to the
    Expenses view. Where billing answers them `null` (a product, panel or kind
    filter) a line says net profit needs no filter; where this viewer keeps no
    ledger (the platform on a reseller) or the answer predates the fields,

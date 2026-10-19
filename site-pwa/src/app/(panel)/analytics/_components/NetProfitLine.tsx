@@ -20,16 +20,18 @@ export interface NetProfitLineProps {
 }
 
 /**
- * Margin minus general expenses (F-1001-u; billing `margin` `totals.overhead`,
- * `totals.netProfit`, F-1001-t): what is left once the costs no sale carries
- * are paid, a loss said in a word beside its colour. Billing answers none
+ * Margin minus general expenses and the gateways' commission (F-1001-u,
+ * F-1001-w; billing `margin` `totals.overhead`, `totals.gatewayCommission`,
+ * `totals.netProfit`): what is left once the costs no sale carries are paid,
+ * each part beside the result so the figures add up, a loss said in a word
+ * beside its colour. Billing answers none
  * under a product, panel or kind filter — an expense is no product's — and
  * the line says so instead of drawing a margin as if it were net.
  */
 export function NetProfitLine({ totals, currency, expensesHref }: NetProfitLineProps) {
   const { t, lang } = useLocale();
   if (!expensesHref) return null;
-  const { overhead, netProfit } = totals;
+  const { overhead, gatewayCommission, netProfit } = totals;
   // Absent: an answer cached before the figure existed — nothing to say about it.
   if (overhead === undefined || netProfit === undefined) return null;
   if (overhead === null || netProfit === null) return <p className="text-xs text-text-secondary">{t("common", P.netProfit.filtered)}</p>;
@@ -50,8 +52,12 @@ export function NetProfitLine({ totals, currency, expensesHref }: NetProfitLineP
             </Link>
           }
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className={`grid grid-cols-2 gap-3 ${gatewayCommission ? "sm:grid-cols-3" : ""}`}>
           <StatTile label={t("common", P.kpis.overhead)} value={amountIn(overhead.value, currency) ?? 0} format={money} delta={overhead.delta[currency] ?? null} downIsGood />
+          {/* Absent in an answer cached before F-1001-v: the expenses alone, as before. */}
+          {gatewayCommission && (
+            <StatTile label={t("common", P.kpis.gatewayCommission)} value={amountIn(gatewayCommission.value, currency) ?? 0} format={money} delta={gatewayCommission.delta[currency] ?? null} downIsGood />
+          )}
           <div className="flex flex-col gap-1">
             <StatTile label={t("common", P.kpis.netProfit)} value={net} format={money} delta={netProfit.delta[currency] ?? null} />
             {net < 0 && (

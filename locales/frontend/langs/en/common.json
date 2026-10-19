@@ -515,6 +515,25 @@
       "confirmWithinMinutes": "Usual time to confirm",
       "confirmWithinHint": "Optional. Shown to the payer while they wait: “usually within this many minutes”. Between {{min}} and {{max}}; leave empty to show no figure.",
       "confirmWithinNone": "Not shown"
+    },
+    "commission": {
+      "title": "Provider commission",
+      "subtitle": "What your payment provider deducts from each payment. The Profit tab counts it as a cost, less the fee your customers already paid.",
+      "none": "Not set — no commission is counted for this gateway yet.",
+      "history": "Commission history",
+      "rate": "{percent}% + {fixed}",
+      "from": "From {day}",
+      "inEffect": "In effect",
+      "scheduled": "Upcoming",
+      "percent": "Percent of each payment",
+      "fixedAmount": "Fixed amount per payment ({currency})",
+      "effectiveFrom": "From day",
+      "add": "Add commission",
+      "added": "Commission saved",
+      "errors": {
+        "percent": "A number from 0 to 100, at most 4 decimal places.",
+        "fixedAmount": "An amount of 0 or more."
+      }
     }
   },
   "wallet": {
@@ -7176,6 +7195,7 @@
         "margin": "Margin",
         "marginRate": "Margin rate",
         "overhead": "General expenses",
+        "gatewayCommission": "Gateway commission",
         "netProfit": "Net profit"
       },
       "trend": {
@@ -7223,7 +7243,7 @@
       },
       "netProfit": {
         "title": "Net profit",
-        "subtitle": "Margin minus the general expenses of the same days",
+        "subtitle": "Margin minus general expenses and gateway commission of the same days",
         "filtered": "Net profit is shown with no product, panel or kind filter: a general expense belongs to no product.",
         "action": "Expenses"
       }

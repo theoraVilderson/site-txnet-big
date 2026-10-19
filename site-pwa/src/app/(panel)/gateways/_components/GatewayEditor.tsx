@@ -20,7 +20,7 @@ import {
 import type { ReactNode } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { ownsAudience, useGatewayMessage, type GatewaySurface } from "../_lib/surface";
+import { useGatewayMessage, type GatewaySurface } from "../_lib/surface";
 import type { Me } from "@/lib/auth-api";
 import type { AdminGateway } from "@/lib/billing-api";
 import { isManualProvider } from "@/lib/billing/manual-transfer";
@@ -28,7 +28,7 @@ import { transferKind } from "../../_components/transfer/transfer-kinds";
 import { Select } from "../../_components/kit/Select";
 import { formatMoney } from "../../_lib/money";
 import { PresetsEditor } from "./PresetsEditor";
-import { GatewayAudienceSection } from "./GatewayAudienceSection";
+import { GatewayOwnSections } from "./GatewayOwnSections";
 import { FeeFields, Field, PROVIDER_ICONS, TextInput, useRangeText, type SetField } from "./gateway-fields";
 import { GatewayConnectionFields } from "./GatewayConnectionFields";
 import { useKindText } from "./WizardProviderPicker";
@@ -414,10 +414,7 @@ export function GatewayEditor({ gateway, surface, me, onClose, onSaved, onAudien
                 </section>
               );
             })}
-            {/* Its own save, on its own route (F-102-g-e): never part of "what changed". */}
-            {ownsAudience(gateway, surface.tenantId, me) && (
-              <GatewayAudienceSection gateway={gateway} surface={surface} onSaved={() => onAudienceSaved?.()} />
-            )}
+            <GatewayOwnSections gateway={gateway} surface={surface} me={me} onAudienceSaved={onAudienceSaved} />
             {failure && (
               <p role="alert" className="flex items-center gap-2 rounded-xl border border-[var(--error-border)] bg-[var(--error-bg)] p-3 text-xs font-bold text-error">
                 <TriangleAlert size={14} aria-hidden />

@@ -2,8 +2,8 @@
 id: panel-web
 layer: interface
 status: active
-version: 2
-updated: 2026-10-14
+version: 3
+updated: 2026-10-19
 ---
 
 # Contract — panel-web: who a record is for (F-102-g-e, GR-1-x)
@@ -38,3 +38,25 @@ feature that aims at a group (ADR-0143): the panel half of governance
    new gateway is offered to everyone; its audience is set in the editor after.
 
 Proof: `_lib/audience.test.ts`, `gateways/gateway-audience.test.tsx`.
+
+## The gateway's provider commission (F-1001-w)
+
+The editor's second owner section (`GatewayOwnSections` holds both, behind
+`ownsAudience`): `GatewayCommissionSection`, over billing's
+`…/gateways/:source/:id/commission` on the surface's own path (ambient, or the
+named reseller's) — billing `contract.analytics-expenses.md` "Gateway commission".
+
+1. **What it shows** — the history newest day first, each row "percent % +
+   fixed" in the gateway's currency and its day; the row billing names
+   `inEffect` a success `Badge`, a later day "upcoming"; none yet says no
+   commission is counted.
+2. **The form** — percent, fixed amount and a day (today by default), checked
+   as billing's schema checks them (`_lib/commission.ts`, blank = 0); its own
+   save, never part of "what changed"; a refusal stays beside it. There is no
+   edit: a change is a new row, the history re-read after it.
+3. **Who sees it** — billing decides: a `not_allowed` read (the platform's staff
+   in a reseller's workspace) hides the section whole.
+4. **On the Profit tab** the net-profit line draws `totals.gatewayCommission`
+   beside the expenses ([contract.analytics-tabs.md](contract.analytics-tabs.md) rule 7).
+
+Proof: `gateways/gateway-commission.test.tsx`, `analytics/expenses.test.tsx`.

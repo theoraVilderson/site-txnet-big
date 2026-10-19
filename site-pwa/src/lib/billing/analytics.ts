@@ -167,10 +167,11 @@ export interface MarginCell {
 export interface AnalyticsMargin {
   currencies: string[];
   /**
-   * `overhead` the window's general expenses and `netProfit` margin − them (F-1001-t): null under a product, panel or
+   * `overhead` the window's general expenses, `gatewayCommission` its gateways' commission less the fees charged
+   * (F-1001-v), and `netProfit` margin − both (F-1001-t): null under a product, panel or
    * fulfilment filter and to the platform's staff on a reseller; absent in an answer cached before they existed.
    */
-  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null; overhead?: MoneyKpi | null; netProfit?: MoneyKpi | null };
+  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null; overhead?: MoneyKpi | null; gatewayCommission?: MoneyKpi | null; netProfit?: MoneyKpi | null };
   costParts: { attributed: Amounts; idle: Amounts; unallocated: Amounts };
   series: { net: Amounts[]; cost: Amounts[]; margin: Amounts[] };
   products: (MarginCell | Hidden<"id">)[];
