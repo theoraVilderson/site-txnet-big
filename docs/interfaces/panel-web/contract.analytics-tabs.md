@@ -48,6 +48,13 @@ named "Profit", offered to every reader of `/analytics` (billing's door is
    the percent past which a user is reported, 0–500, in `AnalyticsSettingField`
    — the one form both settings use; billing answers the current one as
    `lossAlertPercent`, and a change re-reads the tab.
+7. **Net profit** (F-1001-u, `NetProfitLine`): under the tiles, billing's
+   `totals.overhead` (down is good) and `totals.netProfit` — margin minus the
+   general expenses — a loss as a `Badge` with its word, and a link to the
+   Expenses view. Where billing answers them `null` (a product, panel or kind
+   filter) a line says net profit needs no filter; where this viewer keeps no
+   ledger (the platform on a reseller) or the answer predates the fields,
+   nothing is drawn.
 
 ## Cohorts (F-1004-b)
 
@@ -121,5 +128,29 @@ figure, and has no export.
 3. **Live** on the person's own `billing.analytics.report` (`user:`, C-14):
    a send moves "last sent" without a poll. Billing's refusals
    (`not_allowed`, `too_many_schedules`, `rebuilding`) are sentences
-   (`useReportError`).
+   (`useReportError`, `_hooks/useRefusalError.ts`).
+
+## Expenses (F-1001-u)
+
+`ExpensesTab` and `ExpenseForm`, over billing's general expenses
+([contract.analytics-expenses.md](../../domains/billing/contract.analytics-expenses.md)),
+`?tab=expenses`: a view under Profit (`TAB_VIEWS.margin`), a page tab and not
+a figure tab — a ledger, no export.
+
+1. **Own tenant only.** Offered on the session's own `/analytics` and to a
+   reseller's owner on its own workspace (`expensesVisible`); the platform on
+   a reseller's workspace is offered neither the view nor its switch (billing
+   would refuse), and `?tab=expenses` there lands on the Overview.
+2. **The form** (the settings key's holders, `settingsEditable`): category
+   (`Select`, the six of billing), amount as typed, currency (the tenant's by
+   default — billing's `currencyCode` — or any of `/api/currency/rates`), the
+   day paid (`DatePicker`, today by default), months to spread over (1..60)
+   and a note. `expenseBodyOf` refuses what billing would before asking; a
+   refusal from billing is a sentence beside the form, never a toast (K10).
+3. **The list**: newest first, category · amount, the day paid and the
+   months, the note; a taken-back row struck through with a "taken back"
+   badge and nothing to do; the others a Take back (no edit — a mistake is
+   taken back and added again). "Show older" pages by `before`.
+4. **Live** on the tenant's analytics event (`analyticsLiveOf`, C-14): a write
+   restates the figures, and the pass that does announces itself.
 

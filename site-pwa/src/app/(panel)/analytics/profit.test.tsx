@@ -83,6 +83,7 @@ const draw = (body: Partial<AnalyticsMargin> = {}, setting: { tenantId: string; 
       panelName={(id) => (id === PANEL ? "Frankfurt" : null)}
       userHref={(id) => `/users/${id}`}
       catalogHref="/catalog"
+      expensesHref={null}
       setting={setting}
       stale={false}
     />,

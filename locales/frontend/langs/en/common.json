@@ -6939,13 +6939,16 @@
       "margin": "Profit",
       "cohorts": "Retention",
       "capacity": "Capacity",
-      "reports": "Reports"
+      "reports": "Reports",
+      "expenses": "Expenses"
     },
     "viewHints": {
       "customers": "Who buys, how many are new and how many came back",
       "cohorts": "Of the people who first bought in a month, how many kept buying in the months after",
       "catalog": "What each product and each panel sold",
-      "capacity": "How full each panel is, and when it fills up"
+      "capacity": "How full each panel is, and when it fills up",
+      "margin": "What each sale left after its cost, and after the general expenses",
+      "expenses": "What you pay that no panel or product carries: equipment, ads, staff, domain, rent"
     },
     "section": "Section",
     "filters": {
@@ -7171,7 +7174,9 @@
         "net": "Net sales",
         "cost": "Cost",
         "margin": "Margin",
-        "marginRate": "Margin rate"
+        "marginRate": "Margin rate",
+        "overhead": "General expenses",
+        "netProfit": "Net profit"
       },
       "trend": {
         "title": "Sales and cost",
@@ -7215,6 +7220,12 @@
         "hint": "{{min}}–{{max}}. Checked daily over the last 30 days; each user is reported once a month to you and your staff.",
         "save": "Save",
         "saved": "Saved: users are reported past {{percent}}%."
+      },
+      "netProfit": {
+        "title": "Net profit",
+        "subtitle": "Margin minus the general expenses of the same days",
+        "filtered": "Net profit is shown with no product, panel or kind filter: a general expense belongs to no product.",
+        "action": "Expenses"
       }
     },
     "cohorts": {
@@ -7331,6 +7342,52 @@
         "notAllowed": "Only people who can read these figures can receive them.",
         "tooMany": "You have reached the most reports one person can schedule.",
         "rebuilding": "The figures are being rebuilt; try again in a few minutes."
+      }
+    },
+    "expenses": {
+      "title": "General expenses",
+      "subtitle": "Newest first. A one-off buy is spread over the months you give it; a mistake is taken back and added again.",
+      "empty": "No expenses recorded yet.",
+      "loading": "Loading expenses…",
+      "loadFailed": "The expenses could not be loaded",
+      "takeBack": "Take back",
+      "takenBack": "Taken back",
+      "takenBackDone": "Taken back — the profit figures update in a moment",
+      "older": "Show older",
+      "spread": "Paid {{day}}, spread over {{months}} month(s)",
+      "categories": {
+        "equipment": "Equipment",
+        "advertising": "Advertising",
+        "staff": "Staff",
+        "domain": "Domain",
+        "rent": "Rent",
+        "other": "Other"
+      },
+      "form": {
+        "title": "Record an expense",
+        "subtitle": "It counts against profit from the day it was paid, spread evenly over its months.",
+        "category": "What it was for",
+        "amount": "Amount",
+        "currency": "Currency",
+        "spentOn": "Day paid",
+        "months": "Spread over (months)",
+        "monthsHint": "1 for a monthly bill, 12 for a yearly one — at most {{max}}",
+        "note": "Note",
+        "add": "Add expense",
+        "added": "Expense added — the profit figures update in a moment",
+        "errors": {
+          "amount": "Enter an amount above zero, with at most four decimal places",
+          "months": "Enter whole months from 1 to {{max}}",
+          "spentOn": "Pick a day no later than today"
+        }
+      },
+      "refusals": {
+        "notAllowed": "You cannot change these expenses",
+        "notFound": "That expense no longer exists",
+        "alreadyTakenBack": "That expense was already taken back",
+        "currencyNotRegistered": "That currency is not registered",
+        "amountFinerThanCurrency": "That currency does not take so many decimal places",
+        "spentInFuture": "An expense cannot be paid after today"
       }
     }
   },

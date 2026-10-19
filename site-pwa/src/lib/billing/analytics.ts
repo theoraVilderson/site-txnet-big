@@ -166,7 +166,11 @@ export interface MarginCell {
 /** The Profit tab (billing `margin`, F-1001-l; cost in the sale's currency, ADR-0149). */
 export interface AnalyticsMargin {
   currencies: string[];
-  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null };
+  /**
+   * `overhead` the window's general expenses and `netProfit` margin − them (F-1001-t): null under a product, panel or
+   * fulfilment filter and to the platform's staff on a reseller; absent in an answer cached before they existed.
+   */
+  totals: { net: MoneyKpi; cost: MoneyKpi; margin: MoneyKpi; marginRate: number | null; previousMarginRate: number | null; overhead?: MoneyKpi | null; netProfit?: MoneyKpi | null };
   costParts: { attributed: Amounts; idle: Amounts; unallocated: Amounts };
   series: { net: Amounts[]; cost: Amounts[]; margin: Amounts[] };
   products: (MarginCell | Hidden<"id">)[];

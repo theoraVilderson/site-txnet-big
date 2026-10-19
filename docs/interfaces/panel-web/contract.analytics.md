@@ -14,7 +14,7 @@ is built — each rule names its backlog row. The figures and their definitions
 are [billing/contract.analytics.md](../../domains/billing/contract.analytics.md);
 this file never redefines one. **Built: the chart kit (F-1001-c); the page,
 its filter bar and the Overview (F-1001-d); the insights strip and the
-dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i); Profit (F-1001-m); Cohorts and `CohortGrid` (F-1004-b); Capacity (F-1005-b); Reports (F-1006-b) — tabs after Resellers in [contract.analytics-tabs.md](contract.analytics-tabs.md).** The other tabs are not yet.
+dashboard's sparkline (F-1001-k); the Overview by meter (F-1001-o); Sales and Products and panels (F-1001-e); Customers (F-1001-g); Resellers and the top five (F-1001-i); Profit (F-1001-m); Cohorts and `CohortGrid` (F-1004-b); Capacity (F-1005-b); Reports (F-1006-b); Expenses and net profit (F-1001-u) — tabs after Resellers in [contract.analytics-tabs.md](contract.analytics-tabs.md).** The other tabs are not yet.
 
 **The aim, in the user's words: professional, simple, a pleasure to use, and
 showing a lot.** "Simple" here means one question per card, one axis per chart,
@@ -138,9 +138,9 @@ page for the owner and a reseller; the owner also gets the Resellers tab.
   survives a reload. Below `md` the bar is the button opening a `Sheet`: what
   is on in one line under "Filters", how many as a badge.
 - **Tabs** (`TabLinks`, `?tab=`): Overview, Sales, Customers, Products and
-  panels, Resellers (owner), Profit (after F-1002), Cohorts, Capacity, Reports.
-  Cohorts ("Retention") and Capacity are views under Customers and Products
-  and panels (`TAB_VIEWS`, own `?tab=`); their switch is full width on a phone,
+  panels, Resellers (owner), Profit (after F-1002), Cohorts, Capacity, Reports, Expenses.
+  Cohorts ("Retention"), Capacity and Expenses are views under Customers, Products
+  and panels, and Profit (`TAB_VIEWS`, own `?tab=`); their switch is full width on a phone,
   icon per view, a line under it saying what the view answers (`viewHints`).
   The row wraps from `md`; below it one `Select` (`AnalyticsTabs`). 3+ long
   labels are a `Select`, never a segment.

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GeneralExpense, GeneralExpenseTakeBack, Prisma } from '@prisma/client';
-import { AdmittedReseller, ResellerAccess, ResellerAccessRefused, ResellerActor, finerThanCurrency, moneyText, tenantTransaction } from '@txnet-backend/shared-core';
+import { AdmittedReseller, ResellerAccess, ResellerAccessRefused, ResellerActor, finerThanCurrency, moneyText, operatingCurrencyOf, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { dayOf } from './analytics-days';
@@ -41,8 +41,8 @@ export class AnalyticsExpenseService {
     private readonly access: ResellerAccess,
   ) {}
 
-  /** The newest expenses first, taken-back ones included and marked; `before` pages past the one it names. */
-  list(actor: ResellerActor, tenantId: string, q: ExpenseListQuery): Promise<{ expenses: ExpenseView[]; more: boolean }> {
+  /** The newest expenses first, taken-back ones included and marked; `before` pages past the one it names; the tenant's currency, a new one's default. */
+  list(actor: ResellerActor, tenantId: string, q: ExpenseListQuery): Promise<{ expenses: ExpenseView[]; more: boolean; currencyCode: string }> {
     return this.door(this.access.for('analytics.read'), actor, tenantId, 'read', async (tx) => {
       const rows = await tx.generalExpense.findMany({
         include: { takeBack: true },
@@ -50,7 +50,7 @@ export class AnalyticsExpenseService {
         take: EXPENSES_SHOWN + 1,
         ...(q.before ? { cursor: { id: q.before }, skip: 1 } : {}),
       });
-      return { expenses: rows.slice(0, EXPENSES_SHOWN).map(viewOf), more: rows.length > EXPENSES_SHOWN };
+      return { expenses: rows.slice(0, EXPENSES_SHOWN).map(viewOf), more: rows.length > EXPENSES_SHOWN, currencyCode: await operatingCurrencyOf(tx, tenantId) };
     });
   }
 

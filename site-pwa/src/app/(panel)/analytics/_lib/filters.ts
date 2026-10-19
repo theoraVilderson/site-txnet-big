@@ -12,11 +12,11 @@ import { numberLocale } from "../../_lib/digits";
 export const RANGE_PRESETS = ["today", "7d", "30d", "thisMonth", "lastMonth", "90d", "12m", "custom"] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number];
 
-/** The page's tabs: billing's figure tabs, then Reports (F-1006-b), which reads schedules and no figure. */
-export const PAGE_TABS = [...ANALYTICS_TABS, "reports"] as const;
+/** The page's tabs: billing's figure tabs, then Reports (F-1006-b) and Expenses (F-1001-u), which read no figure. */
+export const PAGE_TABS = [...ANALYTICS_TABS, "reports", "expenses"] as const;
 export type PageTab = (typeof PAGE_TABS)[number];
-/** A figure tab, as billing reads one; Reports is none. */
-export const isFigureTab = (tab: PageTab): tab is AnalyticsTab => tab !== "reports";
+/** A figure tab, as billing reads one; Reports (schedules) and Expenses (a ledger) are none. */
+export const isFigureTab = (tab: PageTab): tab is AnalyticsTab => tab !== "reports" && tab !== "expenses";
 
 /**
  * The tab row groups questions about one thing: Retention is a view of
@@ -27,6 +27,8 @@ export const isFigureTab = (tab: PageTab): tab is AnalyticsTab => tab !== "repor
 export const TAB_VIEWS: Readonly<Partial<Record<PageTab, readonly PageTab[]>>> = {
   customers: ["customers", "cohorts"],
   catalog: ["catalog", "capacity"],
+  // What profit is made of: the general expenses under the margin sit with it (F-1001-u).
+  margin: ["margin", "expenses"],
 };
 
 /** The tab in the row a view sits under — itself when it is no view. */

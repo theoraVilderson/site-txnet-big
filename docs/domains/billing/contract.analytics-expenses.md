@@ -33,7 +33,7 @@ The analytics read bucket bounds all three.
 
 | route | door | answers |
 |---|---|---|
-| `GET ?before=<id>` | `analytics.read` | `{expenses, more}` — the newest 50 first (created), taken-back ones included with `takenBackAt`; `before` pages past the one named |
+| `GET ?before=<id>` | `analytics.read` | `{expenses, more, currencyCode}` — the newest 50 first (created), taken-back ones included with `takenBackAt`; `before` pages past the one named; `currencyCode` the tenant's operating one, a new expense's default (F-1001-u) |
 | `POST` | `settings.manage` (`platform.tenant.manage` on the platform's own) | the expense added — `{category, amount, currencyCode, spentOn, months?, note?}`, `.strict()` |
 | `POST /:id/take-back` | as `POST` | the expense, `takenBackAt` set |
 

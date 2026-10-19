@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { useReportError } from "../_hooks/useReportError";
+import { useReportError } from "../_hooks/useRefusalError";
 import { ANALYTICS_TABS, type AnalyticsCalendar, type AnalyticsTab } from "@/lib/billing/analytics";
 import { REPORT_FREQUENCIES, type ReportSchedule, type ReportTab, reportSchedulesApi } from "@/lib/billing/analytics-reports";
 import { Button, Card, CardHeader, Checkbox, Field, SegmentedControl, Select, notify } from "../../_components/kit";

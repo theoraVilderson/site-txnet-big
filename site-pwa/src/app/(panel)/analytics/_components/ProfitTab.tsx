@@ -13,6 +13,7 @@ import { Alert, Badge, Card, CardHeader, DataTable, type DataColumn } from "../.
 import { BarList, ChartCard, StatTile, TrendChart, slotColor, useChartFormat } from "../../_components/kit/charts";
 import { amountIn } from "../_lib/overview";
 import { AnalyticsSettingField } from "./AnalyticsSettingField";
+import { NetProfitLine } from "./NetProfitLine";
 
 const K = FrontendI18nKeys.common.analytics;
 const P = K.profit;
@@ -33,6 +34,8 @@ export interface ProfitTabProps {
   userHref: (userId: string) => string;
   /** Where this tenant's products are costed — its catalog (F-1002-h). */
   catalogHref: string;
+  /** Where the tenant's general expenses are kept (F-1001-u); null hides the net-profit line — the platform on a reseller keeps none. */
+  expensesHref: string | null;
   /** The loss alert's form (F-1003), for the settings key's holders; null hides it. */
   setting: { tenantId: string; onSaved: () => void } | null;
   stale: boolean;
@@ -45,9 +48,10 @@ export interface ProfitTabProps {
  * losing user, and on the platform's own view per reseller. A loss says so in
  * a word beside its colour (chart rule 4); a panel with no cost set is named,
  * with the way to set it, so its perfect margin is not believed. The settings
- * key's holders set the percent past which a user is reported (F-1003).
+ * key's holders set the percent past which a user is reported (F-1003). Under
+ * the tiles, margin minus the general expenses: net profit (F-1001-u).
  */
-export function ProfitTab({ margin, x, currency, productName, panelName, userHref, catalogHref, setting, stale }: ProfitTabProps) {
+export function ProfitTab({ margin, x, currency, productName, panelName, userHref, catalogHref, expensesHref, setting, stale }: ProfitTabProps) {
   const { t, lang } = useLocale();
   const fmt = useChartFormat();
   const state = margin ? "ready" : "loading";
@@ -75,6 +79,7 @@ export function ProfitTab({ margin, x, currency, productName, panelName, userHre
           <StatTile label={t("common", P.kpis.marginRate)} value={margin.totals.marginRate ?? 0} format={(n) => (margin.totals.marginRate === null ? "—" : fmt.percent(n))} />
         </div>
       )}
+      {margin && <NetProfitLine totals={margin.totals} currency={currency} expensesHref={expensesHref} />}
 
       {noCost.length > 0 && (
         <Alert

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChartColumn } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
@@ -17,6 +17,7 @@ import { dayIn, formatInstant, formatMonth, formatRelative } from "../../_lib/da
 import { useAnalyticsRead } from "../_hooks/useAnalyticsRead";
 import { type AnalyticsFilters, type PageTab, ROW_TABS, calendarOf, filtersOf, isFigureTab, queryOf, retabbed, searchOf, windowOf } from "../_lib/filters";
 import { customerHrefOf, settingsEditable } from "../_lib/customers";
+import { expensesVisible } from "../_lib/expenses";
 import { analyticsLiveOf } from "../_lib/live";
 import { resellersVisible } from "../_lib/resellers";
 import { currencyOf, productNamer } from "../_lib/overview";
@@ -28,6 +29,7 @@ import { CapacityTab } from "./CapacityTab";
 import { CatalogTab } from "./CatalogTab";
 import { CohortsTab } from "./CohortsTab";
 import { CustomersTab } from "./CustomersTab";
+import { ExpensesTab } from "./ExpensesTab";
 import { ResellersTab } from "./ResellersTab";
 import { OverviewTab } from "./OverviewTab";
 import { ProfitTab } from "./ProfitTab";
@@ -81,11 +83,14 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
   const search = useSearchParams()?.toString() ?? "";
 
   const asked = useMemo(() => filtersOf(new URLSearchParams(search)), [search]);
-  // The leaderboard is the platform's own view, for its report key (F-1001-i): anyone else asking for it lands on the Overview.
+  // The leaderboard is the platform's own view, for its report key (F-1001-i); the expenses are the tenant's own (F-1001-u).
+  // Anyone else asking for either lands on the Overview.
   const owner = resellersVisible(me, pathTenant);
-  const filters = useMemo(() => (asked.tab === "resellers" && !owner ? { ...asked, tab: "overview" as const } : asked), [asked, owner]);
-  const tabs = ROW_TABS.filter((tab) => tab !== "resellers" || owner);
-  // Reports reads schedules, never a figure (F-1006-b).
+  const ledger = expensesVisible({ tenantId: pathTenant, self });
+  const offered = useCallback((tab: PageTab) => (tab !== "resellers" || owner) && (tab !== "expenses" || ledger), [owner, ledger]);
+  const filters = useMemo(() => (offered(asked.tab) ? asked : { ...asked, tab: "overview" as const }), [asked, offered]);
+  const tabs = ROW_TABS.filter(offered);
+  // Reports reads schedules and Expenses a ledger, never a figure (F-1006-b, F-1001-u).
   const figureTab = isFigureTab(filters.tab) ? filters.tab : null;
   const calendar = calendarOf(lang);
   // The viewer's day, read once: a page left open past midnight keeps the window it opened with.
@@ -131,7 +136,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
 
       <FilterBar filters={filters} window={windowOf(filters, today, calendar)} names={names} productName={productName} onChange={onChange} />
 
-      <AnalyticsTabs filters={filters} tabs={tabs} hrefOf={hrefOf} onOpen={openTab} />
+      <AnalyticsTabs filters={filters} tabs={tabs} offered={offered} hrefOf={hrefOf} onOpen={openTab} />
 
       {ready && ready.currencies.length > 1 && currency && (
         <Alert tone="info" title={t("common", K.severalCurrencies)}>
@@ -142,6 +147,8 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
 
       {filters.tab === "reports" ? (
         tenantId && <ReportsTab tenantId={tenantId} calendar={calendar} tabName={(tab) => t("common", K.tabs[tab])} />
+      ) : filters.tab === "expenses" ? (
+        tenantId && <ExpensesTab tenantId={tenantId} editable={setting !== null} today={today} />
       ) : answer?.rebuilding ? (
         <Alert tone="info" title={t("common", K.rebuilding.title)}>
           {t("common", K.rebuilding.body)}
@@ -175,6 +182,7 @@ export function AnalyticsView({ tenantId: pathTenant, self }: { tenantId?: strin
           panelName={panelName}
           userHref={customerHrefOf({ tenantId: pathTenant, self })}
           catalogHref={pathTenant ? myResellerCatalogPath(pathTenant, self) : PANEL_CATALOG}
+          expensesHref={ledger ? hrefOf({ ...filters, tab: "expenses" }) : null}
           setting={setting}
           stale={stale}
         />

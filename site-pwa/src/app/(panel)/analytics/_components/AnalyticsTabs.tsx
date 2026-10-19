@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, Package, Repeat, Users, type LucideIcon } from "lucide-react";
+import { Gauge, Package, Receipt, Repeat, TrendingUp, Users, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { SegmentedControl, Select, TabLinks } from "../../_components/kit";
@@ -9,7 +9,7 @@ import { type AnalyticsFilters, type PageTab, TAB_VIEWS, groupOf } from "../_lib
 const K = FrontendI18nKeys.common.analytics;
 
 /** One icon per view, so the switch reads as a choice of pages and not as a filter. */
-const VIEW_ICONS: Readonly<Partial<Record<PageTab, LucideIcon>>> = { customers: Users, cohorts: Repeat, catalog: Package, capacity: Gauge };
+const VIEW_ICONS: Readonly<Partial<Record<PageTab, LucideIcon>>> = { customers: Users, cohorts: Repeat, catalog: Package, capacity: Gauge, margin: TrendingUp, expenses: Receipt };
 /** What each view answers, said under the switch. */
 const VIEW_HINTS: Readonly<Partial<Record<PageTab, string>>> = K.viewHints;
 
@@ -17,6 +17,8 @@ export interface AnalyticsTabsProps {
   filters: AnalyticsFilters;
   /** The row's tabs this viewer may open (`ROW_TABS`, Resellers for the owner only). */
   tabs: readonly PageTab[];
+  /** Whether this viewer may open a tab or a view: a view it may not is not offered (F-1001-u). */
+  offered: (tab: PageTab) => boolean;
   hrefOf: (next: AnalyticsFilters) => string;
   /** Opens a tab or a view with the filters kept. */
   onOpen: (tab: PageTab) => void;
@@ -28,10 +30,11 @@ export interface AnalyticsTabsProps {
  * past a phone's edge — and, under a tab with views (`TAB_VIEWS`), a switch
  * between them.
  */
-export function AnalyticsTabs({ filters, tabs, hrefOf, onOpen }: AnalyticsTabsProps) {
+export function AnalyticsTabs({ filters, tabs, offered, hrefOf, onOpen }: AnalyticsTabsProps) {
   const { t } = useLocale();
   const group = groupOf(filters.tab);
-  const views = TAB_VIEWS[group];
+  // A group left with one view has no switch.
+  const views = TAB_VIEWS[group]?.filter(offered);
   const hint = VIEW_HINTS[filters.tab];
 
   return (
@@ -52,7 +55,7 @@ export function AnalyticsTabs({ filters, tabs, hrefOf, onOpen }: AnalyticsTabsPr
         links={tabs.map((tab) => ({ href: hrefOf({ ...filters, tab }), label: t("common", K.tabs[tab]) }))}
         className="hidden flex-wrap md:flex"
       />
-      {views && (
+      {views && views.length > 1 && (
         <div className="flex flex-col gap-1.5">
           {/* A small pill was missed and Retention read as gone (2026-10-17): full width on a phone, with icons and a line. */}
           <SegmentedControl

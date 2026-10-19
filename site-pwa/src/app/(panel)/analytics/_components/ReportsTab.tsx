@@ -5,7 +5,7 @@ import { Bot, Mail, PauseCircle } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
-import { useReportError } from "../_hooks/useReportError";
+import { useReportError } from "../_hooks/useRefusalError";
 import { useLiveReread } from "@/hooks/useLiveReread";
 import type { AnalyticsCalendar, AnalyticsTab } from "@/lib/billing/analytics";
 import { REPORT_SCHEDULES_PER_PERSON, type ReportSchedule, type ReportSchedules, reportSchedulesApi } from "@/lib/billing/analytics-reports";
