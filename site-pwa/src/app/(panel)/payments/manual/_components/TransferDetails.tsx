@@ -17,6 +17,9 @@ import { ReceiptLightbox } from "./ReceiptLightbox";
 const K = MANUAL_KEYS.transfer;
 const PROOF_LABELS: Record<string, string> = FrontendI18nKeys.common.transfer.proof;
 
+/** Both fact lists share it: two columns on a phone, three from `sm`. */
+const FACT_GRID = "grid grid-cols-2 gap-x-6 gap-y-3 text-xs sm:grid-cols-3";
+
 /** `proof_only` is the ordinary case (a person checks the account); every other reason is something to look at twice. */
 const reasonTone = (reason: TransferReviewReason): Tone => (reason === "proof_only" ? "info" : "warning");
 
@@ -33,7 +36,8 @@ export function TransferDetails({ row, transfer }: { row: VerifyingPayment; tran
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-card-border bg-bg-inner p-4">
-      <dl className="grid gap-x-6 gap-y-2 text-xs sm:grid-cols-3">
+      {/* One column count for both lists, so the payer's proof lines up under the payment's facts. */}
+      <dl className={FACT_GRID}>
         <Fact label={t("common", K.destination)}>{transfer.destinationLabel}</Fact>
         <Fact label={t("common", K.expected)} ltr>
           {expected ? formatMoney(expected, transfer.currencyCode, { lang, t }, { decimals: transfer.decimals }) : transfer.expectedAmountMinor}
@@ -43,28 +47,30 @@ export function TransferDetails({ row, transfer }: { row: VerifyingPayment; tran
         </Fact>
       </dl>
 
-      {transfer.reviewReason && (
-        <Badge tone={reasonTone(transfer.reviewReason)} className="self-start">
-          {t("common", REVIEW_REASON_KEYS[transfer.reviewReason])}
-        </Badge>
-      )}
-
       {transfer.proof === null ? (
         <p className="text-xs text-text-secondary">{t("common", K.noProof)}</p>
       ) : (
-        <div className="flex flex-wrap items-start gap-4">
-          {transfer.receiptUrl && (
-            <Button size="sm" onClick={() => setReceiptOpen(true)} icon={<ImageIcon size={14} aria-hidden />}>
-              {t("common", K.openReceipt)}
-            </Button>
-          )}
-          <dl className="grid flex-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2">
+        rows.length > 0 && (
+          <dl className={`${FACT_GRID} border-t border-card-border pt-3`}>
             {rows.map(([id, value]) => (
               <Fact key={id} label={id in PROOF_LABELS ? t("common", PROOF_LABELS[id]) : id} ltr>
                 <ProofValue id={id} value={value} network={transfer.network} />
               </Fact>
             ))}
           </dl>
+        )
+      )}
+
+      {(transfer.reviewReason || (transfer.proof !== null && transfer.receiptUrl)) && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {transfer.reviewReason && (
+            <Badge tone={reasonTone(transfer.reviewReason)}>{t("common", REVIEW_REASON_KEYS[transfer.reviewReason])}</Badge>
+          )}
+          {transfer.proof !== null && transfer.receiptUrl && (
+            <Button size="sm" onClick={() => setReceiptOpen(true)} icon={<ImageIcon size={14} aria-hidden />} className="ms-auto">
+              {t("common", K.openReceipt)}
+            </Button>
+          )}
         </div>
       )}
 
@@ -77,9 +83,8 @@ function Fact({ label, ltr, children }: { label: string; ltr?: boolean; children
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <dt className="text-text-secondary">{label}</dt>
-      <dd dir={ltr ? "ltr" : undefined} className="break-all font-bold text-text-primary">
-        {children}
-      </dd>
+      {/* The ltr run is isolated inside the cell, so a number keeps its order but sits under its label, not across from it. */}
+      <dd className="break-all font-bold text-text-primary">{ltr ? <span dir="ltr">{children}</span> : children}</dd>
     </div>
   );
 }

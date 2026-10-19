@@ -61,7 +61,8 @@ export function CreditedPanel() {
           </span>
         </div>
       )}
-      <div className="flex w-full max-w-sm flex-col gap-2 sm:flex-row">
+      {/* A grid, not a flex row: kit buttons are `shrink-0`, so two `w-full` ones in a row are twice the card wide. */}
+      <div className="grid w-full max-w-sm gap-2 sm:grid-cols-2">
         <Link href={PANEL_FINANCIAL} className={buttonClass({ variant: "primary", fullWidth: true })}>
           <Wallet size={16} aria-hidden />
           {t("common", PAY_KEYS.credited.toWallet)}
