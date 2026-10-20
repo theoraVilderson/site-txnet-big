@@ -126,15 +126,23 @@ Provider top-ups and cost sources: [contract.cost-sources.md](contract.cost-sour
 
 ## 6. The balance read (F-1008-o)
 
-In the tenant's operating currency at today's rate (ADR-0152), each part also
-per original currency:
+`?currency=` any registered currency, default the operating one. **Balances**
+(cash, users' money, taxes, payables, reserve, credit, equity) at today's
+rate; **flows** in `profit` summed line by line at each line's own day's rate
+(ADR-0152); `profit.fxUnrealized` = the balances' value today − their value at
+the rates they were booked at, never in `net`; `profit.fxRealized` = the
+`fx_gain` − `fx_loss` lines. Each part also per original currency. The
+reserve's `costPerByte` is in its sources' currency, so a falling rial raises
+the reserve by itself. A line with no rate for the day is shown apart, never
+summed as 0 (ADR-0149).
 
 `{cash:{settled, inTransit, atGateways}, userMoney:{wallets, held, unearned},
 taxes:{sales, income}, payables:{settlement, providerShortfall}, reserve,
 withdrawable, providerCredit:[{accountId, estimatedLeft, daysLeft}],
 profit:{earned, infraCost, estimateAdjust, priceVariance, commission,
-overhead, incomeTax, net}, personalSpend, parties:[{partyId, equity, drawn,
-withdrawable, owes}], flags:{estimatedSplit[], unassignedExpenses, shortfall}}`.
+overhead, incomeTax, net, fxRealized, fxUnrealized}, personalSpend, parties:[{partyId, equity, drawn,
+withdrawable, owes}], fxExposure:[{currencyCode, held, owed, expectedCost}],
+flags:{estimatedSplit[], unassignedExpenses, shortfall, noRate[]}}`.
 
 `withdrawable = settled − userMoney − taxes − payables − reserve`.
 `reserve = reservePercent × Σ open grants (unconsumed bytes × costPerByte)`.

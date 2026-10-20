@@ -98,6 +98,19 @@ crypto wallet). Nothing says how much of that cash is the owner's:
 12. **The Profit tab stays** the sales margin on `analytics_*`; the ledger
     feeds only the money view and "earned profit". The two are never summed,
     and infrastructure cost has one source, `analytics_cost_day` (ADR-0156).
+13. **Every amount stays in its own currency; a rate never rewrites it**
+    (added 2026-10-20, the user: a rial gateway, dollar costs, rates moving
+    daily). A line is stored in the currency the money moved in (any
+    registered currency; toman is rial ÷ 10, `DERIVED_CURRENCIES`), and each
+    entry balances per currency. When read: a **balance** (cash, wallets,
+    credit, reserve) is valued at today's rate; a **flow** (earned revenue,
+    cost, profit) at each line's own day's rate (ADR-0152). Their difference
+    is **unrealized FX gain or loss**, a line of its own, never inside
+    operating profit. A real conversion (rial to USDT, buying USD credit)
+    posts its **realized** gain or loss against the day's rate. The view
+    may be read in any registered currency (USD to see value kept), and
+    shows **FX exposure**: per currency, what is held against what is owed,
+    including the expected cost of unconsumed volume in its source's currency.
 
 ## Consequences
 

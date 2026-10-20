@@ -33,7 +33,9 @@ Before opening (`{opened:false}`): a setup card — add accounts, then "open the
 books on <first of month>" with each account's balance on that day
 (`POST open`).
 
-After: one stacked bar of settled cash in five parts (user money, taxes,
+A currency switch in the view's header (any registered currency, default the
+operating one; `?currency=` in the URL) — USD shows what the money is worth
+in dollars. After: one stacked bar of settled cash in five parts (user money, taxes,
 payables, reserve, withdrawable — dataviz kit, ADR-0150 colours), then cards:
 
 1. **Withdrawable** — the big number; negative turns it into the shortfall
@@ -44,10 +46,13 @@ payables, reserve, withdrawable — dataviz kit, ADR-0150 colours), then cards:
    `lowCreditDays`), "record a top-up".
 5. **Earned profit** — earned, infrastructure cost, estimate corrections,
    server price variance, commission, overhead, income tax, net; a line saying
-   it differs from the Profit tab's sales margin by timing.
+   it differs from the Profit tab's sales margin by timing. Below net, apart:
+   realized and unrealized FX gain or loss.
 6. **My share** (one party) or **Partners** (more) — equity, drawn, withdrawable,
    "owes the business".
-7. **Flags** — estimated splits, unfunded sources, unassigned expenses,
+7. **FX exposure** — per currency: held, owed, expected cost of unconsumed
+   volume; a currency owed more than held is marked.
+8. **Flags** — estimated splits, unfunded sources, unassigned expenses,
    unaccepted balance differences — each a link to its form.
 
 ## `money-sources` (F-1008-f)
