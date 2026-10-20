@@ -1584,6 +1584,9 @@ Resellers today fly blind; this section alone could be reason enough to stay.
 | F-1005 | Usage forecast and capacity planning                                      | new       |
 | F-1006 | Scheduled report to bot or email                                          | new       |
 | F-1007 | CSV/Excel export of every report                                          | new       |
+| F-1008 | Money balance: users' money, taxes, provider credit and the owner's (and partners') withdrawable share, from a double-entry ledger; infrastructure cost from cost sources trued up at each provider top-up | new       |
+
+**F-1008:** profit is earned as service is delivered (a package by `max(volume share, time share)`, the refund formula); cash is always users' money + taxes + payables + reserve + withdrawable; a server, CDN or other cost is a *cost source* (fixed per hour/day/month, a free allowance on a meter with a known or unknown reset, a price per GB each way; purpose platform / overhead / personal) estimated pessimistically and corrected from the provider credit's balance before each top-up. ADR-0155, ADR-0156.
 
 **Also relevant here, defined elsewhere:** F-1527 §24.4 · F-1528 §24.4.
 

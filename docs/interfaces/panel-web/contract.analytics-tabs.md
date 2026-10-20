@@ -155,3 +155,7 @@ a figure tab — a ledger, no export.
 4. **Live** on the tenant's analytics event (`analyticsLiveOf`, C-14): a write
    restates the figures, and the pass that does announces itself.
 
+## Money balance (F-1008)
+
+Specified, not built: the views under Profit for the money ledger, cost
+sources, accounts and partners — [contract.money-balance.md](contract.money-balance.md).

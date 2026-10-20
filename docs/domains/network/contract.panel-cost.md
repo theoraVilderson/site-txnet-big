@@ -35,3 +35,10 @@ the price in effect today, or `null`.
 | 4 | **The panel's owner sets it** on the systems surface: `platform.node.manage` at the guard and the panel in the actor's scope (ADR-0080 decision 2) — today the platform's own panels. Written on the platform owner's pool, as every panel write is; read on the app pool, visible exactly when its panel is (RLS through `network.panel`). |
 | 5 | USD always: a panel is bought in dollars whatever the tenant sells in. Analytics converts nothing (its principle 6) — the cost series is its own currency. |
 | 6 | **The allowance is the price's** (F-1005-a, ADR-0150): history with it, read on a day as the price is (rule 3). Analytics' capacity forecast reads it; nothing enforces it on the panel. |
+
+## Replaced (F-1008)
+
+ADR-0156 replaces this cost with cost sources —
+[billing/contract.cost-sources.md](../billing/contract.cost-sources.md). F-1008-c
+migrates every row; F-1008-r drops `panel_cost` once nothing reads it. Until
+then this file holds.

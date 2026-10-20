@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 218
+- features: 219
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -147,7 +147,7 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` Retention, Anti-Churn and Growth | 2 |  |  |  |
 | `App-Features.md` · 17.1 Retention | 16 | F-1519 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
 | `App-Features.md` · 17.2 Growth and Acquisition | 19 | F-701 F-702 F-703 F-704 F-705 F-706 F-708 F-709 | C-10 C-11 D-05 |  |
-| `App-Features.md` Reseller Profitability Tools | 20 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 |  |  |
+| `App-Features.md` Reseller Profitability Tools | 23 | F-1001 F-1002 F-1003 F-1004 F-1005 F-1006 F-1007 F-1008 |  |  |
 | `App-Features.md` Security, Fraud and Abuse | 2 |  |  |  |
 | `App-Features.md` · 19.1 Three Unrecoverable Risks | 10 |  |  |  |
 | `App-Features.md` · 19.2 Input Handling | 8 |  | C-04 |  |
@@ -324,6 +324,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-1005 | Usage forecast and capacity planning | new | Reseller Profitability Tools |
 | F-1006 | Scheduled report to bot or email | new | Reseller Profitability Tools |
 | F-1007 | CSV/Excel export of every report | new | Reseller Profitability Tools |
+| F-1008 | Money balance: users' money, taxes, provider credit and the owner's (and partners') withdr | new | Reseller Profitability Tools |
 | F-1101 | Concurrent-device cap from distinct IPs | core | 19.4 Fraud and Abuse Detection |
 | F-1102 | Link-sharing detection — multiple ISPs or cities simultaneously | new | 19.4 Fraud and Abuse Detection |
 | F-1103 | Graduated response: warn → restrict → suspend (never an abrupt cutoff) | new | 19.4 Fraud and Abuse Detection |

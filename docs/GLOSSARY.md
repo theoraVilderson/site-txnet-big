@@ -68,6 +68,12 @@ introduce a synonym, record why.
 | Degradation | The `F-302` policy: a missing capability is *substituted* and the flow continues, observably logged — never an error and never a silently dropped affordance. | messenger | Fallback (banned for notifications — see D-03 / §9.7 No-Fallback Rule) |
 | Mini App | Telegram's WebApp surface running `panel-web` itself with a shared session (`F-310`). It is the same panel, not a bot screen and not a third UI. | bot-app / panel-web | BotView, User panel (the same code, reached from a browser) |
 | Guide | One piece of help content (a product, an OS, an app or a panel/bot section), its text per language and where it is placed; inherited from the platform by key (ADR-0115). | guide | the panel's built-in UI hints (`site-pwa` copy), a support canned reply |
+| Money ledger | `billing.ledger_account` / `ledger_entry` / `ledger_line` — a tenant's double-entry books, **projected** from wallet, payment and record rows, never written by a money path (ADR-0155). | billing | Wallet (a user's single-entry balance), the Profit tab (a report) |
+| Unearned | The part of a sold package or prepaid block not yet delivered — `total × (1 − max(volume share, time share))`, exactly what a cancel would refund. A liability, never profit (ADR-0155). | billing | Held money (a lock on a wallet, still the user's) |
+| Withdrawable | Settled cash less users' money, taxes owed, payables and the reserve — what the owner may spend (ADR-0155). | billing | Profit, cash, a wallet balance |
+| Cost source | `network.cost_source` — one thing a provider bills: a server, a CDN, other; purpose `platform` / `overhead` / `personal`; funded by a provider credit account (ADR-0156). | billing | Panel (a cost source may serve several, or none) |
+| Provider credit | A `money_account` of kind `provider_credit` — the prepaid balance at ArvanCloud or a server host. The owner's asset, not cash; its drop between top-ups is the true infrastructure cost (ADR-0156). | billing | User wallet, tenant billing wallet |
+| Party | `billing.party` — an owner or partner of a tenant's business, with dated shares summing to 100; draws, contributions and personal sources name one (ADR-0155). | billing | User, Tenant staff member |
 
 ## Banned words
 Terms that were ambiguous and are now forbidden project-wide.
