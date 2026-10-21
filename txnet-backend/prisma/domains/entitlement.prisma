@@ -81,6 +81,11 @@ model Grant {
   /// What issued it — the payment, the coupon redemption, the admin action. With
   /// `source`, unique when set, so issuing twice for one cause is refused.
   sourceReferenceId     String?            @db.Uuid
+  /// The source panel's client this Grant was imported from (F-201-a, D-63):
+  /// the import's idempotency key, so a second run updates instead of issuing
+  /// again (F-207). Only on a `migration` Grant (CHECK
+  /// `grant_remote_identity_is_migration`); unique per tenant.
+  remoteIdentity        String?
   status                GrantStatus        @default(pending)
   statusReason          String?
   startsAt              DateTime
@@ -237,6 +242,7 @@ model Grant {
   leaseClose       LeaseClose?
   rateLimit        GrantRateLimit?
 
+  @@unique([tenantId, remoteIdentity])
   @@index([tenantId, userId])
   @@index([userId, status])
   /// A group's Grants: the due scan, drain and a group's delete (F-027-er).
@@ -549,3 +555,123 @@ model GrantCompensation {
   @@schema("entitlement")
 }
 
+/// What an import brings (F-201-a, D-63): a whole source panel, one old
+/// subscription link, or a balances CSV.
+enum MigrationRunKind {
+  panel
+  link
+  csv
+
+  @@schema("entitlement")
+}
+
+/// `draft → previewing → previewed → committing → committed → rolled_back`;
+/// before the commit a run may be `cancelled` or `expired`. A trigger holds it
+/// (`migration_run_status_moves`).
+enum MigrationRunStatus {
+  draft
+  previewing
+  previewed
+  committing
+  committed
+  rolled_back
+  cancelled
+  expired
+
+  @@schema("entitlement")
+}
+
+/// What the dry run plans for one source client (F-206).
+enum MigrationItemAction {
+  create
+  update
+  skip
+
+  @@schema("entitlement")
+}
+
+/// Why the dry run skips a source client (F-206's report).
+enum MigrationSkipReason {
+  expired
+  duplicate
+  over_cap
+  unknown_protocol
+
+  @@schema("entitlement")
+}
+
+/// What the commit did with one item (F-207); `pending` until it reaches it.
+enum MigrationItemOutcome {
+  pending
+  created
+  updated
+  skipped
+  failed
+  rolled_back
+
+  @@schema("entitlement")
+}
+
+/// One import a reseller runs (F-201-a, D-63). Nothing outside this table and
+/// its items is written before the commit; the counts are the dry run's report
+/// and the commit's progress. No foreign key on the actor (may be staff).
+model MigrationRun {
+  id             String             @id @default(uuid()) @db.Uuid
+  tenantId       String             @db.Uuid
+  kind           MigrationRunKind
+  /// The source panel's family; only on a `panel` run.
+  sourceFamily   DriverType?
+  /// The source's origin as read (`scheme://host[:port]`); null on a `csv` run.
+  sourceAddress  String?
+  status         MigrationRunStatus @default(draft)
+  plannedCreate  Int                @default(0)
+  plannedUpdate  Int                @default(0)
+  plannedSkip    Int                @default(0)
+  committedItems Int                @default(0)
+  failedItems    Int                @default(0)
+  /// The end of the rollback window (D-63: 7 days), set by the commit.
+  rollbackUntil  DateTime?
+  actorUserId    String             @db.Uuid
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  items MigrationItem[]
+
+  /// The item's composite foreign key: an item is its run's tenant's.
+  @@unique([id, tenantId])
+  @@index([tenantId, createdAt])
+  @@map("migration_run")
+  @@schema("entitlement")
+}
+
+/// One source client in a run (F-201-a): its snapshot as read — the source
+/// state a rollback restores from (F-211) — what the dry run planned, and what
+/// the commit created. One per `remoteIdentity` in a run; across runs the
+/// Grant's own `remoteIdentity` is the key. No foreign keys on the created ids:
+/// the item is the record of them after a rollback removes them.
+model MigrationItem {
+  id               String               @id @default(uuid()) @db.Uuid
+  runId            String               @db.Uuid
+  tenantId         String               @db.Uuid
+  remoteIdentity   String
+  /// The normalised source client (F-201-b), never edited after the preview.
+  sourceSnapshot   Json
+  plannedAction    MigrationItemAction
+  skipReason       MigrationSkipReason?
+  outcome          MigrationItemOutcome @default(pending)
+  /// Why the commit failed this item; the batch goes on (F-207).
+  failureReason    String?
+  createdUserId    String?              @db.Uuid
+  createdGrantId   String?              @db.Uuid
+  createdConfigIds String[]             @default([]) @db.Uuid
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  run MigrationRun @relation(fields: [runId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([runId, remoteIdentity])
+  @@index([runId, plannedAction])
+  @@index([tenantId])
+  @@map("migration_item")
+  @@schema("entitlement")
+}
