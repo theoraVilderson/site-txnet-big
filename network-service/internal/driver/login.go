@@ -1,7 +1,10 @@
 package driver
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -52,4 +55,26 @@ func RefusalFault(op string, status int, msg string) *Fault {
 		kind = FaultUnavailable
 	}
 	return NewFault(kind, op, status, fmt.Errorf("panel refused: %s", msg))
+}
+
+// FormLogin reads a form-login family's answer to its login (the x-ui forks,
+// S-UI): `{success, msg}` and the session cookies it set. A refusal is
+// classified by refusals; a success with no cookie is the panel's fault.
+func FormLogin(resp *http.Response, op string, refusals *LoginRefusals) ([]*http.Cookie, error) {
+	defer resp.Body.Close()
+	var answer struct {
+		Success bool   `json:"success"`
+		Msg     string `json:"msg"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil {
+		return nil, NewFault(FaultProtocol, op, 0, fmt.Errorf("decoding the login answer: %w", err))
+	}
+	if !answer.Success {
+		return nil, refusals.Refused(op, resp.StatusCode, answer.Msg)
+	}
+	if len(resp.Cookies()) == 0 {
+		return nil, NewFault(FaultProtocol, op, 0, errors.New("login set no session cookie"))
+	}
+	refusals.Succeeded()
+	return resp.Cookies(), nil
 }

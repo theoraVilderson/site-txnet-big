@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -64,19 +63,9 @@ func (d *Driver) login(ctx context.Context, op string) ([]*http.Cookie, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-	var env envelope
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the login answer: %w", err))
+	if d.cookies, err = driver.FormLogin(resp, op, &d.refusals); err != nil {
+		return nil, err
 	}
-	if !env.Success {
-		return nil, d.refusals.Refused(op, resp.StatusCode, env.Msg)
-	}
-	if len(resp.Cookies()) == 0 {
-		return nil, driver.NewFault(driver.FaultProtocol, op, 0, errors.New("login set no session cookie"))
-	}
-	d.refusals.Succeeded()
-	d.cookies = resp.Cookies()
 	return d.cookies, nil
 }
 
@@ -123,46 +112,13 @@ func (d *Driver) do(ctx context.Context, op, method string, path []string, body,
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-	var env envelope
-	if err := json.NewDecoder(resp.Body).Decode(&env); err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return driver.NewFault(driver.FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
-		}
-		return driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding the answer: %w", err))
-	}
-	if !env.Success {
-		return driver.RefusalFault(op, resp.StatusCode, env.Msg)
-	}
-	if out == nil {
-		return nil
-	}
-	if err := json.Unmarshal(env.Obj, out); err != nil {
-		return driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("decoding obj: %w", err))
-	}
-	return nil
+	return driver.ReadEnvelope(ctx, resp, op, out)
 }
 
 // roundTrip is where every transport and status failure is classified
-// (driver.Fault). A success=false inside a 200 is classified by the caller.
+// (driver.Send). A success=false inside a 200 is classified by the caller.
 func (d *Driver) roundTrip(ctx context.Context, op string, req *http.Request) (*http.Response, error) {
-	resp, err := d.http.Do(req)
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, driver.NewFault(driver.FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
-		}
-		return nil, driver.NewFault(driver.FaultUnavailable, op, 0, err)
-	}
-	if resp.StatusCode >= 300 {
-		defer resp.Body.Close()
-		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		fault := driver.FaultForStatus(op, resp.StatusCode, fmt.Errorf("%s", strings.TrimSpace(string(detail))))
-		if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
-			fault.RetryAfter = time.Duration(seconds) * time.Second
-		}
-		return nil, fault
-	}
-	return resp, nil
+	return driver.Send(ctx, d.http, op, req)
 }
 
 func (d *Driver) list(ctx context.Context, op string) ([]inbound, time.Time, error) {

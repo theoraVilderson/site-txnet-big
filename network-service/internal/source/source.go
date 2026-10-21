@@ -34,7 +34,7 @@ var _ Reader = driver.Driver(nil)
 // IsFamily is whether an import reads panels of the family (catalog F-201:
 // Marzban, Marzneshin, the x-ui forks, 3x-ui, S-UI, Hiddify). One with no
 // driver yet is still a source; opening it answers opener.ErrNoDriver
-// until its driver ships (S-UI: F-201-c).
+// until its driver ships (legacy x-ui `x_ui_vaxilu`).
 func IsFamily(f driver.DriverType) bool {
 	switch f {
 	case driver.DriverMarzban, driver.DriverMarzneshin, driver.DriverSanaee, driver.DriverThreeXUI,

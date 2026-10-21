@@ -13,7 +13,8 @@ normalised. The run, its items and the commit are entitlement's
 file says what the read does and what it never does.
 
 Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
-(the routes), `internal/driver/conformance/readonly.go` (the proof).
+(the routes), `internal/driver/conformance/readonly.go` (the proof),
+`internal/driver/sui` (S-UI, read-only).
 
 ## Rules
 
@@ -49,7 +50,21 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
    built from a login.
 7. **Families.** Marzban, Marzneshin, both x-ui forks, 3x-ui, S-UI, Hiddify
    (`source.IsFamily`). One without a driver yet answers `no_driver` until it
-   ships (S-UI: F-201-c; legacy x-ui `x_ui_vaxilu`).
+   ships (legacy x-ui `x_ui_vaxilu`).
+8. **S-UI is read-only** (F-201-c, `internal/driver/sui`). A reseller leaves
+   it; nobody registers a panel on it, so `opener.HasDriver` leaves it off
+   (registration answers `no_driver`) and `opener.HasReader` lets
+   `opener.Build` open it for a source only. Every write, `Capabilities` and
+   `BuildLink` answer `unsupported`. Its address includes the panel's web path
+   (`https://host:2095/app`). `GET api/load` is the bulk read: inbounds,
+   clients and `subURI`. A client is keyed by its name, which is unique and
+   is its subscription path (`<subURI><name>`, or the `clientBaseUrl` given).
+   From v1.1 the list has no config or links, so the snapshot's `uuid` is
+   empty and `linesRead` false. A link batch reads `api/clients?id=` per
+   client, plus one load for the name → id index. A client on several
+   inbounds is listed under its first. A type we do not sell (`naive`,
+   `shadowtls`, …) is passed through for the dry run's `unknown_protocol`.
+   Tested on a scripted panel only; no live panel yet.
 
 ## Routes
 

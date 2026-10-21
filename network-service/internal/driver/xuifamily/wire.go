@@ -11,12 +11,6 @@ import (
 	"network-service/internal/driver"
 )
 
-type envelope struct {
-	Success bool            `json:"success"`
-	Msg     string          `json:"msg"`
-	Obj     json.RawMessage `json:"obj"`
-}
-
 // client is one element of an inbound's settings.clients. Fields this driver
 // does not own (tgId, flow) are carried through a write unchanged; limitIp is
 // the Grant's device limit (F-311-q). Comment is the claim tag; a fork that

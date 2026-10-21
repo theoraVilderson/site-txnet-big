@@ -25,6 +25,7 @@ import (
 	"network-service/internal/driver/marzban"
 	"network-service/internal/driver/marzneshin"
 	"network-service/internal/driver/sanaee"
+	"network-service/internal/driver/sui"
 	"network-service/internal/driver/threexui"
 	"network-service/internal/driver/usermanager"
 	"network-service/internal/driver/xuialireza"
@@ -184,6 +185,13 @@ func HasDriver(family driver.DriverType) bool {
 	return false
 }
 
+// HasReader is whether an import can read a source of the family (F-201-b):
+// every family a panel can be registered on, and S-UI, whose driver reads
+// only (F-201-c) — a panel is never registered on it, so Open refuses it.
+func HasReader(family driver.DriverType) bool {
+	return HasDriver(family) || family == driver.DriverSUI
+}
+
 // Target is the panel a driver is built for: its family and addresses.
 type Target struct {
 	Family        driver.DriverType
@@ -193,9 +201,10 @@ type Target struct {
 
 // Build is a family's driver for a login already read, dialing through hc —
 // Open's for a registered panel, the source snapshot's for an import's
-// (F-201-b). A family with no driver is ErrNoDriver.
+// (F-201-b). A family with no driver is ErrNoDriver; Open asks HasDriver
+// first, so a read-only family is built here for a source alone.
 func Build(t Target, login string, hc *http.Client) (driver.Driver, error) {
-	if !HasDriver(t.Family) {
+	if !HasReader(t.Family) {
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, t.Family)
 	}
 	if t.Family == driver.DriverHiddify {
@@ -215,6 +224,8 @@ func Build(t Target, login string, hc *http.Client) (driver.Driver, error) {
 		return usermanager.New(t.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverSanaee:
 		return sanaee.New(t.APIBaseURL, t.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, hc)
+	case driver.DriverSUI:
+		return sui.New(t.APIBaseURL, t.ClientBaseURL, sui.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverThreeXUI:
 		return threexui.New(t.APIBaseURL, threexui.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverXUIAlireza:

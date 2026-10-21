@@ -280,7 +280,8 @@ func TestAnOpenerWithNoPlatformClientDialsEveryPanelBare(t *testing.T) {
 }
 
 // A family with no driver is ours to ship, not the panel's fault: it stays
-// pending and costs no read of its login.
+// pending and costs no read of its login. S-UI's driver reads only (F-201-c):
+// an import builds it, a registration never opens it.
 func TestAFamilyWithNoDriverIsNotOpenedAndItsLoginNotRead(t *testing.T) {
 	srv, calls := vaultStub(t, "admin:secret", http.StatusOK, "")
 	o := Opener{Logins: Vault{BaseURL: srv.URL, ServiceToken: "svc-token"}}
@@ -294,6 +295,9 @@ func TestAFamilyWithNoDriverIsNotOpenedAndItsLoginNotRead(t *testing.T) {
 	}
 	if kind, ok := driver.KindOf(err); ok {
 		t.Errorf("the error classifies as %s: it must fall through to unopenable, not read as a panel fault", kind)
+	}
+	if _, err := Build(Target{Family: driver.DriverSUI, APIBaseURL: "https://panel.example.test/app"}, "admin:secret", nil); err != nil {
+		t.Errorf("Build(s_ui) for a source read = %v, want its read-only driver", err)
 	}
 }
 
