@@ -62,6 +62,10 @@ enum TenantDomainPurpose {
   subscription
   assets
   api
+  /// The old panel's subscription host a reseller brought with an import
+  /// (F-204-a, D-63): proved as any custom domain, it serves sub-service's
+  /// paths alone — the users' old links (F-203-b) and `/sub`, no panel, no API.
+  legacy_sub
 
   @@schema("tenant")
 }

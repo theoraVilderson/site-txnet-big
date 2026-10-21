@@ -2697,7 +2697,8 @@
     "purposes": {
       "panel": "Panel",
       "subscription": "Subscription links",
-      "assets": "Files and images"
+      "assets": "Files and images",
+      "legacy_sub": "Old panel’s subscription address"
     },
     "status": {
       "pending": "Waiting for records",

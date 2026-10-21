@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { answersAsPanel, doorClosed, doorServesPanel } from './door';
+import { isHostSurface } from './host-surface';
 
 /**
  * The door rules, once, for every process that answers on a Host (F-018-ak).
@@ -36,6 +37,15 @@ describe('door rules', () => {
     expect(answersAsPanel('api')).toBe(true);
     expect(answersAsPanel('subscription')).toBe(false);
     expect(answersAsPanel('assets')).toBe(false);
+  });
+
+  // F-204-a: the old panel's subscription host answers sub-service's paths alone.
+  it('serves no panel and no API on a legacy_sub door, and caches it as a door', () => {
+    const legacy = { ...resellerCustom, purpose: 'legacy_sub' } as const;
+    expect(doorServesPanel(legacy)).toBe(false);
+    expect(answersAsPanel('legacy_sub')).toBe(false);
+    // An entry this code does not recognise is re-read every request: the old host would cost Postgres a read per fetch.
+    expect(isHostSurface({ id: 't', slug: 'ali-vpn', ownerUserId: 'u', ...legacy })).toBe(true);
   });
 
   it("serves no panel on a reseller's platform subdomain", () => {

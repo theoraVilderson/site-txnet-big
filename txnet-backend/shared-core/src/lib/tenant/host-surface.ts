@@ -1,6 +1,6 @@
 import {
+  TenantDomainPurpose,
   TenantType,
-  type TenantDomainPurpose,
   type TenantDomainType,
 } from '@prisma/client';
 
@@ -57,7 +57,7 @@ export type HostSurface = CachedTenantRow & {
  */
 export const HOST_SURFACE_MISS = '-';
 
-const PURPOSES: readonly string[] = ['panel', 'subscription', 'assets', 'api'];
+const PURPOSES: readonly string[] = Object.values(TenantDomainPurpose);
 const DOMAIN_TYPES: readonly string[] = ['subdomain', 'custom_domain'];
 const TENANT_TYPES: readonly string[] = Object.values(TenantType);
 

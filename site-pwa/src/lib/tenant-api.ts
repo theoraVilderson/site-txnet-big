@@ -374,7 +374,7 @@ export const resellerLimitsApi = {
 /** A custom domain as the reseller sees it; `revalidating` is `verified` inside its grace. */
 export type DomainStatus = "pending" | "verifying" | "verified" | "revalidating" | "failed";
 /** Prisma's `TenantDomainPurpose`. */
-export type DomainPurpose = "panel" | "subscription" | "assets";
+export type DomainPurpose = "panel" | "subscription" | "assets" | "legacy_sub";
 export type CheckName = "txt" | "cname" | "http" | "https" | "cache" | "edge_owner";
 /** Prisma's `TenantDomainEdgeStatus`: the domain's step at the CDN (EDGE-1-e). */
 export type EdgeStatus = "none" | "registering" | "issuing" | "issued" | "renew_failed" | "failed";

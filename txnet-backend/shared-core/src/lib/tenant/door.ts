@@ -1,4 +1,4 @@
-import type { TenantType } from '@prisma/client';
+import type { TenantDomainPurpose, TenantType } from '@prisma/client';
 
 /**
  * What a host is, as far as the door rules care: the purpose of its
@@ -6,7 +6,7 @@ import type { TenantType } from '@prisma/client';
  * field is absent when the request had no surface at all.
  */
 export interface DoorSurface {
-  purpose?: 'panel' | 'subscription' | 'assets' | 'api' | null;
+  purpose?: TenantDomainPurpose | null;
   domainType?: 'subdomain' | 'custom_domain' | null;
   tenantType?: TenantType | null;
 }

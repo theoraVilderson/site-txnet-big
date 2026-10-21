@@ -1,4 +1,4 @@
-import type { TenantType } from '@prisma/client';
+import type { TenantDomainPurpose, TenantType } from '@prisma/client';
 import { answersAsPanel, IdentityHeaders } from '@txnet-backend/shared-core';
 import { Request } from 'express';
 
@@ -22,7 +22,7 @@ export type TenantVia = 'session' | 'bot' | 'domain';
  * one. All of them resolve to the same tenant — purpose is not a second
  * tenancy — but only a `panel` domain serves this process's routes.
  */
-export type TenantSurfacePurpose = 'panel' | 'subscription' | 'assets' | 'api';
+export type TenantSurfacePurpose = TenantDomainPurpose;
 
 /**
  * How the tenant got the host (mirrors `tenant.TenantDomainType`).
@@ -57,6 +57,8 @@ const SERVED_PATHS: Record<Exclude<TenantSurfacePurpose, 'panel' | 'api'>, reado
   {
     subscription: [],
     assets: [],
+    // F-204-a: an old panel's subscription host is sub-service's alone.
+    legacy_sub: [],
   };
 
 /**

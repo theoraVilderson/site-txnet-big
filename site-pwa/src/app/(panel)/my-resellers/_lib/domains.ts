@@ -78,7 +78,7 @@ export function domainLiveChannels(
 }
 
 /** `panel` first: it is the one that lifts the onboarding gate (`contract.domains.md` rule 6). */
-export const DOMAIN_PURPOSES = ["panel", "subscription", "assets"] as const satisfies readonly DomainPurpose[];
+export const DOMAIN_PURPOSES = ["panel", "subscription", "assets", "legacy_sub"] as const satisfies readonly DomainPurpose[];
 
 /** Only `verified` routes; `revalidating` is `verified` inside its grace. */
 export const isRoutable = (status: DomainStatus) => status === "verified" || status === "revalidating";

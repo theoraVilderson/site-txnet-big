@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 2
-updated: 2026-09-19
+version: 3
+updated: 2026-10-21
 ---
 
 # Contract — tenant / custom domains
@@ -143,6 +143,14 @@ domain is held once TXT and CNAME prove it, and verified once they pass.
    ([contract.onboarding.md](contract.onboarding.md), F-018-l). A change of
    verification status notifies `tenant_status_changed` as a status change
    does, so the gate follows the sweep at once.
+
+7. **A `legacy_sub` domain is an old panel's subscription host** (F-204-a,
+   D-63): added with `purpose: legacy_sub`, proved and pointed exactly as
+   above, counted in `custom_domains_max`. It serves sub-service's paths
+   alone — no panel page (`doorServesPanel`), no API (`surfaceServesPath`;
+   the probe excepted). What it answers is sub-api's (F-203-b). Traefik sends
+   `/sub/…` on every host to sub-service — the default of every import
+   family but Hiddify; any other path there gets the panel's 404 until F-204-c.
 
 ## Consumers
 
