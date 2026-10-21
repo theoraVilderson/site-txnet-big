@@ -2,11 +2,11 @@
 id: entitlement
 layer: domain
 status: active
-version: 36
+version: 37
 updated: 2026-10-21
 ---
 
-# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208)
+# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208), the rollback (F-211)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). `network-service` reads the old panel and answers
@@ -150,6 +150,50 @@ Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
     (D-63), the source login destroyed. Each batch and the end write the
     page's event (rule 13).
 
+## The rollback (F-211)
+
+Code: `migration-rollback.ts` (`MigrationRollbackService`, `keptReasonOf`),
+`MigrationRunService.rollback`; identity's half through `migration-seams.ts`
+(`ImportedPeople.remove`). The source panel was never written (D-63), so it
+is still there to go back to.
+
+22. **Inside the window only.** `POST …/rollback` moves a `committed` run
+    before its `rollbackUntil` (rule 21) to `rolling_back`, naming who asked
+    (`rollbackActorUserId`); asked again once started, answered as it is.
+    Past the window: `rollback_window_closed`. Once started it finishes, the
+    window passing or not.
+23. **A batch a tick, up to 200 items**, as the commit (rule 17): the items
+    the run `created`, and any whose person it made. An `updated` item's
+    Grant is an earlier run's and is left (rule 19).
+24. **A customer who lived here since is kept** (`kept`, `keptReason`): the
+    Grant's end moved after the import (`endSetAt` past `startsAt` — any
+    renewal, an admin's days) or a `grant_renewal` row is `renewed`; bytes
+    added (`quota_adjustment` on traffic) `topped_up`; a Grant bought or
+    redeemed, or a gateway payment or wallet purchase, by the person after
+    the import `bought`. What they did before it is their own history. The
+    Grant and the person stay; the item is listed (`problems`).
+25. **Otherwise the Grant is closed as an admin's delete answering no**
+    (contract.admin.md, F-311-m): `cancelled` with `statusReason =
+    migration_rolled_back`, its configs released now, one `grant_deletion`
+    row by the asker; no remainder to the user — nothing was paid here —
+    every other meter settled, the reseller's wholesale given back
+    (contract.package-wholesale.md rule 5). A Grant already closed is left;
+    one the delete refuses (`grant_not_active`, …) is `kept` with that reason;
+    `grant_moved` is retried by the next tick.
+26. **A person the run made goes only if they did nothing else.** Billing
+    keeps who holds another Grant (`holds_other_service`) or any wallet row
+    (`paid`); identity removes the rest or says why not (identity
+    `contract.import.md` rule 8) — the reason is the item's `keptReason`. A
+    person the import found is never removed. Identity unreachable leaves
+    those items for the next tick (`rolledBackAt` still null); their Grants are
+    closed once, the item's write guards it.
+27. **The end.** Nothing left: `rolled_back`. Every batch and the end write
+    the page's event (rule 13).
+28. **The source state is kept for the window, not longer.** Once
+    `rollbackUntil` passes on a `committed` or `rolled_back` run, the tick
+    clears every item's `sourceSnapshot` and stamps `snapshotsPurgedAt`, ten
+    runs a tick; the report's cells read from it are null from then on.
+
 ## Routes
 
 Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
@@ -159,23 +203,27 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 |---|---|---|
 | `POST` | `family` (a `DriverType`), `sourceAddress` (absolute http(s), kept as its origin) | 201 the run, `draft` |
 | `GET` | `page`, `pageSize` | the runs, newest first |
-| `GET /:runId` | — | the run: status, `failureReason`, counts, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
+| `GET /:runId` | — | the run: status, `failureReason`, counts, `rollbackUntil`, `snapshotsPurgedAt`, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
 | `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null | the run |
 | `POST /:runId/preview` | — | 202 the run, `previewing` (answered as it is while it runs) |
 | `POST /:runId/commit` | — | 202 the run, `committing` (answered as it is once started) |
-| `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped and failed only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason` |
+| `POST /:runId/rollback` | — | 202 the run, `rolling_back` (answered as it is once started) |
+| `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped, failed and kept only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason`, `keptReason` |
 | `POST /:runId/cancel` | — | the run, `cancelled` |
 
 `POST /api/internal/billing/migration-runs/drain` (service-only) answers
-`{previewed, returned, committed, finished}` for one tick: one dry run, one
-commit batch.
+`{previewed, returned, committed, finished, rolledBack, rollbacksFinished,
+purged}` for one tick: one dry run, one commit batch, one rollback batch, the
+purges due.
 
 | Refusal | Status | Meaning |
 |---|---|---|
 | `run_not_found`, `inbound_not_found`, `variant_not_found` | 404 | not this reseller's, not in the snapshot, or not a variant it sells |
 | `run_busy` | 409 | the run is being previewed |
-| `run_closed` | 409 | committing, committed, rolled back, cancelled or expired |
+| `run_closed` | 409 | committing, committed, rolled back, cancelled or expired (a rollback: cancelled or expired) |
 | `run_not_previewed` | 409 | a commit of a run with no report yet (`draft`, `previewing`) |
+| `run_not_committed` | 409 | a rollback of a run not committed yet (`draft` … `committing`) |
+| `rollback_window_closed` | 409 | a rollback past `rollbackUntil` (rule 22) |
 | `variant_not_prepaid`, `variant_not_assignable`, `variant_not_deliverable` | 422 | rule 10 |
 
 The door's own refusals are every reseller route's (`not_allowed`,

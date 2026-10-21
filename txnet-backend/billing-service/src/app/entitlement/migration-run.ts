@@ -25,6 +25,8 @@ export const MIGRATION_RUN_REJECTIONS = [
   'run_busy',
   'run_closed',
   'run_not_previewed',
+  'run_not_committed',
+  'rollback_window_closed',
   'inbound_not_found',
   'variant_not_found',
   'variant_not_prepaid',
@@ -52,13 +54,31 @@ const MAPPABLE: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, Migra
 const CANCELLABLE: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, MigrationRunStatus.previewing, MigrationRunStatus.previewed];
 /** A commit asked again once it started is answered as it is. */
 const STARTED: readonly MigrationRunStatus[] = [MigrationRunStatus.committing, MigrationRunStatus.committed];
+/** A rollback asked again once it started is answered as it is (F-211). */
+const ROLLING: readonly MigrationRunStatus[] = [MigrationRunStatus.rolling_back, MigrationRunStatus.rolled_back];
+/** Never committed, or not yet: nothing to roll back. A cancelled or expired run is `run_closed`. */
+const UNCOMMITTED: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, MigrationRunStatus.previewing, MigrationRunStatus.previewed, MigrationRunStatus.committing];
 
 export type MigrationInboundView = Pick<MigrationInbound, 'inboundRemoteId' | 'tag' | 'protocol' | 'clientCount' | 'variantId'>;
 
 /** A run as its page reads it: the report's counts and, on one run, the inbounds and their variants. */
 export type MigrationRunView = Pick<
   MigrationRun,
-  'id' | 'kind' | 'sourceFamily' | 'sourceAddress' | 'status' | 'failureReason' | 'plannedCreate' | 'plannedUpdate' | 'plannedSkip' | 'committedItems' | 'failedItems' | 'rollbackUntil' | 'createdAt' | 'updatedAt'
+  | 'id'
+  | 'kind'
+  | 'sourceFamily'
+  | 'sourceAddress'
+  | 'status'
+  | 'failureReason'
+  | 'plannedCreate'
+  | 'plannedUpdate'
+  | 'plannedSkip'
+  | 'committedItems'
+  | 'failedItems'
+  | 'rollbackUntil'
+  | 'snapshotsPurgedAt'
+  | 'createdAt'
+  | 'updatedAt'
 > & { inbounds?: MigrationInboundView[] };
 
 const runView = (r: MigrationRun, inbounds?: MigrationInbound[]): MigrationRunView => ({
@@ -74,6 +94,7 @@ const runView = (r: MigrationRun, inbounds?: MigrationInbound[]): MigrationRunVi
   committedItems: r.committedItems,
   failedItems: r.failedItems,
   rollbackUntil: r.rollbackUntil,
+  snapshotsPurgedAt: r.snapshotsPurgedAt,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
   ...(inbounds ? { inbounds: inbounds.map(({ inboundRemoteId, tag, protocol, clientCount, variantId }) => ({ inboundRemoteId, tag, protocol, clientCount, variantId })) } : {}),
@@ -93,13 +114,26 @@ export type MigrationItemView = {
   skipReason: string | null;
   outcome: MigrationItemOutcome;
   failureReason: string | null;
+  /** Why the rollback kept the item, or its person (F-211). */
+  keptReason: string | null;
 };
 
 const numberOr = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 const textOr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
-/** The table's row from the item's snapshot; an `unreadable` one holds its id alone, so most cells are null. */
-function itemView(i: { remoteIdentity: string; sourceSnapshot: Prisma.JsonValue; plannedAction: MigrationItemAction; skipReason: string | null; outcome: MigrationItemOutcome; failureReason: string | null }): MigrationItemView {
+/**
+ * The table's row from the item's snapshot; an `unreadable` one holds its id
+ * alone, and a purged one (its window ended, F-211) nothing, so most cells are null.
+ */
+function itemView(i: {
+  remoteIdentity: string;
+  sourceSnapshot: Prisma.JsonValue;
+  plannedAction: MigrationItemAction;
+  skipReason: string | null;
+  outcome: MigrationItemOutcome;
+  failureReason: string | null;
+  keptReason: string | null;
+}): MigrationItemView {
   const s = (i.sourceSnapshot && typeof i.sourceSnapshot === 'object' && !Array.isArray(i.sourceSnapshot) ? i.sourceSnapshot : {}) as Record<string, unknown>;
   const up = numberOr(s['upBytes']);
   const down = numberOr(s['downBytes']);
@@ -116,6 +150,7 @@ function itemView(i: { remoteIdentity: string; sourceSnapshot: Prisma.JsonValue;
     skipReason: i.skipReason,
     outcome: i.outcome,
     failureReason: i.failureReason,
+    keptReason: i.keptReason,
   };
 }
 
@@ -179,13 +214,13 @@ export class MigrationRunService {
     return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => this.viewOf(tx, tenantId, runId)));
   }
 
-  /** The report's per-user table in the snapshot's order; `problems` keeps the skipped and the failed. */
+  /** The report's per-user table in the snapshot's order; `problems` keeps the skipped, the failed and what a rollback kept. */
   outcomes(actor: ResellerActor, tenantId: string, runId: string, page: GrantBulkPage) {
     const { page: p = 1, pageSize = 20, problems } = page;
     return this.admitted(actor, tenantId, 'read', () =>
       tenantTransaction(this.prisma, async (tx) => {
         await this.find(tx, tenantId, runId);
-        const where: Prisma.MigrationItemWhereInput = { runId, ...(problems ? { OR: [{ plannedAction: MigrationItemAction.skip }, { outcome: MigrationItemOutcome.failed }] } : {}) };
+        const where: Prisma.MigrationItemWhereInput = { runId, ...(problems ? { OR: [{ plannedAction: MigrationItemAction.skip }, { outcome: { in: [MigrationItemOutcome.failed, MigrationItemOutcome.kept] } }] } : {}) };
         const [items, total] = await Promise.all([
           tx.migrationItem.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (p - 1) * pageSize, take: pageSize }),
           tx.migrationItem.count({ where }),
@@ -263,6 +298,27 @@ export class MigrationRunService {
         if (run.status === MigrationRunStatus.draft || run.status === MigrationRunStatus.previewing) throw new MigrationRunRefused('run_not_previewed', run.status);
         if (run.status !== MigrationRunStatus.previewed) throw new MigrationRunRefused('run_closed', run.status);
         const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.committing, workerClaimedAt: null } });
+        await announceRun(tx, after);
+        return runView(after);
+      }),
+    );
+  }
+
+  /**
+   * The reseller undoes a committed run inside its window (F-211, D-63): the
+   * worker rolls it back a batch a tick (`MigrationRollbackService`). Asked
+   * again once started, answered as it is; past `rollbackUntil` it is
+   * `rollback_window_closed` — the snapshots it would be judged by are gone.
+   */
+  rollback(actor: ResellerActor, tenantId: string, runId: string, now: Date = new Date()): Promise<MigrationRunView> {
+    return this.admitted(actor, tenantId, 'staffWrite', () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const run = await this.find(tx, tenantId, runId);
+        if (ROLLING.includes(run.status)) return runView(run);
+        if (UNCOMMITTED.includes(run.status)) throw new MigrationRunRefused('run_not_committed', run.status);
+        if (run.status !== MigrationRunStatus.committed) throw new MigrationRunRefused('run_closed', run.status);
+        if (!run.rollbackUntil || run.rollbackUntil.getTime() <= now.getTime()) throw new MigrationRunRefused('rollback_window_closed', run.rollbackUntil?.toISOString());
+        const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.rolling_back, rollbackActorUserId: actor.userId, workerClaimedAt: null } });
         await announceRun(tx, after);
         return runView(after);
       }),

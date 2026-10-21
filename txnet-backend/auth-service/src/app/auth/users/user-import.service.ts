@@ -24,6 +24,22 @@ export type ImportedUser = { remoteIdentity: string; userId: string; created: bo
 export const USER_IMPORT_REFUSALS = ['over_cap', 'deleted'] as const;
 export type RefusedUser = { remoteIdentity: string; reason: (typeof USER_IMPORT_REFUSALS)[number] };
 export type UserImportAnswer = { users: ImportedUser[]; refused: RefusedUser[] };
+/** Why a rollback's removal keeps a person (F-211): not an import's, or they did something here since. */
+export const USER_REMOVAL_KEPT = ['not_found', 'not_imported', 'phone_linked', 'email_linked', 'messenger_linked', 'signed_in'] as const;
+export type KeptUser = { userId: string; reason: (typeof USER_REMOVAL_KEPT)[number] };
+export type UserRemovalAnswer = { removed: string[]; kept: KeptUser[] };
+
+type RemovalFacts = { remoteIdentity: string | null; phoneNumber: string | null; email: string | null; _count: { sessions: number; linkedBotAccounts: number } };
+
+/** Why a person stays, or null when all they did was arrive by the import: no phone or email, no messenger, never signed in. */
+function keptBecause(user: RemovalFacts): KeptUser['reason'] | null {
+  if (user.remoteIdentity === null) return 'not_imported';
+  if (user.phoneNumber) return 'phone_linked';
+  if (user.email) return 'email_linked';
+  if (user._count.linkedBotAccounts > 0) return 'messenger_linked';
+  if (user._count.sessions > 0) return 'signed_in';
+  return null;
+}
 
 /**
  * A username from a source label: lower-cased, every run of characters the
@@ -97,6 +113,41 @@ export class UserImportService {
       const rows = await this.newUsers(tx, { tenantId, roleId: role.id, passwordHash }, admitted);
       await tx.user.createMany({ data: rows });
       for (const row of rows) answer.users.push({ remoteIdentity: row.remoteIdentity, userId: row.id, created: true });
+      return answer;
+    });
+  }
+
+  /**
+   * An import's rollback (F-211) removes the people it made: soft-deleted
+   * (`deletedAt`), their `remoteIdentity` and username released so a later
+   * run of the same source makes them afresh under the same name instead of
+   * refusing them `deleted` (rule 4). Only an import's person who did nothing
+   * here goes; the rest are kept with why. One already removed is answered
+   * removed, so a retried batch is safe. Billing decided they hold nothing
+   * there; this is identity's half.
+   */
+  async removeImported(userIds: string[]): Promise<UserRemovalAnswer> {
+    const tenantId = TenantContext.current('user import removal').id;
+    const ids = [...new Set(userIds)];
+    return tenantTransaction(this.prisma, async (tx) => {
+      const users = await tx.user.findMany({
+        where: { tenantId, id: { in: ids } },
+        select: { id: true, remoteIdentity: true, deletedAt: true, phoneNumber: true, email: true, _count: { select: { sessions: true, linkedBotAccounts: true } } },
+      });
+      const byId = new Map(users.map((u) => [u.id, u]));
+      const answer: UserRemovalAnswer = { removed: [], kept: [] };
+      const gone: string[] = [];
+      for (const id of ids) {
+        const user = byId.get(id);
+        const reason = !user ? 'not_found' : user.deletedAt ? null : keptBecause(user);
+        if (reason) answer.kept.push({ userId: id, reason });
+        else if (user?.deletedAt) answer.removed.push(id);
+        else gone.push(id);
+      }
+      if (gone.length > 0) {
+        await tx.user.updateMany({ where: { tenantId, id: { in: gone }, deletedAt: null }, data: { deletedAt: new Date(), remoteIdentity: null, username: null } });
+        answer.removed.push(...gone);
+      }
       return answer;
     });
   }

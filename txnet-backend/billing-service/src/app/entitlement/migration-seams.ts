@@ -12,6 +12,8 @@ const SNAPSHOT_PATH = '/api/internal/source/snapshot';
 const DESTROY_LOGIN_PATH = '/api/internal/vault/source-credential/destroy';
 /** The people of an import on `auth-service` (identity `contract.import.md`). Service callers only. */
 const PEOPLE_PATH = '/api/internal/users/import';
+/** An import's rollback removes the people it made there (identity `contract.import.md`, F-211). Service callers only. */
+const REMOVE_PEOPLE_PATH = '/api/internal/users/import/remove';
 
 /** The seam could not be asked: unset, unreachable, or an answer in no shape it gives. Retried by the next tick. */
 export class MigrationSeamUnavailable extends Error {
@@ -148,10 +150,18 @@ const peopleSchema = z.object({
 });
 export type ImportedPeopleAnswer = z.infer<typeof peopleSchema>;
 
+/** The people identity removed, and the ones it kept with why (`signed_in`, `phone_linked`, …). */
+const removalSchema = z.object({
+  removed: z.array(z.string().uuid()),
+  kept: z.array(z.object({ userId: z.string().uuid(), reason: z.string().regex(REASON) })),
+});
+export type RemovedPeopleAnswer = z.infer<typeof removalSchema>;
+
 /**
  * Finds or makes an import's people on `auth-service` (F-201-e): by the
  * source's key, so a batch retried after a timeout makes no one twice
- * (identity rule 1). The tenant is the header, honoured with the token.
+ * (identity rule 1); and removes the ones a rollback undoes (F-211), safe to
+ * ask twice. The tenant is the header, honoured with the token.
  */
 @Injectable()
 export class ImportedPeople {
@@ -165,6 +175,13 @@ export class ImportedPeople {
     const data = await postToSeam(this.seam, PEOPLE_PATH, { users }, { [IdentityHeaders.tenantId]: tenantId });
     const parsed = peopleSchema.safeParse(data);
     if (!parsed.success) throw new MigrationSeamUnavailable(`${PEOPLE_PATH} answered no people`);
+    return parsed.data;
+  }
+
+  async remove(tenantId: string, userIds: string[]): Promise<RemovedPeopleAnswer> {
+    const data = await postToSeam(this.seam, REMOVE_PEOPLE_PATH, { userIds }, { [IdentityHeaders.tenantId]: tenantId });
+    const parsed = removalSchema.safeParse(data);
+    if (!parsed.success) throw new MigrationSeamUnavailable(`${REMOVE_PEOPLE_PATH} answered no removal`);
     return parsed.data;
   }
 }

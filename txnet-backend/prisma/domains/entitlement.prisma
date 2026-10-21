@@ -571,9 +571,9 @@ enum MigrationRunKind {
   @@schema("entitlement")
 }
 
-/// `draft → previewing → previewed → committing → committed → rolled_back`;
-/// before the commit a run may be `cancelled` or `expired`. A trigger holds it
-/// (`migration_run_status_moves`).
+/// `draft → previewing → previewed → committing → committed → rolling_back →
+/// rolled_back`; before the commit a run may be `cancelled` or `expired`. A
+/// trigger holds it (`migration_run_status_moves`).
 enum MigrationRunStatus {
   draft
   previewing
@@ -583,6 +583,8 @@ enum MigrationRunStatus {
   rolled_back
   cancelled
   expired
+  /// The reseller asked for a rollback inside its window (F-211): undone a batch a tick.
+  rolling_back
 
   @@schema("entitlement")
 }
@@ -618,6 +620,8 @@ enum MigrationItemOutcome {
   skipped
   failed
   rolled_back
+  /// The rollback left it: its customer renewed, topped up or bought since (F-211, `keptReason`).
+  kept
 
   @@schema("entitlement")
 }
@@ -646,6 +650,10 @@ model MigrationRun {
   /// The drain's lease on the run (F-206, F-207): two ticks never read the source or commit it at once.
   workerClaimedAt DateTime?
   actorUserId    String             @db.Uuid
+  /// Who asked for the rollback (F-211); no foreign key, may be staff.
+  rollbackActorUserId String?       @db.Uuid
+  /// When the window ended and the items' snapshots were cleared (F-211); null while they are kept.
+  snapshotsPurgedAt DateTime?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -669,8 +677,8 @@ model MigrationItem {
   runId            String               @db.Uuid
   tenantId         String               @db.Uuid
   remoteIdentity   String
-  /// The normalised source client (F-201-b), never edited after the preview.
-  sourceSnapshot   Json
+  /// The normalised source client (F-201-b), never edited after the preview; null once its run's window ended (F-211).
+  sourceSnapshot   Json?
   plannedAction    MigrationItemAction
   skipReason       MigrationSkipReason?
   outcome          MigrationItemOutcome @default(pending)
@@ -679,6 +687,10 @@ model MigrationItem {
   createdUserId    String?              @db.Uuid
   createdGrantId   String?              @db.Uuid
   createdConfigIds String[]             @default([]) @db.Uuid
+  /// Why the rollback kept the item (`renewed`, `topped_up`, `bought`, …), or why its person stayed (F-211).
+  keptReason       String?
+  /// The rollback is done with the item, its person included (F-211).
+  rolledBackAt     DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
 

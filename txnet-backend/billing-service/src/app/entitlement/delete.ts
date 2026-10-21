@@ -70,7 +70,7 @@ const CLOSED: readonly GrantStatus[] = [GrantStatus.expired, GrantStatus.exhaust
 export async function deleteGrant(
   tx: Prisma.TransactionClient,
   grantId: string,
-  input: { at: Date; actorUserId: string; reason: string; refund: boolean },
+  input: { at: Date; actorUserId: string; reason: string; refund: boolean; statusReason?: string },
   settle: RemainderSettler,
 ): Promise<Deletion> {
   const grant = await tx.grant.findFirst({ where: { id: grantId }, select: { id: true, tenantId: true, status: true, statusReason: true, suspendedAt: true, freezeStopsClock: true } });
@@ -80,7 +80,8 @@ export async function deleteGrant(
 
   const moved = await tx.grant.updateMany({
     where: { id: grantId, status: grant.status, statusReason: grant.statusReason },
-    data: { status: GrantStatus.cancelled, statusReason: ADMIN_DELETED, frozenUntil: null },
+    // An import's rollback (F-211) names its own reason; every admin's delete is `admin_deleted`.
+    data: { status: GrantStatus.cancelled, statusReason: input.statusReason ?? ADMIN_DELETED, frozenUntil: null },
   });
   if (moved.count === 0) throw new EntitlementRefused('grant_moved');
 

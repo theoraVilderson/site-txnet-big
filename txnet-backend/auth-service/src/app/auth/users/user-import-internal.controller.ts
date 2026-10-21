@@ -3,7 +3,7 @@ import { TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core'
 import { z } from 'zod';
 
 import { ServiceOnlyGuard } from '../../common/guards/service-only.guard';
-import { USER_IMPORT_BATCH_MAX, UserImportService, type SourceUser, type UserImportAnswer } from './user-import.service';
+import { USER_IMPORT_BATCH_MAX, UserImportService, type SourceUser, type UserImportAnswer, type UserRemovalAnswer } from './user-import.service';
 
 /** A source panel's names are free text; these bound what one call may carry. */
 const REMOTE_IDENTITY_MAX = 512;
@@ -16,9 +16,13 @@ export const userImportSchema = z.object({
     .max(USER_IMPORT_BATCH_MAX),
 });
 
+export const userRemovalSchema = z.object({ userIds: z.array(z.string().uuid()).min(1).max(USER_IMPORT_BATCH_MAX) });
+
 /**
  * `POST /api/internal/users/import` (F-201-e, contract.import.md) — the seam an
- * import's commit (F-207, billing-service) finds or creates its users through.
+ * import's commit (F-207, billing-service) finds or creates its users through;
+ * `POST /api/internal/users/import/remove` the one its rollback (F-211) removes
+ * the people it made through.
  * Service callers only (a neutral 404 otherwise); the tenant is `X-Tenant-Id`,
  * honoured because the service token verified. `staffWrite`: the import is the
  * reseller's own act, closed when its staff could not write either.
@@ -33,5 +37,11 @@ export class UserImportInternalController {
   @HttpCode(HttpStatus.OK)
   findOrCreate(@Body(new ZodValidationPipe(userImportSchema)) body: { users: SourceUser[] }): Promise<UserImportAnswer> {
     return this.imports.findOrCreate(body.users);
+  }
+
+  @Post('import/remove')
+  @HttpCode(HttpStatus.OK)
+  remove(@Body(new ZodValidationPipe(userRemovalSchema)) body: { userIds: string[] }): Promise<UserRemovalAnswer> {
+    return this.imports.removeImported(body.userIds);
   }
 }

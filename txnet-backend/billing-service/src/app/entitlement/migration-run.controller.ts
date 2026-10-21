@@ -32,6 +32,8 @@ const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
   run_busy: 409,
   run_closed: 409,
   run_not_previewed: 409,
+  run_not_committed: 409,
+  rollback_window_closed: 409,
   variant_not_prepaid: 422,
   variant_not_deliverable: 422,
   variant_not_assignable: 422,
@@ -54,6 +56,7 @@ function migrationRefusal(e: unknown): unknown {
  * - `PUT …/migration-runs/:runId/inbounds` `{inbounds: [{inboundRemoteId, variantId}]}` -> the run
  * - `POST …/migration-runs/:runId/preview` -> **202** the run, `previewing`
  * - `POST …/migration-runs/:runId/commit` -> **202** the run, `committing` (F-207)
+ * - `POST …/migration-runs/:runId/rollback` -> **202** the run, `rolling_back` (F-211, inside its 7 days)
  * - `GET …/migration-runs`, `GET …/:runId`, `GET …/:runId/outcomes` (the report's table), `POST …/:runId/cancel`
  *
  * All `migration.manage`: `staffWrite` to change, `read` to look. The page
@@ -100,11 +103,18 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   commit(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('runId', new ParseUUIDPipe()) runId: string, @Req() req: Request) {
     return this.answer(() => this.jobs.commit(actorOf(req), tenantId, runId));
   }
+
+  @Post(':runId/rollback')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit(bulkWriteLimit)
+  rollback(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('runId', new ParseUUIDPipe()) runId: string, @Req() req: Request) {
+    return this.answer(() => this.jobs.rollback(actorOf(req), tenantId, runId));
+  }
 }
 
 /**
- * The seam `worker-service`'s `migration_run_drain` tick reaches the dry run
- * through (F-206, F-207), as every drain: service callers only, outside the gate and
+ * The seam `worker-service`'s `migration_run_drain` tick reaches the dry run,
+ * the commit and the rollback through (F-206, F-207, F-211), as every drain: service callers only, outside the gate and
  * the tenant (ADR-0027).
  */
 @TenantCapability('system')

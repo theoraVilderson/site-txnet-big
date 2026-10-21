@@ -2,11 +2,11 @@
 id: identity
 layer: domain
 status: active
-version: 38
+version: 39
 updated: 2026-10-21
 ---
 
-# Contract — identity / the people an import brings (F-201-e)
+# Contract — identity / the people an import brings (F-201-e), and removes on a rollback (F-211)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). Each source client becomes a Grant
@@ -46,6 +46,16 @@ and the cap, shared with registration).
    Role `user`, `active`.
 7. **Not a signup.** No `USER_SIGNED_UP`: analytics' signups count people who
    signed up; an import's are counted by its run.
+8. **A rollback removes only an import's person who did nothing here**
+   (F-211; entitlement `contract.import.md` rule 26). Billing names the
+   people the run made and holding nothing there; each is kept, with why,
+   when it has no `remoteIdentity` (`not_imported`), a phone
+   (`phone_linked`), an email (`email_linked`), a messenger link
+   (`messenger_linked`) or a session (`signed_in`), or is not the tenant's
+   (`not_found`). The rest are soft-deleted (`deletedAt`) with their
+   `remoteIdentity` and username released, so a later run of the same source
+   makes them afresh under the same name instead of refusing them `deleted`
+   (rule 4). One already removed is answered removed: a retry is safe.
 
 ## Route
 
@@ -57,6 +67,7 @@ not write either.
 | Route | Body | Answers |
 |---|---|---|
 | `POST /api/internal/users/import` | `users[]` (1..200): `remoteIdentity` (1..512, trimmed), `label` (≤ 200) | in `data`: `users[]`: `remoteIdentity`, `userId`, `created`; `refused[]`: `remoteIdentity`, `reason` `over_cap` \| `deleted` |
+| `POST /api/internal/users/import/remove` | `userIds[]` (1..200, uuids) | in `data`: `removed[]` (user ids); `kept[]`: `userId`, `reason` (rule 8) |
 
 A `remoteIdentity` named twice in one body is one person. A username taken
 outside the lock while the batch runs fails the

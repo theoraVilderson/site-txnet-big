@@ -61,6 +61,8 @@ describe('entitlement.migration_run: one import, its source and its state', () =
       'rolled_back',
       'cancelled',
       'expired',
+      // F-211: added after, so last — Postgres appends a new value.
+      'rolling_back',
     ]);
   });
 
@@ -86,6 +88,10 @@ describe('entitlement.migration_run: one import, its source and its state', () =
     expect(sql).toContain('CREATE TRIGGER migration_run_status_moves');
     // A committed run only rolls back; it is never previewed or committed again.
     expect(sql).toMatch(/OLD\."status" = 'committed'\s+AND NEW\."status" IN \('rolled_back'\)/);
+    // Since F-211 the rollback goes through `rolling_back`, a batch a tick, never in one step.
+    const rollback = migrationSql('an_import_rolls_back_within_its_window');
+    expect(rollback).toMatch(/OLD\."status"::text = 'committed'\s+AND NEW\."status"::text IN \('rolling_back'\)/);
+    expect(rollback).toMatch(/OLD\."status"::text = 'rolling_back'\s+AND NEW\."status"::text IN \('rolled_back'\)/);
   });
 
   it('a panel run names its family and address; a csv run names neither', () => {

@@ -101,6 +101,63 @@ describe('UserImportService.findOrCreate', () => {
   });
 });
 
+/**
+ * F-211: a rollback removes the people its import made. What fails silently
+ * here: a person who signed up for real (no `remoteIdentity`) or who used the
+ * account since removed with the rollback; a removed person still holding the
+ * source's key, so the next run of the same panel refuses them `deleted`; and
+ * a retried batch that reports the people it removed the first time as kept.
+ */
+describe('UserImportService.removeImported', () => {
+  const TENANT = 'aaaaaaaa-0000-4000-8000-000000000001';
+  type Person = { id: string; remoteIdentity: string | null; deletedAt: Date | null; phoneNumber?: string | null; email?: string | null; sessions?: number; bots?: number };
+
+  const build = (people: Person[]) => {
+    const tx = {
+      $executeRaw: vi.fn(async () => 0),
+      user: {
+        findMany: vi.fn(async (args: { where: { id: { in: string[] } } }) =>
+          people
+            .filter((p) => args.where.id.in.includes(p.id))
+            .map((p) => ({ phoneNumber: null, email: null, ...p, _count: { sessions: p.sessions ?? 0, linkedBotAccounts: p.bots ?? 0 } })),
+        ),
+        updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => ({ count: args.where.id.in.length })),
+      },
+    };
+    const prisma = { $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)) };
+    const service = new UserImportService(prisma as never);
+    return { tx, run: (ids: string[]) => runWithTenant({ id: TENANT } as never, () => service.removeImported(ids)) };
+  };
+
+  it('removes an imported person who did nothing, releasing the key and the name', async () => {
+    const { run, tx } = build([{ id: 'u-1', remoteIdentity: 'r1', deletedAt: null }]);
+    expect(await run(['u-1'])).toEqual({ removed: ['u-1'], kept: [] });
+    expect(tx.user.updateMany).toHaveBeenCalledWith({
+      where: { tenantId: TENANT, id: { in: ['u-1'] }, deletedAt: null },
+      data: { deletedAt: expect.any(Date), remoteIdentity: null, username: null },
+    });
+  });
+
+  it('keeps who signed up for real or used the account since, and says why', async () => {
+    const { run, tx } = build([
+      { id: 'real', remoteIdentity: null, deletedAt: null },
+      { id: 'phone', remoteIdentity: 'r2', deletedAt: null, phoneNumber: '+989120000000' },
+      { id: 'bot', remoteIdentity: 'r3', deletedAt: null, bots: 1 },
+      { id: 'signed', remoteIdentity: 'r4', deletedAt: null, sessions: 2 },
+    ]);
+    const answer = await run(['real', 'phone', 'bot', 'signed', 'missing']);
+    expect(answer.removed).toEqual([]);
+    expect(answer.kept.map((k) => k.reason)).toEqual(['not_imported', 'phone_linked', 'messenger_linked', 'signed_in', 'not_found']);
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('answers a person removed by an earlier try as removed', async () => {
+    const { run, tx } = build([{ id: 'u-1', remoteIdentity: null, deletedAt: new Date() }]);
+    expect(await run(['u-1'])).toEqual({ removed: ['u-1'], kept: [] });
+    expect(tx.user.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('usernameBase', () => {
   it.each([
     ['Reza.K', 'reza_k'],

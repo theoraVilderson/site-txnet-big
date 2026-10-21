@@ -2,7 +2,7 @@
 id: identity
 layer: domain
 status: active
-version: 38
+version: 39
 keywords: [import users from another panel, imported user, remote identity, کاربر انتقالی, temporary access, a key for a window, key with start and end, دسترسی موقت, دسترسی زمان‌دار, active sessions, my sessions, end a session, terminate session, نشست‌های فعال, مدیریت نشست, بستن نشست, impersonate a reseller's user, impersonation under consent, ورود به‌جای کاربر نماینده, time zone, timezone, user time zone, منطقه زمانی, ساعت کاربر, notice messenger, messenger for notices, telegram or bale for notices, پیام‌رسان اعلان‌ها, users, roles, manage roles, create a role, edit a role, role permissions, staff role, نقش‌ها, ساختن نقش, ویرایش نقش, دسترسی‌های نقش, find a user, user search, user picker, جستجوی کاربر, reseller owner login, my reseller panel, handoff, پنل نمایندگی من, owner on own domain, owner in reseller bot chat, مالک در ربات نماینده, login, auth, rbac, roles, permissions, sessions, otp, otp channel, otp delivery push, channel token, delivery result, delivery method, telegram, bale, bot account, bot link, share contact, forgot password, password reset, phone number, e164, phone format, country, email, email address, verify email, email verification, smtp, ایمیل, تایید ایمیل, شماره موبایل, فرمت شماره]
 source:
   - txnet-backend/prisma/domains/identity.prisma
@@ -63,9 +63,9 @@ See [contract.md](contract.md), [contract.sessions.md](contract.sessions.md) (a 
 ## Changelog
 | Date | Change |
 |---|---|
+| 2026-10-21 | Contract v38 -> **v39** (additive, F-211, D-63): `POST /api/internal/users/import/remove` — an import's rollback removes the people it made who did nothing here; see [contract.import.md](contract.import.md) |
 | 2026-10-21 | Contract v37 -> **v38** (additive, F-201-e, D-63): `user.remoteIdentity` (unique per tenant) and `POST /api/internal/users/import` — an import finds or creates its people by the source's key. [contract.import.md](contract.import.md). Consumers: entitlement (F-207, not built yet) |
 | 2026-10-14 | Contract v36 -> **v37** (behaviour change, SA-1-b, ADR-0145): the holder of `*` signs in only with password and code; every one-factor door refuses them, a reset leaves them signed out. [invariants.md](invariants.md) 22. Consumers: auth-api, panel-web (same change) |
 | 2026-10-14 | Contract v35 -> **v36** (additive, SA-1-a): at most `SUPERADMIN_MAX` (default 2) people hold `*`; the assign refuses `superadmin_limit`, boot warns past it. [contract.roles.md](contract.roles.md). Consumers: auth-api (same change) |
 | 2026-10-14 | Contract v34 -> **v35** (breaking in meaning, GR-1-v, ADR-0144): the `Admin` and `Support` templates are gone — their holders and the groups naming them took the keys onto groups; a token's `roleName` is `user`, `SuperAdmin` or a tenant's own. [contract.roles.md](contract.roles.md). Consumers: forward-auth (v6, same change), governance, panel-web (no role name read) |
-| 2026-10-13 | Contract v33 -> **v34** (additive, F-030-a): a key given for a window — `user_permission.startsAt`/`endsAt`/`openedAt`, counted only inside it, opened and closed by a sweep with `key_window` told. [contract.access.md](contract.access.md). Consumers: auth-api (v51, same change), automation (job + template), panel-web (F-030-c) |
 <!-- INDEX.md is a router. <=40 lines. Never put detail here. -->
