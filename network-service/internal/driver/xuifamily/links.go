@@ -62,18 +62,31 @@ func (d *Driver) lines(f found) []string {
 	)
 }
 
-// subscription builds the address from the panel's settings. ok is false for
-// no subId or the sub server off; err is a settings read that failed.
+// subscription builds the address from the panel's settings.
 func (d *Driver) subscription(ctx context.Context, op, subID string) (string, bool, error) {
+	return SubscriptionOf(subID, d.base.Hostname(), func() (SubSettings, error) { return d.subSettings(ctx, op) })
+}
+
+// SubscriptionOf is the address for subID on every x-ui shape, the settings
+// read only when there is a subID. ok is false for no subId or the sub server
+// off; err is a settings read that failed.
+func SubscriptionOf(subID, panelHost string, read func() (SubSettings, error)) (string, bool, error) {
 	if subID == "" {
 		return "", false, nil
 	}
-	var s SubSettings
-	if err := d.call(ctx, op, http.MethodPost, d.dialect.Settings, nil, &s); err != nil {
+	s, err := read()
+	if err != nil {
 		return "", false, err
 	}
-	u, ok := s.Address(d.base.Hostname(), subID)
+	u, ok := s.Address(panelHost, subID)
 	return u, ok, nil
+}
+
+// subSettings is the panel's sub server settings, one read.
+func (d *Driver) subSettings(ctx context.Context, op string) (SubSettings, error) {
+	var s SubSettings
+	err := d.call(ctx, op, http.MethodPost, d.dialect.Settings, nil, &s)
+	return s, err
 }
 
 // SubSettings is the sub server's part of the panel's settings, the same on

@@ -560,15 +560,10 @@ func (d *Driver) BuildLink(ctx context.Context, client driver.RemoteClient, in d
 // the panel has XRAY_SUBSCRIPTION_URL_PREFIX set. The interface has no error:
 // a failed read answers false, and the caller falls back to BuildLink.
 func (d *Driver) SubscriptionURL(ctx context.Context, remoteID string) (string, bool) {
-	u, err := d.getUser(ctx, "SubscriptionURL", remoteID)
-	if err != nil || u.SubscriptionURL == "" {
-		return "", false
+	if u, err := d.getUser(ctx, "SubscriptionURL", remoteID); err == nil {
+		return d.subscription(u)
 	}
-	ref, err := url.Parse(u.SubscriptionURL)
-	if err != nil {
-		return "", false
-	}
-	return d.base.ResolveReference(ref).String(), true
+	return "", false
 }
 
 // ClientLinks is every link Marzban built for the user, its `links` field:

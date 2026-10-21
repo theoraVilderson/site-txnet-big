@@ -2,11 +2,11 @@
 id: entitlement
 layer: domain
 status: active
-version: 37
+version: 38
 updated: 2026-10-21
 ---
 
-# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208), the rollback (F-211)
+# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208), the rollback (F-211), the old link (F-203-a)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). `network-service` reads the old panel and answers
@@ -104,9 +104,9 @@ worker's read), `migration-run-plan.ts` (`planRun`, pure),
 14. **Cancel** (`draft`, `previewing`, `previewed`) ends the run and destroys
     its source login (tenant rule 5), best effort: a later read of a closed
     run destroys it anyway.
-15. **Links are not read here.** Network's link batch (its rule 4) serves the
-    legacy path (F-203-a); the commit places fresh configs, so the dry run
-    needs the snapshot alone.
+15. **Links are not read here.** The commit places fresh configs, and the
+    old link comes in the snapshot (`subscriptionUrl`, network rule 4), so
+    the dry run needs the snapshot alone.
 
 ## The commit (F-207)
 
@@ -193,6 +193,24 @@ is still there to go back to.
     `rollbackUntil` passes on a `committed` or `rolled_back` run, the tick
     clears every item's `sourceSnapshot` and stamps `snapshotsPurgedAt`, ten
     runs a tick; the report's cells read from it are null from then on.
+
+## The old link (F-203-a)
+
+Code: `legacy-sub-link.ts` (`legacyPathOf`, `recordLegacyLink`,
+`removeLegacyLinks`). `sub-service` answers it (F-203-b) once the old host
+is the reseller's (F-204).
+
+29. **Captured from the snapshot, at the commit** (user, 2026-10-21): the
+    login is gone from `committing` on (tenant rule 5), so the client's
+    `subscriptionUrl` is read in bulk with the rest (network rule 4). The
+    item's transaction writes `legacy_sub_link`: the host as `normalizeHost`
+    keeps it (no port), the path decoded with no trailing slash. Not http(s),
+    the bare root or a broken escape is no link; the item goes on without one.
+30. **One Grant per path in a tenant.** Clients sharing one (3x-ui's subId)
+    leave it to the first committed; the rest are logged. An `updated` item
+    writes none.
+31. **It stops with the Grant's link**: a rollback's close (rule 25) and a
+    link reset (`rotateToken`) delete it in their transaction.
 
 ## Routes
 

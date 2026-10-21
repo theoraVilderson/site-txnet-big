@@ -37,8 +37,11 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
    subscription URL and lines one request each — tens of thousands for a big
    panel. So the **snapshot** is the bulk calls only (inbounds, clients,
    usage: a few requests) and carries the lines the list already read
-   (`linesRead`); **links** reads the rest in batches the dry run (F-206) can
-   retry and report on. A protocol fault on one client is recorded on it
+   (`linesRead`) and, where the family lists it in bulk
+   (`driver.SubscriptionsReader`, every import family), each client's own
+   `subscriptionUrl` — the old link an import keeps answering (F-203-a), since
+   the commit can no longer read the source; **links** reads the rest in
+   batches the dry run (F-206) can retry and report on. A protocol fault on one client is recorded on it
    (`failure`) and the batch goes on; any other fault fails the batch.
 5. **Paced** at 300 requests a minute through `driver.Pace`, whose breaker and
    adaptive rate halve it on a 429 or 5xx (F-027-df). A batch of 200 is at
@@ -74,7 +77,7 @@ shared envelope: `{data}` or `{error: {reason, detail}}`.
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`) |
+| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`) |
 | `POST /api/internal/source/links` | the same, plus `clients[]` (≤ 200: `remoteId`, `uuid`, `label`, `inboundRemoteId`, `linesRead`) | `clients[]`: `remoteId`, `subscriptionUrl?`, `lines`, `linesRead`, `failure?` |
 | `POST /api/internal/source/link` | `url` — one old subscription link (F-201-g) | `userinfo` (`uploadBytes`, `downloadBytes`, `totalBytes`, `expiresAt` unix s; 0 = not given) from `Subscription-Userinfo`, `lines` |
 

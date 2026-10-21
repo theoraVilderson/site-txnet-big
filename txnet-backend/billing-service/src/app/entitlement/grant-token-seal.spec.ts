@@ -91,6 +91,8 @@ describe('GrantService keeps the token it answers', () => {
       // No restriction on the person (F-030-e).
       userRestriction: { findMany: async () => [] },
       tenant: { findUnique: async () => ({ operatingCurrencyCode: 'USD' }) },
+      // F-203-a: a reset ends an imported old link too.
+      legacySubLink: { deleteMany: vi.fn(async () => ({ count: 0 })) },
       productVariant: { findUnique: vi.fn(async () => variant) },
       grant: {
         findFirst: vi.fn(async () => null),

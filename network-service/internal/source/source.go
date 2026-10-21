@@ -91,6 +91,10 @@ type Client struct {
 	// the rest come from Links.
 	Lines     []string `json:"lines"`
 	LinesRead bool     `json:"linesRead"`
+	// SubscriptionURL is the address the client's user holds on the old
+	// panel, where its family lists it in bulk (driver.SubscriptionsReader):
+	// the legacy path an import keeps answering (F-203-a). Empty is none.
+	SubscriptionURL string `json:"subscriptionUrl,omitempty"`
 }
 
 // Panel is one snapshot: every inbound and every client.
@@ -100,8 +104,9 @@ type Panel struct {
 }
 
 // Snapshot reads the whole source in its bulk calls only — inbounds, clients,
-// usage — so a 20 000-client panel costs a few requests. Per-client reads
-// (subscription URL, links) are Links', in batches (user, 2026-10-21).
+// usage and, where the family lists them, subscription URLs — so a 20 000-client
+// panel costs a few requests. Per-client reads (links) are Links', in batches
+// (user, 2026-10-21).
 func Snapshot(ctx context.Context, r Reader, lim Limits) (Panel, error) {
 	inbounds, err := r.ListInbounds(ctx)
 	if err != nil {
@@ -118,7 +123,30 @@ func Snapshot(ctx context.Context, r Reader, lim Limits) (Panel, error) {
 	if err != nil {
 		return Panel{}, err
 	}
-	return Panel{Inbounds: inboundsOf(inbounds), Clients: clientsOf(remote, inbounds, usage)}, nil
+	clients := clientsOf(remote, inbounds, usage)
+	if err := withSubscriptions(ctx, r, clients); err != nil {
+		return Panel{}, err
+	}
+	return Panel{Inbounds: inboundsOf(inbounds), Clients: clients}, nil
+}
+
+// withSubscriptions writes each client's own subscription URL onto it. The
+// commit can no longer read the source (tenant contract.source-login.md
+// rule 5), so the snapshot is where an import learns the old link (F-203-a,
+// user 2026-10-21). A family with no bulk list of them leaves every one empty.
+func withSubscriptions(ctx context.Context, r Reader, clients []Client) error {
+	s, ok := driver.SubscriptionsOf(r)
+	if !ok {
+		return nil
+	}
+	urls, err := s.SubscriptionURLs(ctx)
+	if err != nil {
+		return err
+	}
+	for i := range clients {
+		clients[i].SubscriptionURL = urls[clients[i].RemoteID]
+	}
+	return nil
 }
 
 func inboundsOf(in []driver.Inbound) []Inbound {

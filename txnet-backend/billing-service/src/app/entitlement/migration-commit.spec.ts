@@ -79,7 +79,7 @@ const item = (remoteId: string, plannedAction: MigrationItemAction = MigrationIt
 
 /** The run, its items, the tenant's imported Grants and configs, in memory. */
 function fakeDb(items: Row[], grants: Row[] = []) {
-  const state = { run: { ...RUN } as Row, items, grants, outbox: [] as Row[] };
+  const state = { run: { ...RUN } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as Row[] };
   const runMatches = (where: Row) =>
     Object.entries(where).every(([k, v]) => k === 'OR' || (v instanceof Date ? (state.run[k] as Date | null)?.getTime() === v.getTime() : v === null ? state.run[k] === null : state.run[k] === v));
   const itemMatches = (i: Row, where: Row) => Object.entries(where).every(([k, v]) => i[k] === v);
@@ -111,6 +111,7 @@ function fakeDb(items: Row[], grants: Row[] = []) {
     grant: { findFirst: async ({ where }: { where: Row }) => state.grants.find((g) => g['remoteIdentity'] === where['remoteIdentity']) ?? null },
     config: { findMany: async ({ where }: { where: Row }) => [{ id: `config-of-${String(where['grantId'])}` }] },
     outboxEvent: { create: async ({ data }: { data: Row }) => state.outbox.push(data) },
+    legacySubLink: { createMany: async ({ data }: { data: Row[] }) => ({ count: state.oldLinks.push(...data) && data.length }) },
   };
   const tx = new Proxy(models, { get: (target, name: string) => (name === '$executeRaw' ? async () => 0 : target[name]) });
   const prisma = { $transaction: async (fn: (t: unknown) => unknown) => fn(tx) } as unknown as PrismaService;
@@ -181,6 +182,12 @@ describe('MigrationCommitService — one committing run, one batch per tick', ()
     expect(byId(db, 'ali')).toMatchObject({ outcome: MigrationItemOutcome.created, createdUserId: `user-${key('ali')}`, createdGrantId: 'grant-item-ali', createdConfigIds: ['config-of-grant-item-ali'] });
     expect(db.state.run).toMatchObject({ committedItems: 1, failedItems: 0, status: MigrationRunStatus.committing, workerClaimedAt: null });
     expect(db.state.outbox).toEqual([expect.objectContaining({ type: OutboxEventType.MIGRATION_RUN_PROGRESS, payload: { tenantId: RUN.tenantId, userId: RUN.actorUserId, runId: RUN.id } })]);
+  });
+
+  it('keeps the old link the source served the client at, so it answers once the old host points here (F-203-a)', async () => {
+    const db = fakeDb([item('ali', MigrationItemAction.create, { sourceSnapshot: snapshot('ali', { subscriptionUrl: 'https://Sub.Old.example:2096/sub/tok-ali/' }) })]);
+    await commit(db).run();
+    expect(db.state.oldLinks).toEqual([{ tenantId: RUN.tenantId, host: 'sub.old.example', path: '/sub/tok-ali', grantId: 'grant-item-ali', migrationItemId: 'item-ali' }]);
   });
 
   it('never issues a second Grant for a key the tenant already holds: the item is updated, the Grant kept', async () => {

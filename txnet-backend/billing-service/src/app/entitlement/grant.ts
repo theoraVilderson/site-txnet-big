@@ -24,6 +24,7 @@ import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { EntitlementRefused } from './entitlement-refusals';
+import { removeLegacyLinks } from './legacy-sub-link';
 import { importedGrantShape, type ImportedGrant } from './migration-plan';
 import { assertPurchaseRoom } from './purchase-limits';
 import { assertPlatformGrantRoom } from './reseller-room';
@@ -694,16 +695,14 @@ export class GrantService {
     });
   }
 
-  /** A new subscription token for the Grant's own user, answered once; the old link stops working. */
+  /** A new subscription token for the Grant's own user, answered once; the old link stops working, an imported one too (F-203-a). */
   async rotateToken(tx: Prisma.TransactionClient, grantId: string, userId: string): Promise<string> {
     const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { userId: true } });
     // Another user's Grant is answered exactly as a missing one.
     if (!grant || grant.userId !== userId) throw new EntitlementRefused('grant_not_found', grantId);
     const { token, hash } = newSubscriptionToken();
-    await tx.grant.update({
-      where: { id: grantId },
-      data: { subscriptionTokenHash: hash, subscriptionTokenSealed: this.sealed(token), tokenRotatedAt: new Date() },
-    });
+    await tx.grant.update({ where: { id: grantId }, data: { subscriptionTokenHash: hash, subscriptionTokenSealed: this.sealed(token), tokenRotatedAt: new Date() } });
+    await removeLegacyLinks(tx, grantId);
     return token;
   }
 

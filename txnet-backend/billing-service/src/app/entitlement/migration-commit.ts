@@ -9,6 +9,7 @@ import { ConfigActionRefused } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, GrantService } from './grant';
+import { recordLegacyLink } from './legacy-sub-link';
 import { planMigrationItem, sourceClientSchema } from './migration-plan';
 import { claimRun, panelSourceOf, stillOurs } from './migration-preview';
 import { announceRun, MIGRATION_ROLLBACK_DAYS } from './migration-run';
@@ -67,8 +68,9 @@ function labelOf(item: Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>)
  *   the item before anything else, so a rollback (F-211) removes only them.
  * - **One transaction per item**: a Grant of the inbound's variant with the
  *   source's end, bag and usage (`importedGrantShape`), placed by its group
- *   at once (`GroupFulfilmentService.fulfil`), frozen by an admin if the
- *   source had it switched off — its clock running, as it ran there.
+ *   at once (`GroupFulfilmentService.fulfil`), its old link kept (F-203-a),
+ *   frozen by an admin if the source had it switched off — its clock
+ *   running, as it ran there.
  * - **A re-run never duplicates**: a key the tenant already holds a Grant of
  *   is `updated` and the Grant kept as it is (invariant 32).
  * - **A failed item is recorded and the batch goes on**; identity unreachable
@@ -183,6 +185,8 @@ export class MigrationCommitService {
       imported: { remoteIdentity, endsAt: planned.endsAt, purchasedBytes: planned.purchasedBytes, consumedBytes: planned.consumedBytes, trafficUnlimited: planned.trafficUnlimited },
     });
     await this.place(tx, grant.id);
+    const link = await recordLegacyLink(tx, { tenantId: run.tenantId, grantId: grant.id, migrationItemId: item.id, subscriptionUrl: client.subscriptionUrl });
+    if (link === 'taken') this.logger.warn(`run ${run.id}: item ${item.id}'s old link is another Grant's already; left to it (F-203-a)`);
     if (!plan.enabled) await freezeGrant(tx, grant.id, { at: now, mode: FreezeMode.hard, stopsClock: false });
     const configs = await tx.config.findMany({ where: { grantId: grant.id }, select: { id: true } });
     await this.settle(tx, run, item, { outcome: MigrationItemOutcome.created, createdGrantId: grant.id, createdConfigIds: configs.map((c) => c.id) });

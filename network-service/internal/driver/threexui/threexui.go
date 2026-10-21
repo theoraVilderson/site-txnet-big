@@ -663,18 +663,10 @@ func (d *Driver) ClientLinks(ctx context.Context, client driver.RemoteClient) ([
 	return driver.FetchLinks(ctx, d.http, op, u)
 }
 
-// subscription builds the address from the panel's settings. ok is false for
-// no subId or the sub server off; err is a settings read that failed.
+// subscription builds the address from the panel's settings
+// (xuifamily.SubscriptionOf).
 func (d *Driver) subscription(ctx context.Context, op, subID string) (string, bool, error) {
-	if subID == "" {
-		return "", false, nil
-	}
-	var s xuifamily.SubSettings
-	if err := d.call(ctx, op, http.MethodPost, []string{"panel", "api", "setting", "all"}, nil, &s); err != nil {
-		return "", false, err
-	}
-	u, ok := s.Address(d.base.Hostname(), subID)
-	return u, ok, nil
+	return xuifamily.SubscriptionOf(subID, d.base.Hostname(), func() (xuifamily.SubSettings, error) { return d.subSettings(ctx, op) })
 }
 
 func isProtocol(p string) bool {

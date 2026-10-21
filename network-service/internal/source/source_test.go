@@ -42,6 +42,34 @@ func TestSnapshotJoinsEachClientToItsUsage(t *testing.T) {
 	}
 }
 
+// withSubscriptions is a source whose family lists every client's address in bulk.
+type withSubscriptions struct {
+	*fake.Panel
+	urls map[string]string
+}
+
+func (w withSubscriptions) SubscriptionURLs(context.Context) (map[string]string, error) {
+	return w.urls, nil
+}
+
+// F-203-a: the old link is captured from the bulk read, so the commit — which
+// can no longer read the source — still knows the path each user holds.
+func TestSnapshotCarriesEachClientsSubscriptionURL(t *testing.T) {
+	r := withSubscriptions{Panel: panelWith("ali", "reza"), urls: map[string]string{"ali": "https://sub.old.example/sub/tok-ali"}}
+
+	snap, err := source.Snapshot(context.Background(), r, source.Limits{})
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	got := map[string]string{}
+	for _, c := range snap.Clients {
+		got[c.RemoteID] = c.SubscriptionURL
+	}
+	if got["ali"] != "https://sub.old.example/sub/tok-ali" || got["reza"] != "" {
+		t.Fatalf("subscription urls = %v, want ali's alone", got)
+	}
+}
+
 // D-63: a source past the cap is refused whole, never imported in part.
 func TestSnapshotRefusesASourcePastTheClientCap(t *testing.T) {
 	_, err := source.Snapshot(context.Background(), panelWith("a", "b", "c"), source.Limits{MaxClients: 2})

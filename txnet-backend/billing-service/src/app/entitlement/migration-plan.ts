@@ -10,6 +10,7 @@ const LABEL_MAX = 200;
 const UUID_MAX = 128;
 const PROTOCOL_MAX = 64;
 const LINE_MAX = 8192;
+const URL_MAX = 2048;
 /** Most families answer one or two lines a client; a source answering more is not read further. */
 const LINES_MAX = 64;
 const bytes = z.number().int().nonnegative();
@@ -35,6 +36,8 @@ export const sourceClientSchema = z.object({
     .nullable(),
   lines: z.array(z.string().max(LINE_MAX)).max(LINES_MAX),
   linesRead: z.boolean(),
+  /** The old link its user holds, where the family lists it (F-203-a); kept by the commit, never fetched here. */
+  subscriptionUrl: z.string().max(URL_MAX).optional(),
 });
 export type SourceClient = z.infer<typeof sourceClientSchema>;
 

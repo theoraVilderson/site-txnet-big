@@ -72,7 +72,7 @@ const after = (v: unknown, where: unknown) => !(where && typeof where === 'objec
 
 /** The run, its items, the Grants and the billing facts the rollback reads, in memory. */
 function fakeDb(items: Row[], grants: Row[], facts: Facts = {}, run: Row = {}) {
-  const state = { run: { ...RUN, ...run } as Row, items, grants, outbox: [] as Row[] };
+  const state = { run: { ...RUN, ...run } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as string[] };
   const itemMatches = (i: Row, where: Row): boolean =>
     Object.entries(where).every(([k, v]) => {
       if (k === 'OR') return (v as Row[]).some((w) => itemMatches(i, w));
@@ -123,6 +123,7 @@ function fakeDb(items: Row[], grants: Row[], facts: Facts = {}, run: Row = {}) {
     wallet: { findMany: async ({ where }: { where: Row }) => (facts.wallets ?? []).filter((w) => inList(w['ownerUserId'], where['ownerUserId'])) },
     walletTransaction: { groupBy: async ({ where }: { where: Row }) => maxOf((facts.walletTx ?? []).filter((t) => inList(t['walletId'], where['walletId'])), 'walletId') },
     outboxEvent: { create: async ({ data }: { data: Row }) => state.outbox.push(data) },
+    legacySubLink: { deleteMany: async ({ where }: { where: Row }) => ({ count: state.oldLinks.push(String(where['grantId'])) }) },
   };
   const tx = new Proxy(models, { get: (target, name: string) => (name === '$executeRaw' ? async () => 0 : target[name]) });
   const prisma = { $transaction: async (fn: (t: unknown) => unknown) => fn(tx) } as unknown as PrismaService;
@@ -166,6 +167,8 @@ describe('MigrationRollbackService (F-211)', () => {
     // The reseller's wholesale comes back and every other meter settles, as an admin delete answering no.
     expect(r.settleAtClose).toHaveBeenCalledWith(expect.anything(), { grantId: 'grant-ali', refund: false });
     expect(r.wholesaleAtClose).toHaveBeenCalledWith(expect.anything(), 'grant-ali');
+    // F-203-a: the old link stops answering with the Grant it led to.
+    expect(db.state.oldLinks).toEqual(['grant-ali']);
     expect(r.remove).toHaveBeenCalledWith(RUN.tenantId, ['user-ali']);
     expect(byName(db, 'ali')).toMatchObject({ outcome: MigrationItemOutcome.rolled_back, rolledBackAt: NOW, keptReason: null });
     expect(db.state.outbox).toEqual([expect.objectContaining({ type: OutboxEventType.MIGRATION_RUN_PROGRESS, aggregateId: RUN.id })]);

@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RemainderCreditService } from '../traffic/remainder-credit';
 import { UsageSettlementService } from '../usage/usage-settlement';
 import { deleteGrant } from './delete';
+import { removeLegacyLinks } from './legacy-sub-link';
 import { EntitlementRefused } from './grant';
 import { MIGRATION_COMMIT_BATCH_SIZE } from './migration-commit';
 import { claimRun, stillOurs } from './migration-preview';
@@ -225,10 +226,11 @@ export class MigrationRollbackService {
     return false;
   }
 
-  /** The admin delete's close with the remainder answered no (F-311-m): every meter settles, the wholesale comes back. */
+  /** The admin delete's close with the remainder answered no (F-311-m): every meter settles, the wholesale comes back, the old link stops (F-203-a). */
   private async close(tx: Prisma.TransactionClient, run: MigrationRun, grantId: string, now: Date): Promise<void> {
     const actorUserId = run.rollbackActorUserId ?? run.actorUserId;
     await deleteGrant(tx, grantId, { at: now, actorUserId, reason: MIGRATION_ROLLED_BACK, refund: false, statusReason: MIGRATION_ROLLED_BACK }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock }));
+    await removeLegacyLinks(tx, grantId);
     await this.meters.settleAtClose(tx, { grantId, refund: false });
     await this.remainders.wholesaleAtClose(tx, grantId);
   }
