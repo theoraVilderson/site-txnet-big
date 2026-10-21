@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 7
-updated: 2026-10-14
+updated: 2026-10-21
 ---
 
 # The lease planner's state — what it learns, and where it keeps it
@@ -27,7 +27,7 @@ planner that loses it on a deploy boots blind and overshoots while it relearns.
 |---|---|---|
 | `subscriptions` (`quota.Account`) | `entitlement.grant` | billing |
 | `quota_bytes` (Quota) | `entitlement.grant.purchasedBytes`, read directly on every pass (ADR-0094); on a metered Grant plus its share of the reserve, what its own reserve hold buys at its `vpn.traffic` meter's `unitPrice` ([contract.reserve.md](contract.reserve.md), F-118-b, F-118-l) | billing, never copied |
-| `used_bytes` (Used) | Σ `lifetimeUp+DownBytes` of `config_counter_state`, plus a push config's Σ `radius_session` high-water marks (F-027-du), over every config of the Grant, retired ones included (ADR-0094) | the collectors, never copied |
+| `used_bytes` (Used) | `entitlement.grant.importedUsedBytes` (what an import's source served, F-208; 0 otherwise) plus Σ `lifetimeUp+DownBytes` of `config_counter_state`, plus a push config's Σ `radius_session` high-water marks (F-027-du), over every config of the Grant, retired ones included (ADR-0094) | the collectors, never copied; the baseline billing's, written once |
 | `panels` | `network.panel` | — |
 | `job_interval_ms` | `tickPeriodMs`, the `J` its phase mask is cut from; null = the family's interval | planner |
 | `lag_mean_s`, `lag_var`, `lag_n` | `lagMeanSec`, `lagVarianceSec2`, `lagSamples` | planner |

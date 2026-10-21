@@ -30,6 +30,7 @@ type Row = {
   purchasedBytes: bigint;
   endsAt: Date | null;
   consumedBytes: bigint;
+  importedUsedBytes: bigint;
 };
 
 function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?: boolean } = {}) {
@@ -43,6 +44,7 @@ function build(row: Partial<Row> | null, usedPerConfig: bigint[], opts: { moved?
     purchasedBytes: BigInt(10) * GIB,
     endsAt: new Date(AT.getTime() + 3 * DAY_MS),
     consumedBytes: BigInt(7) * GIB,
+    importedUsedBytes: BigInt(0),
     ...row,
   };
   const updates: Array<{ where: Record<string, unknown>; data: Record<string, unknown> }> = [];
@@ -156,6 +158,11 @@ describe('renewGrant', () => {
     const { tx, configScans } = build({}, [GIB]);
     await renew(tx, GIB);
     expect(configScans[0]['where']).toEqual({ grantId: GRANT });
+  });
+
+  it("counts an import's usage at its source in Used (F-208): its debt is carried as any other", async () => {
+    const { tx } = build({ importedUsedBytes: BigInt(8) * GIB }, [BigInt(5) * GIB]);
+    expect(await renew(tx, BigInt(10) * GIB)).toMatchObject({ debtBytes: BigInt(3) * GIB, forgivenBytes: BigInt(0) });
   });
 
   it('extends a Grant already past its end from now, and leaves a permanent Grant permanent', async () => {

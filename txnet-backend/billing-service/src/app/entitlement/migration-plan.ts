@@ -83,6 +83,9 @@ function protocolOf(name: string): ConfigProtocol | null {
   return isSold(normalised) ? normalised : null;
 }
 
+/** A limit of 0 is unlimited, as in every family (rule 4). */
+export const isUnlimitedClient = (client: Pick<SourceClient, 'dataLimitBytes'>): boolean => client.dataLimitBytes === 0;
+
 /**
  * One source client to what an import would issue (F-202, contract.import.md):
  * a user named from its label, a `migration` Grant from now to the client's
@@ -98,7 +101,7 @@ export function planMigrationItem(client: SourceClient, source: MigrationSource)
   if (client.expiresAt && client.expiresAt.getTime() <= source.now.getTime()) return { remoteIdentity, skipReason: 'expired' };
   const protocol = protocolOf(client.protocol);
   if (!protocol) return { remoteIdentity, skipReason: 'unknown_protocol' };
-  const trafficUnlimited = client.dataLimitBytes === 0;
+  const trafficUnlimited = isUnlimitedClient(client);
   return {
     remoteIdentity,
     user: { label: client.label.trim() || client.remoteId },
@@ -125,10 +128,12 @@ type ImportableShape = Pick<ReturnType<typeof grantFromVariant>, 'startsAt' | 'e
  * An import's Grant over its variant's shape (F-207, entitlement
  * `contract.import.md`): the client's end (the variant's period when the
  * source set none), its bag and what it used there, and its `remoteIdentity`
- * (invariant 32). The rest — features, quotas, group, billing mode — is the
- * variant's, so the Grant renews as any of it. An unlimited client on a
- * limited variant, or the other way round, is not the plan the reseller
- * chose: `import_traffic_mismatch`.
+ * (invariant 32). What it used is also `importedUsedBytes` (F-208): Used
+ * counts it beside the configs' counters, so the bag left is the quota less
+ * it — no ledger entry, no hold. The rest — features, quotas, group, billing
+ * mode — is the variant's, so the Grant renews as any of it. An unlimited
+ * client on a limited variant, or the other way round, is the dry run's
+ * `traffic_mismatch` skip; met here it is `import_traffic_mismatch`.
  */
 export function importedGrantShape<S extends ImportableShape>(shape: S, imported: ImportedGrant) {
   if (imported.trafficUnlimited !== shape.trafficUnlimited) throw new EntitlementRefused('import_traffic_mismatch', imported.remoteIdentity);
@@ -139,6 +144,7 @@ export function importedGrantShape<S extends ImportableShape>(shape: S, imported
     endSetAt: endsAt === null ? null : shape.startsAt,
     purchasedBytes: imported.purchasedBytes,
     consumedBytes: imported.consumedBytes,
+    importedUsedBytes: imported.consumedBytes,
     remoteIdentity: imported.remoteIdentity,
   };
 }

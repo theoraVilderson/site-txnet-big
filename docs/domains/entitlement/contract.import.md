@@ -2,11 +2,11 @@
 id: entitlement
 layer: domain
 status: active
-version: 35
+version: 36
 updated: 2026-10-21
 ---
 
-# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207)
+# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). `network-service` reads the old panel and answers
@@ -39,14 +39,15 @@ issues what it planned.
 3. **What is planned.** A user named from the label (the remote id when the
    label is blank); a Grant with `source = migration`, from the plan's moment
    to the client's end (none = no end), its quota as the bag
-   (`purchasedBytes`) and upload plus download as `consumedBytes`; a config of
+   (`purchasedBytes`) and upload plus download as `consumedBytes` — and as Used's
+   start (rule 18); a config of
    the client's protocol from the variant the reseller chose for its inbound,
    placed by that variant's group as any Grant of it (F-027-bl), the client's
    uuid kept for the report (null where the list did not read it, as S-UI's
    from v1.1).
 4. **0 is unlimited**, as in every family: the plan is `trafficUnlimited` with
    a bag of 0 (`grant_traffic_unlimited_is_prepaid`). Whether the target
-   product sells unlimited is F-208's question, not this mapping's.
+   product sells unlimited is the dry run's (rule 11), not this mapping's.
 5. **The source's on/off is kept apart** (`enabled`). A client disabled there
    is not a suspended Grant here: `suspendedAt` starts a purge clock, and an
    import never starts one.
@@ -89,7 +90,8 @@ worker's read), `migration-run-plan.ts` (`planRun`, pure),
 11. **What the report plans** (`planRun`), per client, in the snapshot's
     order: `unreadable` (fails rule 1; its item keeps the id alone — one with
     no id has no item and is only counted), `expired` / `unknown_protocol`
-    (rule 6), `duplicate` (the same uuid as a client already planned: one
+    (rule 6), `traffic_mismatch` (an unlimited client on an inbound mapped to
+    a limited variant or the reverse, F-208: mapped again or left), `duplicate` (the same uuid as a client already planned: one
     person on two inbounds), `update` (the tenant holds a Grant of the key),
     `over_cap` (a new person past `end_users_max`; one already imported takes
     no room — the commit asks identity again, this is the forecast), else
@@ -123,7 +125,11 @@ Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
 18. **One transaction per item.** A Grant of the inbound's variant, `source =
     migration`, `sourceReferenceId` = the item, from now to the client's end
     (the variant's period when the source set none), its bag the client's
-    quota and `consumedBytes` its upload plus download (`importedGrantShape`);
+    quota and `consumedBytes` its upload plus download (`importedGrantShape`).
+    That usage is also `importedUsedBytes` (F-208): Used is it plus the
+    configs' counters (network `contract.lease.md`, billing's `usedBytesOf`),
+    so the panels serve the quota less it, and a renewal, reset or gift counts
+    it. No ledger entry, no hold: it was served and paid for at the source;
     the rest — features, quotas, group, billing mode — the variant's. It is
     placed at once by its group (`GroupFulfilmentService.fulfil`; a member that
     cannot take it yet is the sweep's), and its configs are recorded on the
@@ -136,9 +142,8 @@ Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
     `sourceReferenceId`.
 20. **A failed item never blocks the batch.** Its reason is kept: identity's
     (`over_cap`, `deleted`), the sale's (`wholesale_unfunded`,
-    `variant_not_assignable`, …), `import_traffic_mismatch` (an unlimited
-    client on a limited variant or the reverse — F-208 reports it before the
-    commit), `inbound_unmapped`, `expired` (its end came since the preview), or
+    `variant_not_assignable`, …), `import_traffic_mismatch` (the variant's
+    traffic changed since the dry run planned it, rule 11), `inbound_unmapped`, `expired` (its end came since the preview), or
     `unexpected` (logged). Identity unreachable writes nothing; the next tick
     retries.
 21. **The end.** Nothing pending: `committed`, `rollbackUntil` = 7 days on

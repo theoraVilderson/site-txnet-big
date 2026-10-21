@@ -78,6 +78,8 @@ function build(row: Partial<Row> | null, usedBytes = BigInt(0)) {
   const tx = {
     grant: {
       findFirst: async ({ where }: { where: { id: string } }) => (grant && where.id === grant.id ? { ...grant } : null),
+      // `usedBytesOf`'s baseline (F-208): this Grant was not imported.
+      findUnique: async () => ({ importedUsedBytes: BigInt(0) }),
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         writes.push({ where, data });
         if (!grant || !Object.entries(where).every(([k, v]) => same((grant as Record<string, unknown>)[k], v))) return { count: 0 };

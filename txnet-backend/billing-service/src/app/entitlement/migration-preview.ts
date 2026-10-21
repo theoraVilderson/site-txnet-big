@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GrantSource, MigrationRunStatus, type DriverType, type MigrationRun, type Prisma } from '@prisma/client';
 import { endUserRoom, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
+import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -114,11 +115,15 @@ export class MigrationPreviewService {
         tx.user.findMany({ where: { tenantId: run.tenantId, remoteIdentity: { startsWith: prefix } }, select: { remoteIdentity: true } }),
         endUserRoom(tx, run.tenantId),
       ]);
+      const variantOf = new Map(inbounds.flatMap((i) => (i.variantId ? [[i.inboundRemoteId, i.variantId] as const] : [])));
+      // Read as the sale shapes a Grant of it (`grantFromVariant`): only a prepaid variant is mapped (rule 10).
+      const variants = await tx.productVariant.findMany({ where: { id: { in: [...new Set(variantOf.values())] } }, select: { id: true, quotas: true } });
       return {
         family,
         sourceAddress,
         now,
-        variantOf: new Map(inbounds.flatMap((i) => (i.variantId ? [[i.inboundRemoteId, i.variantId] as const] : []))),
+        variantOf,
+        unlimitedVariants: new Set(variants.filter((v) => trafficQuotaOf(v.quotas).kind === 'unlimited').map((v) => v.id)),
         importedGrants: new Set(grants.flatMap((g) => (g.remoteIdentity ? [g.remoteIdentity] : []))),
         importedUsers: new Set(users.flatMap((u) => (u.remoteIdentity ? [u.remoteIdentity] : []))),
         userRoom,

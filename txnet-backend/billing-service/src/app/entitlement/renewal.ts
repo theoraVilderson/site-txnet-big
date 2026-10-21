@@ -12,8 +12,9 @@ import { PERIOD_ENDED, QUOTA_EXHAUSTED, isSpentReason } from './suspension';
  * A renewal is `Quota += X` on the same Grant (F-027-dg; SPEC weakness #30).
  *
  * Quota is `purchasedBytes` and Used is Σ lifetime counters over every config
- * of the Grant, retired ones included — both cumulative, both what the lease
- * planner reads (`network/contract.lease.md` rule 1). So a renewal on the same
+ * of the Grant, retired ones included, plus what an import's source served
+ * (F-208) — both cumulative, both what the lease planner reads
+ * (`network/contract.lease.md` rule 1). So a renewal on the same
  * Grant carries a period's over- or under-delivery to the next by arithmetic
  * alone: a credit is bytes still under Quota, a debt is Used already past it.
  * A new Grant per period would start Used at zero and drop both.
@@ -87,15 +88,20 @@ export type Renewal = CarryOver & {
   reactivated: boolean;
 };
 
-/** Used: Σ lifetime counters over every config of the Grant, retired ones included — the planner's sum. */
+/**
+ * Used: what an import's source served (`importedUsedBytes`, F-208) plus Σ
+ * lifetime counters over every config of the Grant, retired ones included —
+ * the planner's sum (network `contract.lease.md`).
+ */
 export async function usedBytesOf(tx: Prisma.TransactionClient, grantId: string): Promise<bigint> {
+  const grant = await tx.grant.findUnique({ where: { id: grantId }, select: { importedUsedBytes: true } });
   const configs = await tx.config.findMany({
     where: { grantId },
     select: { counterState: { select: { lifetimeUpBytes: true, lifetimeDownBytes: true } } },
   });
   return configs.reduce(
     (sum, c) => sum + (c.counterState ? c.counterState.lifetimeUpBytes + c.counterState.lifetimeDownBytes : BigInt(0)),
-    BigInt(0),
+    grant?.importedUsedBytes ?? BigInt(0),
   );
 }
 

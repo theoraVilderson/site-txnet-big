@@ -1,6 +1,6 @@
 import { MigrationItemAction, type DriverType, type MigrationSkipReason, type Prisma } from '@prisma/client';
 
-import { planMigrationItem, remoteIdentityOf, sourceClientSchema, type SourceClient } from './migration-plan';
+import { isUnlimitedClient, planMigrationItem, remoteIdentityOf, sourceClientSchema, type SourceClient } from './migration-plan';
 
 /** What the dry run knows besides the snapshot (F-206): the run's source, the mapping, and what the tenant already holds. */
 export type RunPlanContext = {
@@ -9,6 +9,8 @@ export type RunPlanContext = {
   now: Date;
   /** The variant chosen for each source inbound; every inbound with clients has one before a plan is made. */
   variantOf: ReadonlyMap<string, string>;
+  /** The mapped variants sold with unlimited traffic (F-111-q): a client imports unlimited only onto one (F-208). */
+  unlimitedVariants: ReadonlySet<string>;
   /** `remoteIdentity` of every Grant the tenant already holds from an import: an `update`, never a second Grant (invariant 32). */
   importedGrants: ReadonlySet<string>;
   /** `remoteIdentity` of every person already imported (identity rule 1): they take no room. */
@@ -56,6 +58,9 @@ export function clientsPerInbound(clients: readonly unknown[]): Map<string, numb
  * - **unreadable** — the client fails `sourceClientSchema` (catalog §16); one
  *   with no id at all has no row and is only counted.
  * - **expired**, **unknown_protocol** — what the client alone says (F-202).
+ * - **traffic_mismatch** — an unlimited client on an inbound mapped to a
+ *   limited product, or the other way round (F-208): the reseller maps it
+ *   again or leaves it, rather than the commit failing it.
  * - **duplicate** — the same credential (`uuid`) as a client already planned:
  *   one person listed on two inbounds (3x-ui shares a client's uuid), imported once.
  * - **update** — the tenant already holds a Grant of that key.
@@ -103,6 +108,10 @@ export function planRun(clients: readonly unknown[], ctx: RunPlanContext): RunPl
     const item = planMigrationItem(client, { family: ctx.family, sourceAddress: ctx.sourceAddress, variantId, now: ctx.now });
     if (item.skipReason) {
       skip(remoteIdentity, snapshot, item.skipReason);
+      continue;
+    }
+    if (isUnlimitedClient(client) !== ctx.unlimitedVariants.has(variantId)) {
+      skip(remoteIdentity, snapshot, 'traffic_mismatch');
       continue;
     }
     if (client.uuid && credentials.has(client.uuid)) {

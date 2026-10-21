@@ -23,9 +23,9 @@ const MIGRATION_NAME = 'a_reseller_brings_its_users_from_another_panel';
 
 const entitlement = readFileSync(join(DOMAINS, 'entitlement.prisma'), 'utf8');
 
-/** The F-201-a migration's SQL; empty while it does not exist yet. */
-function migrationSql(): string {
-  const dir = readdirSync(MIGRATIONS).find((name) => name.endsWith(`_${MIGRATION_NAME}`));
+/** A migration's SQL (the F-201-a one by default); empty while it does not exist yet. */
+function migrationSql(migration = MIGRATION_NAME): string {
+  const dir = readdirSync(MIGRATIONS).find((name) => name.endsWith(`_${migration}`));
   return dir ? readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8') : '';
 }
 const sql = migrationSql();
@@ -112,9 +112,9 @@ describe('entitlement.migration_item: one source client, planned then done', () 
     expect(sql).toContain(`"${column}"`);
   });
 
-  it('names the skip reasons F-206 reports', () => {
+  it('names the skip reasons F-206 and F-208 report', () => {
     expect(enumValues('MigrationItemAction')).toEqual(['create', 'update', 'skip']);
-    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable']);
+    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable', 'traffic_mismatch']);
   });
 
   it('holds one item per source client in a run, in its run’s tenant', () => {
@@ -136,6 +136,15 @@ describe('grant.remoteIdentity: the import’s idempotency key (F-207)', () => {
 
   it('is carried only by a migrated Grant', () => {
     expect(sql).toContain('grant_remote_identity_is_migration');
+  });
+});
+
+describe('grant.importedUsedBytes: what an import’s source served (F-208)', () => {
+  const baseline = migrationSql('an_import_counts_what_its_source_served');
+
+  it('starts at 0 and is carried only by a migrated Grant', () => {
+    expect(block('model', 'Grant')).toMatch(/^\s*importedUsedBytes\s+BigInt\s+@default\(0\)/m);
+    expect(baseline).toContain('grant_imported_used_bytes_shape');
   });
 });
 

@@ -153,7 +153,9 @@ var RequiredColumns = map[string][]string{
 var ForeignColumns = map[string][]string{
 	"entitlement.grant": {"id", "status", "purchasedBytes", "endsAt", "trafficUnlimited", "userId", "billingMode", "quotas",
 		// The bag's served part, beside the wholesale cursor it moves with (F-118-v).
-		"consumedBytes"},
+		"consumedBytes",
+		// What an import's source served, the start of its Used (F-208).
+		"importedUsedBytes"},
 	// A metered Grant's locked rate is its `vpn.traffic` meter's (F-118-l),
 	// and its wholesale leg bounds the reserve on a platform panel (F-118-v).
 	"entitlement.grant_meter": {"grantId", "meterKey", "unitPrice",

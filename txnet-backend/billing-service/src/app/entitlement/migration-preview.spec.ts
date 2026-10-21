@@ -44,6 +44,7 @@ const context = (over: Partial<RunPlanContext> = {}): RunPlanContext => ({
   sourceAddress: ADDRESS,
   now: NOW,
   variantOf: new Map([['vless-tcp', 'variant-20gb']]),
+  unlimitedVariants: new Set(),
   importedGrants: new Set(),
   importedUsers: new Set(),
   userRoom: null,
@@ -79,6 +80,19 @@ describe('planRun — the report', () => {
     const plan = planRun([client('ali'), client('broken', { dataLimitBytes: 'lots' })], context());
     expect(plan.items[0].sourceSnapshot).toMatchObject({ remoteId: 'ali', dataLimitBytes: 20 * GIB, expiresAt: '2026-10-31T12:00:00.000Z' });
     expect(plan.items[1].sourceSnapshot).toEqual({ remoteId: 'broken' });
+  });
+
+  it("skips a client whose traffic the inbound's product does not sell as traffic_mismatch, both ways (F-208)", () => {
+    const limited = planRun([client('ali'), client('free', { dataLimitBytes: 0 })], context());
+    expect(actions(limited)).toEqual([
+      [key('ali'), MigrationItemAction.create, null],
+      [key('free'), MigrationItemAction.skip, 'traffic_mismatch'],
+    ]);
+    const unlimited = planRun([client('ali'), client('free', { dataLimitBytes: 0 })], context({ unlimitedVariants: new Set(['variant-20gb']) }));
+    expect(actions(unlimited)).toEqual([
+      [key('ali'), MigrationItemAction.skip, 'traffic_mismatch'],
+      [key('free'), MigrationItemAction.create, null],
+    ]);
   });
 
   it('plans an update, never a second Grant, for a key the tenant already holds', () => {
@@ -134,6 +148,7 @@ function fakeDb(run: Row) {
     },
     grant: { findMany: async () => [] },
     user: { findMany: async () => [] },
+    productVariant: { findMany: async () => [{ id: 'variant-20gb', quotas: { traffic_bytes: { limit: 20 * GIB } } }] },
     outboxEvent: { create: async ({ data }: { data: Row }) => state.outbox.push(data) },
   };
   const tx = new Proxy(models, {
@@ -187,7 +202,7 @@ describe('MigrationPreviewService — one previewing run per tick', () => {
       [key('old'), MigrationItemAction.skip, RUN.id, RUN.tenantId],
     ]);
     const writable = ['migrationRun', 'migrationInbound', 'migrationItem', 'outboxEvent'];
-    expect([...db.state.touched].filter((m) => !writable.includes(m)).sort()).toEqual(['grant', 'user']);
+    expect([...db.state.touched].filter((m) => !writable.includes(m)).sort()).toEqual(['grant', 'productVariant', 'user']);
   });
 
   it("keeps the source's refusal as the reason the run went back to draft", async () => {

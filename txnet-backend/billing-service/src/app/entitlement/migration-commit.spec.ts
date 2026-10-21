@@ -146,6 +146,10 @@ describe('importedGrantShape — what the source says over what the variant says
     expect(importedGrantShape(variant, imported)).toMatchObject({ endsAt: imported.endsAt, endSetAt: NOW, purchasedBytes: imported.purchasedBytes, consumedBytes: imported.consumedBytes, remoteIdentity: key('ali') });
   });
 
+  it('counts what the source served as used from the first plan, so what is left is the bag less it (F-208)', () => {
+    expect(importedGrantShape(variant, imported).importedUsedBytes).toBe(BigInt(3 * GIB));
+  });
+
   it("keeps the variant's period for a client with no end there", () => {
     expect(importedGrantShape(variant, { ...imported, endsAt: null })).toMatchObject({ endsAt: variant.endsAt, endSetAt: NOW });
   });

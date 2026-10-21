@@ -43,7 +43,8 @@ var _ Store = PostgresStore{}
 // A Grant with no open reserve hold has a reserve of nothing. On a meter with
 // a wholesale leg (F-118-n2) and a live config on a platform panel, the
 // reserve is also bounded by what the reseller's `tenant_billing_wallet`
-// funds (F-118-v, `WholesaleRoom`): the lesser of the two wallets. Used is summed in Go from each config's
+// funds (F-118-v, `WholesaleRoom`): the lesser of the two wallets. Used starts at what an
+// import's source served (`importedUsedBytes`, F-208) and adds, in Go, each config's
 // lifetime counter (`contract.lease.md`), which the pass that called us has
 // already moved, plus, on a push panel, its sessions' high-water marks in
 // `radius_session` (F-027-du). A config is a replica while it can carry
@@ -64,7 +65,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
        coalesce(m."unitPrice"::text, ''), coalesce(h.amount::text, ''),
        m."wholesalePayerTenantId" IS NOT NULL, coalesce(m."wholesaleUnitSize", 0), coalesce(m."wholesaleUnitPrice"::text, ''),
        coalesce(m."wholesaleBilled", 0), coalesce(m."wholesaleConsumed", 0), coalesce(tw."cachedBalance"::text, ''),
-       g."consumedBytes", p."ownershipType" = 'platform',
+       g."consumedBytes", g."importedUsedBytes", p."ownershipType" = 'platform',
        c.id::text, c."panelId"::text,
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
@@ -119,6 +120,7 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			leg, platform       bool
 			ws                  Wholesale
 			consumed            int64
+			importedUsed        int64
 			purchased, lifetime int64
 			applied             int64
 			endsAt              *time.Time
@@ -134,14 +136,15 @@ func (s PostgresStore) Load(ctx context.Context, panelID string, configIDs []str
 			outageAt            *time.Time
 		)
 		if err := rows.Scan(&grantID, &purchased, &endsAt, &closedQuota, &closedEnd, &closed, &closedWhy, &metered, &rate, &reserve,
-			&leg, &ws.UnitSize, &ws.UnitPrice, &ws.Billed, &ws.Consumed, &ws.Balance, &consumed, &platform, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
+			&leg, &ws.UnitSize, &ws.UnitPrice, &ws.Billed, &ws.Consumed, &ws.Balance, &consumed, &importedUsed, &platform, &c.ID, &c.PanelID, &live, &c.Exists, &c.Counter, &lifetime,
 			&applied, &c.Enabled, &c.Allocated, &c.Peak, &c.Pending, &driverType, &pn.CanSetLimit, &pn.Healthy,
 			&tickMs, &tickMask, &pn.Learned.LagMeanSec, &pn.Learned.LagVarianceSec2, &pn.Learned.LagSamples,
 			&pn.Learned.OutageWeight, &outageAt); err != nil {
 			return Snapshot{}, fmt.Errorf("reading a Grant's config: %w", err)
 		}
 		if n := len(snap.Grants); n == 0 || snap.Grants[n-1].ID != grantID {
-			g := Grant{ID: grantID, Quota: purchased, Purchased: purchased, Metered: metered}
+			// An import starts Used at what its source served (F-208): the bag left is Quota less it.
+			g := Grant{ID: grantID, Quota: purchased, Purchased: purchased, Used: importedUsed, Metered: metered}
 			r := owed{leg: leg}
 			if metered {
 				r.user = BytesAffordable(rate, reserve)

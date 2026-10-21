@@ -25,7 +25,7 @@ import (
 )
 
 // Grant is one Grant as the planner is built from it (`contract.lease.md`):
-// Quota is billing's bag, read, and Used is what its configs' counters served.
+// Quota is billing's bag, read; Used is what its configs' counters (and an import's source, F-208) served.
 //
 // On a metered Grant Quota is the bag plus the wallet's reserve — what the
 // balance would still buy at the Grant's rate (F-027-dc) — and Purchased is
