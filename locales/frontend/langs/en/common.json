@@ -7625,13 +7625,42 @@
       "not_allowed": "You may not run imports for this reseller.",
       "reseller_suspended": "This reseller is suspended.",
       "reseller_not_found": "This reseller was not found.",
-      "reseller_terminated": "This reseller has been closed."
+      "reseller_terminated": "This reseller has been closed.",
+      "legacy_host_not_routed": "This address is not verified yet.",
+      "legacy_link_not_found": "No imported user with a live service holds a link on this address."
     },
     "historyCol": {
       "source": "Panel",
       "status": "Status",
       "counts": "Report",
       "started": "Started"
+    },
+    "legacy": {
+      "title": "Point your old address here",
+      "intro": "Your imported users' apps still fetch their old link. Add the old subscription address here, set its two records at your DNS, and those links keep working. Users don't need to do anything.",
+      "empty": "No old link was kept from your imports, so there is no address to point here.",
+      "links": "{{count}} imported links use this address",
+      "add": "Add this address",
+      "adding": "Adding…",
+      "otherPurpose": "This address is already one of your domains, as \"{{purpose}}\". It serves no old link that way. Remove it on the domains page, then add it here.",
+      "waiting": "Once this address is live, you can test an imported user's link here.",
+      "hiddify": "Hiddify links use a path of their own, which an old address does not serve yet. For now only /sub/ links answer.",
+      "test": "Test an imported user's link",
+      "testing": "Testing…",
+      "ok": "{{label}}'s old link answered with {{servers}} servers.",
+      "okAnonymous": "An imported user's old link answered with {{servers}} servers.",
+      "okEmpty": "The link answered, but with no server. Check that user's service.",
+      "failure": {
+        "source_unavailable": "The address did not answer in time. Its records may not have spread yet, or its certificate is not ready.",
+        "source_unreadable": "The address answered, but not with this user's subscription (for example a 404). If it still points to your old panel, wait for the CNAME to spread.",
+        "source_redirected": "The address answered with a redirect. Turn off any redirect for it at your CDN.",
+        "source_login_refused": "The address refused the request (401/403). Check your CDN's firewall for it.",
+        "address_refused": "This address points to a private network.",
+        "source_too_large": "The answer was too large to be a subscription.",
+        "bad_request": "This address cannot be tested.",
+        "probe_unavailable": "The test could not run right now. Try again in a minute.",
+        "other": "The test failed ({{reason}})."
+      }
     }
   }
 }

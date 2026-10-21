@@ -79,7 +79,7 @@ shared envelope: `{data}` or `{error: {reason, detail}}`.
 |---|---|---|
 | `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`) |
 | `POST /api/internal/source/links` | the same, plus `clients[]` (≤ 200: `remoteId`, `uuid`, `label`, `inboundRemoteId`, `linesRead`) | `clients[]`: `remoteId`, `subscriptionUrl?`, `lines`, `linesRead`, `failure?` |
-| `POST /api/internal/source/link` | `url` — one old subscription link (F-201-g) | `userinfo` (`uploadBytes`, `downloadBytes`, `totalBytes`, `expiresAt` unix s; 0 = not given) from `Subscription-Userinfo`, `lines` |
+| `POST /api/internal/source/link` | `url` — one old subscription link (F-201-g); billing's test of an old host pointed here (entitlement `contract.legacy-host.md`, F-204-b) | `userinfo` (`uploadBytes`, `downloadBytes`, `totalBytes`, `expiresAt` unix s; 0 = not given) from `Subscription-Userinfo`, `lines` |
 
 The snapshot and links read the address and login through tenant-service's
 `POST /api/internal/vault/source-credential/use` (`tenantId`, `credentialRef`

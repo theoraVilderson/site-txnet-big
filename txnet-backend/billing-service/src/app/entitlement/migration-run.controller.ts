@@ -2,6 +2,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Get,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -17,16 +18,26 @@ import {
 import { ServiceOnlyGuard, TenantCapability, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { bulkWriteLimit, ResellerJobRoutes } from '../payment/gift/reseller-job-routes';
+import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from '../payment/gift/reseller-job-routes';
 import { actorOf, resellerRefusal } from '../payment/gift/reseller-user-grants.controller';
 import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { RateLimit } from '../request/rate-limit';
+import { LegacyHostService } from './legacy-host';
 import { MigrationDrainService, type MigrationDrainResult } from './migration-drain';
 import { MigrationRunRefused, MigrationRunService, type MigrationRunRejection } from './migration-run';
-import { migrationInboundsSchema, migrationRunCreateSchema, type MigrationInbounds, type MigrationRunCreate } from './migration-run.schema';
+import {
+  legacyHostTestSchema,
+  migrationInboundsSchema,
+  migrationRunCreateSchema,
+  type LegacyHostTest,
+  type MigrationInbounds,
+  type MigrationRunCreate,
+} from './migration-run.schema';
 
 const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
   run_not_found: 404,
+  legacy_link_not_found: 404,
+  legacy_host_not_routed: 409,
   inbound_not_found: 404,
   variant_not_found: 404,
   run_busy: 409,
@@ -58,18 +69,37 @@ function migrationRefusal(e: unknown): unknown {
  * - `POST …/migration-runs/:runId/commit` -> **202** the run, `committing` (F-207)
  * - `POST …/migration-runs/:runId/rollback` -> **202** the run, `rolling_back` (F-211, inside its 7 days)
  * - `GET …/migration-runs`, `GET …/:runId`, `GET …/:runId/outcomes` (the report's table), `POST …/:runId/cancel`
+ * - `GET …/migration-runs/legacy-hosts`, `POST …/legacy-hosts/test` `{host}` — the old hosts to point here and a test of one (F-204-b)
  *
  * All `migration.manage`: `staffWrite` to change, `read` to look. The page
  * hears every move of the run (`entitlement.migration_run.progress`, C-14).
  */
 @Controller('billing/tenants/:tenantId/migration-runs')
 export class ResellerMigrationRunController extends ResellerJobRoutes {
-  constructor(protected readonly jobs: MigrationRunService) {
+  constructor(
+    protected readonly jobs: MigrationRunService,
+    private readonly legacy: LegacyHostService,
+  ) {
     super();
   }
 
   protected refusal(e: unknown): unknown {
     return migrationRefusal(e);
+  }
+
+  // Declared before the base class's `:jobId`, so the literal path is matched first.
+  @Get('legacy-hosts')
+  @RateLimit(bulkReadLimit)
+  legacyHosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.answer(() => this.legacy.hosts(actorOf(req), tenantId));
+  }
+
+  /** An outside fetch per call: it spends the write bucket, as an action does. */
+  @Post('legacy-hosts/test')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit(bulkWriteLimit)
+  testLegacyHost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(legacyHostTestSchema)) body: LegacyHostTest, @Req() req: Request) {
+    return this.answer(() => this.legacy.test(actorOf(req), tenantId, body.host));
   }
 
   @Post()

@@ -9,6 +9,7 @@ import { driverLabel } from "../../../../systems/_lib/systems";
 import { IMPORT_FAMILIES, MIGRATION_KEYS as K, commitProgress, isCancellable, rollbackDaysLeft, stageOf, type ImportFamily, type RunStage } from "../../../_lib/migration";
 import { useFailureText, useMigrationLive, useMigrationMessage } from "../_hooks/useMigrationLive";
 import { InboundMapping } from "./InboundMapping";
+import { LegacyHostStep } from "./LegacyHostStep";
 import { MigrationReport } from "./MigrationReport";
 import { SourceLoginForm } from "./SourceLoginForm";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
@@ -29,7 +30,8 @@ const importFamilyOf = (f: string): ImportFamily | undefined => IMPORT_FAMILIES.
 
 /**
  * One import, start to end (F-201-f): connect, map, the dry run's report,
- * confirm, live progress, the rollback with its days left. Every step is the
+ * confirm, live progress, the rollback with its days left, and the old
+ * address pointed here (F-204-b). Every step is the
  * run's status as billing answers it (`stageOf`); the card re-reads it on
  * the run's progress event (C-14), never by polling.
  */
@@ -115,6 +117,7 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
         ) : (
           <p className="text-xs text-text-secondary">{t("common", K.rollbackClosed)}</p>
         ))}
+      {stage === "imported" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily} />}
       {run.status === "rolled_back" && <Alert tone="success">{t("common", K.rolledBackNote)}</Alert>}
       {(run.status === "cancelled" || run.status === "expired") && <Alert tone="info">{t("common", K.closed)}</Alert>}
 

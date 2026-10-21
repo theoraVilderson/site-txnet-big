@@ -6,7 +6,7 @@ version: 43
 updated: 2026-10-21
 ---
 
-# Contract — panel-web: a reseller's import from another panel (F-201-f)
+# Contract — panel-web: a reseller's import from another panel (F-201-f), its old address (F-204-b)
 
 A topic file of [contract.md](contract.md) (§10), and a screen of the reseller
 workspace described in [contract.resellers.md](contract.resellers.md) "A
@@ -15,7 +15,7 @@ reseller leaving another panel brings its users with it (D-63).
 
 | page | route | files |
 |---|---|---|
-| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`; rules `my-resellers/_lib/migration.ts` |
+| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address); rules `my-resellers/_lib/migration.ts` |
 
 Its calls are `migrationRunsApi(tenantId)` (`lib/billing/migration-runs.ts`):
 billing's `/tenants/:id/migration-runs` routes and tenant-service's
@@ -64,6 +64,19 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
    owner on the platform's panel hears only the runs they started; another
    run's card is current on each open.
 
-**Not covered:** link and CSV imports (F-203, F-209); legacy link adoption.
+9. **The old address is the last step** (F-204-b), on a `committed` run:
+   every old host billing lists (entitlement
+   [contract.legacy-host.md](../../domains/entitlement/contract.legacy-host.md))
+   at its step (`legacyStepOf`). No domain: "add this address" adds it as
+   `legacy_sub`. The same name with another purpose is said, never re-added —
+   it serves no old link. A `legacy_sub` domain is the domains page's card
+   (`DomainCard`: TXT, CNAME, check now), read and followed live through the
+   same hook (`useResellerDomains`, EDGE-1-f). Only once it is live (verified,
+   edge `issued`) is the test offered; its result is a sentence
+   (`legacy.failure.*`, an unknown reason as its code), the server count on
+   success, a warning for none. A Hiddify run says its own paths do not
+   answer yet (F-204-c).
+
+**Not covered:** link and CSV imports (F-203, F-209).
 Platform products a reseller's package lists are not offered in the mapping
 until the users-admin catalog lists them (it reads the tenant's own products).

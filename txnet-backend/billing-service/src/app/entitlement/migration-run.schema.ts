@@ -34,3 +34,10 @@ export const migrationInboundsSchema = z
   })
   .strict();
 export type MigrationInbounds = z.infer<typeof migrationInboundsSchema>;
+
+/** A host name's longest form (RFC 1035). */
+const HOST_MAX = 253;
+
+/** `POST …/migration-runs/legacy-hosts/test` (F-204-b): one of the reseller's old hosts, as the page lists it. */
+export const legacyHostTestSchema = z.object({ host: z.string().trim().min(1).max(HOST_MAX) }).strict();
+export type LegacyHostTest = z.infer<typeof legacyHostTestSchema>;

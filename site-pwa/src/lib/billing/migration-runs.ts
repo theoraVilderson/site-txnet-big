@@ -70,6 +70,15 @@ export interface MigrationItem extends MigrationSourceCells {
   keptReason: string | null;
 }
 
+/** An old panel's subscription host the reseller's imported users hold links on (F-204-b). */
+export interface LegacyHost {
+  host: string;
+  links: number;
+}
+
+/** One imported link fetched from outside: the servers it carried, or network's reason it did not answer. */
+export type LegacyTestResult = { host: string; label: string | null } & ({ outcome: "ok"; servers: number } | { outcome: "failed"; reason: string });
+
 /** What is sealed in the vault for one run: the full address (its web path too) and the login in the family's form. */
 export interface SourceLoginBody {
   apiBaseUrl: string;
@@ -100,6 +109,10 @@ export function migrationRunsApi(tenantId: string) {
         `${run(runId)}/outcomes?${new URLSearchParams({ page: String(page), pageSize: String(pageSize), problems: String(problems) })}`,
         { method: "GET" },
       ),
+    /** Tenant-wide, most links first: two imports of one old panel share a host. */
+    legacyHosts: () => call<{ hosts: LegacyHost[] }>(`${at}/legacy-hosts`, { method: "GET" }),
+    /** One imported link on a verified old host, fetched from outside as an app would (F-204-b). */
+    testLegacyHost: (host: string) => call<LegacyTestResult>(`${at}/legacy-hosts/test`, { method: "POST", body: JSON.stringify({ host }) }),
     /** Sealed on tenant-service; never read back — the answer is `{configured, expiresAt}` (rule 3). */
     storeLogin: (runId: string, body: SourceLoginBody) =>
       tenantCall<{ configured: true; expiresAt: string }>(`/tenants/${encodeURIComponent(tenantId)}/migration-runs/${encodeURIComponent(runId)}/source-login`, {

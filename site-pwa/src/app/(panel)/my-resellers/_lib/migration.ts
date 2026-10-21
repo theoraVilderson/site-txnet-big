@@ -1,10 +1,12 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
 import type { MigrationInbound, MigrationRun, UsersCatalogProduct } from "@/lib/billing-api";
+import type { ResellerDomain } from "@/lib/tenant-api";
 import { userChannel } from "@/lib/realtime";
 import { tenantChannelOf } from "@/lib/tenant-channel";
 import { DRIVER_PROFILES, composeLogin, loginErrors, type LoginParts } from "../../systems/_lib/register-wizard";
 import type { DRIVER_TYPES } from "../../systems/_lib/systems";
+import { isLive } from "./domains";
 
 /**
  * The import page (F-201-f, D-63; entitlement `contract.import.md`). Nothing
@@ -194,3 +196,25 @@ export function migrationRefusalKey(e: unknown): string | null {
   const reason = (e as { reason?: unknown } | null)?.reason;
   return typeof reason === "string" ? reasonKey(MIGRATION_REFUSAL_KEYS, reason) : null;
 }
+
+/**
+ * Where one old host is on its way here (F-204-b, tenant `contract.domains.md`
+ * rule 7): not yet a domain, the same name added for another purpose (which
+ * serves no old link), proving and pointing, or live — the only step the test
+ * of a link is offered on. Names compare as stored: both sides are `normalizeHost`'s.
+ */
+export type LegacyStep =
+  | { kind: "add" }
+  | { kind: "otherPurpose"; domain: ResellerDomain }
+  | { kind: "pointing"; domain: ResellerDomain }
+  | { kind: "live"; domain: ResellerDomain };
+
+export function legacyStepOf(host: string, domains: readonly ResellerDomain[]): LegacyStep {
+  const domain = domains.find((d) => d.domainValue === host);
+  if (!domain) return { kind: "add" };
+  if (domain.purpose !== "legacy_sub") return { kind: "otherPurpose", domain };
+  return { kind: isLive(domain.status, domain.edge.status) ? "live" : "pointing", domain };
+}
+
+/** Hiddify serves a link at its own path, not `/sub/`; such a path answers on an old host only from F-204-c on. */
+export const servesOnlySubPath = (family: string) => family === "hiddify";

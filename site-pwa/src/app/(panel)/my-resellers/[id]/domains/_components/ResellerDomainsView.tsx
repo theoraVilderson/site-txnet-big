@@ -3,30 +3,18 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { useApiErrorMessage } from "@/hooks/useApiError";
-import { useLiveReread } from "@/hooks/useLiveReread";
 import { authApi } from "@/lib/auth-api";
 import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type EdgeStatus, type ResellerDomain } from "@/lib/tenant-api";
-import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { DataTable } from "../../../../_components/kit/DataTable";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Badge } from "../../../../financial/_components/Badge";
 import { Field } from "../../../../catalog/_components/catalog-ui";
-import { CHECK_LINE_KEYS, DOMAIN_KEYS as K, DOMAIN_LIVE_EVENTS, DOMAIN_PURPOSES, DOMAIN_STATUS_KEYS, EDGE_HINT_KEYS, EDGE_STATUS_KEYS, canRequestCheck, domainHost, domainLiveChannels, domainRefusalKey, dnsName, isApex, isLive, isRoutable } from "../../../_lib/domains";
+import { CHECK_LINE_KEYS, DOMAIN_KEYS as K, DOMAIN_PURPOSES, DOMAIN_STATUS_KEYS, EDGE_HINT_KEYS, EDGE_STATUS_KEYS, canRequestCheck, domainHost, dnsName, isApex, isLive, isRoutable } from "../../../_lib/domains";
+import { useDomainMessage, useResellerDomains } from "../_hooks/useResellerDomains";
 import { Alert, Button, IconButton, Input, PageHeader } from "../../../../_components/kit";
 import { COPY_FEEDBACK_MS, copyText } from "../../../../_lib/clipboard";
-
-/** The refusal's own sentence, else the generic answer for that error. */
-function useMessage() {
-  const { t } = useLocale();
-  const errorMessage = useApiErrorMessage();
-  return (e: unknown) => {
-    const key = domainRefusalKey(e);
-    return key ? t("common", key) : errorMessage(e);
-  };
-}
 
 const STATUS_TONE: Record<DomainStatus, { icon: LucideIcon; className: string }> = {
   pending: { icon: Clock, className: "border-gold/20 bg-gold-bg text-gold" },
@@ -105,42 +93,8 @@ export function ResellerDomainsView({ id }: { id: string }) {
  */
 export function DomainsPanel({ id, asked = 0 }: { id: string; asked?: number }) {
   const { t } = useLocale();
-  const message = useMessage();
-
-  const [domains, setDomains] = useState<ResellerDomain[] | null>(null);
-  const [loadError, setLoadError] = useState<unknown>(null);
-  const [retried, setRetried] = useState(0);
-  const retry = () => {
-    setLoadError(null);
-    setRetried((n) => n + 1);
-  };
-
-  useEffect(() => {
-    let alive = true;
-    setLoadError(null);
-    resellerDomainsApi
-      .list(id)
-      .then((list) => alive && setDomains(list))
-      .catch((e) => alive && setLoadError(e));
-    return () => {
-      alive = false;
-    };
-  }, [id, asked, retried]);
-
-  // A live event is a hint, not the record: the list is read again with no
-  // skeleton, and a failed read keeps what is on screen.
-  const { me, group } = usePanelSession();
-  const [own, platform] = domainLiveChannels(group?.current.userId ?? null, me);
-  const quietRead = () => {
-    resellerDomainsApi.list(id).then(setDomains, () => undefined);
-  };
-  useLiveReread(own, DOMAIN_LIVE_EVENTS, quietRead);
-  useLiveReread(platform, DOMAIN_LIVE_EVENTS, quietRead);
-
-  const replace = (next: ResellerDomain) =>
-    setDomains((list) => (list ?? []).some((d) => d.id === next.id)
-      ? (list ?? []).map((d) => (d.id === next.id ? next : d))
-      : [next, ...(list ?? [])]);
+  const message = useDomainMessage();
+  const { domains, loadError, retry, replace } = useResellerDomains(id, asked);
 
   if (loadError !== null) {
     return (
@@ -169,7 +123,7 @@ export function DomainsPanel({ id, asked = 0 }: { id: string; asked?: number }) 
 
 function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) => void }) {
   const { t } = useLocale();
-  const message = useMessage();
+  const message = useDomainMessage();
   const [raw, setRaw] = useState("");
   const [purpose, setPurpose] = useState<DomainPurpose>("panel");
   const [error, setError] = useState<string | undefined>();
@@ -229,7 +183,8 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
   );
 }
 
-function DomainCard({
+/** One domain: its status, the records to set, check now, the edge step and the last check's lines. */
+export function DomainCard({
   tenantId,
   domain,
   onChanged,
@@ -239,7 +194,7 @@ function DomainCard({
   onChanged: (d: ResellerDomain) => void;
 }) {
   const { lang, t } = useLocale();
-  const message = useMessage();
+  const message = useDomainMessage();
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<unknown>(null);
   const when = (iso: string) => formatInstant(iso, lang) ?? iso;

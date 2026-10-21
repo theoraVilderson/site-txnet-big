@@ -8,6 +8,8 @@ import { errorLine } from '../log-line';
 
 /** The source routes on `network-service` (network `contract.source.md`). Service callers only. */
 const SNAPSHOT_PATH = '/api/internal/source/snapshot';
+/** One subscription link read from outside, through network's egress guard, no redirect followed (F-201-g). */
+const LINK_PATH = '/api/internal/source/link';
 /** The run's source login on `tenant-service` (tenant `contract.source-login.md`). Service callers only. */
 const DESTROY_LOGIN_PATH = '/api/internal/vault/source-credential/destroy';
 /** The people of an import on `auth-service` (identity `contract.import.md`). Service callers only. */
@@ -109,6 +111,30 @@ export class SourceSnapshotReader {
     const parsed = snapshotSchema.safeParse(data);
     if (!parsed.success) throw new MigrationSeamUnavailable(`${SNAPSHOT_PATH} answered no snapshot`);
     return parsed.data;
+  }
+}
+
+/** A link's answer as network reads it; Go sends a nil list as `null`. Only the count is kept. */
+const linkSchema = z.object({ lines: z.array(z.string()).nullable() });
+
+/**
+ * Fetches one subscription link the way a user's app does (F-204-b): from
+ * outside, through network-service's egress guard — never an inward address,
+ * never a redirect. Answers how many servers it carried; the body itself, a
+ * user's configs, never leaves network-service's answer.
+ */
+@Injectable()
+export class SubscriptionLinkProbe {
+  private readonly seam: Seam;
+
+  constructor(config: ConfigService) {
+    this.seam = seamOf(config, 'NETWORK_API_BASE_URL', 'NETWORK_API_TIMEOUT_MS');
+  }
+
+  async servers(url: string): Promise<number> {
+    const parsed = linkSchema.safeParse(await postToSeam(this.seam, LINK_PATH, { url }));
+    if (!parsed.success) throw new MigrationSeamUnavailable(`${LINK_PATH} answered no link`);
+    return parsed.data.lines?.length ?? 0;
   }
 }
 

@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: active
-version: 38
+version: 39
 updated: 2026-10-21
 ---
 
@@ -198,7 +198,7 @@ is still there to go back to.
 
 Code: `legacy-sub-link.ts` (`legacyPathOf`, `recordLegacyLink`,
 `removeLegacyLinks`). `sub-service` answers it (F-203-b) once the old host
-is the reseller's (F-204).
+is the reseller's (F-204); its hosts and a test: [contract.legacy-host.md](contract.legacy-host.md).
 
 29. **Captured from the snapshot, at the commit** (user, 2026-10-21): the
     login is gone from `committing` on (tenant rule 5), so the client's

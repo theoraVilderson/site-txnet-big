@@ -12,10 +12,14 @@
  *    offered, and a switched-off product or plan neither;
  *  - the rollback is offered inside its window only, with the days left;
  *  - the page hears the run on the viewer's `user:` channel, filtered to the
- *    run, and on the reseller's `tenant:` channel only when it is the session's.
+ *    run, and on the reseller's `tenant:` channel only when it is the session's;
+ *  - an old host (F-204-b) is matched to the reseller's `legacy_sub` domain
+ *    only: the same name added for another purpose is not pointed for the old
+ *    links, and the test is offered once the domain is live, not before.
  */
 import { describe, expect, it } from "vitest";
 import type { MigrationRun, UsersCatalogProduct } from "@/lib/billing-api";
+import type { ResellerDomain } from "@/lib/tenant-api";
 import { tenantChannel, userChannel } from "@/lib/realtime";
 import { REALTIME_TENANT_READ } from "@/lib/tenant-channel";
 import {
@@ -23,6 +27,7 @@ import {
   commitProgress,
   connectFormErrors,
   emptyConnectForm,
+  legacyStepOf,
   mappingBody,
   mappingOptions,
   migrationLiveOf,
@@ -178,5 +183,33 @@ describe("where the page hears the run", () => {
 
   it("nothing before the session is known", () => {
     expect(migrationLiveOf(null, "r-9")).toEqual([]);
+  });
+});
+
+describe("the old address (F-204-b)", () => {
+  const domain = (over: Partial<ResellerDomain>): ResellerDomain =>
+    ({
+      id: "d-1",
+      domainValue: "sub.ali-vpn.ir",
+      purpose: "legacy_sub",
+      status: "pending",
+      edge: { status: "none", record: null, lastError: null },
+      ...over,
+    }) as ResellerDomain;
+
+  it("asks to add a host that is none of the reseller's domains", () => {
+    expect(legacyStepOf("sub.ali-vpn.ir", [domain({ domainValue: "panel.ali-vpn.ir", purpose: "panel" })])).toEqual({ kind: "add" });
+  });
+
+  it("names the host added for another purpose, which serves no old link", () => {
+    const panel = domain({ purpose: "panel", status: "verified" });
+    expect(legacyStepOf("sub.ali-vpn.ir", [panel])).toEqual({ kind: "otherPurpose", domain: panel });
+  });
+
+  it("shows the records until the domain is live, then offers the test", () => {
+    const waiting = domain({ status: "verified", edge: { status: "issuing", record: null, lastError: null } });
+    expect(legacyStepOf("sub.ali-vpn.ir", [waiting])).toEqual({ kind: "pointing", domain: waiting });
+    const live = domain({ status: "verified", edge: { status: "issued", record: null, lastError: null } });
+    expect(legacyStepOf("sub.ali-vpn.ir", [live])).toEqual({ kind: "live", domain: live });
   });
 });

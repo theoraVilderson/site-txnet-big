@@ -5,17 +5,16 @@ import {
   productCategoriesInclude,
   productCategoriesLive,
   ResellerAccess,
-  ResellerAccessRefused,
   tenantSellsProduct,
   tenantTransaction,
   type ResellerActor,
 } from '@txnet-backend/shared-core';
 
 import { GrantBulkPage } from '../payment/gift/grant-bulk-job.schema';
-import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
+import { admitMigration } from './migration-door';
 import { MigrationInbounds, MigrationRunCreate } from './migration-run.schema';
 import { destroySourceLogin, SourceLoginVault } from './migration-seams';
 
@@ -32,6 +31,8 @@ export const MIGRATION_RUN_REJECTIONS = [
   'variant_not_prepaid',
   'variant_not_deliverable',
   'variant_not_assignable',
+  'legacy_host_not_routed',
+  'legacy_link_not_found',
 ] as const;
 export type MigrationRunRejection = (typeof MIGRATION_RUN_REJECTIONS)[number];
 
@@ -121,6 +122,16 @@ export type MigrationItemView = {
 const numberOr = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 const textOr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
+/** An item's snapshot as a record; an `unreadable` item's or a purged one's (F-211) is empty. */
+const snapshotOf = (snapshot: Prisma.JsonValue): Record<string, unknown> =>
+  (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}) as Record<string, unknown>;
+
+/** The name the source gave a client, else its id; empty once the snapshot is purged. */
+export function snapshotLabel(snapshot: Prisma.JsonValue): string {
+  const s = snapshotOf(snapshot);
+  return textOr(s['label']) || textOr(s['remoteId']) || '';
+}
+
 /**
  * The table's row from the item's snapshot; an `unreadable` one holds its id
  * alone, and a purged one (its window ended, F-211) nothing, so most cells are null.
@@ -134,12 +145,12 @@ function itemView(i: {
   failureReason: string | null;
   keptReason: string | null;
 }): MigrationItemView {
-  const s = (i.sourceSnapshot && typeof i.sourceSnapshot === 'object' && !Array.isArray(i.sourceSnapshot) ? i.sourceSnapshot : {}) as Record<string, unknown>;
+  const s = snapshotOf(i.sourceSnapshot);
   const up = numberOr(s['upBytes']);
   const down = numberOr(s['downBytes']);
   return {
     remoteIdentity: i.remoteIdentity,
-    label: textOr(s['label']) || textOr(s['remoteId']) || '',
+    label: snapshotLabel(i.sourceSnapshot),
     inboundRemoteId: textOr(s['inboundRemoteId']),
     protocol: textOr(s['protocol']),
     enabled: typeof s['enabled'] === 'boolean' ? s['enabled'] : null,
@@ -343,16 +354,11 @@ export class MigrationRunService {
     return run;
   }
 
-  private async admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
-    try {
-      return await this.access.for('migration.manage').run(actor, tenantId, capability, work);
-    } catch (e) {
-      // The door's reasons are every reseller route's (`resellerRefusal`).
-      if (e instanceof ResellerAccessRefused) throw new ResellerUserGrantsRefused(e.reason, tenantId);
-      throw e;
-    }
+  private admitted<T>(actor: ResellerActor, tenantId: string, capability: 'read' | 'staffWrite', work: () => Promise<T>): Promise<T> {
+    return admitMigration(this.access, { actor, tenantId, capability }, work);
   }
 }
+
 
 function assertMappable(run: MigrationRun): void {
   if (run.status === MigrationRunStatus.previewing) throw new MigrationRunRefused('run_busy', run.status);
