@@ -24,6 +24,7 @@ import { grantMetersFromVariant, lockWholesale } from './grant-meter';
 import { PackageWholesale } from './package-wholesale';
 import { GrantTokenSeal, NO_TOKEN_SEAL, type SealedToken } from './grant-token-seal';
 import { EntitlementRefused } from './entitlement-refusals';
+import { importedGrantShape, type ImportedGrant } from './migration-plan';
 import { assertPurchaseRoom } from './purchase-limits';
 import { assertPlatformGrantRoom } from './reseller-room';
 import { assertBuyerRoom } from './user-restrictions';
@@ -158,7 +159,10 @@ export type IssueGrant = {
   /** Default now. */
   startsAt?: Date;
   issuedByAdminId?: string | null;
+  /** An import's Grant (F-207): only with `source = migration`. */
+  imported?: ImportedGrant;
 };
+
 
 /** `token` is set only when this call wrote the Grant; a repeat for the same cause answers `null`. */
 export type IssuedGrant = { grant: Grant; token: string | null };
@@ -444,29 +448,25 @@ export class GrantService {
     }
 
     const { token, hash } = newSubscriptionToken();
-    const shape = grantFromVariant({ source: input.source, startsAt, currencyCode }, variant);
+    const variantShape = grantFromVariant({ source: input.source, startsAt, currencyCode }, variant);
+    const shape = input.imported ? importedGrantShape(variantShape, input.imported) : variantShape;
     // A metered variant with no rate in effect is not sold — never at zero by
     // default, exactly as a variant with no price is not for sale (ADR-0073).
     // The rate in the tenant's currency, locked on the meter with it (F-116-d, F-118-l).
     const rate = variant.billingMode === VariantBillingMode.metered ? vpnTrafficRateAt(variant.rateCards, startsAt, currencyCode) : null;
-    if (variant.billingMode === VariantBillingMode.metered && rate === null) {
-      throw new EntitlementRefused('metered_rate_missing', input.variantId);
-    }
+    if (variant.billingMode === VariantBillingMode.metered && rate === null) throw new EntitlementRefused('metered_rate_missing', input.variantId);
     // Nor at a rate of zero. `sizeBlock` refuses one too (`rate_not_priceable`,
     // F-027-q), but there it is a user stalled mid-session far from whoever
     // priced the variant; the sale is the last point the two are one act
     // (F-027-al). `rate_card_metered_price_positive` holds the same line in the column.
-    if (rate !== null && rate.rate.lte(0)) {
-      throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
-    }
+    if (rate !== null && rate.rate.lte(0)) throw new EntitlementRefused('metered_rate_not_positive', input.variantId);
     // Each card in effect is locked beside the quotas (F-118-e, ADR-0105 decision 4).
     const { meters: retail, unserved } = grantMetersFromVariant(variant, startsAt, currencyCode);
     if (unserved) throw new EntitlementRefused('meter_not_served', `${input.variantId} ${unserved}`);
     // A reseller's meter also locks what the platform charges it (F-118-n2).
     const { meters, missing } = await lockWholesale(tx, tenant.id, retail, startsAt);
     if (missing) throw new EntitlementRefused('wholesale_rate_missing', `${input.variantId} ${missing}`);
-    // The buyer's own caps: open metered Grants (F-118-ao) and the restrictions staff set on them (F-030-e).
-    // Staff's own issue counts and is never refused.
+    // The buyer's own caps: open metered Grants (F-118-ao), staff's restrictions (F-030-e); staff's own issue counts, never refused.
     await assertBuyerRoom(tx, input.userId, { source: input.source, metered: variant.billingMode === VariantBillingMode.metered });
     // The buyer's purchases in a day, week or month (F-019-t7), under the same lock the invoice took.
     if (input.source === GrantSource.purchase) await assertPurchaseRoom(tx, input.userId);

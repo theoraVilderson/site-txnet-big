@@ -11,14 +11,13 @@ import {
   type ResellerActor,
 } from '@txnet-backend/shared-core';
 
-import { errorLine } from '../log-line';
 import { GrantBulkPage } from '../payment/gift/grant-bulk-job.schema';
 import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
 import { MigrationInbounds, MigrationRunCreate } from './migration-run.schema';
-import { SourceLoginVault } from './migration-seams';
+import { destroySourceLogin, SourceLoginVault } from './migration-seams';
 
 /** Declared once (C-09): why a run's act was refused. */
 export const MIGRATION_RUN_REJECTIONS = [
@@ -44,10 +43,15 @@ export class MigrationRunRefused extends Error {
   }
 }
 
+/** Days a committed run may be rolled back (D-63, F-211): `rollbackUntil` is set at its end. */
+export const MIGRATION_ROLLBACK_DAYS = 7;
+
 /** The statuses a run's mapping may change in; from `previewed` it is previewed again. */
 const MAPPABLE: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, MigrationRunStatus.previewed];
 /** The statuses a run may still be cancelled from (`migration_run_status_moves`). */
 const CANCELLABLE: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, MigrationRunStatus.previewing, MigrationRunStatus.previewed];
+/** A commit asked again once it started is answered as it is. */
+const STARTED: readonly MigrationRunStatus[] = [MigrationRunStatus.committing, MigrationRunStatus.committed];
 
 export type MigrationInboundView = Pick<MigrationInbound, 'inboundRemoteId' | 'tag' | 'protocol' | 'clientCount' | 'variantId'>;
 
@@ -241,17 +245,28 @@ export class MigrationRunService {
         return runView(after);
       }),
     );
-    await this.destroyLogin(tenantId, runId);
+    await destroySourceLogin(this.logins, this.logger, tenantId, runId);
     return view;
   }
 
-  /** Best effort, after the run closed: a later read of a closed run destroys the login anyway (tenant rule 5). */
-  async destroyLogin(tenantId: string, runId: string): Promise<void> {
-    try {
-      await this.logins.destroy(tenantId, runId);
-    } catch (e) {
-      this.logger.warn(`run ${runId}: source login not destroyed now, the vault ends it on its next read: ${errorLine(e)}`);
-    }
+  /**
+   * The reseller confirms the report (F-207): the worker issues what it
+   * planned, a batch a tick (`MigrationCommitService`). From here the source
+   * is not read again and its login ends (tenant rule 5). Asked again once
+   * started, answered as it is; a run never previewed is `run_not_previewed`.
+   */
+  commit(actor: ResellerActor, tenantId: string, runId: string): Promise<MigrationRunView> {
+    return this.admitted(actor, tenantId, 'staffWrite', () =>
+      tenantTransaction(this.prisma, async (tx) => {
+        const run = await this.find(tx, tenantId, runId);
+        if (STARTED.includes(run.status)) return runView(run);
+        if (run.status === MigrationRunStatus.draft || run.status === MigrationRunStatus.previewing) throw new MigrationRunRefused('run_not_previewed', run.status);
+        if (run.status !== MigrationRunStatus.previewed) throw new MigrationRunRefused('run_closed', run.status);
+        const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.committing, workerClaimedAt: null } });
+        await announceRun(tx, after);
+        return runView(after);
+      }),
+    );
   }
 
   private async startPreview(tx: Prisma.TransactionClient, run: MigrationRun): Promise<void> {

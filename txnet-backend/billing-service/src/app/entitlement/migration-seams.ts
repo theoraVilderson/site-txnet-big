@@ -1,13 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, type Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DriverType } from '@prisma/client';
-import { serviceCallHeaders } from '@txnet-backend/shared-core';
+import { IdentityHeaders, serviceCallHeaders } from '@txnet-backend/shared-core';
 import { z } from 'zod';
+
+import { errorLine } from '../log-line';
 
 /** The source routes on `network-service` (network `contract.source.md`). Service callers only. */
 const SNAPSHOT_PATH = '/api/internal/source/snapshot';
 /** The run's source login on `tenant-service` (tenant `contract.source-login.md`). Service callers only. */
 const DESTROY_LOGIN_PATH = '/api/internal/vault/source-credential/destroy';
+/** The people of an import on `auth-service` (identity `contract.import.md`). Service callers only. */
+const PEOPLE_PATH = '/api/internal/users/import';
 
 /** The seam could not be asked: unset, unreachable, or an answer in no shape it gives. Retried by the next tick. */
 export class MigrationSeamUnavailable extends Error {
@@ -121,5 +125,46 @@ export class SourceLoginVault {
 
   async destroy(tenantId: string, runId: string): Promise<void> {
     await postToSeam(this.seam, DESTROY_LOGIN_PATH, { tenantId, credentialRef: runId });
+  }
+}
+
+/**
+ * Ends a run's source login after the run closed, best effort: the vault
+ * destroys it on the next read of a closed run anyway (tenant rule 5), so a
+ * failure here is a warning, never the run's.
+ */
+export async function destroySourceLogin(vault: Pick<SourceLoginVault, 'destroy'>, logger: Logger, tenantId: string, runId: string): Promise<void> {
+  try {
+    await vault.destroy(tenantId, runId);
+  } catch (e) {
+    logger.warn(`run ${runId}: source login not destroyed now, the vault ends it on its next read: ${errorLine(e)}`);
+  }
+}
+
+/** The people identity found or made, and the ones it refused (`over_cap`, `deleted`), each by the source's key. */
+const peopleSchema = z.object({
+  users: z.array(z.object({ remoteIdentity: z.string(), userId: z.string().uuid(), created: z.boolean() })),
+  refused: z.array(z.object({ remoteIdentity: z.string(), reason: z.string().regex(REASON) })),
+});
+export type ImportedPeopleAnswer = z.infer<typeof peopleSchema>;
+
+/**
+ * Finds or makes an import's people on `auth-service` (F-201-e): by the
+ * source's key, so a batch retried after a timeout makes no one twice
+ * (identity rule 1). The tenant is the header, honoured with the token.
+ */
+@Injectable()
+export class ImportedPeople {
+  private readonly seam: Seam;
+
+  constructor(config: ConfigService) {
+    this.seam = seamOf(config, 'AUTH_API_BASE_URL', 'AUTH_API_TIMEOUT_MS');
+  }
+
+  async import(tenantId: string, users: { remoteIdentity: string; label: string }[]): Promise<ImportedPeopleAnswer> {
+    const data = await postToSeam(this.seam, PEOPLE_PATH, { users }, { [IdentityHeaders.tenantId]: tenantId });
+    const parsed = peopleSchema.safeParse(data);
+    if (!parsed.success) throw new MigrationSeamUnavailable(`${PEOPLE_PATH} answered no people`);
+    return parsed.data;
   }
 }

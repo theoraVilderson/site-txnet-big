@@ -40,7 +40,7 @@ export async function claimRun(db: CrossTenantPrismaService, status: MigrationRu
 }
 
 /** The run is still this tick's: in `status`, under the lease it took. A cancel or a re-preview meanwhile is theirs. */
-const stillOurs = (run: MigrationRun, status: MigrationRunStatus): Prisma.MigrationRunWhereInput => ({ id: run.id, status, workerClaimedAt: run.workerClaimedAt });
+export const stillOurs = (run: MigrationRun, status: MigrationRunStatus): Prisma.MigrationRunWhereInput => ({ id: run.id, status, workerClaimedAt: run.workerClaimedAt });
 
 export type MigrationPreviewResult = 'none' | 'previewed' | 'returned' | 'lost';
 

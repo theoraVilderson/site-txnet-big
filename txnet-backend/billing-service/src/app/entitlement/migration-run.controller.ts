@@ -53,6 +53,7 @@ function migrationRefusal(e: unknown): unknown {
  * - `POST …/migration-runs` `{family, sourceAddress}` -> **201** the run, `draft`
  * - `PUT …/migration-runs/:runId/inbounds` `{inbounds: [{inboundRemoteId, variantId}]}` -> the run
  * - `POST …/migration-runs/:runId/preview` -> **202** the run, `previewing`
+ * - `POST …/migration-runs/:runId/commit` -> **202** the run, `committing` (F-207)
  * - `GET …/migration-runs`, `GET …/:runId`, `GET …/:runId/outcomes` (the report's table), `POST …/:runId/cancel`
  *
  * All `migration.manage`: `staffWrite` to change, `read` to look. The page
@@ -92,11 +93,18 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   preview(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('runId', new ParseUUIDPipe()) runId: string, @Req() req: Request) {
     return this.answer(() => this.jobs.preview(actorOf(req), tenantId, runId));
   }
+
+  @Post(':runId/commit')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @RateLimit(bulkWriteLimit)
+  commit(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('runId', new ParseUUIDPipe()) runId: string, @Req() req: Request) {
+    return this.answer(() => this.jobs.commit(actorOf(req), tenantId, runId));
+  }
 }
 
 /**
  * The seam `worker-service`'s `migration_run_drain` tick reaches the dry run
- * through (F-206), as every drain: service callers only, outside the gate and
+ * through (F-206, F-207), as every drain: service callers only, outside the gate and
  * the tenant (ADR-0027).
  */
 @TenantCapability('system')

@@ -15,6 +15,8 @@ export type EntitlementRejection =
   | 'not_in_audience'
   /** A concurrent issue for the same cause won; retry to read its Grant. */
   | 'already_issued'
+  /** An import (F-207): an unlimited source client on a limited variant, or a limited one on an unlimited variant. */
+  | 'import_traffic_mismatch'
   /** Unknown, another tenant's, or — for a token rotation — another user's. Never told apart. */
   | 'grant_not_found'
   | 'illegal_transition'

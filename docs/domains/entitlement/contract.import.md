@@ -2,11 +2,11 @@
 id: entitlement
 layer: domain
 status: active
-version: 34
+version: 35
 updated: 2026-10-21
 ---
 
-# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206)
+# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). `network-service` reads the old panel and answers
@@ -106,6 +106,45 @@ worker's read), `migration-run-plan.ts` (`planRun`, pure),
     legacy path (F-203-a); the commit places fresh configs, so the dry run
     needs the snapshot alone.
 
+## The commit (F-207)
+
+Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
+`migration-plan.ts` (`importedGrantShape`), `GrantService.issue`'s
+`imported`; identity's route through `migration-seams.ts` (`ImportedPeople`).
+
+16. **Confirmed once.** `POST …/commit` moves a `previewed` run to
+    `committing`; asked again it is answered as it is. From here the source is
+    never read again (its login ends: tenant rule 5).
+17. **A batch a tick, up to 200 items**, in the report's order. Skips are
+    recorded `skipped` as reached. People first: one identity batch (identity
+    `contract.import.md`), and who it *made* is written on the item
+    (`createdUserId`) before any Grant, so a rollback (F-211) removes only
+    them — a person found is not the run's.
+18. **One transaction per item.** A Grant of the inbound's variant, `source =
+    migration`, `sourceReferenceId` = the item, from now to the client's end
+    (the variant's period when the source set none), its bag the client's
+    quota and `consumedBytes` its upload plus download (`importedGrantShape`);
+    the rest — features, quotas, group, billing mode — the variant's. It is
+    placed at once by its group (`GroupFulfilmentService.fulfil`; a member that
+    cannot take it yet is the sweep's), and its configs are recorded on the
+    item. A client the source had switched off is frozen `hard` with its clock
+    running, as it ran there (rule 5: never a purge clock).
+19. **A re-run never duplicates** (invariant 32). A key the tenant already
+    holds a Grant of is `updated` and that Grant is **kept as it is**: it has
+    lived here since (usage, renewals, money), so a later change at the source
+    is not carried over. A crashed item retried finds its Grant by its
+    `sourceReferenceId`.
+20. **A failed item never blocks the batch.** Its reason is kept: identity's
+    (`over_cap`, `deleted`), the sale's (`wholesale_unfunded`,
+    `variant_not_assignable`, …), `import_traffic_mismatch` (an unlimited
+    client on a limited variant or the reverse — F-208 reports it before the
+    commit), `inbound_unmapped`, `expired` (its end came since the preview), or
+    `unexpected` (logged). Identity unreachable writes nothing; the next tick
+    retries.
+21. **The end.** Nothing pending: `committed`, `rollbackUntil` = 7 days on
+    (D-63), the source login destroyed. Each batch and the end write the
+    page's event (rule 13).
+
 ## Routes
 
 Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
@@ -118,17 +157,20 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 | `GET /:runId` | — | the run: status, `failureReason`, counts, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
 | `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null | the run |
 | `POST /:runId/preview` | — | 202 the run, `previewing` (answered as it is while it runs) |
+| `POST /:runId/commit` | — | 202 the run, `committing` (answered as it is once started) |
 | `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped and failed only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason` |
 | `POST /:runId/cancel` | — | the run, `cancelled` |
 
 `POST /api/internal/billing/migration-runs/drain` (service-only) answers
-`{previewed, returned}` for one tick.
+`{previewed, returned, committed, finished}` for one tick: one dry run, one
+commit batch.
 
 | Refusal | Status | Meaning |
 |---|---|---|
 | `run_not_found`, `inbound_not_found`, `variant_not_found` | 404 | not this reseller's, not in the snapshot, or not a variant it sells |
 | `run_busy` | 409 | the run is being previewed |
 | `run_closed` | 409 | committing, committed, rolled back, cancelled or expired |
+| `run_not_previewed` | 409 | a commit of a run with no report yet (`draft`, `previewing`) |
 | `variant_not_prepaid`, `variant_not_assignable`, `variant_not_deliverable` | 422 | rule 10 |
 
 The door's own refusals are every reseller route's (`not_allowed`,

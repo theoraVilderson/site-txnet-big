@@ -1,6 +1,9 @@
 import { ConfigProtocol, GrantSource, type DriverType, type MigrationSkipReason } from '@prisma/client';
 import { z } from 'zod';
 
+import { EntitlementRefused } from './entitlement-refusals';
+import type { grantFromVariant } from './grant';
+
 /** A source panel's free text is bounded before anything keeps it (catalog §16: adversarial input). */
 const REMOTE_ID_MAX = 200;
 const LABEL_MAX = 200;
@@ -110,5 +113,32 @@ export function planMigrationItem(client: SourceClient, source: MigrationSource)
     },
     config: { variantId: source.variantId, protocol, uuid: client.uuid || null },
     enabled: client.enabled,
+  };
+}
+
+/** What an import brings over the variant (F-207): the source's end, bag and usage, and the key a re-run finds the Grant by. */
+export type ImportedGrant = { remoteIdentity: string; endsAt: Date | null; purchasedBytes: bigint; consumedBytes: bigint; trafficUnlimited: boolean };
+
+type ImportableShape = Pick<ReturnType<typeof grantFromVariant>, 'startsAt' | 'endsAt' | 'endSetAt' | 'purchasedBytes' | 'trafficUnlimited'>;
+
+/**
+ * An import's Grant over its variant's shape (F-207, entitlement
+ * `contract.import.md`): the client's end (the variant's period when the
+ * source set none), its bag and what it used there, and its `remoteIdentity`
+ * (invariant 32). The rest — features, quotas, group, billing mode — is the
+ * variant's, so the Grant renews as any of it. An unlimited client on a
+ * limited variant, or the other way round, is not the plan the reseller
+ * chose: `import_traffic_mismatch`.
+ */
+export function importedGrantShape<S extends ImportableShape>(shape: S, imported: ImportedGrant) {
+  if (imported.trafficUnlimited !== shape.trafficUnlimited) throw new EntitlementRefused('import_traffic_mismatch', imported.remoteIdentity);
+  const endsAt = imported.endsAt ?? shape.endsAt;
+  return {
+    ...shape,
+    endsAt,
+    endSetAt: endsAt === null ? null : shape.startsAt,
+    purchasedBytes: imported.purchasedBytes,
+    consumedBytes: imported.consumedBytes,
+    remoteIdentity: imported.remoteIdentity,
   };
 }
