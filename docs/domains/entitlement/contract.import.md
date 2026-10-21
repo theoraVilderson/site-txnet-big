@@ -2,11 +2,11 @@
 id: entitlement
 layer: domain
 status: active
-version: 33
+version: 34
 updated: 2026-10-21
 ---
 
-# Contract — entitlement / what an import issues for one source client (F-202)
+# Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). `network-service` reads the old panel and answers
@@ -18,8 +18,8 @@ items are [data-model.md](data-model.md)'s `migration_run` / `migration_item`
 
 Code: `billing-service/src/app/entitlement/migration-plan.ts` —
 `sourceClientSchema`, `remoteIdentityOf`, `planMigrationItem`. Pure: no
-read, no write. Its caller is the dry run (F-206); the commit (F-207) issues
-what it planned.
+read, no write. Its caller is the dry run (F-206, below); the commit (F-207)
+issues what it planned.
 
 ## Rules
 
@@ -40,9 +40,10 @@ what it planned.
    label is blank); a Grant with `source = migration`, from the plan's moment
    to the client's end (none = no end), its quota as the bag
    (`purchasedBytes`) and upload plus download as `consumedBytes`; a config of
-   the client's protocol on the panel the reseller chose for its inbound, with
-   the client's uuid (null where the list did not read it, as S-UI's from
-   v1.1 — the link batch does).
+   the client's protocol from the variant the reseller chose for its inbound,
+   placed by that variant's group as any Grant of it (F-027-bl), the client's
+   uuid kept for the report (null where the list did not read it, as S-UI's
+   from v1.1).
 4. **0 is unlimited**, as in every family: the plan is `trafficUnlimited` with
    a bag of 0 (`grant_traffic_unlimited_is_prepaid`). Whether the target
    product sells unlimited is F-208's question, not this mapping's.
@@ -55,6 +56,80 @@ what it planned.
    `unknown_protocol`. A client already imported (`update`), a duplicate and
    the reseller's cap (`over_cap`) need the run and the tenant: they are the
    dry run's (F-206).
-7. **The panel is given, not looked up.** The caller passes the panel chosen
-   for the client's inbound; a run with an inbound not mapped is not
-   previewed (F-206, F-201-f).
+7. **An inbound maps to a product, not a server** (user, 2026-10-21). The
+   caller passes the prepaid variant chosen for the client's inbound; an
+   imported Grant is then a Grant of that variant — it renews and tops up at
+   the reseller's price (F-305) and is placed by its group. A server alone
+   would have left a Grant with no price to renew at.
+
+## The dry run (F-206)
+
+Code: `migration-run.ts` (the routes' service), `migration-preview.ts` (the
+worker's read), `migration-run-plan.ts` (`planRun`, pure),
+`migration-seams.ts` (network's snapshot, tenant's vault). Worker job
+`migration_run_drain`.
+
+8. **Nothing outside the run's tables before the commit** (invariant 32):
+   the dry run writes `migration_run`, `migration_inbound`, `migration_item`
+   and the page's event; it reads Grants and people, never writes them.
+9. **The flow.** Create (`draft`) → store the source login (tenant
+   `contract.source-login.md`) → preview. The worker leases one `previewing`
+   run (10 minutes), reads network's snapshot — the bulk calls only — and
+   records the source's inbounds with their client counts. An inbound with
+   clients and no variant sends the run back to `draft` with
+   `failureReason = inbounds_unmapped`: the first preview is how the reseller
+   learns what to map. A refusal of the source goes back the same way with
+   network's reason (`source_login_refused`, `address_refused`, …;
+   `source_unavailable` when network could not be asked).
+10. **The mapping** is one prepaid variant per inbound, held to what an admin
+    may hand out by hand (F-311-o): the reseller's own product or a platform
+    one its package lists, live, deliverable. A metered variant is
+    `variant_not_prepaid`: an import brings a bag and an end, not a meter. It
+    changes in `draft` or `previewed`; on a previewed run it previews again.
+11. **What the report plans** (`planRun`), per client, in the snapshot's
+    order: `unreadable` (fails rule 1; its item keeps the id alone — one with
+    no id has no item and is only counted), `expired` / `unknown_protocol`
+    (rule 6), `duplicate` (the same uuid as a client already planned: one
+    person on two inbounds), `update` (the tenant holds a Grant of the key),
+    `over_cap` (a new person past `end_users_max`; one already imported takes
+    no room — the commit asks identity again, this is the forecast), else
+    `create`. A client listed twice is planned once.
+12. **All or nothing.** The report replaces the last one in one transaction,
+    only while the run is still the tick's (`previewing`, its lease): a run
+    cancelled or re-previewed meanwhile is left as the reseller left it.
+13. **Every move is told** (C-14): `entitlement.migration_run.progress`
+    `{tenantId, userId, runId}` to the tenant's channel and the starter's.
+14. **Cancel** (`draft`, `previewing`, `previewed`) ends the run and destroys
+    its source login (tenant rule 5), best effort: a later read of a closed
+    run destroys it anyway.
+15. **Links are not read here.** Network's link batch (its rule 4) serves the
+    legacy path (F-203-a); the commit places fresh configs, so the dry run
+    needs the snapshot alone.
+
+## Routes
+
+Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
+`migration.manage` — `staffWrite` to change, `read` to look.
+
+| Route | Body | Answers |
+|---|---|---|
+| `POST` | `family` (a `DriverType`), `sourceAddress` (absolute http(s), kept as its origin) | 201 the run, `draft` |
+| `GET` | `page`, `pageSize` | the runs, newest first |
+| `GET /:runId` | — | the run: status, `failureReason`, counts, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
+| `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null | the run |
+| `POST /:runId/preview` | — | 202 the run, `previewing` (answered as it is while it runs) |
+| `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped and failed only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason` |
+| `POST /:runId/cancel` | — | the run, `cancelled` |
+
+`POST /api/internal/billing/migration-runs/drain` (service-only) answers
+`{previewed, returned}` for one tick.
+
+| Refusal | Status | Meaning |
+|---|---|---|
+| `run_not_found`, `inbound_not_found`, `variant_not_found` | 404 | not this reseller's, not in the snapshot, or not a variant it sells |
+| `run_busy` | 409 | the run is being previewed |
+| `run_closed` | 409 | committing, committed, rolled back, cancelled or expired |
+| `variant_not_prepaid`, `variant_not_assignable`, `variant_not_deliverable` | 422 | rule 10 |
+
+The door's own refusals are every reseller route's (`not_allowed`,
+`reseller_suspended`, …).

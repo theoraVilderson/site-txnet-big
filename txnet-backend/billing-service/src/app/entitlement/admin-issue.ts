@@ -1,4 +1,4 @@
-import { GrantSource, GrantStatus, Prisma } from '@prisma/client';
+import { GrantSource, GrantStatus, Prisma, type FulfilmentKind, type VariantBillingMode } from '@prisma/client';
 import { consumeProductSale, productOpenTo, productSaleRef, TenantContext, tenantSellsProduct } from '@txnet-backend/shared-core';
 
 import { sellsTrafficToday } from '../catalog/traffic-quota';
@@ -36,6 +36,27 @@ const issuedOf = (g: { id: string; variantId: string | null; status: GrantStatus
   issued,
 });
 
+/** What `isDeliverableVariant` reads of a variant. */
+export type DeliverableVariantFacts = {
+  panelGroupId: string | null;
+  billingMode: VariantBillingMode;
+  quotas: Prisma.JsonValue;
+  product: { fulfilmentKind: FulfilmentKind };
+};
+
+/**
+ * What invoice create sells (F-111-i, F-111-p): a kind with a handler, a
+ * network variant with a group that could ever place one, a prepaid network
+ * variant stating its traffic. Asked before a Grant is issued by hand
+ * (F-311-o) and before an import's inbound is mapped to it (F-206).
+ */
+export async function isDeliverableVariant(tx: Prisma.TransactionClient, variant: DeliverableVariantFacts): Promise<boolean> {
+  const route = deliveryRouteOf(variant.product.fulfilmentKind, variant.panelGroupId);
+  if (route === null) return false;
+  if (!sellsTrafficToday({ fulfilmentKind: variant.product.fulfilmentKind, billingMode: variant.billingMode, quotas: variant.quotas })) return false;
+  return route !== 'panel_group' || (await deliverableGroupIds(tx, [variant.panelGroupId as string])).has(variant.panelGroupId as string);
+}
+
 /**
  * An admin issues a service to a user by hand (F-311-o): a Grant of a variant
  * with `source = admin_grant`, the request as its cause and the admin on it —
@@ -67,12 +88,7 @@ export async function issueGrantByAdmin(tx: Prisma.TransactionClient, grants: Gr
     select: { panelGroupId: true, billingMode: true, quotas: true, product: { select: { id: true, tenantId: true, fulfilmentKind: true } } },
   });
   if (!variant) throw new EntitlementRefused('variant_not_found', input.variantId);
-  const route = deliveryRouteOf(variant.product.fulfilmentKind, variant.panelGroupId);
-  const deliverable =
-    route !== null &&
-    sellsTrafficToday({ fulfilmentKind: variant.product.fulfilmentKind, billingMode: variant.billingMode, quotas: variant.quotas }) &&
-    (route !== 'panel_group' || (await deliverableGroupIds(tx, [variant.panelGroupId as string])).has(variant.panelGroupId as string));
-  if (!deliverable) throw new EntitlementRefused('variant_not_deliverable', input.variantId);
+  if (!(await isDeliverableVariant(tx, variant))) throw new EntitlementRefused('variant_not_deliverable', input.variantId);
   // A product sold to chosen groups is not handed out to anyone else either, by anyone (PT-1-b, the user's
   // call 2026-10-13): staff add the user to a group first.
   if (!(await productOpenTo(tx, TenantContext.current('admin issue').id, input.userId, variant.product))) {

@@ -1,4 +1,3 @@
-// codeshape: spec-only — F-206's dry run is its caller (BACKLOG F-202: the mapping lands first, on its own)
 import { ConfigProtocol, GrantSource, type DriverType, type MigrationSkipReason } from '@prisma/client';
 import { z } from 'zod';
 
@@ -36,8 +35,11 @@ export const sourceClientSchema = z.object({
 });
 export type SourceClient = z.infer<typeof sourceClientSchema>;
 
-/** The run's source, the panel the reseller chose for this client's inbound, and the moment of the plan. */
-export type MigrationSource = { family: DriverType; sourceAddress: string; panelId: string; now: Date };
+/**
+ * The run's source, the prepaid variant the reseller chose for this client's
+ * inbound (a product, not a server — user, 2026-10-21) and the moment of the plan.
+ */
+export type MigrationSource = { family: DriverType; sourceAddress: string; variantId: string; now: Date };
 
 /** What an import would issue for one client (F-202); the commit (F-207) issues it. */
 export type PlannedImport = {
@@ -46,8 +48,12 @@ export type PlannedImport = {
   /** F-201-e makes the username of it. */
   user: { label: string };
   grant: { source: typeof GrantSource.migration; startsAt: Date; endsAt: Date | null; trafficUnlimited: boolean; purchasedBytes: bigint; consumedBytes: bigint };
-  /** `uuid` null where the list did not read it (S-UI from v1.1); the link batch does. */
-  config: { panelId: string; protocol: ConfigProtocol; uuid: string | null };
+  /**
+   * Placed by the variant's group, as any Grant of it (F-027-bl): the protocol
+   * is the client's, for the report. `uuid` null where the list did not read
+   * it (S-UI from v1.1).
+   */
+  config: { variantId: string; protocol: ConfigProtocol; uuid: string | null };
   /** The source's own on/off, kept apart from the Grant's status: a client disabled there is not a suspended Grant here. */
   enabled: boolean;
 };
@@ -78,8 +84,8 @@ function protocolOf(name: string): ConfigProtocol | null {
  * One source client to what an import would issue (F-202, contract.import.md):
  * a user named from its label, a `migration` Grant from now to the client's
  * end with its quota as the bag (0 there is unlimited, as in every family)
- * and its upload plus download as consumed, and a config of its protocol on
- * the panel chosen for its inbound. Pure: a client already imported (update),
+ * and its upload plus download as consumed, and a config of its protocol from
+ * the variant chosen for its inbound. Pure: a client already imported (update),
  * a duplicate and the reseller's cap are the dry run's (F-206), which knows
  * the run; what is skipped here is what the client alone says — an end that
  * has passed, a protocol we do not sell.
@@ -102,7 +108,7 @@ export function planMigrationItem(client: SourceClient, source: MigrationSource)
       purchasedBytes: trafficUnlimited ? BigInt(0) : BigInt(client.dataLimitBytes),
       consumedBytes: BigInt(client.upBytes) + BigInt(client.downBytes),
     },
-    config: { panelId: source.panelId, protocol, uuid: client.uuid || null },
+    config: { variantId: source.variantId, protocol, uuid: client.uuid || null },
     enabled: client.enabled,
   };
 }

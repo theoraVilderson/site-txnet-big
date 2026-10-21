@@ -596,6 +596,8 @@ enum MigrationSkipReason {
   duplicate
   over_cap
   unknown_protocol
+  /// The snapshot answered the client in a shape the import does not take (F-206).
+  unreadable
 
   @@schema("entitlement")
 }
@@ -631,11 +633,16 @@ model MigrationRun {
   failedItems    Int                @default(0)
   /// The end of the rollback window (D-63: 7 days), set by the commit.
   rollbackUntil  DateTime?
+  /// Why the last preview went back to `draft`: the source's refusal or `inbounds_unmapped` (F-206).
+  failureReason  String?
+  /// The drain's lease on the run (F-206, F-207): two ticks never read the source or commit it at once.
+  workerClaimedAt DateTime?
   actorUserId    String             @db.Uuid
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  items MigrationItem[]
+  items    MigrationItem[]
+  inbounds MigrationInbound[]
 
   /// The item's composite foreign key: an item is its run's tenant's.
   @@unique([id, tenantId])
@@ -673,5 +680,30 @@ model MigrationItem {
   @@index([runId, plannedAction])
   @@index([tenantId])
   @@map("migration_item")
+  @@schema("entitlement")
+}
+
+/// One inbound of a run's source as the snapshot read it (F-206), and the
+/// reseller's prepaid variant its clients become — a product, not a server
+/// (user, 2026-10-21), so an imported Grant renews as any other. Null until
+/// chosen; no foreign key, the variant is checked when it is chosen.
+model MigrationInbound {
+  id              String   @id @default(uuid()) @db.Uuid
+  runId           String   @db.Uuid
+  tenantId        String   @db.Uuid
+  inboundRemoteId String
+  tag             String   @default("")
+  protocol        String   @default("")
+  /// The snapshot's clients on it; an inbound with none needs no variant.
+  clientCount     Int      @default(0)
+  variantId       String?  @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  run MigrationRun @relation(fields: [runId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@unique([runId, inboundRemoteId])
+  @@index([tenantId])
+  @@map("migration_inbound")
   @@schema("entitlement")
 }

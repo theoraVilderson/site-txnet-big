@@ -13,7 +13,7 @@ import { planMigrationItem, remoteIdentityOf, sourceClientSchema } from './migra
  */
 const NOW = new Date('2026-10-21T12:00:00Z');
 const GIB = 1024 ** 3;
-const SOURCE = { family: DriverType.marzban, sourceAddress: 'https://old.example:8443', panelId: 'panel-1', now: NOW };
+const SOURCE = { family: DriverType.marzban, sourceAddress: 'https://old.example:8443', variantId: 'variant-1', now: NOW };
 
 /** Each family's client shape as the snapshot answers it (contract.source.md). */
 const FAMILY_CLIENTS = {
@@ -31,7 +31,7 @@ describe('planMigrationItem', () => {
     expect(p.skipReason).toBeUndefined();
   });
 
-  it('plans a user, a migration Grant with its quota, usage and end, and a config on the chosen panel', () => {
+  it('plans a user, a migration Grant with its quota, usage and end, and a config of the chosen variant', () => {
     expect(plan(FAMILY_CLIENTS.marzban)).toEqual({
       remoteIdentity: 'marzban|https://old.example:8443|ali',
       user: { label: 'ali' },
@@ -43,7 +43,7 @@ describe('planMigrationItem', () => {
         purchasedBytes: BigInt(50 * GIB),
         consumedBytes: BigInt(10 * GIB),
       },
-      config: { panelId: 'panel-1', protocol: ConfigProtocol.vless, uuid: '7d0f…' },
+      config: { variantId: 'variant-1', protocol: ConfigProtocol.vless, uuid: '7d0f…' },
       enabled: true,
     });
   });

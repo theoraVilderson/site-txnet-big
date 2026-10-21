@@ -64,6 +64,10 @@ services:
       - TENANT_API_BASE_URL=http://tenant-service:3000
       # A Mini App's invoice link is made by the tenant's bot (F-104-q).
       - BOT_API_BASE_URL=http://bot-service:${BOT_PORT:-3000}
+      # An import reads its source panel through network-service (F-201-b,
+      # F-206) and finds or makes its people through auth-service (F-201-e, F-207).
+      - NETWORK_API_BASE_URL=http://network-service:${NETWORK_SERVICE_PORT:-8090}
+      - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
       # (F-092-a) and uses this pool.

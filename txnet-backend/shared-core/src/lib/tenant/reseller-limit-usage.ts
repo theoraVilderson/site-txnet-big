@@ -2,7 +2,7 @@ import { GrantSource, GrantStatus, PanelOwnershipType, TenantDomainType, type Pr
 
 import { liveMembership } from '../http/key-holders';
 import { RESELLER_KEYS } from './reseller-keys';
-import { RESELLER_LIMIT_KEYS, type ResellerLimitKey } from './reseller-limits';
+import { RESELLER_LIMIT_KEYS, resellerLimitOf, type ResellerLimitKey, type ResellerLimitReader } from './reseller-limits';
 
 /** What holds a seat: every state but the three that end a Grant. */
 export const OPEN_GRANT_STATUSES: readonly GrantStatus[] = [GrantStatus.pending, GrantStatus.active, GrantStatus.suspended];
@@ -127,4 +127,18 @@ export function resellerUsageOf(tx: ResellerUsageReader, tenantId: string, key: 
 export async function resellerUsagesOf(tx: ResellerUsageReader, tenantId: string, now = new Date()): Promise<Record<ResellerLimitKey, number | null>> {
   const counts = await Promise.all(RESELLER_LIMIT_KEYS.map((key) => resellerUsageOf(tx, tenantId, key, now)));
   return Object.fromEntries(RESELLER_LIMIT_KEYS.map((key, i) => [key, counts[i]])) as Record<ResellerLimitKey, number | null>;
+}
+
+/**
+ * How many more end users the tenant may take now under its `end_users_max`
+ * (ADR-0106); never below 0. Null when it has no limit: the platform's own
+ * tenant, or a reseller whose limit is unset. Registration and an import read
+ * it under their lock (F-019-t2, F-201-e); an import's dry run reads it as a
+ * forecast (F-206).
+ */
+export async function endUserRoom(db: ResellerLimitReader & ResellerUsageReader, tenantId: string): Promise<number | null> {
+  const inEffect = await resellerLimitOf(db, tenantId, 'end_users_max');
+  if (inEffect.limit === null) return null;
+  const used = (await resellerUsageOf(db, tenantId, 'end_users_max')) ?? 0;
+  return Math.max(0, inEffect.limit - used);
 }

@@ -69,6 +69,8 @@ export const RealtimeEventType = {
   ANALYTICS_REPORT: 'billing.analytics.report',
   /** F-311-ad: a config move job moved a batch, finished or was cancelled — its page re-reads the job (`ConfigMoveJobDrainService`). */
   CONFIG_MOVE_JOB_PROGRESS: 'network.config_move_job.progress',
+  /** F-206, F-207: an import's run moved — previewed, back to draft, a commit batch, its end, a cancel — its page re-reads the run. */
+  MIGRATION_RUN_PROGRESS: 'entitlement.migration_run.progress',
   GRANT_BULK_PROGRESSED: 'billing.grant_bulk.progressed',
   /** F-513-b: a capped variant's sold or held count moved — its tenant's shop and catalog re-read what is left (`moveSales`). */
   CATALOG_VARIANT_SALES_CHANGED: 'catalog.variant.sales_changed',
@@ -244,6 +246,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.ANALYTICS_USER_LOSS]: 'worker-service',
   [OutboxEventType.ANALYTICS_REPORT]: 'worker-service',
   [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: 'worker-service',
+  [OutboxEventType.MIGRATION_RUN_PROGRESS]: 'worker-service',
   [OutboxEventType.GRANT_BULK_PROGRESSED]: 'worker-service',
   [OutboxEventType.CATALOG_VARIANT_SALES_CHANGED]: 'worker-service',
   [OutboxEventType.PANEL_DRAINED]: 'worker-service',

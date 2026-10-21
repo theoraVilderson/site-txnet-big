@@ -8,6 +8,8 @@ import {
 } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { seamEnv } from './seam-env';
+
 /**
  * A per-route request limit: a positive whole number with a default, and `''`
  * (compose's `VAR=${VAR:-}`) read as unset — `auth-service`'s rule (F-087).
@@ -99,12 +101,6 @@ export const envSchema = z.object({
   SERVICE_AUTH_TOKEN: z.string().default(''),
 
   /**
-   * `tenant-service`'s internal seam, where a gateway's secrets are written
-   * (F-102-c → F-102-a, D-31; moved out of `auth-service` by F-018-ab). Optional at boot on purpose: payments never use
-   * it, so an unset value refuses only the gateway management writes, at call
-   * time, rather than the whole service.
-   */
-  /**
    * The VPN reserve, in bytes (F-118-b, ADR-0105 (8)): what each metered
    * Grant holds past its bag, at its own rate, so its configs keep headroom
    * the wallet has locked. A setting, not a constant (user, 2026-09-29): a
@@ -113,16 +109,7 @@ export const envSchema = z.object({
    */
   VPN_RESERVE_BYTES: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(2 ** 30), // one GiB
 
-  TENANT_API_BASE_URL: z.string().default(''),
-  TENANT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
-
-  /**
-   * `bot-service`'s internal seam, where a Mini App's invoice link is made
-   * (F-104-q). Optional at boot like the one above: unset refuses only an
-   * in-chat top-up started from a Mini App.
-   */
-  BOT_API_BASE_URL: z.string().default(''),
-  BOT_API_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  ...seamEnv,
 
   /** The envelope's translator (`locale/locale.service.ts`). */
   ...localeEnv,

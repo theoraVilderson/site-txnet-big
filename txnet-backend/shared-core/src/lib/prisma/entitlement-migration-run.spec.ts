@@ -114,7 +114,7 @@ describe('entitlement.migration_item: one source client, planned then done', () 
 
   it('names the skip reasons F-206 reports', () => {
     expect(enumValues('MigrationItemAction')).toEqual(['create', 'update', 'skip']);
-    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol']);
+    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable']);
   });
 
   it('holds one item per source client in a run, in its run’s tenant', () => {

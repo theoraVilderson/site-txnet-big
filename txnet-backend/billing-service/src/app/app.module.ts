@@ -7,6 +7,7 @@ import { RateLimitGuard, JsonLoggerModule, TenantStatusGuard, HealthModule } fro
 import { CatalogModule } from './catalog/catalog.module';
 import { EngagementModule } from './engagement/engagement.module';
 import { EntitlementModule } from './entitlement/entitlement.module';
+import { MigrationModule } from './entitlement/migration.module';
 import { envConfigOptions } from './config/env.validation';
 import { LanguageMiddleware } from './locale/language.middleware';
 import { LocaleModule } from './locale/locale.module';
@@ -74,6 +75,7 @@ const INTERNAL_ROUTES = 'internal/*path';
     CouponAdminModule,
     CatalogModule,
     EntitlementModule,
+    MigrationModule,
     TenantBillingModule,
     RevenueModule,
     AnalyticsModule,

@@ -66,6 +66,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.ANALYTICS_REPORT]: { audience: ['user'], fields: ['scheduleId'] },
   /** F-311-ad: a config move job moved a batch or ended — its tenant's and its starter's (F-027-ev) open job page re-reads the job's counts. */
   [OutboxEventType.CONFIG_MOVE_JOB_PROGRESS]: { audience: ['user', 'tenant'], fields: ['jobId'] },
+  /** F-206, F-207: an import's run moved — its tenant's and its starter's open migration page re-reads the run, as a move job. */
+  [OutboxEventType.MIGRATION_RUN_PROGRESS]: { audience: ['user', 'tenant'], fields: ['runId'] },
   /** RT-1-d: a bulk-by-filter job acted on a batch, ended or was cancelled — an open BulkByFilter of `resellerId` re-reads its jobs. */
   /** RT-1-f: a drain sweep retired a draining member's configs or removed it — the member tenant's open systems page re-reads its groups. */
   [OutboxEventType.PANEL_DRAINED]: { audience: ['tenant'], fields: ['panelId', 'groupId'] },
