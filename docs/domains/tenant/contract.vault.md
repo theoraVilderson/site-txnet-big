@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 10
-updated: 2026-09-24
+version: 11
+updated: 2026-10-21
 ---
 
 # Contract — tenant / the Credential Vault
@@ -46,6 +46,7 @@ value in a refusal.
 | `POST /api/internal/vault/gateway-credential` (+ `/state`, `/revoke`) | `{merchantId, secretKey, webhookSecret}` each `{configured, version, rotatedAt}`; 400 blank / nothing to set, 403 `not_owner`, 404 `gateway_not_found`. Caller: `billing` gateway management |
 | `POST /api/internal/vault/panel-credential` | `{configured, version, rotatedAt}` of kind `panel_credentials` under `panelCredentialLabel(panelId)`, or `panelRadiusSecretLabel` for `secret: 'radius_secret'` (F-027-az; absent is `login`, anything else 400); 400 blank, 403 `not_owner` (a `platform` panel only into the platform owner's vault, a `tenant` one only into its own), 404 `panel_not_found`. Caller: `billing` systems (F-027-ar) |
 | `POST /api/internal/vault/panel-credential/use` | `{credentials}` in the envelope's `data` (a refusal's reason in `error.reason`) — **the login itself**, the only value this module answers; `{panelId}` only, the vault re-derived from the row's reference and the same owner rule; `use` logged as `network:Opener`. `secret: 'radius_secret'` reads `panelRadiusSecret`'s reference only, never the login, logged as `network:RadiusDirectory`. 403 `not_owner`, 404 `panel_not_found` / `credential_unavailable` (no reference, or missing/revoked). Callers: the Opener (F-027-aw), the RADIUS allowlist (F-027-az) |
+| `POST /api/internal/vault/source-credential/use` (+ `/destroy`) | an import's source address and login, by run (F-201-d) — [contract.source-login.md](contract.source-login.md) |
 
 A loader mounts the same `VAULT_KEK_FILE` and gets `CredentialEnvGuard` with
 it. Every rule below holds in either process.
@@ -69,7 +70,8 @@ it.
 | `matches` | ref, candidate | `boolean` — "is this the value you already have?" | — |
 | `summary` / `list` | ref / tenantId | `CredentialSummary`(`[]`) | — |
 | `revoke` | ref | — | — |
-| `destroyExpiredVersions` | `now?` | how many rows were destroyed | — |
+| `destroy` | ref | how many rows were deleted — every version, ciphertext and all (F-201-d) | — |
+| `destroyExpiredVersions` | `now?` | how many rows were destroyed: superseded past the window, and expired rows of a `DESTROYED_ON_EXPIRY` kind (F-201-d) | — |
 
 A **ref** is `{tenantId, kind, label?}`. `kind` is `TenantCredentialKind` —
 catalog 20.4's list verbatim. `label` distinguishes several of a kind (a second

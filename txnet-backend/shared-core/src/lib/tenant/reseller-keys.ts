@@ -29,6 +29,7 @@ export const RESELLER_KEYS = [
   'grant.compensate',
   'grant.read',
   'grant.repair',
+  'migration.manage',
   'payment.confirm_manual',
   'report.read',
   'restriction.assign',

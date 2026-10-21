@@ -38,10 +38,10 @@ const (
 	maxRequestBody = 1 << 20
 )
 
-// SourceLogins reads an import's source login from the vault by the run's
-// credential reference (opener.Vault).
+// SourceLogins reads an import's source address and login from the vault by
+// the run's credential reference (opener.Vault).
 type SourceLogins interface {
-	SourceLogin(ctx context.Context, tenantID, credentialRef string) (string, error)
+	SourceLogin(ctx context.Context, tenantID, credentialRef string) (opener.SourcePanel, error)
 }
 
 // Source serves the source routes.
@@ -74,19 +74,17 @@ func (s *Source) serviceOnly(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// panelRequest names a source panel: whose run, which family, where, and
-// the vault reference of its login (F-201-d).
+// panelRequest names a source panel: whose run, which family, and the vault
+// reference its address and login are sealed under (F-201-d) — never the
+// address itself, which is as secret as the login.
 type panelRequest struct {
 	TenantID      string            `json:"tenantId"`
 	Family        driver.DriverType `json:"family"`
-	APIBaseURL    string            `json:"apiBaseUrl"`
-	ClientBaseURL string            `json:"clientBaseUrl"`
 	CredentialRef string            `json:"credentialRef"`
 }
 
 func (p panelRequest) valid() bool {
-	return p.TenantID != "" && p.CredentialRef != "" && source.IsFamily(p.Family) &&
-		absolute(p.APIBaseURL) && (p.ClientBaseURL == "" || absolute(p.ClientBaseURL))
+	return p.TenantID != "" && p.CredentialRef != "" && source.IsFamily(p.Family)
 }
 
 func absolute(raw string) bool {
@@ -159,11 +157,14 @@ func (s *Source) link(w http.ResponseWriter, r *http.Request) {
 // open reads the login and builds the family's driver, paced: the source is
 // a reseller's live panel (source.RequestsPerMinute).
 func (s *Source) open(ctx context.Context, req panelRequest) (source.Reader, error) {
-	login, err := s.Logins.SourceLogin(ctx, req.TenantID, req.CredentialRef)
+	panel, err := s.Logins.SourceLogin(ctx, req.TenantID, req.CredentialRef)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", errCredential, err)
 	}
-	d, err := opener.Build(opener.Target{Family: req.Family, APIBaseURL: req.APIBaseURL, ClientBaseURL: req.ClientBaseURL}, login, s.HTTP)
+	if !absolute(panel.APIBaseURL) || (panel.ClientBaseURL != "" && !absolute(panel.ClientBaseURL)) {
+		return nil, fmt.Errorf("%w: the stored address is not an absolute http(s) url", errCredential)
+	}
+	d, err := opener.Build(opener.Target{Family: req.Family, APIBaseURL: panel.APIBaseURL, ClientBaseURL: panel.ClientBaseURL}, panel.Login, s.HTTP)
 	if err != nil {
 		return nil, err
 	}

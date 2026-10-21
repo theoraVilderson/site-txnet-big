@@ -62,35 +62,61 @@ type Vault struct {
 // (`panel_not_found`, `not_owner`, `credential_unavailable`) and never a
 // value; the registrar records it as `unopenable`, and the panel stays pending.
 func (v Vault) PanelLogin(ctx context.Context, panelID string) (string, error) {
-	return v.read(ctx, panelID, "login")
+	got, err := v.read(ctx, panelID, "login")
+	return got.Credentials, err
 }
 
 // PanelRadiusSecret asks for a push panel's RADIUS shared secret (F-027-az):
 // its own vault reference, never the login. A panel with none stored is
 // refused `credential_unavailable`, and the allowlist leaves it off.
 func (v Vault) PanelRadiusSecret(ctx context.Context, panelID string) (string, error) {
-	return v.read(ctx, panelID, "radius_secret")
+	got, err := v.read(ctx, panelID, "radius_secret")
+	return got.Credentials, err
 }
 
-// SourceLogin asks for the login of an import's source panel by the run's
-// credential reference (F-201-b, D-63): one tenant's, never a registered
-// panel's, so the vault checks the reference against the tenant.
-func (v Vault) SourceLogin(ctx context.Context, tenantID, credentialRef string) (string, error) {
-	return v.use(ctx, sourceUsePath, map[string]string{"tenantId": tenantID, "credentialRef": credentialRef})
+// SourcePanel is an import's source as the vault holds it (F-201-d): the
+// address is sealed with the login, since a panel's web path is a secret too,
+// so neither ever travels in a request body.
+type SourcePanel struct {
+	Login         string
+	APIBaseURL    string
+	ClientBaseURL string
+}
+
+// SourceLogin asks for the address and login of an import's source panel by
+// the run's credential reference (F-201-b, D-63): one tenant's, never a
+// registered panel's, so the vault checks the reference against the tenant.
+func (v Vault) SourceLogin(ctx context.Context, tenantID, credentialRef string) (SourcePanel, error) {
+	got, err := v.use(ctx, sourceUsePath, map[string]string{"tenantId": tenantID, "credentialRef": credentialRef})
+	if err != nil {
+		return SourcePanel{}, err
+	}
+	if got.APIBaseURL == "" {
+		return SourcePanel{}, errors.New("vault answered no source address")
+	}
+	return SourcePanel{Login: got.Credentials, APIBaseURL: got.APIBaseURL, ClientBaseURL: got.ClientBaseURL}, nil
 }
 
 // read names the secret it wants (`PANEL_SECRETS` in shared-core's
 // panel-label.ts): the vault audits the two reads under different callers.
-func (v Vault) read(ctx context.Context, panelID, secret string) (string, error) {
+func (v Vault) read(ctx context.Context, panelID, secret string) (vaultAnswer, error) {
 	return v.use(ctx, usePath, map[string]string{"panelId": panelID, "secret": secret})
 }
 
-// use posts one read to the vault and answers the plaintext it returns.
-func (v Vault) use(ctx context.Context, path string, fields map[string]string) (string, error) {
+// vaultAnswer is a read's `data`: the plaintext, and a source's address
+// beside it (F-201-d); a panel's read carries no address.
+type vaultAnswer struct {
+	Credentials   string `json:"credentials"`
+	APIBaseURL    string `json:"apiBaseUrl"`
+	ClientBaseURL string `json:"clientBaseUrl"`
+}
+
+// use posts one read to the vault and answers what it returns.
+func (v Vault) use(ctx context.Context, path string, fields map[string]string) (vaultAnswer, error) {
 	body, _ := json.Marshal(fields)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(v.BaseURL, "/")+path, bytes.NewReader(body))
 	if err != nil {
-		return "", err
+		return vaultAnswer{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(ServiceTokenHeader, v.ServiceToken)
@@ -100,7 +126,7 @@ func (v Vault) use(ctx context.Context, path string, fields map[string]string) (
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("vault unreachable: %w", err)
+		return vaultAnswer{}, fmt.Errorf("vault unreachable: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -115,18 +141,16 @@ func (v Vault) use(ctx context.Context, path string, fields map[string]string) (
 		if reason == "" {
 			reason = "no reason given"
 		}
-		return "", fmt.Errorf("vault refused the login read (http %d): %s", resp.StatusCode, reason)
+		return vaultAnswer{}, fmt.Errorf("vault refused the login read (http %d): %s", resp.StatusCode, reason)
 	}
 	// ...and the value under `data`, never at the top level.
 	var answer struct {
-		Data struct {
-			Credentials string `json:"credentials"`
-		} `json:"data"`
+		Data vaultAnswer `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&answer); err != nil || answer.Data.Credentials == "" {
-		return "", errors.New("vault answered no login")
+		return vaultAnswer{}, errors.New("vault answered no login")
 	}
-	return answer.Data.Credentials, nil
+	return answer.Data, nil
 }
 
 // Opener is register.Opener over the families this service has drivers for.

@@ -1,21 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  PrismaClient,
-  TenantCredentialKind,
-  TenantCredentialStatus,
-} from '@prisma/client';
+import { PrismaClient, TenantCredentialKind, TenantCredentialStatus } from '@prisma/client';
 import { KekService } from './kek.service';
+import { DESTROYED_ON_EXPIRY } from './source-credential';
 // The label two processes must spell identically (F-102-a) — exported from
 // here so it arrives wherever the vault itself does.
 export * from './gateway-label';
 export * from './panel-label';
-import {
-  fingerprint,
-  fingerprintsMatch,
-  generateKey,
-  open,
-  seal,
-} from './vault.crypto';
+export * from './source-credential';
+import { fingerprint, fingerprintsMatch, generateKey, open, seal } from './vault.crypto';
 
 /**
  * The Credential Vault (ADR-0026, catalog 20.4 — F-1213, F-1214, F-1215,
@@ -93,14 +85,8 @@ export interface CredentialRef {
 
 /** Raised when a credential is asked for and there is no usable version. */
 export class CredentialUnavailable extends Error {
-  constructor(
-    readonly ref: CredentialRef,
-    readonly reason: 'missing' | 'expired' | 'revoked',
-  ) {
-    super(
-      `No usable ${ref.kind} credential for tenant ${ref.tenantId}` +
-        `${ref.label ? ` (${ref.label})` : ''}: ${reason}.`,
-    );
+  constructor(readonly ref: CredentialRef, readonly reason: 'missing' | 'expired' | 'revoked') {
+    super(`No usable ${ref.kind} credential for tenant ${ref.tenantId}${ref.label ? ` (${ref.label})` : ''}: ${reason}.`);
     this.name = 'CredentialUnavailable';
   }
 }
@@ -407,8 +393,23 @@ export class CredentialVaultService {
   }
 
   /**
-   * Destroy superseded versions whose grace window has passed (ADR-0026
-   * decision 4: *"kept for a grace window … then destroyed"*).
+   * Delete every version of one credential, ciphertext and all; answers how many
+   * rows went. {@link revoke} keeps the row for the trail; this is for a secret
+   * held only while a job needs it (F-201-d). The access log has no foreign key.
+   */
+  async destroy(ref: CredentialRef): Promise<number> {
+    const { count } = await this.prisma.tenantCredential.deleteMany({
+      where: { tenantId: ref.tenantId, kind: ref.kind, label: ref.label ?? '' },
+    });
+    if (count > 0) {
+      this.logger.log(`Destroyed ${ref.kind} for tenant ${ref.tenantId} (${count} version(s)).`);
+    }
+    return count;
+  }
+
+  /**
+   * Destroy superseded versions past their grace window (ADR-0026 decision 4),
+   * and every expired version of a kind in {@link DESTROYED_ON_EXPIRY}.
    *
    * Called by whatever schedules it — `automation` owns workers (F-031) and
    * this deliberately does not schedule itself. Until something calls it a
@@ -419,8 +420,7 @@ export class CredentialVaultService {
     const floor = new Date(now.getTime() - ROTATION_GRACE_SEC * 1000);
     const { count } = await this.prisma.tenantCredential.deleteMany({
       where: {
-        status: TenantCredentialStatus.superseded,
-        rotatedAt: { lte: floor },
+        OR: [{ status: TenantCredentialStatus.superseded, rotatedAt: { lte: floor } }, { kind: { in: [...DESTROYED_ON_EXPIRY] }, expiresAt: { lte: now } }],
       },
     });
     if (count > 0) {

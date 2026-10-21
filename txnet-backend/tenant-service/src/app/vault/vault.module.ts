@@ -3,6 +3,7 @@ import {
   CredentialEnvGuard,
   CredentialVaultService,
   KekService,
+  ResellerAccess,
   VAULT_DB,
 } from '@txnet-backend/shared-core';
 
@@ -11,6 +12,8 @@ import { GatewayCredentialController } from './gateway-credential.controller';
 import { GatewayCredentialService } from './gateway-credential.service';
 import { PanelCredentialController } from './panel-credential.controller';
 import { PanelCredentialService } from './panel-credential.service';
+import { SourceCredentialController, SourceCredentialInternalController } from './source-credential.controller';
+import { SourceCredentialService } from './source-credential.service';
 import { VaultInternalController } from './vault-internal.controller';
 
 /**
@@ -18,9 +21,10 @@ import { VaultInternalController } from './vault-internal.controller';
  * `auth-service` with F-018-ab (ADR-0058 (2)): writing a gateway's secrets is
  * tenant administration, not authentication.
  *
- * Three controllers, all service-only: the retention sweep `worker-service`
- * ticks (F-031-c), and the gateway-secret and panel-login writers
- * `billing-service` relays through (F-102-a, D-31; F-027-ar). `auth-service` still loads the vault itself — its
+ * Service-only controllers: the retention sweep `worker-service` ticks
+ * (F-031-c), and the gateway-secret and panel-login writers `billing-service`
+ * relays through (F-102-a, D-31; F-027-ar). One reseller route: an import's
+ * source login (F-201-d), behind `ResellerAccess`, with its two seams. `auth-service` still loads the vault itself — its
  * bot directory and SMS sender read through it — but serves no route on it.
  *
  * `VAULT_DB` is the cross-tenant pool: the sweep spans every tenant, and the
@@ -33,12 +37,14 @@ import { VaultInternalController } from './vault-internal.controller';
  * `PrismaModule` is `@Global`, so it is not imported here.
  */
 @Module({
-  controllers: [VaultInternalController, GatewayCredentialController, PanelCredentialController],
+  controllers: [VaultInternalController, GatewayCredentialController, PanelCredentialController, SourceCredentialController, SourceCredentialInternalController],
   providers: [
     KekService,
     CredentialVaultService,
     GatewayCredentialService,
     PanelCredentialService,
+    SourceCredentialService,
+    ResellerAccess,
     CredentialEnvGuard,
     { provide: VAULT_DB, useExisting: CrossTenantPrismaService },
   ],

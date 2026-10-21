@@ -45,6 +45,9 @@
     "guide": {
       "label": "Guides"
     },
+    "migration": {
+      "label": "Imports"
+    },
     "payment": {
       "label": "Payments"
     },
@@ -205,6 +208,12 @@
       "manage": {
         "label": "Manage guides",
         "description": "Write and publish help guides."
+      }
+    },
+    "migration": {
+      "manage": {
+        "label": "Import from another panel",
+        "description": "Connect the tenant's old panel and bring its users over."
       }
     },
     "payment": {
