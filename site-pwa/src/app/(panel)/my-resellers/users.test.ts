@@ -207,9 +207,9 @@ describe("the platform's own users and the catalog the forms name (F-311-ab, -ab
 
   it("issues only an active plan of an active product; the filter keeps the switched-off", () => {
     const products = [
-      { id: "p1", nameKey: "n1", isActive: true, variants: [{ id: "v1", sku: "A", nameKey: null, isActive: true }, { id: "v2", sku: "B", nameKey: null, isActive: false }] },
-      { id: "p2", nameKey: "n2", isActive: false, variants: [{ id: "v3", sku: "C", nameKey: null, isActive: true }] },
-      { id: "p3", nameKey: "n3", isActive: true, variants: [{ id: "v4", sku: "D", nameKey: null, isActive: false }] },
+      { id: "p1", nameKey: "n1", isActive: true, variants: [{ id: "v1", sku: "A", nameKey: null, isActive: true, billingMode: "prepaid" as const }, { id: "v2", sku: "B", nameKey: null, isActive: false, billingMode: "prepaid" as const }] },
+      { id: "p2", nameKey: "n2", isActive: false, variants: [{ id: "v3", sku: "C", nameKey: null, isActive: true, billingMode: "prepaid" as const }] },
+      { id: "p3", nameKey: "n3", isActive: true, variants: [{ id: "v4", sku: "D", nameKey: null, isActive: false, billingMode: "prepaid" as const }] },
     ];
     expect(issuableProducts(products)).toEqual([{ ...products[0], variants: [products[0].variants[0]] }]);
   });

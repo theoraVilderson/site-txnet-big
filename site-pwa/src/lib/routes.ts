@@ -197,6 +197,12 @@ export const myResellerBotPath = (id: string, self = false) => `${resellerWorksp
 export const myResellerCatalogPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/catalog`;
 /** A reseller's analytics by the path (F-1001-d): its owner's, who signs in to the platform's tenant, and the platform's staff's at tier A. */
 export const myResellerAnalyticsPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/analytics`;
+/**
+ * A reseller's import from another panel (F-201-f, D-63): connect, map each
+ * inbound to a plan, the dry run's report, confirm, live progress, the 7-day
+ * undo and every run before it. `?run=` opens one run.
+ */
+export const myResellerMigrationPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/migration`;
 /** A reseller's brand settings: today the default name of a config line in a buyer's app (F-307-k). */
 export const myResellerBrandingPath = (id: string, self = false) => `${resellerWorkspaceRoot(id, self)}/branding`;
 /**

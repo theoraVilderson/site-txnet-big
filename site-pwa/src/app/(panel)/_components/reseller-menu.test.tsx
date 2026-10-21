@@ -121,6 +121,7 @@ describe("the reseller's links", () => {
       "/my-resellers/r-9/gateways",
       "/my-resellers/r-9/payments",
       "/my-resellers/r-9/users",
+      "/my-resellers/r-9/migration",
       "/my-resellers/r-9/groups",
       "/my-resellers/r-9/access-log",
       "/my-resellers/r-9/domains",

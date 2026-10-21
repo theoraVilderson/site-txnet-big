@@ -1,4 +1,5 @@
 // A reseller's users' Grants, limits, revenue and bulk jobs, scoped by tenant id (F-311-v, F-019-r).
+import type { BillingMode } from "../catalog-api";
 import { type Paged, call } from "./client";
 import type { ConfigActionRefusal, FreezeMode, GrantRow, GrantScope, GrantStatus, GrantUsage, GrantsPage, UserConfigRow } from "./grants";
 
@@ -251,12 +252,12 @@ export const resellerGrantsPath = (tenantId: string) => `/tenants/${encodeURICom
 /** The users-admin door's catalog (F-311-ab1): what an admin issues and a bulk filter picks by product. */
 export const resellerUsersCatalogPath = (tenantId: string) => `/tenants/${encodeURIComponent(tenantId)}/users-catalog`;
 
-/** One product as that route answers it: no price, `tenantId` decided by billing. */
+/** One product as that route answers it: no price, `tenantId` decided by billing; `billingMode` for an import's mapping (F-201-f). */
 export type UsersCatalogProduct = {
   id: string;
   nameKey: string;
   isActive: boolean;
-  variants: { id: string; sku: string; nameKey: string | null; isActive: boolean }[];
+  variants: { id: string; sku: string; nameKey: string | null; isActive: boolean; billingMode: BillingMode }[];
 };
 
 /** A found service: the owner's row with the user it belongs to. */

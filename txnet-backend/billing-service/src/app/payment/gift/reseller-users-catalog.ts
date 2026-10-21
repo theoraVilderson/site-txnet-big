@@ -1,12 +1,16 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, VariantBillingMode } from '@prisma/client';
 import { productsClosedTo } from '@txnet-backend/shared-core';
 
-/** One product as the users pages name it (F-311-ab1): no price, no fulfilment detail. */
+/**
+ * One product as the users pages name it (F-311-ab1): no price, no fulfilment
+ * detail. `billingMode` lets an import's mapping offer prepaid plans only
+ * (F-201-f; entitlement `contract.import.md` rule 10).
+ */
 export type UsersCatalogProduct = {
   id: string;
   nameKey: string;
   isActive: boolean;
-  variants: { id: string; sku: string; nameKey: string | null; isActive: boolean }[];
+  variants: { id: string; sku: string; nameKey: string | null; isActive: boolean; billingMode: VariantBillingMode }[];
 };
 
 /**
@@ -24,7 +28,7 @@ export async function usersCatalogOf(tx: Prisma.TransactionClient, tenantId: str
       id: true,
       nameKey: true,
       isActive: true,
-      variants: { select: { id: true, sku: true, nameKey: true, isActive: true }, orderBy: { sku: 'asc' } },
+      variants: { select: { id: true, sku: true, nameKey: true, isActive: true, billingMode: true }, orderBy: { sku: 'asc' } },
     },
     orderBy: { key: 'asc' },
   });

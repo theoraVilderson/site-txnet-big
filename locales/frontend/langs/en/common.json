@@ -2205,7 +2205,8 @@
       "setup": "Reseller setup",
       "groups": "Groups",
       "accessLog": "Access log",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "migration": "Reseller import"
     },
     "scope": "Reseller",
     "setupProgress": "{{label}}: {{done}} of {{total}} steps done",
@@ -2223,7 +2224,8 @@
       "bot": "Bot",
       "groups": "Groups",
       "accessLog": "Access log",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "migration": "Import"
     }
   },
   "openingResellerPanel": "Opening your reseller panel…",
@@ -7463,6 +7465,172 @@
       "selection_empty": "Nothing in this selection can be moved.",
       "selection_too_large": "This selection is larger than allowed.",
       "job_not_found": "This job was not found."
+    }
+  },
+  "resellerMigration": {
+    "title": "Import from another panel",
+    "subtitle": "Bring your users over from Marzban, 3x-ui, Hiddify and the like. Your old panel is only read, never changed; nothing is written here until you confirm, and you have 7 days to undo it.",
+    "refresh": "Refresh",
+    "newRun": "New import",
+    "history": "Imports",
+    "historyEmpty": "No import yet. Start one to see who would come over before anything is written.",
+    "historyRow": "{{family}} · {{address}}",
+    "startedAt": "Started {{when}}",
+    "back": "All imports",
+    "family": "Old panel",
+    "address": "Panel address",
+    "clientBaseUrl": "Subscription address",
+    "clientBaseUrlHint": "Only if your panel serves users' links from a different address than its login page.",
+    "loginIntro": "Sign in to your old panel. The address and login are sealed in your vault, used only to read it, and deleted when the import is committed or cancelled.",
+    "loginAgain": "Enter the login again to read the panel.",
+    "connect": "Read my panel",
+    "connecting": "Connecting…",
+    "invalid": {
+      "address": "Enter the full address, starting with https:// or http://.",
+      "addressOther": "This import is for {{origin}}. Start a new import for another panel.",
+      "clientBaseUrl": "Enter the full address, starting with https:// or http://.",
+      "loginLong": "The login is too long."
+    },
+    "status": {
+      "draft": "Draft",
+      "previewing": "Reading",
+      "previewed": "Ready to confirm",
+      "committing": "Importing",
+      "committed": "Imported",
+      "rolling_back": "Undoing",
+      "rolled_back": "Undone",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "failure": {
+      "inbounds_unmapped": "Choose a plan for each inbound that has users, then read again.",
+      "source_login_refused": "The old panel refused this login.",
+      "credential_unavailable": "The login is no longer stored (it lasts 7 days unused). Enter it again.",
+      "login_malformed": "The login is not in this panel's form.",
+      "no_driver": "This panel type cannot be read yet.",
+      "address_refused": "This address is not allowed: it points to a private or internal network.",
+      "source_redirected": "The panel answered with a redirect. Enter the address it redirects to.",
+      "source_too_large": "This panel holds more than 20,000 users. Contact support to import it.",
+      "source_unreadable": "The panel answered something we cannot read. Check the panel type and address.",
+      "source_unavailable": "The panel did not answer in time. Try again later.",
+      "bad_request": "This panel type or address cannot be read.",
+      "other": "Reading the panel failed ({{reason}})."
+    },
+    "reading": "Reading your old panel… This page updates by itself.",
+    "mapping": {
+      "title": "What each inbound becomes here",
+      "intro": "Each inbound's users get a service of the plan you choose: it renews and tops up at your price. Only prepaid plans can be chosen: an import brings a volume and an end date.",
+      "inbound": "{{tag}} · {{protocol}}",
+      "users": "{{count}} users",
+      "pick": "Choose a plan",
+      "none": "Do not import",
+      "noOptions": "You have no active prepaid plan yet. Add one in your catalog first.",
+      "save": "Save and read again",
+      "saving": "Saving…"
+    },
+    "report": {
+      "title": "Who would come over",
+      "counts": "{{create}} new · {{update}} already here · {{skip}} skipped",
+      "problemsOnly": "Skipped and failed only",
+      "all": "Everyone",
+      "empty": "No user in this list.",
+      "label": "The import's users",
+      "purged": "The old panel's details were cleared when the undo window ended.",
+      "unlimited": "Unlimited",
+      "noEnd": "No end",
+      "off": "off at the source",
+      "col": {
+        "user": "User",
+        "inbound": "Inbound",
+        "traffic": "Used / volume",
+        "expires": "Ends",
+        "plan": "Plan",
+        "result": "Result"
+      }
+    },
+    "action": {
+      "create": "New",
+      "update": "Already here",
+      "skip": "Skipped"
+    },
+    "outcome": {
+      "pending": "Waiting",
+      "created": "Imported",
+      "updated": "Already here",
+      "skipped": "Skipped",
+      "failed": "Failed",
+      "rolled_back": "Undone",
+      "kept": "Kept"
+    },
+    "skip": {
+      "expired": "already ended",
+      "duplicate": "same user on another inbound",
+      "over_cap": "past your users limit",
+      "unknown_protocol": "a protocol we do not sell",
+      "unreadable": "the panel's data could not be read",
+      "traffic_mismatch": "unlimited user on a limited plan, or the other way round"
+    },
+    "itemFailure": {
+      "over_cap": "past your users limit",
+      "deleted": "the user was deleted here",
+      "wholesale_unfunded": "your wallet cannot pay the wholesale",
+      "variant_not_assignable": "the plan cannot be given",
+      "import_traffic_mismatch": "the plan's volume changed since the preview",
+      "inbound_unmapped": "its inbound has no plan",
+      "expired": "ended since the preview",
+      "unexpected": "an unexpected error"
+    },
+    "kept": {
+      "renewed": "renewed since",
+      "topped_up": "volume added since",
+      "bought": "bought since",
+      "holds_other_service": "has another service",
+      "paid": "has wallet activity",
+      "grant_not_active": "the service is not active",
+      "not_imported": "not made by this import",
+      "phone_linked": "linked a phone",
+      "email_linked": "linked an email",
+      "messenger_linked": "linked a messenger",
+      "signed_in": "signed in here",
+      "not_found": "not found"
+    },
+    "commit": "Import {{count}} users",
+    "commitConfirm": "Import {{count}} users now? They get their services here; your old panel is left as it is.",
+    "commitNothing": "Nothing to import: every user is skipped.",
+    "importing": "Importing… {{done}} of {{total}}",
+    "importedNote": "{{ok}} imported · {{failed}} failed",
+    "rollback": "Undo this import",
+    "rollbackDays": "{{days}} days left to undo",
+    "rollbackConfirm": "Undo this import? Services it made are closed and the users it made removed — except those who renewed, topped up or bought since: they are kept.",
+    "rollbackClosed": "The undo window has ended.",
+    "rollingBack": "Undoing… This page updates by itself.",
+    "rolledBackNote": "Undone. The users listed below were kept, with why.",
+    "cancel": "Cancel import",
+    "cancelConfirm": "Cancel this import? Its stored login is deleted; nothing was imported.",
+    "closed": "This import is closed.",
+    "refusals": {
+      "run_not_found": "This import was not found.",
+      "inbound_not_found": "That inbound is not in this panel any more. Read the panel again.",
+      "variant_not_found": "That plan is not one you sell.",
+      "run_busy": "The panel is being read. Wait for it to finish.",
+      "run_closed": "This import is already closed.",
+      "run_not_previewed": "Read the panel before confirming.",
+      "run_not_committed": "This import has not been committed.",
+      "rollback_window_closed": "The undo window has ended.",
+      "variant_not_prepaid": "Only a prepaid plan can be chosen.",
+      "variant_not_deliverable": "That plan cannot be placed on a server yet.",
+      "variant_not_assignable": "That plan cannot be given by hand.",
+      "not_a_panel_run": "This import does not read a panel.",
+      "not_allowed": "You may not run imports for this reseller.",
+      "reseller_suspended": "This reseller is suspended.",
+      "reseller_not_found": "This reseller was not found.",
+      "reseller_terminated": "This reseller has been closed."
+    },
+    "historyCol": {
+      "source": "Panel",
+      "status": "Status",
+      "counts": "Report",
+      "started": "Started"
     }
   }
 }

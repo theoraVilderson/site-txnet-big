@@ -99,11 +99,11 @@ The drain route answers `{jobs, acted, finished, purged, outcomesPurged}`.
 ## The catalog the users pages name (built — F-311-ab1, D-57)
 
 `GET /api/billing/tenants/:tenantId/users-catalog` -> `{products[{id, nameKey,
-isActive, variants[{id, sku, nameKey, isActive}]}]}`:
+isActive, variants[{id, sku, nameKey, isActive, billingMode}]}]}`:
 `payment/gift/reseller-users-catalog.controller.ts`, query
 `reseller-users-catalog.ts`, `ResellerUserGrantsService.catalog`; spec
-`reseller-users-catalog.spec.ts`. What a bulk filter picks by product and what
-an admin issues.
+`reseller-users-catalog.spec.ts`. What a bulk filter picks by product, what
+an admin issues, and the prepaid plans an import's inbound maps to (F-201-f).
 
 | Rule | Why |
 |---|---|
