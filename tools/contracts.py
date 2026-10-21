@@ -80,7 +80,7 @@ PANEL_PERMISSION_HELPER = "site-pwa/src/lib/permissions.ts"
 ALL_PERMISSIONS = "*"
 ALL_PERMISSIONS_ROLE = "SuperAdmin"
 DEFAULT_ROLE_RE = re.compile(
-    r"where:\s*\{\s*name:\s*'([^']+)'\s*\}")
+    r"export const END_USER_ROLE_NAME\s*=\s*'([^']+)'")
 
 STRIP_RE = re.compile(
     r"traefik\.http\.middlewares\.([A-Za-z0-9_-]+)"
@@ -350,8 +350,9 @@ def check_permissions() -> None:
 def check_default_role() -> None:
     """The default role name is spelled in three places and must agree.
 
-    `RegisterService` looks a role up by name, `prisma/seed.js` creates the
-    rows, and `permissions.yaml` grants that name its permissions. A new user
+    `END_USER_ROLE_NAME` (`end-user-room.ts`) is the role registration and an
+    import (F-201-e) look up by name, `prisma/seed.js` creates the rows, and
+    `permissions.yaml` grants that name its permissions. A new user
     lands on whichever row the first spelling finds; if the third disagrees,
     every request that user makes is refused by the gateway.
     """
@@ -359,8 +360,8 @@ def check_default_role() -> None:
     if not roles or not SEED.exists():
         return
 
-    register = ROOT / ("txnet-backend/auth-service/src/app/auth/register/"
-                       "register.service.ts")
+    register = ROOT / ("txnet-backend/auth-service/src/app/auth/users/"
+                       "end-user-room.ts")
     if not register.exists():
         return
 
@@ -388,12 +389,12 @@ def check_default_role() -> None:
     for name in sorted(set(looked_up)):
         if name not in seeded_names:
             errors.append(
-                f"register.service.ts looks up role {name!r}, which "
+                f"END_USER_ROLE_NAME names role {name!r}, which "
                 f"prisma/seed.js never creates — registration fails with "
                 f"`register.defaultRoleMissing` on a fresh database")
         if name not in roles and name not in seeded_names:
             errors.append(
-                f"register.service.ts looks up role {name!r}, which "
+                f"END_USER_ROLE_NAME names role {name!r}, which "
                 f"{PERMISSIONS.relative_to(ROOT)} does not grant — every "
                 f"request by a newly registered user is refused by the gateway")
 

@@ -60,6 +60,8 @@ import { RolesService } from './roles/roles.service';
 import { UserSearchController } from './users/user-search.controller';
 import { ResellerUsersController } from './users/reseller-users.controller';
 import { UserStatusController } from './users/user-status.controller';
+import { UserImportInternalController } from './users/user-import-internal.controller';
+import { UserImportService } from './users/user-import.service';
 import { UserStatusService } from './users/user-status.service';
 import { ResellerUsersService } from './users/reseller-users.service';
 import { UserSearchService } from './users/user-search.service';
@@ -116,6 +118,7 @@ import { ConfigService } from '@nestjs/config';
     UserStatusController,
     ActiveSessionsController,
     KeyWindowInternalController,
+    UserImportInternalController,
   ],
   providers: [
     SignedInCaptchaGuard,
@@ -133,6 +136,7 @@ import { ConfigService } from '@nestjs/config';
     UserSearchService,
     ResellerUsersService,
     UserStatusService,
+    UserImportService,
     // The one door on a route that names a reseller (F-066-w1). `PrismaModule`
     // binds `RESELLER_ACCESS_READER` to this service's app pool.
     ResellerAccess,

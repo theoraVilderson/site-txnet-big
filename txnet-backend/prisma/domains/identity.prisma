@@ -132,6 +132,10 @@ model User {
   /// Set exactly when `timezone` is (a CHECK holds it).
   timezoneSource         TimeZoneSource?
   referredByUserId       String?    @db.Uuid
+  /// The source panel's client this person was imported for (F-201-e, D-63):
+  /// the same key as the Grant's `remoteIdentity`, so a second import run
+  /// finds them instead of creating them again. Null for anyone who signed up.
+  remoteIdentity         String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -161,6 +165,7 @@ model User {
   @@unique([tenantId, username])
   @@unique([tenantId, phoneNumber])
   @@unique([tenantId, email])
+  @@unique([tenantId, remoteIdentity])
   @@index([tenantId])
   @@map("user")
   @@schema("identity")

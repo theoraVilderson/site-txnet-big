@@ -15,12 +15,13 @@ import {
   OtpPurpose,
 } from '../otp/otp.interface';
 import { OtpChannelRegistry } from '../otp/otp-channels.service';
-import { OutboxEventType, RESELLER_LIMIT_USAGE, resellerLimitOf, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
+import { OutboxEventType, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
 import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
 import { BotLinkStore } from '../bot-link/bot-link.store';
 import { signupSourceOf } from './signup-source';
+import { END_USER_ROLE_NAME, endUserRoom, lockEndUserRoom } from '../users/end-user-room';
 import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
@@ -97,7 +98,7 @@ export class RegisterService {
       // before a code is sent, and to the stranger without the figures.
       if (await this.full(this.prisma, tenant.id)) return err('register.closed');
       const role = await this.prisma.role.findFirst({
-        where: { name: 'user' },
+        where: { name: END_USER_ROLE_NAME },
       });
       if (!role) {
         return err('register.defaultRoleMissing');
@@ -219,10 +220,8 @@ export class RegisterService {
    * Whether the tenant is a reseller at its `end_users_max` (F-019-t2). The
    * platform's own tenant and a reseller with no limit never are.
    */
-  private async full(db: unknown, tenantId: string): Promise<boolean> {
-    const inEffect = await resellerLimitOf(db as ResellerLimitReader, tenantId, 'end_users_max');
-    if (inEffect.limit === null) return false;
-    return (await RESELLER_LIMIT_USAGE.end_users_max(db as ResellerUsageReader, tenantId, new Date())) >= inEffect.limit;
+  private async full(db: ResellerLimitReader & ResellerUsageReader, tenantId: string): Promise<boolean> {
+    return (await endUserRoom(db, tenantId)) === 0;
   }
 
   async verifyPhone(input: VerifyPhoneInput) {
@@ -253,7 +252,7 @@ export class RegisterService {
         // transaction that bound no tenant.
         const source = await signupSourceOf(this.botStore, phoneNumber);
         const user = await tenantTransaction(this.prisma, async (tx) => {
-          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:end_users_max:${pending.tenantId}`}))`;
+          await lockEndUserRoom(tx, pending.tenantId);
           if (await this.full(tx, pending.tenantId)) return null;
           const created = await tx.user.create({
             data: {
