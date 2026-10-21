@@ -2,8 +2,8 @@
 id: sub-api
 layer: interface
 status: active
-version: 1
-updated: 2026-10-17
+version: 2
+updated: 2026-10-21
 ---
 
 # Contract — sub-api
@@ -24,7 +24,7 @@ contacts a panel.
 ## Provides
 | Operation | Input | Output | Sync/Async | Errors |
 |---|---|---|---|---|
-| `GET /sub/{token}` | the token in the path; `User-Agent`; optional `?format=` | the rendered body, `Subscription-Userinfo` (F-609), `Profile-Update-Interval` | sync | see "Who is answered" below. A Grant that is not active → `200` with an empty but valid body and zero remaining, **never a 4xx** |
+| `GET /sub/{token}`, an old panel's link (F-203-b) | the token in the path, or the old path; `User-Agent`; optional `?format=` | the rendered body, `Subscription-Userinfo` (F-609), `Profile-Update-Interval` | sync | see "Who is answered" below. A Grant that is not active → `200` with an empty but valid body and zero remaining, **never a 4xx** |
 
 ### Who is answered (F-113-a, built)
 1. The host is normalised exactly as `shared-core` `normalizeHost` does (lowercase,
@@ -35,12 +35,28 @@ contacts a panel.
    the raw token never reaches the store or a log.
 4. The Grant's `tenantId` must be the domain's.
 
+On an old panel's host (`purpose = legacy_sub`, `verified`, F-204-a) the
+Grant is first the one an import kept the path for (below), then the token.
+
 Any miss is the **same** `404` and body, so a token cannot be probed from
 another tenant's domain. A database error is `503`, never `404`: a client app
 may drop a subscription on a 404. Only `GET`; any other method (a preflight
 included) is the mux's `405`. Every answer is `Cache-Control: no-store`.
 A read of the Grant's configs that fails is also `503`, never an empty body:
 an app that reads an empty body drops every server it had.
+
+### An old panel's link (F-203-b, built)
+`sub/legacy.go`, `db.GrantByLegacyPath`. A user imported from another panel
+keeps the link it gave them (entitlement `contract.import.md` rules 29-31).
+
+1. **Only on a `legacy_sub` host**, by `legacy_sub_link` (tenant, host, path):
+   the path decoded, without its trailing slash. The same path on any other
+   host is the 404. The panel's `/sub/{token}` answers there too.
+2. **The answer is the token's**: body, format, `Subscription-Userinfo`, the
+   cache, its gates. A `cancelled` Grant's old link is the 404, not the
+   inactive body: deleted is gone. A row's change stamps its Grant.
+3. Route `GET /sub/{rest...}`: a token is one segment, so a longer path is
+   read only on a legacy host. Other paths are F-204-c.
 
 ### What is served (F-113-b, built)
 `sub/render.go`. A config's stored lines (network `contract.links.md` rule 7)

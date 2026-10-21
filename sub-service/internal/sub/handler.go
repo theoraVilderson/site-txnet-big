@@ -58,6 +58,9 @@ type Store interface {
 	// GrantByTokenHash finds the Grant whose `subscriptionTokenHash` is the
 	// lowercase hex SHA-256 of the path token.
 	GrantByTokenHash(ctx context.Context, hash string) (Grant, bool, error)
+	// GrantByLegacyPath finds the Grant an import kept this old link for
+	// (`legacy_sub_link`, F-203-a), unless it was deleted (`cancelled`).
+	GrantByLegacyPath(ctx context.Context, tenantID, host, path string) (Grant, bool, error)
 	// ConfigsOfGrant is every `network.config` of the Grant with its panel's
 	// state, in a stable order; which of them are served is decided here.
 	ConfigsOfGrant(ctx context.Context, grantID string) ([]Config, error)
@@ -88,9 +91,12 @@ func (h *Handler) WithCache(c RenderCache) *Handler {
 
 // Register mounts the route. The method is part of the pattern, so any other
 // method — an `OPTIONS` preflight included — is refused by the mux with a 405
-// and never reaches a lookup.
+// and never reaches a lookup. The rest of the path is taken whole: an old
+// panel's link may be longer than one segment (F-203-b, `grantFor`).
 func (h *Handler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /sub/{token}", h.Serve)
+	mux.HandleFunc("GET /sub/{rest...}", h.Serve)
+	// Without it the mux would redirect `/sub` to `/sub/`: it names nothing either way.
+	mux.HandleFunc("GET /sub", func(w http.ResponseWriter, _ *http.Request) { notFound(w) })
 }
 
 // servesSubscriptions is the routing rule for a host, the same one
@@ -122,16 +128,18 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 
-	token := r.PathValue("token")
+	// The token, or an old link's rest (F-203-b): either way the answer is the
+	// host's and this path's, so the cache is keyed on its hash alone.
+	rest := r.PathValue("rest")
 	host := NormalizeHost(r.Host)
-	if token == "" || host == "" {
+	if rest == "" || host == "" {
 		notFound(w)
 		return
 	}
 
 	ctx := r.Context()
 	format := DetectFormat(r)
-	key := h.cache.key(TokenHash(token), format, host)
+	key := h.cache.key(TokenHash(rest), format, host)
 	if e, live, ok := h.cache.lookup(ctx, h.log, key); ok {
 		if !subscriptionLinkAllowed(live.Tenant, h.now()) {
 			h.refuseTenant(w, format, e.Grant, live)
@@ -149,17 +157,17 @@ func (h *Handler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.unavailable(w, "domain lookup failed", err)
 		return
 	}
-	if !ok || !servesSubscriptions(domain) {
+	if !ok {
 		notFound(w)
 		return
 	}
 
-	grant, ok, err := h.store.GrantByTokenHash(ctx, TokenHash(token))
+	grant, ok, err := h.grantFor(ctx, domain, host, rest, r.URL.Path)
 	if err != nil {
 		h.unavailable(w, "grant lookup failed", err)
 		return
 	}
-	if !ok || grant.TenantID != domain.TenantID {
+	if !ok {
 		notFound(w)
 		return
 	}

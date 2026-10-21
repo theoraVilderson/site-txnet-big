@@ -54,6 +54,11 @@ func (f *fakeStore) GrantByTokenHash(_ context.Context, hash string) (Grant, boo
 	return g, ok, nil
 }
 
+// GrantByLegacyPath holds no old links; legacy_test.go's store does (F-203-b).
+func (f *fakeStore) GrantByLegacyPath(context.Context, string, string, string) (Grant, bool, error) {
+	return Grant{}, false, f.err
+}
+
 func (f *fakeStore) ConfigsOfGrant(_ context.Context, grantID string) ([]Config, error) {
 	if f.configErr != nil {
 		return nil, f.configErr

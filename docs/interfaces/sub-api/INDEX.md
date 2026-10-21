@@ -2,12 +2,12 @@
 id: sub-api
 layer: interface
 status: active
-version: 1
-keywords: [subscription link, xray json, clash yaml, sing-box config, sub link, /sub, sub endpoint, subscription url, sub-service, subscription domain, subscription token, subscription-userinfo, remaining quota in the app, profile-update-interval, clash, sing-box, v2rayng, base64 subscription, لینک اشتراک, لینک ساب, ساب, لینک سابسکریپشن]
-source: [sub-service/**, txnet-backend/prisma/domains/migrations/20260924000700_sub_is_told_what_changed/**, txnet-backend/prisma/domains/migrations/20260924000800_sub_hears_a_grants_quota/**, txnet-backend/prisma/domains/migrations/20260926000600_sub_hears_an_unlimited_grant/**, txnet-backend/prisma/domains/migrations/20260926000800_sub_hears_a_configs_name/**]
+version: 2
+keywords: [old subscription link still works, old panel link, legacy link, لینک قدیمی, subscription link, xray json, clash yaml, sing-box config, sub link, /sub, sub endpoint, subscription url, sub-service, subscription domain, subscription token, subscription-userinfo, remaining quota in the app, profile-update-interval, clash, sing-box, v2rayng, base64 subscription, لینک اشتراک, لینک ساب, ساب, لینک سابسکریپشن]
+source: [sub-service/**, txnet-backend/prisma/domains/migrations/20260924000700_sub_is_told_what_changed/**, txnet-backend/prisma/domains/migrations/20260924000800_sub_hears_a_grants_quota/**, txnet-backend/prisma/domains/migrations/20260926000600_sub_hears_an_unlimited_grant/**, txnet-backend/prisma/domains/migrations/20260926000800_sub_hears_a_configs_name/**, txnet-backend/prisma/domains/migrations/20261021000900_sub_hears_an_old_link/**]
 owns_tables: []
 depends_on: [network, entitlement, tenant, redis-keyspace]
-updated: 2026-09-24
+updated: 2026-10-21
 ---
 
 # sub-api
@@ -26,7 +26,7 @@ invalidated by Postgres notifications (F-113-c, ADR-0083), and
 `Subscription-Userinfo` with the inactive Grant's empty body (F-609), its
 used figure live from Redis on every answer (F-609-b), and the tenant
 status gate (F-113-e), and Clash, Sing-box and Xray JSON from the same lines
-(F-113-f). Stage 1 of F-027-bh — one merged link per Grant, every driver
+(F-113-f), and an imported user's old link on its old host (F-203-b). Stage 1 of F-027-bh — one merged link per Grant, every driver
 family — is complete; panel groups (F-027-bk..bm) sit under it.
 
 ## Files
@@ -39,5 +39,6 @@ family — is complete; panel groups (F-027-bk..bm) sit under it.
 |---|---|
 | 2026-09-24 | Unit created, `draft`: its own deployable and stored link lines (ADR-0082) |
 | 2026-09-24 | `active`: `sub-service` serves `GET /sub/{token}` behind the host/token gate (F-113-a) |
+| 2026-10-21 | v1 -> **v2** (additive, F-203-b): `GET /sub/{rest...}` answers an imported user's old link on a `legacy_sub` host with its Grant's subscription |
 
 <!-- INDEX.md is a router. ≤40 lines. Never put detail here. -->

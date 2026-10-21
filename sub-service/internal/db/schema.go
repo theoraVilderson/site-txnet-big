@@ -37,6 +37,8 @@ var RequiredColumns = map[string]map[string][]string{
 	"entitlement": {
 		"grant":            {"id", "tenantId", "status", "subscriptionTokenHash", "billingMode", "consumedBytes", "quotas", "endsAt", "panelGroupId", "trafficUnlimited"},
 		"quota_adjustment": {"grantId", "metric", "delta", "expiresAt"},
+		// An imported user's old link (F-203-b).
+		"legacy_sub_link": {"tenantId", "host", "path", "grantId"},
 	},
 	// The Grant's configs, their stored lines and their panel's state (F-113-b).
 	"network": {
