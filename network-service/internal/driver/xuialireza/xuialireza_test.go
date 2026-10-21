@@ -37,6 +37,8 @@ type farEnd struct {
 	order   []string
 	backup  map[string]farClient
 	calls   int
+	// writes counts requests that change the far end (RunReadOnly).
+	writes  int
 	logins  int
 	session string
 	// resets counts writes that carried a `reset` key, which this fork does
@@ -98,6 +100,9 @@ func newFarEnd(t *testing.T) *farEnd {
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls++
+	if changesFarEnd(r) {
+		f.writes++
+	}
 	stall, status := f.nextStall, f.nextStatus
 	f.nextStall, f.nextStatus = 0, 0
 	f.mu.Unlock()
@@ -400,6 +405,17 @@ func (h *harness) TotalCalls() int {
 	return h.f.calls
 }
 
+func (h *harness) WriteCalls() int {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	return h.f.writes
+}
+
+// changesFarEnd is every request but a read and the login (F-201-b).
+func changesFarEnd(r *http.Request) bool {
+	return r.Method != http.MethodGet && !strings.HasSuffix(r.URL.Path, "/login") && !strings.HasSuffix(r.URL.Path, "/setting/all")
+}
+
 // open starts a far end and a driver logged in to it. The login is spent here,
 // before any scenario counts requests.
 func open(t *testing.T) (*farEnd, *Driver) {
@@ -422,13 +438,15 @@ func open(t *testing.T) (*farEnd, *Driver) {
 // panel with a per-client ceiling. Every push and no-ceiling scenario is
 // skipped by name, because x-ui cannot be put in that shape.
 func TestConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
+	setup := func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
 		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative || !shape.CeilingSupported {
 			return nil, false
 		}
 		f, d := open(t)
 		return &harness{f: f, d: d}, true
-	})
+	}
+	conformance.Run(t, setup)
+	conformance.RunReadOnly(t, setup)
 }
 
 // A zero ceiling is a cut-off, and x-ui reads a totalGB of 0 as unlimited.

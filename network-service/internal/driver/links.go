@@ -58,16 +58,29 @@ func ParseLinks(body []byte) []string {
 // admin power handed to whoever serves it (contract.links.md rule 3). A
 // failure is classified here, as every call's is (fault.go).
 func FetchLinks(ctx context.Context, hc *http.Client, op, url string) ([]string, error) {
+	sub, err := FetchSubscription(ctx, hc, op, url)
+	return sub.Lines, err
+}
+
+// Subscription is one subscription URL's answer: its lines, and the headers a
+// reader of the user's quota needs (`Subscription-Userinfo`, F-201-b).
+type Subscription struct {
+	Lines  []string
+	Header http.Header
+}
+
+// FetchSubscription is FetchLinks with the answer's headers kept.
+func FetchSubscription(ctx context.Context, hc *http.Client, op, url string) (Subscription, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, NewFault(FaultProtocol, op, 0, err)
+		return Subscription{}, NewFault(FaultProtocol, op, 0, err)
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, NewFault(FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
+			return Subscription{}, NewFault(FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
 		}
-		return nil, NewFault(FaultUnavailable, op, 0, err)
+		return Subscription{}, NewFault(FaultUnavailable, op, 0, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
@@ -77,17 +90,17 @@ func FetchLinks(ctx context.Context, hc *http.Client, op, url string) ([]string,
 		if seconds, err := strconv.Atoi(resp.Header.Get("Retry-After")); err == nil && seconds > 0 {
 			fault.RetryAfter = time.Duration(seconds) * time.Second
 		}
-		return nil, fault
+		return Subscription{}, fault
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxSubscriptionBody+1))
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, NewFault(FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
+			return Subscription{}, NewFault(FaultTimeout, op, 0, fmt.Errorf("%w: %v", ctxErr, err))
 		}
-		return nil, NewFault(FaultUnavailable, op, 0, err)
+		return Subscription{}, NewFault(FaultUnavailable, op, 0, err)
 	}
 	if len(body) > maxSubscriptionBody {
-		return nil, NewFault(FaultProtocol, op, 0, errors.New("the subscription body is over 1 MiB"))
+		return Subscription{}, NewFault(FaultProtocol, op, 0, errors.New("the subscription body is over 1 MiB"))
 	}
-	return ParseLinks(bytes.TrimSpace(body)), nil
+	return Subscription{Lines: ParseLinks(bytes.TrimSpace(body)), Header: resp.Header}, nil
 }

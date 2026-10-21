@@ -28,11 +28,13 @@ import (
 type farEnd struct {
 	t *testing.T
 
-	mu      sync.Mutex
-	users   map[string]*farUser
-	order   []string
-	backup  map[string]farUser
-	calls   int
+	mu     sync.Mutex
+	users  map[string]*farUser
+	order  []string
+	backup map[string]farUser
+	calls  int
+	// writes counts requests that change the far end (RunReadOnly).
+	writes  int
 	logins  int
 	token   string
 	nextKey int
@@ -68,6 +70,9 @@ func newFarEnd(t *testing.T) *farEnd {
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls++
+	if changesFarEnd(r) {
+		f.writes++
+	}
 	stall, status := f.nextStall, f.nextStatus
 	f.nextStall, f.nextStatus = 0, 0
 	f.mu.Unlock()
@@ -463,6 +468,17 @@ func (h *harness) TotalCalls() int {
 	return h.f.calls
 }
 
+func (h *harness) WriteCalls() int {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	return h.f.writes
+}
+
+// changesFarEnd is every request but a read and the login (F-201-b).
+func changesFarEnd(r *http.Request) bool {
+	return r.Method != http.MethodGet && r.URL.Path != "/api/admins/token"
+}
+
 // open starts a far end and a driver logged in to it. The login is spent here,
 // before any scenario counts requests, the way a long-lived driver has spent
 // it long before a pass.
@@ -485,13 +501,15 @@ func open(t *testing.T, clientBase string) (*farEnd, *Driver, string) {
 // cumulative panel with a per-user ceiling whose bulk read is paged (ADR-0081).
 // Every push and no-ceiling scenario is skipped by name.
 func TestConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
+	setup := func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
 		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative || !shape.CeilingSupported {
 			return nil, false
 		}
 		f, d, _ := open(t, "")
 		return &harness{f: f, d: d}, true
-	})
+	}
+	conformance.Run(t, setup)
+	conformance.RunReadOnly(t, setup)
 }
 
 // A zero ceiling is a cut-off (driver.SetClientDataLimit), and Marzneshin

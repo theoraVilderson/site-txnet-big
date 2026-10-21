@@ -32,6 +32,7 @@ import (
 	"network-service/internal/reach"
 	"network-service/internal/register"
 	"network-service/internal/shutdown"
+	"network-service/internal/source"
 	"network-service/pkg/logger"
 )
 
@@ -231,6 +232,10 @@ func main() {
 	api := httpapi.New(pool, log)
 	mux.HandleFunc("/health", api.Health)
 	mux.HandleFunc("/metrics", api.Metrics(plannerMetrics))
+	// An import's source panel, read-only (F-201-b): always a tenant's
+	// choice, so the bare guard — never PANEL_EGRESS_ALLOW_CIDRS.
+	sources := &httpapi.Source{Logins: vault, HTTP: source.HTTPClient(egress.Guard{}), ServiceToken: cfg.ServiceAuthToken, Log: log}
+	sources.Register(mux)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,

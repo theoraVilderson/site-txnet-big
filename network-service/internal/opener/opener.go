@@ -40,6 +40,10 @@ const ServiceTokenHeader = "x-service-token"
 // panel's login (`contract.vault.md`, internal routes).
 const usePath = "/api/internal/vault/panel-credential/use"
 
+// sourceUsePath answers the login of a panel a reseller is importing from
+// (F-201-b): a run's `source_panel_credentials`, built by F-201-d.
+const sourceUsePath = "/api/internal/vault/source-credential/use"
+
 // LoginSource answers a panel's login in plaintext. The Opener holds it for
 // the length of one Open and nowhere else.
 type LoginSource interface {
@@ -67,11 +71,23 @@ func (v Vault) PanelRadiusSecret(ctx context.Context, panelID string) (string, e
 	return v.read(ctx, panelID, "radius_secret")
 }
 
+// SourceLogin asks for the login of an import's source panel by the run's
+// credential reference (F-201-b, D-63): one tenant's, never a registered
+// panel's, so the vault checks the reference against the tenant.
+func (v Vault) SourceLogin(ctx context.Context, tenantID, credentialRef string) (string, error) {
+	return v.use(ctx, sourceUsePath, map[string]string{"tenantId": tenantID, "credentialRef": credentialRef})
+}
+
 // read names the secret it wants (`PANEL_SECRETS` in shared-core's
 // panel-label.ts): the vault audits the two reads under different callers.
 func (v Vault) read(ctx context.Context, panelID, secret string) (string, error) {
-	body, _ := json.Marshal(map[string]string{"panelId": panelID, "secret": secret})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(v.BaseURL, "/")+usePath, bytes.NewReader(body))
+	return v.use(ctx, usePath, map[string]string{"panelId": panelID, "secret": secret})
+}
+
+// use posts one read to the vault and answers the plaintext it returns.
+func (v Vault) use(ctx context.Context, path string, fields map[string]string) (string, error) {
+	body, _ := json.Marshal(fields)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(v.BaseURL, "/")+path, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
@@ -143,10 +159,7 @@ var ErrNoDriver = errors.New("no driver for this family yet")
 // Open builds the family's driver. The family is checked before the vault is
 // asked, so a panel no driver can open costs no read of its login.
 func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, error) {
-	switch p.DriverType {
-	case driver.DriverMarzban, driver.DriverMarzneshin, driver.DriverSanaee, driver.DriverThreeXUI,
-		driver.DriverXUIAlireza, driver.DriverHiddify, driver.DriverMikrotikUserManager:
-	default:
+	if !HasDriver(p.DriverType) {
 		return nil, fmt.Errorf("%w: %q", ErrNoDriver, p.DriverType)
 	}
 	if p.APIBaseURL == "" {
@@ -158,30 +171,56 @@ func (o Opener) Open(ctx context.Context, p register.Pending) (driver.Driver, er
 	if err != nil {
 		return nil, err
 	}
-	hc := o.client(p)
-	if p.DriverType == driver.DriverHiddify {
+	return Build(Target{Family: p.DriverType, APIBaseURL: p.APIBaseURL, ClientBaseURL: p.ClientBaseURL}, login, o.client(p))
+}
+
+// HasDriver is whether this service can open a panel of the family.
+func HasDriver(family driver.DriverType) bool {
+	switch family {
+	case driver.DriverMarzban, driver.DriverMarzneshin, driver.DriverSanaee, driver.DriverThreeXUI,
+		driver.DriverXUIAlireza, driver.DriverHiddify, driver.DriverMikrotikUserManager:
+		return true
+	}
+	return false
+}
+
+// Target is the panel a driver is built for: its family and addresses.
+type Target struct {
+	Family        driver.DriverType
+	APIBaseURL    string
+	ClientBaseURL string
+}
+
+// Build is a family's driver for a login already read, dialing through hc —
+// Open's for a registered panel, the source snapshot's for an import's
+// (F-201-b). A family with no driver is ErrNoDriver.
+func Build(t Target, login string, hc *http.Client) (driver.Driver, error) {
+	if !HasDriver(t.Family) {
+		return nil, fmt.Errorf("%w: %q", ErrNoDriver, t.Family)
+	}
+	if t.Family == driver.DriverHiddify {
 		// Hiddify's API takes no username: the login is the admin's API key
 		// (its uuid), typed alone.
-		return hiddify.New(p.APIBaseURL, p.ClientBaseURL, login, hc)
+		return hiddify.New(t.APIBaseURL, t.ClientBaseURL, login, hc)
 	}
 	username, password, err := usernamePassword(login)
 	if err != nil {
 		return nil, err
 	}
-	switch p.DriverType {
+	switch t.Family {
 	case driver.DriverMarzneshin:
 		// Its subscription may be served on another domain (F-027-bg).
-		return marzneshin.New(p.APIBaseURL, p.ClientBaseURL, marzneshin.Credentials{Username: username, Password: password}, hc)
+		return marzneshin.New(t.APIBaseURL, t.ClientBaseURL, marzneshin.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverMikrotikUserManager:
-		return usermanager.New(p.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, hc)
+		return usermanager.New(t.APIBaseURL, usermanager.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverSanaee:
-		return sanaee.New(p.APIBaseURL, p.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, hc)
+		return sanaee.New(t.APIBaseURL, t.ClientBaseURL, sanaee.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverThreeXUI:
-		return threexui.New(p.APIBaseURL, threexui.Credentials{Username: username, Password: password}, hc)
+		return threexui.New(t.APIBaseURL, threexui.Credentials{Username: username, Password: password}, hc)
 	case driver.DriverXUIAlireza:
-		return xuialireza.New(p.APIBaseURL, p.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, hc)
+		return xuialireza.New(t.APIBaseURL, t.ClientBaseURL, xuialireza.Credentials{Username: username, Password: password}, hc)
 	}
-	return marzban.New(p.APIBaseURL, marzban.Credentials{Username: username, Password: password}, hc)
+	return marzban.New(t.APIBaseURL, marzban.Credentials{Username: username, Password: password}, hc)
 }
 
 // client is the guarded client p is dialed through: its own, pinned, when

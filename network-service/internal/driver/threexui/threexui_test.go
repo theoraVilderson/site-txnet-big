@@ -31,8 +31,10 @@ type farEnd struct {
 	backup   map[string]farClient
 	sessions map[string]*farSession // by cookie value
 	calls    int
-	logins   int
-	nextSID  int
+	// writes counts requests that change the far end (RunReadOnly).
+	writes  int
+	logins  int
+	nextSID int
 
 	// subURI and subOff are the sub server's settings; subCookies counts
 	// subscription reads that carried a cookie, which none may (F-027-bi).
@@ -95,6 +97,9 @@ func (f *farEnd) expire() {
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls++
+	if changesFarEnd(r) {
+		f.writes++
+	}
 	stall, status := f.nextStall, f.nextStatus
 	f.nextStall, f.nextStatus = 0, 0
 	f.mu.Unlock()
@@ -393,6 +398,17 @@ func (h *harness) TotalCalls() int {
 	return h.f.calls
 }
 
+func (h *harness) WriteCalls() int {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	return h.f.writes
+}
+
+// changesFarEnd is every request but a read and the login (F-201-b).
+func changesFarEnd(r *http.Request) bool {
+	return r.Method != http.MethodGet && !strings.HasSuffix(r.URL.Path, "/login") && !strings.HasSuffix(r.URL.Path, "/setting/all")
+}
+
 // open starts a far end and a driver logged in to it. The login is spent here,
 // before any scenario counts requests.
 func open(t *testing.T) (*farEnd, *Driver) {
@@ -413,13 +429,15 @@ func open(t *testing.T) (*farEnd, *Driver) {
 // TestConformance: a pull, cumulative panel with a per-client ceiling. Every
 // push and no-ceiling scenario is skipped by name.
 func TestConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
+	setup := func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
 		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative || !shape.CeilingSupported {
 			return nil, false
 		}
 		f, d := open(t)
 		return &harness{f: f, d: d}, true
-	})
+	}
+	conformance.Run(t, setup)
+	conformance.RunReadOnly(t, setup)
 }
 
 // v3 refuses a login, and every POST after it, that does not carry the

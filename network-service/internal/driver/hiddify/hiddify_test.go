@@ -28,11 +28,13 @@ const (
 type farEnd struct {
 	t *testing.T
 
-	mu      sync.Mutex
-	users   []*farUser
-	backup  []farUser
-	nextID  int
-	calls   int
+	mu     sync.Mutex
+	users  []*farUser
+	backup []farUser
+	nextID int
+	calls  int
+	// writes counts requests that change the far end (RunReadOnly).
+	writes  int
 	lists   int
 	patches []map[string]any
 	key     string
@@ -91,6 +93,9 @@ func (f *farEnd) add(u *farUser) {
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls++
+	if changesFarEnd(r) {
+		f.writes++
+	}
 	stall, status := f.nextStall, f.nextStatus
 	f.nextStall, f.nextStatus = 0, 0
 	key := f.key
@@ -351,6 +356,17 @@ func (h *harness) TotalCalls() int {
 	return h.f.calls
 }
 
+func (h *harness) WriteCalls() int {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	return h.f.writes
+}
+
+// changesFarEnd is every request but a read and the login (F-201-b).
+func changesFarEnd(r *http.Request) bool {
+	return r.Method != http.MethodGet
+}
+
 var fixedNow = time.Date(2026, 9, 24, 21, 0, 0, 0, time.UTC)
 
 func open(t *testing.T) (*farEnd, *Driver) {
@@ -372,13 +388,15 @@ func open(t *testing.T) (*farEnd, *Driver) {
 // TestConformance: pull, cumulative, with a per-user ceiling. Every push and
 // no-ceiling scenario is skipped by name.
 func TestConformance(t *testing.T) {
-	conformance.Run(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
+	setup := func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
 		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative || !shape.CeilingSupported {
 			return nil, false
 		}
 		f, d := open(t)
 		return &harness{f: f, d: d}, true
-	})
+	}
+	conformance.Run(t, setup)
+	conformance.RunReadOnly(t, setup)
 }
 
 // The row's own question (data_limit_counts_the_same_bytes): Hiddify reports
