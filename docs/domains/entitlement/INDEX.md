@@ -29,6 +29,7 @@ Runs as a module inside `billing-service` (ADR-0049). Spec:
 | [contract.package-wholesale.md](contract.package-wholesale.md) | a reseller's package plan: its bag bought wholesale at sale and raise, given back at close (F-118-p); an unlimited plan's days, flat per period (F-118-z) |
 | [contract.limits.md](contract.limits.md) | how many open metered Grants a user may hold: platform 5, tenant default, user's own (F-118-ao); staff's routes to read and set them (F-118-ap) |
 | [contract.retention.md](contract.retention.md) | a retention notice: not connected, usage or time thresholds (F-601) |
+| [contract.import.md](contract.import.md) | what an import from another panel issues for one source client, and its remote identity (F-202) |
 | [invariants.md](invariants.md) | writing any code that touches it |
 | [data-model.md](data-model.md) | changing storage |
 | [open-questions.md](open-questions.md) | something is undecided |
