@@ -95,6 +95,9 @@ type Client struct {
 	// panel, where its family lists it in bulk (driver.SubscriptionsReader):
 	// the legacy path an import keeps answering (F-203-a). Empty is none.
 	SubscriptionURL string `json:"subscriptionUrl,omitempty"`
+	// TelegramID is the client's Telegram account, where its family names one
+	// (driver.RemoteClient): the bot user an import links (F-210). Empty is none.
+	TelegramID string `json:"telegramId,omitempty"`
 }
 
 // Panel is one snapshot: every inbound and every client.
@@ -180,7 +183,7 @@ func clientsOf(remote []driver.RemoteClient, inbounds []driver.Inbound, usage []
 			RemoteID: c.RemoteID, Label: c.Label, UUID: c.UUID, InboundRemoteID: c.InboundRemoteID,
 			Protocol: protocol[c.InboundRemoteID], Enabled: c.Enabled, DataLimitBytes: c.DataLimitBytes,
 			UpBytes: used[c.RemoteID][0], DownBytes: used[c.RemoteID][1], ExpiresAt: expires,
-			Lines: c.Lines, LinesRead: c.LinesRead,
+			Lines: c.Lines, LinesRead: c.LinesRead, TelegramID: c.TelegramID,
 		})
 	}
 	return out

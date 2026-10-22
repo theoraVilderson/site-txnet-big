@@ -700,6 +700,8 @@ model MigrationItem {
   createdConfigIds String[]             @default([]) @db.Uuid
   /// Why the rollback kept the item (`renewed`, `topped_up`, `bought`, …), or why its person stayed (F-211).
   keptReason       String?
+  /// What the commit did with the client's Telegram account (F-210): `claimed`, or why not (`taken`, `has_other`). Null when the source named none.
+  telegramLink     String?
   /// A link run's admin over what the link said (F-201-g): null keeps the read figure; the snapshot is never edited.
   correctedDataLimitBytes BigInt?
   correctedUsedBytes      BigInt?

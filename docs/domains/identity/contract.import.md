@@ -2,11 +2,11 @@
 id: identity
 layer: domain
 status: active
-version: 39
-updated: 2026-10-21
+version: 40
+updated: 2026-10-22
 ---
 
-# Contract — identity / the people an import brings (F-201-e), and removes on a rollback (F-211)
+# Contract — identity / the people an import brings (F-201-e), their Telegram (F-210), and removes on a rollback (F-211)
 
 A topic file of `contract.md` (§10). A reseller leaving another panel brings
 its users with it (D-63). Each source client becomes a Grant
@@ -16,7 +16,8 @@ creates that person.
 
 Code: `auth-service/src/app/auth/users/user-import.service.ts` (the rule),
 `user-import-internal.controller.ts` (the route), `end-user-room.ts` (the lock
-and the cap, shared with registration).
+and the cap, shared with registration), `bot-link/link-writes.ts` (the claim,
+its redemption and every proof's write — F-210, ADR-0157).
 
 ## Rules
 
@@ -42,7 +43,8 @@ and the cap, shared with registration).
    username.
 6. **No phone, no known password.** The hash is argon2id of 32 random bytes
    discarded at once — one per batch, since hashing is the slow part. Such a
-   person signs in by the reseller's bot (F-210) or by linking a phone later.
+   person signs in by the reseller's bot once its chat's card redeems the
+   source's claim (rule 10), or by linking a phone later.
    Role `user`, `active`.
 7. **Not a signup.** No `USER_SIGNED_UP`: analytics' signups count people who
    signed up; an import's are counted by its run.
@@ -50,12 +52,25 @@ and the cap, shared with registration).
    (F-211; entitlement `contract.import.md` rule 26). Billing names the
    people the run made and holding nothing there; each is kept, with why,
    when it has no `remoteIdentity` (`not_imported`), a phone
-   (`phone_linked`), an email (`email_linked`), a messenger link
-   (`messenger_linked`) or a session (`signed_in`), or is not the tenant's
-   (`not_found`). The rest are soft-deleted (`deletedAt`) with their
+   (`phone_linked`), an email (`email_linked`), a proved messenger link
+   (`messenger_linked`; a claim is not one, and goes with them) or a session
+   (`signed_in`), or is not the tenant's (`not_found`). The rest are soft-deleted (`deletedAt`) with their
    `remoteIdentity` and username released, so a later run of the same source
    makes them afresh under the same name instead of refusing them `deleted`
    (rule 4). One already removed is answered removed: a retry is safe.
+9. **The source's Telegram id is a claim, never a proof** (F-210, ADR-0157).
+   A `telegramId` beside a person — the snapshot's (network `contract.source.md`)
+   or a balance file's column (`/import/telegram`) — becomes, in the same
+   transaction, a `linked_bot_account` on `telegram` with `claimedAt` and no
+   `contactVerifiedAt`: `claimed`. A chat already linked in the tenant to
+   anyone else, claimed or proved, is `taken` and never moved; a person
+   already linked to another chat keeps it (`has_other`); a re-run finds its
+   own claim. A claim carries nothing — every reader asks `contactVerifiedAt`.
+10. **The chat's own contact card redeems it.** At `bots/session` (rules.md
+    14) a card that passes invariant #12 and whose phone is nobody's in the
+    tenant gives the claimed person — one with no phone — that phone,
+    verified, proves the link and signs them in. A proof for another person
+    (a card, a registration, an OTP link) releases the claim first.
 
 ## Route
 
@@ -66,7 +81,8 @@ not write either.
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST /api/internal/users/import` | `users[]` (1..200): `remoteIdentity` (1..512, trimmed), `label` (≤ 200) | in `data`: `users[]`: `remoteIdentity`, `userId`, `created`; `refused[]`: `remoteIdentity`, `reason` `over_cap` \| `deleted` |
+| `POST /api/internal/users/import` | `users[]` (1..200): `remoteIdentity` (1..512, trimmed), `label` (≤ 200), `telegramId?` (a positive decimal id) | in `data`: `users[]`: `remoteIdentity`, `userId`, `created`, `telegram?` (rule 9); `refused[]`: `remoteIdentity`, `reason` `over_cap` \| `deleted` |
+| `POST /api/internal/users/import/telegram` | `links[]` (1..200): `userId` (uuid), `chatId` (as `telegramId`) | in `data`: `links[]`: `userId`, `telegram` (rule 9); a person not the tenant's or deleted is left out |
 | `POST /api/internal/users/import/remove` | `userIds[]` (1..200, uuids) | in `data`: `removed[]` (user ids); `kept[]`: `userId`, `reason` (rule 8) |
 
 A `remoteIdentity` named twice in one body is one person. A username taken

@@ -7596,6 +7596,11 @@
       "signed_in": "signed in here",
       "not_found": "not found"
     },
+    "telegram": {
+      "claimed": "Telegram linked — signs in at the bot with one tap",
+      "taken": "Telegram account linked to another user — left as it is",
+      "has_other": "already linked to another Telegram account — kept"
+    },
     "commit": "Import {{count}} users",
     "commitConfirm": "Import {{count}} users now? They get their services here; your old panel is left as it is.",
     "commitNothing": "Nothing to import: every user is skipped.",

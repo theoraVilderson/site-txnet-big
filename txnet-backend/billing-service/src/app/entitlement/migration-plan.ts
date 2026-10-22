@@ -13,6 +13,10 @@ const LINE_MAX = 8192;
 const URL_MAX = 2048;
 /** Most families answer one or two lines a client; a source answering more is not read further. */
 const LINES_MAX = 64;
+/** A Telegram account id as network's `TelegramIDOf` answers it: a positive 64-bit integer in decimal (F-210). */
+export const TELEGRAM_ID = /^[1-9]\d{0,18}$/;
+/** Identity's answer for a Telegram claim written (F-210); any other (`taken`, `has_other`) is a problem the report shows. */
+export const TELEGRAM_CLAIMED = 'claimed';
 const bytes = z.number().int().nonnegative();
 
 /**
@@ -38,6 +42,8 @@ export const sourceClientSchema = z.object({
   linesRead: z.boolean(),
   /** The old link its user holds, where the family lists it (F-203-a); kept by the commit, never fetched here. */
   subscriptionUrl: z.string().max(URL_MAX).optional(),
+  /** The client's Telegram account, where its family names one (F-210); the commit claims it for the person. */
+  telegramId: z.string().regex(TELEGRAM_ID).optional(),
 });
 export type SourceClient = z.infer<typeof sourceClientSchema>;
 

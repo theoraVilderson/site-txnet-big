@@ -76,6 +76,8 @@ export interface MigrationItem extends MigrationSourceCells {
   outcome: "pending" | "created" | "updated" | "skipped" | "failed" | "rolled_back" | "kept";
   failureReason: string | null;
   keptReason: string | null;
+  /** What the commit did with the client's Telegram account (F-210): `claimed`, `taken`, `has_other`; null when the source named none. */
+  telegramLink: string | null;
   /** A link run's admin over what the link said; each null keeps the read figure. */
   corrected: { dataLimitBytes: number | null; usedBytes: number | null; expiresAt: string | null };
   /** A balance file's row: its line, the amount and currency as read; each null on another run's row, and once purged. */

@@ -36,6 +36,7 @@ describe('UserImportService.findOrCreate', () => {
           return { count: args.data.length };
         }),
       },
+      linkedBotAccount: { findMany: vi.fn(async () => []), createMany: vi.fn(async () => ({ count: 1 })) },
     };
     const prisma = {
       role: { findFirst: vi.fn(async () => ({ id: 'role-user' })) },
@@ -43,7 +44,7 @@ describe('UserImportService.findOrCreate', () => {
     };
     vi.mocked(endUserRoom).mockResolvedValue(opts.room === undefined ? null : opts.room);
     const service = new UserImportService(prisma as never);
-    const run = (batch: Array<{ remoteIdentity: string; label: string }>) => runWithTenant({ id: TENANT } as never, () => service.findOrCreate(batch));
+    const run = (batch: Array<{ remoteIdentity: string; label: string; telegramId?: string }>) => runWithTenant({ id: TENANT } as never, () => service.findOrCreate(batch));
     return { run, tx, created, order };
   };
 
@@ -52,6 +53,13 @@ describe('UserImportService.findOrCreate', () => {
     const answer = await run([{ remoteIdentity: 'marzban:https://old.example:ali', label: 'ali' }]);
     expect(answer).toEqual({ users: [{ remoteIdentity: 'marzban:https://old.example:ali', userId: 'u-1', created: false }], refused: [] });
     expect(tx.user.createMany).not.toHaveBeenCalled();
+  });
+
+  it('claims the Telegram chat the source named for the person it made (F-210), in the same transaction', async () => {
+    const { run, tx, created } = build();
+    const answer = await run([{ remoteIdentity: 'x:https://h:7', label: 'reza', telegramId: '123456' }]);
+    expect(answer.users).toEqual([expect.objectContaining({ created: true, telegram: 'claimed' })]);
+    expect(tx.linkedBotAccount.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({ userId: created[0].id, platformUserId: '123456', claimedAt: expect.any(Date) })] });
   });
 
   it('creates a user with no phone, the label as name, under the lock, in the tenant', async () => {
@@ -123,6 +131,7 @@ describe('UserImportService.removeImported', () => {
         ),
         updateMany: vi.fn(async (args: { where: { id: { in: string[] } }; data: Record<string, unknown> }) => ({ count: args.where.id.in.length })),
       },
+      linkedBotAccount: { deleteMany: vi.fn(async () => ({ count: 0 })) },
     };
     const prisma = { $transaction: vi.fn(async (work: (t: unknown) => Promise<unknown>) => work(tx)) };
     const service = new UserImportService(prisma as never);
@@ -136,6 +145,8 @@ describe('UserImportService.removeImported', () => {
       where: { tenantId: TENANT, id: { in: ['u-1'] }, deletedAt: null },
       data: { deletedAt: expect.any(Date), remoteIdentity: null, username: null },
     });
+    // F-210: the chat the source claimed for them is freed with them; a proven link would have kept them.
+    expect(tx.linkedBotAccount.deleteMany).toHaveBeenCalledWith({ where: { userId: { in: ['u-1'] }, contactVerifiedAt: null } });
   });
 
   it('keeps who signed up for real or used the account since, and says why', async () => {

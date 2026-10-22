@@ -5,6 +5,7 @@ import {
   BotPlatform,
 } from '@txnet-backend/messenger';
 import { PrismaService } from '../../prisma/prisma.service';
+import { redeemClaim, releaseClaims, upsertProvenLink } from './link-writes';
 import { normalizeMessengerPhone } from './messenger-phone';
 import { AuthService, mayHoldSession } from '../auth.service';
 import { botScopeKey, SwitchScope } from '../../common/security/switch-scope';
@@ -367,7 +368,7 @@ export class BotSessionService {
     // this number is theirs, so they could establish the same by trying to
     // register with it. `BotLinkService.handleContact` answers the same way
     // for the same reason.
-    if (!found) return BackendI18nKeys.errors.otp.botLink.noAccount;
+    if (!found) return this.redeemed(platform, chatId, phoneNumber);
     return runWithTenant(found.scope, () =>
       this.writeLink(found.user as any, platform, chatId, phoneNumber),
     );
@@ -379,30 +380,22 @@ export class BotSessionService {
     chatId: string,
     phoneNumber: string,
   ) {
-
-    // One messenger account, one platform account.
+    // One messenger account, one platform account; an import's claim yields to the proof (ADR-0157).
+    await releaseClaims(this.prisma, platform, chatId, user.id);
     const takenBySomeoneElse = await this.prisma.linkedBotAccount.findFirst({
       where: { platform, platformUserId: chatId, userId: { not: user.id } },
       select: { id: true },
     });
     if (takenBySomeoneElse) return BackendI18nKeys.errors.otp.botLink.takenByAnotherAccount;
+    await upsertProvenLink(this.prisma, { userId: user.id, platform, chatId, phoneNumber });
+    return { user, scope: TenantContext.current('a bot link') };
+  }
 
-    await this.prisma.linkedBotAccount.upsert({
-      where: { userId_platform: { userId: user.id, platform } },
-      create: {
-        tenantId: TenantContext.current('a bot link').id,
-        userId: user.id,
-        platform,
-        platformUserId: chatId,
-        phoneNumber,
-        contactVerifiedAt: new Date(),
-      },
-      update: {
-        platformUserId: chatId,
-        phoneNumber,
-        contactVerifiedAt: new Date(),
-      },
-    });
+  /** No account holds the card's phone: the person an import claimed this chat for takes it (F-210, ADR-0157). */
+  private async redeemed(platform: BotPlatform, chatId: string, phoneNumber: string) {
+    const userId = await redeemClaim(this.prisma, { platform, chatId, phoneNumber });
+    const user = userId && (await this.prisma.user.findUnique({ where: { id: userId }, include: WITH_ROLE }));
+    if (!user) return BackendI18nKeys.errors.otp.botLink.noAccount;
     return { user, scope: TenantContext.current('a bot link') };
   }
 }

@@ -82,6 +82,7 @@ describe('BotLinkService.handleUpdate — shared contact', () => {
     const prisma = {
       linkedBotAccount: {
         findFirst: vi.fn().mockResolvedValue(null),
+        deleteMany: vi.fn(),
         upsert,
       },
       user: { findFirst: vi.fn().mockResolvedValue({ id: 'user-1' }) },

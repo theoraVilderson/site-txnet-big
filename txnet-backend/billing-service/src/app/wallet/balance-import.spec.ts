@@ -6,6 +6,7 @@ import {
   balanceItemKey,
   creditBalanceRow,
   csvPeopleOf,
+  withCsvTelegram,
   parseBalanceFile,
   planBalanceRows,
   type BalancePlanContext,
@@ -39,6 +40,13 @@ describe('parseBalanceFile', () => {
     expect(parseBalanceFile('user,amount,currency\n+۹۸۹۱۲۱۲۳۴۵۶۷,۱۲۰۰۰,IRR\nعلي,5,IRR')).toEqual([
       { line: 2, user: '+989121234567', amount: '12000', currency: 'IRR' },
       { line: 3, user: 'علي', amount: '5', currency: 'IRR' },
+    ]);
+  });
+
+  it('reads an optional telegram column, its digits folded; a blank cell is none (F-210)', () => {
+    expect(parseBalanceFile('user,amount,currency,Telegram\nalice,5,IRR,۱۲۳ ۴۵۶\nbob,5,IRR,')).toEqual([
+      { line: 2, user: 'alice', amount: '5', currency: 'IRR', telegram: '123456' },
+      { line: 3, user: 'bob', amount: '5', currency: 'IRR' },
     ]);
   });
 
@@ -96,6 +104,12 @@ describe('planBalanceRows', () => {
     expect(plan).toMatchObject({ plannedCreate: 1, plannedUpdate: 0, plannedSkip: 7, unaddressed: 0 });
   });
 
+  it('keeps a row\'s Telegram id on its credit, and reports one that is no id unreadable (F-210)', () => {
+    const plan = planBalanceRows([{ ...row(2, 'alice', '5', 'IRR'), telegram: '123456' }, { ...row(3, '+989121234567', '5', 'USD'), telegram: '@bob' }], context());
+    expect(plan.items[0].sourceSnapshot).toEqual({ line: 2, user: 'alice', amount: '5', currency: 'IRR', userId: ALICE, telegramId: '123456' });
+    expect(plan.items[1].skipReason).toBe(MigrationSkipReason.unreadable);
+  });
+
   it('keys the items so the report reads in the file\'s order', () => {
     expect([balanceItemKey(10), balanceItemKey(9), balanceItemKey(100)].sort()).toEqual([balanceItemKey(9), balanceItemKey(10), balanceItemKey(100)]);
   });
@@ -106,6 +120,20 @@ describe('the commit and the rollback of one row', () => {
 
   it('finds the person the dry run named, never makes one', () => {
     expect(csvPeopleOf([item]).made.get(item.remoteIdentity)).toEqual({ userId: ALICE, created: false });
+  });
+
+  it('claims the Telegram account a row named for its person through identity, and keeps the outcome on them (F-210)', async () => {
+    const named = { ...item, sourceSnapshot: { ...item.sourceSnapshot, telegramId: '123456' } };
+    const claim = vi.fn().mockResolvedValue({ links: [{ userId: ALICE, telegram: 'claimed' }] });
+    const people = await withCsvTelegram(csvPeopleOf([named, { ...item, remoteIdentity: balanceItemKey(3) }]), claim);
+    expect(claim).toHaveBeenCalledWith([{ userId: ALICE, chatId: '123456' }]);
+    expect(people.made.get(named.remoteIdentity)).toEqual({ userId: ALICE, created: false, telegramId: '123456', telegram: 'claimed' });
+  });
+
+  it('asks identity nothing for a file with no Telegram column', async () => {
+    const claim = vi.fn();
+    await withCsvTelegram(csvPeopleOf([item]), claim);
+    expect(claim).not.toHaveBeenCalled();
   });
 
   it('credits one ledger row naming the item — never an UPDATE on a balance', async () => {

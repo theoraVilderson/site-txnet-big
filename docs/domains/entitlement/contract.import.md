@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: active
-version: 39
-updated: 2026-10-21
+version: 41
+updated: 2026-10-22
 ---
 
 # Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208), the rollback (F-211), the old link (F-203-a)
@@ -117,11 +117,11 @@ Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
 16. **Confirmed once.** `POST …/commit` moves a `previewed` run to
     `committing`; asked again it is answered as it is. From here the source is
     never read again (its login ends: tenant rule 5).
-17. **A batch a tick, up to 200 items**, in the report's order. Skips are
+17. **A batch a tick, up to 200 items**, in the report's order; skips
     recorded `skipped` as reached. People first: one identity batch (identity
-    `contract.import.md`), and who it *made* is written on the item
-    (`createdUserId`) before any Grant, so a rollback (F-211) removes only
-    them — a person found is not the run's.
+    `contract.import.md`, each client's `telegramId` its claim, F-210); who it
+    *made* (`createdUserId`) and what the claim came to (`telegramLink`) are on
+    the item before any Grant, so a rollback (F-211) removes only the run's.
 18. **One transaction per item.** A Grant of the inbound's variant, `source =
     migration`, `sourceReferenceId` = the item, from now to the client's end
     (the variant's period when the source set none), its bag the client's
@@ -226,7 +226,7 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 | `POST /:runId/preview` | — | 202 the run, `previewing` (answered as it is while it runs) |
 | `POST /:runId/commit` | — | 202 the run, `committing` (answered as it is once started) |
 | `POST /:runId/rollback` | — | 202 the run, `rolling_back` (answered as it is once started) |
-| `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped, failed and kept only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason`, `keptReason` |
+| `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped, failed, kept, and a `telegramLink` other than `claimed`) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason`, `keptReason`, `telegramLink` |
 | `POST /:runId/cancel` | — | the run, `cancelled` |
 
 A balance file's run (`{csv}`, F-209-a) is billing's [contract.balance-import.md](../billing/contract.balance-import.md).

@@ -2,7 +2,9 @@ import { MigrationItemAction, MigrationSkipReason, Prisma, WalletReasonType, typ
 import { foldToOneSpelling, MONEY_PATTERN } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
+import { TELEGRAM_ID } from '../entitlement/migration-plan';
 import type { PlannedRunItem, RunPlan } from '../entitlement/migration-run-plan';
+import type { TelegramClaim, TelegramClaimAnswer } from '../entitlement/migration-seams';
 import type { WalletCreditService } from './wallet-credit.service';
 import { LedgerCurrencyMismatch } from './wallet-ledger.service';
 
@@ -19,6 +21,8 @@ export const BALANCE_FILE_MAX_CHARS = 90_000;
 export const BALANCE_ROWS_MAX = 5_000;
 /** The file's columns, by header name; any order, other columns ignored. */
 const COLUMNS = ['user', 'amount', 'currency'] as const;
+/** An optional column: the person's Telegram account, claimed for them at the commit (F-210). */
+const TELEGRAM_COLUMN = 'telegram';
 /** A person's username, phone or import key as the file names them (identity's columns are no longer). */
 const USER_MAX = 200;
 /** What a cell may hold before it is kept: longer is unreadable, and only its start is shown. */
@@ -50,8 +54,8 @@ export class BalanceRowRefused extends Error {
   }
 }
 
-/** One data row as read: its line in the file (the header is 1), each cell trimmed. */
-export type BalanceRow = { line: number; user: string; amount: string; currency: string };
+/** One data row as read: its line in the file (the header is 1), each cell trimmed; `telegram` only where the file has the column and the cell is not blank. */
+export type BalanceRow = { line: number; user: string; amount: string; currency: string; telegram?: string };
 
 /** One CSV record's cells: double quotes may hold a separator, `""` is a quote. A record never spans lines. */
 function cellsOf(line: string, separator: string): string[] {
@@ -87,7 +91,8 @@ function userOf(cell: string): string {
 
 /**
  * The file's rows (F-209-a): a header naming `user`, `amount` and `currency`
- * (any case, any order), then one row per balance; blank lines skipped. The
+ * (any case, any order) and optionally `telegram` (F-210), then one row per
+ * balance; blank lines skipped. The
  * cells are not judged here — a bad one is the plan's `unreadable` — only a
  * file no row can be read from is refused.
  */
@@ -98,17 +103,20 @@ export function parseBalanceFile(text: string): BalanceRow[] {
   const at = COLUMNS.map((c) => header.indexOf(c));
   if (at.some((i) => i < 0)) throw new BalanceFileRefused('csv_columns');
   const [userAt, amountAt, currencyAt] = at;
+  const telegramAt = header.indexOf(TELEGRAM_COLUMN);
   const rows: BalanceRow[] = [];
   for (let n = 1; n < lines.length; n += 1) {
     if (lines[n].trim() === '') continue;
     if (rows.length === BALANCE_ROWS_MAX) throw new BalanceFileRefused('csv_too_many_rows');
     const cells = cellsOf(lines[n], separator);
     const cell = (i: number) => (cells[i] ?? '').slice(0, i === userAt ? USER_MAX + 1 : CELL_KEPT);
+    const telegram = telegramAt < 0 ? '' : foldToOneSpelling(cell(telegramAt)).replace(/\s/g, '');
     rows.push({
       line: n + 1,
       user: userOf(cell(userAt)),
       amount: foldToOneSpelling(cell(amountAt)).replace(GROUPING, ''),
       currency: cell(currencyAt).toUpperCase(),
+      ...(telegram ? { telegram } : {}),
     });
   }
   if (rows.length === 0) throw new BalanceFileRefused('csv_empty');
@@ -135,6 +143,8 @@ export const balanceSnapshotSchema = z.object({
   amount: z.string(),
   currency: z.string(),
   userId: z.string().uuid().optional(),
+  /** The Telegram account the row named, claimed for its person at the commit (F-210). */
+  telegramId: z.string().regex(TELEGRAM_ID).optional(),
 });
 export type BalanceSnapshot = z.infer<typeof balanceSnapshotSchema>;
 
@@ -146,6 +156,7 @@ const amountFits = (amount: string, places: number): boolean => new Prisma.Decim
 /** One row's answer: whom it credits, or why it is reported instead. */
 function planRow(row: BalanceRow, context: BalancePlanContext, credited: Set<string>): { userId?: string; skipReason: MigrationSkipReason | null } {
   if (row.user === '' || row.user.length > USER_MAX || !amountReadable(row.amount) || !CURRENCY_CODE.test(row.currency)) return { skipReason: MigrationSkipReason.unreadable };
+  if (row.telegram !== undefined && !TELEGRAM_ID.test(row.telegram)) return { skipReason: MigrationSkipReason.unreadable };
   const people = [...new Set(context.peopleOf.get(row.user) ?? [])];
   if (people.length === 0) return { skipReason: MigrationSkipReason.unknown_user };
   if (people.length > 1) return { skipReason: MigrationSkipReason.ambiguous_user };
@@ -168,23 +179,40 @@ export function planBalanceRows(rows: readonly BalanceRow[], context: BalancePla
   const credited = new Set<string>();
   const items: PlannedRunItem[] = rows.map((row) => {
     const { userId, skipReason } = planRow(row, context, credited);
-    const snapshot: BalanceSnapshot = { line: row.line, user: row.user, amount: row.amount, currency: row.currency, ...(userId && !skipReason ? { userId } : {}) };
+    const credits = userId && !skipReason;
+    const snapshot: BalanceSnapshot = { line: row.line, user: row.user, amount: row.amount, currency: row.currency, ...(credits ? { userId } : {}), ...(credits && row.telegram ? { telegramId: row.telegram } : {}) };
     return { remoteIdentity: balanceItemKey(row.line), sourceSnapshot: snapshot, plannedAction: skipReason ? MigrationItemAction.skip : MigrationItemAction.create, skipReason };
   });
   const plannedCreate = items.filter((i) => i.plannedAction === MigrationItemAction.create).length;
   return { items, plannedCreate, plannedUpdate: 0, plannedSkip: items.length - plannedCreate, unaddressed: 0 };
 }
 
+/** A csv run's person: found, never made; the Telegram id its row named, and what claiming it came to (F-210). */
+export type CsvPerson = { userId: string; created: false; telegramId?: string; telegram?: string };
+export type CsvPeople = { made: Map<string, CsvPerson>; refused: Map<string, string> };
+
 /** A csv run's batch's people: the ones its dry run named, found and never made — so a rollback never removes them. */
-export function csvPeopleOf(batch: ReadonlyArray<Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>>): { made: Map<string, { userId: string; created: false }>; refused: Map<string, string> } {
-  const made = new Map<string, { userId: string; created: false }>();
+export function csvPeopleOf(batch: ReadonlyArray<Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>>): CsvPeople {
+  const made = new Map<string, CsvPerson>();
   const refused = new Map<string, string>();
   for (const item of batch) {
-    const userId = balanceSnapshotSchema.safeParse(item.sourceSnapshot).data?.userId;
-    if (userId) made.set(item.remoteIdentity, { userId, created: false });
+    const snapshot = balanceSnapshotSchema.safeParse(item.sourceSnapshot).data;
+    if (snapshot?.userId) made.set(item.remoteIdentity, { userId: snapshot.userId, created: false, ...(snapshot.telegramId ? { telegramId: snapshot.telegramId } : {}) });
     else refused.set(item.remoteIdentity, 'user_not_found');
   }
   return { made, refused };
+}
+
+/** The batch's Telegram column claimed through identity (F-210), each outcome written onto its person; nothing asked when no row named one. */
+export async function withCsvTelegram(people: CsvPeople, claim: (links: TelegramClaim[]) => Promise<TelegramClaimAnswer>): Promise<CsvPeople> {
+  const links = [...people.made.values()].flatMap((p) => (p.telegramId ? [{ userId: p.userId, chatId: p.telegramId }] : []));
+  if (links.length === 0) return people;
+  const outcomeOf = new Map((await claim(links)).links.map((l) => [l.userId, l.telegram]));
+  for (const person of people.made.values()) {
+    const telegram = person.telegramId && outcomeOf.get(person.userId);
+    if (telegram) person.telegram = telegram;
+  }
+  return people;
 }
 
 /**

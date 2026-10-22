@@ -69,6 +69,8 @@ export type MigrationItemView = {
   failureReason: string | null;
   /** Why the rollback kept the item, or its person (F-211). */
   keptReason: string | null;
+  /** What the commit did with the client's Telegram account (F-210): `claimed`, `taken`, `has_other`; null when none was named. */
+  telegramLink: string | null;
   /** A link run's admin over what the link said (F-201-g); each null keeps the read figure beside it. */
   corrected: { dataLimitBytes: number | null; usedBytes: number | null; expiresAt: string | null };
   /** A balance file's row (F-209-a): its line, the amount and currency as read; null on any other run's, or once purged. */
@@ -100,6 +102,7 @@ export function itemView(i: {
   outcome: MigrationItemOutcome;
   failureReason: string | null;
   keptReason: string | null;
+  telegramLink: string | null;
   correctedDataLimitBytes: bigint | null;
   correctedUsedBytes: bigint | null;
   correctedExpiresAt: Date | null;
@@ -121,6 +124,7 @@ export function itemView(i: {
     outcome: i.outcome,
     failureReason: i.failureReason,
     keptReason: i.keptReason,
+    telegramLink: i.telegramLink,
     corrected: {
       dataLimitBytes: i.correctedDataLimitBytes === null ? null : Number(i.correctedDataLimitBytes),
       usedBytes: i.correctedUsedBytes === null ? null : Number(i.correctedUsedBytes),

@@ -18,6 +18,7 @@ import { cooldownLeftSince } from '../otp/otp-answer';
 import { BotLinkStore } from './bot-link.store';
 import { BotLinkMessageKey, botLinkMessage } from './bot-link.messages';
 import { BotContact, BotLinkStatus, BotUpdate, PendingBotLink } from './bot-link.types';
+import { proveLink } from './link-writes';
 import { normalizeMessengerPhone } from './messenger-phone';
 import { TenantContext } from '../../tenant-context/tenant-context';
 import { BackendI18nKeys, type BotLinkEvent, otpRealtimeChannel } from '@txnet-backend/shared-core';
@@ -123,26 +124,7 @@ export class BotLinkService {
     for (const platform of BOT_PLATFORMS) {
       const chatId = await this.store.provenChat(platform, phoneNumber);
       if (!chatId) continue;
-      await this.prisma.linkedBotAccount.upsert({
-        where: { userId_platform: { userId, platform } },
-        create: {
-          // The ambient tenant is the one `withTenant` would inject anyway
-          // (F-066-l); Prisma's create input has no way to know that, so the
-          // three link writes name it. It is the user's own tenant by
-          // construction — the user was created, or found, in this scope.
-          tenantId: TenantContext.current('a bot link').id,
-          userId,
-          platform,
-          platformUserId: chatId,
-          phoneNumber,
-          contactVerifiedAt: new Date(),
-        },
-        update: {
-          platformUserId: chatId,
-          phoneNumber,
-          contactVerifiedAt: new Date(),
-        },
-      });
+      await proveLink(this.prisma, { userId, platform, chatId, phoneNumber });
       await this.store.clearProvenChat(platform, phoneNumber);
     }
   }
@@ -382,22 +364,7 @@ export class BotLinkService {
       return this.fail(link, 'noAccount', BackendI18nKeys.errors.otp.botLink.noAccount);
     }
 
-    await this.prisma.linkedBotAccount.upsert({
-      where: { userId_platform: { userId: user.id, platform } },
-      create: {
-        tenantId: TenantContext.current('a bot link').id,
-        userId: user.id,
-        platform,
-        platformUserId: chatId,
-        phoneNumber: shared,
-        contactVerifiedAt: new Date(),
-      },
-      update: {
-        platformUserId: chatId,
-        phoneNumber: shared,
-        contactVerifiedAt: new Date(),
-      },
-    });
+    await proveLink(this.prisma, { userId: user.id, platform, chatId, phoneNumber: shared });
 
     return this.completeLink(platform, chatId, link);
   }

@@ -16,6 +16,7 @@ const DESTROY_LOGIN_PATH = '/api/internal/vault/source-credential/destroy';
 const PEOPLE_PATH = '/api/internal/users/import';
 /** An import's rollback removes the people it made there (identity `contract.import.md`, F-211). Service callers only. */
 const REMOVE_PEOPLE_PATH = '/api/internal/users/import/remove';
+const TELEGRAM_PATH = '/api/internal/users/import/telegram';
 
 /** The seam could not be asked: unset, unreachable, or an answer in no shape it gives. Retried by the next tick. */
 export class MigrationSeamUnavailable extends Error {
@@ -185,7 +186,7 @@ export async function destroySourceLogin(vault: Pick<SourceLoginVault, 'destroy'
 
 /** The people identity found or made, and the ones it refused (`over_cap`, `deleted`), each by the source's key. */
 const peopleSchema = z.object({
-  users: z.array(z.object({ remoteIdentity: z.string(), userId: z.string().uuid(), created: z.boolean() })),
+  users: z.array(z.object({ remoteIdentity: z.string(), userId: z.string().uuid(), created: z.boolean(), telegram: z.string().regex(REASON).optional() })),
   refused: z.array(z.object({ remoteIdentity: z.string(), reason: z.string().regex(REASON) })),
 });
 export type ImportedPeopleAnswer = z.infer<typeof peopleSchema>;
@@ -197,11 +198,18 @@ const removalSchema = z.object({
 });
 export type RemovedPeopleAnswer = z.infer<typeof removalSchema>;
 
+/** What each named person's Telegram claim came to (F-210): `claimed`, `taken`, `has_other`. */
+const telegramSchema = z.object({ links: z.array(z.object({ userId: z.string().uuid(), telegram: z.string().regex(REASON) })) });
+export type TelegramClaimAnswer = z.infer<typeof telegramSchema>;
+/** One person's chat as a balance file named it (F-210). */
+export type TelegramClaim = { userId: string; chatId: string };
+
 /**
  * Finds or makes an import's people on `auth-service` (F-201-e): by the
  * source's key, so a batch retried after a timeout makes no one twice
  * (identity rule 1); and removes the ones a rollback undoes (F-211), safe to
- * ask twice. The tenant is the header, honoured with the token.
+ * ask twice; and claims the Telegram chats a balance file names (F-210). The
+ * tenant is the header, honoured with the token.
  */
 @Injectable()
 export class ImportedPeople {
@@ -211,7 +219,7 @@ export class ImportedPeople {
     this.seam = seamOf(config, 'AUTH_API_BASE_URL', 'AUTH_API_TIMEOUT_MS');
   }
 
-  async import(tenantId: string, users: { remoteIdentity: string; label: string }[]): Promise<ImportedPeopleAnswer> {
+  async import(tenantId: string, users: { remoteIdentity: string; label: string; telegramId?: string }[]): Promise<ImportedPeopleAnswer> {
     const data = await postToSeam(this.seam, PEOPLE_PATH, { users }, { [IdentityHeaders.tenantId]: tenantId });
     const parsed = peopleSchema.safeParse(data);
     if (!parsed.success) throw new MigrationSeamUnavailable(`${PEOPLE_PATH} answered no people`);
@@ -222,6 +230,13 @@ export class ImportedPeople {
     const data = await postToSeam(this.seam, REMOVE_PEOPLE_PATH, { userIds }, { [IdentityHeaders.tenantId]: tenantId });
     const parsed = removalSchema.safeParse(data);
     if (!parsed.success) throw new MigrationSeamUnavailable(`${REMOVE_PEOPLE_PATH} answered no removal`);
+    return parsed.data;
+  }
+
+  async claimTelegram(tenantId: string, links: TelegramClaim[]): Promise<TelegramClaimAnswer> {
+    const data = await postToSeam(this.seam, TELEGRAM_PATH, { links }, { [IdentityHeaders.tenantId]: tenantId });
+    const parsed = telegramSchema.safeParse(data);
+    if (!parsed.success) throw new MigrationSeamUnavailable(`${TELEGRAM_PATH} answered no links`);
     return parsed.data;
   }
 }

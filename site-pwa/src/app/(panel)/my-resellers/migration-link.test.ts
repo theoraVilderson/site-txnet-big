@@ -54,6 +54,7 @@ const item = (over: Partial<MigrationItem> = {}): MigrationItem => ({
   outcome: "pending",
   failureReason: null,
   keptReason: null,
+  telegramLink: null,
   corrected: { dataLimitBytes: null, usedBytes: null, expiresAt: null },
   balance: { line: null, amount: null, currency: null },
   ...over,

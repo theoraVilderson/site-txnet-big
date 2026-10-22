@@ -7,7 +7,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
-import { BalanceRowRefused, creditBalanceRow, csvPeopleOf } from '../wallet/balance-import';
+import { BalanceRowRefused, creditBalanceRow, csvPeopleOf, withCsvTelegram } from '../wallet/balance-import';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, GrantService } from './grant';
@@ -44,9 +44,10 @@ export type MigrationCommitResult = { outcome: 'none' | 'batch' | 'finished' | '
 /** What one item became; `lost` stops the batch. */
 type ItemResult = 'done' | 'failed' | 'moved' | 'lost';
 
-type People = { made: Map<string, { userId: string; created: boolean }>; refused: Map<string, string> };
+/** Each person by the source's key: found or made, and what their Telegram claim came to (F-210). */
+type People = { made: Map<string, { userId: string; created: boolean; telegram?: string }>; refused: Map<string, string> };
 const peopleOf = (answer: ImportedPeopleAnswer): People => ({
-  made: new Map(answer.users.map((u) => [u.remoteIdentity, { userId: u.userId, created: u.created }])),
+  made: new Map(answer.users.map((u) => [u.remoteIdentity, { userId: u.userId, created: u.created, telegram: u.telegram }])),
   refused: new Map(answer.refused.map((r) => [r.remoteIdentity, r.reason])),
 });
 
@@ -56,11 +57,16 @@ function reasonOf(e: unknown): string | null {
   return null;
 }
 
-/** The name identity makes the username of (F-201-e): the label, else the source's id — as the plan names it. */
-function labelOf(item: Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>): string {
+/**
+ * The person identity is asked for: the name it makes the username of
+ * (F-201-e) — the label, else the source's id, as the plan names it — and the
+ * Telegram account the source named for them (F-210).
+ */
+function sourcePersonOf(item: Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>): { remoteIdentity: string; label: string; telegramId?: string } {
   const parsed = sourceClientSchema.safeParse(item.sourceSnapshot);
-  if (!parsed.success) return item.remoteIdentity;
-  return parsed.data.label.trim() || parsed.data.remoteId;
+  if (!parsed.success) return { remoteIdentity: item.remoteIdentity, label: item.remoteIdentity };
+  const { label, remoteId, telegramId } = parsed.data;
+  return { remoteIdentity: item.remoteIdentity, label: label.trim() || remoteId, ...(telegramId ? { telegramId } : {}) };
 }
 
 /** What the commit issues under: a panel run's family and origin, or a link run's (F-201-g). */
@@ -151,12 +157,12 @@ export class MigrationCommitService {
     return { outcome: 'batch', items };
   }
 
-  /** The batch's people: a link run's own person, a balance file's named by its dry run, else identity's batch; null when identity could not be asked (the next tick retries). */
+  /** The batch's people: a link run's own person, a balance file's named by its dry run (its Telegram column claimed), else identity's batch; null when identity could not be asked (the next tick retries). */
   private async peopleFor(run: MigrationRun, batch: MigrationItem[]): Promise<People | null> {
     if (run.kind === MigrationRunKind.link) return linkPeopleOf(run, batch);
-    if (run.kind === MigrationRunKind.csv) return csvPeopleOf(batch);
     try {
-      return peopleOf(await this.people.import(run.tenantId, batch.map((i) => ({ remoteIdentity: i.remoteIdentity, label: labelOf(i) }))));
+      if (run.kind === MigrationRunKind.csv) return await withCsvTelegram(csvPeopleOf(batch), (links) => this.people.claimTelegram(run.tenantId, links));
+      return peopleOf(await this.people.import(run.tenantId, batch.map(sourcePersonOf)));
     } catch (e) {
       if (!(e instanceof MigrationSeamUnavailable || e instanceof MigrationSeamRefused)) throw e;
       this.logger.warn(`run ${run.id}: people not imported, the next tick retries: ${errorLine(e)}`);
@@ -164,13 +170,14 @@ export class MigrationCommitService {
     }
   }
 
-  /** Who identity made, on their items before any Grant: a crash after this still lets a rollback find them. */
+  /** Who identity made, and what each Telegram claim came to (F-210), on their items before any Grant: a crash after this still lets a rollback find them. */
   private recordMadePeople(run: MigrationRun, batch: MigrationItem[], people: People): Promise<void> {
     return tenantTransaction(this.prisma, async (tx) => {
-      // One write per person made: the batch is at most `MIGRATION_COMMIT_BATCH_SIZE`.
+      // One write per person made or claimed: the batch is at most `MIGRATION_COMMIT_BATCH_SIZE`.
       for (const item of batch) {
         const person = people.made.get(item.remoteIdentity);
-        if (person?.created) await tx.migrationItem.updateMany({ where: { id: item.id, outcome: MigrationItemOutcome.pending }, data: { createdUserId: person.userId } });
+        const data = { ...(person?.created ? { createdUserId: person.userId } : {}), ...(person?.telegram ? { telegramLink: person.telegram } : {}) };
+        if (Object.keys(data).length > 0) await tx.migrationItem.updateMany({ where: { id: item.id, outcome: MigrationItemOutcome.pending }, data });
       }
     });
   }

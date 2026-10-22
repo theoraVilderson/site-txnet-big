@@ -71,6 +71,38 @@ func TestSnapshotCarriesEachClientsSubscriptionURL(t *testing.T) {
 }
 
 // D-63: a source past the cap is refused whole, never imported in part.
+// withTelegram is a source whose family names a client's Telegram account.
+type withTelegram struct {
+	*fake.Panel
+	ids map[string]string
+}
+
+func (w withTelegram) ListClients(ctx context.Context) ([]driver.RemoteClient, error) {
+	list, err := w.Panel.ListClients(ctx)
+	for i := range list {
+		list[i].TelegramID = w.ids[list[i].RemoteID]
+	}
+	return list, err
+}
+
+// F-210: the commit can no longer read the source, so the snapshot is where
+// an import learns which Telegram account each client was the reseller's bot user.
+func TestSnapshotCarriesEachClientsTelegramID(t *testing.T) {
+	r := withTelegram{Panel: panelWith("ali", "reza"), ids: map[string]string{"ali": "123456789"}}
+
+	snap, err := source.Snapshot(context.Background(), r, source.Limits{})
+	if err != nil {
+		t.Fatalf("Snapshot: %v", err)
+	}
+	got := map[string]string{}
+	for _, c := range snap.Clients {
+		got[c.RemoteID] = c.TelegramID
+	}
+	if got["ali"] != "123456789" || got["reza"] != "" {
+		t.Fatalf("telegram ids = %v, want ali's alone", got)
+	}
+}
+
 func TestSnapshotRefusesASourcePastTheClientCap(t *testing.T) {
 	_, err := source.Snapshot(context.Background(), panelWith("a", "b", "c"), source.Limits{MaxClients: 2})
 	if !errors.Is(err, source.ErrTooManyClients) {

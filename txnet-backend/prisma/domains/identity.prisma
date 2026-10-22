@@ -373,6 +373,11 @@ model LinkedBotAccount {
   /// Set only when that ownership proof succeeded. An account may only carry
   /// OTP once this is non-null — see identity/invariants.md #12.
   contactVerifiedAt DateTime?
+  /// Set on a link an import wrote from the source panel's data (F-210,
+  /// ADR-0157): the reseller's claim that this chat is this person, never a
+  /// proof. It carries nothing until the chat's own contact card proves it
+  /// (`contactVerifiedAt`), and a proof for another person releases it.
+  claimedAt      DateTime?
   linkedAt       DateTime       @default(now())
 
   user User @relation(fields: [userId], references: [id])

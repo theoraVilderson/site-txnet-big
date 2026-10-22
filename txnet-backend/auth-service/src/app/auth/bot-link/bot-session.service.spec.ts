@@ -34,6 +34,7 @@ function harness(over: {
         .fn()
         .mockResolvedValueOnce(over.link ?? null)
         .mockResolvedValue(over.taken ?? null),
+      deleteMany: vi.fn(),
       upsert: vi.fn(),
     },
     user: {

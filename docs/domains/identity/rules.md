@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-09-06
+updated: 2026-10-22
 ---
 
 # Business rules — identity
@@ -29,7 +29,7 @@ performs `revoke(old, user_logout)` + `create(new)` atomically (token rotation).
 | 7 | Access-token `permissions[]` is a snapshot from `role_permission` at sign time | token issue | stale until token expires |
 | 11 | Failed password logins are counted 10 per 900s in a bucket keyed on the normalized identifier (`login-failures:<username\|E.164>`), reset on a correct password | password login | the counter is consumed before the password is checked, so the 11th attempt in a window is locked even if its password is right |
 | 13 | A `linked_bot_account` with `contactVerifiedAt` set authenticates its user directly: `bots/session` issues the ordinary token pair, no OTP (ADR-0012). Allowed for the `user` role only (`BOT_SESSION_ROLES`) | bot sign-in | an **allow-list**: Support/Admin/SuperAdmin and any role added later are refused with `auth.botFactorNotAllowed` until deliberately admitted. Account conditions answer exactly as password login does — deleted/inactive -> `auth.invalidCredentials`, unverified phone -> `auth.phoneVerificationRequired` |
-| 14 | A contact card sent *with* a `bots/session` request links the chat on the spot: same proof as rule 9 (`contact.user_id === message.from.id`), but the account is found **by the card's own phone number** rather than one typed beforehand | bot sign-in, no link yet | this is the only link not anchored to a phone the caller named first — the card carries a number the platform vouches for. No account on that number -> `otp.botLink.noAccount`, which reveals nothing: the sender has just proven the number is theirs |
+| 14 | A contact card sent *with* a `bots/session` request links the chat on the spot: same proof as rule 9 (`contact.user_id === message.from.id`), but the account is found **by the card's own phone number** rather than one typed beforehand | bot sign-in, no link yet | this is the only link not anchored to a phone the caller named first — the card carries a number the platform vouches for. No account on that number: an import's claim on this chat (F-210, ADR-0157) for a person with no phone takes the number, verified, and signs them in; else `otp.botLink.noAccount`, which reveals nothing: the sender has just proven the number is theirs |
 | 12 | Order of answers on password login: account missing/deleted/inactive -> `auth.invalidCredentials`; lock -> `auth.temporarilyLocked`; wrong password -> `auth.invalidCredentials`; only then unverified phone -> `auth.phoneVerificationRequired` | password login | the unverified-phone key is deliberately last: answered earlier it tells an anonymous caller the account exists (invariant #6) |
 
 ## Edge cases decided

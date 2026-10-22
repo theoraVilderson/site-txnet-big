@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"time"
@@ -105,6 +106,7 @@ func (f found) remote() driver.RemoteClient {
 		Enabled:         f.client.Enable,
 		DataLimitBytes:  f.client.TotalGB,
 		IPLimit:         f.client.LimitIP,
+		TelegramID:      telegramIDOf(f.client.TgID),
 	}
 	// The counters' row is what the panel's depletion job checks, so its total
 	// is the ceiling actually enforced; the settings copy is only its source.
@@ -116,6 +118,21 @@ func (f found) remote() driver.RemoteClient {
 		c.ExpiresAt = time.UnixMilli(f.client.ExpiryTime).UTC()
 	}
 	return c
+}
+
+// telegramIDOf reads tgId as the forks store it: a JSON number, or the
+// string a form saved it as (F-210). A fractional number is no id.
+func telegramIDOf(v any) string {
+	switch id := v.(type) {
+	case float64:
+		if id != math.Trunc(id) {
+			return ""
+		}
+		return driver.TelegramIDOfNumber(int64(id))
+	case string:
+		return driver.TelegramIDOf(id)
+	}
+	return ""
 }
 
 // clients flattens every inbound's clients. An inbound whose settings do not

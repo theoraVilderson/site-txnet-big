@@ -26,7 +26,8 @@ them for a `csv` run.
 ## Rules
 
 1. **The file.** A header naming `user`, `amount` and `currency` — any case,
-   any order, other columns ignored — then one row per balance; blank lines
+   any order, other columns ignored; optionally `telegram`, the person's
+   Telegram account (F-210) — then one row per balance; blank lines
    skipped. Separated by `,`, `;` or a tab (the one that splits the header
    most); double quotes may hold a separator. A record is one line. At most
    `BALANCE_FILE_MAX_CHARS` (90 000 characters, under the 100 KB body) and
@@ -50,8 +51,12 @@ them for a `csv` run.
    another's phone); `duplicate` (a second row for one person: one balance
    each); `currency_mismatch` (not the person's wallet currency — the tenant's
    operating currency when they have no wallet; never converted); else
-   `create`. A row's cells are kept on its item (`line`, `user`, `amount`,
-   `currency`, and the `userId` it credits).
+   `create`. A `telegram` cell, digits folded, that is not a plain id makes
+   the row `unreadable`. A row's cells are kept on its item (`line`, `user`,
+   `amount`, `currency`, the `userId` it credits and its `telegramId`). At
+   the commit each credited person's id is claimed through identity
+   (`/import/telegram`, identity `contract.import.md` rule 9) before the credit,
+   its outcome kept as the item's `telegramLink`.
 6. **The commit credits one `migration_import` row per planned row**,
    `referenceId` = its `migration_item`, through `WalletCreditService` like
    every user credit (a Grant the money funds is revived with it), in the

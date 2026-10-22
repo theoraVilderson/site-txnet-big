@@ -192,7 +192,7 @@ func (r record) remote() driver.RemoteClient {
 		UUID:           r.UUID,
 		Enabled:        r.Enable,
 		DataLimitBytes: r.TotalGB,
-		IPLimit:        r.LimitIP,
+		IPLimit:        r.LimitIP, TelegramID: driver.TelegramIDOfNumber(r.TgID),
 	}
 	if c.UUID == "" {
 		c.UUID = r.Password

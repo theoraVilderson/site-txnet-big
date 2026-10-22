@@ -186,6 +186,15 @@ describe('MigrationCommitService — one committing run, one batch per tick', ()
     expect(db.state.outbox).toEqual([expect.objectContaining({ type: OutboxEventType.MIGRATION_RUN_PROGRESS, payload: { tenantId: RUN.tenantId, userId: RUN.actorUserId, runId: RUN.id } })]);
   });
 
+  it('claims the Telegram account the source named for the person, and keeps what came of it on the item (F-210)', async () => {
+    const db = fakeDb([item('ali', MigrationItemAction.create, { sourceSnapshot: snapshot('ali', { telegramId: '123456' }) }), item('reza')]);
+    const c = commit(db, { people: async (asked) => ({ users: asked.map((a) => ({ remoteIdentity: a.remoteIdentity, userId: `user-${a.remoteIdentity}`, created: true, ...(a.remoteIdentity === key('ali') ? { telegram: 'taken' } : {}) })), refused: [] }) });
+    await c.run();
+    expect(c.people.import).toHaveBeenCalledWith(RUN.tenantId, [{ remoteIdentity: key('ali'), label: 'ali label', telegramId: '123456' }, { remoteIdentity: key('reza'), label: 'reza label' }]);
+    expect(byId(db, 'ali')).toMatchObject({ outcome: MigrationItemOutcome.created, telegramLink: 'taken' });
+    expect(byId(db, 'reza')).not.toHaveProperty('telegramLink');
+  });
+
   it('keeps the old link the source served the client at, so it answers once the old host points here (F-203-a)', async () => {
     const db = fakeDb([item('ali', MigrationItemAction.create, { sourceSnapshot: snapshot('ali', { subscriptionUrl: 'https://Sub.Old.example:2096/sub/tok-ali/' }) })]);
     await commit(db).run();

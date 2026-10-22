@@ -15,6 +15,7 @@ import { BALANCE_FILE_REFUSALS } from '../wallet/balance-import';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
 import { admitMigration } from './migration-door';
+import { TELEGRAM_CLAIMED } from './migration-plan';
 import { announceRun, itemView, runView, type MigrationRunView } from './migration-run-view';
 import { MigrationInbounds, MigrationRunCreate } from './migration-run.schema';
 import { destroySourceLogin, SourceLoginVault } from './migration-seams';
@@ -115,13 +116,13 @@ export class MigrationRunService {
     return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => this.viewOf(tx, tenantId, runId)));
   }
 
-  /** The report's per-user table in the snapshot's order; `problems` keeps the skipped, the failed and what a rollback kept. */
+  /** The report's per-user table in the snapshot's order; `problems` keeps the skipped, the failed, what a rollback kept and a Telegram account not claimed (F-210). */
   outcomes(actor: ResellerActor, tenantId: string, runId: string, page: GrantBulkPage) {
     const { page: p = 1, pageSize = 20, problems } = page;
     return this.admitted(actor, tenantId, 'read', () =>
       tenantTransaction(this.prisma, async (tx) => {
         await this.find(tx, tenantId, runId);
-        const where: Prisma.MigrationItemWhereInput = { runId, ...(problems ? { OR: [{ plannedAction: MigrationItemAction.skip }, { outcome: { in: [MigrationItemOutcome.failed, MigrationItemOutcome.kept] } }] } : {}) };
+        const where: Prisma.MigrationItemWhereInput = { runId, ...(problems ? { OR: [{ plannedAction: MigrationItemAction.skip }, { outcome: { in: [MigrationItemOutcome.failed, MigrationItemOutcome.kept] } }, { telegramLink: { not: TELEGRAM_CLAIMED } }] } : {}) };
         const [items, total] = await Promise.all([
           // A report is written in one transaction, so its rows share `createdAt`: the key orders them (a csv run's is its line, F-209-a).
           tx.migrationItem.findMany({ where, orderBy: [{ createdAt: 'asc' }, { remoteIdentity: 'asc' }], skip: (p - 1) * pageSize, take: pageSize }),

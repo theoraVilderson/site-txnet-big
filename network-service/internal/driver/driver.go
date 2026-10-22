@@ -177,6 +177,10 @@ type RemoteClient struct {
 	// no Lines is a client the panel gives none.
 	Lines     []string
 	LinesRead bool
+	// TelegramID is the client's Telegram account where the family names one
+	// (3x-ui's tgId, a numeric Marzban note): what an import links to the
+	// reseller's bot (F-210). Empty is none.
+	TelegramID string
 }
 
 // CreateClientRequest is what provisioning asks for. The driver turns it into

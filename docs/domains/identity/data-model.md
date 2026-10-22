@@ -1,7 +1,7 @@
 ---
 id: identity
 layer: domain
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # Data model — identity
@@ -35,7 +35,7 @@ many users with no username.
 | role_permission | role<->permission join | no | — |
 | user_permission | one key given (`give`) or taken (`take`) on one person on top of their role, with `reason` and `grantedByUserId`; one row per person and key (AC-1-l, ADR-0138). A give may carry `startsAt`/`endsAt` (F-030-a, check `endsAt > startsAt`) and `openedAt`, the sweep's mark that a future start passed. A trigger notifies `{kind:"person"}` | yes (`tenantId`, the person's; strict RLS) | until lifted by hand or its `endsAt` passes; cascades with the user |
 | otp_code | OTP audit/history + fallback | no (has `phoneNumber`) | expire; Redis is truth (ADR-0007) |
-| linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`) | yes (`tenantId`, F-066-l) | until unlinked |
+| linked_bot_account | user <-> Telegram/Bale chat id (OTP delivery source), plus the messenger-verified phone (`phoneNumber`) and the moment that proof succeeded (`contactVerifiedAt`); `claimedAt` marks an import's unproved claim (F-210) | yes (`tenantId`, F-066-l) | until unlinked |
 
 ## A role belongs to a tenant, or to no one (F-018-n, ADR-0062)
 
@@ -95,8 +95,10 @@ it was issued for, and what to do once it succeeds live only in Redis
 (`botlink:token:<token>`, `botlink:phone:*`, `botlink:chat:*` — see
 `redis-keyspace`). `linked_bot_account` is written once, at the moment the
 shared contact passes the ownership check, with `contactVerifiedAt` set in the
-same write. A row without `contactVerifiedAt` (a link made before this existed)
-is inert: senders will not deliver to it. See invariants.md #12.
+same write. A row without `contactVerifiedAt` (a link made before this existed,
+or an import's claim — `claimedAt`, F-210, ADR-0157) is inert: senders will not
+deliver to it. A claim is proved by that chat's own card (contract.import.md
+rule 10) and released by a proof for anyone else. See invariants.md #12.
 
 `@@unique([platform, platformUserId])` is what stops one messenger account from
 being attached to two platform accounts — without it, a chat id could be made

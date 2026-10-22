@@ -30,10 +30,12 @@ const hasOutcomes = (run: MigrationRun) => !["draft", "previewing", "previewed",
 
 /**
  * The dry run's per-user table (F-206's report), and after the commit what
- * each user came to (F-207) and what a rollback kept, with why (F-211); a
+ * each user came to (F-207), its Telegram account's link (F-210) and what a
+ * rollback kept, with why (F-211); a
  * balance file's rows by their line, amount and currency (F-209-b). It
  * reads again whenever the run moves (`updatedAt`), which the card hears
- * live; "problems" narrows to the skipped, the failed and the kept.
+ * live; "problems" narrows to the skipped, the failed, the kept and a Telegram
+ * account left unlinked.
  */
 export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: MigrationRun }) {
   const { t, lang } = useLocale();
@@ -120,6 +122,7 @@ export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: Migr
         <span className="flex flex-col gap-0.5">
           <Badge tone={OUTCOME_TONE[r.outcome]}>{t("common", K.outcome[r.outcome])}</Badge>
           {(r.failureReason ?? r.keptReason) && <span className="text-xs text-text-secondary">{why(r.failureReason ? reasons.itemFailure : reasons.kept, r.failureReason ?? r.keptReason)}</span>}
+          {r.telegramLink && <span className="text-xs text-text-secondary">{why(K.telegram, r.telegramLink)}</span>}
         </span>
       ),
     });

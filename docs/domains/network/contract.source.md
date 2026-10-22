@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # Contract — reading an import's source panel (F-201-b)
@@ -69,6 +69,11 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
    inbounds is listed under its first. A type we do not sell (`naive`,
    `shadowtls`, …) is passed through for the dry run's `unknown_protocol`.
    Tested on a scripted panel only; no live panel yet.
+9. **A client's Telegram account** (F-210) is read where the family names
+   one: 3x-ui's and the x-ui forks' `tgId` (a number, or the string a fork's
+   form saved), a Marzban or Marzneshin note that is a plain id. Only ASCII
+   digits making a positive 64-bit id count (`driver.TelegramIDOf`); 0, a
+   group id or any other text is none. S-UI and Hiddify name none here.
 
 ## Routes
 
@@ -77,7 +82,7 @@ shared envelope: `{data}` or `{error: {reason, detail}}`.
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`) |
+| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`, `telegramId?`) |
 | `POST /api/internal/source/links` | the same, plus `clients[]` (≤ 200: `remoteId`, `uuid`, `label`, `inboundRemoteId`, `linesRead`) | `clients[]`: `remoteId`, `subscriptionUrl?`, `lines`, `linesRead`, `failure?` |
 | `POST /api/internal/source/link` | `url` — one old subscription link (F-201-g); billing's test of an old host pointed here (entitlement `contract.legacy-host.md`, F-204-b) | `userinfo` (`uploadBytes`, `downloadBytes`, `totalBytes`, `expiresAt` unix s; 0 = not given) from `Subscription-Userinfo`, `lines` |
 

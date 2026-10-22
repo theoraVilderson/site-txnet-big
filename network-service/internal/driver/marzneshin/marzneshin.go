@@ -173,7 +173,7 @@ func (u user) remote() driver.RemoteClient {
 		c.InboundRemoteID = strconv.Itoa(lowest)
 	}
 	if u.Note != nil {
-		c.Label = *u.Note
+		c.Label, c.TelegramID = *u.Note, driver.TelegramIDOf(*u.Note) // a bot's user id kept in the note (F-210)
 	}
 	if u.DataLimit != nil {
 		c.DataLimitBytes = *u.DataLimit

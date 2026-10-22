@@ -1,12 +1,13 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { SocialPlatform, type Prisma } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 import * as argon2 from 'argon2';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenant-context/tenant-context';
+import { claimChats, type ChatClaim, type ChatClaimOutcome } from '../bot-link/link-writes';
 import { END_USER_ROLE_NAME, endUserRoom, lockEndUserRoom } from './end-user-room';
 
 /** At most this many source clients per call (F-201-e), the size of a source link batch (F-201-b). */
@@ -19,8 +20,9 @@ const USERNAME_FALLBACK = 'user';
 const FULL_NAME_MAX = 120;
 const UNKNOWN_SECRET_BYTES = 32;
 
-export type SourceUser = { remoteIdentity: string; label: string };
-export type ImportedUser = { remoteIdentity: string; userId: string; created: boolean };
+/** A source client's person; `telegramId` the account the source named for its bot user (F-210). */
+export type SourceUser = { remoteIdentity: string; label: string; telegramId?: string };
+export type ImportedUser = { remoteIdentity: string; userId: string; created: boolean; telegram?: ChatClaimOutcome };
 export const USER_IMPORT_REFUSALS = ['over_cap', 'deleted'] as const;
 export type RefusedUser = { remoteIdentity: string; reason: (typeof USER_IMPORT_REFUSALS)[number] };
 export type UserImportAnswer = { users: ImportedUser[]; refused: RefusedUser[] };
@@ -28,10 +30,11 @@ export type UserImportAnswer = { users: ImportedUser[]; refused: RefusedUser[] }
 export const USER_REMOVAL_KEPT = ['not_found', 'not_imported', 'phone_linked', 'email_linked', 'messenger_linked', 'signed_in'] as const;
 export type KeptUser = { userId: string; reason: (typeof USER_REMOVAL_KEPT)[number] };
 export type UserRemovalAnswer = { removed: string[]; kept: KeptUser[] };
+export type TelegramLinkAnswer = { links: Array<{ userId: string; telegram: ChatClaimOutcome }> };
 
 type RemovalFacts = { remoteIdentity: string | null; phoneNumber: string | null; email: string | null; _count: { sessions: number; linkedBotAccounts: number } };
 
-/** Why a person stays, or null when all they did was arrive by the import: no phone or email, no messenger, never signed in. */
+/** Why a person stays, or null when all they did was arrive by the import: no phone or email, no proven messenger (a claim is not one), never signed in. */
 function keptBecause(user: RemovalFacts): KeptUser['reason'] | null {
   if (user.remoteIdentity === null) return 'not_imported';
   if (user.phoneNumber) return 'phone_linked';
@@ -103,18 +106,46 @@ export class UserImportService {
         else if (user.deletedAt) answer.refused.push({ remoteIdentity: source.remoteIdentity, reason: 'deleted' });
         else answer.users.push({ remoteIdentity: source.remoteIdentity, userId: user.id, created: false });
       }
-      if (fresh.length === 0) return answer;
-
-      const room = await endUserRoom(tx, tenantId);
+      const room = fresh.length === 0 ? 0 : await endUserRoom(tx, tenantId);
       const admitted = room === null ? fresh : fresh.slice(0, room);
       for (const source of fresh.slice(admitted.length)) answer.refused.push({ remoteIdentity: source.remoteIdentity, reason: 'over_cap' });
-      if (admitted.length === 0) return answer;
-
-      const rows = await this.newUsers(tx, { tenantId, roleId: role.id, passwordHash }, admitted);
-      await tx.user.createMany({ data: rows });
-      for (const row of rows) answer.users.push({ remoteIdentity: row.remoteIdentity, userId: row.id, created: true });
+      if (admitted.length > 0) {
+        const rows = await this.newUsers(tx, { tenantId, roleId: role.id, passwordHash }, admitted);
+        await tx.user.createMany({ data: rows });
+        for (const row of rows) answer.users.push({ remoteIdentity: row.remoteIdentity, userId: row.id, created: true });
+      }
+      await this.claimSourceChats(tx, tenantId, sources, answer.users);
       return answer;
     });
+  }
+
+  /**
+   * A balance file's Telegram column (F-210): each named person — the
+   * tenant's, not deleted — gets the claim an import's person would. One
+   * transaction; a person not found is left out of the answer.
+   */
+  async claimTelegram(links: ChatClaim[]): Promise<TelegramLinkAnswer> {
+    const tenantId = TenantContext.current('telegram claim').id;
+    return tenantTransaction(this.prisma, async (tx) => {
+      const live = await tx.user.findMany({ where: { tenantId, id: { in: links.map((l) => l.userId) }, deletedAt: null }, select: { id: true } });
+      const ids = new Set(live.map((u) => u.id));
+      const claimed = await claimChats(tx, tenantId, SocialPlatform.telegram, links.filter((l) => ids.has(l.userId)));
+      return { links: [...claimed].map(([userId, telegram]) => ({ userId, telegram })) };
+    });
+  }
+
+  /** The chat each source named for its person, claimed (F-210, ADR-0157) and told on the person's answer. */
+  private async claimSourceChats(tx: Prisma.TransactionClient, tenantId: string, sources: SourceUser[], users: ImportedUser[]): Promise<void> {
+    const chatOf = new Map(sources.map((s) => [s.remoteIdentity, s.telegramId]));
+    const claims = users.flatMap((u) => {
+      const chatId = chatOf.get(u.remoteIdentity);
+      return chatId ? [{ userId: u.userId, chatId }] : [];
+    });
+    const claimed = await claimChats(tx, tenantId, SocialPlatform.telegram, claims);
+    for (const user of users) {
+      const outcome = claimed.get(user.userId);
+      if (outcome) user.telegram = outcome;
+    }
   }
 
   /**
@@ -132,7 +163,7 @@ export class UserImportService {
     return tenantTransaction(this.prisma, async (tx) => {
       const users = await tx.user.findMany({
         where: { tenantId, id: { in: ids } },
-        select: { id: true, remoteIdentity: true, deletedAt: true, phoneNumber: true, email: true, _count: { select: { sessions: true, linkedBotAccounts: true } } },
+        select: { id: true, remoteIdentity: true, deletedAt: true, phoneNumber: true, email: true, _count: { select: { sessions: true, linkedBotAccounts: { where: { contactVerifiedAt: { not: null } } } } } },
       });
       const byId = new Map(users.map((u) => [u.id, u]));
       const answer: UserRemovalAnswer = { removed: [], kept: [] };
@@ -146,6 +177,8 @@ export class UserImportService {
       }
       if (gone.length > 0) {
         await tx.user.updateMany({ where: { tenantId, id: { in: gone }, deletedAt: null }, data: { deletedAt: new Date(), remoteIdentity: null, username: null } });
+        // Their claims go too (F-210): a later run's person, or the chat's real owner, takes the chat afresh.
+        await tx.linkedBotAccount.deleteMany({ where: { userId: { in: gone }, contactVerifiedAt: null } });
         answer.removed.push(...gone);
       }
       return answer;

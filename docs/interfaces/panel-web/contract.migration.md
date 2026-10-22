@@ -52,7 +52,8 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
    by billing.
 6. **The report is billing's table**, paged, "everyone" or problems only; the
    result column appears from the commit on. Reasons are sentences
-   (`skip.*`, `itemFailure.*`, `kept.*`), an unknown one its code. Purged
+   (`skip.*`, `itemFailure.*`, `kept.*`, and `telegram.*` for what became of
+   the user's Telegram account, F-210), an unknown one its code. Purged
    snapshots (rule 28) are said, never shown as blanks without why.
 7. **Confirm, undo, cancel are each one `useConfirm`**: the commit names the
    count it issues (create + update; none, no button); the rollback shows its
