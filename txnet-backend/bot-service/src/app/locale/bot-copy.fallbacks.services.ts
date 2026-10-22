@@ -79,6 +79,8 @@ export const SERVICES_FALLBACKS = {
   [BotKeys.prizeService.daysOnly]: "{{name}} (days only)",
   [BotKeys.prizeService.trafficOnly]: "{{name}} (GB only)",
   [BotKeys.prizeService.chosen]: "✅ {{name}}",
+  [BotKeys.prizeService.option]: "{{name}} \u2014 {{when}}",
+  [BotKeys.prizeService.optionWithLeft]: "{{name}} \u2014 {{when}}, {{left}} left",
   [BotKeys.prizeService.saved]: "✅ Saved. GB and days you win now go to: {{current}}",
   [BotKeys.prizeService.none]: "Nothing to choose: GB and days you win go to your active service on their own.",
   [BotKeys.prizeService.refusals.grant_not_found]: "This service was not found. Tap «Prize service» again.",

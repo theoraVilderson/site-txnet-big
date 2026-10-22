@@ -73,6 +73,8 @@ export interface ChatPrizeService {
   label: string | null;
   variant: { id: string; sku: string; nameKey: string } | null;
   endsAt: string | null;
+  /** What is left of a capped service, in bytes; `null` for an unlimited or metered one (F-707-x). */
+  remainingBytes: string | null;
   takesTraffic: boolean;
   takesDays: boolean;
 }

@@ -8,7 +8,7 @@ import { LocaleService } from '../locale/locale.service';
 import { ChatAccess } from '../session/chat-access';
 import { freezeRefusalOf, frozenNoteOf, ownFreezeOf } from './own-freeze';
 import { renewalAction, renewalOffered } from './renewal-actions';
-import { bytesLabel, serviceNameOf } from './service-words';
+import { bytesLabel, serviceNameOf, timeLeftOf } from './service-words';
 import { ACTIONS, say, view } from './views';
 
 /** Every entitlement status in the chat's words; the spec holds it to the Prisma enum. */
@@ -29,7 +29,6 @@ export const SERVICES_FLOW_CLOCK = Symbol('SERVICES_FLOW_CLOCK');
 const LIST_MAX = 10;
 /** The card finds its row in billing's largest page (`pageSize ≤ 100`): there is no single-Grant route. */
 const CARD_READ_MAX = 100;
-const DAY_MS = 86_400_000;
 
 const back: BotAction = { id: ACTIONS.services, label: { key: BotKeys.action.servicesBack } };
 
@@ -103,7 +102,7 @@ export class ServicesFlow {
     const found = await this.find(call, id);
     if ('view' in found) return found;
     const s = found.service;
-    const values = { name: this.name(s, call.lang), status: statusOf(s), traffic: trafficOf(s), time: this.timeOf(s), frozen: frozenNoteOf(s, this.now()) };
+    const values = { name: this.name(s, call.lang), status: statusOf(s), traffic: trafficOf(s), time: timeLeftOf(s.endsAt, this.now()), frozen: frozenNoteOf(s, this.now()) };
     const offer = ownFreezeOf(s);
     const buttons: BotAction[][] = [
       ...(renewalOffered(s) ? [[{ id: renewalAction('open', s.id), label: { key: BotKeys.action.serviceRenew } }]] : []),
@@ -141,15 +140,6 @@ export class ServicesFlow {
 
   private name(s: MyService, lang: string): BotText {
     return serviceNameOf(s, lang, this.locale);
-  }
-
-  /** Time to the end as whole days — a span needs no time zone, as the lotteries' does. */
-  private timeOf(s: MyService): BotText {
-    if (!s.endsAt) return { key: BotKeys.services.time.permanent };
-    const leftMs = new Date(s.endsAt).getTime() - this.now().getTime();
-    if (leftMs <= 0) return { key: BotKeys.services.time.ended };
-    if (leftMs < DAY_MS) return { key: BotKeys.services.time.today };
-    return { key: BotKeys.services.time.left, values: { d: Math.floor(leftMs / DAY_MS) } };
   }
 
   private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {

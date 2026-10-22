@@ -41,7 +41,8 @@ they serve are engagement's ([contract.md](../../domains/engagement/contract.md)
    under the lottery list, only when `GET /api/billing/reward-target` names
    two services or more (`prizeServiceRows`; a failed read costs the row, not
    the screen). `flows/prize-service.flow.ts`: one button per service and
-   «automatic», as My services names them, the chosen one marked; a tap
+   «automatic», as My services names them with the days and GB left
+   (`timeLeftOf`, `bytesLabel`; F-707-x), the chosen one marked; a tap
    saves through `PUT` and says what billing now holds, a refusal by its
    reason's sentence. Buttons `prz:o` / `prz:a` / `prz:g:<grantId>` name what
    they do, so they need no state. One choice with the panel's (panel-web

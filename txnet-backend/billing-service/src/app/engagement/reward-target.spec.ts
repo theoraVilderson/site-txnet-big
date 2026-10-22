@@ -15,6 +15,7 @@ const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
 const OTHER = '33333333-3333-4333-8333-333333333333';
 const AT = new Date('2026-10-22T12:00:00Z');
+const GIB = 1024 ** 3;
 
 type G = { id: string; userId: string; status: GrantStatus; trafficUnlimited: boolean; endsAt: Date | null; startsAt: Date; userLabel: string | null; variant: null };
 const g = (id: string, o: Partial<G> = {}): G => ({ id, userId: USER, status: GrantStatus.active, trafficUnlimited: false, endsAt: AT, startsAt: AT, userLabel: null, variant: null, ...o });
@@ -43,7 +44,9 @@ function build(o: { grants: G[]; chosen?: string }) {
     },
   };
   const prisma = { $transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
-  return { service: new RewardTargetService(prisma as never), chosen: () => chosen };
+  // My services' own view of each Grant: its cap and what it used (F-707-x).
+  const grants = { listForUser: async () => ({ rows: o.grants.map((x) => ({ id: x.id, trafficCapBytes: x.trafficUnlimited ? null : String(10 * GIB), consumedBytes: String(4 * GIB) })) }) };
+  return { service: new RewardTargetService(prisma as never, grants as never), chosen: () => chosen };
 }
 
 const asTenant = <T>(fn: () => Promise<T>) => runWithTenant({ id: TENANT }, fn);
@@ -63,6 +66,14 @@ describe('RewardTargetService.view', () => {
   it('reads automatic when the saved service can no longer take a prize', async () => {
     const { service } = build({ grants: [g('g-a'), g('g-off', { status: GrantStatus.expired })], chosen: 'g-off' });
     await expect(asTenant(() => service.view(caller))).resolves.toMatchObject({ chosenGrantId: null });
+  });
+});
+
+describe('telling services apart (F-707-x)', () => {
+  it('names what is left of a capped service, nothing for an unlimited one, and each end date', async () => {
+    const { service } = build({ grants: [g('g-a'), g('g-c', { trafficUnlimited: true })] });
+    const view = await asTenant(() => service.view(caller));
+    expect(view.services.map((s) => [s.id, s.remainingBytes, s.endsAt])).toEqual([['g-a', String(6 * GIB), AT], ['g-c', null, AT]]);
   });
 });
 

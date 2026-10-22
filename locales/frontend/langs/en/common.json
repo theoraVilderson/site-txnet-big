@@ -5498,7 +5498,11 @@
     "refusals": {
       "grant_not_found": "This service was not found. Open the page again.",
       "grant_not_eligible": "Prizes can no longer go to this service. Choose another one."
-    }
+    },
+    "option": "{{name}} — {{when}}",
+    "optionWithLeft": "{{name}} — {{when}}, {{left}} left",
+    "until": "until {{date}}",
+    "noEnd": "no end date"
   },
   "wheelSettings": {
     "title": "Wheel settings",

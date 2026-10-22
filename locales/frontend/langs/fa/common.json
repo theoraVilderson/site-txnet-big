@@ -5498,7 +5498,11 @@
     "refusals": {
       "grant_not_found": "این سرویس پیدا نشد. صفحه را دوباره باز کنید.",
       "grant_not_eligible": "به این سرویس دیگر جایزه‌ای اضافه نمی‌شود. سرویس دیگری انتخاب کنید."
-    }
+    },
+    "option": "{{name}} — {{when}}",
+    "optionWithLeft": "{{name}} — {{when}}، {{left}} مانده",
+    "until": "تا {{date}}",
+    "noEnd": "بدون تاریخ پایان"
   },
   "wheelSettings": {
     "title": "تنظیمات گردونه",

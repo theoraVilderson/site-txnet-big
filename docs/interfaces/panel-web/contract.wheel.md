@@ -43,7 +43,8 @@ ADR-0111), both through `lib/engagement-api.ts`:
    (`lib/billing/reward-target.ts`) — which service GB and days won are added
    to. One choice for the wheel and both lottery kinds; «automatic» is `null`.
    Shown only with two services or more a prize can reach; each named as My
-   services names it, a days-only or GB-only one marked. It draws billing's
+   services names it, a days-only or GB-only one marked, then its end date and
+   the GB left when capped (F-707-x) — two services of one plan never read alike. It draws billing's
    answer and keeps no choice of its own, so a refusal leaves billing's in
    place with the reason's sentence. A failed read hides it.
 

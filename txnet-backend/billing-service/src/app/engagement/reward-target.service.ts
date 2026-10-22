@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { GrantStatus, Prisma, SpinPrizeType } from '@prisma/client';
 import { tenantTransaction } from '@txnet-backend/shared-core';
 
+import { GrantService } from '../entitlement/grant';
 import { PrismaService } from '../prisma/prisma.service';
 import { takes } from './reward-issuer';
 
@@ -33,6 +34,8 @@ export type PrizeService = {
   label: string | null;
   variant: { id: string; sku: string; nameKey: string } | null;
   endsAt: Date | null;
+  /** What is left of a capped service, in bytes (F-707-x); `null` for an unlimited or metered one. */
+  remainingBytes: string | null;
   takesTraffic: boolean;
   takesDays: boolean;
 };
@@ -42,6 +45,8 @@ export type RewardTargetView = { chosenGrantId: string | null; services: PrizeSe
 
 /** A picker, not a page: more active services than this is not a real user's. */
 const SERVICES_MAX = 50;
+/** My services' largest page: the current Grants' caps are read from it, the same figures that page shows. */
+const CURRENT_PAGE = { pageSize: 100, scope: 'current' } as const;
 
 /** Active, and able to take GB or days — `takes` for either kind, as a query. */
 const offered = (userId: string): Prisma.GrantWhereInput => ({
@@ -52,14 +57,32 @@ const offered = (userId: string): Prisma.GrantWhereInput => ({
 
 @Injectable()
 export class RewardTargetService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly grants: GrantService,
+  ) {}
 
   view(caller: RewardTargetCaller): Promise<RewardTargetView> {
-    return tenantTransaction(this.prisma, (tx) => this.viewIn(tx, caller));
+    return this.withRemaining(caller, tenantTransaction(this.prisma, (tx) => this.viewIn(tx, caller)));
   }
 
   /** Saves the caller's own active Grant that a prize can reach; `null` is automatic again. */
   choose(caller: RewardTargetCaller, grantId: string | null): Promise<RewardTargetView> {
+    return this.withRemaining(caller, this.saveIn(caller, grantId));
+  }
+
+  /**
+   * Each service's GB left, from My services' own view (F-707-x): the cap there
+   * is the quota plus its unexpired adjustments, worked out once in `GrantService`.
+   * Read after the choice's transaction, never inside it.
+   */
+  private async withRemaining(caller: RewardTargetCaller, read: Promise<RewardTargetView>): Promise<RewardTargetView> {
+    const [view, page] = await Promise.all([read, this.grants.listForUser(caller.userId, CURRENT_PAGE)]);
+    const left = new Map(page.rows.map((r) => [r.id, r.trafficCapBytes === null ? null : bytesLeft(r.trafficCapBytes, r.consumedBytes)]));
+    return { ...view, services: view.services.map((s) => ({ ...s, remainingBytes: left.get(s.id) ?? null })) };
+  }
+
+  private saveIn(caller: RewardTargetCaller, grantId: string | null): Promise<RewardTargetView> {
     return tenantTransaction(this.prisma, async (tx) => {
       const key = { tenantId: caller.tenantId, userId: caller.userId };
       if (grantId === null) {
@@ -97,10 +120,17 @@ export class RewardTargetService {
       label: r.userLabel,
       variant: r.variant ? { id: r.variant.id, sku: r.variant.sku, nameKey: r.variant.nameKey ?? r.variant.product.nameKey } : null,
       endsAt: r.endsAt,
+      remainingBytes: null,
       takesTraffic: takes(r, SpinPrizeType.bonus_traffic_gb),
       takesDays: takes(r, SpinPrizeType.extra_days),
     }));
     const chosenGrantId = services.some((s) => s.id === saved?.grantId) ? (saved?.grantId ?? null) : null;
     return { chosenGrantId, services };
   }
+}
+
+/** A cap less what was used, never below nothing. */
+function bytesLeft(cap: string, used: string): string {
+  const left = BigInt(cap) - BigInt(used);
+  return (left > BigInt(0) ? left : BigInt(0)).toString();
 }

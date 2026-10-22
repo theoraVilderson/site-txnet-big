@@ -8,6 +8,8 @@ import { ApiError } from "@/lib/api-error";
 import { rewardTargetApi, type PrizeService, type RewardTarget } from "@/lib/billing/reward-target";
 import { useCatalogTexts } from "../catalog/_lib/meter-names";
 import { serviceName } from "../services/_lib/my-services";
+import { formatBytes } from "../services/_lib/service-configs";
+import { formatInstant } from "../_lib/datetime";
 import { Card, CardHeader, Select } from "./kit";
 import { notify } from "./kit/notify";
 
@@ -29,7 +31,7 @@ const AUTOMATIC = "automatic";
  * leaves billing's in place.
  */
 export function PrizeServicePicker() {
-  const { t } = useLocale();
+  const { lang, t } = useLocale();
   const texts = useCatalogTexts();
   const errorMessage = useApiErrorMessage();
   const [target, setTarget] = useState<RewardTarget | null>(null);
@@ -56,7 +58,14 @@ export function PrizeServicePicker() {
     if (!s.takesDays) return t("common", K.trafficOnly, { name });
     return name;
   };
-  const options = [{ value: AUTOMATIC, label: t("common", K.automatic) }, ...target.services.map((s) => ({ value: s.id, label: nameOf(s) }))];
+  /** The name, then when it ends and what is left — so two services of one plan are never a guess (F-707-x). */
+  const optionOf = (s: PrizeService) => {
+    const date = formatInstant(s.endsAt, lang, { withTime: false });
+    const when = date ? t("common", K.until, { date }) : t("common", K.noEnd);
+    const left = formatBytes(s.remainingBytes, lang);
+    return left ? t("common", K.optionWithLeft, { name: nameOf(s), when, left }) : t("common", K.option, { name: nameOf(s), when });
+  };
+  const options = [{ value: AUTOMATIC, label: t("common", K.automatic) }, ...target.services.map((s) => ({ value: s.id, label: optionOf(s) }))];
 
   async function choose(value: string) {
     const grantId = value === AUTOMATIC ? null : value;

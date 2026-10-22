@@ -8,7 +8,9 @@ import { BotKeys } from '../locale/bot-keys';
 import { LocaleService } from '../locale/locale.service';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
+import type { BotText } from '@txnet-backend/messenger';
 import { PRIZE_SERVICE_ACTION_PREFIX, PrizeServiceFlow, prizeServiceRows } from './prize-service.flow';
+import { bytesLabel } from './service-words';
 
 /**
  * The prize service in the chat (F-707-t, billing F-707-r): which service GB
@@ -25,9 +27,13 @@ const A = '00000000-0000-4000-8000-00000000000a';
 const B = '00000000-0000-4000-8000-00000000000b';
 
 const svc = (id: string, o: Partial<ChatPrizeService> = {}): ChatPrizeService => ({
-  id, label: null, variant: { id: `v-${id}`, sku: `SKU-${id.slice(-1)}`, nameKey: 'catalog.p.x' }, endsAt: null, takesTraffic: true, takesDays: true, ...o,
+  id, label: null, variant: { id: `v-${id}`, sku: `SKU-${id.slice(-1)}`, nameKey: 'catalog.p.x' }, endsAt: null, remainingBytes: null, takesTraffic: true, takesDays: true, ...o,
 });
-const TWO: ChatRewardTarget = { chosenGrantId: B, services: [svc(A, { label: 'Phone' }), svc(B, { takesTraffic: false })] };
+const TWO: ChatRewardTarget = { chosenGrantId: B, services: [svc(A, { label: 'Phone', remainingBytes: String(6 * 1024 ** 3) }), svc(B, { takesTraffic: false })] };
+const FOREVER: BotText = { key: BotKeys.services.time.permanent };
+/** An option: the name, when it ends, and what is left when capped (F-707-x). */
+const option = (name: BotText, left?: string): BotText =>
+  left ? { key: BotKeys.prizeService.optionWithLeft, values: { name, when: FOREVER, left: { raw: left } } } : { key: BotKeys.prizeService.option, values: { name, when: FOREVER } };
 
 function harness(o: { read?: unknown; choose?: unknown } = {}) {
   const auth = { refresh: vi.fn().mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })) } as unknown as Mocked<AuthApiClient>;
@@ -50,8 +56,8 @@ describe('PrizeServiceFlow', () => {
     expect(r.view.body.key).toBe(BotKeys.prizeService.screen);
     expect(buttons(r).map((b) => [b.id, b.label])).toEqual([
       [`${PRIZE_SERVICE_ACTION_PREFIX}a`, { key: BotKeys.prizeService.automatic }],
-      [`${PRIZE_SERVICE_ACTION_PREFIX}g:${A}`, { raw: 'Phone' }],
-      [`${PRIZE_SERVICE_ACTION_PREFIX}g:${B}`, { key: BotKeys.prizeService.chosen, values: { name: { key: BotKeys.prizeService.daysOnly, values: { name: { raw: 'SKU-b' } } } } }],
+      [`${PRIZE_SERVICE_ACTION_PREFIX}g:${A}`, option({ raw: 'Phone' }, bytesLabel(String(6 * 1024 ** 3)))],
+      [`${PRIZE_SERVICE_ACTION_PREFIX}g:${B}`, { key: BotKeys.prizeService.chosen, values: { name: option({ key: BotKeys.prizeService.daysOnly, values: { name: { raw: 'SKU-b' } } }) } }],
     ]);
   });
 
@@ -59,7 +65,7 @@ describe('PrizeServiceFlow', () => {
     const { flow, billing } = harness({ choose: ok({ ...TWO, chosenGrantId: A }) });
     const r = await flow.tap(ctx, `${PRIZE_SERVICE_ACTION_PREFIX}g:${A}`);
     expect(billing.chooseRewardTarget).toHaveBeenCalledWith(A, expect.anything());
-    expect(r.view.body).toEqual({ key: BotKeys.prizeService.saved, values: { current: { raw: 'Phone' } } });
+    expect(r.view.body).toEqual({ key: BotKeys.prizeService.saved, values: { current: option({ raw: 'Phone' }, bytesLabel(String(6 * 1024 ** 3))) } });
     await flow.tap(ctx, `${PRIZE_SERVICE_ACTION_PREFIX}a`);
     expect(billing.chooseRewardTarget).toHaveBeenLastCalledWith(null, expect.anything());
   });

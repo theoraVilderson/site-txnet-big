@@ -6,7 +6,7 @@ import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { LocaleService } from '../locale/locale.service';
 import { ChatAccess } from '../session/chat-access';
-import { serviceNameOf } from './service-words';
+import { bytesLabel, serviceNameOf, timeLeftOf } from './service-words';
 import { say, view } from './views';
 
 /** Billing's `RewardTargetRejection`, each with its sentence. */
@@ -64,7 +64,7 @@ export class PrizeServiceFlow {
     const marked = (label: BotText, chosen: boolean): BotText => (chosen ? { key: BotKeys.prizeService.chosen, values: { name: label } } : label);
     const rows: BotAction[][] = [
       [{ id: AUTOMATIC, label: marked({ key: BotKeys.prizeService.automatic }, target.chosenGrantId === null) }],
-      ...target.services.map((s) => [{ id: `${GRANT}${s.id}`, label: marked(this.nameOf(s, ctx.lang), s.id === target.chosenGrantId) }]),
+      ...target.services.map((s) => [{ id: `${GRANT}${s.id}`, label: marked(this.optionOf(s, ctx.lang), s.id === target.chosenGrantId) }]),
     ];
     return { view: view('prizeService.screen', { key: BotKeys.prizeService.screen, values: { current: this.current(target, ctx.lang) } }, rows), nextState: null };
   }
@@ -79,10 +79,18 @@ export class PrizeServiceFlow {
     return { view: say('prizeService.saved', { key: BotKeys.prizeService.saved, values: { current: this.current(done.data, ctx.lang) } }), nextState: null };
   }
 
-  /** The choice billing holds, by name; automatic when none. */
+  /** The choice billing holds, told as its option is (name, time and GB left); automatic when none. */
   private current(target: ChatRewardTarget, lang: string): BotText {
     const chosen = target.services.find((s) => s.id === target.chosenGrantId);
-    return chosen ? this.nameOf(chosen, lang) : { key: BotKeys.prizeService.automatic };
+    return chosen ? this.optionOf(chosen, lang) : { key: BotKeys.prizeService.automatic };
+  }
+
+  /** The name, then the time left and the GB left — so two services of one plan are never a guess (F-707-x). */
+  private optionOf(s: ChatPrizeService, lang: string): BotText {
+    const name = this.nameOf(s, lang);
+    const when = timeLeftOf(s.endsAt, new Date());
+    if (s.remainingBytes === null) return { key: BotKeys.prizeService.option, values: { name, when } };
+    return { key: BotKeys.prizeService.optionWithLeft, values: { name, when, left: { raw: bytesLabel(s.remainingBytes) } } };
   }
 
   /** As My services names it (`serviceNameOf`); a service only one kind of prize reaches says which. */

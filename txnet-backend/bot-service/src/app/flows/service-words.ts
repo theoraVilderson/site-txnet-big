@@ -41,3 +41,14 @@ export function bytesLabel(bytes: string): string {
   const n = BigInt(bytes);
   return n === BigInt(0) ? '0 MB' : remainingLabel(n);
 }
+
+const DAY_MS = 86_400_000;
+
+/** Time to a service's end as whole days, as My services and the prize-service list say it — a span needs no time zone. */
+export function timeLeftOf(endsAt: string | null, now: Date): BotText {
+  if (!endsAt) return { key: BotKeys.services.time.permanent };
+  const leftMs = new Date(endsAt).getTime() - now.getTime();
+  if (leftMs <= 0) return { key: BotKeys.services.time.ended };
+  if (leftMs < DAY_MS) return { key: BotKeys.services.time.today };
+  return { key: BotKeys.services.time.left, values: { d: Math.floor(leftMs / DAY_MS) } };
+}

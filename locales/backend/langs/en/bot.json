@@ -356,7 +356,9 @@
     "refusals": {
       "grant_not_found": "This service was not found. Tap «Prize service» again.",
       "grant_not_eligible": "Prizes can no longer go to this service. Choose another one."
-    }
+    },
+    "option": "{{name}} — {{when}}",
+    "optionWithLeft": "{{name}} — {{when}}, {{left}} left"
   },
   "support": {
     "list": "💬 Your support conversations. Choose one, or start a new one.",
