@@ -7627,7 +7627,9 @@
       "reseller_not_found": "This reseller was not found.",
       "reseller_terminated": "This reseller has been closed.",
       "legacy_host_not_routed": "This address is not verified yet.",
-      "legacy_link_not_found": "No imported user with a live service holds a link on this address."
+      "legacy_link_not_found": "No imported user with a live service holds a link on this address.",
+      "user_not_found": "This user is not one of this reseller's users.",
+      "variant_unchosen": "Choose a plan before confirming."
     },
     "historyCol": {
       "source": "Panel",
@@ -7660,6 +7662,46 @@
         "bad_request": "This address cannot be tested.",
         "probe_unavailable": "The test could not run right now. Try again in a minute.",
         "other": "The test failed ({{reason}})."
+      }
+    },
+    "link": {
+      "newLink": "One user from a link",
+      "intro": "Enter the user's old subscription link and say whose it is. The link is read once, and nothing is created until you confirm.",
+      "url": "Old subscription link",
+      "urlHint": "The link the user has in their app, like https://sub.example.com/sub/…",
+      "user": "For which user",
+      "userSearch": "Search a user by name, username or phone",
+      "userChange": "Another user",
+      "read": "Read the link",
+      "reading": "Reading the link… this page updates by itself.",
+      "retry": "Read again",
+      "historyRow": "One user from a link · {{host}}",
+      "reviewTitle": "What the link said",
+      "quotaGb": "Total volume (GB, 0 is unlimited)",
+      "usedGb": "Used (GB)",
+      "end": "End date",
+      "noEnd": "The link named no end; left empty, the plan's period applies.",
+      "readWas": "The link said: {{value}}",
+      "unlimited": "Unlimited",
+      "gb": "{{value}} GB",
+      "product": "Plan",
+      "pickProduct": "Choose a plan",
+      "save": "Save",
+      "saving": "Saving…",
+      "willCreate": "On confirm, a new service is created for this user.",
+      "willUpdate": "This link was imported already; nothing is created.",
+      "duplicate": "This link came over with a panel import already.",
+      "needProduct": "Choose and save a plan before confirming.",
+      "commit": "Import this user",
+      "commitConfirm": "Create this user's service now? The old panel is not touched.",
+      "invalidUrl": "Enter a whole http or https link, with its path.",
+      "invalidGb": "Enter a number, zero or more.",
+      "chooseUser": "Choose the user first.",
+      "failure": {
+        "source_unavailable": "The link did not answer in time. Read it again a little later.",
+        "source_unreadable": "The link's answer could not be read. Check the link.",
+        "address_refused": "This address is not allowed: it points at a private or internal network.",
+        "source_redirected": "The link redirected elsewhere. Enter the address it leads to."
       }
     }
   }

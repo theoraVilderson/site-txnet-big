@@ -3,10 +3,10 @@ id: panel-web
 layer: interface
 status: active
 version: 43
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
-# Contract — panel-web: a reseller's import from another panel (F-201-f), its old address (F-204-b)
+# Contract — panel-web: a reseller's import from another panel (F-201-f), one user's from an old link (F-201-h-1), its old address (F-204-b)
 
 A topic file of [contract.md](contract.md) (§10), and a screen of the reseller
 workspace described in [contract.resellers.md](contract.resellers.md) "A
@@ -15,7 +15,7 @@ reseller leaving another panel brings its users with it (D-63).
 
 | page | route | files |
 |---|---|---|
-| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address); rules `my-resellers/_lib/migration.ts` |
+| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address), `LinkImportForm.tsx` + `LinkReview.tsx` (one user from a link), `_hooks/usePrepaidPlans.ts`; rules `my-resellers/_lib/migration.ts`, `migration-link.ts` |
 
 Its calls are `migrationRunsApi(tenantId)` (`lib/billing/migration-runs.ts`):
 billing's `/tenants/:id/migration-runs` routes and tenant-service's
@@ -77,6 +77,27 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
    success, a warning for none. A Hiddify run says its own paths do not
    answer yet (F-204-c).
 
-**Not covered:** link and CSV imports (F-203, F-209).
+10. **One user from an old link** (F-201-h-1; entitlement
+    [contract.link-import.md](../../domains/entitlement/contract.link-import.md)):
+    a second start beside the panel's — the link (`linkUrlError`: absolute
+    http(s) with a path, billing's `oldLinkSchema`) and a user of the
+    reseller, found through its users list (`UserSearch`, `via="reseller"`).
+    The run is named by its host alone (`runTitleOf`): the path is its
+    owner's token and is never shown. A draft the read sent back is `retry`
+    (read again), never the login form; the reasons are the link's own words
+    (`link.failure.*`) where they differ.
+11. **The review** (`LinkReview`, `previewed`): each figure the link said
+    under the field that corrects it; the form starts from the admin's
+    correction, else the link's (`linkFormOf`); a save sends only what moved,
+    a figure put back to the link's clears the correction
+    (`linkCorrectionBody`). The plan offered is a prepaid one (rule 5,
+    `usePrepaidPlans`). What the commit will do is billing's plan, said:
+    create, nothing (already here), or the skip — a link's `duplicate` is a
+    panel import that brought it. The commit is offered once a plan is saved
+    (`variant_unchosen`); the result, rollback and old address are the
+    panel run's (rules 7, 9).
+
+**Not covered:** a user handing in their own link, its queue and notice (not
+built, user 2026-10-22); CSV imports (F-209).
 Platform products a reseller's package lists are not offered in the mapping
 until the users-admin catalog lists them (it reads the tenant's own products).

@@ -51,6 +51,8 @@ const run = (over: Partial<MigrationRun> = {}): MigrationRun => ({
   failedItems: 0,
   rollbackUntil: null,
   snapshotsPurgedAt: null,
+  userId: null,
+  variantId: null,
   createdAt: "2026-10-21T08:00:00Z",
   updatedAt: "2026-10-21T08:00:00Z",
   inbounds: [],

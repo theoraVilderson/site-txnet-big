@@ -1,15 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, Undo2, Upload, X } from "lucide-react";
+import { Loader2, RotateCw, Undo2, Upload, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { MigrationRun, MigrationRunsApi } from "@/lib/billing-api";
 import { formatInstant } from "../../../../_lib/datetime";
-import { driverLabel } from "../../../../systems/_lib/systems";
 import { IMPORT_FAMILIES, MIGRATION_KEYS as K, commitProgress, isCancellable, rollbackDaysLeft, stageOf, type ImportFamily, type RunStage } from "../../../_lib/migration";
+import { runTitleOf } from "../../../_lib/migration-link";
 import { useFailureText, useMigrationLive, useMigrationMessage } from "../_hooks/useMigrationLive";
 import { InboundMapping } from "./InboundMapping";
 import { LegacyHostStep } from "./LegacyHostStep";
+import { LinkReview } from "./LinkReview";
 import { MigrationReport } from "./MigrationReport";
 import { SourceLoginForm } from "./SourceLoginForm";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
@@ -18,6 +19,7 @@ import { Alert, Button, Card, CardHeader, StatusPill, useConfirm, type Tone } fr
 const STAGE_TONE: Record<RunStage, Tone> = {
   login: "neutral",
   mapping: "warning",
+  retry: "warning",
   reading: "info",
   report: "info",
   importing: "info",
@@ -26,10 +28,12 @@ const STAGE_TONE: Record<RunStage, Tone> = {
   closed: "neutral",
 };
 
-const importFamilyOf = (f: string): ImportFamily | undefined => IMPORT_FAMILIES.find((x) => x === f);
+const importFamilyOf = (f: string | null): ImportFamily | undefined => IMPORT_FAMILIES.find((x) => x === f);
 
 /**
- * One import, start to end (F-201-f): connect, map, the dry run's report,
+ * One import, start to end (F-201-f) — or one user's from an old link
+ * (F-201-h-1), its read, review and correction in place of the connect and
+ * the mapping: connect, map, the dry run's report,
  * confirm, live progress, the rollback with its days left, and the old
  * address pointed here (F-204-b). Every step is the
  * run's status as billing answers it (`stageOf`); the card re-reads it on
@@ -70,35 +74,48 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
   const issued = run.plannedCreate + run.plannedUpdate;
   const days = rollbackDaysLeft(run);
   const family = importFamilyOf(run.sourceFamily);
-  const commit = () => act({ title: t("common", K.commitConfirm, { count: String(issued) }), label: t("common", K.commit, { count: String(issued) }) }, api.commit);
+  const isLink = run.kind === "link";
+  const title = runTitleOf(run);
+  // A link run is committed once its product is chosen (billing's `variant_unchosen`).
+  const committable = issued > 0 && (!isLink || run.variantId !== null);
+  const commitText = isLink ? { title: t("common", K.link.commitConfirm), label: t("common", K.link.commit) } : { title: t("common", K.commitConfirm, { count: String(issued) }), label: t("common", K.commit, { count: String(issued) }) };
+  const commit = () => act(commitText, api.commit);
+  const reread = () => act({ title: t("common", K.link.retry), label: t("common", K.link.retry) }, api.preview);
   const rollback = () => act({ title: t("common", K.rollbackConfirm), label: t("common", K.rollback), danger: true }, api.rollback);
   const cancel = () => act({ title: t("common", K.cancelConfirm), label: t("common", K.cancel), danger: true }, api.cancel);
 
   return (
     <Card className="space-y-5">
       <CardHeader
-        title={<span dir="auto">{t("common", K.historyRow, { family: driverLabel(run.sourceFamily), address: run.sourceAddress })}</span>}
+        title={<span dir="auto">{t("common", title.key, title.values)}</span>}
         subtitle={t("common", K.startedAt, { when: formatInstant(run.createdAt, lang) ?? "" })}
         actions={<StatusPill tone={STAGE_TONE[stage]}>{t("common", K.status[run.status])}</StatusPill>}
       />
-      {run.failureReason && (stage === "login" || stage === "mapping") && <Alert tone="warning">{failureText(run.failureReason)}</Alert>}
+      {run.failureReason && (stage === "login" || stage === "mapping" || stage === "retry") && <Alert tone="warning">{failureText(run.failureReason, run.kind)}</Alert>}
+      {stage === "retry" && (
+        <Button variant="secondary" disabled={busy} onClick={() => void reread()} icon={<RotateCw size={14} aria-hidden />}>
+          {t("common", K.link.retry)}
+        </Button>
+      )}
 
       {stage === "login" && (family ? <SourceLoginForm api={api} run={run} family={family} onDone={setRun} /> : <Alert tone="error">{failureText("no_driver")}</Alert>)}
-      {(stage === "mapping" || stage === "report") && <InboundMapping api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
-      {stage === "reading" && <Progress label={t("common", K.reading)} />}
+      {!isLink && (stage === "mapping" || stage === "report") && <InboundMapping api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
+      {isLink && stage === "report" && <LinkReview api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
+      {stage === "reading" && <Progress label={t("common", isLink ? K.link.reading : K.reading)} />}
       {stage === "importing" && <CommitProgress run={run} />}
       {stage === "rollingBack" && <Progress label={t("common", K.rollingBack)} />}
 
       {stage === "report" && (
         <div className="space-y-3">
-          <p className="text-sm font-bold text-text-primary">
-            {t("common", K.report.counts, { create: String(run.plannedCreate), update: String(run.plannedUpdate), skip: String(run.plannedSkip) })}
-          </p>
-          {issued === 0 ? (
-            <Alert tone="info">{t("common", K.commitNothing)}</Alert>
-          ) : (
+          {!isLink && (
+            <p className="text-sm font-bold text-text-primary">
+              {t("common", K.report.counts, { create: String(run.plannedCreate), update: String(run.plannedUpdate), skip: String(run.plannedSkip) })}
+            </p>
+          )}
+          {!isLink && issued === 0 && <Alert tone="info">{t("common", K.commitNothing)}</Alert>}
+          {committable && (
             <Button disabled={busy} onClick={() => void commit()} icon={<Upload size={14} aria-hidden />}>
-              {t("common", K.commit, { count: String(issued) })}
+              {commitText.label}
             </Button>
           )}
         </div>
@@ -117,11 +134,11 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
         ) : (
           <p className="text-xs text-text-secondary">{t("common", K.rollbackClosed)}</p>
         ))}
-      {stage === "imported" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily} />}
+      {stage === "imported" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily ?? ""} />}
       {run.status === "rolled_back" && <Alert tone="success">{t("common", K.rolledBackNote)}</Alert>}
       {(run.status === "cancelled" || run.status === "expired") && <Alert tone="info">{t("common", K.closed)}</Alert>}
 
-      {stage !== "login" && stage !== "reading" && run.plannedCreate + run.plannedUpdate + run.plannedSkip > 0 && <MigrationReport api={api} run={run} />}
+      {stage !== "login" && stage !== "reading" && !(isLink && stage === "report") && run.plannedCreate + run.plannedUpdate + run.plannedSkip > 0 && <MigrationReport api={api} run={run} />}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
       {isCancellable(run) && (
         <Button variant="quiet" size="sm" disabled={busy} onClick={() => void cancel()} icon={<X size={12} aria-hidden />}>

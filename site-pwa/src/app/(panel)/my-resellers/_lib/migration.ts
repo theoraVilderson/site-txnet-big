@@ -31,8 +31,8 @@ export type ImportFamily = (typeof IMPORT_FAMILIES)[number];
 const ADDRESS_MAX = 2048;
 const LOGIN_MAX = 4096;
 
-/** The page's step for a run; one per status, a draft split by what it is missing. */
-export type RunStage = "login" | "mapping" | "reading" | "report" | "importing" | "imported" | "rollingBack" | "closed";
+/** The page's step for a run; one per status, a draft split by what it is missing — a link run's by nothing but a new read. */
+export type RunStage = "login" | "mapping" | "retry" | "reading" | "report" | "importing" | "imported" | "rollingBack" | "closed";
 
 /** Why a preview sent the run back for its mapping (billing's `INBOUNDS_UNMAPPED`); any other reason is the source's. */
 const INBOUNDS_UNMAPPED = "inbounds_unmapped";
@@ -42,9 +42,11 @@ const INBOUNDS_UNMAPPED = "inbounds_unmapped";
  * source refused, or never read, asks for the login (again) — it also lasts
  * only 7 days unused (tenant rule 4), so a later preview may need it anew.
  */
-export function stageOf(run: Pick<MigrationRun, "status" | "failureReason" | "inbounds">): RunStage {
+export function stageOf(run: Pick<MigrationRun, "kind" | "status" | "failureReason" | "inbounds">): RunStage {
   switch (run.status) {
     case "draft": {
+      // A link run needs no login: the read sent it back, and reading again is all it can ask (F-201-g).
+      if (run.kind === "link") return "retry";
       const mappable = (run.inbounds?.length ?? 0) > 0 && (run.failureReason === null || run.failureReason === INBOUNDS_UNMAPPED);
       return mappable ? "mapping" : "login";
     }

@@ -1,15 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Save } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
-import { resellerGrantsApi, type MigrationRun, type MigrationRunsApi } from "@/lib/billing-api";
-import { useCatalogTexts } from "../../../../catalog/_lib/meter-names";
-import { MIGRATION_KEYS as K, mappingBody, mappingOptions } from "../../../_lib/migration";
+import type { MigrationRun, MigrationRunsApi } from "@/lib/billing-api";
+import { MIGRATION_KEYS as K, mappingBody } from "../../../_lib/migration";
 import { useMigrationMessage } from "../_hooks/useMigrationLive";
+import { usePrepaidPlans } from "../_hooks/usePrepaidPlans";
 import { Alert, Button, NativeSelect } from "../../../../_components/kit";
-
-type Option = { value: string; label: string };
 
 /**
  * Each source inbound to one of the reseller's prepaid plans, or none
@@ -21,25 +19,14 @@ type Option = { value: string; label: string };
 export function InboundMapping({ api, tenantId, run, onSaved }: { api: MigrationRunsApi; tenantId: string; run: MigrationRun; onSaved: (run: MigrationRun) => void }) {
   const { t } = useLocale();
   const message = useMigrationMessage();
-  const texts = useCatalogTexts();
-  const [products, setProducts] = useState<Parameters<typeof mappingOptions>[0] | null>(null);
+  const { plans, error: plansError } = usePrepaidPlans(tenantId);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-
-  useEffect(() => {
-    let alive = true;
-    resellerGrantsApi(tenantId)
-      .usersCatalog()
-      .then((list) => alive && setProducts(list))
-      .catch((e: unknown) => alive && setError(e));
-    return () => {
-      alive = false;
-    };
-  }, [tenantId]);
+  const failure = error !== null ? error : plansError;
 
   const inbounds = run.inbounds ?? [];
-  const options: Option[] = products ? mappingOptions(products, texts) : [];
+  const options = plans ?? [];
   const body = mappingBody(inbounds, chosen);
   const changed = body.some((b, i) => b.variantId !== inbounds[i].variantId);
 
@@ -64,7 +51,7 @@ export function InboundMapping({ api, tenantId, run, onSaved }: { api: Migration
         {t("common", K.mapping.title)}
       </h3>
       <p className="text-xs text-text-secondary">{t("common", K.mapping.intro)}</p>
-      {products !== null && options.length === 0 && <Alert tone="warning">{t("common", K.mapping.noOptions)}</Alert>}
+      {plans !== null && options.length === 0 && <Alert tone="warning">{t("common", K.mapping.noOptions)}</Alert>}
       <ul className="divide-y divide-card-border rounded-xl border border-card-border">
         {inbounds.map((i, n) => (
           <li key={i.inboundRemoteId} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center">
@@ -78,7 +65,7 @@ export function InboundMapping({ api, tenantId, run, onSaved }: { api: Migration
               className="sm:w-72"
               aria-label={t("common", K.mapping.pick)}
               value={body[n].variantId ?? ""}
-              disabled={busy || products === null}
+              disabled={busy || plans === null}
               onChange={(e) => setChosen((c) => ({ ...c, [i.inboundRemoteId]: e.target.value }))}
             >
               <option value="">{t("common", i.clientCount > 0 ? K.mapping.pick : K.mapping.none)}</option>
@@ -91,7 +78,7 @@ export function InboundMapping({ api, tenantId, run, onSaved }: { api: Migration
           </li>
         ))}
       </ul>
-      {error !== null && <Alert tone="error">{message(error)}</Alert>}
+      {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
       <Button size="sm" disabled={busy || (!changed && run.status !== "draft")} onClick={() => void save()} icon={<Save size={14} aria-hidden />}>
         {t("common", busy ? K.mapping.saving : K.mapping.save)}
       </Button>

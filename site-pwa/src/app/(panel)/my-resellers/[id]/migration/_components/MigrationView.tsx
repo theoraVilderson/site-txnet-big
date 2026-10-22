@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRightLeft, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, Link2, Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { migrationRunsApi, type MigrationRun, type MigrationRunsApi, type Paged } from "@/lib/billing-api";
 import { myResellerMigrationPath } from "@/lib/routes";
 import { formatInstant } from "../../../../_lib/datetime";
-import { driverLabel } from "../../../../systems/_lib/systems";
 import { MIGRATION_KEYS as K, stageOf } from "../../../_lib/migration";
+import { runTitleOf } from "../../../_lib/migration-link";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { useMigrationLive, useMigrationMessage } from "../_hooks/useMigrationLive";
+import { LinkImportForm } from "./LinkImportForm";
 import { MigrationRunCard } from "./MigrationRunCard";
 import { SourceLoginForm } from "./SourceLoginForm";
 import { Pagination } from "../../../../_components/kit/Pagination";
@@ -24,7 +25,8 @@ const PAGE_SIZE = 10;
  * never the session's tenant (ADR-0064): its owner signs in to the
  * platform's. Billing and tenant-service admit by `migration.manage` and the
  * page shows their refusal otherwise. `?run=` is the run open on screen, so
- * a reload or a shared link lands on it.
+ * a reload or a shared link lands on it. A new run is a whole panel or one
+ * user from an old link (F-201-h-1).
  */
 export function MigrationView({ id }: { id: string }) {
   const { t } = useLocale();
@@ -32,11 +34,11 @@ export function MigrationView({ id }: { id: string }) {
   const runId = useSearchParams().get("run");
   const self = useWorkspaceSelf(id);
   const api = useMemo(() => migrationRunsApi(id), [id]);
-  const [starting, setStarting] = useState(false);
+  const [starting, setStarting] = useState<"panel" | "link" | null>(null);
 
   const root = myResellerMigrationPath(id, self);
   const open = (run: string | null) => {
-    setStarting(false);
+    setStarting(null);
     router.replace(run ? `${root}?run=${encodeURIComponent(run)}` : root);
   };
 
@@ -53,20 +55,30 @@ export function MigrationView({ id }: { id: string }) {
             </Button>
           ) : (
             !starting && (
-              <Button size="sm" onClick={() => setStarting(true)} icon={<Plus size={12} aria-hidden />}>
-                {t("common", K.newRun)}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => setStarting("panel")} icon={<Plus size={12} aria-hidden />}>
+                  {t("common", K.newRun)}
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setStarting("link")} icon={<Link2 size={12} aria-hidden />}>
+                  {t("common", K.link.newLink)}
+                </Button>
+              </div>
             )
           )
         }
       />
       {runId && <MigrationRunCard key={runId} api={api} tenantId={id} runId={runId} />}
-      {!runId && starting && (
+      {!runId && starting === "panel" && (
         <Card>
-          <SourceLoginForm api={api} run={null} onDone={(run) => open(run.id)} onCancel={() => setStarting(false)} />
+          <SourceLoginForm api={api} run={null} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
         </Card>
       )}
-      {!runId && <MigrationHistory api={api} tenantId={id} onOpen={open} onStart={() => setStarting(true)} />}
+      {!runId && starting === "link" && (
+        <Card>
+          <LinkImportForm api={api} tenantId={id} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
+        </Card>
+      )}
+      {!runId && <MigrationHistory api={api} tenantId={id} onOpen={open} onStart={() => setStarting("panel")} />}
     </div>
   );
 }
@@ -97,7 +109,7 @@ function MigrationHistory({ api, tenantId, onOpen, onStart }: { api: MigrationRu
       header: t("common", K.historyCol.source),
       cell: (r) => (
         <button type="button" className="text-start font-bold text-primary hover:underline" dir="auto" onClick={() => onOpen(r.id)}>
-          {t("common", K.historyRow, { family: driverLabel(r.sourceFamily), address: r.sourceAddress })}
+          {t("common", runTitleOf(r).key, runTitleOf(r).values)}
         </button>
       ),
     },

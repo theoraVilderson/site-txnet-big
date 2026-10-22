@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "@/context/LocaleContext";
+import type { MigrationRun } from "@/lib/billing-api";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { useLiveReread } from "@/hooks/useLiveReread";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
@@ -28,11 +29,14 @@ export function useMigrationMessage() {
   };
 }
 
-/** Why a preview sent the run back, as a sentence; a reason this build does not know is shown as its code. */
+/**
+ * Why a preview sent the run back, as a sentence — a link run's in its own
+ * words where they differ (F-201-h-1); a reason this build does not know is shown as its code.
+ */
 export function useFailureText() {
   const { t } = useLocale();
-  return (reason: string) => {
-    const key = reasonKey(K.failure, reason);
+  return (reason: string, kind?: MigrationRun["kind"]) => {
+    const key = (kind === "link" ? reasonKey(K.link.failure, reason) : null) ?? reasonKey(K.failure, reason);
     return key ? t("common", key) : t("common", K.failure.other, { reason });
   };
 }
