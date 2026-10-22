@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useEffect, useState } from "react";
-import { AlertCircle, BellOff, Check, ChevronDown, Copy, Link2, Loader2, MoreVertical, QrCode, RotateCcw, Search, X } from "lucide-react";
+import { AlertCircle, BellOff, Check, ChevronDown, Copy, Link2, Loader2, MoreVertical, QrCode, RotateCcw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
@@ -20,11 +20,13 @@ import { matchesConfig, purgeCountdown } from "../_lib/service-configs";
 import { ownFreezeOf } from "../_lib/own-freeze";
 import { capOffered } from "../_lib/spending-cap";
 import { ConfigLines } from "./ConfigLines";
+import { ConfigSearch } from "./ConfigSearch";
 import { ConnectGuide } from "./ConnectGuide";
 import { GrantConfigs } from "./GrantConfigs";
 import { NoticeLevel } from "./NoticeLevel";
 import { FreezeOwn, FrozenNote } from "./OwnFreeze";
 import { QrDialog } from "./QrDialog";
+import { Renewal } from "./RenewalSheet";
 import { RefusalNote } from "./RefusalNote";
 import { ServiceBuilding, ServiceReady } from "./ServiceBuilding";
 import { ServiceName } from "./ServiceName";
@@ -239,6 +241,7 @@ export const ServiceRow = memo(function ServiceRow({
         )}
 
         {row.frozen && <FrozenNote row={row} />}
+        <Renewal row={row} name={name} />
 
         {capabilities.length > 0 && (
           <ul aria-label={t("common", S.features)} className="flex flex-wrap gap-1.5">
@@ -258,41 +261,7 @@ export const ServiceRow = memo(function ServiceRow({
         )}
 
         {searchable && configs.rows && shown && (
-          <div>
-            <div className="flex items-center gap-2 rounded-2xl border border-card-border bg-bg-inner px-3 focus-within:border-primary">
-              <Search size={16} className="shrink-0 text-text-secondary" aria-hidden />
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Escape") setQuery("");
-                }}
-                placeholder={t("common", S.search.placeholder)}
-                aria-label={t("common", S.search.label)}
-                dir="auto"
-                className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-text-primary outline-none [&::-webkit-search-cancel-button]:hidden"
-              />
-              {query !== "" && (
-                <button
-                  type="button"
-                  onClick={() => setQuery("")}
-                  aria-label={t("common", S.search.clear)}
-                  title={t("common", S.search.clear)}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-secondary hover:bg-leaf-bg hover:text-text-primary"
-                >
-                  <X size={16} aria-hidden />
-                </button>
-              )}
-            </div>
-            {query.trim() !== "" && (
-              <p role="status" className="mt-1.5 text-xs text-text-secondary">
-                {shown.length === 0
-                  ? t("common", S.search.none, { query: query.trim() })
-                  : t("common", S.search.count, { shown: shown.length, total: configs.rows.length })}
-              </p>
-            )}
-          </div>
+          <ConfigSearch query={query} onQuery={setQuery} shown={shown.length} total={configs.rows.length} />
         )}
 
         {stage !== null ? null : configsOpen ? (

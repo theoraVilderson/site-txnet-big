@@ -15,7 +15,9 @@ purchase routes ([billing/contract.purchase.md](../../domains/billing/contract.p
 `POST /invoices/:id/cancel`.
 
 Its pieces: `_components/ShopView.tsx` (checkout, paid), `OfferList.tsx`
-(the cards), `_hooks/useCatalogSalesLive.ts` (rule 13),
+(the cards), `_hooks/useCheckout.ts` + `_components/CheckoutPay.tsx` (rules 4–7, 9, 11:
+the codes, the invoice, the pay — shared with My services' renewal sheet,
+[contract.renewal.md](contract.renewal.md) rule 5), `_hooks/useCatalogSalesLive.ts` (rule 13),
 `_lib/shop.ts` (the shortfall, the pre-fill, the grouping, the tabs, a quota's
 limit, the return id),
 `page.tsx` (reads `?invoice=`). The top-up page and `/payment/success` each
@@ -84,7 +86,8 @@ carry one piece of the return (rules 7 and 8).
    ([contract.payment-result.md](contract.payment-result.md)); the shop forgets
    it once the invoice is paid or replaced. Changing the codes there cancels
    it and makes a new one for the same variant (rule 5). Only the id is kept —
-   never a code or a figure.
+   never a code or a figure. **A renewal invoice** (`renewal` set, F-305-f) pays
+   as it is, with no code field: only My services' sheet knows what it renews.
 9. **An invoice that is not `pending` offers no pay.** Every `InvoiceStatus`
    has a sentence (`common.shop.invoice.status.*`, keyed by the union
    `INVOICE_STATUSES`, which mirrors `billing.prisma`). A `pending` one past its

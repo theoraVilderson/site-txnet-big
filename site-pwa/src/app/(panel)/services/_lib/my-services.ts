@@ -146,9 +146,14 @@ export function readGrantSettled(payload: unknown): { grantId: string } | null {
  * are never in the payload: the open list reads them from billing.
  */
 export function readLinksCaptured(payload: unknown): { grantId: string } | null {
+  return grantEvent(payload, RealtimeEvents.grantLinksCaptured);
+}
+
+/** The Grant an event of `type` names, or `null` for anything else — the shape every Grant-only event shares. */
+function grantEvent(payload: unknown, type: string): { grantId: string } | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as Record<string, unknown>;
-  if (p.type !== RealtimeEvents.grantLinksCaptured) return null;
+  if (p.type !== type) return null;
   return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
 }
 
@@ -159,10 +164,16 @@ export function readLinksCaptured(payload: unknown): { grantId: string } | null 
  * lift it now is the list's to say.
  */
 export function readFreezeChanged(payload: unknown): { grantId: string } | null {
-  if (!payload || typeof payload !== "object") return null;
-  const p = payload as Record<string, unknown>;
-  if (p.type !== RealtimeEvents.grantFreezeChanged) return null;
-  return typeof p.grantId === "string" && p.grantId !== "" ? { grantId: p.grantId } : null;
+  return grantEvent(payload, RealtimeEvents.grantFreezeChanged);
+}
+
+/**
+ * The Grant the owner's own renewal just paid for (F-305-d, realtime
+ * `contract.live-events.md`): the row re-reads its bag, its end and its plan
+ * from the list, never from the payment's answer (`contract.renewal.md` rule 6).
+ */
+export function readGrantRenewed(payload: unknown): { grantId: string } | null {
+  return grantEvent(payload, RealtimeEvents.grantRenewed);
 }
 
 /**

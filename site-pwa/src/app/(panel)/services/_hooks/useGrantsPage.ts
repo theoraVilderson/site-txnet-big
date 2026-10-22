@@ -7,7 +7,7 @@ import { userChannel } from "@/lib/realtime";
 import { usePanelRealtime } from "../../_context/PanelRealtimeContext";
 import { usePanelSession } from "../../_context/PanelSessionContext";
 import { flattenTexts } from "../../catalog/_lib/catalog-form";
-import { readFreezeChanged, readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-services";
+import { readFreezeChanged, readGrantRenewed, readGrantSettled, readGrantUsage, readLinksCaptured } from "../_lib/my-services";
 
 /** Billing's own default page size (`GrantService.listForUser`), sent explicitly. */
 export const PAGE_SIZE = 20;
@@ -183,8 +183,9 @@ export function useGrantsPage(
         const captured = readLinksCaptured(payload);
         if (captured && shownIds.current.includes(captured.grantId)) askConfigs([captured.grantId]);
         // A freeze moved on a row shown here: status, mode and who may lift it are billing's (F-0401-e).
-        const frozen = readFreezeChanged(payload);
-        if (frozen && shownIds.current.includes(frozen.grantId)) void quietRead();
+        // So did a renewal paid on one (F-305-f): its bag, end and plan.
+        const moved = readFreezeChanged(payload) ?? readGrantRenewed(payload);
+        if (moved && shownIds.current.includes(moved.grantId)) void quietRead();
         const usage = readGrantUsage(payload);
         if (usage) setRows((before) => withUsage(before, usage));
       },

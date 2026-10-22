@@ -3503,6 +3503,18 @@
       "cancel": "Cancel",
       "nextAt": "You can change the server again from {{at}}.",
       "moved": "Moved to {{region}}. Its new link appears here in a moment."
+    },
+    "renew": {
+      "action": "Renew",
+      "title": "Renew {{name}}",
+      "plans": "Renewal plan",
+      "current": "Current plan",
+      "unlimited": "Unlimited traffic",
+      "notSold": "This service's plan is no longer sold. Pick one of the plans below, or buy a new service in the shop.",
+      "toShop": "Go to the shop",
+      "loading": "Reading the plans…",
+      "again": "Get a new invoice",
+      "paid": "Renewal paid. Your service updates in a moment."
     }
   },
   "systems": {

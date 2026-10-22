@@ -71,6 +71,8 @@ export interface ShopInvoice {
   currencyCode: string;
   applied: Array<{ code: string; discount: string }>;
   rejected?: Array<{ code: string; reason: string; message: string }>;
+  /** What a renewal invoice adds to which Grant (F-305-c); `null` on a purchase. `bytes` a decimal string (C-02). */
+  renewal?: { grantId: string; bytes: string; days: number } | null;
   expiresAt: string;
 }
 

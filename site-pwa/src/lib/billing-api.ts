@@ -10,6 +10,7 @@ import { grantCalls } from "./billing/grants";
 import { manualPaymentCalls } from "./billing/manual-payments";
 import { transferCalls } from "./billing/manual-transfer";
 import { panelGroupCalls } from "./billing/panel-groups";
+import { renewalCalls } from "./billing/renewal";
 import { shopCalls } from "./billing/shop";
 import { systemsCalls } from "./billing/systems";
 import { walletCalls } from "./billing/wallet";
@@ -26,6 +27,7 @@ export * from "./billing/manual-payments";
 export * from "./billing/manual-transfer";
 export * from "./billing/migration-runs";
 export * from "./billing/panel-groups";
+export * from "./billing/renewal";
 export * from "./billing/reseller-grants";
 export * from "./billing/self-move-settings";
 export * from "./billing/shop";
@@ -37,6 +39,7 @@ export const billingApi = {
   ...walletCalls,
   ...depositCalls,
   ...shopCalls,
+  ...renewalCalls,
   ...grantCalls,
   ...configMoveCalls,
   ...manualPaymentCalls,
