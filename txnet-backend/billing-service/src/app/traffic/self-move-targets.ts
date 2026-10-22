@@ -1,4 +1,4 @@
-import { ActorType, ConfigStatus, PanelGroupMemberRole, Prisma } from '@prisma/client';
+import { ActorType, ConfigStatus, PanelGroupMemberRole, PanelGroupStrategy, Prisma } from '@prisma/client';
 
 import { moveTargetWhere } from '../payment/gift/config-move-selection';
 import { CONFIG_MOVE_OUT_ACTION, ConfigActionRefused } from './config-actions';
@@ -7,7 +7,8 @@ import { selfMoveSettingOf } from './self-move-setting';
 /** More members than one group ever has: the list is bounded all the same (C-28). */
 export const MAX_SELF_MOVE_TARGETS = 100;
 
-const HOUR_MS = 3_600_000;
+/** One hour, in the milliseconds a `Date` counts. */
+export const HOUR_MS = 3_600_000;
 
 /**
  * Where a user may move one of their configs, and from when (F-410-b). A panel
@@ -23,6 +24,14 @@ export type SelfMoveTargets = {
   panels: { id: string; region: string }[];
 };
 
+/** What a move reads before it acts (F-410-c): the targets, and what only the act needs. */
+export type SelfMoveState = {
+  view: SelfMoveTargets;
+  grantId: string;
+  /** Fulfilment places this Grant on every member of its group (`mirror`): a line moved off one would be put back. */
+  placedByGroup: boolean;
+};
+
 /**
  * The targets of a user's own move (F-410-b, `network/contract.config-move.md`
  * "Self-move"). **Only panels the product already allows** (D-63): the members
@@ -30,31 +39,50 @@ export type SelfMoveTargets = {
  * ADR-0127 decision 4) not draining, whose panel is a move target
  * (`moveTargetWhere`: accepted, not retired, shared or the Grant's tenant's),
  * and on which the Grant holds no live config. A Grant of no group has none,
- * and a `mirror` Grant — on every member already — is offered none either.
+ * and a `mirror` Grant — on every member by rule — is offered none either,
+ * even beside a member fulfilment has not reached yet.
  *
  * Another user's config reads as absent (`config_not_found`), as everywhere a
  * user names a config. Runs in the caller's tenant transaction; reads only.
  */
 export async function selfMoveTargets(tx: Prisma.TransactionClient, userId: string, configId: string, now: Date): Promise<SelfMoveTargets> {
+  return (await readSelfMove(tx, userId, configId, now)).view;
+}
+
+/** {@link selfMoveTargets}, with the Grant it read — the one home of the rules both the list and the move hold. */
+export async function readSelfMove(tx: Prisma.TransactionClient, userId: string, configId: string, now: Date): Promise<SelfMoveState> {
   const config = await tx.config.findUnique({
     where: { id: configId },
-    select: { userId: true, status: true, tenantId: true, grantId: true, grant: { select: { panelGroupId: true, variant: { select: { productId: true } } } } },
+    select: {
+      userId: true,
+      status: true,
+      tenantId: true,
+      grantId: true,
+      grant: { select: { panelGroupId: true, panelGroup: { select: { strategy: true } }, variant: { select: { productId: true } } } },
+    },
   });
   if (!config || config.userId !== userId) throw new ConfigActionRefused('config_not_found', configId);
   if (config.status === ConfigStatus.retired) throw new ConfigActionRefused('config_retired', configId);
 
+  const { grantId } = config;
+  const placedByGroup = config.grant.panelGroup?.strategy === PanelGroupStrategy.mirror;
   const setting = await selfMoveSettingOf(tx, config.tenantId, config.grant.variant?.productId ?? null);
   const enabled = setting.enabled.value;
   const cooldownHours = setting.cooldownHours.value;
-  if (!enabled) return { configId, enabled, cooldownHours, nextMoveAt: null, panels: [] };
+  if (!enabled) return { grantId, placedByGroup, view: { configId, enabled, cooldownHours, nextMoveAt: null, panels: [] } };
 
   const groupId = config.grant.panelGroupId;
+  const placeable = groupId !== null && !placedByGroup;
   return {
-    configId,
-    enabled,
-    cooldownHours,
-    nextMoveAt: await nextMoveAt(tx, config.grantId, cooldownHours, now),
-    panels: groupId === null ? [] : await groupTargets(tx, groupId, config.grantId, config.tenantId),
+    grantId,
+    placedByGroup,
+    view: {
+      configId,
+      enabled,
+      cooldownHours,
+      nextMoveAt: await nextMoveAt(tx, grantId, cooldownHours, now),
+      panels: placeable ? await groupTargets(tx, groupId, grantId, config.tenantId) : [],
+    },
   };
 }
 

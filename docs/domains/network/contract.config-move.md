@@ -170,9 +170,30 @@ user's config, a missing one and a retired one are 404 `config_not_found` /
 | Rule | Why |
 |---|---|
 | **Only panels the product already allows** (D-63): members of the Grant's own group (`grant.panelGroupId`, never the variant's — ADR-0127 decision 4), not `drain`, whose panel is a `moveTargetWhere` target (accepted, not retired, shared or the Grant's tenant's), at most 100, by region then id | a user can only go where their product is sold; a panel nothing provisions strands the config |
-| **Not a panel the Grant already holds a live config on** (not retired, not drained). A Grant of no group has no targets; a `mirror` Grant — on every member — has none either (user, 2026-10-22: targets stay the group's; self-move becomes useful once a one-panel strategy is built) | a Grant never gets two lines on one panel; the rule does not change when `priority` lands |
+| **Not a panel the Grant already holds a live config on** (not retired, not drained). A Grant of no group has no targets; a `mirror` Grant has none either, by its group's strategy — even beside a member fulfilment has not reached yet (user, 2026-10-22: targets stay the group's; self-move becomes useful once a one-panel strategy is built, F-410-g) | a Grant never gets two lines on one panel; a mirror's next fulfilment would put a moved line back |
 | **A panel is its id and region, never its name or address** (user, 2026-10-22), as the config list answers | an admin's name for a server can be internal |
 | **`nextMoveAt` = the Grant's last move by its own user** (`config_action_log` `move_out`, actor `user`, over the Grant's configs; index `(configId, createdAt)`) plus `cooldownHours`; null when none, when it has passed, or when the wait is 0. An admin's or a job's move does not count | a move retires the config and makes a new one, so the wait is the Grant's; the reseller's own moves are not the user's quota |
 | Switched off answers `enabled: false`, no targets, `nextMoveAt` null | the page hides the action instead of guessing |
 
 `self-move-targets.spec.ts` pins these.
+
+### The move (F-410-c)
+
+`POST /api/billing/traffic/configs/:configId/move` `{toPanelId}` — the owner
+only, capability `subscriptionLink`, budget `CONFIG_ACTION` (`user-configs.controller.ts`,
+`traffic/self-move.ts`). Answers **200** `{retiredConfigId, configId, panel{id,
+region}, nextMoveAt}`: the new config, where it is served, and the next move
+allowed (null = now, for a wait of 0). Refusals carry `reason`; `move_cooldown`
+also `facts.nextAtMs`, as a per-day cap does.
+
+| Rule | Why |
+|---|---|
+| **Only a panel F-410-b offers**: the list and the act are one read (`readSelfMove`), so anything else — the panel it is on, a draining member, another group's — is 404 `not_a_target` | the action cannot reach where the list does not |
+| Refused before any write, in this order: 404 `config_not_found` (another user's, missing, retired); 409 `move_disabled` (switched off); 409 `placed_by_group` (a `mirror` Grant); 409 `move_cooldown` (inside the wait) | the page names each; nothing half-moved |
+| **The Grant is locked first** (`FOR UPDATE`), then read | the wait is the Grant's: two of its configs moved at once would both pass a check read before the other committed |
+| The act is `ConfigActions.move`, actor `user`: the old row retires (`move_out`, what the next wait counts from), a new one is provisioned on the target. No audit row and no notice — the user did it | one act for every move; the user's own history is `config_action_log` |
+| **The new link reaches the page by `network.grant.linksCaptured`** when network-service captures it (F-111-l, C-14); nothing is announced here | the page re-reads the Grant's configs; it never polls |
+| A refusal of `ConfigActions` meanwhile (`config_changed`, the target retired) is 409 and moves nothing; `grant_not_active` is 409 too | the user reloads the list and chooses again |
+
+`self-move.spec.ts` pins these. Until F-410-g every group is `mirror`, so a
+group's Grant is refused `placed_by_group` (user, 2026-10-22).

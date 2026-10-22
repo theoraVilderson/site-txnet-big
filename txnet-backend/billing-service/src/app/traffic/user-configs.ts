@@ -6,12 +6,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService, type ConfigActionRejection } from './config-actions';
 import { nameGrantLines } from './line-names';
 import { foldConfigText } from './config-text';
+import { selfMove, type SelfMoveResult } from './self-move';
 import { selfMoveTargets, SelfMoveTargets } from './self-move-targets';
 
 /**
  * What a user may do to their own config from the panel: a new link, and
  * nothing else. Enable/disable is an operator's switch (user, 2026-09-23); a
- * move is F-410-c, to a panel `moveTargets` answers (F-410-b); a delete is gone too
+ * move is its own route (`move`, F-410-c) to a panel `moveTargets` answers; a delete is gone too
  * (F-027-ac1, user 2026-09-30) — it cannot be undone, and a user who ticked
  * every config was left with a paid service and no way to connect. Retiring is
  * an admin's step (`ADMIN_CONFIG_ACTIONS`).
@@ -142,9 +143,14 @@ export class UserConfigsService {
     private readonly actions: ConfigActionsService,
   ) {}
 
-  /** Where the user may move one of their configs, and from when (F-410-b); the move itself is F-410-c. */
+  /** Where the user may move one of their configs, and from when (F-410-b). */
   moveTargets(userId: string, configId: string): Promise<SelfMoveTargets> {
     return tenantTransaction(this.prisma, (tx) => selfMoveTargets(tx, userId, configId, new Date()));
+  }
+
+  /** The user moves one of their configs to one of those panels (F-410-c); one config, one transaction. */
+  move(userId: string, configId: string, toPanelId: string): Promise<SelfMoveResult> {
+    return tenantTransaction(this.prisma, (tx) => selfMove(tx, this.actions, { userId, configId, toPanelId, now: new Date() }));
   }
 
   /** A Grant's live configs, oldest first. Retired ones are gone from the user's view: they deleted them. */

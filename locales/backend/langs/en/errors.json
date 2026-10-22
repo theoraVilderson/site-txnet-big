@@ -217,6 +217,15 @@
     "spendingCapInvalid": "A cap needs a name of 1 to 40 characters, an amount above zero with at most two decimals, and a period of none or monthly.",
     "configNotFound": "No such config in your account.",
     "selfMoveSettingsInvalid": "Choose on, off or inherit, and a wait of 0 to 8760 hours or inherit.",
+    "selfMove": {
+      "invalid": "Choose one of the servers offered for this config.",
+      "off": "Changing the server yourself is not available in this store.",
+      "placedByGroup": "This service is already served from every server of its plan, so there is nowhere to move it.",
+      "cooldown": "You changed this service's server a short while ago. The next change is allowed later.",
+      "notATarget": "That server is not one this config can move to. Reload the list and choose again.",
+      "notActive": "This service is not active, so its server cannot be changed now.",
+      "changed": "This config changed a moment ago. Please try again."
+    },
     "productNotFound": "That product is not in your catalog.",
     "coupon": {
       "notFound": "This discount code is not valid.",

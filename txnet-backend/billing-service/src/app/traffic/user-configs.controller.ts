@@ -7,10 +7,36 @@ import { RateLimit } from '../request/rate-limit';
 import { ConfigActionRefused } from './config-actions';
 import { GrantPeriodRefused, GrantPeriodService } from './grant-period';
 import { GrantUsageService } from './grant-usage';
+import { SelfMoveRefused, type SelfMoveRejection } from './self-move';
 import { UserConfigsService } from './user-configs';
-import { ConfigActionBody, configActionSchema, ConfigLabelBody, configLabelSchema } from './user-configs.schema';
+import { ConfigActionBody, configActionSchema, ConfigLabelBody, configLabelSchema, SelfMoveBody, selfMoveSchema } from './user-configs.schema';
 
 const E = BackendI18nKeys.errors.billing;
+
+/** Each self-move refusal as the user is told it (F-410-c); `not_a_target` is 404, the rest 409. */
+const SELF_MOVE_KEYS: Record<SelfMoveRejection, string> = {
+  move_disabled: E.selfMove.off,
+  placed_by_group: E.selfMove.placedByGroup,
+  move_cooldown: E.selfMove.cooldown,
+  not_a_target: E.selfMove.notATarget,
+};
+
+/** A refusal of the move as its HTTP answer; anything that is not one is rethrown, not told. */
+function selfMoveError(e: unknown): unknown {
+  if (e instanceof SelfMoveRefused) {
+    // The wait's end rides as a figure, as every per-day cap's does (`facts.nextAtMs`).
+    const facts = e.nextMoveAt ? { facts: { nextAtMs: Date.parse(e.nextMoveAt) } } : {};
+    const body = { i18nKey: SELF_MOVE_KEYS[e.reason], reason: e.reason, message: `${e.name}: ${e.message}`, ...facts };
+    return e.reason === 'not_a_target' ? new NotFoundException(body) : new ConflictException(body);
+  }
+  if (!(e instanceof ConfigActionRefused)) return e;
+  const payload = { reason: e.reason, message: `${e.name}: ${e.message}` };
+  // A retired config is no longer the user's to move: the same 404 as a missing one.
+  if (e.reason === 'config_not_found' || e.reason === 'config_retired') return new NotFoundException({ i18nKey: E.configNotFound, ...payload });
+  if (e.reason === 'grant_not_active') return new ConflictException({ i18nKey: E.selfMove.notActive, ...payload });
+  // config_changed, or a target retired since it was read: try again from a fresh list.
+  return new ConflictException({ i18nKey: E.selfMove.changed, ...payload });
+}
 
 /**
  * A user's own configs (F-027-ac): the list under one Grant, and the action
@@ -118,6 +144,28 @@ export class UserConfigsController {
         throw new NotFoundException({ i18nKey: E.configNotFound, reason: e.reason, message: `${e.name}: ${e.message}` });
       }
       throw e;
+    }
+  }
+
+  /**
+   * The user moves this config to a panel `move-targets` offered (F-410-c):
+   * at once, free, no approval. Answers the new config's id and region and the
+   * next allowed move; its lines arrive by `network.grant.linksCaptured`.
+   * Under `CONFIG_ACTION`: a write of the user's own config.
+   */
+  @TenantCapability('subscriptionLink')
+  @Post('configs/:configId/move')
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.CONFIG_ACTION, identityOf(req).userId),
+    configKey: 'CONFIG_ACTION_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async move(@Param('configId', ParseUUIDPipe) configId: string, @Body(new ZodValidationPipe(selfMoveSchema)) body: SelfMoveBody, @Req() req: Request) {
+    try {
+      return await this.configs.move(identityOf(req).userId, configId, body.toPanelId);
+    } catch (e) {
+      throw selfMoveError(e);
     }
   }
 

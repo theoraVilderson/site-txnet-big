@@ -38,6 +38,13 @@ export const configLabelSchema = z.object({
 
 export type ConfigLabelBody = z.infer<typeof configLabelSchema>;
 
+/** The body of `POST /api/billing/traffic/configs/:configId/move` (F-410-c): one panel `move-targets` offered. */
+export const selfMoveSchema = z.object({
+  toPanelId: z.string({ message: E.selfMove.invalid }).uuid({ message: E.selfMove.invalid }),
+});
+
+export type SelfMoveBody = z.infer<typeof selfMoveSchema>;
+
 /**
  * The body of `POST /api/billing/tenants/:tenantId/users/:userId/configs/actions`
  * (F-311-g): an admin's action on 1..50 of that user's configs. A disable
