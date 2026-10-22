@@ -216,6 +216,8 @@
     "serviceLabelInvalid": "A service's name is 1 to 40 characters.",
     "spendingCapInvalid": "A cap needs a name of 1 to 40 characters, an amount above zero with at most two decimals, and a period of none or monthly.",
     "configNotFound": "No such config in your account.",
+    "selfMoveSettingsInvalid": "Choose on, off or inherit, and a wait of 0 to 8760 hours or inherit.",
+    "productNotFound": "That product is not in your catalog.",
     "coupon": {
       "notFound": "This discount code is not valid.",
       "notADiscount": "This is a gift code. Redeem it on the gift code page.",

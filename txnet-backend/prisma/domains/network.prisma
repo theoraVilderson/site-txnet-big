@@ -722,6 +722,42 @@ model GrantRateLimit {
   @@schema("network")
 }
 
+/// Whether a tenant's users may move their own config to another server, and
+/// how many hours they wait between two moves (F-410-a, D-63). One row per
+/// tenant; a null is "not set here" and the platform's default answers
+/// (`PLATFORM_SELF_MOVE_DEFAULTS`: on, 24 h). A product's override is
+/// `ConfigSelfMoveProductSetting`; both resolve as the selling settings do.
+model ConfigSelfMoveSetting {
+  tenantId        String   @id @db.Uuid
+  enabled         Boolean?
+  /// 0..8760 (CHECK); 0 = no wait.
+  cooldownHours   Int?
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  @@map("config_self_move_setting")
+  @@schema("network")
+}
+
+/// A tenant's self-move override for one product (F-410-a): its own, or a
+/// platform product it sells. Over the tenant's row, setting by setting.
+model ConfigSelfMoveProductSetting {
+  tenantId        String   @db.Uuid
+  productId       String   @db.Uuid
+  enabled         Boolean?
+  /// 0..8760 (CHECK); 0 = no wait.
+  cooldownHours   Int?
+  updatedByUserId String?  @db.Uuid
+  updatedAt       DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, productId])
+  @@index([productId])
+  @@map("config_self_move_product_setting")
+  @@schema("network")
+}
+
 /// Where a variant's Grants are provisioned (§7.3, F-027-bk). `tenantId` null
 /// is a platform group: it holds platform panels only and serves anyone's
 /// variants. A tenant's group holds its own panels and platform ones, and

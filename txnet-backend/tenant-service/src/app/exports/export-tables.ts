@@ -204,6 +204,8 @@ export const EXPORT_TABLES: Readonly<Record<Prisma.ModelName, ExportRule>> = {
   ConfigCounterState: none('operational'),
   ConfigMoveJob: OWN,
   ConfigMoveJobItem: OWN,
+  ConfigSelfMoveProductSetting: OWN,
+  ConfigSelfMoveSetting: OWN,
   GrantRateLimit: via('grantId', 'Grant'),
   InboundRelease: OWN,
   IpAccessRule: none('platform'),

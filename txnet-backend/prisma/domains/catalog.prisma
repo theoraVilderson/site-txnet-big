@@ -178,6 +178,8 @@ model Product {
   packages            PackageProduct[]
   /// The groups it is sold to; none = every user (PT-1-b, ADR-0142 (4)).
   audience            ProductAudience[]
+  /// Tenants' self-move overrides for it (F-410-a).
+  selfMoveSettings    ConfigSelfMoveProductSetting[]
 
   /// The composite key `product_audience` points at, so an audience row is its product's tenant's.
   @@unique([id, tenantId])

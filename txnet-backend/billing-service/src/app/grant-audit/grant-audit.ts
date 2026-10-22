@@ -3,6 +3,7 @@ import { AdminAction, AuditTargetType, Prisma } from '@prisma/client';
 import { emitFreezeChanged } from '../entitlement/freeze';
 import { adminNoticeOf, configNoticeOf, emitAdminNotice, ownerOf } from './admin-notice';
 import type { FreezeSettings } from '../entitlement/freeze-settings';
+import type { SelfMoveOwn } from '../traffic/self-move-setting';
 
 /**
  * An admin's act on a user's Grant or config, written down (F-311-r, audit
@@ -185,6 +186,22 @@ export async function auditCompensationCap(
  */
 export async function auditFreezeSettings(tx: Prisma.TransactionClient, actor: AuditActor, tenantId: string, before: FreezeSettings, after: FreezeSettings): Promise<void> {
   await write(tx, actor, tenantId, 'grant_freeze_settings_set', AuditTargetType.tenant, tenantId, before, after, null);
+}
+
+/**
+ * A tenant's self-move setting, or one product's override of it, changed
+ * (F-410-a): that layer's own values before and after, null = inherited.
+ * Nobody is told: it changes what a user may do next, not what they hold.
+ */
+export async function auditSelfMoveSettings(
+  tx: Prisma.TransactionClient,
+  actor: AuditActor,
+  tenantId: string,
+  target: { type: typeof AuditTargetType.tenant | typeof AuditTargetType.product; id: string },
+  before: SelfMoveOwn,
+  after: SelfMoveOwn,
+): Promise<void> {
+  await write(tx, actor, tenantId, 'config_self_move_settings_set', target.type, target.id, before, after, null);
 }
 
 /**

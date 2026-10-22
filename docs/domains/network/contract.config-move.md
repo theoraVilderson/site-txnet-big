@@ -2,11 +2,11 @@
 id: network
 layer: domain
 status: active
-version: 2
-updated: 2026-10-17
+version: 3
+updated: 2026-10-22
 ---
 
-# Moving many configs as a job (F-311-ad), releasing an inbound (F-027-es), and Grants to another group (F-027-et)
+# Moving many configs as a job (F-311-ad), releasing an inbound (F-027-es), Grants to another group (F-027-et), and a user's own move (F-410)
 
 A topic file of `contract.md` (§10), beside [contract.provisioning.md](contract.provisioning.md),
 whose `ConfigActions.move` is the one act every move here runs. A reseller's
@@ -121,3 +121,38 @@ One answers `{grantId, fromGroupId, toGroupId, kept, moved}`; `count` answers
 | Written down against the Grant, `grant_group_move` (`{panelGroupId}` before and after, `{kept, moved}`), no notice of its own; a job's start and cancel as above; its list is `to_group` jobs only, as a move job's is `to_panel` only | "who put this user on that group" is one row |
 
 `grant-regroup.spec.ts` pins the act; the selection is `grant-regroup-selection.ts`.
+
+## Self-move — a user moves their own config (F-410, D-63)
+
+A user moves one of their configs to another server, at once, free, with no
+approval — between the panels their product already allows, and not twice
+inside the wait. The act is F-410-c (`ConfigActions.move`, actor the user); the
+setting it moves by is F-410-a, below.
+
+### The setting (F-410-a)
+
+`network.config_self_move_setting` — key `tenantId`; `enabled`, `cooldownHours`
+(0–8760, CHECK; 0 = no wait), `updatedByUserId`. `network.config_self_move_product_setting`
+— key `(tenantId, productId)`, the same two values: the tenant's override for one
+product, its own or a platform product it sells (FK, `ON DELETE CASCADE`).
+Tenant RLS on both (migration `20261022000700_a_user_may_move_a_config_by_its_tenants_setting`).
+Code: `traffic/self-move-setting.ts` (the resolver),
+`self-move-settings.service.ts` / `.controller.ts` / `.schema.ts`.
+
+| Route, under `/api/billing/tenants/:tenantId/self-move-settings` | Door | Answers |
+|---|---|---|
+| `GET` | `read` | the view: `{platformDefault, tenant, effective, products[{productId, enabled, cooldownHours, effective}]}` (at most 500 overrides) |
+| `PUT` `{enabled, cooldownHours}` | `staffWrite` | the view, after the tenant's layer is set |
+| `PUT …/products/:productId` `{enabled, cooldownHours}` | `staffWrite` | the view, after that product's override is set; 404 `product_not_found` |
+
+Each value of a body is required and may be `null` (inherit). The door is
+`ResellerAccess.for('catalog.manage').runIncludingPlatform`, as a selling
+choice; its refusals are `resellerRefusal`'s. Budgets: catalog management's.
+
+| Rule | Why |
+|---|---|
+| **Resolved product -> tenant -> platform, setting by setting** (`resolveLayers`, the selling settings' rule): a null is "not set here"; `false` and `0` are values. The platform answers on, 24 h (`PLATFORM_SELF_MOVE_DEFAULTS`). Each effective value names its layer | every Grant moves by some answer, and the page says "inherited" without computing it |
+| A product is the tenant's own or the platform's (the query names both, as RLS does), else `product_not_found` before any write | a reseller cannot hang a row on another reseller's product |
+| A layer set to nothing (both null) is deleted; the same values again write nothing. Every change is one `config_self_move_settings_set` row, target `tenant` or `product`, the layer's own values before and after; nobody is told | the history says who switched it off; a no-op leaves no noise |
+
+`self-move-settings.spec.ts` pins these.

@@ -232,6 +232,8 @@ enum AdminAction {
   // archive handed out as a signed URL — the delivery itself is audited.
   tenant_data_export_request
   tenant_data_export_delivery
+  // F-410-a. A tenant's self-move setting, or one product's override of it.
+  config_self_move_settings_set
 
   @@schema("audit")
 }

@@ -1,5 +1,7 @@
 import { ConfigProtocol, InboundPlacement } from '@prisma/client';
 
+import { LayerValues, Resolved, resolveLayers } from './layered-setting';
+
 /**
  * A panel's selling settings, resolved in three layers (F-027-cg, ADR-0090
  * decision 2): the group membership, then the panel, then the platform
@@ -26,13 +28,12 @@ export type SellingValues = {
   inboundsPerBuyer: number;
 };
 
-export type SellingSetting = keyof SellingValues;
 export type SellingLayer = 'member' | 'panel' | 'platform';
 
 /** One layer's own values: null (or absent) = not set at this layer. */
-export type SellingLayerValues = { [K in SellingSetting]?: SellingValues[K] | null };
+export type SellingLayerValues = LayerValues<SellingValues>;
 
-export type EffectiveSellingSettings = { [K in SellingSetting]: { value: SellingValues[K]; layer: SellingLayer } };
+export type EffectiveSellingSettings = Resolved<SellingValues, SellingLayer>;
 
 /**
  * What a panel sells by when neither it nor the membership says otherwise.
@@ -50,20 +51,14 @@ export const PLATFORM_SELLING_DEFAULTS: Readonly<SellingValues> = Object.freeze(
 
 /** Each setting's effective value and the layer it came from. `member` is null for the panel's own view. */
 export function effectiveSellingSettings(member: SellingLayerValues | null, panel: SellingLayerValues): EffectiveSellingSettings {
-  const pick = <K extends SellingSetting>(key: K): { value: SellingValues[K]; layer: SellingLayer } => {
-    const own = member?.[key];
-    if (own !== null && own !== undefined) return { value: own as SellingValues[K], layer: 'member' };
-    const panels = panel[key];
-    if (panels !== null && panels !== undefined) return { value: panels as SellingValues[K], layer: 'panel' };
-    return { value: PLATFORM_SELLING_DEFAULTS[key], layer: 'platform' };
-  };
-  return {
-    inboundPlacement: pick('inboundPlacement'),
-    maxClients: pick('maxClients'),
-    priority: pick('priority'),
-    weight: pick('weight'),
-    inboundsPerBuyer: pick('inboundsPerBuyer'),
-  };
+  return resolveLayers(
+    [
+      ['member', member],
+      ['panel', panel],
+    ],
+    PLATFORM_SELLING_DEFAULTS,
+    'platform',
+  );
 }
 
 /** A panel's inbound ids in the panel's own order: `2` before `10`. */

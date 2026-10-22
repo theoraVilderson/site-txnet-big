@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { UsageModule } from '../usage/usage.module';
 import { WalletModule } from '../wallet/wallet.module';
@@ -15,6 +16,8 @@ import { GrantRegroupActs } from './grant-regroup';
 import { InboundReleaseActs } from './inbound-release';
 import { BlockRequestQueue } from './block-request.queue';
 import { RemainderCreditService } from './remainder-credit';
+import { SelfMoveSettingsController } from './self-move-settings.controller';
+import { SelfMoveSettingsService } from './self-move-settings.service';
 import { UserConfigsController } from './user-configs.controller';
 import { UserConfigsService } from './user-configs';
 import { GrantPeriodService } from './grant-period';
@@ -41,12 +44,13 @@ import { VpnReserveSweep } from './vpn-reserve';
  * `GroupFulfilmentService` places a panel group's configs through it and
  * activates the Grant (F-027-bl), asked by `worker-service` over `fulfil-due`;
  * `GroupDrainService` retires a drained member's configs through it (F-027-bm),
- * over `drain-due`.
+ * over `drain-due`. `SelfMoveSettingsService` is the reseller's switch and
+ * wait for a user's own move (F-410-a), behind the catalog door.
  */
 @Module({
   imports: [WalletModule, UsageModule],
-  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController],
-  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GrantPeriodService, GroupFulfilmentService, GroupDrainService, InboundReleaseActs, GrantRegroupActs, GrantCloseService, VpnReserveSweep],
+  controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController, SelfMoveSettingsController],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GrantPeriodService, GroupFulfilmentService, GroupDrainService, InboundReleaseActs, GrantRegroupActs, GrantCloseService, VpnReserveSweep, SelfMoveSettingsService, ResellerAccess],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService, InboundReleaseActs, GrantRegroupActs],
 })
 export class TrafficModule {}
