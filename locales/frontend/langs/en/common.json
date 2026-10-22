@@ -5466,8 +5466,8 @@
       "spin_in_progress": "Your spin is already being processed."
     },
     "result": {
-      "bonus_traffic_gb": "You won {{value}} GB on your service.",
-      "extra_days": "You won {{value}} extra days on your service.",
+      "bonus_traffic_gb": "You won {{value}} GB — added to your service {{service}}.",
+      "extra_days": "You won {{value}} extra days — added to your service {{service}}.",
       "discount_coupon": "You won a {{value}}% discount coupon.",
       "free_grant": "You won a free service: {{label}}.",
       "empty": "No prize this time. Better luck next spin!",

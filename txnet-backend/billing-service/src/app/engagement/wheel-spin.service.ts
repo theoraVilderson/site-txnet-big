@@ -171,7 +171,7 @@ export type SpinResult = {
   /** The slot the client animates to; null for a refused spin. */
   position: number | null;
   prize: { position: number; label: string; prizeType: SpinPrizeType; prizeValue: string } | null;
-  reward: { grantId: string | null; coupon: RewardIssued['coupon'] } | null;
+  reward: { grantId: string | null; service: RewardIssued['service']; coupon: RewardIssued['coupon'] } | null;
   replay: boolean;
 };
 
@@ -397,7 +397,7 @@ export class WheelSpinService {
       seq,
       position: landingOf(cfg, given, picked),
       prize: given ? prizeOf(given) : null,
-      reward: reward ? { grantId: reward.grantId, coupon: reward.coupon } : null,
+      reward: reward ? { grantId: reward.grantId, service: reward.service, coupon: reward.coupon } : null,
       replay: false,
     };
   }
@@ -497,7 +497,7 @@ export class WheelSpinService {
       seq: a.seq,
       position: picked ? landingOf(cfg, given, picked) : null,
       prize: given ? prizeOf(given) : null,
-      reward: reward ? { grantId: reward.grantId, coupon: reward.coupon } : null,
+      reward: reward ? { grantId: reward.grantId, service: reward.service, coupon: reward.coupon } : null,
       replay: true,
     };
   }

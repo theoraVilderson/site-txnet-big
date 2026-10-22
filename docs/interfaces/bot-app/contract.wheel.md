@@ -33,7 +33,8 @@ they serve are engagement's ([contract.md](../../domains/engagement/contract.md)
    answer (no `error.reason`) or `spin_in_progress` keeps it and offers Spin
    again, so the retry is the same spin; any other answer ends the
    conversation. A Spin whose state expired opens a fresh screen, never a spin.
-5. **The prize is told in the chat**, by kind; a coupon with its code. A
+5. **The prize is told in the chat**, by kind; a coupon with its code; GB and
+   days with the service they went to (`reward.service`, F-707-y). A
    recorded refusal (`200`) and an unrecorded one (`4xx`) are both told by
    the reason's own sentence (`wheel.refusals.*`, the same set as the panel's);
    an unknown reason falls back to billing's translated `msg`.

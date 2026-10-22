@@ -5,6 +5,7 @@ import { BillingApiClient } from '../billing-api/billing-api.client';
 import type { SpinAnswer, UserWheel } from '../billing-api/engagement.types';
 import { ChatContext, NavState } from '../conversation/nav.types';
 import { BotKeys } from '../locale/bot-keys';
+import { LocaleService } from '../locale/locale.service';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { ACTIONS } from './views';
@@ -59,12 +60,20 @@ function harness(o: { wheel?: unknown; spin?: unknown; services?: number } = {})
     rewardTarget: vi.fn().mockResolvedValue(ok({ chosenGrantId: null, services: Array.from({ length: o.services ?? 0 }, (_, i) => ({ id: `g-${i}` })) })),
   } as unknown as Mocked<BillingApiClient>;
   const sessions = { get: vi.fn().mockResolvedValue({ refreshToken: 'r-1', signedInAt: 0 }), save: vi.fn(), clear: vi.fn() } as unknown as BotSessionStore;
-  return { billing, flow: new WheelFlow(billing, new ChatAccess(auth, sessions)) };
+  const locale = { getKey: () => undefined, getDefaultLanguage: () => 'fa' } as unknown as LocaleService;
+  return { billing, flow: new WheelFlow(billing, new ChatAccess(auth, sessions), locale) };
 }
 
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
 
 describe('WheelFlow', () => {
+  it('says which service the GB went to, as My services names it (F-707-y)', async () => {
+    const spin = ok(answer({ reward: { grantId: 'g-1', service: { label: 'Family', sku: 'GOLD-50', nameKey: null }, coupon: null } }));
+    const { flow } = harness({ spin });
+    const r = await flow.handle(ctx, { flow: 'wheel', step: 'wheel.offer', data: { requestId: 'k-1' } }, ACTIONS.wheelSpin);
+    expect(r.view.body.values?.service).toEqual({ raw: 'Family' });
+  });
+
   it('marks a slot whose prize cannot reach this user, and says what the mark means (F-707-v)', async () => {
     const prizes = [{ ...WHEEL.prizes[0], oddsPercent: '0.00', reachable: false }, { ...WHEEL.prizes[1], oddsPercent: '100.00' }];
     const r = await harness({ wheel: ok({ ...WHEEL, prizes }) }).flow.start(ctx);
@@ -107,7 +116,7 @@ describe('WheelFlow', () => {
     const state: NavState = { flow: 'wheel', step: 'wheel.offer', data: { requestId: 'req-1' } };
     const r = await flow.handle(ctx, state, ACTIONS.wheelSpin);
     expect(billing.spinWheel).toHaveBeenCalledWith('req-1', expect.objectContaining({ accessToken: 'access-1', platform: 'telegram' }));
-    expect(r.view.body).toEqual({ key: BotKeys.wheel.won.bonus_traffic_gb, values: { value: '1.5', label: '1 GB', code: '' } });
+    expect(r.view.body).toEqual({ key: BotKeys.wheel.won.bonus_traffic_gb, values: { value: '1.5', label: '1 GB', code: '', service: { key: BotKeys.services.unnamed } } });
     expect(r.nextState).toBeNull();
   });
 

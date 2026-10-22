@@ -26,7 +26,11 @@ import { issueReward, RewardRefused } from './reward-issuer';
 
 vi.mock('./reward-issuer', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./reward-issuer')>()),
-  issueReward: vi.fn(async () => ({ rewardId: 'rw-1', prizeType: 'bonus_traffic_gb', replay: false, grantId: 'g-1', coupon: null })),
+  // GB names the service it went to (F-707-y); a coupon names none.
+  issueReward: vi.fn(async (_tx: unknown, _g: unknown, input: { prize: { prizeType: string } }) => ({
+    rewardId: 'rw-1', prizeType: input.prize.prizeType, replay: false, grantId: 'g-1', coupon: null,
+    service: input.prize.prizeType === 'bonus_traffic_gb' ? { label: 'Family', sku: 'GOLD-50', nameKey: 'catalog.p.gold' } : null,
+  })),
 }));
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
@@ -99,7 +103,10 @@ function build(o: { status?: LotteryStatus; winners?: Winner[]; users?: Record<s
   return { service, winners, events, savepoints };
 }
 
-beforeEach(() => vi.mocked(issueReward).mockClear());
+// Braced: a function returned from beforeEach is run as its teardown, and mockClear returns the mock.
+beforeEach(() => {
+  vi.mocked(issueReward).mockClear();
+});
 
 describe('LotteryDeliveryService.deliverDue', () => {
   it('gives each winner its prize, as the lottery, by its admin, and tells the winner', async () => {
@@ -118,7 +125,7 @@ describe('LotteryDeliveryService.deliverDue', () => {
       ['w-4', LotteryWinnerDelivery.pending, null],
     ]);
     expect(events).toEqual([
-      expect.objectContaining({ type: OutboxEventType.LOTTERY_WON, payload: { tenantId: TENANT, userId: 'u-1', lotteryId: LOT, title: 'Autumn draw', prize: '20 GB', rank: 1 } }),
+      expect.objectContaining({ type: OutboxEventType.LOTTERY_WON, payload: { tenantId: TENANT, userId: 'u-1', lotteryId: LOT, title: 'Autumn draw', prize: '20 GB', rank: 1, serviceLabel: 'Family', serviceSku: 'GOLD-50', serviceNameKey: 'catalog.p.gold' } }),
       expect.objectContaining({ type: OutboxEventType.LOTTERY_WON, payload: { tenantId: TENANT, userId: 'u-2', lotteryId: LOT, title: 'Autumn draw', prize: '10% off', rank: 2 } }),
     ]);
 
@@ -164,7 +171,7 @@ describe('LotteryDeliveryService.deliverDue', () => {
   it("keeps a winner pending, not passed on, when the refusal is the tenant's", async () => {
     vi.mocked(issueReward).mockImplementation(async (_tx, _g, input) => {
       if (input.referenceId === 'w-2') throw new RewardRefused('coupon_template_unavailable');
-      return { rewardId: 'rw', prizeType: input.prize.prizeType, replay: false, grantId: null, coupon: null };
+      return { rewardId: 'rw', prizeType: input.prize.prizeType, replay: false, grantId: null, service: null, coupon: null };
     });
     const { service, winners, events } = build();
     expect(await service.deliverDue(AT)).toEqual({ scanned: 1, delivered: 1, passedOn: 0, held: 1, failed: 0 });
@@ -172,7 +179,7 @@ describe('LotteryDeliveryService.deliverDue', () => {
     expect(winners.find((w) => w.id === 'w-3')).toMatchObject({ prizeId: null });
     expect(events).toHaveLength(1);
     vi.mocked(issueReward).mockReset();
-    vi.mocked(issueReward).mockImplementation(async () => ({ rewardId: 'rw-1', prizeType: 'bonus_traffic_gb', replay: false, grantId: 'g-1', coupon: null }));
+    vi.mocked(issueReward).mockImplementation(async () => ({ rewardId: 'rw-1', prizeType: 'bonus_traffic_gb', replay: false, grantId: 'g-1', service: null, coupon: null }));
   });
 
   it('touches only a drawn lottery', async () => {

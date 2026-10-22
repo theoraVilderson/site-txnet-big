@@ -63,8 +63,13 @@ export type RewardIssued = {
   replay: boolean;
   /** The Grant the GB or days went to, or the free Grant. */
   grantId: string | null;
+  /** The service GB or days went to, named as My services names it, so the user is told where (F-707-y); `null` for any other prize. */
+  service: PrizeServiceName | null;
   coupon: { id: string; code: string; percent: string; expiresAt: Date } | null;
 };
+
+/** The buyer's own name for a service (F-307-x), else its catalog name key, else its sku. */
+export type PrizeServiceName = { label: string | null; sku: string | null; nameKey: string | null };
 
 export type RewardInput = {
   tenantId: string;
@@ -116,6 +121,13 @@ async function targetGrant(tx: Prisma.TransactionClient, input: RewardInput): Pr
   // The user's choice, when it can take this prize; a gone or unfit one is automatic, never a refusal.
   const chosen = await tx.rewardTarget.findUnique({ where: { tenantId_userId: { tenantId: input.tenantId, userId: input.userId } }, select: { grantId: true } });
   return fit.find((g) => g.id === chosen?.grantId) ?? fit[0];
+}
+
+/** GB and days name their service; the other kinds give no service a user already holds. */
+async function serviceOf(tx: Prisma.TransactionClient, kind: SpinPrizeType, grantId: string | null): Promise<PrizeServiceName | null> {
+  if (!grantId || !(kind === SpinPrizeType.bonus_traffic_gb || kind === SpinPrizeType.extra_days)) return null;
+  const g = await tx.grant.findUnique({ where: { id: grantId }, select: { userLabel: true, variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } } });
+  return g ? { label: g.userLabel, sku: g.variant?.sku ?? null, nameKey: g.variant ? (g.variant.nameKey ?? g.variant.product.nameKey) : null } : null;
 }
 
 function couponCode(): string {
@@ -201,6 +213,7 @@ export async function issueReward(tx: Prisma.TransactionClient, grants: GrantSer
       prizeType: prior.prizeType,
       replay: true,
       grantId: prior.grantId,
+      service: await serviceOf(tx, prior.prizeType, prior.grantId),
       coupon: coupon ? { id: coupon.id, code: coupon.code, percent: percentText(new Prisma.Decimal(coupon.discountValue)), expiresAt: coupon.expiresAt as Date } : null,
     };
   }
@@ -256,5 +269,5 @@ export async function issueReward(tx: Prisma.TransactionClient, grants: GrantSer
     data: { tenantId: input.tenantId, source: input.source, referenceId: input.referenceId, userId: input.userId, prizeType: prize.prizeType, ...record },
     select: { id: true },
   });
-  return { rewardId: row.id, prizeType: prize.prizeType, replay: false, grantId: record.grantId ?? null, coupon };
+  return { rewardId: row.id, prizeType: prize.prizeType, replay: false, grantId: record.grantId ?? null, service: await serviceOf(tx, prize.prizeType, record.grantId ?? null), coupon };
 }

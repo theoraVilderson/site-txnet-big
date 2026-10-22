@@ -313,7 +313,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   // F-707-m: a lottery winner was given its prize — to that winner, once per place.
   lotteryWon: {
     read: (ns) => ns?.engagement?.lotteryWon,
-    fallback: '🎉 You won {{prize}} in "{{title}}". It has been added to your account. The full result, and how to check the draw yourself, is on the lottery\'s page.',
+    fallback: '🎉 You won {{prize}} in "{{title}}". It has been added {{where}}. The full result, and how to check the draw yourself, is on the lottery\'s page.',
     inbox: { read: (ns) => ns?.engagement?.lotteryWonTitle, fallback: 'You won in "{{title}}"' },
     many: {
       read: (ns) => ns?.engagement?.lotteryWonMany,
@@ -900,7 +900,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
     },
   },
   // F-038-g3 (ADR-0109 point 11): an AI suggestion, always labelled as one. `service` and `plan` are
-  // named here from billing's keys (`withSuggestionNames`); the price is billing's price in force.
+  // named here from billing's keys (`withServiceNames`); the price is billing's price in force.
   suggestionRenew: {
     read: (ns) => ns?.suggestion?.renew,
     fallback: '💡 Suggestion: {{service}} ends in {{days}} days. Renew it to keep it running without a break — {{price}} for the next period.',
@@ -1038,6 +1038,11 @@ const TRAILING_LINES: ReadonlyArray<Text & { param: string }> = [
 const LISTED_SERVICES = 20;
 
 /** The words of a combined notice's list of services (F-601-p). */
+/** Where a lottery prize went (F-707-y): the service GB or days were added to, else the account. */
+const LOTTERY_WON_WHERE: Record<'service' | 'account', Text> = {
+  service: { read: (ns) => ns?.engagement?.lotteryWonOnService, fallback: 'to your service {{service}}' },
+  account: { read: (ns) => ns?.engagement?.lotteryWonOnAccount, fallback: 'to your account' },
+};
 const SERVICE_LIST = {
   line: { read: (ns) => ns?.retention?.serviceLine, fallback: '• {{name}}' },
   labelled: { read: (ns) => ns?.retention?.serviceLineLabelled, fallback: '• {{name}} — {{labels}}' },
@@ -1103,7 +1108,7 @@ export class UserNotifier {
     const combined = request.count !== undefined && request.count > 1;
     const spec = combined ? TEMPLATE_TEXT[request.template].many : TEMPLATE_TEXT[request.template];
     const lang = user.languagePreference;
-    const labelled = this.withKeyLabels(this.withSuggestionNames(request.template, this.withQuotaName(request.template, request.params, lang, ns), lang, ns), lang, ns);
+    const labelled = this.withKeyLabels(this.withServiceNames(request.template, this.withQuotaName(request.template, request.params, lang, ns), lang, ns), lang, ns);
     const named = withReportFigures(request.template, labelled, lang, ns);
     const told = withCurrencyName(named, this.locale.getNamespace(lang, 'bot'));
     const params = combined ? { ...told, count: String(request.count) } : told;
@@ -1149,13 +1154,6 @@ export class UserNotifier {
   }
 
   /**
-   * The services a combined notice is about, one line each (F-601-p): the
-   * buyer's own name for the service first (F-307-x), then the catalog name
-   * in the user's language, else the platform's default one, else the sku;
-   * then the buyer's config labels. Either name tells identical purchases
-   * apart. Past {@link LISTED_SERVICES}, one "and N more" line.
-   */
-  /**
    * A quota notice names its quota in the user's language (F-019-v8): a registry key by `resellerQuotaKeys.<key>`,
    * a product's sales by its catalog name. A name already given is kept.
    */
@@ -1174,16 +1172,16 @@ export class UserNotifier {
   }
 
   /**
-   * An AI suggestion names its service and plan in the user's language (F-038-g3) from billing's keys: the service
-   * as a combined notice lists it — the buyer's own name first, then the catalog name, else the sku — and the plan
-   * by its catalog name (else sku) with its size beside it. A package (PK-1-e) by its key in the user's language
-   * alone, else `package` as sent: the `name` column, which is the source text (ADR-0154 (5)).
+   * An AI suggestion (F-038-g3), and a lottery win (F-707-y: `where` it went), name the service as a combined notice lists it —
+   * the buyer's own name, then the catalog name, else the sku. A suggestion's plan by its catalog name (else sku) with its size;
+   * a package (PK-1-e) by its key in the user's language alone, else `package` as sent, the source text (ADR-0154 (5)).
    */
-  private withSuggestionNames(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
-    if (!template.startsWith('suggestion')) return params;
+  private withServiceNames(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
+    if (!template.startsWith('suggestion') && template !== 'lotteryWon') return params;
     const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
     const catalog = this.catalogName(params.serviceNameKey ?? null, lang) ?? params.serviceSku ?? say(SERVICE_LIST.unnamed);
     const service = params.serviceLabel ? say(SERVICE_LIST.named, { label: params.serviceLabel, name: catalog }) : catalog;
+    if (template === 'lotteryWon') return { ...params, where: say(params.serviceLabel || params.serviceNameKey || params.serviceSku ? LOTTERY_WON_WHERE.service : LOTTERY_WON_WHERE.account, { service }) };
     const planName = this.catalogName(params.planNameKey ?? null, lang) ?? params.planSku ?? '';
     const plan = params.planSize ? say(SERVICE_LIST.named, { label: planName, name: params.planSize }) : planName;
     const packageText = params.packageNameKey?.startsWith(`${PACKAGE_TEXT_NAMESPACE}.`) ? this.locale.getKey(lang, PACKAGE_TEXT_NAMESPACE, params.packageNameKey.slice(PACKAGE_TEXT_NAMESPACE.length + 1)) : undefined;
@@ -1217,6 +1215,8 @@ export class UserNotifier {
     return typeof text === 'string' && text !== '' ? text : undefined;
   }
 
+  /** The services a combined notice is about, one line each (F-601-p): the buyer's own name (F-307-x), then the catalog name in their
+   *  language, else the default one, else the sku; then their config labels. Past {@link LISTED_SERVICES}, one "and N more" line. */
   private serviceList(services: NotifyService[], lang: string, ns: NotificationsNamespace | undefined): string {
     const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
     const catalogName = (key: string | null) => this.catalogName(key, lang);

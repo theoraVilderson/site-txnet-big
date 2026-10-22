@@ -5,7 +5,7 @@ import { OutboxEventType, runWithTenant, tenantTransaction } from '@txnet-backen
 import { GrantService } from '../entitlement/grant';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { issueReward, RewardRefused } from './reward-issuer';
+import { issueReward, RewardRefused, RewardIssued, PrizeServiceName } from './reward-issuer';
 
 /**
  * A drawn lottery's prizes, given (F-707-m, ADR-0111 points 2, 5), by the
@@ -123,8 +123,9 @@ export class LotteryDeliveryService {
       if (!prize) throw new Error(`lottery ${lotteryId}: place ${place.position} names a prize that is not the lottery's`);
 
       await tx.$executeRaw`SAVEPOINT lottery_reward`;
+      let issued: RewardIssued;
       try {
-        await issueReward(tx, this.grants, {
+        issued = await issueReward(tx, this.grants, {
           tenantId: lot.tenantId,
           userId: place.userId,
           source: RewardSource.lottery,
@@ -152,7 +153,7 @@ export class LotteryDeliveryService {
           aggregate: LOTTERY_AGGREGATE,
           aggregateId: lotteryId,
           type: OutboxEventType.LOTTERY_WON,
-          payload: { tenantId: lot.tenantId, userId: place.userId, lotteryId, title: lot.title, prize: prize.label, rank: prize.rank },
+          payload: { tenantId: lot.tenantId, userId: place.userId, lotteryId, title: lot.title, prize: prize.label, rank: prize.rank, ...serviceParams(issued.service) },
         },
         select: { id: true },
       });
@@ -160,4 +161,11 @@ export class LotteryDeliveryService {
     }
     return counts;
   }
+}
+
+/** Where GB or days went, for the winner's notice to name (F-707-y): absent for any other prize, and empty parts left out. */
+function serviceParams(service: PrizeServiceName | null): Record<string, string> {
+  if (!service) return {};
+  const parts = { serviceLabel: service.label, serviceSku: service.sku, serviceNameKey: service.nameKey };
+  return Object.fromEntries(Object.entries(parts).filter((e): e is [string, string] => e[1] !== null));
 }

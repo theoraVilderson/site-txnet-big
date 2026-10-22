@@ -106,7 +106,8 @@ const PERSON_NOTICES: Partial<Record<string, { template: string; params: readonl
   // F-707-e: the wheel's day at 80% of its cap, to each wheel admin.
   [OutboxEventType.TENANT_WHEEL_CAP_NEARING]: { template: 'wheelCapNearing', params: ['day', 'spent', 'cap', 'currencyCode'] },
   // F-707-m: a lottery prize given, to its winner.
-  [OutboxEventType.LOTTERY_WON]: { template: 'lotteryWon', params: ['title', 'prize'] },
+  // F-707-y: and the service GB or days went to, named by the notifier as My services names it.
+  [OutboxEventType.LOTTERY_WON]: { template: 'lotteryWon', params: ['title', 'prize', 'serviceLabel', 'serviceNameKey', 'serviceSku'] },
   // F-805-b: a transfer's proof, to each person who may confirm it by hand; the bot's button opens it by id.
   [OutboxEventType.TRANSFER_PROOF_SENT]: { template: 'transferProofSent', params: ['paymentId', 'amount', 'currencyCode'] },
   // F-1003: a user whose 30-day cost passed their net by the tenant's percent, to each of its staff.

@@ -140,7 +140,8 @@ export interface SpinResult {
   /** The slot the wheel stops on: the prize's, or the first empty one. `null` = refused. */
   position: number | null;
   prize: { position: number; label: string; prizeType: WheelPrizeType; prizeValue: string } | null;
-  reward: { grantId: string | null; coupon: { id: string; code: string; percent: string; expiresAt: string } | null } | null;
+  /** `service`: where GB or days went, the buyer's label else the catalog key else the sku (F-707-y); `null` for other prizes. */
+  reward: { grantId: string | null; service: { label: string | null; sku: string | null; nameKey: string | null } | null; coupon: { id: string; code: string; percent: string; expiresAt: string } | null } | null;
   replay: boolean;
 }
 

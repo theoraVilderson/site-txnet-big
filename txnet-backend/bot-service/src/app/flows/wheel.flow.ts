@@ -5,8 +5,10 @@ import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api
 import type { SpinAnswer, WheelPrizeType } from '../billing-api/engagement.types';
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
+import { LocaleService } from '../locale/locale.service';
 import { ChatAccess } from '../session/chat-access';
 import { prizeServiceRows } from './prize-service.flow';
+import { planNameOf } from './service-words';
 import { ACTIONS, say, view } from './views';
 
 /** Every reason billing gives for no spin — recorded (`SpinRefusalReason`) or not (`WheelSpinRejection`). */
@@ -42,6 +44,7 @@ export class WheelFlow {
   constructor(
     private readonly billing: BillingApiClient,
     private readonly access: ChatAccess,
+    private readonly locale: LocaleService,
   ) {}
 
   /** The odds, and either a Spin button or why not; the prize-service row under them when there is a choice (F-707-t). */
@@ -87,7 +90,7 @@ export class WheelFlow {
       }
       return { view: say('wheel.refused', { key: BotKeys.wheel.refused, values: { reason: reasonText(reason, spun.msg) } }), nextState: null };
     }
-    return { view: say('wheel.result', told(spun.data)), nextState: null };
+    return { view: say('wheel.result', told(spun.data, (s) => (s.label ? { raw: s.label } : planNameOf(s.sku || s.nameKey ? { sku: s.sku ?? '', nameKey: s.nameKey ?? '' } : null, ctx.lang, this.locale)))), nextState: null };
   }
 
   private async callContext(ctx: ChatContext): Promise<BillingCallContext | null> {
@@ -100,12 +103,19 @@ export class WheelFlow {
   }
 }
 
-/** What the chat says: the prize by its kind (a coupon with its code), a refusal by its reason, else nothing won. */
-function told(a: SpinAnswer): BotText {
+/** What the chat says: the prize by its kind (a coupon with its code; GB and days with the service they went to, F-707-y), a refusal by its reason, else nothing won. */
+function told(a: SpinAnswer, nameOf: (s: NonNullable<NonNullable<SpinAnswer['reward']>['service']>) => BotText): BotText {
   if (a.status !== 'awarded') return { key: BotKeys.wheel.refused, values: { reason: reasonText(a.refusalReason) } };
   if (!a.prize || a.prize.prizeType === 'empty') return { key: BotKeys.wheel.won.empty };
   return {
     key: WON_KEYS[a.prize.prizeType],
-    values: { value: plain(a.prize.prizeValue), label: a.prize.label, code: a.reward?.coupon?.code ?? '' },
+    values: { value: plain(a.prize.prizeValue), label: a.prize.label, code: a.reward?.coupon?.code ?? '', ...serviceOf(a, nameOf) },
   };
+}
+
+/** GB and days name their service; one billing did not name reads "unnamed" rather than a raw placeholder. */
+function serviceOf(a: SpinAnswer, nameOf: Parameters<typeof told>[1]): { service?: BotText } {
+  if (a.prize?.prizeType !== 'bonus_traffic_gb' && a.prize?.prizeType !== 'extra_days') return {};
+  const s = a.reward?.service;
+  return { service: s ? nameOf(s) : { key: BotKeys.services.unnamed } };
 }

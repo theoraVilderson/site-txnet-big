@@ -95,11 +95,11 @@ describe("what the user is told", () => {
   it("names the prize by its kind, a refusal by its reason, and nothing as nothing", () => {
     expect(resultLine(result({ prize: { position: 1, label: "1 GB", prizeType: "bonus_traffic_gb", prizeValue: "1.50" } }))).toEqual({
       key: WHEEL_KEYS.result.bonus_traffic_gb,
-      values: { value: "1.5", label: "1 GB" },
+      values: { value: "1.5", label: "1 GB", service: "" },
     });
     expect(resultLine(result({ prize: { position: 2, label: "3 days", prizeType: "extra_days", prizeValue: "3.00" } }))).toEqual({
       key: WHEEL_KEYS.result.extra_days,
-      values: { value: "3", label: "3 days" },
+      values: { value: "3", label: "3 days", service: "" },
     });
     expect(resultLine(result({ position: 3 }))).toEqual({ key: WHEEL_KEYS.result.empty, values: {} });
     expect(resultLine(result({ status: "rejected_ineligible", refusalReason: "cooldown", position: null, seq: null }))).toEqual({
@@ -131,5 +131,18 @@ describe("a slot's odds, this user's own (F-707-u, F-707-v)", () => {
   it("says why a slot reads 0% when its prize cannot reach this user's services", () => {
     expect(oddsLine({ oddsPercent: "0.00", reachable: false })).toEqual({ key: WHEEL_KEYS.odds.unreachable, values: { percent: "0" } });
     expect(oddsLine({ oddsPercent: "42.50", reachable: true })).toEqual({ key: WHEEL_KEYS.odds.chance, values: { percent: "42.5" } });
+  });
+});
+
+describe("where a prize went (F-707-y)", () => {
+  const won = (service: { label: string | null; sku: string | null; nameKey: string | null }) =>
+    ({ attemptId: "a", status: "awarded", refusalReason: null, seq: 1, position: 1, replay: false,
+       prize: { position: 1, label: "5 GB", prizeType: "bonus_traffic_gb", prizeValue: "5.00" }, reward: { grantId: "g", service, coupon: null } }) as unknown as SpinResult;
+  const texts = { "catalog.p.gold": "Gold 50 GB" };
+
+  it("names the service as My services does: its label, then the catalog name, then the sku", () => {
+    expect(resultLine(won({ label: "Family", sku: "G", nameKey: "catalog.p.gold" }), texts).values.service).toBe("Family");
+    expect(resultLine(won({ label: null, sku: "G", nameKey: "catalog.p.gold" }), texts).values.service).toBe("Gold 50 GB");
+    expect(resultLine(won({ label: null, sku: "G", nameKey: "catalog.p.none" }), texts).values.service).toBe("G");
   });
 });

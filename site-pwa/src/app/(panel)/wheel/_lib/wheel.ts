@@ -90,12 +90,15 @@ export interface Line {
 }
 
 /** The sentence for a spin's answer: the prize by its kind, a refusal by its reason, else nothing won. */
-export function resultLine(r: SpinResult): Line {
+export function resultLine(r: SpinResult, texts: Record<string, string> = {}): Line {
   if (r.status !== "awarded") return { key: K.result.refused, values: {}, reason: refusalKeyOf(r.refusalReason) ?? undefined };
   if (!r.prize) return { key: K.result.empty, values: {} };
   const type = r.prize.prizeType;
   const key = type === "empty" ? K.result.empty : K.result[type];
-  return { key, values: type === "empty" ? {} : { value: plainNumber(r.prize.prizeValue), label: r.prize.label } };
+  // GB and days say which service they went to (F-707-y), named as My services names it.
+  const s = r.reward?.service;
+  const service = (s && (s.label ?? (s.nameKey ? texts[s.nameKey] : undefined) ?? s.sku)) || "";
+  return { key, values: type === "empty" ? {} : { value: plainNumber(r.prize.prizeValue), label: r.prize.label, service } };
 }
 
 /** A tenant day (`YYYY-MM-DD`) in the reader's calendar, never shifted by their zone. */

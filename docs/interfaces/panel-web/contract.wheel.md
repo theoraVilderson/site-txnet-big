@@ -35,6 +35,7 @@ ADR-0111), both through `lib/engagement-api.ts`:
 4. **Every reason has a sentence**: `REFUSAL_KEYS` covers `SpinRefusalReason`
    and `WheelSpinRejection`, read from the service by the spec. `no_wheel` on
    the read is a page state, not an error.
+   The result line names the service GB or days went to (`resultLine`, F-707-y).
 5. **History is the caller's own** (`GET /wheel/history`, newest 30); a won
    coupon is shown with its code, so a code missed on the result is not lost.
 6. **The menu entry asks nothing** — every signed-in user may open the page.

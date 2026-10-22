@@ -10,6 +10,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { WHEEL_KEYS as K, landingRotation, nextRequestId, oddsLine, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
+import { useCatalogTexts } from "../../catalog/_lib/meter-names";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { PrizeServicePicker } from "../../_components/PrizeServicePicker";
 import { celebrate } from "../../_components/kit/celebrate";
@@ -26,6 +27,7 @@ const SPIN_MS = 4500;
  */
 export function WheelView() {
   const { lang, t } = useLocale();
+  const texts = useCatalogTexts();
   const errorMessage = useApiErrorMessage();
   const message = (e: unknown) => {
     const key = refusalKey(e);
@@ -106,7 +108,7 @@ export function WheelView() {
     }, SPIN_MS);
   }
 
-  const line = result && resultLine(result);
+  const line = result && resultLine(result, texts);
   const coupon = result?.reward?.coupon ?? null;
   const ready = loaded === asked || wheel !== null;
 

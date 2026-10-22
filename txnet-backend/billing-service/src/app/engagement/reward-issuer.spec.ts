@@ -44,6 +44,8 @@ function fakeTx(o: { grants?: GrantRow[]; template?: Template | null; tenantType
   const tx = {
     grant: {
       findMany: vi.fn(async ({ where }) => (o.grants ?? []).filter((g) => g.status === where.status && (!where.id || g.id === where.id))),
+      // The service a prize went to, as My services names it (F-707-y).
+      findUnique: vi.fn(async ({ where }) => ({ userLabel: where.id === 'g-family' ? 'Family' : null, variant: { sku: `SKU-${where.id}`, nameKey: null, product: { nameKey: 'catalog.p.gold' } } })),
     },
     rewardTarget: { findUnique: vi.fn(async () => (o.chosen ? { grantId: o.chosen } : null)) },
     rewardIssue: {
@@ -137,6 +139,13 @@ describe("the user's prize service (F-707-r)", () => {
   it('falls back when the choice is no longer active', async () => {
     const { tx } = fakeTx({ grants: two({ status: GrantStatus.expired }), chosen: 'g-family' });
     await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ grantId: 'g-long' });
+  });
+
+  it('names the service the prize went to, the first time and on a retry (F-707-y)', async () => {
+    const { tx } = fakeTx({ grants: two(), chosen: 'g-family' });
+    const service = { label: 'Family', sku: 'SKU-g-family', nameKey: 'catalog.p.gold' };
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ service });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ replay: true, service });
   });
 
   it('gives way to a Grant the caller names', async () => {
