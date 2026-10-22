@@ -707,7 +707,7 @@ export const VPN_TRAFFIC = "vpn.traffic";
 const GIB_UNIT = String(GIB);
 
 /** `Decimal(18, 8)` above zero: billing's `rate_card_metered_price_positive`. */
-const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
+export const UNIT_PRICE = /^(0|[1-9]\d{0,9})(\.\d{1,8})?$/;
 const isUnitPrice = (v: string) => UNIT_PRICE.test(v.trim()) && /[1-9]/.test(v);
 
 /** Per GiB, nothing included, then metered — any other `vpn.traffic` card billing refuses `rate_card_not_served`. */

@@ -2012,6 +2012,33 @@
       "counts": "{{live}} / {{cap}} live · {{held}} held by unpaid invoices · {{remaining}} left",
       "uncapped": "No cap · {{live}} live now",
       "full": "Full — no live slot left, cannot be bought in the shop"
+    },
+    "renewalRate": {
+      "title": "Renewal by GB and days typed",
+      "hint": "What each GB and each day a buyer types when renewing costs, and the fewest and most of each. A change applies from the day you pick and stays in the history.",
+      "inEffect": "Rate in effect",
+      "none": "Custom renewal is off for this product.",
+      "off": "Off",
+      "perGib": "{{price}} per GB ({{min}} to {{max}} GB)",
+      "perDay": "{{price}} per day ({{min}} to {{max}} days)",
+      "pricePerGib": "Price per GB",
+      "pricePerDay": "Price per day",
+      "minGib": "Fewest GB",
+      "maxGib": "Most GB",
+      "minDays": "Fewest days",
+      "maxDays": "Most days",
+      "boundsHint": "A most of 0 means that part is not sold.",
+      "save": "Set new rate",
+      "turnOff": "Turn custom renewal off",
+      "history": "Rate history",
+      "errors": {
+        "price": "Enter a number with at most 8 decimal places.",
+        "gib": "Enter a whole number from 0 to 100000.",
+        "days": "Enter a whole number from 0 to 3650.",
+        "reversed": "The fewest is more than the most.",
+        "nothing": "At least one of GB or days must be sold (its most above 0).",
+        "soldFree": "A part that is sold cannot be free."
+      }
     }
   },
   "settings": {
@@ -3514,7 +3541,15 @@
       "toShop": "Go to the shop",
       "loading": "Reading the plans…",
       "again": "Get a new invoice",
-      "paid": "Renewal paid. Your service updates in a moment."
+      "paid": "Renewal paid. Your service updates in a moment.",
+      "custom": {
+        "title": "Your own GB and days",
+        "hint": "Type how many GB and how many days to add.",
+        "gib": "GB",
+        "days": "Days",
+        "bounds": "From {{min}} to {{max}}",
+        "pricing": "Getting the price…"
+      }
     }
   },
   "systems": {

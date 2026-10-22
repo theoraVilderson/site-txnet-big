@@ -172,7 +172,7 @@ A variant's cost per sale and the usage costs tab: [contract.catalog-cost.md](co
 The product sheet's "who can buy this product" section (`ProductAudienceSection.tsx`): the shared audience
 section and picker ([contract.gateway-audience.md](contract.gateway-audience.md), GR-1-x), saved on
 `PUT …/products/:id/audience` (catalog [contract.audience.md](../../domains/catalog/contract.audience.md)).
-Only on the surface's own tenant's products (`ownsAudience`). The list marks a limited product. A product's self-move override: [contract.self-move.md](contract.self-move.md) rule 7 (F-410-f).
+Only on the surface's own tenant's products (`ownsAudience`). The list marks a limited product. A product's self-move override: [contract.self-move.md](contract.self-move.md) rule 7 (F-410-f); its renewal rate (`RenewalRateSection.tsx`, same owner rule): [contract.renewal.md](contract.renewal.md) "The seller's rate" (F-305-g).
 
 ## Capabilities by name (F-114-f-b, ADR-0086)
 

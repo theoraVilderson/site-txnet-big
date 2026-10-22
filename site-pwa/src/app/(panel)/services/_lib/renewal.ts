@@ -1,7 +1,8 @@
-import type { GrantRow, GrantStatus, RenewalPlan } from "@/lib/billing-api";
+import type { GrantRow, GrantStatus, RenewalCustom, RenewalPlan } from "@/lib/billing-api";
+import { toEnglishDigits } from "@/util/helper";
 
 /**
- * The renewal sheet's rules that are not layout (F-305-f, panel-web
+ * The renewal sheet's rules that are not layout (F-305-f/g, panel-web
  * `contract.renewal.md`).
  */
 
@@ -29,4 +30,33 @@ export function planAdds(plan: Pick<RenewalPlan, "bytes" | "days">, row: Pick<Gr
 } {
   const traffic = plan.bytes !== "0" ? { bytes: plan.bytes } : row.trafficUnlimited ? "unlimited" : null;
   return { traffic, days: plan.days > 0 ? plan.days : null };
+}
+
+/** The sheet's own choice beside the plans' variant ids (which are uuids): GiB and days typed (rule 4). */
+export const CUSTOM_CHOICE = "custom";
+
+/** What the custom fields hold, as typed. */
+export interface TypedRenewal {
+  gib: string;
+  days: string;
+}
+
+/**
+ * GiB and days typed, as whole numbers to quote — or `null` while there is
+ * nothing to ask billing: not a whole number, or both 0. A part with no field
+ * (its most is 0 for this Grant) and an empty field are 0, "not this part".
+ * The bounds are **not** checked here: billing's `custom_out_of_bounds` says
+ * them, so the rule has one home.
+ */
+export function typedAmount(typed: TypedRenewal, custom: Pick<RenewalCustom, "maxGib" | "maxDays">): { gib: number; days: number } | null {
+  const part = (text: string, max: number): number | null => {
+    if (max === 0) return 0;
+    const s = toEnglishDigits(text.trim());
+    if (s === "") return 0;
+    return /^\d{1,6}$/.test(s) ? Number(s) : null;
+  };
+  const gib = part(typed.gib, custom.maxGib);
+  const days = part(typed.days, custom.maxDays);
+  if (gib === null || days === null || (gib === 0 && days === 0)) return null;
+  return { gib, days };
 }

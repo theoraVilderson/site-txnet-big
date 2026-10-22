@@ -6,22 +6,24 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
-import { billingApi, type GrantRow, type RenewalPlan, type RenewalPlans } from "@/lib/billing-api";
+import { billingApi, type GrantRow, type RenewalChoice, type RenewalPlan, type RenewalPlans } from "@/lib/billing-api";
 import { PANEL_SHOP } from "@/lib/routes";
 import { useCatalogTexts } from "../../catalog/_lib/meter-names";
 import { formatMoney } from "../../_lib/money";
 import { Alert, Button, Dialog, RadioCards, buttonClass, notify } from "../../_components/kit";
 import { useCheckout } from "../../shop/_hooks/useCheckout";
 import { CheckoutPay, ErrorBox } from "../../shop/_components/CheckoutPay";
+import { useRenewalQuote } from "../_hooks/useRenewalQuote";
 import { formatBytes } from "../_lib/service-configs";
-import { planAdds, renewalOffered } from "../_lib/renewal";
+import { CUSTOM_CHOICE, planAdds, renewalOffered, typedAmount, type TypedRenewal } from "../_lib/renewal";
+import { CustomRenewal } from "./CustomRenewal";
 
 const R = FrontendI18nKeys.common.myServices.renew;
 const SHOP = FrontendI18nKeys.common.shop;
 
-/** The invoice maker for one plan of this Grant: a renewal, priced by billing (rule 5). */
-const planInvoice = (grantId: string, variantId: string) => (codes: string[]) =>
-  billingApi.createRenewalInvoice(grantId, { variantId }, codes);
+/** The invoice maker for one choice on this Grant — a plan, or GiB and days quoted — priced by billing (rule 5); none while there is no choice to invoice. */
+const choiceInvoice = (grantId: string, choice: RenewalChoice | null) =>
+  choice && ((codes: string[]) => billingApi.createRenewalInvoice(grantId, choice, codes));
 
 /**
  * «تمدید» on a renewable Grant's row, and the sheet it opens (F-305-f,
@@ -42,8 +44,9 @@ export function Renewal({ row, name }: { row: GrantRow; name: string | null }) {
 }
 
 /**
- * The plans billing would renew this Grant to, its own first (rule 2), and
- * the shop's checkout under the one picked (rule 5). A plan no longer sold is
+ * The plans billing would renew this Grant to, its own first (rule 2), then
+ * GiB and days typed where the product has a rate (rule 4, F-305-g), and the
+ * shop's checkout under the one picked (rule 5). A plan no longer sold is
  * said and the shop linked (rule 3). **Paid closes the sheet and patches
  * nothing**: the row re-reads on `entitlement.grant.renewed` (rule 6). A
  * refusal stays here, in billing's words (rule 7).
@@ -56,6 +59,7 @@ function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onC
   const [asked, setAsked] = useState(0);
   const texts = useCatalogTexts();
   const [picked, setPicked] = useState<string | null>(null);
+  const [typed, setTyped] = useState<TypedRenewal>({ gib: "", days: "" });
 
   useEffect(() => {
     let alive = true;
@@ -69,11 +73,17 @@ function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onC
   }, [row.id, asked]);
 
   // Billing answers the Grant's own plan first: that is the one picked until another is.
-  const plan = plans?.plans.find((p) => p.variantId === picked) ?? plans?.plans[0] ?? null;
+  const custom = plans?.custom ?? null;
+  const choice = picked ?? plans?.plans[0]?.variantId ?? (custom ? CUSTOM_CHOICE : null);
+  const isCustom = choice === CUSTOM_CHOICE && custom !== null;
+  const plan = isCustom ? null : (plans?.plans.find((p) => p.variantId === choice) ?? null);
+  const amount = isCustom ? typedAmount(typed, custom) : null;
+  const quote = useRenewalQuote(row.id, amount?.gib ?? null, amount?.days ?? null);
+  const priced = isCustom ? quote.quote : null;
   const co = useCheckout({
     initial: null,
-    listed: plan?.price ?? null,
-    makeInvoice: plan ? planInvoice(row.id, plan.variantId) : null,
+    listed: plan?.price ?? priced?.amount ?? null,
+    makeInvoice: choiceInvoice(row.id, plan ? { variantId: plan.variantId } : priced && { gib: priced.gib, days: priced.days }),
     onPaid: () => {
       notify.success(t("common", R.paid));
       onClose();
@@ -84,9 +94,15 @@ function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onC
     co.leave();
     onClose();
   };
-  const pick = (variantId: string) => {
-    setPicked(variantId);
-    co.restart(planInvoice(row.id, variantId));
+  const pick = (value: string) => {
+    setPicked(value);
+    // GiB and days are invoiced once billing has quoted what is typed; until then, no invoice.
+    co.restart(choiceInvoice(row.id, value === CUSTOM_CHOICE ? null : { variantId: value }));
+  };
+  const retype = (next: TypedRenewal) => {
+    setTyped(next);
+    // An invoice made for the old amount is given up; the codes stay for the new one.
+    if (co.invoice) co.restart(null);
   };
 
   return (
@@ -124,24 +140,34 @@ function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onC
                 {t("common", R.notSold)}
               </Alert>
             )}
-            {plan && (
+            {choice !== null && (
               <RadioCards
                 columns={1}
                 ariaLabel={t("common", R.plans)}
-                value={plan.variantId}
+                value={choice}
                 onChange={pick}
-                options={plans.plans.map((p) => ({
-                  value: p.variantId,
-                  label: <PlanName plan={p} name={texts[p.nameKey] || p.sku} />,
-                  description: <PlanFacts plan={p} row={row} />,
-                }))}
+                options={[
+                  ...plans.plans.map((p) => ({
+                    value: p.variantId,
+                    label: <PlanName plan={p} name={texts[p.nameKey] || p.sku} />,
+                    description: <PlanFacts plan={p} row={row} />,
+                  })),
+                  ...(custom ? [{ value: CUSTOM_CHOICE, label: t("common", R.custom.title), description: t("common", R.custom.hint) }] : []),
+                ]}
               />
             )}
+            {isCustom && <CustomRenewal custom={custom} typed={typed} onTyped={retype} quote={quote} />}
           </>
         )}
 
-        {plan && (
-          <CheckoutPay co={co} listed={plan.price} currency={plan.currencyCode} againLabel={t("common", R.again)} onAgain={() => co.restart()} />
+        {(plan ?? priced) && (
+          <CheckoutPay
+            co={co}
+            listed={plan?.price ?? priced?.amount ?? null}
+            currency={plan?.currencyCode ?? priced?.currencyCode ?? ""}
+            againLabel={t("common", R.again)}
+            onAgain={() => co.restart()}
+          />
         )}
       </div>
     </Dialog>

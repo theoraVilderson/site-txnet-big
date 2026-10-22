@@ -23,6 +23,7 @@ import {
 import { CapabilityPicker } from "./CapabilityPicker";
 import { ProductCategories } from "./CategoryPickers";
 import { ProductAudienceSection, ownsAudience } from "./ProductAudienceSection";
+import { RenewalRateSection } from "./RenewalRateSection";
 import { SelfMoveSettings } from "../../_components/SelfMoveSettings";
 import { setsSelfMove } from "../../_lib/self-move-settings";
 import { usePanelGroups, type PanelGroups } from "./PanelGroupSelect";
@@ -112,8 +113,12 @@ export function ProductDetailSheet({
         label={capabilityLabel}
         onCreated={onCapabilityCreated}
         onSaved={async () => Promise.all([load(), onChanged()]).then(() => undefined)} />
+      {/* Who may buy it, and what GiB and days typed to renew it cost (F-305-g): the owner's alone. */}
       {detail && ownsAudience(detail, surfaceTenantId, me?.tenant.id ?? null) && (
-        <ProductAudienceSection key={detail.id} product={detail} onSaved={onChanged} />
+        <>
+          <ProductAudienceSection key={detail.id} product={detail} onSaved={onChanged} />
+          <RenewalRateSection key={`renewal-${detail.id}`} productId={detail.id} />
+        </>
       )}
       {detail && selfMoveTenant !== null && takesPanelGroup(kind) && setsSelfMove(detail, selfMoveTenant) && <SelfMoveSettings key={product.id} tenantId={selfMoveTenant} productId={product.id} errorMessage={message} />}
 

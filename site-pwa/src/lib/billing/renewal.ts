@@ -44,6 +44,18 @@ export interface RenewalPlans {
   custom: RenewalCustom | null;
 }
 
+/** GiB and days typed, priced now (F-305-e): billing's figure before discounts, the one the sheet shows. */
+export interface RenewalQuote {
+  grantId: string;
+  gib: number;
+  days: number;
+  /** What `gib` comes to, as a decimal string (C-02). */
+  bytes: string;
+  amount: string;
+  currencyCode: string;
+  rateId: string;
+}
+
 /** What a renewal invoice is for: a plan, or GiB and days typed (F-305-e). */
 export type RenewalChoice = { variantId: string } | { gib: number; days: number };
 
@@ -52,6 +64,16 @@ export const renewalCalls = {
   /** The plans the sheet lists (F-305-j). Another user's Grant is a 404; a closed one a 409. */
   async renewalPlans(grantId: string): Promise<RenewalPlans> {
     return call<RenewalPlans>(`/gift/grants/${encodeURIComponent(grantId)}/renewal-plans`, { method: "GET" });
+  },
+
+  /**
+   * The price of GiB and days typed (F-305-e), before discounts; writes
+   * nothing. Out of this Grant's bounds is a 409 `custom_out_of_bounds`, and no
+   * rate in effect `custom_renewal_off`, each with billing's sentence.
+   */
+  async renewalQuote(grantId: string, gib: number, days: number): Promise<RenewalQuote> {
+    const query = new URLSearchParams({ gib: String(gib), days: String(days) });
+    return call<RenewalQuote>(`/gift/grants/${encodeURIComponent(grantId)}/renewal-quote?${query}`, { method: "GET" });
   },
 
   /**
