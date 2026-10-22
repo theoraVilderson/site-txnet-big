@@ -61,6 +61,7 @@ vi.mock("./_components/SessionsSection", () => ({ SessionsSection: () => <p>sess
 vi.mock("../_components/OperatingCurrencyCard", () => ({ OperatingCurrencyCard: () => <p>currency-card</p> }));
 vi.mock("../_components/TenantTimeZoneCard", () => ({ TenantTimeZoneCard: () => <p>tenant-zone-card</p> }));
 vi.mock("../_components/ManualRateCard", () => ({ ManualRateCard: () => <p>rate-card</p> }));
+vi.mock("../_components/SelfMoveSettings", () => ({ SelfMoveSettings: ({ tenantId, productId }: { tenantId: string; productId: string | null }) => <p>self-move-card {tenantId} {String(productId)}</p> }));
 vi.mock("@/lib/auth-api", () => ({
   authApi: {
     messenger: vi.fn(),
@@ -134,6 +135,16 @@ describe("the settings page (S1–S2)", () => {
     expect(tab(T.tabs.platform)).toHaveAttribute("aria-selected", "true");
     expect(screen.getByText("currency-card")).toBeVisible();
     expect(screen.getByText("tenant-zone-card")).toBeVisible();
+    // settings.manage alone: the self-move card is catalog.manage's (F-410-h).
+    expect(screen.queryByText(/self-move-card/)).toBeNull();
+  });
+
+  it("draws the platform's own self-move card for its staff holding catalog.manage (F-410-h)", () => {
+    me = { ...PLATFORM_STAFF, permissions: ["catalog.manage"] };
+    search = new URLSearchParams("tab=workspace");
+    page();
+    expect(screen.getByText("self-move-card t-1 null")).toBeVisible();
+    expect(screen.queryByText("currency-card")).toBeNull();
   });
 
   it("writes the motion level from appearance at once", async () => {

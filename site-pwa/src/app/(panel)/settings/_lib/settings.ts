@@ -25,6 +25,17 @@ export function canPinRates(me: Me | null): boolean {
   return !!me && holdsPermission(me.permissions, CURRENCY_PIN);
 }
 
+const CATALOG_MANAGE = "catalog.manage";
+
+/**
+ * Who sees the platform's own self-move card (F-410-h): the platform's staff
+ * holding `catalog.manage`, or `*` — billing's door for the setting. A
+ * reseller's is on its workspace's settings page (F-410-f).
+ */
+export function canSetPlatformSelfMove(me: Me | null): boolean {
+  return me != null && isPlatformTenant(me.tenant.type) && holdsPermission(me.permissions, CATALOG_MANAGE);
+}
+
 const T = FrontendI18nKeys.common.settings.tabs;
 
 export type SettingsTab = "profile" | "notifications" | "appearance" | "workspace";
@@ -40,7 +51,7 @@ export function settingsTabs(me: Me | null): { value: SettingsTab; label: string
     { value: "notifications", label: T.notifications },
     { value: "appearance", label: T.appearance },
   ];
-  if (canSetPlatformCurrency(me) || canPinRates(me)) {
+  if (canSetPlatformCurrency(me) || canSetPlatformSelfMove(me) || canPinRates(me)) {
     tabs.push({ value: "workspace", label: isPlatformTenant(me?.tenant?.type) ? T.platform : T.reseller });
   }
   return tabs;

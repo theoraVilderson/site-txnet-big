@@ -4,15 +4,17 @@ import { Suspense, useCallback, useEffect, useState, type ReactNode } from "reac
 import { Settings } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
+import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ManualRateCard } from "../_components/ManualRateCard";
 import { OperatingCurrencyCard } from "../_components/OperatingCurrencyCard";
+import { SelfMoveSettings } from "../_components/SelfMoveSettings";
 import { TenantTimeZoneCard } from "../_components/TenantTimeZoneCard";
 import { PageHeader } from "../_components/kit/PageHeader";
 import { Tabs } from "../_components/kit/Tabs";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { AppearanceSection } from "./_components/AppearanceSection";
 import { EmailSection } from "./_components/EmailSection";
-import { canPinRates, canSetPlatformCurrency, settingsTabs, type SettingsTab } from "./_lib/settings";
+import { canPinRates, canSetPlatformCurrency, canSetPlatformSelfMove, settingsTabs, type SettingsTab } from "./_lib/settings";
 import { MessengerSection } from "./_components/MessengerSection";
 import { NotificationsSection } from "./_components/NotificationsSection";
 import { ProfileSection } from "./_components/ProfileSection";
@@ -35,7 +37,8 @@ import { isPlatformTenant } from "@/lib/tenant-type";
  *   currency is in its workspace, because its owner's session carries the
  *   platform tenant (invariant 21). The manual-rate card (F-116-l) is here for
  *   anyone holding `currency.pin`, on either kind of tenant: the pin routes
- *   scope to the session's own books.
+ *   scope to the session's own books. The platform's own self-move switch and
+ *   wait (F-410-h) are here for its staff holding `catalog.manage`.
  *
  * A tab is mounted the first time it is opened and stays mounted, hidden, so
  * an unsaved form — and its `SaveBar` — survives a switch to another tab.
@@ -46,6 +49,7 @@ import { isPlatformTenant } from "@/lib/tenant-type";
 export default function SettingsPage() {
   const { t } = useLocale();
   const { me } = usePanelSession();
+  const errorMessage = useApiErrorMessage();
   const tabs = settingsTabs(me);
   // AC-1-i: signed in as someone, their password, email and sessions stay theirs (ADR-0136).
   const own = !me?.isImpersonated;
@@ -77,6 +81,7 @@ export default function SettingsPage() {
         <>
           {canSetPlatformCurrency(me) && <OperatingCurrencyCard tenantId={me.tenant.id} scope="platform" />}
           {canSetPlatformCurrency(me) && <TenantTimeZoneCard tenantId={me.tenant.id} scope="platform" />}
+          {canSetPlatformSelfMove(me) && <SelfMoveSettings tenantId={me.tenant.id} productId={null} errorMessage={errorMessage} />}
           {canPinRates(me) && <ManualRateCard scope={isPlatformTenant(me.tenant.type) ? "platform" : "reseller"} />}
         </>
       ),
