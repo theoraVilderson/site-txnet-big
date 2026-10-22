@@ -23,20 +23,18 @@ export function WheelReport({ today }: { today: string | null }) {
   const [from, setFrom] = useState(today ?? "");
   const [to, setTo] = useState(today ?? "");
   const [asked, setAsked] = useState({ from: today ?? "", to: today ?? "" });
-  const [days, setDays] = useState<WheelDayReport[] | null>(null);
-  const [error, setError] = useState<unknown>(null);
+  // The answer names the range it was asked for, so a new range reads as loading
+  // by comparison instead of clearing state inside the effect (C-30).
+  const [answer, setAnswer] = useState<{ asked: typeof asked; days: WheelDayReport[]; error: unknown } | null>(null);
+  const current = answer?.asked === asked ? answer : null;
+  const days = current?.days ?? null;
+  const error = current?.error ?? null;
 
   useEffect(() => {
     let alive = true;
-    setDays(null);
-    setError(null);
     wheelAdminApi.report({ from: asked.from || undefined, to: asked.to || undefined }).then(
-      (d) => alive && setDays(d),
-      (e) => {
-        if (!alive) return;
-        setDays([]);
-        setError(e);
-      },
+      (d) => alive && setAnswer({ asked, days: d, error: null }),
+      (e) => alive && setAnswer({ asked, days: [], error: e }),
     );
     return () => {
       alive = false;
