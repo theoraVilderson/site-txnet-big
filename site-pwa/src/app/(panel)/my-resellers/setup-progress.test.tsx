@@ -18,7 +18,7 @@ vi.mock("@/context/LocaleContext", () => ({
 vi.mock("../_context/PanelSessionContext", () => ({
   usePanelSession: () => ({ me: { tenant: { id: "p-1", type: "platform_owner" }, permissions: [] }, group: { current: { userId: "u-1" } } }),
 }));
-vi.mock("@/lib/tenant-api", () => ({ resellerOnboardingApi: { get: vi.fn() } }));
+vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn() } }));
 const { live, cheer, toast } = vi.hoisted(() => ({
   live: [] as { channel: string | null; types: readonly string[] | "any"; reread: () => void }[],
   cheer: vi.fn(),
@@ -32,10 +32,10 @@ vi.mock("@/hooks/useLiveReread", () => ({
 vi.mock("../_components/kit/celebrate", () => ({ celebrate: cheer }));
 vi.mock("../_components/kit/notify", () => ({ notify: { success: toast } }));
 
-import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 
 const view = (done: Partial<Record<"domain" | "gateway" | "bot" | "pricing", boolean>>): ResellerOnboarding => {
-  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain" }));
+  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain", optional: false, skipped: false }));
   return { tenantId: "r-1", onboarding: !done.domain, closed: [], steps, complete: steps.every((s) => s.done) };
 };
 

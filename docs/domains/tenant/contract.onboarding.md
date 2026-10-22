@@ -2,8 +2,8 @@
 id: tenant
 layer: domain
 status: active
-version: 6
-updated: 2026-10-08
+version: 7
+updated: 2026-10-22
 ---
 
 # Contract — tenant / the onboarding gate
@@ -144,10 +144,11 @@ The panel's side — the cache, and why every doubt renders — is
 
 ```
 { tenantId, onboarding, closed: [...capabilities], complete,
-  steps: [{ key: 'domain' | 'gateway' | 'bot' | 'pricing', done, gate }] }
+  steps: [{ key: 'import' | 'domain' | 'gateway' | 'bot' | 'pricing',
+            done, gate, optional, skipped }] }
 ```
 
-**Every step is computed from live rows, never stored** — a `verified` panel
+**Every required step is computed from live rows, never stored** — a `verified` panel
 domain, an `isActive`, unblocked `tenant_gateway_config` (F-104-ak), an `active`
 `bot_integration`, and something the catalog offers the reseller. A reseller
 that deletes its last gateway is back on that step.
@@ -165,6 +166,17 @@ console asks for next and refuse nothing, because a reseller may sell without a
 bot and price its products the day after it opens. `complete` is all four;
 `onboarding` is the gate alone, and the two differ on purpose.
 
+**`import`, "bring my users", is optional and first** (F-213). Done by a
+`committed` `panel` or `link` migration run (a `csv` run brings balances, not
+users), or by a skip. `optional: true` puts it outside `complete` and the
+panel's count (user, 2026-10-22), so a reseller already set up is not pulled
+back. A skip is the one stored answer — a person's "none to bring", not a
+count: a `tenant_onboarding_skip` row (`tenantId`, `step`), written by
+`PUT /api/tenants/:id/onboarding/skips/:step` and deleted by `DELETE` (204,
+safe twice), behind `ResellerAccess` on `migration.manage` as a `staffWrite`.
+`:step` is `TenantOnboardingOptionalStep` — a required step is a 400, and the
+next optional step is an enum value, not a column (user, 2026-10-22).
+
 Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 `reseller_suspended` 403, `reseller_terminated` 409.
 
@@ -173,6 +185,7 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 | From unit | What | Failure behaviour if unavailable |
 |---|---|---|
 | catalog | `offeredToTenant` (shared-core): the `pricing` step, own or platform offers (F-018-ah) | the step reads `done: false`; nothing is gated on it |
+| entitlement | `migration_run` (`status`, `kind`): the `import` step (F-213), read on the cross-tenant pool | the step reads `done: false`; nothing is gated on it |
 
 ## Consumers
 
@@ -180,4 +193,4 @@ Refusals are `ResellerAccess`'s: `not_allowed` 403, `reseller_not_found` 404,
 |---|---|
 | auth-, billing-, notification-service | `TenantStatusGuard` — inherit the column through `tenantAllows`, unchanged |
 | worker-service `TenantStatusGate`, gateway-service `TenantSocketWatch` | the same state; a gated tenant's ticks and sockets follow their capability |
-| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`) and its setup wizard, `/my-resellers/:id/setup` (UX-2-c); the door rule through `GET /api/public/tenant/serves-panel` (F-066-x, F-018-ak) |
+| panel-web | the checklist, on `/my-resellers/:id` (F-066-w, `resellerOnboardingApi`) and its setup wizard, `/my-resellers/:id/setup` (UX-2-c), with the import step's skip (F-213); the door rule through `GET /api/public/tenant/serves-panel` (F-066-x, F-018-ak) |

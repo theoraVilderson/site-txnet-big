@@ -1,5 +1,5 @@
-import type { OnboardingStepKey, ResellerOnboarding } from "@/lib/tenant-api";
-import { myResellerBotPath, myResellerCatalogPath, myResellerDomainsPath, myResellerGatewaysPath } from "@/lib/routes";
+import type { OnboardingStepKey, ResellerOnboarding } from "@/lib/tenant-onboarding-api";
+import { myResellerBotPath, myResellerCatalogPath, myResellerDomainsPath, myResellerGatewaysPath, myResellerMigrationPath } from "@/lib/routes";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 
 /** The console's strings as generated constants (C-06). */
@@ -39,23 +39,29 @@ export const consoleState = (v: ResellerOnboarding): ConsoleState =>
   v.onboarding ? "closed" : v.complete ? "complete" : "open";
 
 /**
- * The step that gates, apart from the ones that refuse nothing — by the
- * service's `gate` flag, not by a name this page assumes.
+ * The step that gates, the required ones that refuse nothing, and the
+ * optional ones that count toward nothing (F-213) — by the service's `gate`
+ * and `optional` flags, not by a name this page assumes.
  */
 export function splitSteps(v: ResellerOnboarding) {
-  return { gate: v.steps.find((s) => s.gate) ?? null, rest: v.steps.filter((s) => !s.gate) };
+  return {
+    gate: v.steps.find((s) => s.gate) ?? null,
+    rest: v.steps.filter((s) => !s.gate && !s.optional),
+    optional: v.steps.filter((s) => s.optional),
+  };
 }
 
 /**
  * The workspace screen that finishes a step, or `null` while it has none.
  * Never the ambient screen (`/gateways`, `/catalog`): those configure the
- * session's tenant — the platform's — not this reseller (ADR-0064). Every one
- * of the four now has its own.
+ * session's tenant — the platform's — not this reseller (ADR-0064). Every
+ * step has its own; `import` is the migration page (F-213).
  */
 export function stepHref(key: OnboardingStepKey, id: string, self = false): string | null {
   if (key === "domain") return myResellerDomainsPath(id, self);
   if (key === "gateway") return myResellerGatewaysPath(id, self);
   if (key === "bot") return myResellerBotPath(id, self);
   if (key === "pricing") return myResellerCatalogPath(id, self);
+  if (key === "import") return myResellerMigrationPath(id, self);
   return null;
 }

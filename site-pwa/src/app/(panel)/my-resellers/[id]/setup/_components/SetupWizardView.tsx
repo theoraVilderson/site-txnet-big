@@ -11,7 +11,7 @@ import { useMotionLevel } from "@/hooks/useMotionLevel";
 import { authApi } from "@/lib/auth-api";
 import { DURATION, EASE } from "@/lib/motion";
 import { myResellerConsolePath } from "@/lib/routes";
-import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { useResellerWorkspace } from "../../../../_context/ResellerWorkspaceContext";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
@@ -23,6 +23,8 @@ import { ONBOARDING_KEYS as K, STEP_KEYS, onboardingRefusalKey } from "../../../
 import { SETUP_STEP_ICONS, firstUndoneIndex, setupSlide } from "../../../_lib/setup";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { BotPanel } from "../../bot/_components/ResellerBotView";
+import { ImportStep } from "./ImportStep";
+import { SetupProgress } from "../../_components/SetupProgress";
 import { BrandingPanel } from "../../branding/_components/ResellerBrandingView";
 import { ResellerCatalogView } from "../../catalog/_components/ResellerCatalogView";
 import { DomainsPanel } from "../../domains/_components/ResellerDomainsView";
@@ -86,7 +88,10 @@ export function SetupWizardView({ id }: { id: string }) {
   // screen when none is left; a re-read after it never moves the person.
   const placed = useRef(false);
   const goTo = useRef(wizard.goTo);
-  goTo.current = wizard.goTo;
+  // Synced before the placement effect below reads it (effects run in order).
+  useEffect(() => {
+    goTo.current = wizard.goTo;
+  });
   useEffect(() => {
     if (!view || placed.current) return;
     placed.current = true;
@@ -163,36 +168,6 @@ export function SetupWizardView({ id }: { id: string }) {
   );
 }
 
-/** Steps done of all of them, as the route counts — the home's own figure (UX-2-b). */
-function SetupProgress({ view }: { view: ResellerOnboarding }) {
-  const { t } = useLocale();
-  const reduced = useMotionLevel() === "reduced";
-  const total = view.steps.length;
-  const done = view.steps.filter((s) => s.done).length;
-  if (total === 0) return null;
-  const label = t("common", K.progress, { done, total });
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-text-secondary">{label}</p>
-      <div
-        className="h-2 overflow-hidden rounded-full bg-leaf-bg"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-      >
-        <motion.div
-          className="h-full rounded-full bg-primary"
-          initial={false}
-          animate={{ width: `${(done / total) * 100}%` }}
-          transition={{ duration: reduced ? 0 : DURATION.slow, ease: EASE.standard }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function Steps({
   id,
   view,
@@ -232,6 +207,7 @@ function Steps({
               icon={SETUP_STEP_ICONS[s.key]}
               label={t("common", STEP_KEYS[s.key].title)}
               done={s.done}
+              optional={s.optional}
               current={i === index}
               onClick={() => move(i)}
             />
@@ -342,11 +318,11 @@ function StepHead({ step, index, total }: { step: Step; index: number; total: nu
       </span>
       <div className="min-w-0 space-y-1">
         <p className="text-2xs font-bold text-text-secondary">
-          {t("common", W.stepOf, { current: String(index + 1), total: String(total) })} · {t("common", step.gate ? W.required : W.optional)}
+          {t("common", W.stepOf, { current: String(index + 1), total: String(total) })} · {t("common", step.gate ? W.required : step.optional ? W.optionalStep : W.optional)}
         </p>
         <h2 className="text-base font-bold text-text-primary">{t("common", STEP_KEYS[step.key].title)}</h2>
         <p className="text-xs text-text-secondary">{t("common", STEP_KEYS[step.key].hint)}</p>
-        {step.done && step.key !== "domain" && (
+        {step.done && step.key !== "domain" && !step.optional && (
           <p className="flex items-center gap-1.5 text-xs font-bold text-primary">
             <CheckCircle2 size={14} aria-hidden />
             {t("common", W.stepDone)}
@@ -360,6 +336,8 @@ function StepHead({ step, index, total }: { step: Step; index: number; total: nu
 /** The step's own screen, inside the wizard, by the path's reseller (UX-2-d). */
 function StepBody({ id, step, onChanged }: { id: string; step: Step; onChanged: () => void }) {
   switch (step.key) {
+    case "import":
+      return <ImportStep id={id} step={step} onChanged={onChanged} />;
     case "domain":
       return <DomainStep id={id} done={step.done} />;
     case "gateway":

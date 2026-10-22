@@ -412,33 +412,6 @@ export interface ResellerDomain {
 }
 
 /**
- * A reseller's custom domains (F-018-i), by the reseller the path names
- * (ADR-0064): the owner, a staff seat with `domain.manage`, or platform staff
- * are admitted there (invariant 21) — so no permission key is checked here.
- */
-/** A step of the checklist (`tenant/contract.onboarding.md` "The checklist"). */
-export type OnboardingStepKey = "domain" | "gateway" | "bot" | "pricing";
-
-/** `GET /api/tenants/:id/onboarding`: every field computed from live rows, nothing stored. */
-export interface ResellerOnboarding {
-  tenantId: string;
-  /** The gate: true while no panel domain is proved. The same answer the guard enforces. */
-  onboarding: boolean;
-  /** What the gate closes while `onboarding`; empty otherwise. */
-  closed: string[];
-  steps: { key: OnboardingStepKey; done: boolean; gate: boolean }[];
-  /** Every step done — a reseller can be open well before this. */
-  complete: boolean;
-}
-
-/** The onboarding checklist (F-018-l), admitted by the path's reseller (invariant 21) as a `read`. */
-export const resellerOnboardingApi = {
-  async get(tenantId: string): Promise<ResellerOnboarding> {
-    return call<ResellerOnboarding>(`/tenants/${encodeURIComponent(tenantId)}/onboarding`, { method: "GET" });
-  },
-};
-
-/**
  * The door's verdict on the caller for one tenant (F-311-e): never refuses, a
  * refused caller gets `canRead: false`. Uncached — a seat revoked a second ago
  * must stop administering.
@@ -564,6 +537,11 @@ export const resellerBrandingApi = {
   },
 };
 
+/**
+ * A reseller's custom domains (F-018-i), by the reseller the path names
+ * (ADR-0064): the owner, a staff seat with `domain.manage`, or platform staff
+ * are admitted there (invariant 21) — so no permission key is checked here.
+ */
 export const resellerDomainsApi = {
   async list(tenantId: string): Promise<ResellerDomain[]> {
     return call<ResellerDomain[]>(`/tenants/${encodeURIComponent(tenantId)}/domains`, { method: "GET" });

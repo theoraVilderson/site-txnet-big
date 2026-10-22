@@ -8,7 +8,7 @@ import { useApiErrorMessage } from "@/hooks/useApiError";
 import { authApi } from "@/lib/auth-api";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { myResellerBrandingPath, myResellerSettingsPath, myResellerSetupPath, myResellerUsersPath } from "@/lib/routes";
-import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 import { TableSkeleton } from "../../../_components/kit/TableSkeleton";
 import { Badge } from "../../../financial/_components/Badge";
 import {
@@ -23,6 +23,7 @@ import {
 } from "../../_lib/onboarding";
 import { PageHeader } from "../../../_components/kit/PageHeader";
 import { useWorkspaceSelf } from "../../_lib/workspace";
+import { SetupProgress } from "./SetupProgress";
 import { Alert, Button, buttonClass } from "../../../_components/kit";
 
 const USERS = FrontendI18nKeys.common.resellerUsers.moreUsers;
@@ -121,7 +122,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
   const { t } = useLocale();
   const self = useWorkspaceSelf(id);
   const state = consoleState(view);
-  const { gate, rest } = splitSteps(view);
+  const { gate, rest, optional } = splitSteps(view);
   const closed = view.closed.filter((c): c is ClosedCapability => c in CLOSED_CAPABILITY_KEYS);
 
   return (
@@ -150,7 +151,7 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         </section>
       )}
 
-      <Progress view={view} />
+      <SetupProgress view={view} />
 
       {!view.complete && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -177,6 +178,16 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         </div>
       )}
 
+      {/* F-213: done or skipped, it counts toward nothing. */}
+      {optional.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-bold text-text-secondary">{t("common", K.optionalSteps)}</h2>
+          {optional.map((s) => (
+            <StepCard key={s.key} id={id} step={s} />
+          ))}
+        </div>
+      )}
+
       {/* Not steps: nothing waits on them, and they are never "done". */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold text-text-secondary">{t("common", K.shortcuts)}</h2>
@@ -185,30 +196,6 @@ function Console({ id, view }: { id: string; view: ResellerOnboarding }) {
         <Shortcut icon={Users} title={t("common", USERS.title)} hint={t("common", USERS.hint)} href={myResellerUsersPath(id, self)} />
       </div>
     </>
-  );
-}
-
-/** How many of the route's steps are done — counted, never stored. */
-function Progress({ view }: { view: ResellerOnboarding }) {
-  const { t } = useLocale();
-  const total = view.steps.length;
-  const done = view.steps.filter((s) => s.done).length;
-  if (total === 0) return null;
-  const label = t("common", K.progress, { done, total });
-  return (
-    <div className="space-y-2">
-      <p className="text-sm font-medium text-text-secondary">{label}</p>
-      <div
-        className="h-2 overflow-hidden rounded-full bg-leaf-bg"
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={done}
-      >
-        <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(done / total) * 100}%` }} />
-      </div>
-    </div>
   );
 }
 
@@ -248,7 +235,9 @@ function StepCard({ id, step }: { id: string; step: Step }) {
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-bold text-text-primary">{t("common", keys.title)}</h3>
-            {step.done ? (
+            {step.skipped ? (
+              <Badge icon={CheckCircle2} className="border-card-border bg-card-bg text-text-secondary" label={t("common", K.skipped)} />
+            ) : step.done ? (
               <Badge icon={CheckCircle2} className="border-primary/20 bg-leaf-bg text-primary" label={t("common", K.done)} />
             ) : (
               <Badge icon={Clock} className="border-card-border bg-card-bg text-text-secondary" label={t("common", K.todo)} />

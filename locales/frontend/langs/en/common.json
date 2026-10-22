@@ -2822,6 +2822,10 @@
     "required": "Required to open",
     "recommended": "Recommended next — these do not block opening",
     "steps": {
+      "import": {
+        "title": "Bring your users over",
+        "hint": "From your old panel or their old subscription links — they keep their services and links. Optional: skip it if you are starting fresh."
+      },
       "domain": {
         "title": "Connect your own domain",
         "hint": "Add a panel domain and publish its two DNS records. Once it is verified, your reseller opens."
@@ -2962,9 +2966,19 @@
         "title": "Your brand",
         "hint": "How your configs are named in your customers' VPN apps.",
         "optional": "Optional — it is not part of setup progress"
+      },
+      "optionalStep": "Optional — it is not part of setup progress",
+      "import": {
+        "open": "Open the import page",
+        "skip": "I have no users to bring",
+        "skipped": "You said you have no users to bring. Changed your mind? Undo it and bring them over any time.",
+        "undo": "Undo",
+        "done": "Your users have been brought over."
       }
     },
-    "opened": "Your domain is verified — your reseller is open to customers."
+    "opened": "Your domain is verified — your reseller is open to customers.",
+    "optionalSteps": "Optional — it counts toward nothing",
+    "skipped": "Skipped"
   },
   "resellerGateways": {
     "title": "{{slug}}'s payment gateways",

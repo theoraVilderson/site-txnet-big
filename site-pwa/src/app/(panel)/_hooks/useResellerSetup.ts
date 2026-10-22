@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { resellerOnboardingApi } from "@/lib/tenant-api";
+import { resellerOnboardingApi } from "@/lib/tenant-onboarding-api";
 import { usePanelSession } from "../_context/PanelSessionContext";
 import { celebrate } from "../_components/kit/celebrate";
 import { notify } from "../_components/kit/notify";

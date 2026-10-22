@@ -20,7 +20,7 @@ vi.mock("@/context/LocaleContext", () => ({
 }));
 vi.mock("../_context/PanelSessionContext", () => ({ usePanelSession: () => ({ me: null, isLoading: false }) }));
 vi.mock("@/lib/auth-api", () => ({ authApi: { ownedResellers: vi.fn(async () => ({ resellers: [] })) } }));
-vi.mock("@/lib/tenant-api", () => ({ resellerOnboardingApi: { get: vi.fn() } }));
+vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn() } }));
 const { card } = vi.hoisted(() => ({ card: (name: string) => () => <div data-testid={name} /> }));
 vi.mock("../_components/OperatingCurrencyCard", () => ({ OperatingCurrencyCard: card("currency") }));
 vi.mock("../_components/TenantTimeZoneCard", () => ({ TenantTimeZoneCard: card("time-zone") }));
@@ -35,7 +35,7 @@ vi.mock("./[id]/_components/QuotaCards", () => ({
 
 const CARDS = ["currency", "time-zone", "limits", "product-quotas", "overage-cap", "package-change", "support-access", "data-export"];
 
-import { resellerOnboardingApi } from "@/lib/tenant-api";
+import { resellerOnboardingApi } from "@/lib/tenant-onboarding-api";
 
 beforeEach(() => {
   vi.mocked(resellerOnboardingApi.get).mockResolvedValue({
@@ -44,10 +44,10 @@ beforeEach(() => {
     closed: ["signup"],
     complete: false,
     steps: [
-      { key: "domain", done: false, gate: true },
-      { key: "gateway", done: true, gate: false },
-      { key: "bot", done: false, gate: false },
-      { key: "pricing", done: true, gate: false },
+      { key: "domain", done: false, gate: true, optional: false, skipped: false },
+      { key: "gateway", done: true, gate: false, optional: false, skipped: false },
+      { key: "bot", done: false, gate: false, optional: false, skipped: false },
+      { key: "pricing", done: true, gate: false, optional: false, skipped: false },
     ],
   } as never);
 });

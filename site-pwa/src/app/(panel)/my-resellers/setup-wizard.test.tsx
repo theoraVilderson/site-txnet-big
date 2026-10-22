@@ -31,8 +31,8 @@ vi.mock("@/lib/auth-api", () => ({
 // The other steps' screens are UX-2-d's (`setup-steps.test.tsx`).
 vi.mock("../gateways/_components/GatewaysView", () => ({ GatewaysView: () => <div data-testid="gateways-view" /> }));
 vi.mock("../catalog/_components/CatalogView", () => ({ CatalogView: () => <div data-testid="catalog-view" /> }));
+vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn(), skip: vi.fn(), unskip: vi.fn() } }));
 vi.mock("@/lib/tenant-api", () => ({
-  resellerOnboardingApi: { get: vi.fn() },
   resellerDomainsApi: { list: vi.fn(), add: vi.fn(), check: vi.fn() },
 }));
 const { live } = vi.hoisted(() => ({ live: [] as { channel: string | null; types: readonly string[] | "any"; reread: () => void }[] }));
@@ -46,10 +46,11 @@ vi.mock("./_lib/workspace", async (importOriginal) => ({
   useWorkspaceSelf: () => false,
 }));
 
-import { resellerDomainsApi, resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerDomainsApi } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 
 const view = (done: Partial<Record<"domain" | "gateway" | "bot" | "pricing", boolean>>): ResellerOnboarding => {
-  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain" }));
+  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain", optional: false, skipped: false }));
   return { tenantId: "r-1", onboarding: !done.domain, closed: done.domain ? [] : ["register"], steps, complete: steps.every((s) => s.done) };
 };
 

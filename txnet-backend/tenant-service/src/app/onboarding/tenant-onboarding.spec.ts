@@ -5,6 +5,7 @@ import {
   offeredToTenant,
   pricesInEffect,
   parseTenantStatusState,
+  runWithTenant,
   serializeTenantStatusState,
   tenantAllows,
   tenantRefusal,
@@ -110,7 +111,7 @@ describe('TenantOnboardingService', () => {
   const PLATFORM = '10000000-0000-4000-8000-000000000001';
   const actor = { userId: 'u1', tenantId: 'platform', permissions: ['platform.tenant.manage'] };
 
-  const build = (rows: { domain?: boolean; gateway?: boolean; bot?: boolean; price?: boolean }) => {
+  const build = (rows: { domain?: boolean; gateway?: boolean; bot?: boolean; price?: boolean; run?: boolean; skip?: boolean }) => {
     const first = (present: boolean | undefined) =>
       vi.fn(async (_args: { where: Record<string, unknown> }) => (present ? { id: 'x' } : null));
     const all = {
@@ -118,10 +119,23 @@ describe('TenantOnboardingService', () => {
       tenantGatewayConfig: { findFirst: first(rows.gateway) },
       botIntegration: { findFirst: first(rows.bot) },
       productVariant: { findFirst: first(rows.price) },
+      migrationRun: { findFirst: first(rows.run) },
+      tenantOnboardingSkip: { findMany: vi.fn(async (_args: { where: Record<string, unknown> }) => (rows.skip ? [{ step: 'import' }] : [])) },
       tenant: { findUnique: vi.fn(async () => ({ operatingCurrencyCode: 'IRR' })), findFirst: vi.fn(async () => ({ id: PLATFORM })) },
     };
-    const access = { for() { return this; }, admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })) };
-    return { service: new TenantOnboardingService(access as never, all as never), all, access };
+    const tx = {
+      $executeRaw: vi.fn(async () => 1),
+      tenantOnboardingSkip: { upsert: vi.fn(async () => ({})), deleteMany: vi.fn(async () => ({ count: 1 })) },
+    };
+    const prisma = { $transaction: vi.fn(async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx)) };
+    const access = {
+      keys: [] as string[],
+      for(...keys: string[]) { this.keys = keys; return this; },
+      admit: vi.fn(async () => ({ id: RESELLER, slug: 'r', as: 'owner' as const })),
+      run: vi.fn(async (_actor: unknown, id: string, _capability: string, work: (r: { id: string }) => Promise<unknown>) =>
+        runWithTenant({ id }, () => work({ id }))),
+    };
+    return { service: new TenantOnboardingService(access as never, all as never, prisma as never), all, access, tx };
   };
 
   it('reports the gate the guard enforces, and every step from live rows', async () => {
@@ -131,10 +145,11 @@ describe('TenantOnboardingService', () => {
     expect(access.admit).toHaveBeenCalledWith(actor, RESELLER, 'read');
     expect(view).toMatchObject({ tenantId: RESELLER, onboarding: false, complete: false });
     expect(view.steps).toEqual([
-      { key: 'domain', done: true, gate: true },
-      { key: 'gateway', done: true, gate: false },
-      { key: 'bot', done: false, gate: false },
-      { key: 'pricing', done: true, gate: false },
+      { key: 'import', done: false, gate: false, optional: true, skipped: false },
+      { key: 'domain', done: true, gate: true, optional: false, skipped: false },
+      { key: 'gateway', done: true, gate: false, optional: false, skipped: false },
+      { key: 'bot', done: false, gate: false, optional: false, skipped: false },
+      { key: 'pricing', done: true, gate: false, optional: false, skipped: false },
     ]);
     expect(view.closed.sort()).toEqual(['endUserDeposit', 'register', 'sell', 'subscriptionLink']);
   });
@@ -161,6 +176,46 @@ describe('TenantOnboardingService', () => {
     });
     expect(all.tenantGatewayConfig.findFirst.mock.calls[0]![0].where).toMatchObject({ isActive: true, blockedAt: null });
     expect(all.botIntegration.findFirst.mock.calls[0]![0].where).toMatchObject({ status: 'active' });
+  });
+
+  describe('import — the optional first step, "bring my users" (F-213)', () => {
+    it('is done by a committed run that brought users — a panel or an old link, not a balances file', async () => {
+      const { service, all } = build({ run: true });
+      const view = await service.checklist(actor, RESELLER);
+      expect(view.steps[0]).toEqual({ key: 'import', done: true, gate: false, optional: true, skipped: false });
+      expect(all.migrationRun.findFirst.mock.calls[0]?.[0].where).toEqual({ tenantId: RESELLER, status: 'committed', kind: { in: ['panel', 'link'] } });
+    });
+
+    it('is done by a skip, and says it was skipped', async () => {
+      const { service, all } = build({ skip: true });
+      const view = await service.checklist(actor, RESELLER);
+      expect(view.steps[0]).toMatchObject({ key: 'import', done: true, skipped: true });
+      expect(all.tenantOnboardingSkip.findMany.mock.calls[0]?.[0].where).toEqual({ tenantId: RESELLER });
+    });
+
+    it('counts toward nothing: complete is the four required steps (user, 2026-10-22)', async () => {
+      const done = await build({ domain: true, gateway: true, bot: true, price: true }).service.checklist(actor, RESELLER);
+      expect(done.steps[0]).toMatchObject({ key: 'import', done: false });
+      expect(done).toMatchObject({ complete: true });
+    });
+
+    it('a skip is the migration key\'s write, stored once however often it is sent, and undone by deleting it', async () => {
+      const { service, access, tx } = build({ skip: true });
+      await service.skip(actor, RESELLER, 'import');
+      await service.skip(actor, RESELLER, 'import');
+      expect(access.keys).toEqual(['migration.manage']);
+      expect(access.run).toHaveBeenCalledWith(actor, RESELLER, 'staffWrite', expect.any(Function));
+      expect(tx.tenantOnboardingSkip.upsert).toHaveBeenCalledWith({
+        where: { tenantId_step: { tenantId: RESELLER, step: 'import' } },
+        create: { tenantId: RESELLER, step: 'import', skippedByUserId: actor.userId },
+        update: {},
+      });
+      // The write runs in the reseller's own scope: the table is strict RLS.
+      expect(tx.$executeRaw).toHaveBeenCalled();
+
+      await service.unskip(actor, RESELLER, 'import');
+      expect(tx.tenantOnboardingSkip.deleteMany).toHaveBeenCalledWith({ where: { tenantId: RESELLER, step: 'import' } });
+    });
   });
 
   describe('pricing — "there is something to sell", the catalog\'s own rule (F-018-ah)', () => {

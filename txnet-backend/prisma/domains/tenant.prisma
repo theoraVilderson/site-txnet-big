@@ -226,6 +226,7 @@ model Tenant {
   statusHistory       TenantStatusHistory[]
   storedObjects       StoredObject[]
   dataExports         TenantDataExport[]
+  onboardingSkips     TenantOnboardingSkip[]
 
   @@map("tenant")
   @@schema("tenant")
@@ -1119,5 +1120,32 @@ model TenantDataExport {
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("tenant_data_export")
+  @@schema("tenant")
+}
+
+/// F-213: an onboarding step that refuses nothing and that a reseller may
+/// close by saying it does not apply. Only an optional step is here — the
+/// gate and the four required steps are done by live rows alone.
+enum TenantOnboardingOptionalStep {
+  /// "Bring my users": done by a committed panel or link import, or skipped.
+  import
+
+  @@schema("tenant")
+}
+
+/// F-213: a reseller's "this step does not apply to me" — the one onboarding
+/// fact that is a person's decision rather than a count of live rows. One row
+/// per step; deleting it undoes the skip.
+model TenantOnboardingSkip {
+  tenantId        String                       @db.Uuid
+  step            TenantOnboardingOptionalStep
+  /// No foreign key: identity's; may be the platform's staff.
+  skippedByUserId String                       @db.Uuid
+  skippedAt       DateTime                     @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, step])
+  @@map("tenant_onboarding_skip")
   @@schema("tenant")
 }

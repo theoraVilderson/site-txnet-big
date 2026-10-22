@@ -269,6 +269,7 @@ export const EXPORT_TABLES: Readonly<Record<Prisma.ModelName, ExportRule>> = {
   TenantFeatureEntitlement: OWN,
   TenantFeaturePackage: none('platform'),
   TenantGatewayConfig: own('merchantIdEncrypted', 'apiKeyEncrypted'),
+  TenantOnboardingSkip: OWN,
   TenantPackageMeterRate: none('platform'),
   TenantSmsConfig: OWN,
   TenantStaffMember: OWN,

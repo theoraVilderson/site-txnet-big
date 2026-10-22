@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { PANEL_MY_RESELLERS, myResellerCatalogPath, myResellerConsolePath, myResellerDomainsPath } from "@/lib/routes";
-import type { ResellerOnboarding } from "@/lib/tenant-api";
+import type { ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 import {
   CLOSED_CAPABILITY_KEYS,
   ONBOARDING_REFUSAL_KEYS,
@@ -48,6 +48,8 @@ const view = (onboarding: boolean, done: Partial<Record<"domain" | "gateway" | "
       key,
       done: done[key] ?? false,
       gate: key === "domain",
+      optional: false,
+      skipped: false,
     })),
   }) satisfies ResellerOnboarding;
 

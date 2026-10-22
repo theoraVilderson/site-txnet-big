@@ -30,8 +30,8 @@ vi.mock("@/lib/auth-api", () => ({
   audienceGroups: vi.fn(async () => []),
   resellerBotsApi: { list: vi.fn(async () => []), connect: vi.fn(), retire: vi.fn() },
 }));
+vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn(), skip: vi.fn(), unskip: vi.fn() } }));
 vi.mock("@/lib/tenant-api", () => ({
-  resellerOnboardingApi: { get: vi.fn() },
   resellerDomainsApi: { list: vi.fn(async () => []), add: vi.fn(), check: vi.fn() },
   resellerBrandingApi: { get: vi.fn(async () => ({ lineNameTemplate: null })), previewLineName: vi.fn(async () => null), save: vi.fn() },
 }));
@@ -58,10 +58,10 @@ vi.mock("../catalog/_components/CatalogView", async () => {
   };
 });
 
-import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-api";
+import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 
 const view = (done: Partial<Record<"domain" | "gateway" | "bot" | "pricing", boolean>>): ResellerOnboarding => {
-  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain" }));
+  const steps = (["domain", "gateway", "bot", "pricing"] as const).map((key) => ({ key, done: !!done[key], gate: key === "domain", optional: false, skipped: false }));
   return { tenantId: "r-1", onboarding: !done.domain, closed: [], steps, complete: steps.every((s) => s.done) };
 };
 

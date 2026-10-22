@@ -118,9 +118,9 @@ The home's card stack moved to a page of its own, so the menu's settings
 section has one; the home keeps what says how far the reseller is.
 
 1. **Home** (`OnboardingConsoleView`, `/reseller`): the gate's state, a
-   progress bar — the route's steps done of all of them, counted at render,
-   never stored — the required and recommended steps, then shortcuts:
-   settings, brand, users.
+   progress bar — the route's required steps done of all of them, counted at
+   render, never stored — the required, recommended and optional steps, then
+   shortcuts: settings, brand, users.
 2. **Settings** (`ResellerSettingsView`, `/reseller/settings` and
    `/my-resellers/:id/settings`): operating currency, time zone, limits,
    product quotas, the cap on extras, package change, support access — each
@@ -146,9 +146,9 @@ User, 2026-10-08: a wizard rather than a checklist to tick off.
 2. **It opens at the first step not done; "later" stores nothing.** The
    checklist is live, so it already knows where to resume
    (`firstUndoneIndex`). A re-read never moves the person off their step.
-3. **The progress bar is the route's count** — steps done of all of them,
-   the home's own figure — never the step index. All done: a finished
-   screen in place of the steps.
+3. **The progress bar is the route's count** — required steps done of all
+   of them (`requiredCount`), the home's and the menu row's own figure —
+   never the step index. All done: a finished screen in place of the steps.
 4. **Motion is the panel's** (M1–M3): the step slides in from the side it is
    walked toward, mirrored right-to-left; at `reduced` it fades only
    (`setupSlide`). It is a page, not the kit's K12 dialog: nothing is
@@ -183,7 +183,13 @@ User, 2026-10-08: a wizard rather than a checklist to tick off.
     yesterday is not celebrated on every load.
 11. **A bought reseller lands in the wizard**: the purchase screen's
     button is `afterPurchasePath` — `/reseller/setup`, whose first step
-    is the domain.
+    is now «bring my users» (rule 12), then the domain.
+12. **«Bring my users», the optional first step** (F-213, `ImportStep`):
+    the way to this reseller's migration page and "I have no users to
+    bring" — a stored skip (`resellerOnboardingApi.skip`), shown as
+    skipped with an undo; done by an import, neither. Labelled optional,
+    a dashed rail mark, and counted nowhere (user, 2026-10-22); a skip or
+    undo re-reads the checklist like any step's save.
 
 ## Proof
 
@@ -195,4 +201,5 @@ sections, the handoff on both hosts, every link's page),
 `my-resellers/setup-wizard.test.tsx` (the wizard, UX-2-c),
 `my-resellers/setup-steps.test.tsx` (its steps' forms and the brand screen, UX-2-d),
 `my-resellers/setup-progress.test.tsx` (the menu row, the celebration, after buying, UX-2-e),
+`my-resellers/setup-import.test.tsx` (the optional import step and its skip, F-213),
 `handoff.service.spec.ts` (`hasPanel`).

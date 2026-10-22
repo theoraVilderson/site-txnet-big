@@ -1,9 +1,10 @@
-import { Bot, Globe, Landmark, Package, type LucideIcon } from "lucide-react";
+import { Bot, Globe, Import, Landmark, Package, type LucideIcon } from "lucide-react";
 import type { MotionLevel } from "@/lib/motion";
-import type { OnboardingStepKey, ResellerOnboarding } from "@/lib/tenant-api";
+import type { OnboardingStepKey, ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 
 /** Each onboarding step's icon in the setup wizard's rail (UX-2-c). */
 export const SETUP_STEP_ICONS: Record<OnboardingStepKey, LucideIcon> = {
+  import: Import,
   domain: Globe,
   gateway: Landmark,
   bot: Bot,
@@ -39,8 +40,18 @@ export interface SetupProgress {
   onboarding: boolean;
 }
 
+/**
+ * Required steps done of all of them — the home's, the wizard's and the menu's
+ * one figure. An optional step counts toward neither (F-213; user, 2026-10-22),
+ * so a reseller already set up is not pulled back by one.
+ */
+export function requiredCount(v: ResellerOnboarding): { done: number; total: number } {
+  const required = v.steps.filter((s) => !s.optional);
+  return { done: required.filter((s) => s.done).length, total: required.length };
+}
+
 export function setupProgress(v: ResellerOnboarding): SetupProgress {
-  return { done: v.steps.filter((s) => s.done).length, total: v.steps.length, complete: v.complete, onboarding: v.onboarding };
+  return { ...requiredCount(v), complete: v.complete, onboarding: v.onboarding };
 }
 
 /**
