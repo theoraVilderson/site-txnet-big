@@ -25,7 +25,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 
 | Body | Answer (201) |
 |---|---|
-| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, currencyCode, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], expiresAt}` — money as decimal strings, base currency (C-02) |
+| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each), `grantId?` (a renewal — [contract.renewal.md](contract.renewal.md), F-305-c) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, currencyCode, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], renewal: {grantId, bytes, days} \| null, expiresAt}` — money as decimal strings, base currency (C-02) |
 
 | Rule | Held by |
 |---|---|
@@ -48,7 +48,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 | **Nor past the reseller's package quota for the product** (F-019-v6, ADR-0107 points 3, 11; `contract.reseller-quota.md` "A product's sales"): a platform product past every window its reseller's package includes, under `stop` or with overage the reseller cannot pay — asked at create (`admitProductSale`, writes nothing), consumed at issue (`consumeProductSale`, the overage debited from the reseller then). `409 errors.billing.invoice.notAvailableNow`, `reason` `reseller_quota_exhausted`, **no facts** | the buyer hears only "not available now"; one sale past several windows is charged once |
 | **Nor past the reseller's room on the platform's panels** (F-019-o, ADR-0106 `platform_open_grants_max`): a variant whose group holds a platform panel, when the reseller's open Grants there are at its limit — at create, and again at issue (`assertPlatformGrantRoom`, under a per-reseller lock). `409 errors.billing.invoice.notAvailableNow`, `reason` `reseller_limit_reached`, **no facts** | the reseller's limit is not the buyer's business; told before paying, held again at the payment's transaction |
 
-## Renewing a Grant (decided — F-305, ADR-0158)
+## Renewing a Grant (the invoice built — F-305-c, ADR-0158)
 
 The same invoice can name a Grant the caller holds instead of a new purchase:
 the plan as it is now, another plan of the same product on the Grant's panel

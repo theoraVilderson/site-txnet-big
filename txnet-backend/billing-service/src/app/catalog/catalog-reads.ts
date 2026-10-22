@@ -222,6 +222,29 @@ export async function sellableOfferById(tx: Prisma.TransactionClient, variantId:
 }
 
 /**
+ * A plan a Grant may be renewed to (F-305-c, ADR-0158 (2)): live, whatever its
+ * visibility. `admin_only` and `unlisted` say who may *start* a service, and a
+ * renewal starts none — so `public` is put in its place, and only the live
+ * question {@link isSellableBySku} asks beside it is left.
+ */
+export const isRenewable = (f: OfferFacts) => isSellableBySku({ ...f, visibility: VariantVisibility.public });
+
+/**
+ * One variant as a renewal reads it (F-305-c), or `null`: live, with a price
+ * in effect at `at` in the tenant's currency — and no more. A product's
+ * audience (PT-1-b) and a reseller's package list (F-019-v5) say who may buy a
+ * new one, so neither is asked; RLS still returns only the tenant's own
+ * variants and the platform's. The caps are reported, never refused here.
+ */
+export async function renewableOfferById(tx: Prisma.TransactionClient, variantId: string, at: Date): Promise<CatalogOffer | null> {
+  const currencyCode = await tenantCurrency(tx);
+  const row = await tx.productVariant.findUnique({ where: { id: variantId }, include: withPrices(at, currencyCode) });
+  if (!row) return null;
+  const [live] = await withLiveCounts(tx, [row]);
+  return toOffer(live, at, currencyCode, isRenewable);
+}
+
+/**
  * Every listed variant the caller may buy, with the price in effect at `at`,
  * read on the caller's `tx` — what {@link CatalogReadService.listOffers}
  * answers, for a caller that narrows it further in its own transaction (the

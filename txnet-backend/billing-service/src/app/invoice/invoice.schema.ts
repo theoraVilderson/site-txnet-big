@@ -4,7 +4,8 @@ import { z } from 'zod';
 const E = BackendI18nKeys.errors.billing;
 
 /**
- * What a shopper sends to be invoiced (F-111-a): the variant and the codes typed.
+ * What a shopper sends to be invoiced (F-111-a): the variant and the codes typed —
+ * and, for a renewal of a Grant they hold, its id (F-305-c).
  *
  * **No price, and not strict.** Spec §5.8 says a client-submitted price is
  * ignored, not merely validated — so a `price`, `amount` or `total` in the body
@@ -20,6 +21,8 @@ export const invoiceCreateSchema = z.object({
     })
     .max(10, { message: E.couponCodesInvalid })
     .default([]),
+  /** A Grant the caller holds: `variantId` is then the plan it renews to (F-305-c, ADR-0158). */
+  grantId: z.string({ message: E.invoice.grantNotFound }).uuid({ message: E.invoice.grantNotFound }).optional(),
 });
 
 export type InvoiceCreateBody = z.infer<typeof invoiceCreateSchema>;

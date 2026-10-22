@@ -435,6 +435,10 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
     discount: D('2.50'),
     total: D('10.00'),
     status: InvoiceStatus.pending,
+    // A purchase: no Grant renewed (F-305-c).
+    grantId: null,
+    renewBytes: null,
+    renewDays: null,
     expiresAt: new Date('2026-09-25T12:30:00Z'),
     variant: { sku: 'VPN-30', nameKey: null, product: { nameKey: 'catalog.product.vpn.name' } },
   };
@@ -484,6 +488,7 @@ describe('InvoiceService.get — the invoice the shop comes back to (F-111-e)', 
       total: '10.00',
       automaticDiscount: null,
       applied: [{ code: 'SPRING', discount: '2.50' }],
+      renewal: null,
       expiresAt: ROW.expiresAt,
     });
     expect(asked.redemptions[0]).toMatchObject({

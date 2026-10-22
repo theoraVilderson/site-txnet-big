@@ -81,6 +81,7 @@ type LockedInvoice = {
   currencyCode: string;
   status: InvoiceStatus;
   salesCounted: boolean;
+  grantId: string | null;
   expiresAt: Date;
 };
 
@@ -103,7 +104,7 @@ export class InvoicePaymentService {
       // RLS scopes the row to this tenant; the `userId` makes another user's
       // invoice as absent as another tenant's.
       const [invoice] = await tx.$queryRaw<LockedInvoice[]>`
-        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "expiresAt"
+        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "grantId", "expiresAt"
           FROM billing.invoice
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
@@ -119,6 +120,8 @@ export class InvoicePaymentService {
       if (invoice.status === InvoiceStatus.expired || invoice.expiresAt <= now) {
         throw new InvoiceUnpayable('expired', invoiceId);
       }
+      // TODO(F-305-d): a renewal invoice renews its Grant; until then it is never paid as a purchase.
+      if (invoice.grantId) throw new Error(`invoice ${invoice.id} renews a Grant; paying one is F-305-d`);
 
       const total = new Prisma.Decimal(invoice.total);
       const [wallet] = await tx.$queryRaw<Array<{ cachedBalance: Prisma.Decimal; heldAmount: Prisma.Decimal }>>`

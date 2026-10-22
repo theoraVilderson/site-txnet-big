@@ -28,6 +28,7 @@ import { RateLimit } from '../request/rate-limit';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
 import { InvoiceCreateBody, invoiceCreateSchema } from './invoice.schema';
 import { InvoiceCancelRefusal, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
+import { RenewalRefusal, RenewalRefused } from './renewal-invoice';
 
 const E = BackendI18nKeys.errors.billing;
 
@@ -38,6 +39,13 @@ const PAY_REFUSAL_KEY: Record<InvoicePayRejection, string> = {
   expired: E.invoice.expired,
   cancelled: E.invoice.cancelled,
   insufficient_balance: E.invoice.insufficientBalance,
+};
+
+/** Every way a renewal is refused (F-305-c), keyed exhaustively like a pay's. */
+const RENEWAL_REFUSAL_KEY: Record<RenewalRefusal, string> = {
+  grant_not_found: E.invoice.grantNotFound,
+  grant_not_renewable: E.invoice.grantNotRenewable,
+  plan_not_renewable: E.invoice.planNotRenewable,
 };
 
 /** Every way a cancel is refused (F-114-d), keyed exhaustively like a pay's. */
@@ -53,6 +61,11 @@ function toHttp(e: unknown): unknown {
     return e.reason === 'not_found' ? new NotFoundException(body) : new ConflictException(body);
   }
   if (e instanceof InvoiceVariantNotFound) return new NotFoundException({ i18nKey: E.invoice.variantNotFound, message });
+  // Not the caller's Grant is one neutral 404; a Grant or plan that cannot be renewed is the user's to know (F-305-c).
+  if (e instanceof RenewalRefused) {
+    const body = { i18nKey: RENEWAL_REFUSAL_KEY[e.reason], reason: e.reason, message };
+    return e.reason === 'grant_not_found' ? new NotFoundException(body) : new ConflictException(body);
+  }
   // Every unit of a capped variant is sold or held by another invoice (F-513-b): nothing was written.
   if (e instanceof VariantSoldOut) return new ConflictException({ i18nKey: E.invoice.soldOut, reason: e.reason, message });
   if (e instanceof InvoiceUnpayable) {
@@ -157,6 +170,7 @@ export class InvoiceController {
         variantId: body.variantId,
         couponCodes: body.couponCodes,
         channel,
+        grantId: body.grantId,
       });
       return {
         ...invoice,

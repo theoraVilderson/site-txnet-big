@@ -239,6 +239,8 @@ model Grant {
   quotaAdjustments QuotaAdjustment[]
   durationChanges  GrantDurationChange[]
   renewals         GrantRenewal[]
+  /// The renewal invoices that named it (F-305-c).
+  renewalInvoices  Invoice[]
   linkResets       GrantLinkReset[]
   legacySubLinks   LegacySubLink[]
   meters           GrantMeter[]

@@ -15,11 +15,27 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 [contract.reseller-grants.md](contract.reseller-grants.md). Both land in entitlement's
 `renewGrant` (entitlement `contract.admin.md` "Renew").
 
-**Status: decided, not built.** F-305-c (the invoice), F-305-d (paying it),
-F-305-e (GiB and days) build what is below; the rate it reads is catalog's
+**Status: the invoice is built (F-305-c).** F-305-d (paying it) and F-305-e
+(GiB and days) build the rest; the rate F-305-e reads is catalog's
 [contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
 (F-305-f/g), bot-app (F-305-i).
+
+## The route (built — F-305-c)
+
+`POST /api/billing/invoices` with `grantId` beside `variantId` (and `couponCodes?`):
+`InvoiceService.create`, the rules in `invoice/renewal-invoice.ts` (`renewalOf`, pure),
+proved by `invoice/renewal-invoice.spec.ts`; the plan is read by catalog's
+`renewableOfferById`. The answer is a purchase's, plus `renewal: {grantId, bytes, days}`
+(`bytes` a string, C-02), `null` on a purchase; `GET /api/billing/invoices/:id` answers it too.
+The invoice row records `grantId`, `renewBytes`, `renewDays` (all or none, CHECK
+`invoice_renewal_whole`) beside `priceId`, and `salesCounted: false`.
+
+| Refusal | When |
+|---|---|
+| `404 errors.billing.invoice.grantNotFound`, `reason` `grant_not_found` | rule 1: not the caller's Grant, another tenant's (RLS), or unknown |
+| `409 errors.billing.invoice.grantNotRenewable`, `reason` `grant_not_renewable` | rule 1: the Grant is `pending`, `exhausted`, `expired` or `cancelled` |
+| `409 errors.billing.invoice.planNotRenewable`, `reason` `plan_not_renewable` | rules 3, 4, 6: the plan is gone, off, unpriced in the tenant's currency, of another product, panel group or billing mode; permanent against dated; a bag against unlimited; no traffic stated (F-111-p); or it adds nothing. A Grant issued with no plan (an import) has no product to renew within |
 
 ## What may be renewed, and to what (F-305-c)
 

@@ -683,6 +683,12 @@ model Invoice {
   /// Whether it is in its variant's sales counts (F-513-b): held while
   /// `pending`, sold once `paid`. False on every invoice made before the counts.
   salesCounted Boolean    @default(false)
+  /// A renewal of a Grant the buyer holds (F-305-c, ADR-0158), else null: a
+  /// purchase. `renewBytes` / `renewDays` are what the plan added when quoted,
+  /// paid as quoted; all three or none (CHECK `invoice_renewal_whole`).
+  grantId    String?      @db.Uuid
+  renewBytes BigInt?
+  renewDays  Int?
   expiresAt DateTime
   createdAt DateTime      @default(now())
   updatedAt DateTime      @default(now()) @updatedAt
@@ -690,10 +696,12 @@ model Invoice {
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
   price   Price          @relation(fields: [priceId], references: [id], onDelete: Restrict)
   discountRule DiscountRule? @relation(fields: [discountRuleId], references: [id], onDelete: Restrict)
+  grant   Grant?         @relation(fields: [grantId], references: [id], onDelete: Restrict)
 
   @@index([status, expiresAt])
   @@index([tenantId, userId, createdAt(sort: Desc)])
   @@index([variantId])
+  @@index([grantId])
   @@map("invoice")
   @@schema("billing")
 }
