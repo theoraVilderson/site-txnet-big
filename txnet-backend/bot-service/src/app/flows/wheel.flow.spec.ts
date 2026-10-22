@@ -30,8 +30,8 @@ const WHEEL: UserWheel = {
   version: 2,
   currencyCode: 'USD',
   prizes: [
-    { position: 1, label: '1 GB', prizeType: 'bonus_traffic_gb', prizeValue: '1.00', oddsPercent: '30.00' },
-    { position: 2, label: 'Nothing', prizeType: 'empty', prizeValue: '0.00', oddsPercent: '70.00' },
+    { position: 1, label: '1 GB', prizeType: 'bonus_traffic_gb', prizeValue: '1.00', oddsPercent: '30.00', reachable: true },
+    { position: 2, label: 'Nothing', prizeType: 'empty', prizeValue: '0.00', oddsPercent: '70.00', reachable: true },
   ],
   eligible: true,
   refusalReason: null,
@@ -65,6 +65,15 @@ function harness(o: { wheel?: unknown; spin?: unknown; services?: number } = {})
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
 
 describe('WheelFlow', () => {
+  it('marks a slot whose prize cannot reach this user, and says what the mark means (F-707-v)', async () => {
+    const prizes = [{ ...WHEEL.prizes[0], oddsPercent: '0.00', reachable: false }, { ...WHEEL.prizes[1], oddsPercent: '100.00' }];
+    const r = await harness({ wheel: ok({ ...WHEEL, prizes }) }).flow.start(ctx);
+    expect(r.view.body.values?.odds).toEqual({ raw: '1 GB — 0% 🚫\nNothing — 100%' });
+    expect(r.view.body.values?.unreachable).toEqual({ key: BotKeys.wheel.unreachable });
+    const all = await harness().flow.start(ctx);
+    expect(all.view.body.values?.unreachable).toEqual({ raw: '' });
+  });
+
   it('offers the prize-service row under the odds only when there is a service to choose (F-707-t)', async () => {
     expect(ids(await harness({ services: 2 }).flow.start(ctx))).toEqual([ACTIONS.wheelSpin, `${PRIZE_SERVICE_ACTION_PREFIX}o`]);
     expect(ids(await harness({ services: 1 }).flow.start(ctx))).toEqual([ACTIONS.wheelSpin]);

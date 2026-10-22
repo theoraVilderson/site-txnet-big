@@ -36,9 +36,15 @@ export function reachableSlots<T extends Slot>(prizes: T[], reach: PrizeReach): 
   return reachable.length ? reachable : prizes;
 }
 
+/** A slot's odds for this user, and whether its prize can reach them at all — the page says why a slot reads 0% (F-707-v). */
+export type SlotOdds = { oddsPercent: string; reachable: boolean };
+
 /** Each slot's odds for this user, as percent text: an unreachable slot `0.00`, the rest over the reachable weight. */
-export function oddsFor<T extends Slot>(prizes: T[], reach: PrizeReach): (p: T) => string {
-  const reachable = prizes.filter((p) => reach.has(p.prizeType));
-  const total = reachable.reduce((s, p) => s + p.probabilityWeight, 0);
-  return (p) => (total > 0 && reach.has(p.prizeType) ? percentText(new Prisma.Decimal(p.probabilityWeight).mul(100).div(total)) : percentText(new Prisma.Decimal(0)));
+export function oddsFor<T extends Slot>(prizes: T[], reach: PrizeReach): (p: T) => SlotOdds {
+  const total = prizes.filter((p) => reach.has(p.prizeType)).reduce((s, p) => s + p.probabilityWeight, 0);
+  return (p) => {
+    const reachable = reach.has(p.prizeType);
+    const odds = total > 0 && reachable ? new Prisma.Decimal(p.probabilityWeight).mul(100).div(total) : new Prisma.Decimal(0);
+    return { oddsPercent: percentText(odds), reachable };
+  };
 }

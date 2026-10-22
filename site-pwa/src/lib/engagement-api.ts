@@ -121,7 +121,8 @@ export interface UserWheel {
   tenantDay: string;
   version: number;
   currencyCode: string;
-  prizes: Array<{ position: number; label: string; prizeType: WheelPrizeType; prizeValue: string; oddsPercent: string }>;
+  /** This user's own odds (F-707-u); `reachable: false` = the prize cannot reach their services, so 0% (F-707-v). */
+  prizes: Array<{ position: number; label: string; prizeType: WheelPrizeType; prizeValue: string; oddsPercent: string; reachable: boolean }>;
   eligible: boolean;
   refusalReason: string | null;
   spinsLeftToday: number;

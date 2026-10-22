@@ -7,7 +7,7 @@ import { liveMembership, runWithTenant, tenantTransaction, moneyText } from '@tx
 import { GrantService } from '../entitlement/grant';
 import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, fingerprintVerdict, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
 import { PrismaService } from '../prisma/prisma.service';
-import { oddsFor, prizeReachOf, reachableSlots } from './prize-reach';
+import { oddsFor, prizeReachOf, reachableSlots, type SlotOdds } from './prize-reach';
 import { issueReward, RewardIssued, RewardRefused } from './reward-issuer';
 import { isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
 import { alertCapCrossing } from './wheel-report';
@@ -180,7 +180,7 @@ export type WheelView = {
   version: number;
   currencyCode: string;
   /** Public odds (ADR-0111 point 4): each slot's weight over the total, as a percent to two places. */
-  prizes: Array<{ position: number; label: string; prizeType: SpinPrizeType; prizeValue: string; oddsPercent: string }>;
+  prizes: Array<{ position: number; label: string; prizeType: SpinPrizeType; prizeValue: string } & SlotOdds>;
   eligible: boolean;
   refusalReason: SpinRefusalReason | null;
   spinsLeftToday: number;
@@ -255,7 +255,7 @@ export class WheelSpinService {
         currencyCode: cfg.currencyCode,
         prizes: [...cfg.prizes]
           .sort((a, b) => a.position - b.position)
-          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), oddsPercent: odds(p) })),
+          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), ...odds(p) })),
         eligible: refusal === null,
         refusalReason: refusal?.reason ?? null,
         spinsLeftToday: Math.max(0, cfg.maxSpinsPerAccountPerDay - facts.awardedToday),

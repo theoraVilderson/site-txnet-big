@@ -15,6 +15,9 @@ const WON_KEYS: Record<WheelPrizeType, BotKey> = BotKeys.wheel.won;
 
 const spinButton = [[{ id: ACTIONS.wheelSpin, label: { key: BotKeys.action.wheelSpin } }]];
 
+/** Beside a slot whose prize cannot reach this user's services; `wheel.unreachable` says what it means. */
+const UNREACHABLE_MARK = '🚫';
+
 /** `"1.50"` -> `"1.5"`, `"30.00"` -> `"30"`: a figure as people say it. */
 const plain = (v: string) => (v.includes('.') ? v.replace(/\.?0+$/, '') : v);
 
@@ -53,12 +56,13 @@ export class WheelFlow {
     }
 
     const w = read.data;
-    // A slot's name is the tenant's data, not copy: shown as it is.
-    const odds: BotText = { raw: w.prizes.map((p) => `${p.label} — ${plain(p.oddsPercent)}%`).join('\n') };
+    // A slot's name is the tenant's data, not copy: shown as it is. 🚫 marks a prize that cannot reach this user (F-707-v).
+    const odds: BotText = { raw: w.prizes.map((p) => `${p.label} — ${plain(p.oddsPercent)}%${p.reachable ? '' : ` ${UNREACHABLE_MARK}`}`).join('\n') };
+    const unreachable: BotText = w.prizes.some((p) => !p.reachable) ? { key: BotKeys.wheel.unreachable } : { raw: '' };
     const status: BotText = w.eligible
       ? { key: BotKeys.wheel.canSpin, values: { n: w.spinsLeftToday } }
       : { key: BotKeys.wheel.cannotSpin, values: { reason: reasonText(w.refusalReason) } };
-    const body: BotText = { key: BotKeys.wheel.screen, values: { odds, status } };
+    const body: BotText = { key: BotKeys.wheel.screen, values: { odds, unreachable, status } };
     if (!w.eligible) return { view: prizeRows.length ? view('wheel.screen', body, prizeRows) : say('wheel.screen', body), nextState: null };
     return {
       view: view('wheel.screen', body, [...spinButton, ...prizeRows]),

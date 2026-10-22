@@ -35,10 +35,14 @@ describe('prizeReachOf', () => {
 describe("a user's own odds", () => {
   const onlyCoupons = new Set<SpinPrizeType>([SpinPrizeType.discount_coupon, SpinPrizeType.empty, SpinPrizeType.free_grant]);
 
-  it('shows an unreachable slot at 0% and re-weights the rest', () => {
-    const odds = oddsFor(WHEEL, onlyCoupons);
-    expect(WHEEL.map(odds)).toEqual(['0.00', '0.00', '20.00', '80.00']);
-    expect(WHEEL.map(oddsFor(WHEEL, new Set(Object.values(SpinPrizeType))))).toEqual(['30.00', '20.00', '10.00', '40.00']);
+  it('shows an unreachable slot at 0%, says so, and re-weights the rest (F-707-v)', () => {
+    expect(WHEEL.map(oddsFor(WHEEL, onlyCoupons))).toEqual([
+      { oddsPercent: '0.00', reachable: false },
+      { oddsPercent: '0.00', reachable: false },
+      { oddsPercent: '20.00', reachable: true },
+      { oddsPercent: '80.00', reachable: true },
+    ]);
+    expect(WHEEL.map((p) => oddsFor(WHEEL, new Set(Object.values(SpinPrizeType)))(p).oddsPercent)).toEqual(['30.00', '20.00', '10.00', '40.00']);
   });
 
   it('never draws a slot it shows at 0%', () => {
@@ -49,6 +53,6 @@ describe("a user's own odds", () => {
   it('keeps every slot when none can be reached, so a spin still lands as before', () => {
     const gbOnly = [slot(1, SpinPrizeType.bonus_traffic_gb, 1)];
     expect(reachableSlots(gbOnly, onlyCoupons)).toEqual(gbOnly);
-    expect(gbOnly.map(oddsFor(gbOnly, onlyCoupons))).toEqual(['0.00']);
+    expect(gbOnly.map(oddsFor(gbOnly, onlyCoupons))).toEqual([{ oddsPercent: '0.00', reachable: false }]);
   });
 });

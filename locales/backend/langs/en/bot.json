@@ -268,7 +268,7 @@
     "gone": "This suggestion is no longer available."
   },
   "wheel": {
-    "screen": "🎡 Lucky wheel\nThese are the real odds; our server picks the result.\n\n{{odds}}\n\n{{status}}",
+    "screen": "🎡 Lucky wheel\nThese are the real odds; our server picks the result.\n\n{{odds}}{{unreachable}}\n\n{{status}}",
     "canSpin": "Spins left today: {{n}}. Tap Spin!",
     "cannotSpin": "You cannot spin right now. {{reason}}",
     "none": "There is no wheel running today. Check back later.",
@@ -296,7 +296,8 @@
       "no_wheel": "There is no wheel running today.",
       "no_fingerprint": "This chat could not be recognised. Open the menu and try again.",
       "spin_in_progress": "Your spin is already being processed. Tap Spin again in a moment."
-    }
+    },
+    "unreachable": "\n🚫 = this prize cannot reach your services (GB only to a service with a volume, days only to one with an end date)"
   },
   "lotteries": {
     "list": "🎟 Your lotteries ({{n}}). Choose one to see its prizes and your entry.",

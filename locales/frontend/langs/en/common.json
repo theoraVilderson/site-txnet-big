@@ -5445,7 +5445,8 @@
     "odds": {
       "title": "The odds",
       "note": "These are the real odds of every slot. The server picks the result with them; the wheel only shows it.",
-      "chance": "{{percent}}%"
+      "chance": "{{percent}}%",
+      "unreachable": "{{percent}}% (cannot reach your services)"
     },
     "notEligible": "You cannot spin right now",
     "refusals": {

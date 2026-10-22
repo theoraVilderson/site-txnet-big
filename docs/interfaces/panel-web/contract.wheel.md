@@ -30,7 +30,8 @@ ADR-0111), both through `lib/engagement-api.ts`:
    `reason`, or `spin_in_progress`), so the retry is answered with the spin it
    may have made (engagement "The spin" rule 1); any other answer starts a new key.
 3. **The odds shown are billing's** `oddsPercent`, never recomputed here —
-   this user's own: a slot whose prize cannot reach their services reads 0% (F-707-u).
+   this user's own: a slot whose prize cannot reach their services reads 0% (F-707-u),
+   with «(به سرویس شما نمی‌رسد)» beside it from billing's `reachable` (`oddsLine`, F-707-v).
 4. **Every reason has a sentence**: `REFUSAL_KEYS` covers `SpinRefusalReason`
    and `WheelSpinRejection`, read from the service by the spec. `no_wheel` on
    the read is a page state, not an error.

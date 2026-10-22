@@ -25,7 +25,8 @@ they serve are engagement's ([contract.md](../../domains/engagement/contract.md)
    top-up row is (`BillingApiClient.isConfigured`). Whether a wheel runs today
    is billing's answer, told as `wheel.none`.
 3. **The screen is the odds and a status.** Each slot as `label — percent%`, billing's
-   per-user odds (0% for a prize that cannot reach this user, F-707-u)
+   per-user odds (0% for a prize that cannot reach this user, F-707-u), such a
+   line marked 🚫 and `wheel.unreachable` saying what the mark means (F-707-v)
    (the label is the tenant's data, shown raw); then either the spins left and
    a Spin button, or `cannotSpin` with the reason's sentence and no button.
 4. **One screen, one key.** The screen's state holds a `requestId`. A lost

@@ -8,7 +8,7 @@ import { wheelApi, type SpinResult, type UserWheel, type WheelHistoryRow } from 
 import { copyText } from "../../_lib/clipboard";
 import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
-import { WHEEL_KEYS as K, landingRotation, nextRequestId, plainNumber, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
+import { WHEEL_KEYS as K, landingRotation, nextRequestId, oddsLine, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
 import { PageHeader } from "../../_components/kit/PageHeader";
 import { PrizeServicePicker } from "../../_components/PrizeServicePicker";
@@ -176,14 +176,17 @@ export function WheelView() {
               <h2 className="text-sm font-bold text-text-primary">{t("common", K.odds.title)}</h2>
               <p className="mt-1 text-xs text-text-secondary">{t("common", K.odds.note)}</p>
               <ul className="mt-3 divide-y divide-card-border text-sm">
-                {wheel.prizes.map((p) => (
-                  <li key={p.position} className="flex items-center justify-between gap-3 py-2">
-                    <span dir="auto" className="text-text-primary">
-                      {p.label}
-                    </span>
-                    <span className="font-bold text-text-secondary">{t("common", K.odds.chance, { percent: plainNumber(p.oddsPercent) })}</span>
-                  </li>
-                ))}
+                {wheel.prizes.map((p) => {
+                  const odds = oddsLine(p);
+                  return (
+                    <li key={p.position} className="flex items-center justify-between gap-3 py-2">
+                      <span dir="auto" className="text-text-primary">
+                        {p.label}
+                      </span>
+                      <span className="font-bold text-text-secondary">{t("common", odds.key, odds.values)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
 

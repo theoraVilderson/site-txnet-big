@@ -6,7 +6,7 @@ import type { Me } from "@/lib/auth-api";
 import type { SpinResult } from "@/lib/engagement-api";
 import { PANEL_WHEEL } from "@/lib/routes";
 import { PANEL_MENU, menuHrefs, visibleMenu } from "../_lib/panel-menu";
-import { REFUSAL_KEYS, WHEEL_KEYS, landingRotation, nextRequestId, resultLine, slotUnderPointer } from "./_lib/wheel";
+import { REFUSAL_KEYS, WHEEL_KEYS, landingRotation, nextRequestId, oddsLine, resultLine, slotUnderPointer } from "./_lib/wheel";
 
 /**
  * The user's wheel (F-707-g, ADR-0111 point 4), over billing's `/api/billing/wheel`.
@@ -124,5 +124,12 @@ describe("every key this page can reach", () => {
   it.each(["en", "fa"])("resolves in %s", (lang) => {
     const keys = shipped(lang);
     expect(flatten(WHEEL_KEYS).filter((k) => !keys.has(k))).toEqual([]);
+  });
+});
+
+describe("a slot's odds, this user's own (F-707-u, F-707-v)", () => {
+  it("says why a slot reads 0% when its prize cannot reach this user's services", () => {
+    expect(oddsLine({ oddsPercent: "0.00", reachable: false })).toEqual({ key: WHEEL_KEYS.odds.unreachable, values: { percent: "0" } });
+    expect(oddsLine({ oddsPercent: "42.50", reachable: true })).toEqual({ key: WHEEL_KEYS.odds.chance, values: { percent: "42.5" } });
   });
 });

@@ -257,7 +257,8 @@ export const BOT_COPY_FALLBACKS: Readonly<Record<string, string>> = {
   // F-707-h. The lucky wheel.
   [BotKeys.action.wheel]: '🎡 Lucky wheel',
   [BotKeys.action.wheelSpin]: '🎡 Spin',
-  [BotKeys.wheel.screen]: '🎡 Lucky wheel\nThese are the real odds; our server picks the result.\n\n{{odds}}\n\n{{status}}',
+  [BotKeys.wheel.screen]: '🎡 Lucky wheel\nThese are the real odds; our server picks the result.\n\n{{odds}}{{unreachable}}\n\n{{status}}',
+  [BotKeys.wheel.unreachable]: '\n🚫 = this prize cannot reach your services (GB only to a service with a volume, days only to one with an end date)',
   [BotKeys.wheel.canSpin]: 'Spins left today: {{n}}. Tap Spin!',
   [BotKeys.wheel.cannotSpin]: 'You cannot spin right now. {{reason}}',
   [BotKeys.wheel.none]: 'There is no wheel running today. Check back later.',

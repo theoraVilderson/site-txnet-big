@@ -108,3 +108,8 @@ export function formatDay(day: string, lang: string): string {
     return day;
   }
 }
+
+/** A slot's odds as the list writes them; one whose prize cannot reach this user's services says so (F-707-v). */
+export function oddsLine(p: { oddsPercent: string; reachable: boolean }): Line {
+  return { key: p.reachable ? K.odds.chance : K.odds.unreachable, values: { percent: plainNumber(p.oddsPercent) } };
+}
