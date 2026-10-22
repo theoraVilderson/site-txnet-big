@@ -26,13 +26,14 @@ vi.mock("../_components/OperatingCurrencyCard", () => ({ OperatingCurrencyCard: 
 vi.mock("../_components/TenantTimeZoneCard", () => ({ TenantTimeZoneCard: card("time-zone") }));
 vi.mock("./[id]/_components/ResellerLimitsCard", () => ({ ResellerLimitsCard: card("limits") }));
 vi.mock("./[id]/_components/SupportAccessCard", () => ({ SupportAccessCard: card("support-access") }));
+vi.mock("./[id]/_components/DataExportCard", () => ({ DataExportCard: card("data-export") }));
 vi.mock("./[id]/_components/QuotaCards", () => ({
   ProductQuotasCard: card("product-quotas"),
   OverageCapCard: card("overage-cap"),
   PackageChangeCard: card("package-change"),
 }));
 
-const CARDS = ["currency", "time-zone", "limits", "product-quotas", "overage-cap", "package-change", "support-access"];
+const CARDS = ["currency", "time-zone", "limits", "product-quotas", "overage-cap", "package-change", "support-access", "data-export"];
 
 import { resellerOnboardingApi } from "@/lib/tenant-api";
 

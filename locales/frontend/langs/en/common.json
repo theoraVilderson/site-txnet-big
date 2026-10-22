@@ -7752,5 +7752,35 @@
       "commitNothing": "Nothing to credit: every row is skipped.",
       "rollbackConfirm": "Undo these balances? Each credit is taken back from its wallet — except wallets used since the credit: they keep it."
     }
+  },
+  "dataExport": {
+    "title": "Take your data",
+    "subtitle": "One archive of everything that is yours: users, services, invoices, ledger, support, pages, domains, bot links and audit. Never a password or a key. Once a day, in any status; each archive is kept 7 days.",
+    "format": "A .jsonl.gz file: one JSON line per row, readable with zcat and jq.",
+    "request": "Prepare an export",
+    "nextAt": "You can ask for the next one on {{date}}",
+    "none": "No export yet.",
+    "loading": "Loading…",
+    "asked": "Asked {{date}}",
+    "size": "{{size}} · {{rows}} rows",
+    "until": "Downloadable until {{date}}",
+    "download": "Download",
+    "queued": "Your export is queued. This page updates by itself when it is ready.",
+    "status": {
+      "queued": "Waiting",
+      "building": "Being built",
+      "ready": "Ready",
+      "expired": "Deleted after 7 days",
+      "failed": "Failed — ask again"
+    },
+    "refusals": {
+      "not_allowed": "Only the reseller's owner can take its data.",
+      "reseller_not_found": "This reseller does not exist.",
+      "reseller_suspended": "This reseller is suspended.",
+      "reseller_terminated": "This reseller has been terminated.",
+      "export_too_soon": "An export was already asked for in the last 24 hours.",
+      "export_not_found": "This export no longer exists.",
+      "export_not_ready": "This export is not ready yet."
+    }
   }
 }

@@ -6,6 +6,7 @@ import { TenantTimeZoneCard } from "../../../../_components/TenantTimeZoneCard";
 import { PageHeader } from "../../../../_components/kit/PageHeader";
 import { ResellerLimitsCard } from "../../_components/ResellerLimitsCard";
 import { SupportAccessCard } from "../../_components/SupportAccessCard";
+import { DataExportCard } from "../../_components/DataExportCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "../../_components/QuotaCards";
 import { ONBOARDING_KEYS as K } from "../../../_lib/onboarding";
 
@@ -31,6 +32,8 @@ export function ResellerSettingsView({ id }: { id: string }) {
         <PackageChangeCard tenantId={id} />
         {/* F-117-f: the platform's access to this reseller's people; nothing to platform staff. */}
         <SupportAccessCard tenantId={id} />
+        {/* F-212-c: the reseller takes all its data, in any status (catalog §14.8). */}
+        <DataExportCard tenantId={id} />
       </div>
     </div>
   );

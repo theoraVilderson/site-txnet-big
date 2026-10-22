@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 1
-updated: 2026-10-08
+updated: 2026-10-22
 ---
 
 # Contract — panel-web: where a reseller's workspace lives (F-061-n)
@@ -126,6 +126,13 @@ section has one; the home keeps what says how far the reseller is.
    product quotas, the cap on extras, package change, support access — each
    card by the path's reseller, admitting and refusing on its own
    (invariant 21). The menu links it in `account`, before the brand.
+3. **Last on settings: «export my data»** (F-212-c, `DataExportCard`;
+   tenant `contract.data-export.md`). Ask, the list, download. The 24 h
+   clock is the service's `nextAllowedAt`; a link is minted on the click
+   (audited, 5 minutes), only for `ready`; the list re-reads on
+   `tenant.data_export.changed` on the caller's `user:` channel, this
+   reseller's only (C-14). A `not_allowed` list — a staff seat — draws
+   nothing. Proof: `my-resellers/data-export.test.tsx`.
 
 ## The setup wizard (UX-2-c)
 

@@ -28,7 +28,7 @@ asked for at any moment, in any status. Code:
 `export_too_soon` **429** with `nextAllowedAt`, `export_not_found` 404,
 `export_not_ready` 409. The page hears `tenant.data_export.changed` on the
 requester's `user:` channel, `{type, resellerId, exportId}`, when an export is
-built, fails or expires (RT-1, C-14; the panel is F-212-c).
+built, fails or expires (RT-1, C-14; the panel's `DataExportCard`, F-212-c).
 
 ## Rules
 
@@ -59,6 +59,6 @@ without it was cut short. A new shape is a new `format` number. Capped at
 
 | unit | uses |
 |---|---|
-| panel-web | the three routes and the live event — «export my data» on the reseller page (F-212-c, not built) |
+| panel-web | the three routes and the live event — «export my data» on the reseller's settings page (F-212-c, panel-web `contract.reseller-workspace.md`) |
 | automation | `tenant_data_export_drain` calls the internal route (`domains/automation/contract.jobs.md`) |
 | object-storage | the archive, private, under the tenant's prefix ([contract.md](../../platform/object-storage/contract.md)) |
