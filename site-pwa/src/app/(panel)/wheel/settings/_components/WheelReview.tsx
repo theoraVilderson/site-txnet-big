@@ -5,7 +5,7 @@ import { useLocale } from "@/context/LocaleContext";
 import type { AudienceGroups } from "../../../_hooks/useAudienceGroups";
 import { ReviewRows, type ReviewRow } from "../../../_components/kit";
 import { formatDay, plainNumber } from "../../_lib/wheel";
-import { WHEEL_SETTINGS_KEYS as K, capLastsSpins, expectedCostPerSpin, oddsPercents, type WheelForm } from "../_lib/wheel-settings";
+import { WHEEL_SETTINGS_KEYS as K, capLastsSpins, expectedCostPerSpin, highestCostPerSpin, oddsPercents, type WheelForm } from "../_lib/wheel-settings";
 import type { WheelFieldStep } from "../_lib/wheel-steps";
 import { dayAfter } from "./wheel-settings-ui";
 
@@ -30,6 +30,8 @@ export function WheelReview({ form, today, currency, decimals, money, groups, on
   const { lang, t } = useLocale();
   const expected = expectedCostPerSpin(form.prizes, decimals);
   const lasts = expected && capLastsSpins(form.cap, expected, decimals);
+  // Shown only when some users meet a dearer wheel than the average (F-707-w).
+  const highest = highestCostPerSpin(form.prizes, decimals);
   const odds = oddsPercents(form.prizes.map((p) => p.weight));
   const yes = (on: boolean) => t("common", on ? W.review.yes : W.review.no);
   const orNone = (v: string, show: (v: string) => string = (x) => x) => (v.trim() ? show(v.trim()) : t("common", W.review.none));
@@ -70,6 +72,7 @@ export function WheelReview({ form, today, currency, decimals, money, groups, on
           <>
             <p className="font-bold text-text-primary">{t("common", K.cost.expected, { amount: money(expected) })}</p>
             <p className="text-text-secondary">{lasts === null ? t("common", K.cost.free) : t("common", K.cost.capLasts, { n: lasts })}</p>
+            {highest !== null && highest !== expected && <p className="text-text-secondary">{t("common", K.cost.highest, { amount: money(highest) })}</p>}
           </>
         )}
         <p className="flex items-center gap-2 pt-2 text-text-secondary">

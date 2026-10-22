@@ -5572,7 +5572,8 @@
       "expected": "Average cost per spin: {{amount}}",
       "capLasts": "The cap pays for about {{n}} average spins a day.",
       "free": "A spin costs nothing on average.",
-      "unknown": "Fill in every weight and cost to see the average."
+      "unknown": "Fill in every weight and cost to see the average.",
+      "highest": "For users whose services cannot take GB or days, the other slots come up more often and a spin averages up to {{amount}}. The daily cap holds either way."
     },
     "versions": {
       "title": "Every version",

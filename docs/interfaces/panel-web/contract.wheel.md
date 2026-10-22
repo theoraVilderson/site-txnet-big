@@ -61,6 +61,10 @@ ADR-0111), both through `lib/engagement-api.ts`:
    for. A form whose average passes the cap is stopped with billing's exact
    comparison (`expected_cost_over_cap`), and a prize dearer than the cap at
    its field (`prize_cost_over_cap`).
+   The review also names `highestCostPerSpin` when some users meet a dearer
+   wheel — billing leaves out of a user's pick what their services cannot take
+   (F-707-u), so the rest come up more often; the cap holds either way. Billing's
+   check stays on the all-slots average (F-707-w).
 4. **Each kind carries its own fields** (engagement "settings" rule 3): GB > 0;
    whole days ≥ 1; a coupon's percent (0, 100], its template and 1..365 days; a
    free service's variant; an empty slot gives and costs nothing. The body

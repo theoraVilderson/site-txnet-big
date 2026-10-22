@@ -89,6 +89,30 @@ export function expectedCostPerSpin(prizes: ReadonlyArray<{ weight: string; cost
   return sums && fromUnits(divided(sums.weighted, sums.total), decimals);
 }
 
+/** The kinds a prize reaches only through one of the user's services — billing's `prize-reach.ts` (F-707-u). */
+const THROUGH_A_SERVICE: readonly WheelPrizeType[] = ["bonus_traffic_gb", "extra_days"];
+/** Who can meet a different wheel: users GB cannot reach, days cannot, or neither can. */
+const DROPPED_BY_REACH: readonly (readonly WheelPrizeType[])[] = [[THROUGH_A_SERVICE[0]], [THROUGH_A_SERVICE[1]], THROUGH_A_SERVICE];
+
+/**
+ * The highest average cost per spin any user meets (F-707-w): billing leaves
+ * out of a user's pick the slots their services cannot take, so the rest come
+ * up more often — and when those are the dear ones, a spin costs more than the
+ * all-slots average. A group left with no slot spins over every slot, as billing does.
+ * `null` while a figure is unreadable. The daily cap holds whatever this says.
+ */
+export function highestCostPerSpin(prizes: ReadonlyArray<{ prizeType: WheelPrizeType; weight: string; costAmount: string }>, decimals: number): string | null {
+  const all = expectedCostPerSpin(prizes, decimals);
+  if (all === null) return null;
+  let highest = all;
+  for (const dropped of DROPPED_BY_REACH) {
+    const left = prizes.filter((p) => !dropped.includes(p.prizeType));
+    const cost = left.length ? expectedCostPerSpin(left, decimals) : all;
+    if (cost !== null && (moneyUnits(cost, decimals) ?? BigInt(0)) > (moneyUnits(highest, decimals) ?? BigInt(0))) highest = cost;
+  }
+  return highest;
+}
+
 function costSums(prizes: ReadonlyArray<{ weight: string; costAmount: string }>, decimals: number): { weighted: bigint; total: bigint } | null {
   let weighted = BigInt(0);
   let total = BigInt(0);

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { WheelPrizeType } from "@/lib/engagement-api";
 import { describe, expect, it } from "vitest";
 
 import type { Me } from "@/lib/auth-api";
@@ -17,6 +18,7 @@ import {
   capLastsSpins,
   emptyPrize,
   expectedCostPerSpin,
+  highestCostPerSpin,
   formFromVersion,
   oddsPercents,
   validateWheelForm,
@@ -114,6 +116,19 @@ describe("the odds and the cost, as billing counts them", () => {
     // A toman has no minor unit: 0.33 toman a spin is told as 0, a cost of 0.5 is not one (F-116-s).
     expect(expectedCostPerSpin([{ weight: "1", costAmount: "1" }, { weight: "2", costAmount: "0" }], 0)).toBe("0");
     expect(expectedCostPerSpin([{ weight: "1", costAmount: "0.5" }], 0)).toBeNull();
+  });
+
+  it("names the highest average any user meets once slots they cannot be given drop out (F-707-w)", () => {
+    const slot = (prizeType: WheelPrizeType, weight: string, costAmount: string) => ({ prizeType, weight, costAmount });
+    // 1 GB costs 1, a coupon 4, nothing 0: without GB the coupon comes up 20 in 70 spins, not 20 in 100.
+    const wheel = [slot("bonus_traffic_gb", "30", "1"), slot("discount_coupon", "20", "4"), slot("empty", "50", "0")];
+    expect(expectedCostPerSpin(wheel, 2)).toBe("1.10");
+    expect(highestCostPerSpin(wheel, 2)).toBe("1.14");
+    // A wheel every user reaches the same way has nothing higher to say.
+    expect(highestCostPerSpin([slot("discount_coupon", "1", "4"), slot("empty", "1", "0")], 2)).toBe("2.00");
+    // GB is the dear slot: dropping it makes a spin cheaper, so the all-slots figure is the highest.
+    expect(highestCostPerSpin([slot("bonus_traffic_gb", "1", "9"), slot("empty", "1", "0")], 2)).toBe("4.50");
+    expect(highestCostPerSpin([slot("extra_days", "x", "1")], 2)).toBeNull();
   });
 
   it("says how many average spins the cap pays for", () => {
