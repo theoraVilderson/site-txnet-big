@@ -30,7 +30,7 @@ and the editor, F-305-h the 'renew' links that lead here.
 ## The seller's rate (F-305-g)
 
 On a product's editor, for the platform and for a reseller (the reseller's door, ADR-0064),
-over catalog's renewal-rate routes (F-305-b):
+over catalog's [contract.renewal-rate.md](../../domains/catalog/contract.renewal-rate.md) (F-305-b, built):
 the rate in effect (price per GiB, per day, the fewest and most of each), its history newest
 first, a new rate from a moment, and «خاموش» (custom renewal off) as its own row. The amounts
 are in the tenant's pricing currency, named beside them (`GET /pricing-currency`).

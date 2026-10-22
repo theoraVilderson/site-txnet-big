@@ -1,11 +1,11 @@
 import { Body, Controller, Get, HttpCode, HttpStatus, Ip, Param, ParseUUIDPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 
-import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { CATALOG_ADMIN_READ as READ, CATALOG_ADMIN_WRITE as WRITE } from './catalog-admin.rate-limit';
-import { CatalogActor, CatalogAdminRefused } from './catalog-admin.service';
+import { CatalogActor } from './catalog-admin.service';
+import { catalogActorOf, refusingCatalog, refusingResellerCatalog, resellerCatalogActorOf } from './catalog-door';
 import {
   ListMeterCostsQuery,
   SetMeterCostBody,
@@ -24,9 +24,7 @@ import {
 } from './catalog-cost.schema';
 import { CatalogCostService, MeterCostInput, MeterCostUnsetInput, VariantCostInput } from './catalog-cost.service';
 import { CatalogPermissionGuard } from './catalog-permission.guard';
-import { CATALOG_REFUSAL_STATUS, catalogRefusal } from './catalog-refusal';
-import { STATUS as RESELLER_STATUS } from './reseller-catalog.controller';
-import { ResellerCatalogActor, ResellerCatalogRefused, ResellerCatalogService } from './reseller-catalog.service';
+import { ResellerCatalogService } from './reseller-catalog.service';
 
 /** `platform` is the platform owner's own tenant (ADR-0142): the caller's, for the only caller who may ask. */
 const ownerOf = (tenantId: string | undefined) => (tenantId === 'platform' ? undefined : tenantId);
@@ -44,14 +42,14 @@ export class CatalogCostController {
   @Get('variants/:id/costs')
   @RateLimit(READ)
   variantCosts(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.variantCosts(actorOf(req, ip), id));
+    return refusingCatalog(() => this.costs.variantCosts(catalogActorOf(req, ip), id));
   }
 
   @Post('variants/:id/costs')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   setVariantCost(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(setVariantCostSchema)) body: SetVariantCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.setVariantCost(actorOf(req, ip), id, body as VariantCostInput));
+    return refusingCatalog(() => this.costs.setVariantCost(catalogActorOf(req, ip), id, body as VariantCostInput));
   }
 
   /** F-1002-i: the cost taken back — "not set" from `effectiveFrom` on. */
@@ -59,36 +57,27 @@ export class CatalogCostController {
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   unsetVariantCost(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(unsetVariantCostSchema)) body: UnsetVariantCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.unsetVariantCost(actorOf(req, ip), id, body));
+    return refusingCatalog(() => this.costs.unsetVariantCost(catalogActorOf(req, ip), id, body));
   }
 
   @Get('meter-costs')
   @RateLimit(READ)
   meterCosts(@Query(new ZodValidationPipe(listMeterCostsSchema)) query: ListMeterCostsQuery, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.meterCosts(actorOf(req, ip), ownerOf(query.tenantId)));
+    return refusingCatalog(() => this.costs.meterCosts(catalogActorOf(req, ip), ownerOf(query.tenantId)));
   }
 
   @Post('meter-costs')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   setMeterCost(@Body(new ZodValidationPipe(setMeterCostSchema)) body: SetMeterCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.setMeterCost(actorOf(req, ip), { ...(body as MeterCostInput), tenantId: ownerOf(body.tenantId) }));
+    return refusingCatalog(() => this.costs.setMeterCost(catalogActorOf(req, ip), { ...(body as MeterCostInput), tenantId: ownerOf(body.tenantId) }));
   }
 
   @Post('meter-costs/unset')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   unsetMeterCost(@Body(new ZodValidationPipe(unsetMeterCostSchema)) body: UnsetMeterCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.costs.unsetMeterCost(actorOf(req, ip), { ...(body as MeterCostUnsetInput), tenantId: ownerOf(body.tenantId) }));
-  }
-
-  private async refusing<T>(run: () => Promise<T>): Promise<T> {
-    try {
-      return await run();
-    } catch (e) {
-      if (!(e instanceof CatalogAdminRefused)) throw e;
-      throw catalogRefusal(CATALOG_REFUSAL_STATUS[e.reason], e.reason, e.message);
-    }
+    return refusingCatalog(() => this.costs.unsetMeterCost(catalogActorOf(req, ip), { ...(body as MeterCostUnsetInput), tenantId: ownerOf(body.tenantId) }));
   }
 }
 
@@ -108,7 +97,7 @@ export class ResellerCatalogCostController {
   @Get('variants/:id/costs')
   @RateLimit(READ)
   variantCosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'read', (as) => this.costs.variantCosts(as, id)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'read', (as) => this.costs.variantCosts(as, id)));
   }
 
   @Post('variants/:id/costs')
@@ -121,7 +110,7 @@ export class ResellerCatalogCostController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setVariantCost(as, id, body as VariantCostInput)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setVariantCost(as, id, body as VariantCostInput)));
   }
 
   @Post('variants/:id/costs/unset')
@@ -134,45 +123,26 @@ export class ResellerCatalogCostController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetVariantCost(as, id, body)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetVariantCost(as, id, body)));
   }
 
   @Get('meter-costs')
   @RateLimit(READ)
   meterCosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'read', (as: CatalogActor) => this.costs.meterCosts(as)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'read', (as: CatalogActor) => this.costs.meterCosts(as)));
   }
 
   @Post('meter-costs')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   setMeterCost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(setResellerMeterCostSchema)) body: SetResellerMeterCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setMeterCost(as, body as MeterCostInput)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.setMeterCost(as, body as MeterCostInput)));
   }
 
   @Post('meter-costs/unset')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
   unsetMeterCost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(unsetResellerMeterCostSchema)) body: UnsetResellerMeterCostBody, @Req() req: Request, @Ip() ip: string) {
-    return this.refusing(() => this.reseller.run(resellerActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetMeterCost(as, body as MeterCostUnsetInput)));
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'staffWrite', (as) => this.costs.unsetMeterCost(as, body as MeterCostUnsetInput)));
   }
-
-  private async refusing<T>(run: () => Promise<T>): Promise<T> {
-    try {
-      return await run();
-    } catch (e) {
-      if (!(e instanceof ResellerCatalogRefused)) throw e;
-      throw catalogRefusal(RESELLER_STATUS[e.reason], e.reason, e.message);
-    }
-  }
-}
-
-function actorOf(req: Request, ip: string): CatalogActor {
-  const { userId, tenantId, permissions } = identityOf(req);
-  return { adminId: userId, tenantId, ip, permissions };
-}
-
-function resellerActorOf(req: Request, ip: string): ResellerCatalogActor {
-  const { userId, tenantId, permissions } = identityOf(req);
-  return { userId, tenantId, permissions, ip };
 }

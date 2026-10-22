@@ -132,6 +132,7 @@ export const EXPORT_TABLES: Readonly<Record<Prisma.ModelName, ExportRule>> = {
   ProductCategoryLink: OWN,
   ProductVariant: OWN,
   RateCard: OWN,
+  RenewalRate: OWN,
   Season: OWN,
   SeasonPrice: OWN,
   VariantCost: OWN,

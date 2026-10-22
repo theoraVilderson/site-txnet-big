@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: active
 version: 11
-updated: 2026-10-14
+updated: 2026-10-22
 ---
 
 # Contract — catalog
@@ -50,6 +50,7 @@ cross-tenant pool.
 | `POST /variants/:id/campaigns`, `GET` it, `POST /campaigns/:id/cancel` (F-503-a) | a time-boxed price: two new price rows | [contract.campaigns.md](contract.campaigns.md) | ibid.; `POST …/prices` gains `campaign_pending` 409 |
 | `POST /variants/:id/rate-cards` (F-118-m) | `meterKey`, `unitSize`, `unitPrice` (≤ 8 places), `mode`, `includedQuantity?`, `afterIncluded`, `effectiveFrom?` — quantities as strings; the DB CHECKs are schema 400s | a **new** card, `currencyCode` as a price's | `variant_not_found` (the platform's to a reseller), `meter_not_found` 404, `rate_card_not_served` 400 (below), `price_in_the_past` |
 | `POST /rate-cards/:id/deactivate` | — | the card, switched off | `rate_card_not_found` |
+| `GET\|POST /products/:id/renewal-rates`, `POST …/renewal-rates/off` (F-305-b) | a product's renewal rate: what typed GiB and days of a renewal cost | [contract.renewal-rate.md](contract.renewal-rate.md) | ibid. |
 | `GET /translations` | `lang?` | drafts: `{lang, key, draft, published, source: {lang, text}}` — the caller's items' (owner: all) | — |
 | `POST /translations/draft-missing` | — | `{drafted}` | `texts_unavailable` |
 | `POST /translations/publish` | `lang`, `keys[]` (1-200) | `{published}` — drafts as they are | `text_key_invalid` 400, `product_not_found` / `category_not_found` (not the caller's item) |

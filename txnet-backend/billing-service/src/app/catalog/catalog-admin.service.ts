@@ -1806,8 +1806,8 @@ export class CatalogAdminService {
     }
   }
 
-  /** `effectiveFrom` as given, or now; a backdated one would reprice an issued invoice. */
-  private effectiveFrom(requested: string | undefined): Date {
+  /** `effectiveFrom` as given, or now; a backdated one would reprice an issued invoice. A renewal rate shares it (F-305-b). */
+  effectiveFrom(requested: string | undefined): Date {
     if (requested === undefined) return new Date();
     const at = new Date(requested);
     if (at.getTime() < Date.now() - PAST_SKEW_MS) throw new CatalogAdminRefused('price_in_the_past', requested);

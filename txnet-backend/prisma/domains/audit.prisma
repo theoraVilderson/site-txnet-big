@@ -83,6 +83,9 @@ enum AdminAction {
   /// F-1002-i: a cost taken back — a new row with none.
   catalog_variant_cost_unset
   catalog_meter_cost_unset
+  /// F-305-b: a product's renewal rate, and custom renewal switched off — each a new row.
+  catalog_renewal_rate_set
+  catalog_renewal_rate_off
   // F-503-a. A campaign is two price rows; cancelling it switches both off.
   catalog_campaign_create
   catalog_campaign_cancel
@@ -270,6 +273,8 @@ enum AuditTargetType {
   // F-1002-d.
   variant_cost
   meter_cost
+  // F-305-b.
+  renewal_rate
   notification_campaign
   // F-311-u3. A bulk job by filter, not any one Grant it acted on.
   grant_bulk_job

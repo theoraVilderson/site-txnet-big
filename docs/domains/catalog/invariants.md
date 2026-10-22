@@ -2,7 +2,7 @@
 id: catalog
 layer: domain
 status: draft
-updated: 2026-10-18
+updated: 2026-10-22
 ---
 
 # Invariants — catalog
@@ -29,6 +29,7 @@ Held by the database since F-026-a; proved by
 | 11 | A tenant is offered only prices and rates in its operating currency; a row in another is no price, never converted (F-116-d, ADR-0098 part 2) | `effectiveIn`, `pricesInEffect` / `rateCardsInEffect` (`price-currency.spec.ts`) | a rial user quoted the platform's dollar amount as rial, or a debit the ledger refuses at the last step |
 | 15 | A variant's sales cap is above zero or null, and its sold and held counts never negative; a cap under them closes sales and undoes none (F-513-a) | CHECKs `product_variant_sales_cap_positive`, `product_variant_sales_counts_not_negative`; `salesOf` | a negative remainder sold as stock, or a cap lowered that cancels paid sales |
 | 16 | A variant's active cap is above zero or null, and its live count is read from the Grants, never stored; a cap under the live count closes sales and ends no service (F-514-a) | CHECK `product_variant_active_cap_positive`; `catalog.live_grants_of`; `activeOf` | a counter drifting from the Grants and selling a slot that is taken, or a lowered cap that cuts live services |
+| 17 | A product's renewal rate is history in its tenant's currency: a row is priced whole or not at all (none = custom renewal off, never the older rate), a part sold costs more than 0, and `0 <= min <= max` (F-305-b, ADR-0158) | CHECKs `renewal_rate_off_whole`, `renewal_rate_sold_part_priced`, `renewal_rate_sells_something`, `renewal_rate_bounds_ok`; trigger `renewal_rate_is_history`; composite FK to the product; `renewalRateAt` | a renewal quoted at a rate edited since, sold for nothing, or priced at a rate the seller switched off |
 
 ## How to test
 

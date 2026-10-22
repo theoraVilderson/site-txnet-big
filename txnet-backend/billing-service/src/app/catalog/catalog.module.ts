@@ -11,6 +11,8 @@ import { CatalogReadService } from './catalog-reads';
 import { CATALOG_TEXT_STORE, CatalogTextService } from './catalog-texts';
 import { ResellerCatalogController } from './reseller-catalog.controller';
 import { ResellerCatalogService } from './reseller-catalog.service';
+import { RenewalRateController, ResellerRenewalRateController } from './renewal-rate.controller';
+import { RenewalRateService } from './renewal-rate.service';
 import { SeasonInternalController } from './season-internal.controller';
 
 /**
@@ -26,11 +28,12 @@ import { SeasonInternalController } from './season-internal.controller';
  */
 @Module({
   imports: [LocaleModule],
-  controllers: [CatalogAdminController, ResellerCatalogController, CatalogCostController, ResellerCatalogCostController, SeasonInternalController],
+  controllers: [CatalogAdminController, ResellerCatalogController, CatalogCostController, ResellerCatalogCostController, RenewalRateController, ResellerRenewalRateController, SeasonInternalController],
   providers: [
     CatalogReadService,
     CatalogAdminService,
     CatalogCostService,
+    RenewalRateService,
     ResellerCatalogService,
     ResellerAccess,
     CatalogTextService,

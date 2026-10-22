@@ -80,6 +80,8 @@ export type CurrencyChangeSummary = {
   meteredRates: number;
   /** Open Grants' meters converted (F-118-l). The key predates them. */
   grants: number;
+  /** Products' renewal rates (F-305-b, ADR-0158 (6)), written again in the new money. */
+  renewalRates: number;
   /** Spending caps (F-118-i): the cap and what it has counted, with their wallet. */
   spendingCaps: number;
   coupons: number;
@@ -170,6 +172,7 @@ export async function convertOperatingCurrency(
     wallets: await convertWallets(c),
     prices: await repricePrices(c),
     meteredRates: await repriceRateCards(c),
+    renewalRates: await repriceRenewalRates(c),
     grants: await convertGrants(c),
     spendingCaps: await convertSpendingCaps(c),
     coupons: await convertCoupons(c),
@@ -282,6 +285,23 @@ const repriceRateCards = (c: Conversion) => c.tx.$executeRaw`
            SELECT max(q."effectiveFrom") FROM catalog.rate_card q
             WHERE q."variantId" = p."variantId" AND q."meterKey" = p."meterKey" AND q."currencyCode" = ${c.from}
               AND q."isActive" AND q."effectiveFrom" <= now()))`;
+
+/**
+ * A product's renewal rate is repriced as a price is (F-305-b, ADR-0158 (6)):
+ * the row in effect and every one scheduled after it, as new rows. An off row
+ * is copied too — its nulls stay null — so a scheduled "off" still lands.
+ */
+const repriceRenewalRates = (c: Conversion) => c.tx.$executeRaw`
+  INSERT INTO catalog.renewal_rate (id, "tenantId", "productId", "pricePerGib", "pricePerDay", "minGib", "maxGib", "minDays", "maxDays",
+                                    "currencyCode", "effectiveFrom", "createdByAdminId", "createdAt")
+  SELECT gen_random_uuid(), p."tenantId", p."productId",
+         round(p."pricePerGib" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int), round(p."pricePerDay" * ${c.rate}::numeric, ${RATE_COLUMN_SCALE}::int),
+         p."minGib", p."maxGib", p."minDays", p."maxDays", ${c.to}, greatest(p."effectiveFrom", now()), ${c.actor}::uuid, now()
+    FROM catalog.renewal_rate p
+   WHERE ${owned(c, Prisma.sql`p."tenantId"`)} AND p."currencyCode" = ${c.from}
+     AND (p."effectiveFrom" > now() OR p."effectiveFrom" = (
+           SELECT max(q."effectiveFrom") FROM catalog.renewal_rate q
+            WHERE q."productId" = p."productId" AND q."currencyCode" = ${c.from} AND q."effectiveFrom" <= now()))`;
 
 /**
  * A Grant not yet closed keeps charging at its locked rate, so each of its

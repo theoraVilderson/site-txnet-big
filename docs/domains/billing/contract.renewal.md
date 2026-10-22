@@ -16,8 +16,8 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 `renewGrant` (entitlement `contract.admin.md` "Renew").
 
 **Status: decided, not built.** F-305-c (the invoice), F-305-d (paying it),
-F-305-e (GiB and days) build what is below, over the product's renewal rate
-that catalog stores (F-305-b).
+F-305-e (GiB and days) build what is below; the rate it reads is catalog's
+[contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
 (F-305-f/g), bot-app (F-305-i).
 
@@ -38,7 +38,7 @@ Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.r
 | # | Rule | Why |
 |---|---|---|
 | 8 | **The server prices it** (spec §5.8): a plan renewal at the variant's price in effect; a typed one at `gib × pricePerGib + days × pricePerDay`, rounded **once**, up, to the currency's minor unit (`roundCharge`, ADR-0153) | a price in the body is stripped, as on a purchase |
-| 9 | **The invoice records what priced it**: the price row (`priceId`), or the renewal-rate row and the GiB and days typed. Paying charges what was quoted, even if a newer row took effect in between | a rate is history, as a price is (ADR-0158 (5)) |
+| 9 | **The invoice records what priced it**: the price row (`priceId`), or the renewal-rate row and the GiB and days typed. Paying charges what was quoted, even if a newer row took effect in between | a rate is history (catalog `contract.renewal-rate.md` rule 1) |
 | 10 | **In the tenant's operating currency.** A row in another currency is no rate (catalog invariant 11), so the plan or the custom renewal is not offered | as a price |
 
 ## Paying it (F-305-d)

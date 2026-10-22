@@ -180,6 +180,8 @@ model Product {
   audience            ProductAudience[]
   /// Tenants' self-move overrides for it (F-410-a).
   selfMoveSettings    ConfigSelfMoveProductSetting[]
+  /// What a user's typed renewal costs (F-305-b, ADR-0158 (4)); no row in effect = custom renewal off.
+  renewalRates        RenewalRate[]
 
   /// The composite key `product_audience` points at, so an audience row is its product's tenant's.
   @@unique([id, tenantId])
@@ -195,6 +197,39 @@ model Product {
 /// bounded by its package, not the platform's groups. A Grant already sold is
 /// kept when its owner leaves the group. The composite keys keep group and
 /// product in one tenant; a group in use is not deleted (`group_in_use`).
+/// F-305-b (ADR-0158 (4)–(6)): a product's renewal rate — what GiB and days
+/// a user types on their own Grant cost, and how few and how many one renewal
+/// buys. History, as a price: a change is a new row from `effectiveFrom`, never
+/// edited (`renewal_rate_is_history`). A row with no prices and no bounds
+/// switches custom renewal off from its `effectiveFrom` (`renewal_rate_off_whole`).
+/// A part not sold has a maximum of 0.
+model RenewalRate {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  productId        String   @db.Uuid
+  /// Per GiB, in `currencyCode`; above 0 while `maxGib` is (`renewal_rate_sold_part_priced`).
+  pricePerGib      Decimal? @db.Decimal(18, 8)
+  /// Per day, in `currencyCode`; above 0 while `maxDays` is.
+  pricePerDay      Decimal? @db.Decimal(18, 8)
+  minGib           Int?
+  maxGib           Int?
+  minDays          Int?
+  maxDays          Int?
+  /// The tenant's pricing currency when written, as a price's (F-116-d).
+  currencyCode     String
+  effectiveFrom    DateTime
+  createdByAdminId String?  @db.Uuid
+  createdAt        DateTime @default(now())
+
+  /// Composite, so a rate carries its product's tenant (catalog invariant 3).
+  product Product @relation(fields: [productId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@index([productId, effectiveFrom(sort: Desc)])
+  @@index([tenantId])
+  @@map("renewal_rate")
+  @@schema("catalog")
+}
+
 model ProductAudience {
   productId String   @db.Uuid
   tenantId  String   @db.Uuid
