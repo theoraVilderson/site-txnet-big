@@ -52,6 +52,7 @@ const PRICE = '77777777-7777-4777-8777-777777777771';
 const RETIRED_PRICE = '77777777-7777-4777-8777-777777777772';
 const COUPON = '88888888-8888-4888-8888-888888888888';
 const ADMIN = '99999999-9999-4999-8999-999999999999';
+const PACKAGE = 'abababab-abab-4bab-8bab-abababababab';
 
 let pg: PostgresFixture;
 let owner: PrismaClient;
@@ -65,6 +66,8 @@ beforeAll(async () => {
   owner = prismaAt(pg.ownerUrl);
 
   await owner.$executeRawUnsafe(`INSERT INTO identity.role (id, name, "isSystemRole") VALUES ('${ROLE}', 'User', true)`);
+  // The ledger rounds to the currency's places, read from the registry (ADR-0153).
+  await owner.$executeRawUnsafe(`INSERT INTO currency.currency (id, code, name, symbol, "decimalPlaces") VALUES (gen_random_uuid(), 'USD', 'USD', '$', 2)`);
   await owner.$executeRawUnsafe(`
     INSERT INTO tenant.tenant (id, "tenantType", "ownerUserId", slug, status, "billingModel", "updatedAt")
     VALUES ('${TENANT}', 'reseller', '${TENANT}', 'alpha', 'active', 'pay_as_you_go_metered', now()),
@@ -89,6 +92,17 @@ beforeAll(async () => {
     VALUES ('${PRODUCT}', '${PLATFORM}', 'vpn_basic', 'k', 'network_access')
   `);
   await owner.$executeRawUnsafe(`INSERT INTO catalog.product_category_link ("productId", "categoryId", "tenantId") SELECT id, '${CATEGORY}', "tenantId" FROM catalog.product WHERE id = '${PRODUCT}'`);
+  // A reseller sells a platform product only while its package lists it (F-019-v5); no sales bound on it.
+  await owner.$executeRawUnsafe(`
+    INSERT INTO tenant.tenant_feature_package (id, name, "monthlyPrice", "currencyCode", "includedFeatureKeys")
+    VALUES ('${PACKAGE}', 'Starter', 10.00, 'USD', '[]')
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO tenant.tenant_subscription ("tenantId", "packageId", "currentPeriodEnd", "updatedAt") VALUES ('${TENANT}', '${PACKAGE}', now() + interval '30 days', now())
+  `);
+  await owner.$executeRawUnsafe(`
+    INSERT INTO tenant.package_product ("packageId", "productId", "updatedByUserId", "updatedAt") VALUES ('${PACKAGE}', '${PRODUCT}', '${ADMIN}', now())
+  `);
   for (const [variant, price, sku] of [[VARIANT, PRICE, 'VPN-30'], [RETIRED_VARIANT, RETIRED_PRICE, 'VPN-90']]) {
     await owner.$executeRawUnsafe(`
       INSERT INTO catalog.product_variant (id, "tenantId", "productId", sku, "billingMode", visibility, "durationDays")
