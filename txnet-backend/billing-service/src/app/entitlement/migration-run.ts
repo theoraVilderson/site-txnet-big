@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, Prisma, VariantBillingMode, type MigrationInbound, type MigrationRun } from '@prisma/client';
+import { GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, Prisma, VariantBillingMode, type MigrationRun } from '@prisma/client';
 import {
-  OutboxEventType,
   productCategoriesInclude,
   productCategoriesLive,
   ResellerAccess,
@@ -15,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
 import { admitMigration } from './migration-door';
+import { announceRun, itemView, runView, type MigrationRunView } from './migration-run-view';
 import { MigrationInbounds, MigrationRunCreate } from './migration-run.schema';
 import { destroySourceLogin, SourceLoginVault } from './migration-seams';
 
@@ -33,6 +33,10 @@ export const MIGRATION_RUN_REJECTIONS = [
   'variant_not_assignable',
   'legacy_host_not_routed',
   'legacy_link_not_found',
+  /** A link run's person is not one of the tenant's (F-201-g). */
+  'user_not_found',
+  /** A link run committed before the admin chose its product (F-201-g). */
+  'variant_unchosen',
 ] as const;
 export type MigrationRunRejection = (typeof MIGRATION_RUN_REJECTIONS)[number];
 
@@ -59,123 +63,6 @@ const STARTED: readonly MigrationRunStatus[] = [MigrationRunStatus.committing, M
 const ROLLING: readonly MigrationRunStatus[] = [MigrationRunStatus.rolling_back, MigrationRunStatus.rolled_back];
 /** Never committed, or not yet: nothing to roll back. A cancelled or expired run is `run_closed`. */
 const UNCOMMITTED: readonly MigrationRunStatus[] = [MigrationRunStatus.draft, MigrationRunStatus.previewing, MigrationRunStatus.previewed, MigrationRunStatus.committing];
-
-export type MigrationInboundView = Pick<MigrationInbound, 'inboundRemoteId' | 'tag' | 'protocol' | 'clientCount' | 'variantId'>;
-
-/** A run as its page reads it: the report's counts and, on one run, the inbounds and their variants. */
-export type MigrationRunView = Pick<
-  MigrationRun,
-  | 'id'
-  | 'kind'
-  | 'sourceFamily'
-  | 'sourceAddress'
-  | 'status'
-  | 'failureReason'
-  | 'plannedCreate'
-  | 'plannedUpdate'
-  | 'plannedSkip'
-  | 'committedItems'
-  | 'failedItems'
-  | 'rollbackUntil'
-  | 'snapshotsPurgedAt'
-  | 'createdAt'
-  | 'updatedAt'
-> & { inbounds?: MigrationInboundView[] };
-
-const runView = (r: MigrationRun, inbounds?: MigrationInbound[]): MigrationRunView => ({
-  id: r.id,
-  kind: r.kind,
-  sourceFamily: r.sourceFamily,
-  sourceAddress: r.sourceAddress,
-  status: r.status,
-  failureReason: r.failureReason,
-  plannedCreate: r.plannedCreate,
-  plannedUpdate: r.plannedUpdate,
-  plannedSkip: r.plannedSkip,
-  committedItems: r.committedItems,
-  failedItems: r.failedItems,
-  rollbackUntil: r.rollbackUntil,
-  snapshotsPurgedAt: r.snapshotsPurgedAt,
-  createdAt: r.createdAt,
-  updatedAt: r.updatedAt,
-  ...(inbounds ? { inbounds: inbounds.map(({ inboundRemoteId, tag, protocol, clientCount, variantId }) => ({ inboundRemoteId, tag, protocol, clientCount, variantId })) } : {}),
-});
-
-/** One row of the report's per-user table: what was read and what is planned or was done. */
-export type MigrationItemView = {
-  remoteIdentity: string;
-  label: string;
-  inboundRemoteId: string | null;
-  protocol: string | null;
-  enabled: boolean | null;
-  dataLimitBytes: number | null;
-  usedBytes: number | null;
-  expiresAt: string | null;
-  plannedAction: MigrationItemAction;
-  skipReason: string | null;
-  outcome: MigrationItemOutcome;
-  failureReason: string | null;
-  /** Why the rollback kept the item, or its person (F-211). */
-  keptReason: string | null;
-};
-
-const numberOr = (v: unknown): number | null => (typeof v === 'number' ? v : null);
-const textOr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
-
-/** An item's snapshot as a record; an `unreadable` item's or a purged one's (F-211) is empty. */
-const snapshotOf = (snapshot: Prisma.JsonValue): Record<string, unknown> =>
-  (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}) as Record<string, unknown>;
-
-/** The name the source gave a client, else its id; empty once the snapshot is purged. */
-export function snapshotLabel(snapshot: Prisma.JsonValue): string {
-  const s = snapshotOf(snapshot);
-  return textOr(s['label']) || textOr(s['remoteId']) || '';
-}
-
-/**
- * The table's row from the item's snapshot; an `unreadable` one holds its id
- * alone, and a purged one (its window ended, F-211) nothing, so most cells are null.
- */
-function itemView(i: {
-  remoteIdentity: string;
-  sourceSnapshot: Prisma.JsonValue;
-  plannedAction: MigrationItemAction;
-  skipReason: string | null;
-  outcome: MigrationItemOutcome;
-  failureReason: string | null;
-  keptReason: string | null;
-}): MigrationItemView {
-  const s = snapshotOf(i.sourceSnapshot);
-  const up = numberOr(s['upBytes']);
-  const down = numberOr(s['downBytes']);
-  return {
-    remoteIdentity: i.remoteIdentity,
-    label: snapshotLabel(i.sourceSnapshot),
-    inboundRemoteId: textOr(s['inboundRemoteId']),
-    protocol: textOr(s['protocol']),
-    enabled: typeof s['enabled'] === 'boolean' ? s['enabled'] : null,
-    dataLimitBytes: numberOr(s['dataLimitBytes']),
-    usedBytes: up === null || down === null ? null : up + down,
-    expiresAt: textOr(s['expiresAt']),
-    plannedAction: i.plannedAction,
-    skipReason: i.skipReason,
-    outcome: i.outcome,
-    failureReason: i.failureReason,
-    keptReason: i.keptReason,
-  };
-}
-
-/**
- * The page re-reads (C-14): a run moved — previewed, back to draft, a commit
- * batch, its end, a cancel. To its tenant and to the admin who started it, as
- * a config move job (F-027-ev): a reseller's admin on the platform's panel is
- * on the platform tenant, so the reseller's channel never reaches them.
- */
-export function announceRun(tx: Prisma.TransactionClient, run: Pick<MigrationRun, 'id' | 'tenantId' | 'actorUserId'>) {
-  return tx.outboxEvent.create({
-    data: { aggregate: 'entitlement.migration_run', aggregateId: run.id, type: OutboxEventType.MIGRATION_RUN_PROGRESS, payload: { tenantId: run.tenantId, userId: run.actorUserId, runId: run.id } },
-  });
-}
 
 /**
  * A reseller's import from another panel (F-206, D-63, entitlement
@@ -291,7 +178,8 @@ export class MigrationRunService {
         return runView(after);
       }),
     );
-    await destroySourceLogin(this.logins, this.logger, tenantId, runId);
+    // A link run never had a login (F-201-g).
+    if (view.kind === MigrationRunKind.panel) await destroySourceLogin(this.logins, this.logger, tenantId, runId);
     return view;
   }
 
@@ -308,6 +196,8 @@ export class MigrationRunService {
         if (STARTED.includes(run.status)) return runView(run);
         if (run.status === MigrationRunStatus.draft || run.status === MigrationRunStatus.previewing) throw new MigrationRunRefused('run_not_previewed', run.status);
         if (run.status !== MigrationRunStatus.previewed) throw new MigrationRunRefused('run_closed', run.status);
+        // A link run has no inbounds to map: its one client becomes the product the admin chose (F-201-g).
+        if (run.kind === MigrationRunKind.link && !run.variantId) throw new MigrationRunRefused('variant_unchosen', run.id);
         const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.committing, workerClaimedAt: null } });
         await announceRun(tx, after);
         return runView(after);

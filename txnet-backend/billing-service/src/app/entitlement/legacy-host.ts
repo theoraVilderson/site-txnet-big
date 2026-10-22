@@ -4,7 +4,8 @@ import { normalizeHost, ResellerAccess, tenantTransaction, type ResellerActor } 
 
 import { PrismaService } from '../prisma/prisma.service';
 import { admitMigration } from './migration-door';
-import { MigrationRunRefused, snapshotLabel } from './migration-run';
+import { MigrationRunRefused } from './migration-run';
+import { snapshotLabel } from './migration-run-view';
 import { MigrationSeamRefused, MigrationSeamUnavailable, SubscriptionLinkProbe } from './migration-seams';
 
 /** At most this many old hosts are listed: an import has one or two; this bounds a hostile source (C-28). */

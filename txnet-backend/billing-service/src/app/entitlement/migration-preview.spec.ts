@@ -5,7 +5,7 @@ import type { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.ser
 import type { PrismaService } from '../prisma/prisma.service';
 import { INBOUNDS_UNMAPPED, MigrationPreviewService } from './migration-preview';
 import { planRun, type RunPlanContext } from './migration-run-plan';
-import { MigrationSeamRefused, type SourceSnapshotReader } from './migration-seams';
+import { MigrationSeamRefused, type SourceSnapshotReader, type SubscriptionLinkProbe } from './migration-seams';
 
 vi.mock('@txnet-backend/shared-core', async (actual) => ({ ...(await actual<typeof import('@txnet-backend/shared-core')>()), endUserRoom: vi.fn() }));
 
@@ -177,7 +177,9 @@ const SNAPSHOT = { inbounds: [{ remoteId: 'vless-tcp', tag: 'VLESS TCP', protoco
 
 function preview(db: ReturnType<typeof fakeDb>, snapshot: () => Promise<unknown>) {
   const reader = { snapshot: vi.fn(snapshot) } as unknown as SourceSnapshotReader;
-  return new MigrationPreviewService(db.prisma, db.crossTenant, reader).previewNext(NOW);
+  // A panel run never reads a link: the probe answering would be a bug.
+  const links = { read: vi.fn(() => Promise.reject(new Error('a panel run read a link'))) } as unknown as SubscriptionLinkProbe;
+  return new MigrationPreviewService(db.prisma, db.crossTenant, reader, links).previewNext(NOW);
 }
 
 describe('MigrationPreviewService — one previewing run per tick', () => {

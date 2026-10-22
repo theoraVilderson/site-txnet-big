@@ -636,8 +636,12 @@ model MigrationRun {
   kind           MigrationRunKind
   /// The source panel's family; only on a `panel` run.
   sourceFamily   DriverType?
-  /// The source's origin as read (`scheme://host[:port]`); null on a `csv` run.
+  /// The source's origin as read (`scheme://host[:port]`); on a `link` run the whole old link (F-201-g); null on a `csv` run.
   sourceAddress  String?
+  /// The person a `link` run is for, and only on one (`migration_run_link_names_its_person`, F-201-g). No foreign key: identity's.
+  userId         String?            @db.Uuid
+  /// The prepaid variant a `link` run's client becomes, chosen by the admin (F-201-g); a panel run maps inbounds instead.
+  variantId      String?            @db.Uuid
   status         MigrationRunStatus @default(draft)
   plannedCreate  Int                @default(0)
   plannedUpdate  Int                @default(0)
@@ -690,6 +694,10 @@ model MigrationItem {
   createdConfigIds String[]             @default([]) @db.Uuid
   /// Why the rollback kept the item (`renewed`, `topped_up`, `bought`, …), or why its person stayed (F-211).
   keptReason       String?
+  /// A link run's admin over what the link said (F-201-g): null keeps the read figure; the snapshot is never edited.
+  correctedDataLimitBytes BigInt?
+  correctedUsedBytes      BigInt?
+  correctedExpiresAt      DateTime?
   /// The rollback is done with the item, its person included (F-211).
   rolledBackAt     DateTime?
   createdAt        DateTime             @default(now())

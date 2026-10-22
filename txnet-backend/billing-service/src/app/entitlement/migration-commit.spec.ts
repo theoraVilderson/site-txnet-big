@@ -6,6 +6,7 @@ import type { PrismaService } from '../prisma/prisma.service';
 import type { GroupFulfilmentService } from '../traffic/group-fulfilment';
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, type GrantService } from './grant';
+import { linkClientOf, linkIdentityOf } from './migration-link';
 import { importedGrantShape } from './migration-plan';
 import { MIGRATION_COMMIT_BATCH_SIZE, MigrationCommitService } from './migration-commit';
 import { MIGRATION_ROLLBACK_DAYS } from './migration-run';
@@ -255,5 +256,58 @@ describe('MigrationCommitService — one committing run, one batch per tick', ()
     expect(c.issue).not.toHaveBeenCalled();
     expect(byId(db, 'ali')['outcome']).toBe(MigrationItemOutcome.pending);
     expect(db.state.run).toMatchObject({ status: MigrationRunStatus.committing, workerClaimedAt: null });
+  });
+});
+
+describe('MigrationCommitService — a link run, one person from one old link (F-201-g)', () => {
+  const LINK = 'https://old.example.com:2096/sub/Ab12';
+  const read = linkClientOf(LINK, { userinfo: { uploadBytes: GIB, downloadBytes: 4 * GIB, totalBytes: 20 * GIB, expiresAt: 0 }, lines: ['vless://u@a:443'] });
+  const CORRECTED_END = new Date('2026-11-01T00:00:00Z');
+
+  function linkDb(run: Row, correction: Row = {}) {
+    const db = fakeDb([
+      item('link', MigrationItemAction.create, {
+        remoteIdentity: linkIdentityOf(LINK),
+        sourceSnapshot: { ...read, expiresAt: null },
+        correctedDataLimitBytes: null,
+        correctedUsedBytes: null,
+        correctedExpiresAt: null,
+        ...correction,
+      }),
+    ]);
+    Object.assign(db.state.run, { kind: MigrationRunKind.link, sourceFamily: null, sourceAddress: LINK, userId: 'user-ali', variantId: 'variant-link', ...run });
+    return db;
+  }
+
+  it("issues the run's own person a Grant of the chosen product with the admin's figures, asks identity for nobody, and keeps the old link", async () => {
+    const db = linkDb({}, { correctedDataLimitBytes: BigInt(30 * GIB), correctedExpiresAt: CORRECTED_END });
+    const c = commit(db);
+    expect(await c.run()).toMatchObject({ outcome: 'batch', items: 1 });
+
+    expect(c.people.import).not.toHaveBeenCalled();
+    expect(c.issue).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      userId: 'user-ali',
+      variantId: 'variant-link',
+      imported: { remoteIdentity: linkIdentityOf(LINK), endsAt: CORRECTED_END, purchasedBytes: BigInt(30 * GIB), consumedBytes: BigInt(5 * GIB), trafficUnlimited: false },
+    }));
+    // Found, never made: a rollback (F-211) closes the Grant and leaves the person.
+    expect(db.state.items[0]).toMatchObject({ outcome: MigrationItemOutcome.created, createdUserId: null });
+    expect(db.state.oldLinks).toEqual([expect.objectContaining({ host: 'old.example.com', path: '/sub/Ab12' })]);
+  });
+
+  it('ends with no source login to destroy: a link run never had one', async () => {
+    const db = linkDb({});
+    const c = commit(db);
+    await c.run();
+    expect(await c.run()).toMatchObject({ outcome: 'finished' });
+    expect(c.destroy).not.toHaveBeenCalled();
+  });
+
+  it('fails the item of a run that reached the commit with no product, never guessing one', async () => {
+    const db = linkDb({ variantId: null });
+    const c = commit(db);
+    await c.run();
+    expect(c.issue).not.toHaveBeenCalled();
+    expect(db.state.items[0]).toMatchObject({ outcome: MigrationItemOutcome.failed, failureReason: 'variant_unchosen' });
   });
 });

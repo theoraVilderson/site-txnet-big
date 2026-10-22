@@ -114,14 +114,22 @@ export class SourceSnapshotReader {
   }
 }
 
-/** A link's answer as network reads it; Go sends a nil list as `null`. Only the count is kept. */
-const linkSchema = z.object({ lines: z.array(z.string()).nullable() });
+const figure = z.number().int().nonnegative();
+
+/** A link's answer as network reads it (`Subscription-Userinfo`, 0 = not given); Go sends a nil list as `null`. */
+const linkSchema = z.object({
+  userinfo: z.object({ uploadBytes: figure, downloadBytes: figure, totalBytes: figure, expiresAt: figure }),
+  lines: z.array(z.string()).nullable(),
+});
+
+/** What network-service read from one old link (network `contract.source.md`): the header's four figures, 0 = not given, and its lines. */
+export type LinkRead = { userinfo: z.infer<typeof linkSchema>['userinfo']; lines: string[] };
 
 /**
- * Fetches one subscription link the way a user's app does (F-204-b): from
- * outside, through network-service's egress guard — never an inward address,
- * never a redirect. Answers how many servers it carried; the body itself, a
- * user's configs, never leaves network-service's answer.
+ * Fetches one subscription link the way a user's app does (F-204-b,
+ * F-201-g): from outside, through network-service's egress guard — never an
+ * inward address, never a redirect. The lines are someone's configs: a
+ * caller reads what it needs of them and keeps none.
  */
 @Injectable()
 export class SubscriptionLinkProbe {
@@ -131,10 +139,16 @@ export class SubscriptionLinkProbe {
     this.seam = seamOf(config, 'NETWORK_API_BASE_URL', 'NETWORK_API_TIMEOUT_MS');
   }
 
-  async servers(url: string): Promise<number> {
+  /** The link's header figures and lines (F-201-g). */
+  async read(url: string): Promise<LinkRead> {
     const parsed = linkSchema.safeParse(await postToSeam(this.seam, LINK_PATH, { url }));
     if (!parsed.success) throw new MigrationSeamUnavailable(`${LINK_PATH} answered no link`);
-    return parsed.data.lines?.length ?? 0;
+    return { userinfo: parsed.data.userinfo, lines: parsed.data.lines ?? [] };
+  }
+
+  /** How many servers the link carried — an old host's test (F-204-b). */
+  async servers(url: string): Promise<number> {
+    return (await this.read(url)).lines.length;
   }
 }
 

@@ -12,7 +12,7 @@ import { removeLegacyLinks } from './legacy-sub-link';
 import { EntitlementRefused } from './grant';
 import { MIGRATION_COMMIT_BATCH_SIZE } from './migration-commit';
 import { claimRun, stillOurs } from './migration-preview';
-import { announceRun } from './migration-run';
+import { announceRun } from './migration-run-view';
 import { ImportedPeople, MigrationSeamRefused, MigrationSeamUnavailable } from './migration-seams';
 
 /** `grant.statusReason` and the `grant_deletion` reason of a Grant an import's rollback closed (F-211). */

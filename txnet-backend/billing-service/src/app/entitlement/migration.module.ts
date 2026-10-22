@@ -7,6 +7,7 @@ import { EntitlementModule } from './entitlement.module';
 import { LegacyHostService } from './legacy-host';
 import { MigrationCommitService } from './migration-commit';
 import { MigrationDrainService } from './migration-drain';
+import { MigrationLinkService } from './migration-link-run';
 import { MigrationPreviewService } from './migration-preview';
 import { MigrationRollbackService } from './migration-rollback';
 import { MigrationRunInternalController, ResellerMigrationRunController } from './migration-run.controller';
@@ -24,6 +25,6 @@ import { ImportedPeople, SourceLoginVault, SourceSnapshotReader, SubscriptionLin
 @Module({
   imports: [EntitlementModule, TrafficModule, UsageModule],
   controllers: [ResellerMigrationRunController, MigrationRunInternalController],
-  providers: [MigrationRunService, MigrationPreviewService, MigrationCommitService, MigrationRollbackService, MigrationDrainService, SourceSnapshotReader, SourceLoginVault, ImportedPeople, SubscriptionLinkProbe, LegacyHostService, ResellerAccess],
+  providers: [MigrationRunService, MigrationLinkService, MigrationPreviewService, MigrationCommitService, MigrationRollbackService, MigrationDrainService, SourceSnapshotReader, SourceLoginVault, ImportedPeople, SubscriptionLinkProbe, LegacyHostService, ResellerAccess],
 })
 export class MigrationModule {}

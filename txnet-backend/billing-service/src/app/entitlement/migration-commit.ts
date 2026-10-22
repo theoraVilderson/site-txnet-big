@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunStatus, type MigrationItem, type MigrationRun, type Prisma } from '@prisma/client';
+import { FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, type MigrationItem, type MigrationRun, type Prisma } from '@prisma/client';
 import { ResellerLimitReached, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { errorLine } from '../log-line';
@@ -10,9 +10,12 @@ import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, GrantService } from './grant';
 import { recordLegacyLink } from './legacy-sub-link';
-import { planMigrationItem, sourceClientSchema } from './migration-plan';
+import { linkItemClientOf, linkSourceOf } from './migration-link';
+import { linkOf } from './migration-link-run';
+import { planMigrationItem, sourceClientSchema, type ImportSource, type SourceClient } from './migration-plan';
 import { claimRun, panelSourceOf, stillOurs } from './migration-preview';
-import { announceRun, MIGRATION_ROLLBACK_DAYS } from './migration-run';
+import { MIGRATION_ROLLBACK_DAYS } from './migration-run';
+import { announceRun } from './migration-run-view';
 import { destroySourceLogin, ImportedPeople, MigrationSeamRefused, MigrationSeamUnavailable, SourceLoginVault, type ImportedPeopleAnswer } from './migration-seams';
 
 /** Items committed per tick: identity's own batch (≤ 200, identity rule 2), each item one short transaction. */
@@ -56,6 +59,19 @@ function labelOf(item: Pick<MigrationItem, 'remoteIdentity' | 'sourceSnapshot'>)
   const parsed = sourceClientSchema.safeParse(item.sourceSnapshot);
   if (!parsed.success) return item.remoteIdentity;
   return parsed.data.label.trim() || parsed.data.remoteId;
+}
+
+/** What the commit issues under: a panel run's family and origin, or a link run's (F-201-g). */
+function importSourceOf(run: MigrationRun): ImportSource {
+  return run.kind === MigrationRunKind.link ? linkSourceOf(linkOf(run)) : panelSourceOf(run);
+}
+
+/** A link run's one person is the run's own (F-201-g): found already, never made, so a rollback never removes them. */
+function linkPeopleOf(run: MigrationRun, batch: MigrationItem[]): People {
+  // `migration_run_link_names_its_person` holds it on every link run: a missing one is a broken row.
+  const userId = run.userId;
+  if (!userId) throw new Error(`run ${run.id} names no person`);
+  return { made: new Map(batch.map((i) => [i.remoteIdentity, { userId, created: false }])), refused: new Map() };
 }
 
 /**
@@ -114,12 +130,8 @@ export class MigrationCommitService {
     });
     if (batch.length === 0) return this.finish(run, now);
 
-    let people: People;
-    try {
-      people = peopleOf(await this.people.import(run.tenantId, batch.map((i) => ({ remoteIdentity: i.remoteIdentity, label: labelOf(i) }))));
-    } catch (e) {
-      if (!(e instanceof MigrationSeamUnavailable || e instanceof MigrationSeamRefused)) throw e;
-      this.logger.warn(`run ${run.id}: people not imported, the next tick retries: ${errorLine(e)}`);
+    const people = await this.peopleFor(run, batch);
+    if (!people) {
       await this.release(run, false);
       return { outcome: 'waiting', items: 0 };
     }
@@ -134,6 +146,18 @@ export class MigrationCommitService {
     await this.release(run, true);
     this.logger.log(`run ${run.id}: committed a batch of ${items} item(s)`);
     return { outcome: 'batch', items };
+  }
+
+  /** The batch's people: a link run's own person, else identity's batch; null when identity could not be asked (the next tick retries). */
+  private async peopleFor(run: MigrationRun, batch: MigrationItem[]): Promise<People | null> {
+    if (run.kind === MigrationRunKind.link) return linkPeopleOf(run, batch);
+    try {
+      return peopleOf(await this.people.import(run.tenantId, batch.map((i) => ({ remoteIdentity: i.remoteIdentity, label: labelOf(i) }))));
+    } catch (e) {
+      if (!(e instanceof MigrationSeamUnavailable || e instanceof MigrationSeamRefused)) throw e;
+      this.logger.warn(`run ${run.id}: people not imported, the next tick retries: ${errorLine(e)}`);
+      return null;
+    }
   }
 
   /** Who identity made, on their items before any Grant: a crash after this still lets a rollback find them. */
@@ -169,10 +193,8 @@ export class MigrationCommitService {
     const held = await tx.grant.findFirst({ where: { tenantId: run.tenantId, remoteIdentity: item.remoteIdentity }, select: { id: true } });
     if (held) return this.settle(tx, run, item, { outcome: MigrationItemOutcome.updated });
 
-    const client = sourceClientSchema.parse(item.sourceSnapshot);
-    const variantId = variantOf.get(client.inboundRemoteId);
-    if (!variantId) throw new ItemRefused('inbound_unmapped');
-    const plan = planMigrationItem(client, { ...panelSourceOf(run), variantId, now });
+    const { client, variantId } = this.clientOf(run, item, variantOf);
+    const plan = planMigrationItem(client, { ...importSourceOf(run), variantId, now });
     // The snapshot is the preview's, but time passed: an end reached since is still an end.
     if (plan.skipReason) throw new ItemRefused(plan.skipReason);
     const { remoteIdentity, grant: planned } = plan;
@@ -190,6 +212,21 @@ export class MigrationCommitService {
     if (!plan.enabled) await freezeGrant(tx, grant.id, { at: now, mode: FreezeMode.hard, stopsClock: false });
     const configs = await tx.config.findMany({ where: { grantId: grant.id }, select: { id: true } });
     await this.settle(tx, run, item, { outcome: MigrationItemOutcome.created, createdGrantId: grant.id, createdConfigIds: configs.map((c) => c.id) });
+  }
+
+  /**
+   * The item's client and its variant: a link run's corrected by its admin and
+   * of the product they chose (F-201-g); a panel run's as read, of its inbound's.
+   */
+  private clientOf(run: MigrationRun, item: MigrationItem, variantOf: ReadonlyMap<string, string>): { client: SourceClient; variantId: string } {
+    if (run.kind === MigrationRunKind.link) {
+      if (!run.variantId) throw new ItemRefused('variant_unchosen');
+      return { client: linkItemClientOf(item), variantId: run.variantId };
+    }
+    const client = sourceClientSchema.parse(item.sourceSnapshot);
+    const variantId = variantOf.get(client.inboundRemoteId);
+    if (!variantId) throw new ItemRefused('inbound_unmapped');
+    return { client, variantId };
   }
 
   /** Placed now where its group can; a member that cannot take it yet is the sweep's (F-027-bl), never the item's failure. */
@@ -239,7 +276,8 @@ export class MigrationCommitService {
       return count === 1;
     });
     if (!finished) return { outcome: 'lost', items: 0 };
-    await destroySourceLogin(this.logins, this.logger, run.tenantId, run.id);
+    // A link run never had a login (F-201-g).
+    if (run.kind === MigrationRunKind.panel) await destroySourceLogin(this.logins, this.logger, run.tenantId, run.id);
     this.logger.log(`run ${run.id}: committed`);
     return { outcome: 'finished', items: 0 };
   }

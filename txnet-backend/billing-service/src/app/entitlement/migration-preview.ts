@@ -1,15 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantSource, MigrationRunStatus, type DriverType, type MigrationRun, type Prisma } from '@prisma/client';
+import { GrantSource, MigrationRunKind, MigrationRunStatus, type DriverType, type MigrationRun, type Prisma } from '@prisma/client';
 import { endUserRoom, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { linkPlanOf, readLinkRun } from './migration-link-run';
 import { remoteIdentityOf } from './migration-plan';
-import { announceRun } from './migration-run';
+import { announceRun } from './migration-run-view';
 import { clientsPerInbound, planRun, type RunPlan } from './migration-run-plan';
-import { MigrationSeamRefused, SourceSnapshotReader, type SourceSnapshot } from './migration-seams';
+import { MigrationSeamRefused, SourceSnapshotReader, SubscriptionLinkProbe, type SourceSnapshot } from './migration-seams';
 
 /** How long a tick holds a run: past it, a tick that died mid-read is taken over (F-206). */
 export const MIGRATION_RUN_LEASE_MS = 10 * 60_000;
@@ -75,6 +76,7 @@ export class MigrationPreviewService {
     private readonly prisma: PrismaService,
     private readonly crossTenant: CrossTenantPrismaService,
     private readonly source: SourceSnapshotReader,
+    private readonly links: SubscriptionLinkProbe,
   ) {}
 
   async previewNext(now: Date = new Date()): Promise<MigrationPreviewResult> {
@@ -84,6 +86,7 @@ export class MigrationPreviewService {
   }
 
   private async preview(run: MigrationRun, now: Date): Promise<MigrationPreviewResult> {
+    if (run.kind === MigrationRunKind.link) return this.previewLink(run, now);
     let snapshot: SourceSnapshot;
     try {
       snapshot = await this.source.snapshot(run.tenantId, panelSourceOf(run).family, run.id);
@@ -100,6 +103,20 @@ export class MigrationPreviewService {
     const written = await tenantTransaction(this.prisma, (tx) => writeReport(tx, run, plan), { timeout: REPORT_WRITE_TIMEOUT_MS });
     if (!written) return 'lost';
     this.logger.log(`run ${run.id}: previewed ${plan.items.length} client(s): ${plan.plannedCreate} create, ${plan.plannedUpdate} update, ${plan.plannedSkip} skip`);
+    return 'previewed';
+  }
+
+  /**
+   * A link run's dry run (F-201-g): the link read once through network, its
+   * one client planned against what the tenant holds, the report written as
+   * a panel run's is. A refusal returns the run to `draft` with its reason.
+   */
+  private async previewLink(run: MigrationRun, now: Date): Promise<MigrationPreviewResult> {
+    const read = await readLinkRun(this.links, run, this.logger);
+    if ('reason' in read) return this.returnToDraft(run, read.reason);
+    const written = await tenantTransaction(this.prisma, async (tx) => writeReport(tx, run, await linkPlanOf(tx, run, { client: read.client, read: read.client, now })));
+    if (!written) return 'lost';
+    this.logger.log(`run ${run.id}: previewed its link`);
     return 'previewed';
   }
 

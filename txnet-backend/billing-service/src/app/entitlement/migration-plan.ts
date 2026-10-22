@@ -42,10 +42,19 @@ export const sourceClientSchema = z.object({
 export type SourceClient = z.infer<typeof sourceClientSchema>;
 
 /**
+ * A link run's half of the import key (`remoteIdentityOf`): it stands where a
+ * panel run's family does, since one old link names no panel (F-201-g).
+ */
+export const LINK_SOURCE = 'link';
+
+/** What an import key is made under: a panel's family, or a link run's `LINK_SOURCE`. */
+export type ImportSource = { family: DriverType | typeof LINK_SOURCE; sourceAddress: string };
+
+/**
  * The run's source, the prepaid variant the reseller chose for this client's
  * inbound (a product, not a server — user, 2026-10-21) and the moment of the plan.
  */
-export type MigrationSource = { family: DriverType; sourceAddress: string; variantId: string; now: Date };
+export type MigrationSource = ImportSource & { variantId: string; now: Date };
 
 /** What an import would issue for one client (F-202); the commit (F-207) issues it. */
 export type PlannedImport = {
@@ -73,7 +82,7 @@ export type MigrationItemPlan = PlannedImport | SkippedImport;
  * hold no `|`, so it reads back unambiguously. A panel that moved to a new
  * address is a new source.
  */
-export function remoteIdentityOf(source: Pick<MigrationSource, 'family' | 'sourceAddress'>, remoteId: string): string {
+export function remoteIdentityOf(source: ImportSource, remoteId: string): string {
   return `${source.family}|${source.sourceAddress}|${remoteId}`;
 }
 
@@ -90,6 +99,16 @@ function protocolOf(name: string): ConfigProtocol | null {
 export const isUnlimitedClient = (client: Pick<SourceClient, 'dataLimitBytes'>): boolean => client.dataLimitBytes === 0;
 
 /**
+ * What the client alone says against importing it (F-202): an end at or
+ * before the plan's moment, or a protocol we do not sell. A duplicate, an
+ * update and the cap need the run, and are the dry run's.
+ */
+export function ownSkipOf(client: SourceClient, now: Date): SkippedImport['skipReason'] | null {
+  if (client.expiresAt && client.expiresAt.getTime() <= now.getTime()) return 'expired';
+  return protocolOf(client.protocol) ? null : 'unknown_protocol';
+}
+
+/**
  * One source client to what an import would issue (F-202, contract.import.md):
  * a user named from its label, a `migration` Grant from now to the client's
  * end with its quota as the bag (0 there is unlimited, as in every family)
@@ -101,9 +120,9 @@ export const isUnlimitedClient = (client: Pick<SourceClient, 'dataLimitBytes'>):
  */
 export function planMigrationItem(client: SourceClient, source: MigrationSource): MigrationItemPlan {
   const remoteIdentity = remoteIdentityOf(source, client.remoteId);
-  if (client.expiresAt && client.expiresAt.getTime() <= source.now.getTime()) return { remoteIdentity, skipReason: 'expired' };
+  const skipReason = ownSkipOf(client, source.now);
   const protocol = protocolOf(client.protocol);
-  if (!protocol) return { remoteIdentity, skipReason: 'unknown_protocol' };
+  if (skipReason || !protocol) return { remoteIdentity, skipReason: skipReason ?? 'unknown_protocol' };
   const trafficUnlimited = isUnlimitedClient(client);
   return {
     remoteIdentity,

@@ -23,20 +23,27 @@ import { actorOf, resellerRefusal } from '../payment/gift/reseller-user-grants.c
 import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { RateLimit } from '../request/rate-limit';
 import { LegacyHostService } from './legacy-host';
+import { MigrationLinkService } from './migration-link-run';
 import { MigrationDrainService, type MigrationDrainResult } from './migration-drain';
 import { MigrationRunRefused, MigrationRunService, type MigrationRunRejection } from './migration-run';
 import {
+  isLinkRunCreate,
   legacyHostTestSchema,
+  migrationAnyRunCreateSchema,
   migrationInboundsSchema,
-  migrationRunCreateSchema,
+  migrationLinkCorrectionSchema,
   type LegacyHostTest,
   type MigrationInbounds,
+  type MigrationLinkCorrection,
+  type MigrationLinkRunCreate,
   type MigrationRunCreate,
 } from './migration-run.schema';
 
 const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
   run_not_found: 404,
   legacy_link_not_found: 404,
+  user_not_found: 404,
+  variant_unchosen: 409,
   legacy_host_not_routed: 409,
   inbound_not_found: 404,
   variant_not_found: 404,
@@ -63,7 +70,9 @@ function migrationRefusal(e: unknown): unknown {
  * `contract.import.md`). The source login is stored on tenant-service
  * between the create and the preview (tenant `contract.source-login.md`).
  *
- * - `POST …/migration-runs` `{family, sourceAddress}` -> **201** the run, `draft`
+ * - `POST …/migration-runs` `{family, sourceAddress}` -> **201** the run, `draft`;
+ *   or `{url, userId}` -> **201** one person's link run, `previewing` (F-201-g)
+ * - `PUT …/migration-runs/:runId/link` `{variantId?, dataLimitBytes?, usedBytes?, expiresAt?}` -> the link run, re-planned
  * - `PUT …/migration-runs/:runId/inbounds` `{inbounds: [{inboundRemoteId, variantId}]}` -> the run
  * - `POST …/migration-runs/:runId/preview` -> **202** the run, `previewing`
  * - `POST …/migration-runs/:runId/commit` -> **202** the run, `committing` (F-207)
@@ -79,6 +88,7 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   constructor(
     protected readonly jobs: MigrationRunService,
     private readonly legacy: LegacyHostService,
+    private readonly links: MigrationLinkService,
   ) {
     super();
   }
@@ -105,8 +115,19 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(bulkWriteLimit)
-  create(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(migrationRunCreateSchema)) body: MigrationRunCreate, @Req() req: Request) {
-    return this.answer(() => this.jobs.create(actorOf(req), tenantId, body));
+  create(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(migrationAnyRunCreateSchema)) body: MigrationRunCreate | MigrationLinkRunCreate, @Req() req: Request) {
+    return this.answer(() => (isLinkRunCreate(body) ? this.links.create(actorOf(req), tenantId, body) : this.jobs.create(actorOf(req), tenantId, body)));
+  }
+
+  @Put(':runId/link')
+  @RateLimit(bulkWriteLimit)
+  correctLink(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('runId', new ParseUUIDPipe()) runId: string,
+    @Body(new ZodValidationPipe(migrationLinkCorrectionSchema)) body: MigrationLinkCorrection,
+    @Req() req: Request,
+  ) {
+    return this.answer(() => this.links.correct(actorOf(req), tenantId, runId, body));
   }
 
   @Put(':runId/inbounds')
