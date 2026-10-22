@@ -30,8 +30,9 @@ import { giftGrantBytes } from '../traffic/gift-bytes';
  *
  * GB and days need an `active` Grant now: with none it is refused, never
  * queued — a prize waiting for a purchase would be a prize for buying. Which
- * Grant: the one the caller names, else the one that runs longest (no end
- * first), so the prize is not lost with a Grant about to close.
+ * Grant: the one the caller names, else the user's prize service (F-707-r)
+ * while it is active and can take the prize, else the one that runs longest
+ * (no end first), so the prize is not lost with a Grant about to close.
  *
  * **Once per (source, referenceId)** — a spin attempt or a lottery winner row.
  * A retry answers what was given with `replay: true`; the same reference for
@@ -87,8 +88,8 @@ const reasonOf = (input: RewardInput) => `engagement_reward ${input.source}:${in
 
 type Candidate = { id: string; billingMode: VariantBillingMode; trafficUnlimited: boolean; startsAt: Date; endsAt: Date | null };
 
-/** Can this Grant take this prize: a bag for GB, an end for days. */
-function takes(grant: Candidate, kind: SpinPrizeType): boolean {
+/** Can this Grant take this prize: a bag for GB, an end for days. The prize-service picker offers by the same rule (F-707-r). */
+export function takes(grant: Pick<Candidate, 'trafficUnlimited' | 'endsAt'>, kind: SpinPrizeType): boolean {
   if (kind === SpinPrizeType.bonus_traffic_gb) return !grant.trafficUnlimited;
   return grant.endsAt !== null;
 }
@@ -112,7 +113,9 @@ async function targetGrant(tx: Prisma.TransactionClient, input: RewardInput): Pr
   }
   const fit = active.filter((g) => takes(g, kind)).sort(longestFirst);
   if (fit.length === 0) throw new RewardRefused('no_active_grant', kind);
-  return fit[0];
+  // The user's choice, when it can take this prize; a gone or unfit one is automatic, never a refusal.
+  const chosen = await tx.rewardTarget.findUnique({ where: { tenantId_userId: { tenantId: input.tenantId, userId: input.userId } }, select: { grantId: true } });
+  return fit.find((g) => g.id === chosen?.grantId) ?? fit[0];
 }
 
 function couponCode(): string {

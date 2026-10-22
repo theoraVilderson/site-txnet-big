@@ -50,6 +50,8 @@ export const IMPERSONATION_REACH: readonly ImpersonationRoute[] = [
   { method: 'GET', path: '/api/billing/wheel' },
   { method: 'GET', path: '/api/billing/wheel/history' },
   { method: 'POST', path: '/api/billing/wheel/spin' },
+  { method: 'GET', path: '/api/billing/reward-target' },
+  { method: 'PUT', path: '/api/billing/reward-target' },
   { method: 'GET', path: '/api/currency/rates' },
   { method: 'GET', path: '/api/notifications' },
   { method: 'POST', path: '/api/notifications/read' },

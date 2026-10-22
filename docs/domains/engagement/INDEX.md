@@ -5,9 +5,9 @@ status: active
 version: 1
 keywords: [spin wheel, lucky wheel, lottery, raffle, draw, گردونه شانس, قرعه کشی, engagement, daily reward, eligibility, attention budget, proactive message cap]
 source: [txnet-backend/ai-service/src/app/attention/**, txnet-backend/billing-service/src/app/engagement/**, txnet-backend/shared-core/src/lib/engagement/**]
-owns_tables: [spin_wheel_config, spin_wheel_prize, spin_wheel_day, spin_wheel_prize_day, spin_wheel_attempt, lottery, lottery_prize, lottery_entrant, lottery_draw, lottery_winner, reward_issue, attention_budget]
+owns_tables: [spin_wheel_config, spin_wheel_prize, spin_wheel_day, spin_wheel_prize_day, spin_wheel_attempt, lottery, lottery_prize, lottery_entrant, lottery_draw, lottery_winner, reward_issue, reward_target, attention_budget]
 depends_on: [identity, billing, fraud]
-updated: 2026-10-14
+updated: 2026-10-22
 ---
 
 # Engagement

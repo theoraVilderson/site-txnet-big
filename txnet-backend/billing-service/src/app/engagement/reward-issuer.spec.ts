@@ -38,13 +38,14 @@ const grant = (id: string, over: Partial<GrantRow> = {}): GrantRow => ({
 
 type Template = { tenantId: string; deletedAt: Date | null; discountType: DiscountType; discountValue: Prisma.Decimal; maxDiscountCap: Prisma.Decimal | null; currencyCode: string };
 
-function fakeTx(o: { grants?: GrantRow[]; template?: Template | null; tenantType?: string } = {}) {
+function fakeTx(o: { grants?: GrantRow[]; template?: Template | null; tenantType?: string; chosen?: string } = {}) {
   const issues: Record<string, unknown>[] = [];
   const coupons: Record<string, unknown>[] = [];
   const tx = {
     grant: {
       findMany: vi.fn(async ({ where }) => (o.grants ?? []).filter((g) => g.status === where.status && (!where.id || g.id === where.id))),
     },
+    rewardTarget: { findUnique: vi.fn(async () => (o.chosen ? { grantId: o.chosen } : null)) },
     rewardIssue: {
       findUnique: vi.fn(async ({ where }) => issues.find((r) => r.source === where.source_referenceId.source && r.referenceId === where.source_referenceId.referenceId) ?? null),
       create: vi.fn(async ({ data }) => {
@@ -115,6 +116,32 @@ describe('bonus GB', () => {
     const { tx } = fakeTx({ grants: [grant('g-a', { endsAt: in_(5) }), grant('g-unlimited', { trafficUnlimited: true })] });
     await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 1), { grantId: 'g-unlimited' }))).rejects.toMatchObject({ reason: 'grant_not_eligible' });
     await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 1), { grantId: 'g-a' }))).resolves.toMatchObject({ grantId: 'g-a' });
+  });
+});
+
+describe("the user's prize service (F-707-r)", () => {
+  const two = (over: Partial<GrantRow> = {}) => [grant('g-long', { endsAt: in_(60) }), grant('g-family', { endsAt: in_(10), ...over })];
+
+  it('takes GB and days over the one that runs longest', async () => {
+    const { tx } = fakeTx({ grants: two(), chosen: 'g-family' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ grantId: 'g-family' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.extra_days, 3), { referenceId: 'att-2' }))).resolves.toMatchObject({ grantId: 'g-family' });
+  });
+
+  it('falls back, never refuses, when the choice cannot take this prize', async () => {
+    const { tx } = fakeTx({ grants: two({ trafficUnlimited: true }), chosen: 'g-family' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ grantId: 'g-long' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.extra_days, 3), { referenceId: 'att-2' }))).resolves.toMatchObject({ grantId: 'g-family' });
+  });
+
+  it('falls back when the choice is no longer active', async () => {
+    const { tx } = fakeTx({ grants: two({ status: GrantStatus.expired }), chosen: 'g-family' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5)))).resolves.toMatchObject({ grantId: 'g-long' });
+  });
+
+  it('gives way to a Grant the caller names', async () => {
+    const { tx } = fakeTx({ grants: two(), chosen: 'g-family' });
+    await expect(issueReward(tx, grants, input(prize(SpinPrizeType.bonus_traffic_gb, 5), { grantId: 'g-long' }))).resolves.toMatchObject({ grantId: 'g-long' });
   });
 });
 

@@ -21,7 +21,7 @@ updated: 2026-10-03
 | 7 | A wheel version and its prizes never change once written | `spin_wheel_is_history` | a day's odds changed mid-day |
 | 8 | A lottery is frozen once published and moves one way; cancelling needs a reason | `lottery_guard`, `lottery_parts_guard`; `LotteryAdminService` answers each with a reason (`lottery-admin.spec.ts`) | an operator steers the draw |
 | 9 | A draw happens once and is never rewritten; its seed is made only after the list is frozen, in the freeze's transaction | key + `lottery_draw_is_history`; `LotteryCloseService`, `LotteryDrawService` re-hashes the list before drawing (`lottery-close.spec.ts`, `lottery-draw.spec.ts`) | a re-roll until the right winner |
-| 10 | A prize is given once per (source, reference), in the caller's transaction; GB and days only to an active Grant now, never queued | `reward_issue` unique + `issueReward`; `reward-issuer.spec.ts` | a prize paid twice, or held for a purchase |
+| 10 | A prize is given once per (source, reference), in the caller's transaction; GB and days only to an active Grant now, never queued; the user's saved prize service only steers which (F-707-r) | `reward_issue` unique + `issueReward`; `reward-issuer.spec.ts` | a prize paid twice, or held for a purchase |
 | 11 | A lottery prize goes to its winner or, passed on with a recorded reason, to the next reserve in place order; never to anyone else, never queued | `LotteryDeliveryService` (`lottery-delivery.spec.ts`); `lottery_draw_is_history` keeps each place's entrant | a prize steered, or held for a purchase |
 
 ## How to test

@@ -14,6 +14,8 @@ import { LotteryInternalController } from './lottery-internal.controller';
 import { LotteryResultService } from './lottery-result.service';
 import { LotterySeedSeal } from './lottery-seed-seal';
 import { LotteryController } from './lottery.controller';
+import { RewardTargetController } from './reward-target.controller';
+import { RewardTargetService } from './reward-target.service';
 import { WheelAdminController } from './wheel-admin.controller';
 import { WheelAdminService } from './wheel-admin.service';
 import { WheelReportService } from './wheel-report';
@@ -31,7 +33,7 @@ import { WheelController } from './wheel.controller';
  */
 @Module({
   imports: [EntitlementModule],
-  controllers: [WheelAdminController, WheelController, LotteryAdminController, LotteryController, LotteryInternalController, WheelInternalController],
-  providers: [WheelAdminService, LotteryAdminService, LotteryAdminReportService, LotteryAudienceService, LotteryEntryService, LotteryCloseService, LotteryDrawService, LotteryDeliveryService, LotteryResultService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService],
+  controllers: [WheelAdminController, WheelController, LotteryAdminController, LotteryController, LotteryInternalController, WheelInternalController, RewardTargetController],
+  providers: [WheelAdminService, LotteryAdminService, LotteryAdminReportService, LotteryAudienceService, LotteryEntryService, LotteryCloseService, LotteryDrawService, LotteryDeliveryService, LotteryResultService, LotterySeedSeal, KekService, WheelSpinService, WheelReportService, RewardTargetService],
 })
 export class EngagementModule {}

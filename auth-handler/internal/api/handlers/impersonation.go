@@ -54,6 +54,8 @@ var impersonationReach = []impersonationRoute{
 	{Method: "GET", Path: "/api/billing/wheel"},
 	{Method: "GET", Path: "/api/billing/wheel/history"},
 	{Method: "POST", Path: "/api/billing/wheel/spin"},
+	{Method: "GET", Path: "/api/billing/reward-target"},
+	{Method: "PUT", Path: "/api/billing/reward-target"},
 	{Method: "GET", Path: "/api/currency/rates"},
 	{Method: "GET", Path: "/api/notifications"},
 	{Method: "POST", Path: "/api/notifications/read"},

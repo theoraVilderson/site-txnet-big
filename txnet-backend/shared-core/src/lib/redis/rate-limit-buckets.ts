@@ -405,28 +405,25 @@ export const RateLimitBucket = {
   CATALOG_ADMIN_READ: 'catalog:admin:read',
   CATALOG_ADMIN_WRITE: 'catalog:admin:write',
 
-  /**
-   * The wheel's settings and report in `billing-service` (F-707-c, F-707-e),
-   * per user. The page reads on every visit; a save is a new wheel version.
-   */
+  /** The wheel's settings and report in `billing-service` (F-707-c, F-707-e), per user; a save is a new wheel version. */
   ENGAGEMENT_ADMIN_READ: 'engagement:admin:read',
   ENGAGEMENT_ADMIN_WRITE: 'engagement:admin:write',
 
   /**
-   * A user's wheel in `billing-service` (F-707-d), per user, never shared
-   * (ADR-0070). The page reads the odds on every visit; a spin is bounded by
-   * the version's spins a day already, so this budget only covers retries.
+   * A user's wheel in `billing-service` (F-707-d), per user, never shared (ADR-0070). The page reads the odds
+   * on every visit; a spin is bounded by the version's spins a day already, so this budget only covers retries.
    */
   WHEEL_READ: 'wheel:read',
   WHEEL_SPIN: 'wheel:spin',
 
   /**
-   * A user's lotteries in `billing-service` (F-707-j), per user, never shared
-   * (ADR-0070). A join or a leave is idempotent; this budget only stops a
-   * client toggling its entry in a loop.
+   * A user's lotteries (F-707-j) and prize service (F-707-r) in `billing-service`, per user, never shared
+   * (ADR-0070). A join, a leave or a choice is idempotent; a write budget only stops a client toggling in a loop.
    */
   LOTTERY_READ: 'lottery:read',
   LOTTERY_ENTRY: 'lottery:entry',
+  REWARD_TARGET_READ: 'reward-target:read',
+  REWARD_TARGET_WRITE: 'reward-target:write',
 
   /**
    * The platform owner adjusting a reseller's billing wallet by hand in

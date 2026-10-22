@@ -364,6 +364,22 @@ model RewardIssue {
   @@schema("engagement")
 }
 
+/// The user's prize service (F-707-r): the Grant a wheel or lottery prize of
+/// GB or days goes to, chosen by the user. One per user; no row = automatic
+/// (the Grant that runs longest). Read by the reward issuer, which falls back
+/// to automatic when this Grant is gone, not active, or cannot take the prize
+/// — so a stale row is harmless and never cleaned up by a Grant's end.
+model RewardTarget {
+  tenantId  String   @db.Uuid
+  userId    String   @db.Uuid
+  grantId   String   @db.Uuid
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, userId])
+  @@map("reward_target")
+  @@schema("engagement")
+}
+
 // =============================================================================
 
 /// F-1501 / ADR-0109 point 10: how many proactive AI messages a subject has

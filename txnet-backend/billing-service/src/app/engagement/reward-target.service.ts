@@ -1,0 +1,106 @@
+import { Injectable } from '@nestjs/common';
+import { GrantStatus, Prisma, SpinPrizeType } from '@prisma/client';
+import { tenantTransaction } from '@txnet-backend/shared-core';
+
+import { PrismaService } from '../prisma/prisma.service';
+import { takes } from './reward-issuer';
+
+/**
+ * The user's prize service (F-707-r, user 2026-10-22): which of their Grants a
+ * wheel or lottery prize of GB or days goes to — `/api/billing/reward-target`.
+ *
+ * One saved choice, not one per spin or entry: an `automatic` lottery has no
+ * step to ask in, and the wheel and both lottery kinds then agree. The reward
+ * issuer reads it and falls back to automatic (the Grant that runs longest)
+ * when it is gone or cannot take the prize, so nothing here has to follow a
+ * Grant's end; the view just stops reporting a choice that no longer applies.
+ */
+
+export type RewardTargetRejection = 'grant_not_found' | 'grant_not_eligible';
+
+export class RewardTargetRefused extends Error {
+  constructor(readonly reason: RewardTargetRejection) {
+    super(reason);
+    this.name = 'RewardTargetRefused';
+  }
+}
+
+export type RewardTargetCaller = { userId: string; tenantId: string };
+
+/** A service a prize can go to, named as My services names it (F-307-x): the buyer's label, else the catalog's `nameKey`. */
+export type PrizeService = {
+  id: string;
+  label: string | null;
+  variant: { id: string; sku: string; nameKey: string } | null;
+  endsAt: Date | null;
+  takesTraffic: boolean;
+  takesDays: boolean;
+};
+
+/** `chosenGrantId` is `null` for automatic, and when the saved Grant can no longer take a prize. */
+export type RewardTargetView = { chosenGrantId: string | null; services: PrizeService[] };
+
+/** A picker, not a page: more active services than this is not a real user's. */
+const SERVICES_MAX = 50;
+
+/** Active, and able to take GB or days — `takes` for either kind, as a query. */
+const offered = (userId: string): Prisma.GrantWhereInput => ({
+  userId,
+  status: GrantStatus.active,
+  OR: [{ trafficUnlimited: false }, { endsAt: { not: null } }],
+});
+
+@Injectable()
+export class RewardTargetService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  view(caller: RewardTargetCaller): Promise<RewardTargetView> {
+    return tenantTransaction(this.prisma, (tx) => this.viewIn(tx, caller));
+  }
+
+  /** Saves the caller's own active Grant that a prize can reach; `null` is automatic again. */
+  choose(caller: RewardTargetCaller, grantId: string | null): Promise<RewardTargetView> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const key = { tenantId: caller.tenantId, userId: caller.userId };
+      if (grantId === null) {
+        await tx.rewardTarget.deleteMany({ where: key });
+        return this.viewIn(tx, caller);
+      }
+      const grant = await tx.grant.findFirst({ where: { id: grantId, userId: caller.userId }, select: { status: true, trafficUnlimited: true, endsAt: true } });
+      if (!grant) throw new RewardTargetRefused('grant_not_found');
+      const reachable = grant.status === GrantStatus.active && (takes(grant, SpinPrizeType.bonus_traffic_gb) || takes(grant, SpinPrizeType.extra_days));
+      if (!reachable) throw new RewardTargetRefused('grant_not_eligible');
+      await tx.rewardTarget.upsert({ where: { tenantId_userId: key }, create: { ...key, grantId }, update: { grantId } });
+      return this.viewIn(tx, caller);
+    });
+  }
+
+  private async viewIn(tx: Prisma.TransactionClient, caller: RewardTargetCaller): Promise<RewardTargetView> {
+    const [rows, saved] = await Promise.all([
+      tx.grant.findMany({
+        where: offered(caller.userId),
+        select: {
+          id: true,
+          userLabel: true,
+          trafficUnlimited: true,
+          endsAt: true,
+          variant: { select: { id: true, sku: true, nameKey: true, product: { select: { nameKey: true } } } },
+        },
+        // The issuer's automatic order: no end first, then the latest end.
+        orderBy: [{ endsAt: { sort: 'desc', nulls: 'first' } }, { startsAt: 'asc' }, { id: 'asc' }],
+        take: SERVICES_MAX,
+      }),
+      tx.rewardTarget.findUnique({ where: { tenantId_userId: { tenantId: caller.tenantId, userId: caller.userId } }, select: { grantId: true } }),
+    ]);
+    const services = rows.map((r) => ({
+      id: r.id,
+      label: r.userLabel,
+      variant: r.variant ? { id: r.variant.id, sku: r.variant.sku, nameKey: r.variant.nameKey ?? r.variant.product.nameKey } : null,
+      endsAt: r.endsAt,
+      takesTraffic: takes(r, SpinPrizeType.bonus_traffic_gb),
+      takesDays: takes(r, SpinPrizeType.extra_days),
+    }));
+    const chosenGrantId = services.some((s) => s.id === saved?.grantId) ? (saved?.grantId ?? null) : null;
+    return { chosenGrantId, services };
+  }
+}

@@ -23,6 +23,7 @@ Source of truth: `txnet-backend/prisma/domains/engagement.prisma` (Postgres sche
 | lottery_entrant | one user once; `ticketNumber` at the freeze or `excludedReason` | yes | permanent |
 | lottery_draw | once per lottery, written at the freeze: list hash, sealed seed (ADR-0022), algorithm, `frozenAt`; `drawnAt` and `publishedAt` set later, once each | yes | permanent |
 | lottery_winner | a place in the permutation: winner (`prizeId`) or reserve, delivery outcome | yes | permanent |
+| reward_target | the user's prize service (F-707-r): (tenantId, userId) key, the Grant GB and days go to; no row = automatic; no foreign key — a stale row falls back in the issuer | yes | while the user exists |
 | reward_issue | one prize given: (source spin\|lottery, referenceId) unique, user, kind, and what it became (Grant + adjustment or duration change, coupon, free Grant); written once (F-707-b) | yes | permanent |
 | attention_budget | recent proactive AI-message times per subject (`chargedAt[]`, user or tenant) — 3 per rolling 7 days, 1 per 24 h (F-1501, ADR-0109 point 10); written by `ai-service` only; a count, never a ledger account (C-13); strict tenant RLS | yes | while the subject exists |
 
@@ -50,6 +51,8 @@ contract.md "The storage rules", RLS. `currentDayAwardedCount` dropped (the
 tables were empty; the migration refuses to run otherwise).
 `20261003000300_a_prize_is_given_once` (F-707-b): `reward_issue`, its shape
 CHECK, write-once trigger, RLS; `GrantSource.engagement_reward`.
+`20261022001200_a_user_chooses_the_prize_service` (F-707-r): `reward_target`,
+its same-tenant trigger, RLS. Additive.
 `20261003000400_a_tenant_admin_runs_its_wheel` (F-707-c): `engagement.manage`
 to `Admin`, the audit values. `20261003000500_the_wheel_warns_at_80_percent`
 (F-707-e): `spin_wheel_day.capAlertedAt`. Both additive.

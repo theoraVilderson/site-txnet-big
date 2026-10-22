@@ -150,6 +150,7 @@ export const EXPORT_TABLES: Readonly<Record<Prisma.ModelName, ExportRule>> = {
   LotteryPrize: OWN,
   LotteryWinner: OWN,
   RewardIssue: OWN,
+  RewardTarget: OWN,
   SpinWheelAttempt: OWN,
   SpinWheelConfig: OWN,
   SpinWheelDay: none('derived'),
