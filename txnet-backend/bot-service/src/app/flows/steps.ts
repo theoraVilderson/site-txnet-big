@@ -75,6 +75,8 @@ const FLOW_STEPS: Record<Exclude<BotFlow, 'login' | 'accountAdd'>, string[]> = {
   support: [],
   // A transfer's proof is the seller's pick of fields (F-805-b): its length is not this table's to know.
   transfer: [],
+  // A renewal types one answer at most — an amount or a code — between taps: nothing to count (F-305-i).
+  renewal: [],
 };
 
 /**
@@ -101,6 +103,7 @@ export const PROGRESS_KEY: Record<BotFlow, BotKey | null> = {
   wheel: null,
   support: null,
   transfer: null,
+  renewal: null,
 };
 
 export function progressOf(state: NavState): BotText | undefined {

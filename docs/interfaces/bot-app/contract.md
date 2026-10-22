@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 18
-updated: 2026-10-15
+version: 19
+updated: 2026-10-22
 ---
 
 # bot-app — contract

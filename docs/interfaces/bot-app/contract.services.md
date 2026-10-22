@@ -2,8 +2,8 @@
 id: bot-app
 layer: interface
 status: active
-version: 18
-updated: 2026-10-15
+version: 19
+updated: 2026-10-22
 ---
 
 # Contract — bot-app: My services in the chat (F-307-y), and the user's own freeze (F-0401-g)
@@ -86,6 +86,9 @@ screen; ask, then cancel sends nothing; freeze and unfreeze after the yes,
 the screen read again; the daily cap named; `self_freeze_off` in billing's
 sentence; the callback length. The lotteries' span moved to `flows/span.ts`.
 `locale/bot-copy.spec.ts` holds the new keys in `en`, `fa` and the fallbacks.
+
+**«🔄 تمدید»** is the first button on a renewable service's screen; what it opens is
+[contract.renewal.md](contract.renewal.md) (F-305-i).
 
 ## Not covered
 

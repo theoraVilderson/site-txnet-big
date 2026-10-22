@@ -14,7 +14,8 @@ A §10 split of [contract.my-services.md](contract.my-services.md), beside
 The seller's side is the renewal-rate section of a product's editor (F-305-g, at the
 end). **Status: built** — the sheet (F-305-f), the custom amount and the editor (F-305-g),
 and the AI suggestion's `renew`, which opens this sheet on its plan (F-305-h,
-[contract.suggestion.md](contract.suggestion.md) rule 1).
+[contract.suggestion.md](contract.suggestion.md) rule 1). A renew notice's action is the bot's
+renewal (bot-app [contract.renewal.md](../bot-app/contract.renewal.md), F-305-i, user 2026-10-22).
 
 Its pieces: `services/_components/RenewalSheet.tsx` (`Renewal`: the button and the sheet),
 `CustomRenewal.tsx` and `_hooks/useRenewalQuote.ts` (rule 4),

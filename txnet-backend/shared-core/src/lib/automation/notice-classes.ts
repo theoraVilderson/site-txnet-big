@@ -54,6 +54,15 @@ export const SUPPORT_CALLBACK_PREFIX = 'sup:';
 export const supportOpenCallback = (conversationId: string) => `${SUPPORT_CALLBACK_PREFIX}o:${conversationId}`;
 
 /**
+ * A service's renewal in the bot (F-305-i): `rnw:<kind>:…`. A renew notice
+ * (time over, volume spent, configs dropped within a day — F-601-b, F-601-j)
+ * carries the open one, which auth-service sends and bot-service routes from
+ * any state — the tap lands on that Grant's plans, ready to pay. 42 bytes.
+ */
+export const RENEWAL_CALLBACK_PREFIX = 'rnw:';
+export const renewalOpenCallback = (grantId: string) => `${RENEWAL_CALLBACK_PREFIX}o:${grantId}`;
+
+/**
  * A manual transfer's review buttons in the bot (F-805-b): `mtr:<kind>:<payment id>`.
  * A proof notice carries the open one, which auth-service sends and
  * bot-service routes from any state — the tap lands on that transfer's

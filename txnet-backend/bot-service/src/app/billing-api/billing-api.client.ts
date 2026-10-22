@@ -9,6 +9,7 @@ import type { OutgoingFile } from '../support-api/support-api.client';
 import type { CurrencyAmount } from '../locale/money';
 import type { ChatLottery, ChatLotteryResult, LotteryEntryAnswer, SpinAnswer, UserWheel } from './engagement.types';
 import type { DepositBody, DepositGateway, DepositQuote, DepositStarted, InChatPaid, InChatPaymentBody, PreCheckoutVerdict } from './deposit.types';
+import type { InvoicePaid, RenewalChoice, RenewalInvoice, RenewalPlans } from './renewal.types';
 import type { MyServicesPage } from './services.types';
 import type { ManualAnswer, ManualQueueRow, ProofAccepted, TransferStatus } from './transfer.types';
 
@@ -190,6 +191,26 @@ export class BillingApiClient {
     return this.call('POST', `${GRANTS_PATH}/${encodeURIComponent(grantId)}/unfreeze`, undefined, ctx);
   }
 
+  /** The plans billing would renew this Grant to (F-305-i): the panel's own read, so the chat offers what the invoice takes. */
+  renewalPlans(grantId: string, ctx: BillingCallContext): Promise<ApiResult<RenewalPlans>> {
+    return this.call('GET', `${GRANTS_PATH}/${encodeURIComponent(grantId)}/renewal-plans`, undefined, ctx);
+  }
+
+  /** A renewal invoice — a plan, or GiB and days typed — priced by billing, codes applied (`contract.renewal.md`). */
+  createRenewalInvoice(grantId: string, choice: RenewalChoice, couponCodes: string[], ctx: BillingCallContext): Promise<ApiResult<RenewalInvoice>> {
+    return this.call('POST', INVOICES_PATH, { grantId, ...choice, couponCodes }, ctx);
+  }
+
+  /** Pays it from the wallet; a shortfall is `insufficient_balance` with `facts.missing`. */
+  payInvoice(invoiceId: string, ctx: BillingCallContext): Promise<ApiResult<InvoicePaid>> {
+    return this.call('POST', `${INVOICES_PATH}/${encodeURIComponent(invoiceId)}/pay`, undefined, ctx);
+  }
+
+  /** Gives it up, so its coupon holds are freed at once rather than at its 30 minutes. */
+  cancelInvoice(invoiceId: string, ctx: BillingCallContext): Promise<ApiResult<{ id: string; status: string }>> {
+    return this.call('POST', `${INVOICES_PATH}/${encodeURIComponent(invoiceId)}/cancel`, undefined, ctx);
+  }
+
   /** A transfer a start answered, re-read with where it stands (F-803-d) — for a payer coming back to it. */
   transfer(paymentId: string, ctx: BillingCallContext): Promise<ApiResult<TransferStatus>> {
     return this.call('GET', `${depositPath(paymentId)}/transfer`, undefined, ctx);
@@ -324,6 +345,7 @@ async function readImage(r: Response): Promise<ApiResult<OutgoingFile>> {
 
 const depositPath = (paymentId: string) => `/api/billing/deposit/${encodeURIComponent(paymentId)}`;
 const GRANTS_PATH = '/api/billing/gift/grants';
+const INVOICES_PATH = '/api/billing/invoices';
 const MANUAL_PATH = '/api/billing/payments/manual';
 const manualPath = (paymentId: string) => `${MANUAL_PATH}/${encodeURIComponent(paymentId)}`;
 

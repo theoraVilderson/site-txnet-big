@@ -1,6 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { BotAction, BotText } from '@txnet-backend/messenger';
-import { remainingLabel } from '@txnet-backend/shared-core';
 import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api.client';
 import type { GrantStatus, MyService } from '../billing-api/services.types';
 import { ChatContext, FlowResult } from '../conversation/nav.types';
@@ -8,6 +7,8 @@ import { BotKey, BotKeys } from '../locale/bot-keys';
 import { LocaleService } from '../locale/locale.service';
 import { ChatAccess } from '../session/chat-access';
 import { freezeRefusalOf, frozenNoteOf, ownFreezeOf } from './own-freeze';
+import { renewalAction, renewalOffered } from './renewal-actions';
+import { bytesLabel, serviceNameOf } from './service-words';
 import { ACTIONS, say, view } from './views';
 
 /** Every entitlement status in the chat's words; the spec holds it to the Prisma enum. */
@@ -29,8 +30,6 @@ const LIST_MAX = 10;
 /** The card finds its row in billing's largest page (`pageSize ≤ 100`): there is no single-Grant route. */
 const CARD_READ_MAX = 100;
 const DAY_MS = 86_400_000;
-/** A catalog name key is `catalog.<entry>`, served from the `catalog` namespace (as auth-service's notices read it). */
-const CATALOG_PREFIX = 'catalog.';
 
 const back: BotAction = { id: ACTIONS.services, label: { key: BotKeys.action.servicesBack } };
 
@@ -51,7 +50,8 @@ type Offer = keyof typeof OFFER;
  * still means what it says; each answer ends the conversation. What may be
  * done to a service from here is added by the rows that ride this screen:
  * the user's own freeze and unfreeze (F-0401-g, `own-freeze.ts`), each asked
- * first, the screen read again after billing answers.
+ * first, the screen read again after billing answers; and «تمدید», which
+ * opens the service's renewal (F-305-i, `renewal.flow.ts`).
  */
 @Injectable()
 export class ServicesFlow {
@@ -105,7 +105,11 @@ export class ServicesFlow {
     const s = found.service;
     const values = { name: this.name(s, call.lang), status: statusOf(s), traffic: trafficOf(s), time: this.timeOf(s), frozen: frozenNoteOf(s, this.now()) };
     const offer = ownFreezeOf(s);
-    const buttons: BotAction[][] = offer ? [[{ id: serviceAction(OFFER[offer].ask, s.id), label: { key: OFFER[offer].label } }], [back]] : [[back]];
+    const buttons: BotAction[][] = [
+      ...(renewalOffered(s) ? [[{ id: renewalAction('open', s.id), label: { key: BotKeys.action.serviceRenew } }]] : []),
+      ...(offer ? [[{ id: serviceAction(OFFER[offer].ask, s.id), label: { key: OFFER[offer].label } }]] : []),
+      [back],
+    ];
     return { view: view('services.card', { key: BotKeys.services.card, values }, buttons), nextState: null };
   }
 
@@ -131,31 +135,12 @@ export class ServicesFlow {
     return { view: view('services.refused', freezeRefusalOf(done, this.now()), [[toService]]), nextState: null };
   }
 
-  /** The row billing now lists under this id, or the screen that says why there is none. */
-  private async find(call: BillingCallContext, id: string): Promise<{ service: MyService } | FlowResult> {
-    const read = await this.billing.myServices(CARD_READ_MAX, call);
-    if (!read.ok || !read.data) return { view: say('services.failed', { raw: read.msg }), nextState: null };
-    const service = read.data.rows.find((x) => x.id === id);
-    return service ? { service } : { view: view('services.gone', { key: BotKeys.services.gone }, [[back]]), nextState: null };
+  private find(call: BillingCallContext, id: string): Promise<{ service: MyService } | FlowResult> {
+    return findOwnService(this.billing, call, id);
   }
 
-  /**
-   * As My services and every notice name it (F-307-x): the buyer's own name,
-   * else the catalog's in the chat's language (else the default one), else the
-   * sku. A name key with no text is never shown as itself.
-   */
   private name(s: MyService, lang: string): BotText {
-    if (s.label) return { raw: s.label };
-    const catalog = this.catalogName(s.variant?.nameKey ?? null, lang);
-    if (catalog) return { raw: catalog };
-    return s.variant?.sku ? { raw: s.variant.sku } : { key: BotKeys.services.unnamed };
-  }
-
-  private catalogName(key: string | null, lang: string): string | undefined {
-    if (!key?.startsWith(CATALOG_PREFIX)) return undefined;
-    const entry = key.slice(CATALOG_PREFIX.length);
-    const text = this.locale.getKey(lang, 'catalog', entry) ?? this.locale.getKey(this.locale.getDefaultLanguage(), 'catalog', entry);
-    return typeof text === 'string' && text !== '' ? text : undefined;
+    return serviceNameOf(s, lang, this.locale);
   }
 
   /** Time to the end as whole days — a span needs no time zone, as the lotteries' does. */
@@ -177,6 +162,14 @@ export class ServicesFlow {
   }
 }
 
+/** The row billing now lists under this id, or the screen that says why there is none — a service's screen's, and its renewal's (F-305-i). */
+export async function findOwnService(billing: BillingApiClient, call: BillingCallContext, id: string): Promise<{ service: MyService } | FlowResult> {
+  const read = await billing.myServices(CARD_READ_MAX, call);
+  if (!read.ok || !read.data) return { view: say('services.failed', { raw: read.msg }), nextState: null };
+  const service = read.data.rows.find((x) => x.id === id);
+  return service ? { service } : { view: view('services.gone', { key: BotKeys.services.gone }, [[back]]), nextState: null };
+}
+
 /** A frozen Grant is `suspended` underneath; the user knows it as frozen. */
 function statusOf(s: MyService): BotText {
   return { key: s.frozen ? BotKeys.services.frozen : SERVICE_STATUS_KEYS[s.status] };
@@ -189,10 +182,4 @@ function trafficOf(s: MyService): BotText {
   if (s.billingMode === 'metered') return { key: BotKeys.services.traffic.metered, values: { used } };
   if (s.trafficCapBytes !== null) return { key: BotKeys.services.traffic.capped, values: { used, cap: bytesLabel(s.trafficCapBytes) } };
   return { key: BotKeys.services.traffic.used, values: { used } };
-}
-
-/** Bytes as the notices say them (`remainingLabel`); nothing used reads 0, not its "at least 1 MB". */
-function bytesLabel(bytes: string): string {
-  const n = BigInt(bytes);
-  return n === BigInt(0) ? '0 MB' : remainingLabel(n);
 }

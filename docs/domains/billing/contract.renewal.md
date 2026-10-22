@@ -19,7 +19,7 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 (F-305-j) and GiB and days typed (F-305-e); the rate F-305-e reads is catalog's
 [contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
-(F-305-f/g), bot-app (F-305-i).
+(F-305-f/g), bot-app [contract.renewal.md](../../interfaces/bot-app/contract.renewal.md) (F-305-i).
 
 ## The route (built — F-305-c)
 

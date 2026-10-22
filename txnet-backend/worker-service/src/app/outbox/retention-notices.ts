@@ -54,15 +54,16 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_ENDS_IN_3D]: { template: 'serviceEndsSoon', params: ['days'], patient: true },
   [OutboxEventType.GRANT_ENDS_IN_1D]: { template: 'serviceEndsWithinADay', params: [] },
   // F-601-b: the service stopped — time, a prepaid volume, a metered wallet. Cutoff notices: never muted (F-601-m).
-  [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: [] },
-  [OutboxEventType.GRANT_VOLUME_SPENT]: { template: 'serviceVolumeSpent', params: [] },
+  // A renewal brings the first two back: `grantId` rides as a param for the bot's «تمدید» button (F-305-i).
+  [OutboxEventType.GRANT_ENDED]: { template: 'serviceEnded', params: ['grantId'] },
+  [OutboxEventType.GRANT_VOLUME_SPENT]: { template: 'serviceVolumeSpent', params: ['grantId'] },
   [OutboxEventType.GRANT_WALLET_SPENT]: { template: 'serviceWalletSpent', params: [] },
   // F-118-t: the same stop when the service's spending cap refused it — "raise the cap", not "top up".
   [OutboxEventType.GRANT_CAP_REACHED]: { template: 'serviceCapReached', params: [] },
   // F-601-g: a metered Grant's wallet buys under a GB at its rate — what it still buys; once per crossing.
   [OutboxEventType.GRANT_LOW_BALANCE]: { template: 'serviceWalletLow', params: ['remaining'] },
   // F-601-j: a suspended Grant's configs are dropped from the panel within a day — renew, or top up if metered. Never muted (F-601-m).
-  [OutboxEventType.GRANT_PURGE_SOON]: { template: 'servicePurgeSoon', params: [] },
+  [OutboxEventType.GRANT_PURGE_SOON]: { template: 'servicePurgeSoon', params: ['grantId'] },
   [OutboxEventType.GRANT_PURGE_SOON_METERED]: { template: 'servicePurgeSoonTopUp', params: [] },
   // F-118-t: the same for a service its spending cap stopped — raise or remove the cap.
   [OutboxEventType.GRANT_PURGE_SOON_CAPPED]: { template: 'servicePurgeSoonRaiseCap', params: [] },

@@ -1,8 +1,8 @@
 import { BotKey, BotKeys } from './bot-keys';
 
 /**
- * The last-resort English of My services in the chat (F-307-y) and the
- * user's own freeze there (F-0401-g).
+ * The last-resort English of My services in the chat (F-307-y), the
+ * user's own freeze there (F-0401-g) and its renewal (F-305-i).
  * `bot-copy.fallbacks.ts` spreads it into the one table `bot-copy.spec.ts`
  * holds to `bot.json`; it lives apart only to keep that table under the file
  * cap (C-20), as the payment screens' does.
@@ -46,4 +46,30 @@ export const SERVICES_FALLBACKS = {
   [BotKeys.services.freezeAsk]: "Freeze «{{name}}»? No device connects with it until you unfreeze it.",
   [BotKeys.services.unfreezeAsk]: "Unfreeze «{{name}}»? Its configs work again.",
   [BotKeys.services.freezeLimited]: "A service can be frozen at most {{limit}} times in 24 hours. You can freeze this one again in {{left}}.",
+  // F-305-i: renewing one's own service from the wallet.
+  [BotKeys.action.serviceRenew]: "🔄 Renew",
+  [BotKeys.action.renewGib]: "➕ Add traffic",
+  [BotKeys.action.renewDays]: "📅 Add days",
+  [BotKeys.action.renewPay]: "💳 Pay from my wallet",
+  [BotKeys.action.renewCoupon]: "🎟 Discount code",
+  [BotKeys.action.renewPayAgain]: "🔁 Pay again",
+  [BotKeys.renewal.plans]: "🔄 Renew «{{name}}»\nPick a plan; the service's own plan is first.{{notSold}}",
+  [BotKeys.renewal.notSold]: "\n\nThis service's own plan is no longer sold; pick one of the others.",
+  [BotKeys.renewal.none]: "This service has no plan to renew to right now.",
+  [BotKeys.renewal.plan]: "{{name}} · {{adds}} · {{price}}",
+  [BotKeys.renewal.planCurrent]: "⭐ {{name}} · {{adds}} · {{price}}",
+  [BotKeys.renewal.addsBoth]: "{{traffic}}, {{days}}",
+  [BotKeys.renewal.addsDays]: "{{d}} days",
+  [BotKeys.renewal.unlimited]: "unlimited traffic",
+  [BotKeys.renewal.askGib]: "How many GB should be added to «{{name}}»? Send a number from {{min}} to {{max}}.",
+  [BotKeys.renewal.askDays]: "How many days should be added to «{{name}}»? Send a number from {{min}} to {{max}}.",
+  [BotKeys.renewal.notANumber]: "Please send just a number.",
+  [BotKeys.renewal.invoice]: "🧾 Renewal invoice\nPlan: {{plan}}\nAdds: {{adds}}\nPrice: {{amount}}{{discount}}\nTo pay: {{total}}\nValid for {{left}} more.{{rejected}}",
+  [BotKeys.renewal.discount]: "\nDiscount: {{discount}}",
+  [BotKeys.renewal.rejected]: "\n\n⚠️ Code {{code}}: {{message}}",
+  [BotKeys.renewal.askCoupon]: "Send the discount code.",
+  [BotKeys.renewal.stale]: "This screen is old; tap «🔄 Renew» again.",
+  [BotKeys.renewal.paid]: "✅ The service is renewed.\nPaid: {{total}} — wallet balance: {{balance}}",
+  [BotKeys.renewal.shortfall]: "Your wallet is short for this renewal: {{missing}} more is needed.\nTop up your wallet, then tap «🔁 Pay again».",
+  [BotKeys.renewal.cancelled]: "The renewal was cancelled.",
 } satisfies Partial<Record<BotKey, string>>;

@@ -11,6 +11,7 @@ import { BotKeys } from '../locale/bot-keys';
 import { LocaleService } from '../locale/locale.service';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
+import { renewalAction } from './renewal-actions';
 import { SERVICE_STATUS_KEYS, ServicesFlow, serviceAction } from './services.flow';
 import { ACTIONS } from './views';
 
@@ -130,7 +131,7 @@ describe('the list', () => {
 });
 
 describe('a service', () => {
-  it('shows its status, its traffic against its cap and the days left, with the way back', async () => {
+  it('shows its status, its traffic against its cap and the days left, with «تمدید» (F-305-i) and the way back', async () => {
     const { flow } = harness();
     const r = await flow.tap(ctx, serviceAction('open', ID));
     expect(r.view.body.key).toBe(BotKeys.services.card);
@@ -140,7 +141,7 @@ describe('a service', () => {
       traffic: { key: BotKeys.services.traffic.capped, values: { used: '3.0 GB', cap: '50 GB' } },
       time: { key: BotKeys.services.time.left, values: { d: 10 } },
     });
-    expect(ids(r)).toEqual([ACTIONS.services]);
+    expect(ids(r)).toEqual([renewalAction('open', ID), ACTIONS.services]);
   });
 
   it('says unlimited, pay as you go, ended and no end date in their own words', async () => {

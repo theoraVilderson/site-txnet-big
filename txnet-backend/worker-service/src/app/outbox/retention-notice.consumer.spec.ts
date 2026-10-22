@@ -18,7 +18,7 @@
  *  - **the words are auth-service's**: the template and exactly the params
  *    the table names, nothing else from the payload.
  */
-import { RETENTION_KIND_OF, UnscopedRedisKeys, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
+import { OutboxEventType, RETENTION_KIND_OF, UnscopedRedisKeys, RequestHeaders, type OutboxMessage } from '@txnet-backend/shared-core';
 
 import { RetentionNoticeConsumer } from './retention-notice.consumer';
 import { RETENTION_NOTICES } from './retention-notices';
@@ -141,6 +141,12 @@ describe('RetentionNoticeConsumer.handle', () => {
       const { consumer, calls } = build();
       await expect(consumer.handle(event({ [missing]: undefined })), missing).rejects.toThrow(/payload/);
       expect(calls.fetched, missing).toEqual([]);
+    }
+  });
+
+  it("names the Grant to the notices a renewal answers, for the bot's «تمدید» (F-305-i)", () => {
+    for (const type of [OutboxEventType.GRANT_ENDED, OutboxEventType.GRANT_VOLUME_SPENT, OutboxEventType.GRANT_PURGE_SOON]) {
+      expect(RETENTION_NOTICES[type]?.params).toContain('grantId');
     }
   });
 

@@ -22,7 +22,8 @@ export type BotFlow =
   | 'timeZone'
   | 'wheel'
   | 'support'
-  | 'transfer';
+  | 'transfer'
+  | 'renewal';
 
 /**
  * Navigation state: the screen, the breadcrumb and a half-typed input.

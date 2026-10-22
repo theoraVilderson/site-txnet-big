@@ -317,7 +317,7 @@
   "txnet-backend/billing-service/src/app/systems/systems.controller.ts": 464,
   "txnet-backend/billing-service/src/app/wallet/wallet-history.service.ts": 457,
   "txnet-backend/bot-service/src/app/auth-api/auth-api.client.ts": 496,
-  "txnet-backend/bot-service/src/app/conversation/router.ts": 602,
+  "txnet-backend/bot-service/src/app/conversation/router.ts": 598,
   "txnet-backend/bot-service/src/app/flows/views.ts": 828,
   "txnet-backend/gateway-service/src/app/realtime/realtime.gateway.ts": 452,
   "txnet-backend/messenger/src/lib/telegram-like-bot.client.ts": 619,

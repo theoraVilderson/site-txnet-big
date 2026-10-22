@@ -9,6 +9,7 @@ import { AccountAddFlow } from './flows/account-add.flow';
 import { AccountsFlow } from './flows/accounts.flow';
 import { TimeZoneFlow } from './flows/time-zone.flow';
 import { LotteryFlow } from './flows/lottery.flow';
+import { RenewalFlow } from './flows/renewal.flow';
 import { ServicesFlow } from './flows/services.flow';
 import { ChatFiles } from './flows/chat-files';
 import { SupportFlow } from './flows/support.flow';
@@ -86,6 +87,7 @@ import { WebhookController } from './webhook/webhook.controller';
     WheelFlow,
     LotteryFlow,
     ServicesFlow,
+    RenewalFlow,
     SupportApiClient,
     ChatFiles,
     SupportFlow,

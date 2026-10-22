@@ -80,7 +80,13 @@
     "serviceFreeze": "🧊 Freeze this service",
     "serviceUnfreeze": "▶️ Unfreeze",
     "serviceFreezeYes": "Yes, freeze it",
-    "serviceUnfreezeYes": "Yes, unfreeze it"
+    "serviceUnfreezeYes": "Yes, unfreeze it",
+    "serviceRenew": "🔄 Renew",
+    "renewGib": "➕ Add traffic",
+    "renewDays": "📅 Add days",
+    "renewPay": "💳 Pay from my wallet",
+    "renewCoupon": "🎟 Discount code",
+    "renewPayAgain": "🔁 Pay again"
   },
   "common": {
     "cancelled": "Cancelled; nothing was saved. Start again below whenever you like.",
@@ -525,5 +531,26 @@
     "freezeAsk": "Freeze «{{name}}»? No device connects with it until you unfreeze it.",
     "unfreezeAsk": "Unfreeze «{{name}}»? Its configs work again.",
     "freezeLimited": "A service can be frozen at most {{limit}} times in 24 hours. You can freeze this one again in {{left}}."
+  },
+  "renewal": {
+    "plans": "🔄 Renew «{{name}}»\nPick a plan; the service's own plan is first.{{notSold}}",
+    "notSold": "\n\nThis service's own plan is no longer sold; pick one of the others.",
+    "none": "This service has no plan to renew to right now.",
+    "plan": "{{name}} · {{adds}} · {{price}}",
+    "planCurrent": "⭐ {{name}} · {{adds}} · {{price}}",
+    "addsBoth": "{{traffic}}, {{days}}",
+    "addsDays": "{{d}} days",
+    "unlimited": "unlimited traffic",
+    "askGib": "How many GB should be added to «{{name}}»? Send a number from {{min}} to {{max}}.",
+    "askDays": "How many days should be added to «{{name}}»? Send a number from {{min}} to {{max}}.",
+    "notANumber": "Please send just a number.",
+    "invoice": "🧾 Renewal invoice\nPlan: {{plan}}\nAdds: {{adds}}\nPrice: {{amount}}{{discount}}\nTo pay: {{total}}\nValid for {{left}} more.{{rejected}}",
+    "discount": "\nDiscount: {{discount}}",
+    "rejected": "\n\n⚠️ Code {{code}}: {{message}}",
+    "askCoupon": "Send the discount code.",
+    "stale": "This screen is old; tap «🔄 Renew» again.",
+    "paid": "✅ The service is renewed.\nPaid: {{total}} — wallet balance: {{balance}}",
+    "shortfall": "Your wallet is short for this renewal: {{missing}} more is needed.\nTop up your wallet, then tap «🔁 Pay again».",
+    "cancelled": "The renewal was cancelled."
   }
 }
