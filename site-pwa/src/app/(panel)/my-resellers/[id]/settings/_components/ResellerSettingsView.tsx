@@ -9,6 +9,8 @@ import { SupportAccessCard } from "../../_components/SupportAccessCard";
 import { DataExportCard } from "../../_components/DataExportCard";
 import { OverageCapCard, PackageChangeCard, ProductQuotasCard } from "../../_components/QuotaCards";
 import { ONBOARDING_KEYS as K } from "../../../_lib/onboarding";
+import { SelfMoveSettings } from "../../../../_components/SelfMoveSettings";
+import { useUserMessage } from "../../users/[userId]/_components/useUserMessage";
 
 /**
  * A reseller's settings (UX-2-b): the cards the workspace's home once
@@ -18,6 +20,7 @@ import { ONBOARDING_KEYS as K } from "../../../_lib/onboarding";
  */
 export function ResellerSettingsView({ id }: { id: string }) {
   const { t } = useLocale();
+  const message = useUserMessage();
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-4 md:p-8">
       <PageHeader title={t("common", K.settingsPage.title)} subtitle={t("common", K.settingsPage.subtitle)} />
@@ -30,6 +33,8 @@ export function ResellerSettingsView({ id }: { id: string }) {
         <ProductQuotasCard tenantId={id} />
         <OverageCapCard tenantId={id} />
         <PackageChangeCard tenantId={id} />
+        {/* F-410-f: its users moving their own config; a product's override is on the product's sheet. */}
+        <SelfMoveSettings tenantId={id} productId={null} errorMessage={message} />
         {/* F-117-f: the platform's access to this reseller's people; nothing to platform staff. */}
         <SupportAccessCard tenantId={id} />
         {/* F-212-c: the reseller takes all its data, in any status (catalog §14.8). */}

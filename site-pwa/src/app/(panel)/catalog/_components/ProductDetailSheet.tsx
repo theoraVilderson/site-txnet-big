@@ -23,6 +23,8 @@ import {
 import { CapabilityPicker } from "./CapabilityPicker";
 import { ProductCategories } from "./CategoryPickers";
 import { ProductAudienceSection, ownsAudience } from "./ProductAudienceSection";
+import { SelfMoveSettings } from "../../_components/SelfMoveSettings";
+import { setsSelfMove } from "../../_lib/self-move-settings";
 import { usePanelGroups, type PanelGroups } from "./PanelGroupSelect";
 import { VariantFields } from "./VariantFields";
 import { VariantCard } from "./VariantCard";
@@ -85,6 +87,9 @@ export function ProductDetailSheet({
     void load();
   }, [load]);
 
+  // F-410-f: a product whose services hold configs may override its tenant's self-move setting.
+  const selfMoveTenant = surfaceTenantId ?? me?.tenant.id ?? null;
+
   const money = (price: CatalogPrice) => formatMoney(price.amount, price.currencyCode, { lang, t });
   const currency = usePricingCurrency(product.tenantId);
 
@@ -110,6 +115,7 @@ export function ProductDetailSheet({
       {detail && ownsAudience(detail, surfaceTenantId, me?.tenant.id ?? null) && (
         <ProductAudienceSection key={detail.id} product={detail} onSaved={onChanged} />
       )}
+      {detail && selfMoveTenant !== null && takesPanelGroup(kind) && setsSelfMove(detail, selfMoveTenant) && <SelfMoveSettings key={product.id} tenantId={selfMoveTenant} productId={product.id} errorMessage={message} />}
 
       <h3 className="text-xs font-bold text-text-secondary">{t("common", K.open)}</h3>
       {error && <Alert tone="error">{error}</Alert>}

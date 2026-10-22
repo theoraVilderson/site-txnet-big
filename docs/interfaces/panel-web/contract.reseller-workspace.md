@@ -123,7 +123,8 @@ section has one; the home keeps what says how far the reseller is.
    shortcuts: settings, brand, users.
 2. **Settings** (`ResellerSettingsView`, `/reseller/settings` and
    `/my-resellers/:id/settings`): operating currency, time zone, limits,
-   product quotas, the cap on extras, package change, support access — each
+   product quotas, the cap on extras, package change, users' self-move
+   ([contract.self-move.md](contract.self-move.md), F-410-f), support access — each
    card by the path's reseller, admitting and refusing on its own
    (invariant 21). The menu links it in `account`, before the brand.
 3. **Last on settings: «export my data»** (F-212-c, `DataExportCard`;

@@ -26,6 +26,7 @@ export * from "./billing/manual-transfer";
 export * from "./billing/migration-runs";
 export * from "./billing/panel-groups";
 export * from "./billing/reseller-grants";
+export * from "./billing/self-move-settings";
 export * from "./billing/shop";
 export * from "./billing/systems";
 export * from "./billing/wallet";

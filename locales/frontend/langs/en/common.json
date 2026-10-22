@@ -7807,5 +7807,35 @@
       "export_not_found": "This export no longer exists.",
       "export_not_ready": "This export is not ready yet."
     }
+  },
+  "selfMoveSettings": {
+    "tenantLayer": {
+      "title": "Users change their server",
+      "hint": "Your users can move their service to another server of the same product themselves, at once and free. Switch it on or off here, and say how long they wait between two moves."
+    },
+    "productLayer": {
+      "title": "Users change their server, for this product",
+      "hint": "Unless you choose otherwise here, this product follows your general setting on the Settings page."
+    },
+    "enabledLabel": "Users may change their server themselves",
+    "cooldownLabel": "Wait between two moves",
+    "inherit": "As {layer} ({value})",
+    "layer": {
+      "platform": "the platform default",
+      "tenant": "your general setting",
+      "product": "this product"
+    },
+    "on": "On",
+    "off": "Off",
+    "ownHours": "A number of hours",
+    "hours": "{hours} hours",
+    "noWait": "No wait",
+    "hoursLabel": "Hours",
+    "hoursHint": "0 means a user may move again whenever they like.",
+    "invalidHours": "Enter a whole number from 0 to {max}.",
+    "unchanged": "You have not changed anything.",
+    "overrides": "{count} products have a setting of their own; see it on the product in the catalog.",
+    "save": "Save",
+    "saved": "Saved."
   }
 }
