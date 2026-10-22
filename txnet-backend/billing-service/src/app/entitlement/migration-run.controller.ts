@@ -22,21 +22,22 @@ import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from '../payment/gif
 import { actorOf, resellerRefusal } from '../payment/gift/reseller-user-grants.controller';
 import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { RateLimit } from '../request/rate-limit';
+import { BalanceImportService } from '../wallet/balance-import-run';
 import { LegacyHostService } from './legacy-host';
 import { MigrationLinkService } from './migration-link-run';
 import { MigrationDrainService, type MigrationDrainResult } from './migration-drain';
 import { MigrationRunRefused, MigrationRunService, type MigrationRunRejection } from './migration-run';
 import {
+  isCsvRunCreate,
   isLinkRunCreate,
   legacyHostTestSchema,
   migrationAnyRunCreateSchema,
   migrationInboundsSchema,
   migrationLinkCorrectionSchema,
   type LegacyHostTest,
+  type MigrationAnyRunCreate,
   type MigrationInbounds,
   type MigrationLinkCorrection,
-  type MigrationLinkRunCreate,
-  type MigrationRunCreate,
 } from './migration-run.schema';
 
 const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
@@ -55,6 +56,9 @@ const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
   variant_not_prepaid: 422,
   variant_not_deliverable: 422,
   variant_not_assignable: 422,
+  csv_columns: 422,
+  csv_empty: 422,
+  csv_too_many_rows: 422,
 };
 
 /** A run's refusal, or the reseller door's, as HTTP; anything else unchanged. */
@@ -71,7 +75,8 @@ function migrationRefusal(e: unknown): unknown {
  * between the create and the preview (tenant `contract.source-login.md`).
  *
  * - `POST …/migration-runs` `{family, sourceAddress}` -> **201** the run, `draft`;
- *   or `{url, userId}` -> **201** one person's link run, `previewing` (F-201-g)
+ *   or `{url, userId}` -> **201** one person's link run, `previewing` (F-201-g);
+ *   or `{csv}` -> **201** a balance file's run, `previewed` with its report (F-209-a)
  * - `PUT …/migration-runs/:runId/link` `{variantId?, dataLimitBytes?, usedBytes?, expiresAt?}` -> the link run, re-planned
  * - `PUT …/migration-runs/:runId/inbounds` `{inbounds: [{inboundRemoteId, variantId}]}` -> the run
  * - `POST …/migration-runs/:runId/preview` -> **202** the run, `previewing`
@@ -89,6 +94,7 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
     protected readonly jobs: MigrationRunService,
     private readonly legacy: LegacyHostService,
     private readonly links: MigrationLinkService,
+    private readonly balances: BalanceImportService,
   ) {
     super();
   }
@@ -115,8 +121,10 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(bulkWriteLimit)
-  create(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(migrationAnyRunCreateSchema)) body: MigrationRunCreate | MigrationLinkRunCreate, @Req() req: Request) {
-    return this.answer(() => (isLinkRunCreate(body) ? this.links.create(actorOf(req), tenantId, body) : this.jobs.create(actorOf(req), tenantId, body)));
+  create(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(migrationAnyRunCreateSchema)) body: MigrationAnyRunCreate, @Req() req: Request) {
+    const actor = actorOf(req);
+    if (isCsvRunCreate(body)) return this.answer(() => this.balances.create(actor, tenantId, body.csv));
+    return this.answer(() => (isLinkRunCreate(body) ? this.links.create(actor, tenantId, body) : this.jobs.create(actor, tenantId, body)));
   }
 
   @Put(':runId/link')

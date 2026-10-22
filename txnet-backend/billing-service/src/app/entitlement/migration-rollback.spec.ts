@@ -142,6 +142,7 @@ function rollback(db: ReturnType<typeof fakeDb>, answer?: (userIds: string[]) =>
     { remove } as unknown as ImportedPeople,
     { wholesaleAtClose, settle: vi.fn() } as unknown as RemainderCreditService,
     { settleAtClose } as unknown as UsageSettlementService,
+    { debit: vi.fn() } as never,
   );
   return { run: () => service.rollbackNext(NOW), purge: () => service.purgeEnded(NOW), remove, settleAtClose, wholesaleAtClose };
 }

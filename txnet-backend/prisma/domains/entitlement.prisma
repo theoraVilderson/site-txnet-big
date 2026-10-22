@@ -609,6 +609,12 @@ enum MigrationSkipReason {
   unreadable
   /// An unlimited client on a limited product, or the other way round (F-208).
   traffic_mismatch
+  /// A balance file's row naming no person of the tenant (F-209-a).
+  unknown_user
+  /// A balance file's row whose name is one person's username and another's phone (F-209-a).
+  ambiguous_user
+  /// A balance file's row in another currency than the person's wallet (F-209-a): never converted.
+  currency_mismatch
 
   @@schema("entitlement")
 }

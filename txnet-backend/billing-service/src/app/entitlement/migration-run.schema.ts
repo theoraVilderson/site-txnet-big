@@ -1,6 +1,7 @@
 import { DriverType } from '@prisma/client';
 import { z } from 'zod';
 
+import { BALANCE_FILE_MAX_CHARS } from '../wallet/balance-import';
 import { legacyPathOf } from './legacy-sub-link';
 
 /** A source inbound's id, as the snapshot answers it (`sourceClientSchema.inboundRemoteId`). */
@@ -62,11 +63,19 @@ export const oldLinkSchema = z
 export const migrationLinkRunCreateSchema = z.object({ url: oldLinkSchema, userId: z.string().uuid() }).strict();
 export type MigrationLinkRunCreate = z.infer<typeof migrationLinkRunCreateSchema>;
 
-/** The create's body: a whole panel or one link, told apart by their fields. */
-export const migrationAnyRunCreateSchema = z.union([migrationRunCreateSchema, migrationLinkRunCreateSchema]);
+/** `POST …/migration-runs` (F-209-a): a reseller's balances, the file's text as the page read it. Its rows are judged by the dry run. */
+export const migrationCsvRunCreateSchema = z.object({ csv: z.string().min(1).max(BALANCE_FILE_MAX_CHARS) }).strict();
+export type MigrationCsvRunCreate = z.infer<typeof migrationCsvRunCreateSchema>;
+
+/** The create's body: a whole panel, one link or a balance file, told apart by their fields. */
+export const migrationAnyRunCreateSchema = z.union([migrationRunCreateSchema, migrationLinkRunCreateSchema, migrationCsvRunCreateSchema]);
+export type MigrationAnyRunCreate = z.infer<typeof migrationAnyRunCreateSchema>;
 
 /** The create's body names one link (F-201-g), not a panel. */
-export const isLinkRunCreate = (body: MigrationRunCreate | MigrationLinkRunCreate): body is MigrationLinkRunCreate => 'url' in body && typeof body.url === 'string';
+export const isLinkRunCreate = (body: MigrationAnyRunCreate): body is MigrationLinkRunCreate => 'url' in body && typeof body.url === 'string';
+
+/** The create's body is a balance file (F-209-a). */
+export const isCsvRunCreate = (body: MigrationAnyRunCreate): body is MigrationCsvRunCreate => 'csv' in body && typeof body.csv === 'string';
 
 const correctedBytes = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional();
 

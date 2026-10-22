@@ -748,7 +748,8 @@
       "product_refund": "بازگشت وجه محصول — تحویل نشد",
       "currency_change": "تغییر ارز",
       "usage_charge": "هزینه‌ی مصرف سرویس",
-      "usage_refund": "بازگشت مصرف‌نشده‌ی سرویس"
+      "usage_refund": "بازگشت مصرف‌نشده‌ی سرویس",
+      "migration_import": "موجودی منتقل‌شده از پنل قبلی"
     },
     "status": {
       "pending": "در انتظار",

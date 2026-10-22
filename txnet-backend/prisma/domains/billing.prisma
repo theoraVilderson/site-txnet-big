@@ -43,6 +43,11 @@ enum WalletReasonType {
   /// F-118-g: a prepaid block's units a closed Grant never used, given back;
   /// `referenceId` = the Grant. Always a credit — it undoes `usage_charge` (`UNDOES`).
   usage_refund
+  /// F-209-a: a balance a reseller brought from its old panel, one row of its
+  /// file; `referenceId` = the `migration_item`. A credit at the commit, the
+  /// same amount back as a debit at the import's rollback (F-211). Never a
+  /// sale and never money paid in. Once per item and direction (a unique index).
+  migration_import
 
   @@schema("billing")
 }

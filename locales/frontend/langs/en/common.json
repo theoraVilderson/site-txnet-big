@@ -748,7 +748,8 @@
       "product_refund": "Product refund — not delivered",
       "currency_change": "Currency change",
       "usage_charge": "Service usage",
-      "usage_refund": "Unused service usage returned"
+      "usage_refund": "Unused service usage returned",
+      "migration_import": "Balance brought from the previous panel"
     },
     "status": {
       "pending": "Pending",

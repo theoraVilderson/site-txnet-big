@@ -134,6 +134,7 @@ function commit(db: ReturnType<typeof fakeDb>, opts: { people?: (asked: { remote
     { issue } as unknown as GrantService,
     { fulfil } as unknown as GroupFulfilmentService,
     { destroy } as unknown as SourceLoginVault,
+    { credit: vi.fn() } as never,
   );
   return { run: () => service.commitNext(NOW), people, issue, fulfil, destroy };
 }

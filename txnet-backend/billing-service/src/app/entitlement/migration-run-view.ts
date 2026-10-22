@@ -71,6 +71,8 @@ export type MigrationItemView = {
   keptReason: string | null;
   /** A link run's admin over what the link said (F-201-g); each null keeps the read figure beside it. */
   corrected: { dataLimitBytes: number | null; usedBytes: number | null; expiresAt: string | null };
+  /** A balance file's row (F-209-a): its line, the amount and currency as read; null on any other run's, or once purged. */
+  balance: { line: number | null; amount: string | null; currency: string | null };
 };
 
 const numberOr = (v: unknown): number | null => (typeof v === 'number' ? v : null);
@@ -80,10 +82,10 @@ const textOr = (v: unknown): string | null => (typeof v === 'string' ? v : null)
 const snapshotOf = (snapshot: Prisma.JsonValue): Record<string, unknown> =>
   (snapshot && typeof snapshot === 'object' && !Array.isArray(snapshot) ? snapshot : {}) as Record<string, unknown>;
 
-/** The name the source gave a client, else its id; empty once the snapshot is purged. */
+/** The name the source gave a client, else its id — a balance file's, the name its row gave (F-209-a); empty once the snapshot is purged. */
 export function snapshotLabel(snapshot: Prisma.JsonValue): string {
   const s = snapshotOf(snapshot);
-  return textOr(s['label']) || textOr(s['remoteId']) || '';
+  return textOr(s['label']) || textOr(s['remoteId']) || textOr(s['user']) || '';
 }
 
 /**
@@ -124,6 +126,7 @@ export function itemView(i: {
       usedBytes: i.correctedUsedBytes === null ? null : Number(i.correctedUsedBytes),
       expiresAt: i.correctedExpiresAt?.toISOString() ?? null,
     },
+    balance: { line: numberOr(s['line']), amount: textOr(s['amount']), currency: textOr(s['currency']) },
   };
 }
 

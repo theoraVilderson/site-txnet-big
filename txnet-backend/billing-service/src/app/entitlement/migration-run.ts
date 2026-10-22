@@ -11,6 +11,7 @@ import {
 
 import { GrantBulkPage } from '../payment/gift/grant-bulk-job.schema';
 import { PrismaService } from '../prisma/prisma.service';
+import { BALANCE_FILE_REFUSALS } from '../wallet/balance-import';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
 import { admitMigration } from './migration-door';
@@ -37,6 +38,8 @@ export const MIGRATION_RUN_REJECTIONS = [
   'user_not_found',
   /** A link run committed before the admin chose its product (F-201-g). */
   'variant_unchosen',
+  /** A balance file no row can be read from (F-209-a): no run is made. */
+  ...BALANCE_FILE_REFUSALS,
 ] as const;
 export type MigrationRunRejection = (typeof MIGRATION_RUN_REJECTIONS)[number];
 
@@ -120,7 +123,8 @@ export class MigrationRunService {
         await this.find(tx, tenantId, runId);
         const where: Prisma.MigrationItemWhereInput = { runId, ...(problems ? { OR: [{ plannedAction: MigrationItemAction.skip }, { outcome: { in: [MigrationItemOutcome.failed, MigrationItemOutcome.kept] } }] } : {}) };
         const [items, total] = await Promise.all([
-          tx.migrationItem.findMany({ where, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], skip: (p - 1) * pageSize, take: pageSize }),
+          // A report is written in one transaction, so its rows share `createdAt`: the key orders them (a csv run's is its line, F-209-a).
+          tx.migrationItem.findMany({ where, orderBy: [{ createdAt: 'asc' }, { remoteIdentity: 'asc' }], skip: (p - 1) * pageSize, take: pageSize }),
           tx.migrationItem.count({ where }),
         ]);
         return { rows: items.map(itemView), page: p, pageSize, total };

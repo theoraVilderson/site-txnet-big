@@ -37,6 +37,7 @@ const REFERS_TO: Record<WalletReasonType, 'invoice' | 'grant' | null> = {
   [WalletReasonType.admin_manual_adjust]: null,
   [WalletReasonType.reseller_purchase]: null,
   [WalletReasonType.currency_change]: null,
+  [WalletReasonType.migration_import]: null,
 };
 
 /** The reasons whose `referenceId` names an invoice, or a Grant — the analytics rollup ties a sale to its product the same way (F-1001-a). */

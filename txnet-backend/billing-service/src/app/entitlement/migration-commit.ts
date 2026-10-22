@@ -7,6 +7,8 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
+import { BalanceRowRefused, creditBalanceRow, csvPeopleOf } from '../wallet/balance-import';
+import { WalletCreditService } from '../wallet/wallet-credit.service';
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, GrantService } from './grant';
 import { recordLegacyLink } from './legacy-sub-link';
@@ -50,7 +52,7 @@ const peopleOf = (answer: ImportedPeopleAnswer): People => ({
 
 /** A refusal with a reason of its own, kept as the item's; anything else is `unexpected` and logged. */
 function reasonOf(e: unknown): string | null {
-  if (e instanceof ItemRefused || e instanceof EntitlementRefused || e instanceof ConfigActionRefused || e instanceof GroupFulfilmentRefused || e instanceof ResellerLimitReached) return e.reason;
+  if (e instanceof ItemRefused || e instanceof EntitlementRefused || e instanceof ConfigActionRefused || e instanceof GroupFulfilmentRefused || e instanceof ResellerLimitReached || e instanceof BalanceRowRefused) return e.reason;
   return null;
 }
 
@@ -106,6 +108,7 @@ export class MigrationCommitService {
     private readonly grants: GrantService,
     private readonly fulfilment: GroupFulfilmentService,
     private readonly logins: SourceLoginVault,
+    private readonly credits: WalletCreditService,
   ) {}
 
   async commitNext(now: Date = new Date()): Promise<MigrationCommitResult> {
@@ -121,7 +124,7 @@ export class MigrationCommitService {
       const [items, inbounds] = await Promise.all([
         tx.migrationItem.findMany({
           where: { runId: run.id, outcome: MigrationItemOutcome.pending, plannedAction: { not: MigrationItemAction.skip } },
-          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          orderBy: [{ createdAt: 'asc' }, { remoteIdentity: 'asc' }],
           take: MIGRATION_COMMIT_BATCH_SIZE,
         }),
         tx.migrationInbound.findMany({ where: { runId: run.id }, select: { inboundRemoteId: true, variantId: true } }),
@@ -148,9 +151,10 @@ export class MigrationCommitService {
     return { outcome: 'batch', items };
   }
 
-  /** The batch's people: a link run's own person, else identity's batch; null when identity could not be asked (the next tick retries). */
+  /** The batch's people: a link run's own person, a balance file's named by its dry run, else identity's batch; null when identity could not be asked (the next tick retries). */
   private async peopleFor(run: MigrationRun, batch: MigrationItem[]): Promise<People | null> {
     if (run.kind === MigrationRunKind.link) return linkPeopleOf(run, batch);
+    if (run.kind === MigrationRunKind.csv) return csvPeopleOf(batch);
     try {
       return peopleOf(await this.people.import(run.tenantId, batch.map((i) => ({ remoteIdentity: i.remoteIdentity, label: labelOf(i) }))));
     } catch (e) {
@@ -188,8 +192,12 @@ export class MigrationCommitService {
     }
   }
 
-  /** One item's write: the Grant kept, or a new one issued, placed and — switched off at the source — frozen. */
+  /** One item's write: a balance file's row credited (F-209-a); else the Grant kept, or a new one issued, placed and — switched off at the source — frozen. */
   private async issue(tx: Prisma.TransactionClient, run: MigrationRun, item: MigrationItem, userId: string, variantOf: ReadonlyMap<string, string>, now: Date): Promise<void> {
+    if (run.kind === MigrationRunKind.csv) {
+      await creditBalanceRow(tx, this.credits, run, item, userId);
+      return this.settle(tx, run, item, { outcome: MigrationItemOutcome.created });
+    }
     const held = await tx.grant.findFirst({ where: { tenantId: run.tenantId, remoteIdentity: item.remoteIdentity }, select: { id: true } });
     if (held) return this.settle(tx, run, item, { outcome: MigrationItemOutcome.updated });
 

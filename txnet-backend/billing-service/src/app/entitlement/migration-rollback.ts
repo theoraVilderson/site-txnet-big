@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantSource, GrantStatus, MigrationItemOutcome, MigrationRunStatus, Prisma, QuotaMetric, WalletReasonType, type Grant, type MigrationItem, type MigrationRun } from '@prisma/client';
+import { GrantSource, GrantStatus, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, Prisma, QuotaMetric, WalletReasonType, type Grant, type MigrationItem, type MigrationRun } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { errorLine } from '../log-line';
@@ -7,6 +7,9 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { PrismaService } from '../prisma/prisma.service';
 import { RemainderCreditService } from '../traffic/remainder-credit';
 import { UsageSettlementService } from '../usage/usage-settlement';
+import { BalanceRowRefused } from '../wallet/balance-import';
+import { reverseBalanceRow } from '../wallet/balance-import-rollback';
+import { WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { deleteGrant } from './delete';
 import { removeLegacyLinks } from './legacy-sub-link';
 import { EntitlementRefused } from './grant';
@@ -132,6 +135,7 @@ export class MigrationRollbackService {
     private readonly people: ImportedPeople,
     private readonly remainders: RemainderCreditService,
     private readonly meters: UsageSettlementService,
+    private readonly ledger: WalletLedgerService,
   ) {}
 
   async rollbackNext(now: Date = new Date()): Promise<MigrationRollbackResult> {
@@ -193,7 +197,7 @@ export class MigrationRollbackService {
     return { outcome: settled ? 'batch' : 'waiting', items: batch.length };
   }
 
-  /** One item in its own transaction: kept with why, or its Grant closed. True when its person is next. */
+  /** One item in its own transaction: kept with why, or its Grant closed — a balance file's row, its credit taken back (F-209-a). True when its person is next. */
   private async undoItem(run: MigrationRun, item: MigrationItem, grants: ReadonlyMap<string, ImportedGrant>, lived: LivedSince, now: Date): Promise<boolean> {
     const grant = item.createdGrantId ? grants.get(item.createdGrantId) : undefined;
     const kept = grant ? keptReasonOf(grant, lived) : null;
@@ -201,6 +205,7 @@ export class MigrationRollbackService {
     try {
       await tenantTransaction(this.prisma, async (tx) => {
         if (grant && !CLOSED.includes(grant.status)) await this.close(tx, run, grant.id, now);
+        if (run.kind === MigrationRunKind.csv) await reverseBalanceRow(tx, this.ledger, item);
         // A person the run made is removed after the batch; the item is done with only then.
         const { count } = await tx.migrationItem.updateMany({
           where: { id: item.id, outcome: MigrationItemOutcome.created },
@@ -212,7 +217,7 @@ export class MigrationRollbackService {
     } catch (e) {
       // Another tick, or a Grant moved under the close: the next tick reads it again.
       if (e instanceof ItemMoved || (e instanceof EntitlementRefused && e.reason === 'grant_moved')) return false;
-      const reason = e instanceof EntitlementRefused ? e.reason : UNEXPECTED;
+      const reason = e instanceof EntitlementRefused || e instanceof BalanceRowRefused ? e.reason : UNEXPECTED;
       if (reason === UNEXPECTED) this.logger.error(`run ${run.id}: item ${item.id} not rolled back: ${errorLine(e)}`);
       return this.keep(item, reason, now);
     }

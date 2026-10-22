@@ -89,12 +89,10 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   [WalletReasonType.wallet_transfer_in]: false,
   // The sale.
   [WalletReasonType.traffic_consumption]: true,
-  // A debit that funds a Config-scoped shared wallet; the consumption charged
-  // out of it is the `traffic_consumption` above, so counting both would count
-  // the same sale twice.
+  // A debit that funds a Config-scoped shared wallet; the consumption charged out of it is the
+  // `traffic_consumption` above, so counting both would count the same sale twice.
   [WalletReasonType.sub_account_charge]: false,
-  // Money moved between two of this reseller's users. Nothing was sold, and
-  // counting it would let a pair of accounts manufacture revenue in a loop.
+  // Money moved between two of this reseller's users. Nothing was sold, and counting it would let a pair of accounts manufacture revenue in a loop.
   [WalletReasonType.wallet_transfer_out]: false,
   // An operator's correction. It is how a mistake is undone, not a sale.
   [WalletReasonType.admin_manual_adjust]: false,
@@ -115,6 +113,7 @@ const IS_SALE: Record<WalletReasonType, boolean> = {
   [WalletReasonType.usage_charge]: true,
   // A credit: a prepaid block's unused part given back. Subtracted below.
   [WalletReasonType.usage_refund]: false,
+  [WalletReasonType.migration_import]: false, // F-209-a: a balance from the old panel and its rollback's debit — paid there, nothing sold here.
 };
 
 /** The reasons that count, derived from the table above rather than listed twice. */
@@ -152,6 +151,7 @@ const UNDOES: Record<WalletReasonType, WalletReasonType | null> = {
   [WalletReasonType.product_purchase]: null,
   [WalletReasonType.currency_change]: null,
   [WalletReasonType.usage_charge]: null,
+  [WalletReasonType.migration_import]: null,
 };
 
 /** The credits that come off a sale, derived from the table above. */

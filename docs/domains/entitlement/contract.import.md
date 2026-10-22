@@ -229,6 +229,8 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 | `GET /:runId/outcomes` | `page`, `pageSize`, `problems` (skipped, failed and kept only) | the per-user table: `remoteIdentity`, `label`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `usedBytes`, `expiresAt`, `plannedAction`, `skipReason`, `outcome`, `failureReason`, `keptReason` |
 | `POST /:runId/cancel` | — | the run, `cancelled` |
 
+A balance file's run (`{csv}`, F-209-a) is billing's [contract.balance-import.md](../billing/contract.balance-import.md).
+
 `POST /api/internal/billing/migration-runs/drain` (service-only) answers
 `{previewed, returned, committed, finished, rolledBack, rollbacksFinished,
 purged}` for one tick: one dry run, one commit batch, one rollback batch, the

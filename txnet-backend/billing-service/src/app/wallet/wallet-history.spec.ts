@@ -293,6 +293,8 @@ describe('WalletHistoryService.ledger', () => {
         WalletReasonType.currency_change,
         WalletReasonType.usage_charge,
         WalletReasonType.usage_refund,
+        // A balance brought from the old panel (F-209-a): money in, shown as a top-up is.
+        WalletReasonType.migration_import,
       ],
     });
   });

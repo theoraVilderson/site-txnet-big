@@ -7,9 +7,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { foldedSearch } from './persian-search';
 
 /**
- * What the panel's financial page reads (F-092-n): the wallet ledger as a
- * filtered page, and — separately — the top-up attempts that never became
- * ledger rows.
+ * What the panel's financial page reads (F-092-n): the wallet ledger as a filtered page, and —
+ * separately — the top-up attempts that never became ledger rows.
  *
  * **The balance is read, never rebuilt.** Legacy reconstructed each row's
  * balance by taking the wallet's current balance and walking backwards over
@@ -61,6 +60,7 @@ const LABEL_KEYS: Record<WalletReasonType, string> = {
   // F-118-g: a meter's usage paid for, and a prepaid block's unused part given back — both on the default page.
   [WalletReasonType.usage_charge]: REASON_LABEL_KEY.usage_charge,
   [WalletReasonType.usage_refund]: REASON_LABEL_KEY.usage_refund,
+  [WalletReasonType.migration_import]: REASON_LABEL_KEY.migration_import, // F-209-a: a balance from the old panel — on the default page, as money in is.
 };
 
 /** The declaration order, which is the order a filter is answered in. */

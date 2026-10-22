@@ -118,9 +118,9 @@ describe('entitlement.migration_item: one source client, planned then done', () 
     expect(sql).toContain(`"${column}"`);
   });
 
-  it('names the skip reasons F-206 and F-208 report', () => {
+  it('names the skip reasons F-206, F-208 and a balance file (F-209-a) report', () => {
     expect(enumValues('MigrationItemAction')).toEqual(['create', 'update', 'skip']);
-    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable', 'traffic_mismatch']);
+    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable', 'traffic_mismatch', 'unknown_user', 'ambiguous_user', 'currency_mismatch']);
   });
 
   it('holds one item per source client in a run, in its run’s tenant', () => {

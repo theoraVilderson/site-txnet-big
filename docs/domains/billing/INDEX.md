@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 86
-keywords: [quota engine, consume a quota, release a quota, overage charge, reseller spend cap, سهمیه نماینده, wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
+keywords: [import balances from a file, balance csv upload, bring wallet balances from the old panel, quota engine, consume a quota, release a quota, overage charge, reseller spend cap, سهمیه نماینده, wallet, ledger, balance, transfer, coupon, payment gateway, transaction, affiliate, billing-service, /api/billing]
 source:
   - txnet-backend/billing-service/src/app/wallet/**
   - txnet-backend/shared-core/src/lib/billing/**
@@ -86,9 +86,11 @@ source:
   - txnet-backend/prisma/domains/migrations/20261018000300_top_up_presets_hold_four_places/**
   - txnet-backend/prisma/domains/migrations/20261019000100_a_general_expense_is_spread_as_overhead/**
   - txnet-backend/prisma/domains/migrations/20261019000200_a_gateway_carries_its_providers_commission/**
+  - txnet-backend/prisma/domains/migrations/20261022000200_a_balance_import_is_a_ledger_row/**
+  - txnet-backend/prisma/domains/migrations/20261022000300_a_balance_row_is_credited_once/**
 owns_tables: [wallet, wallet_hold, wallet_transaction, spending_cap, wallet_transfer_request, coupon, coupon_service_scope, coupon_allowed_user, coupon_redemption, coupon_batch, coupon_gateway, payment_gateway, payment_transaction, payment_reconciliation_log, crypto_payment_detail, affiliate_referral, affiliate_commission, payment_gateway_grant, gateway_settlement_entry, gateway_settlement_payout, invoice, currency_change, manual_gateway_setting, manual_destination, payment_transfer_detail, transfer_tx_ref, analytics_sales_day, analytics_user_day, analytics_payment_day, analytics_stock_day, analytics_meter_day, analytics_grant_end, analytics_signup, analytics_signup_day, analytics_setting, analytics_cost_day, analytics_loss_alert, analytics_rollup_state]
 depends_on: [identity, governance, catalog, entitlement, currency, tenant, tenant-context, forward-auth, i18n]
-updated: 2026-10-16
+updated: 2026-10-22
 ---
 
 # Billing
@@ -101,7 +103,7 @@ tenant<->platform billing (`tenant`), display-currency conversion (`currency`), 
 ## Files
 | File | Read it when |
 |---|---|
-| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md); a spending cap on one Grant: [contract.spending-cap.md](contract.spending-cap.md) |
+| [contract.md](contract.md) | using or changing billing from outside; what a tenant's currency change converts: [contract.currency-change.md](contract.currency-change.md); money held for a promise: [contract.holds.md](contract.holds.md); balances brought from an old panel's file (F-209-a): [contract.balance-import.md](contract.balance-import.md); a spending cap on one Grant: [contract.spending-cap.md](contract.spending-cap.md) |
 | [contract.gateways.md](contract.gateways.md) | creating, changing or deleting a payment gateway — a tenant's own, or a named reseller's |
 | [contract.purchase.md](contract.purchase.md) | buying a catalog product: the invoice, its coupons and discounts with no code, its 30-minute clock, and paying it from the wallet |
 | [contract.deposit.md](contract.deposit.md) | one whole top-up: gateway list, quote, start — and the bank's callback that settles it; what an AI suggestion's delivery asks billing — names, an offer's coupon, another gateway: [contract.ai-delivery.md](contract.ai-delivery.md) — **or a top-up paid by card-to-card or to a wallet, its proof and its matching:** [contract.manual-transfer.md](contract.manual-transfer.md) (F-803) |

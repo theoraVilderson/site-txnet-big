@@ -6,6 +6,7 @@ import { trafficQuotaOf } from '../catalog/traffic-quota';
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { balancePlanOf, balanceRowsOf } from '../wallet/balance-import-plan';
 import { linkPlanOf, readLinkRun } from './migration-link-run';
 import { remoteIdentityOf } from './migration-plan';
 import { announceRun } from './migration-run-view';
@@ -87,6 +88,7 @@ export class MigrationPreviewService {
 
   private async preview(run: MigrationRun, now: Date): Promise<MigrationPreviewResult> {
     if (run.kind === MigrationRunKind.link) return this.previewLink(run, now);
+    if (run.kind === MigrationRunKind.csv) return this.previewCsv(run);
     let snapshot: SourceSnapshot;
     try {
       snapshot = await this.source.snapshot(run.tenantId, panelSourceOf(run).family, run.id);
@@ -117,6 +119,18 @@ export class MigrationPreviewService {
     const written = await tenantTransaction(this.prisma, async (tx) => writeReport(tx, run, await linkPlanOf(tx, run, { client: read.client, read: read.client, now })));
     if (!written) return 'lost';
     this.logger.log(`run ${run.id}: previewed its link`);
+    return 'previewed';
+  }
+
+  /**
+   * A balance file planned again (F-209-a): its rows as the items keep them,
+   * against the tenant's people and wallets now — a name the reseller has
+   * since added is found. The file is not handed in again.
+   */
+  private async previewCsv(run: MigrationRun): Promise<MigrationPreviewResult> {
+    const written = await tenantTransaction(this.prisma, async (tx) => writeReport(tx, run, await balancePlanOf(tx, run.tenantId, await balanceRowsOf(tx, run))), { timeout: REPORT_WRITE_TIMEOUT_MS });
+    if (!written) return 'lost';
+    this.logger.log(`run ${run.id}: previewed its balance file again`);
     return 'previewed';
   }
 
