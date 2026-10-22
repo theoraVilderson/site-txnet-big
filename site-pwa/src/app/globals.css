@@ -1247,7 +1247,8 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 /* Chart kit motion (F-1001-c, panel-web contract.analytics.md rule 10): a
    line draws and an area rises in 600ms when first inserted; new data morphs
    its path in `slow` (320ms) where the browser animates `d`. The kit leaves
-   the classes off at the `reduced` motion level. */
+   the classes off at the `reduced` motion level, and the switch stops them
+   here too (contract.ux.md M3): one place holds every keyframe. */
 .chart-draw {
   stroke-dasharray: 1;
   animation: chart-draw 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1267,4 +1268,13 @@ div:has(> .password-field-input:autofill) > .password-field-label {
 @keyframes chart-rise {
   from { transform: scaleY(0); }
   to { transform: scaleY(1); }
+}
+
+/* Reduced: the line and the area stand drawn at once, and new data replaces the path without a morph. */
+[data-motion="reduced"] .chart-draw,
+[data-motion="reduced"] .chart-rise {
+  animation: none;
+}
+[data-motion="reduced"] .chart-morph {
+  transition: none;
 }
