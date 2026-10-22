@@ -15,8 +15,8 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 [contract.reseller-grants.md](contract.reseller-grants.md). Both land in entitlement's
 `renewGrant` (entitlement `contract.admin.md` "Renew").
 
-**Status: the invoice is built (F-305-c).** F-305-d (paying it) and F-305-e
-(GiB and days) build the rest; the rate F-305-e reads is catalog's
+**Status: the invoice (F-305-c) and paying it (F-305-d) are built.** F-305-e
+(GiB and days) builds the rest; the rate it reads is catalog's
 [contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
 (F-305-f/g), bot-app (F-305-i).
@@ -57,11 +57,24 @@ The invoice row records `grantId`, `renewBytes`, `renewDays` (all or none, CHECK
 | 9 | **The invoice records what priced it**: the price row (`priceId`), or the renewal-rate row and the GiB and days typed. Paying charges what was quoted, even if a newer row took effect in between | a rate is history (catalog `contract.renewal-rate.md` rule 1) |
 | 10 | **In the tenant's operating currency.** A row in another currency is no rate (catalog invariant 11), so the plan or the custom renewal is not offered | as a price |
 
-## Paying it (F-305-d)
+## Paying it (built — F-305-d)
+
+`POST /api/billing/invoices/:id/pay`, the purchase's route and its first five steps
+(`contract.purchase.md` "Paying it"); in place of the issue, `renewByInvoice`
+(`invoice/renewal-payment.ts`), proved against a real Postgres by
+`invoice/renewal-payment.int.spec.ts`. It asks rules 1–4 and 6 again at that instant
+(`renewalSaleOf`) and adds the bytes and days **quoted** (rule 9). The answer is the
+purchase's, `grants: [{id, status}]` naming the renewed Grant (`active` once revived).
+No Grant is issued, no unit of the variant sold (`salesCounted` stays false); the
+debit is `product_purchase`, as a purchase's. A Grant closed or a plan switched off
+since the quote is the create's `409` (`grant_not_renewable` / `plan_not_renewable`),
+and the whole payment rolls back. A revival writes no notice (`tellReactivated: false`):
+the payer pressed pay, as with their own freeze.
+
 
 | # | Rule | Why |
 |---|---|---|
 | 11 | **The purchase's transaction, with one step changed**: in place of issuing a Grant, `renewGrant` on the invoice's Grant, under its row lock. One `grant_renewal` row names the user as actor and the invoice as request | one request, one renewal (entitlement invariant 27) |
 | 12 | **A plan switch writes the Grant's new variant, bag and period** in the same transaction. Its next renewal is of that plan | ADR-0158 (3) |
 | 13 | **A reseller's package plan on a platform panel buys its bag wholesale** in the same transaction (entitlement invariant 30); a shortfall is the purchase's (`insufficient_balance` + `facts`, F-111-c) | the platform is paid for every byte it serves |
-| 14 | **The page hears it**: the payment writes its outbox event (C-14, ADR-0121), and My services re-reads the Grant on it | no page polls for a renewal |
+| 14 | **The page hears it**: the payment writes `entitlement.grant.renewed` `{tenantId, userId, grantId, invoiceId, renewalId}`, live-only to `user:` (realtime `contract.live-events.md`, C-14, ADR-0121); My services re-reads the Grant on it | no page polls for a renewal |

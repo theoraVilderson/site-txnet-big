@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import { InsufficientFunds, WalletLedgerService } from '../wallet/wallet-ledger.service';
 import { InvoiceShortfall, invoiceShortfall } from './invoice-shortfall';
+import { renewByInvoice } from './renewal-payment';
 
 /**
  * Paying an invoice from the wallet (F-111-b, spec §5.8 step 2).
@@ -33,6 +34,10 @@ import { InvoiceShortfall, invoiceShortfall } from './invoice-shortfall';
  *  7. the invoice's coupon holds → uses, and its held unit of the variant → a
  *     sale (F-513-b) — counted, never refused, for one made before the counts;
  *  8. `entitlement.grant.created` in the outbox (ADR-0021).
+ *
+ * **A renewal invoice** (F-305-d) takes steps 1–5 and 7 as they are, and in
+ * place of 6 and 8 renews its Grant (`renewal-payment.ts`): no Grant issued,
+ * no unit of the variant sold (ADR-0158 (2)), `entitlement.grant.renewed`.
  *
  * Concurrent pays of one invoice queue on step 1, and every one after the
  * first finds it `paid`: the money moves exactly once (`invoice-payment.int.spec.ts`).
@@ -82,6 +87,8 @@ type LockedInvoice = {
   status: InvoiceStatus;
   salesCounted: boolean;
   grantId: string | null;
+  renewBytes: bigint | null;
+  renewDays: number | null;
   expiresAt: Date;
 };
 
@@ -104,7 +111,7 @@ export class InvoicePaymentService {
       // RLS scopes the row to this tenant; the `userId` makes another user's
       // invoice as absent as another tenant's.
       const [invoice] = await tx.$queryRaw<LockedInvoice[]>`
-        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "grantId", "expiresAt"
+        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "grantId", "renewBytes", "renewDays", "expiresAt"
           FROM billing.invoice
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
@@ -120,8 +127,6 @@ export class InvoicePaymentService {
       if (invoice.status === InvoiceStatus.expired || invoice.expiresAt <= now) {
         throw new InvoiceUnpayable('expired', invoiceId);
       }
-      // TODO(F-305-d): a renewal invoice renews its Grant; until then it is never paid as a purchase.
-      if (invoice.grantId) throw new Error(`invoice ${invoice.id} renews a Grant; paying one is F-305-d`);
 
       const total = new Prisma.Decimal(invoice.total);
       const [wallet] = await tx.$queryRaw<Array<{ cachedBalance: Prisma.Decimal; heldAmount: Prisma.Decimal }>>`
@@ -155,7 +160,17 @@ export class InvoicePaymentService {
         }
       }
 
-      await tx.invoice.update({ where: { id: invoice.id }, data: { status: InvoiceStatus.paid, salesCounted: true } });
+      // A renewal is never counted as a sale (ADR-0158 (2)).
+      await tx.invoice.update({ where: { id: invoice.id }, data: { status: InvoiceStatus.paid, salesCounted: invoice.grantId === null } });
+      if (invoice.grantId !== null) {
+        const renewed = await renewByInvoice(
+          tx,
+          { ...invoice, grantId: invoice.grantId, renewBytes: invoice.renewBytes ?? BigInt(0), renewDays: invoice.renewDays ?? 0 },
+          now,
+        );
+        await this.reservations.confirm(tx, invoice.id);
+        return paidAnswer(invoice, total, balanceAfter, walletTransactionId, renewed);
+      }
 
       const issued = await this.grants.issue(tx, {
         userId,
@@ -189,15 +204,26 @@ export class InvoicePaymentService {
         select: { id: true },
       });
 
-      return {
-        id: invoice.id,
-        status: InvoiceStatus.paid,
-        total: moneyText(total),
-        currencyCode: invoice.currencyCode,
-        balanceAfter: moneyText(balanceAfter),
-        walletTransactionId,
-        grants: [{ id: issued.grant.id, status: issued.grant.status }],
-      };
+      return paidAnswer(invoice, total, balanceAfter, walletTransactionId, { id: issued.grant.id, status: issued.grant.status });
     });
   }
+}
+
+/** What a paid invoice answers: the money moved, and the Grant it issued or renewed. */
+function paidAnswer(
+  invoice: LockedInvoice,
+  total: Prisma.Decimal,
+  balanceAfter: Prisma.Decimal,
+  walletTransactionId: string | null,
+  grant: { id: string; status: Grant['status'] },
+): InvoicePaid {
+  return {
+    id: invoice.id,
+    status: InvoiceStatus.paid,
+    total: moneyText(total),
+    currencyCode: invoice.currencyCode,
+    balanceAfter: moneyText(balanceAfter),
+    walletTransactionId,
+    grants: [grant],
+  };
 }

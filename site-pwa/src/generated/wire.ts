@@ -72,6 +72,7 @@ export const RealtimeEvents = {
   "walletChanged": "billing.wallet.changed",
   "grantUsage": "entitlement.grant.usage",
   "grantFreezeChanged": "entitlement.grant.freeze_changed",
+  "grantRenewed": "entitlement.grant.renewed",
   "tenantDomainChanged": "tenant.domain.changed",
   "tenantDataExportChanged": "tenant.data_export.changed",
   "tenantSubscriptionRenewed": "tenant.subscription.renewed",

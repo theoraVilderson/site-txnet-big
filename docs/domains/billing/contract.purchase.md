@@ -70,6 +70,9 @@ otherwise) → `InvoiceExpiryService.expirePending()` → `{scanned, expired, ho
 
 ## Paying it (built — F-111-b)
 
+A renewal invoice takes steps 1–5 and 7 below and renews its Grant in place of 6
+and 8 — [contract.renewal.md](contract.renewal.md) "Paying it" (F-305-d).
+
 `POST /api/billing/invoices/:id/pay` — `InvoicePaymentService` in
 `invoice/invoice-payment.service.ts`, proved against a real Postgres by
 `invoice/invoice-payment.int.spec.ts`. `@TenantCapability('sell')`, no body.

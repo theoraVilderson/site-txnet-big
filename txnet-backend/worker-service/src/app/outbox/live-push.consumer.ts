@@ -30,6 +30,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
   [OutboxEventType.GRANT_USAGE]: { audience: ['user'], fields: ['grantId', 'consumedBytes'] },
   /** F-0401-c: the user froze or unfroze their own Grant — My services re-reads the row; the act is theirs, so no notice. */
   [OutboxEventType.GRANT_FREEZE_CHANGED]: { audience: ['user'], fields: ['grantId'] },
+  /** F-305-d: the user paid a renewal of their own Grant — My services re-reads the row; they pressed pay, so no notice. */
+  [OutboxEventType.GRANT_RENEWED]: { audience: ['user'], fields: ['grantId'] },
   /**
    * RT-1-e: a reseller domain's status or edge step changed. The page is on the
    * platform's panel, so its owner (`userId`) and the platform's staff

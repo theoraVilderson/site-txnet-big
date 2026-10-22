@@ -41,6 +41,8 @@ export const RealtimeEventType = {
   GRANT_USAGE: 'entitlement.grant.usage',
   /** F-0401-c: a Grant's freeze changed by its user — its owner's pages re-read it; nobody is told. */
   GRANT_FREEZE_CHANGED: 'entitlement.grant.freeze_changed',
+  /** F-305-d: the user renewed their own Grant from the wallet — My services re-reads the row; the act is theirs, so no notice. */
+  GRANT_RENEWED: 'entitlement.grant.renewed',
   /** RT-1-e / EDGE-1-e: a reseller domain's status or edge step changed (`TenantDomainService`). */
   TENANT_DOMAIN_CHANGED: 'tenant.domain.changed',
   /** F-212-a: a reseller's data export was built, failed or expired — its requester's page re-reads its exports. */
@@ -234,6 +236,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.WALLET_CHANGED]: 'worker-service',
   [OutboxEventType.GRANT_USAGE]: 'worker-service',
   [OutboxEventType.GRANT_FREEZE_CHANGED]: 'worker-service',
+  [OutboxEventType.GRANT_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_DATA_EXPORT_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',

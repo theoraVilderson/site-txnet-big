@@ -47,6 +47,7 @@ corrected, per "Decide once".
 | `notification.created` | `user:` | notification → consumer | useNotifications, useMenuBadges |
 | `entitlement.grant.delivered` / `refunded`, `network.grant.linksCaptured`, `entitlement.grant.usage` | `user:` | billing, network → live-push | useGrantsPage |
 | `entitlement.grant.freeze_changed` | `user:` | billing (the user's own freeze, F-0401-c) → live-push | My services (F-0401-e, `readFreezeChanged`) |
+| `entitlement.grant.renewed` | `user:` | billing (the user's own renewal paid, F-305-d) → live-push; body `{grantId}` | My services' renewal sheet (F-305-f) |
 | `identity.access.changed` | `user:` | identity (role set, role keys edited), tenant (seat removed) → live-push | AC-1-r (`useAccessLive`: refresh once, re-read `me`) |
 | `network.panel.tested` | `tenant:` | network → panel-tested consumer | SystemsView |
 | `network.panel.state_changed` | `tenant:` | network → panel-tested consumer (F-027-el) | SystemsView (F-027-em) |
