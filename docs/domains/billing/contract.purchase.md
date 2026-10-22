@@ -48,6 +48,14 @@ the gate like every billing route ("Request edge" in `contract.md`).
 | **Nor past the reseller's package quota for the product** (F-019-v6, ADR-0107 points 3, 11; `contract.reseller-quota.md` "A product's sales"): a platform product past every window its reseller's package includes, under `stop` or with overage the reseller cannot pay — asked at create (`admitProductSale`, writes nothing), consumed at issue (`consumeProductSale`, the overage debited from the reseller then). `409 errors.billing.invoice.notAvailableNow`, `reason` `reseller_quota_exhausted`, **no facts** | the buyer hears only "not available now"; one sale past several windows is charged once |
 | **Nor past the reseller's room on the platform's panels** (F-019-o, ADR-0106 `platform_open_grants_max`): a variant whose group holds a platform panel, when the reseller's open Grants there are at its limit — at create, and again at issue (`assertPlatformGrantRoom`, under a per-reseller lock). `409 errors.billing.invoice.notAvailableNow`, `reason` `reseller_limit_reached`, **no facts** | the reseller's limit is not the buyer's business; told before paying, held again at the payment's transaction |
 
+## Renewing a Grant (decided — F-305, ADR-0158)
+
+The same invoice can name a Grant the caller holds instead of a new purchase:
+the plan as it is now, another plan of the same product on the Grant's panel
+group, or GiB and days at the product's renewal rate. Paying it renews that
+Grant (`renewGrant`) instead of issuing one. Where it differs from a purchase
+is [contract.renewal.md](contract.renewal.md) (F-305-c/d/e).
+
 ## The clock (built — F-111-a)
 
 `worker-service` job `invoice_pending_expiry` (seeded `always_on`) calls
