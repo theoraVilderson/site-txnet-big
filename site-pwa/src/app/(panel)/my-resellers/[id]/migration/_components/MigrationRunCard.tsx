@@ -33,7 +33,8 @@ const importFamilyOf = (f: string | null): ImportFamily | undefined => IMPORT_FA
 /**
  * One import, start to end (F-201-f) — or one user's from an old link
  * (F-201-h-1), its read, review and correction in place of the connect and
- * the mapping: connect, map, the dry run's report,
+ * the mapping; or a balance file's (F-209-b), its report at once and no old
+ * address to point: connect, map, the dry run's report,
  * confirm, live progress, the rollback with its days left, and the old
  * address pointed here (F-204-b). Every step is the
  * run's status as billing answers it (`stageOf`); the card re-reads it on
@@ -75,13 +76,16 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
   const days = rollbackDaysLeft(run);
   const family = importFamilyOf(run.sourceFamily);
   const isLink = run.kind === "link";
+  const isPanel = run.kind === "panel";
   const title = runTitleOf(run);
   // A link run is committed once its product is chosen (billing's `variant_unchosen`).
   const committable = issued > 0 && (!isLink || run.variantId !== null);
-  const commitText = isLink ? { title: t("common", K.link.commitConfirm), label: t("common", K.link.commit) } : { title: t("common", K.commitConfirm, { count: String(issued) }), label: t("common", K.commit, { count: String(issued) }) };
+  const commitKeys = { panel: { title: K.commitConfirm, label: K.commit }, csv: { title: K.csv.commitConfirm, label: K.csv.commit }, link: { title: K.link.commitConfirm, label: K.link.commit } }[run.kind];
+  const commitText = { title: t("common", commitKeys.title, { count: String(issued) }), label: t("common", commitKeys.label, { count: String(issued) }) };
   const commit = () => act(commitText, api.commit);
-  const reread = () => act({ title: t("common", K.link.retry), label: t("common", K.link.retry) }, api.preview);
-  const rollback = () => act({ title: t("common", K.rollbackConfirm), label: t("common", K.rollback), danger: true }, api.rollback);
+  const recheckLabel = t("common", run.kind === "csv" ? K.csv.recheck : K.link.retry);
+  const reread = () => act({ title: recheckLabel, label: recheckLabel }, api.preview);
+  const rollback = () => act({ title: t("common", run.kind === "csv" ? K.csv.rollbackConfirm : K.rollbackConfirm), label: t("common", K.rollback), danger: true }, api.rollback);
   const cancel = () => act({ title: t("common", K.cancelConfirm), label: t("common", K.cancel), danger: true }, api.cancel);
 
   return (
@@ -94,14 +98,14 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
       {run.failureReason && (stage === "login" || stage === "mapping" || stage === "retry") && <Alert tone="warning">{failureText(run.failureReason, run.kind)}</Alert>}
       {stage === "retry" && (
         <Button variant="secondary" disabled={busy} onClick={() => void reread()} icon={<RotateCw size={14} aria-hidden />}>
-          {t("common", K.link.retry)}
+          {recheckLabel}
         </Button>
       )}
 
       {stage === "login" && (family ? <SourceLoginForm api={api} run={run} family={family} onDone={setRun} /> : <Alert tone="error">{failureText("no_driver")}</Alert>)}
-      {!isLink && (stage === "mapping" || stage === "report") && <InboundMapping api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
+      {isPanel && (stage === "mapping" || stage === "report") && <InboundMapping api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
       {isLink && stage === "report" && <LinkReview api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
-      {stage === "reading" && <Progress label={t("common", isLink ? K.link.reading : K.reading)} />}
+      {stage === "reading" && <Progress label={t("common", { panel: K.reading, link: K.link.reading, csv: K.csv.checking }[run.kind])} />}
       {stage === "importing" && <CommitProgress run={run} />}
       {stage === "rollingBack" && <Progress label={t("common", K.rollingBack)} />}
 
@@ -112,12 +116,21 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
               {t("common", K.report.counts, { create: String(run.plannedCreate), update: String(run.plannedUpdate), skip: String(run.plannedSkip) })}
             </p>
           )}
-          {!isLink && issued === 0 && <Alert tone="info">{t("common", K.commitNothing)}</Alert>}
-          {committable && (
-            <Button disabled={busy} onClick={() => void commit()} icon={<Upload size={14} aria-hidden />}>
-              {commitText.label}
-            </Button>
-          )}
+          {!isLink && issued === 0 && <Alert tone="info">{t("common", isPanel ? K.commitNothing : K.csv.commitNothing)}</Alert>}
+          <div className="flex flex-wrap items-center gap-2">
+            {committable && (
+              <Button disabled={busy} onClick={() => void commit()} icon={<Upload size={14} aria-hidden />}>
+                {commitText.label}
+              </Button>
+            )}
+            {/* A person the file named may have been added since: billing plans the kept rows again (rule 3). */}
+            {run.kind === "csv" && (
+              <Button variant="secondary" disabled={busy} onClick={() => void reread()} icon={<RotateCw size={14} aria-hidden />}>
+                {recheckLabel}
+              </Button>
+            )}
+          </div>
+          {run.kind === "csv" && run.plannedSkip > 0 && <p className="text-xs text-text-secondary">{t("common", K.csv.recheckHint)}</p>}
         </div>
       )}
       {(stage === "imported" || run.status === "rolled_back") && (
@@ -134,7 +147,7 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
         ) : (
           <p className="text-xs text-text-secondary">{t("common", K.rollbackClosed)}</p>
         ))}
-      {stage === "imported" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily ?? ""} />}
+      {stage === "imported" && run.kind !== "csv" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily ?? ""} />}
       {run.status === "rolled_back" && <Alert tone="success">{t("common", K.rolledBackNote)}</Alert>}
       {(run.status === "cancelled" || run.status === "expired") && <Alert tone="info">{t("common", K.closed)}</Alert>}
 

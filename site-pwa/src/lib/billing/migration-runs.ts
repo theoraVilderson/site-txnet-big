@@ -1,6 +1,7 @@
-// A reseller's import from another panel (F-201-f, D-63), or of one user from
-// an old link (F-201-h-1): billing's `/tenants/:id/migration-runs`
-// (entitlement `contract.import.md`, `contract.link-import.md`) and the
+// A reseller's import from another panel (F-201-f, D-63), of one user from
+// an old link (F-201-h-1), or of its users' balances from a file (F-209-b):
+// billing's `/tenants/:id/migration-runs` (entitlement `contract.import.md`,
+// `contract.link-import.md`, billing `contract.balance-import.md`) and the
 // source login, stored on tenant-service (tenant `contract.source-login.md`).
 import { call as tenantCall } from "../tenant-call";
 import { call, type Paged } from "./client";
@@ -32,8 +33,8 @@ export interface MigrationRun {
   kind: "panel" | "link" | "csv";
   /** A panel run's family; null on a link run. */
   sourceFamily: string | null;
-  /** A panel run's origin; a link run's whole old link — its path is its owner's token, never shown. */
-  sourceAddress: string;
+  /** A panel run's origin; a link run's whole old link — its path is its owner's token, never shown; null on a balance file's run. */
+  sourceAddress: string | null;
   status: MigrationRunStatus;
   failureReason: string | null;
   plannedCreate: number;
@@ -77,6 +78,8 @@ export interface MigrationItem extends MigrationSourceCells {
   keptReason: string | null;
   /** A link run's admin over what the link said; each null keeps the read figure. */
   corrected: { dataLimitBytes: number | null; usedBytes: number | null; expiresAt: string | null };
+  /** A balance file's row: its line, the amount and currency as read; each null on another run's row, and once purged. */
+  balance: { line: number | null; amount: string | null; currency: string | null };
 }
 
 /** What a link run's correction sends: a field left out keeps its value, null clears it (entitlement `contract.link-import.md`). */
@@ -112,6 +115,8 @@ export function migrationRunsApi(tenantId: string) {
     create: (body: { family: string; sourceAddress: string }) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify(body) }),
     /** One person's import from their old link; billing reads it at once (F-201-g). */
     createLink: (body: { url: string; userId: string }) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify(body) }),
+    /** A reseller's balances from a file's text; billing answers it previewed, with its report (F-209-a). */
+    createCsv: (csv: string) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify({ csv }) }),
     /** A previewed link run's product and corrected figures; billing re-plans its one item. */
     correctLink: (runId: string, body: LinkCorrectionBody) => call<MigrationRun>(`${run(runId)}/link`, { method: "PUT", body: JSON.stringify(body) }),
     list: (page: number, pageSize: number) =>

@@ -6,6 +6,8 @@ import type { MigrationItem, MigrationRun, MigrationRunsApi, Paged } from "@/lib
 import { formatInstant } from "../../../../_lib/datetime";
 import { formatBytes } from "../../../../services/_lib/service-configs";
 import { MIGRATION_KEYS as K, reasonKey } from "../../../_lib/migration";
+import { reasonTablesOf } from "../../../_lib/migration-csv";
+import { formatMoney } from "../../../../_lib/money";
 import { useMigrationMessage } from "../_hooks/useMigrationLive";
 import { Pagination } from "../../../../_components/kit/Pagination";
 import { Alert, Badge, DataTable, SegmentedControl, type DataColumn, type Tone } from "../../../../_components/kit";
@@ -28,7 +30,8 @@ const hasOutcomes = (run: MigrationRun) => !["draft", "previewing", "previewed",
 
 /**
  * The dry run's per-user table (F-206's report), and after the commit what
- * each user came to (F-207) and what a rollback kept, with why (F-211). It
+ * each user came to (F-207) and what a rollback kept, with why (F-211); a
+ * balance file's rows by their line, amount and currency (F-209-b). It
  * reads again whenever the run moves (`updatedAt`), which the card hears
  * live; "problems" narrows to the skipped, the failed and the kept.
  */
@@ -56,6 +59,8 @@ export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: Migr
   }, [api, run.id, run.updatedAt, page, problems]);
 
   const tagOf = new Map((run.inbounds ?? []).map((i) => [i.inboundRemoteId, i.tag]));
+  const reasons = reasonTablesOf(run.kind);
+  const amount = ({ balance }: MigrationItem) => (balance.amount === null ? "—" : balance.currency ? formatMoney(balance.amount, balance.currency, { lang, t }) : balance.amount);
   const why = (table: Readonly<Record<string, string>>, reason: string | null) => {
     if (reason === null) return null;
     const key = reasonKey(table, reason);
@@ -68,6 +73,22 @@ export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: Migr
     return `${used} / ${limit}`;
   };
 
+  const sourceColumns: DataColumn<MigrationItem>[] =
+    run.kind === "csv"
+      ? [
+          { id: "line", header: t("common", K.csv.col.line), dir: "ltr", cell: (r) => (r.balance.line === null ? "—" : String(r.balance.line)) },
+          { id: "amount", header: t("common", K.csv.col.amount), dir: "ltr", cell: amount },
+        ]
+      : [
+          { id: "inbound", header: t("common", K.report.col.inbound), dir: "auto", cell: (r) => (r.inboundRemoteId ? (tagOf.get(r.inboundRemoteId) ?? r.inboundRemoteId) : "—") },
+          { id: "traffic", header: t("common", K.report.col.traffic), dir: "ltr", cell: traffic },
+          {
+            id: "expires",
+            header: t("common", K.report.col.expires),
+            cell: (r) => (r.expiresAt ? (formatInstant(r.expiresAt, lang, { withTime: false }) ?? "—") : t("common", K.report.noEnd)),
+          },
+        ];
+
   const columns: DataColumn<MigrationItem>[] = [
     {
       id: "user",
@@ -79,20 +100,14 @@ export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: Migr
         </span>
       ),
     },
-    { id: "inbound", header: t("common", K.report.col.inbound), dir: "auto", cell: (r) => (r.inboundRemoteId ? (tagOf.get(r.inboundRemoteId) ?? r.inboundRemoteId) : "—") },
-    { id: "traffic", header: t("common", K.report.col.traffic), dir: "ltr", cell: traffic },
-    {
-      id: "expires",
-      header: t("common", K.report.col.expires),
-      cell: (r) => (r.expiresAt ? (formatInstant(r.expiresAt, lang, { withTime: false }) ?? "—") : t("common", K.report.noEnd)),
-    },
+    ...sourceColumns,
     {
       id: "plan",
       header: t("common", K.report.col.plan),
       cell: (r) => (
         <span className="flex flex-col gap-0.5">
           <Badge tone={ACTION_TONE[r.plannedAction]}>{t("common", K.action[r.plannedAction])}</Badge>
-          {r.skipReason && <span className="text-xs text-text-secondary">{why(K.skip, r.skipReason)}</span>}
+          {r.skipReason && <span className="text-xs text-text-secondary">{why(reasons.skip, r.skipReason)}</span>}
         </span>
       ),
     },
@@ -104,7 +119,7 @@ export function MigrationReport({ api, run }: { api: MigrationRunsApi; run: Migr
       cell: (r) => (
         <span className="flex flex-col gap-0.5">
           <Badge tone={OUTCOME_TONE[r.outcome]}>{t("common", K.outcome[r.outcome])}</Badge>
-          {(r.failureReason ?? r.keptReason) && <span className="text-xs text-text-secondary">{why(r.failureReason ? K.itemFailure : K.kept, r.failureReason ?? r.keptReason)}</span>}
+          {(r.failureReason ?? r.keptReason) && <span className="text-xs text-text-secondary">{why(r.failureReason ? reasons.itemFailure : reasons.kept, r.failureReason ?? r.keptReason)}</span>}
         </span>
       ),
     });

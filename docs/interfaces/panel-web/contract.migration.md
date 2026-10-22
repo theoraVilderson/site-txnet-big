@@ -6,7 +6,7 @@ version: 43
 updated: 2026-10-22
 ---
 
-# Contract — panel-web: a reseller's import from another panel (F-201-f), one user's from an old link (F-201-h-1), its old address (F-204-b)
+# Contract — panel-web: a reseller's import from another panel (F-201-f), one user's from an old link (F-201-h-1), its old address (F-204-b), balances from a file (F-209-b)
 
 A topic file of [contract.md](contract.md) (§10), and a screen of the reseller
 workspace described in [contract.resellers.md](contract.resellers.md) "A
@@ -15,12 +15,13 @@ reseller leaving another panel brings its users with it (D-63).
 
 | page | route | files |
 |---|---|---|
-| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address), `LinkImportForm.tsx` + `LinkReview.tsx` (one user from a link), `_hooks/usePrepaidPlans.ts`; rules `my-resellers/_lib/migration.ts`, `migration-link.ts` |
+| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address), `LinkImportForm.tsx` + `LinkReview.tsx` (one user from a link), `BalanceFileForm.tsx` (balances from a file), `_hooks/usePrepaidPlans.ts`; rules `my-resellers/_lib/migration.ts`, `migration-link.ts`, `migration-csv.ts` |
 
 Its calls are `migrationRunsApi(tenantId)` (`lib/billing/migration-runs.ts`):
 billing's `/tenants/:id/migration-runs` routes and tenant-service's
 `PUT …/source-login`. Every rule behind them is entitlement's
-[contract.import.md](../../domains/entitlement/contract.import.md) and tenant's
+[contract.import.md](../../domains/entitlement/contract.import.md), billing's
+[contract.balance-import.md](../../domains/billing/contract.balance-import.md) and tenant's
 [contract.source-login.md](../../domains/tenant/contract.source-login.md); the
 page decides nothing they decide. The menu row is keyed `migration.manage`.
 
@@ -97,7 +98,21 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
     (`variant_unchosen`); the result, rollback and old address are the
     panel run's (rules 7, 9).
 
+12. **Balances from a file** (F-209-b; billing
+    [contract.balance-import.md](../../domains/billing/contract.balance-import.md)):
+    a third start. The template is billing's three columns with a byte-order
+    mark (a spreadsheet opens it as UTF-8), downloaded with no round trip; the
+    file is read as text and sent whole — billing parses it. Empty or past
+    billing's 90 000 characters is said before sending (`balanceFileError`):
+    the body limit would answer a bare 413. Billing answers the run
+    `previewed`, so the card opens on its report: line, name, amount in its
+    currency (`formatMoney`), the plan; reasons are the file's own sentences
+    (`csv.*`, `reasonTablesOf`). "Check again" re-plans the kept rows (a person
+    added since is found); the commit names the count it credits; the
+    rollback's confirm says a used wallet keeps its money. No login, mapping
+    or old address step: a draft is `retry` (`stageOf`).
+
 **Not covered:** a user handing in their own link, its queue and notice (not
-built, user 2026-10-22); CSV imports (F-209).
+built, user 2026-10-22).
 Platform products a reseller's package lists are not offered in the mapping
 until the users-admin catalog lists them (it reads the tenant's own products).

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowRightLeft, Link2, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, FileSpreadsheet, Link2, Plus } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { migrationRunsApi, type MigrationRun, type MigrationRunsApi, type Paged } from "@/lib/billing-api";
 import { myResellerMigrationPath } from "@/lib/routes";
@@ -11,6 +11,7 @@ import { MIGRATION_KEYS as K, stageOf } from "../../../_lib/migration";
 import { runTitleOf } from "../../../_lib/migration-link";
 import { useWorkspaceSelf } from "../../../_lib/workspace";
 import { useMigrationLive, useMigrationMessage } from "../_hooks/useMigrationLive";
+import { BalanceFileForm } from "./BalanceFileForm";
 import { LinkImportForm } from "./LinkImportForm";
 import { MigrationRunCard } from "./MigrationRunCard";
 import { SourceLoginForm } from "./SourceLoginForm";
@@ -25,8 +26,8 @@ const PAGE_SIZE = 10;
  * never the session's tenant (ADR-0064): its owner signs in to the
  * platform's. Billing and tenant-service admit by `migration.manage` and the
  * page shows their refusal otherwise. `?run=` is the run open on screen, so
- * a reload or a shared link lands on it. A new run is a whole panel or one
- * user from an old link (F-201-h-1).
+ * a reload or a shared link lands on it. A new run is a whole panel, one
+ * user from an old link (F-201-h-1) or the users' balances from a file (F-209-b).
  */
 export function MigrationView({ id }: { id: string }) {
   const { t } = useLocale();
@@ -34,7 +35,7 @@ export function MigrationView({ id }: { id: string }) {
   const runId = useSearchParams().get("run");
   const self = useWorkspaceSelf(id);
   const api = useMemo(() => migrationRunsApi(id), [id]);
-  const [starting, setStarting] = useState<"panel" | "link" | null>(null);
+  const [starting, setStarting] = useState<"panel" | "link" | "csv" | null>(null);
 
   const root = myResellerMigrationPath(id, self);
   const open = (run: string | null) => {
@@ -62,6 +63,9 @@ export function MigrationView({ id }: { id: string }) {
                 <Button size="sm" variant="secondary" onClick={() => setStarting("link")} icon={<Link2 size={12} aria-hidden />}>
                   {t("common", K.link.newLink)}
                 </Button>
+                <Button size="sm" variant="secondary" onClick={() => setStarting("csv")} icon={<FileSpreadsheet size={12} aria-hidden />}>
+                  {t("common", K.csv.newCsv)}
+                </Button>
               </div>
             )
           )
@@ -76,6 +80,11 @@ export function MigrationView({ id }: { id: string }) {
       {!runId && starting === "link" && (
         <Card>
           <LinkImportForm api={api} tenantId={id} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
+        </Card>
+      )}
+      {!runId && starting === "csv" && (
+        <Card>
+          <BalanceFileForm api={api} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
         </Card>
       )}
       {!runId && <MigrationHistory api={api} tenantId={id} onOpen={open} onStart={() => setStarting("panel")} />}

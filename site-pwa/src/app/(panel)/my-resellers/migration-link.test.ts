@@ -55,6 +55,7 @@ const item = (over: Partial<MigrationItem> = {}): MigrationItem => ({
   failureReason: null,
   keptReason: null,
   corrected: { dataLimitBytes: null, usedBytes: null, expiresAt: null },
+  balance: { line: null, amount: null, currency: null },
   ...over,
 });
 

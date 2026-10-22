@@ -17,13 +17,15 @@ const WEB_SCHEMES: ReadonlySet<string> = new Set(["http:", "https:"]);
 
 /** A link run's name on the page: its host. The path is its owner's token and is never shown. */
 export function linkHostOf(run: Pick<MigrationRun, "sourceAddress">): string {
-  return URL.canParse(run.sourceAddress) ? new URL(run.sourceAddress).hostname : "";
+  const link = run.sourceAddress ?? "";
+  return URL.canParse(link) ? new URL(link).hostname : "";
 }
 
-/** A run's title as a key and its values: a panel by its family and origin, a link by its host alone. */
+/** A run's title as a key and its values: a panel by its family and origin, a link by its host alone, a balance file by what it is (F-209-b). */
 export function runTitleOf(run: Pick<MigrationRun, "kind" | "sourceFamily" | "sourceAddress">): { key: string; values: Record<string, string> } {
   if (run.kind === "link") return { key: K.link.historyRow, values: { host: linkHostOf(run) } };
-  return { key: K.historyRow, values: { family: driverLabel(run.sourceFamily ?? ""), address: run.sourceAddress } };
+  if (run.kind === "csv") return { key: K.csv.historyRow, values: {} };
+  return { key: K.historyRow, values: { family: driverLabel(run.sourceFamily ?? ""), address: run.sourceAddress ?? "" } };
 }
 
 /** The link's error key, or null: absolute http(s) with a path past the root, as billing's `oldLinkSchema` takes it. */

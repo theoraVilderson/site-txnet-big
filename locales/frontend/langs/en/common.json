@@ -7630,7 +7630,10 @@
       "legacy_host_not_routed": "This address is not verified yet.",
       "legacy_link_not_found": "No imported user with a live service holds a link on this address.",
       "user_not_found": "This user is not one of this reseller's users.",
-      "variant_unchosen": "Choose a plan before confirming."
+      "variant_unchosen": "Choose a plan before confirming.",
+      "csv_columns": "The file's first row must name the columns user, amount and currency.",
+      "csv_empty": "The file has no rows.",
+      "csv_too_many_rows": "The file has more than 5,000 rows. Split it into smaller files."
     },
     "historyCol": {
       "source": "Panel",
@@ -7704,6 +7707,45 @@
         "address_refused": "This address is not allowed: it points at a private or internal network.",
         "source_redirected": "The link redirected elsewhere. Enter the address it leads to."
       }
+    },
+    "csv": {
+      "newCsv": "Balances from a file",
+      "intro": "Bring your users' wallet balances from your old panel. Upload a CSV file with one row per user; nothing is credited until you confirm, and each balance becomes one transaction in the user's wallet.",
+      "template": "Download the template",
+      "templateHint": "Columns: user — a username, or a phone with its country code like +98912…; amount — the balance, in the user's wallet currency; currency — its three-letter code, like USD. One row per user.",
+      "pick": "Choose the CSV file",
+      "picked": "Chosen: {{name}}",
+      "check": "Check the file",
+      "checking": "Checking the file…",
+      "empty": "The file is empty.",
+      "tooLong": "The file is too large. Split it into smaller files and upload each one.",
+      "historyRow": "Balances from a file",
+      "commit": "Credit {{count}} balances",
+      "commitConfirm": "Credit {{count}} balances to your users' wallets now? Each becomes one transaction in their wallet; for 7 days you can undo it.",
+      "recheck": "Check again",
+      "recheckHint": "Added a user the file named? Check again — the file is not needed again.",
+      "col": {
+        "line": "Row",
+        "amount": "Amount"
+      },
+      "skip": {
+        "unreadable": "the row could not be read",
+        "unknown_user": "no such user here",
+        "ambiguous_user": "matches more than one user",
+        "duplicate": "a second row for this user",
+        "currency_mismatch": "not the user's wallet currency"
+      },
+      "itemFailure": {
+        "user_not_found": "the user was deleted since",
+        "currency_mismatch": "the wallet's currency changed since",
+        "unexpected": "an unexpected error"
+      },
+      "kept": {
+        "wallet_used": "the wallet was used since",
+        "unexpected": "an unexpected error"
+      },
+      "commitNothing": "Nothing to credit: every row is skipped.",
+      "rollbackConfirm": "Undo these balances? Each credit is taken back from its wallet — except wallets used since the credit: they keep it."
     }
   }
 }
