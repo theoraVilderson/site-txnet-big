@@ -2,7 +2,8 @@ import { BotKey, BotKeys } from './bot-keys';
 
 /**
  * The last-resort English of My services in the chat (F-307-y), the
- * user's own freeze there (F-0401-g) and its renewal (F-305-i).
+ * user's own freeze there (F-0401-g), its renewal (F-305-i) and the prize
+ * service, which one wheel and lottery prizes go to (F-707-t).
  * `bot-copy.fallbacks.ts` spreads it into the one table `bot-copy.spec.ts`
  * holds to `bot.json`; it lives apart only to keep that table under the file
  * cap (C-20), as the payment screens' does.
@@ -72,4 +73,14 @@ export const SERVICES_FALLBACKS = {
   [BotKeys.renewal.paid]: "✅ The service is renewed.\nPaid: {{total}} — wallet balance: {{balance}}",
   [BotKeys.renewal.shortfall]: "Your wallet is short for this renewal: {{missing}} more is needed.\nTop up your wallet, then tap «🔁 Pay again».",
   [BotKeys.renewal.cancelled]: "The renewal was cancelled.",
+  [BotKeys.action.prizeService]: "🎁 Prize service",
+  [BotKeys.prizeService.screen]: "🎁 Prize service\nGB and days you win on the wheel or in a lottery are added to this service.\n\nNow: {{current}}",
+  [BotKeys.prizeService.automatic]: "Automatic — the service that runs longest",
+  [BotKeys.prizeService.daysOnly]: "{{name}} (days only)",
+  [BotKeys.prizeService.trafficOnly]: "{{name}} (GB only)",
+  [BotKeys.prizeService.chosen]: "✅ {{name}}",
+  [BotKeys.prizeService.saved]: "✅ Saved. GB and days you win now go to: {{current}}",
+  [BotKeys.prizeService.none]: "Nothing to choose: GB and days you win go to your active service on their own.",
+  [BotKeys.prizeService.refusals.grant_not_found]: "This service was not found. Tap «Prize service» again.",
+  [BotKeys.prizeService.refusals.grant_not_eligible]: "Prizes can no longer go to this service. Choose another one.",
 } satisfies Partial<Record<BotKey, string>>;

@@ -6,6 +6,7 @@ import type { SpinAnswer, WheelPrizeType } from '../billing-api/engagement.types
 import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { ChatAccess } from '../session/chat-access';
+import { prizeServiceRows } from './prize-service.flow';
 import { ACTIONS, say, view } from './views';
 
 /** Every reason billing gives for no spin — recorded (`SpinRefusalReason`) or not (`WheelSpinRejection`). */
@@ -40,12 +41,12 @@ export class WheelFlow {
     private readonly access: ChatAccess,
   ) {}
 
-  /** The odds, and either a Spin button or why not. */
+  /** The odds, and either a Spin button or why not; the prize-service row under them when there is a choice (F-707-t). */
   async start(ctx: ChatContext): Promise<FlowResult> {
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
 
-    const read = await this.billing.wheel(call);
+    const [read, prizeRows] = await Promise.all([this.billing.wheel(call), prizeServiceRows(this.billing, call)]);
     if (!read.ok || !read.data) {
       if (read.error?.reason === 'no_wheel') return { view: say('wheel.none', { key: BotKeys.wheel.none }), nextState: null };
       return { view: say('wheel.failed', { raw: read.msg }), nextState: null };
@@ -58,9 +59,9 @@ export class WheelFlow {
       ? { key: BotKeys.wheel.canSpin, values: { n: w.spinsLeftToday } }
       : { key: BotKeys.wheel.cannotSpin, values: { reason: reasonText(w.refusalReason) } };
     const body: BotText = { key: BotKeys.wheel.screen, values: { odds, status } };
-    if (!w.eligible) return { view: say('wheel.screen', body), nextState: null };
+    if (!w.eligible) return { view: prizeRows.length ? view('wheel.screen', body, prizeRows) : say('wheel.screen', body), nextState: null };
     return {
-      view: view('wheel.screen', body, spinButton),
+      view: view('wheel.screen', body, [...spinButton, ...prizeRows]),
       nextState: { flow: 'wheel', step: 'wheel.offer', data: { requestId: randomUUID() } },
     };
   }

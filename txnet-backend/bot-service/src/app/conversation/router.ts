@@ -24,6 +24,7 @@ import { ResellerFlow } from '../flows/reseller.flow';
 import { TopUpFlow } from '../flows/top-up.flow';
 import { TimeZoneFlow } from '../flows/time-zone.flow';
 import { LOTTERY_ACTION_PREFIX, LotteryFlow } from '../flows/lottery.flow';
+import { PRIZE_SERVICE_ACTION_PREFIX, PrizeServiceFlow } from '../flows/prize-service.flow';
 import { RenewalFlow } from '../flows/renewal.flow';
 import { SERVICE_ACTION_PREFIX, ServicesFlow } from '../flows/services.flow';
 import { WheelFlow } from '../flows/wheel.flow';
@@ -86,6 +87,7 @@ export class ConversationRouter {
     private readonly suggestions: SuggestionOptOut,
     private readonly wheel: WheelFlow,
     private readonly lotteries: LotteryFlow,
+    private readonly prizeService: PrizeServiceFlow,
     private readonly services: ServicesFlow,
     private readonly support: SupportFlow,
     private readonly guides: GuideFlow,
@@ -95,15 +97,12 @@ export class ConversationRouter {
   ) {}
 
   /**
-   * Decide, then orient. `dispatch` picks the next screen; `decorate` makes
-   * that screen answer "where am I, what have I already said, what can I do
-   * from here" — centrally, so a flow cannot ship without it.
+   * Decide, then orient. `dispatch` picks the next screen; `decorate` makes that screen answer
+   * "where am I, what have I already said, what can I do from here" — centrally, so a flow cannot ship without it.
    */
   async route(ctx: ChatContext): Promise<FlowResult> {
-    // Worked out once, here, because `PANEL_BASE_URL` is config and a flow
-    // holds none. The menu already asked for it (`menu()`); since ADR-0070 a
-    // throttled sign-in needs it too, and a screen that has to reach back into
-    // the router for it is a screen that will forget to.
+    // Worked out once, here, because `PANEL_BASE_URL` is config and a flow holds none. The menu already asked for it (`menu()`);
+    // since ADR-0070 a throttled sign-in needs it too, and a screen that has to reach back into the router for it will forget to.
     ctx.miniAppUrl = this.miniAppUrl(ctx.platform);
     const state = await this.nav.get(ctx.integration, ctx.chatId);
     const actionId = this.resolveAction(ctx, state);
@@ -163,6 +162,7 @@ export class ConversationRouter {
     // F-707-p. Every lottery button names its lottery, so it needs no state and an old screen's tap still means what it says.
     if (actionId === ACTIONS.lotteries) return this.lotteries.start(ctx);
     if (actionId?.startsWith(LOTTERY_ACTION_PREFIX)) return this.lotteries.tap(ctx, actionId);
+    if (actionId?.startsWith(PRIZE_SERVICE_ACTION_PREFIX)) return this.prizeService.tap(ctx, actionId); // F-707-t, the same: each button names its act
 
     // F-309. A thread's buttons name it, so they need no state; the open one is also under a reply notice.
     if (actionId === ACTIONS.support) return this.support.start(ctx);

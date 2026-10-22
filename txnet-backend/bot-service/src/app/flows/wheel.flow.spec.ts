@@ -8,6 +8,7 @@ import { BotKeys } from '../locale/bot-keys';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
 import { ACTIONS } from './views';
+import { PRIZE_SERVICE_ACTION_PREFIX } from './prize-service.flow';
 import { WheelFlow } from './wheel.flow';
 
 /**
@@ -48,13 +49,14 @@ const answer = (over: Partial<SpinAnswer> = {}): SpinAnswer => ({
   ...over,
 });
 
-function harness(o: { wheel?: unknown; spin?: unknown } = {}) {
+function harness(o: { wheel?: unknown; spin?: unknown; services?: number } = {}) {
   const auth = {
     refresh: vi.fn().mockResolvedValue(ok({ accessToken: 'access-1', expiresIn: 900, refreshToken: 'r-next' })),
   } as unknown as Mocked<AuthApiClient>;
   const billing = {
     wheel: vi.fn().mockResolvedValue(o.wheel ?? ok(WHEEL)),
     spinWheel: vi.fn().mockResolvedValue(o.spin ?? ok(answer())),
+    rewardTarget: vi.fn().mockResolvedValue(ok({ chosenGrantId: null, services: Array.from({ length: o.services ?? 0 }, (_, i) => ({ id: `g-${i}` })) })),
   } as unknown as Mocked<BillingApiClient>;
   const sessions = { get: vi.fn().mockResolvedValue({ refreshToken: 'r-1', signedInAt: 0 }), save: vi.fn(), clear: vi.fn() } as unknown as BotSessionStore;
   return { billing, flow: new WheelFlow(billing, new ChatAccess(auth, sessions)) };
@@ -63,6 +65,11 @@ function harness(o: { wheel?: unknown; spin?: unknown } = {}) {
 const ids = (r: { view: { actions?: { id: string }[][] } }) => (r.view.actions ?? []).flat().map((a) => a.id);
 
 describe('WheelFlow', () => {
+  it('offers the prize-service row under the odds only when there is a service to choose (F-707-t)', async () => {
+    expect(ids(await harness({ services: 2 }).flow.start(ctx))).toEqual([ACTIONS.wheelSpin, `${PRIZE_SERVICE_ACTION_PREFIX}o`]);
+    expect(ids(await harness({ services: 1 }).flow.start(ctx))).toEqual([ACTIONS.wheelSpin]);
+  });
+
   it('shows the public odds and a Spin button holding one key for this screen', async () => {
     const { flow } = harness();
     const r = await flow.start(ctx);

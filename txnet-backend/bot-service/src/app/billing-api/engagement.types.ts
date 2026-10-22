@@ -65,3 +65,19 @@ export interface SpinAnswer {
   reward: { grantId: string | null; coupon: { id: string; code: string; percent: string; expiresAt: string } | null } | null;
   replay: boolean;
 }
+
+/** `GET` / `PUT /api/billing/reward-target` (F-707-r): a service GB and days prizes can go to, named as My services names it. */
+export interface ChatPrizeService {
+  id: string;
+  label: string | null;
+  variant: { id: string; sku: string; nameKey: string } | null;
+  endsAt: string | null;
+  takesTraffic: boolean;
+  takesDays: boolean;
+}
+
+/** `chosenGrantId: null` is automatic — the service that runs longest. */
+export interface ChatRewardTarget {
+  chosenGrantId: string | null;
+  services: ChatPrizeService[];
+}

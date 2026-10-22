@@ -7,6 +7,7 @@ import { ChatContext, FlowResult } from '../conversation/nav.types';
 import { BotKey, BotKeys } from '../locale/bot-keys';
 import { ChatAccess } from '../session/chat-access';
 import { spanUntil } from './span';
+import { prizeServiceRows } from './prize-service.flow';
 import { ACTIONS, say, view } from './views';
 
 /** Billing's `ExclusionReason` (the close, F-707-k); the spec reads the union from the service. */
@@ -61,7 +62,7 @@ export class LotteryFlow {
   async start(ctx: ChatContext): Promise<FlowResult> {
     const call = await this.callContext(ctx);
     if (!call) return this.signedOut();
-    const read = await this.billing.lotteries(call);
+    const [read, prizeRows] = await Promise.all([this.billing.lotteries(call), prizeServiceRows(this.billing, call)]);
     if (!read.ok || !read.data) return { view: say('lotteries.failed', { raw: read.msg }), nextState: null };
     const rows = read.data.slice(0, LIST_MAX);
     if (rows.length === 0) return { view: say('lotteries.none', { key: BotKeys.lotteries.none }), nextState: null };
@@ -69,7 +70,11 @@ export class LotteryFlow {
       view: view(
         'lotteries.list',
         { key: BotKeys.lotteries.list, values: { n: rows.length } },
-        rows.map((l) => [{ id: lotteryAction('open', l.id), label: { key: BotKeys.lotteries.item, values: { title: raw(l.title), status: this.status(l, false) } } }]),
+        [
+          ...rows.map((l) => [{ id: lotteryAction('open', l.id), label: { key: BotKeys.lotteries.item, values: { title: raw(l.title), status: this.status(l, false) } } }]),
+          // The prize service (F-707-t): one choice for every lottery and the wheel.
+          ...prizeRows,
+        ],
       ),
       nextState: null,
     };

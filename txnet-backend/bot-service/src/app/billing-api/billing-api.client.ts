@@ -7,7 +7,7 @@ import { BotCopy } from '../locale/bot-copy';
 import { BotKeys } from '../locale/bot-keys';
 import type { OutgoingFile } from '../support-api/support-api.client';
 import type { CurrencyAmount } from '../locale/money';
-import type { ChatLottery, ChatLotteryResult, LotteryEntryAnswer, SpinAnswer, UserWheel } from './engagement.types';
+import type { ChatLottery, ChatLotteryResult, ChatRewardTarget, LotteryEntryAnswer, SpinAnswer, UserWheel } from './engagement.types';
 import type { DepositBody, DepositGateway, DepositQuote, DepositStarted, InChatPaid, InChatPaymentBody, PreCheckoutVerdict } from './deposit.types';
 import type { InvoicePaid, RenewalChoice, RenewalInvoice, RenewalPlans } from './renewal.types';
 import type { MyServicesPage } from './services.types';
@@ -158,6 +158,16 @@ export class BillingApiClient {
     return this.call('POST', '/api/billing/wheel/spin', { requestId }, ctx);
   }
 
+  /** The user's prize service (F-707-t): the panel's own route, so the chat and the panel hold one choice. */
+  rewardTarget(ctx: BillingCallContext): Promise<ApiResult<ChatRewardTarget>> {
+    return this.call('GET', '/api/billing/reward-target', undefined, ctx);
+  }
+
+  /** `null` is automatic again; answers the same view as the read. */
+  chooseRewardTarget(grantId: string | null, ctx: BillingCallContext): Promise<ApiResult<ChatRewardTarget>> {
+    return this.call('PUT', '/api/billing/reward-target', { grantId }, ctx);
+  }
+
   /** The user's lotteries (F-707-p): the panel's own routes, so the chat and the panel show the same entry. */
   lotteries(ctx: BillingCallContext): Promise<ApiResult<ChatLottery[]>> {
     return this.call('GET', '/api/billing/lotteries', undefined, ctx);
@@ -259,7 +269,7 @@ export class BillingApiClient {
     return this.relay('/api/internal/billing/deposit/in-chat/paid', body, lang);
   }
 
-  private call<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
+  private call<T>(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string, body: unknown, ctx: BillingCallContext): Promise<ApiResult<T>> {
     if (!this.isConfigured) return Promise.resolve(this.unreachable(ctx.lang));
     return this.send(method, `${this.baseUrl}${path}`, body, { lang: ctx.lang, auth: this.authOf(ctx) });
   }
@@ -284,7 +294,7 @@ export class BillingApiClient {
 
   /** A JSON body, or a `FormData` one that sets its own type; the answer read as an envelope unless `read` says otherwise. */
   private async send<T>(
-    method: 'GET' | 'POST' | 'DELETE',
+    method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     url: string,
     body: unknown,
     { lang, auth, read = readEnvelope }: { lang: string; auth: Record<string, string>; read?: ReadAnswer<T> },

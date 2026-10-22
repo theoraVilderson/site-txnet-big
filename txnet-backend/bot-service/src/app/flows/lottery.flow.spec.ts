@@ -67,6 +67,7 @@ function harness(o: { list?: unknown; join?: unknown; leave?: unknown; result?: 
   } as unknown as Mocked<AuthApiClient>;
   const billing = {
     lotteries: vi.fn().mockResolvedValue(o.list ?? ok([lottery()])),
+    rewardTarget: vi.fn().mockResolvedValue(ok({ chosenGrantId: null, services: [] })),
     joinLottery: vi.fn().mockResolvedValue(o.join ?? ok({ lotteryId: ID, joined: true, replay: false })),
     leaveLottery: vi.fn().mockResolvedValue(o.leave ?? ok({ lotteryId: ID, joined: false, replay: false })),
     lotteryResult: vi.fn().mockResolvedValue(o.result ?? ok(RESULT)),
