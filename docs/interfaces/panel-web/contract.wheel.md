@@ -29,7 +29,8 @@ ADR-0111), both through `lib/engagement-api.ts`:
 2. **One tap, one spin.** A tap's `requestId` is kept after a lost answer (no
    `reason`, or `spin_in_progress`), so the retry is answered with the spin it
    may have made (engagement "The spin" rule 1); any other answer starts a new key.
-3. **The odds shown are billing's** `oddsPercent`, never recomputed here.
+3. **The odds shown are billing's** `oddsPercent`, never recomputed here —
+   this user's own: a slot whose prize cannot reach their services reads 0% (F-707-u).
 4. **Every reason has a sentence**: `REFUSAL_KEYS` covers `SpinRefusalReason`
    and `WheelSpinRejection`, read from the service by the spec. `no_wheel` on
    the read is a page state, not an error.

@@ -2,11 +2,12 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { FraudSubjectType, GrantStatus, InvoiceStatus, Prisma, RewardSource, SpinAttemptStatus, SpinPrizeType, UserStatus } from '@prisma/client';
-import { liveMembership, runWithTenant, tenantTransaction, moneyText, percentText } from '@txnet-backend/shared-core';
+import { liveMembership, runWithTenant, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
 import { accountsOnFingerprint, FINGERPRINT_FREE_GRANTS_REFUSED_AT, fingerprintHash, fingerprintVerdict, FingerprintSource, recordFingerprint } from '../fraud/device-fingerprint';
 import { PrismaService } from '../prisma/prisma.service';
+import { oddsFor, prizeReachOf, reachableSlots } from './prize-reach';
 import { issueReward, RewardIssued, RewardRefused } from './reward-issuer';
 import { isoDay, tenantDayOf, tenantZoneOf } from './tenant-day';
 import { alertCapCrossing } from './wheel-report';
@@ -14,8 +15,8 @@ import { alertCapCrossing } from './wheel-report';
 /**
  * The spin (F-707-d, ADR-0111 points 3, 4): `POST /api/billing/wheel/spin`.
  *
- * **The server decides.** The pick is `crypto.randomInt` over the version's
- * weights; the client is told the slot and only animates to it.
+ * **The server decides.** The pick is `crypto.randomInt` over the version's weights, as this user can be given them
+ * (`prize-reach.ts`, F-707-u); the client is told the slot and only animates to it.
  *
  * **One transaction, in this order:**
  * 1. A retried `requestId` answers its recorded attempt and spins nothing.
@@ -29,10 +30,9 @@ import { alertCapCrossing } from './wheel-report';
  * 5. Eligibility is gathered fresh and frozen into the attempt (invariant 3).
  *    A refused spin is recorded too (invariant 2), `voided_fraud` for a shared
  *    device or an open flag, `rejected_ineligible` for the rest.
- * 6. The pick. Over the day's cap, past its stock, or a prize the issuer
- *    refuses (no active service for GB or days) becomes nothing: the issuer
- *    runs inside a savepoint, rolled back on refusal, and the counters are
- *    charged only for a prize actually given. Never cash (point 2).
+ * 6. The pick, over the slots this user can be given (F-707-u). Over the day's cap, past its stock, or a prize
+ *    the issuer still refuses becomes nothing: the issuer runs inside a savepoint, rolled back on refusal, and
+ *    the counters are charged only for a prize actually given. Never cash (point 2).
  * 7. The spin whose prize brings the day to 80% of the cap tells the
  *    tenant's admins, once a day (F-707-e, `alertCapCrossing`).
  */
@@ -247,7 +247,7 @@ export class WheelSpinService {
       const accounts = source ? await accountsOnFingerprint(tx, { tenantId: actor.tenantId, fingerprintHash: fingerprintHash(source), at }) : 0;
       const facts = await this.facts(tx, actor, cfg, day, Math.max(accounts, 1));
       const { refusal } = checkEligibility(cfg, facts, at);
-      const total = cfg.prizes.reduce((s, p) => s + p.probabilityWeight, 0);
+      const odds = oddsFor(cfg.prizes, await prizeReachOf(tx, actor.userId)); // this user's own (F-707-u)
       const nextAt = facts.lastAwardedAt ? new Date(facts.lastAwardedAt.getTime() + cfg.perUserCooldownHours * HOUR_MS) : null;
       return {
         tenantDay: isoDay(day),
@@ -255,7 +255,7 @@ export class WheelSpinService {
         currencyCode: cfg.currencyCode,
         prizes: [...cfg.prizes]
           .sort((a, b) => a.position - b.position)
-          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), oddsPercent: percentText(D(p.probabilityWeight).mul(100).div(total)) })),
+          .map((p) => ({ ...(prizeOf(p) as NonNullable<SpinResult['prize']>), oddsPercent: odds(p) })),
         eligible: refusal === null,
         refusalReason: refusal?.reason ?? null,
         spinsLeftToday: Math.max(0, cfg.maxSpinsPerAccountPerDay - facts.awardedToday),
@@ -363,7 +363,7 @@ export class WheelSpinService {
       return { attemptId: id, status: refusal.status, refusalReason: refusal.reason, version: cfg.version, tenantDay: dayKey, seq: null, position: null, prize: null, reward: null, replay: false };
     }
 
-    const picked = pickSlot(cfg.prizes, this.random);
+    const picked = pickSlot(reachableSlots(cfg.prizes, await prizeReachOf(tx, actor.userId)), this.random); // as the view weighs it (F-707-u)
     const seq = facts.awardedToday + 1;
     let given: SpinPrize | null = null;
     let reward: RewardIssued | null = null;

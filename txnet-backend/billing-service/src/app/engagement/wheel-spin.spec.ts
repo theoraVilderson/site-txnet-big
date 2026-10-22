@@ -71,7 +71,7 @@ function build(o: { cfg?: ReturnType<typeof config> | null; day?: { costSpent: n
     spinWheelDay: { update: async (a: Record<string, unknown>) => dayUpdates.push(a) },
     spinWheelPrizeDay: { update: async (a: Record<string, unknown>) => prizeDayUpdates.push(a) },
     user: { findUnique: async () => ({ status: 'active', deletedAt: null, createdAt: new Date(AT.getTime() - 48 * HOUR), phoneVerifiedAt: AT, ...o.user }) },
-    grant: { count: async () => 1 },
+    grant: { count: async () => 1, findMany: async () => [{ trafficUnlimited: false, endsAt: new Date('2099-01-01T00:00:00Z') }] },
     invoice: { aggregate: async () => ({ _sum: { total: D(0) }, _count: { _all: 0 } }) },
     fraudFlag: { count: async () => 0 },
     userGroupMember: { findFirst: async () => null },
