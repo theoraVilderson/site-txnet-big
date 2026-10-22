@@ -5,7 +5,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import { GRANT_AGGREGATE } from '../entitlement/delivered';
 import { renewGrant } from '../entitlement/renewal';
-import { RenewalRefused, renewalSaleOf } from './renewal-invoice';
+import { assertGrantRenewable, callersGrant, RenewalRefused, renewalSaleOf } from './renewal-invoice';
 
 /**
  * The step a paid renewal invoice takes in place of issuing a Grant (F-305-d,
@@ -16,7 +16,9 @@ import { RenewalRefused, renewalSaleOf } from './renewal-invoice';
  *     its bag or end between the check and the raise;
  *  2. the renewal is asked again at this instant (`renewalSaleOf`): a Grant
  *     closed or a plan switched off since the quote refuses the whole payment,
- *     as a variant switched off refuses a purchase's issue;
+ *     as a variant switched off refuses a purchase's issue. GiB and days typed
+ *     (F-305-e) ask only the Grant: the rate they were quoted at is the one
+ *     they pay, even if a newer one took effect (rule 9);
  *  3. `renewGrant` with the bytes and days **quoted** (rule 9), the invoice's
  *     renewal id named by an unlimited plan's wholesale charge; a reseller's
  *     package plan buys its raise wholesale there (invariant 30);
@@ -30,7 +32,7 @@ import { RenewalRefused, renewalSaleOf } from './renewal-invoice';
  */
 
 /** A paid renewal invoice, as the payment locked it. */
-export type RenewalInvoice = { id: string; userId: string; variantId: string; grantId: string; renewBytes: bigint; renewDays: number };
+export type RenewalInvoice = { id: string; userId: string; variantId: string; grantId: string; renewBytes: bigint; renewDays: number; renewalRateId: string | null };
 
 type LockedGrant = { id: string; tenantId: string; purchasedBytes: bigint; endsAt: Date | null };
 
@@ -41,7 +43,7 @@ export async function renewByInvoice(tx: Prisma.TransactionClient, invoice: Rene
      WHERE id = ${invoice.grantId}::uuid AND "userId" = ${invoice.userId}::uuid
      FOR UPDATE`;
   if (!grant) throw new RenewalRefused('grant_not_found', invoice.grantId);
-  const sale = await renewalSaleOf(tx, { userId: invoice.userId, grantId: grant.id, variantId: invoice.variantId, at });
+  const switchTo = await planSwitchOf(tx, invoice, at);
 
   // Chosen before the row exists: an unlimited plan's wholesale charge names it (F-118-z).
   const renewalId = randomUUID();
@@ -61,7 +63,8 @@ export async function renewByInvoice(tx: Prisma.TransactionClient, invoice: Rene
       grantId: grant.id,
       requestId: invoice.id,
       actorUserId: invoice.userId,
-      plan: true,
+      // A plan's period, or GiB and days typed (F-305-e).
+      plan: invoice.renewalRateId === null,
       bytes: invoice.renewBytes,
       days: invoice.renewDays,
       forgivenBytes: done.forgivenBytes,
@@ -71,11 +74,11 @@ export async function renewByInvoice(tx: Prisma.TransactionClient, invoice: Rene
       endsAtAfter: done.endsAt,
     },
   });
-  if (sale.amount.switched) {
+  if (switchTo) {
     // The plan as it is now (ADR-0158 (1)); the group is the Grant's own and unchanged (invariant 31).
     await tx.grant.update({
       where: { id: grant.id },
-      data: { variantId: sale.offer.variantId, quotas: structuredClone(sale.offer.quotas ?? {}), periodDays: sale.offer.durationDays },
+      data: { variantId: switchTo.variantId, quotas: structuredClone(switchTo.quotas ?? {}), periodDays: switchTo.durationDays },
     });
   }
 
@@ -90,4 +93,18 @@ export async function renewByInvoice(tx: Prisma.TransactionClient, invoice: Rene
   });
   const { status } = await tx.grant.findUniqueOrThrow({ where: { id: grant.id }, select: { status: true } });
   return { id: grant.id, status };
+}
+
+/**
+ * The renewal asked again under the Grant's lock: a plan renewal by
+ * `renewalSaleOf`, answering the plan to switch to when it is not the Grant's
+ * own; GiB and days typed only by the Grant's status — they switch nothing.
+ */
+async function planSwitchOf(tx: Prisma.TransactionClient, invoice: RenewalInvoice, at: Date) {
+  if (invoice.renewalRateId) {
+    assertGrantRenewable(await callersGrant(tx, invoice.userId, invoice.grantId));
+    return null;
+  }
+  const sale = await renewalSaleOf(tx, { userId: invoice.userId, grantId: invoice.grantId, variantId: invoice.variantId, at });
+  return sale.amount.switched ? sale.offer : null;
 }

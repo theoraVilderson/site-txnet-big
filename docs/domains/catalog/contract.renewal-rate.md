@@ -9,7 +9,7 @@ updated: 2026-10-22
 # Contract — catalog / a product's renewal rate (F-305-b, ADR-0158)
 
 What the GiB and days a user types to renew their own Grant cost, and how few
-and how many one renewal buys. Read by billing's renewal invoice (F-305-e,
+and how many one renewal buys. Read by billing's renewal invoice (F-305-e, built — `renewalRateAt`,
 billing [contract.renewal.md](../billing/contract.renewal.md)). Not a
 `rate_card`: a rate card prices a meter's use on a variant and is locked onto a
 Grant at sale; a renewal rate prices one top-up of a product and is read at the
@@ -22,7 +22,8 @@ invoice. `renewal-rate.*` in `billing-service/src/app/catalog/`, proved by
 `maxGib`, `minDays`, `maxDays` (integers), `currencyCode`, `effectiveFrom` —
 [data-model.md](data-model.md).
 
-1. **History.** A change is a new row from `effectiveFrom`, never in the past
+1. **History.** An invoice priced at a row names it (`invoice.renewalRateId`, RESTRICT).
+   A change is a new row from `effectiveFrom`, never in the past
    (`price_in_the_past`, as a price's); no row is changed or deleted
    (`renewal_rate_is_history`), but a product's rows go with it (cascade).
 2. **Off is a row.** Switching custom renewal off writes a row with no prices

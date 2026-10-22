@@ -51,7 +51,7 @@ const renewalRateView = (r: RenewalRate): RenewalRateView => ({
  * currency is no rate). An off row in effect, or none, is `null`: custom
  * renewal is off (ADR-0158 (4)). Never an older rate behind an off row.
  */
-async function renewalRateAt(db: Prisma.TransactionClient, productId: string, at: Date, currencyCode: string): Promise<RenewalRate | null> {
+export async function renewalRateAt(db: Prisma.TransactionClient, productId: string, at: Date, currencyCode: string): Promise<RenewalRate | null> {
   const row = await db.renewalRate.findFirst({ where: { productId, currencyCode, effectiveFrom: { lte: at } }, orderBy: NEWEST });
   return row && row.pricePerGib !== null ? row : null;
 }

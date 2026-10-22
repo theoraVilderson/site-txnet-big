@@ -285,7 +285,9 @@
       "soldOut": "This product is sold out.",
       "grantNotFound": "This service was not found.",
       "grantNotRenewable": "This service can't be renewed: it has ended or is not ready yet.",
-      "planNotRenewable": "This plan can't renew this service. Choose another plan, or buy a new service from the shop."
+      "planNotRenewable": "This plan can't renew this service. Choose another plan, or buy a new service from the shop.",
+      "customRenewalOff": "This service can't be renewed by amount. Choose one of its plans.",
+      "customOutOfBounds": "This amount is outside what one renewal of this service can buy. Check the allowed range and try again."
     },
     "resellerLimitReached": "You have reached a limit of your plan for this. Ask the platform to raise it.",
     "restricted": {

@@ -25,7 +25,7 @@ the gate like every billing route ("Request edge" in `contract.md`).
 
 | Body | Answer (201) |
 |---|---|
-| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each), `grantId?` (a renewal — [contract.renewal.md](contract.renewal.md), F-305-c) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, currencyCode, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], renewal: {grantId, bytes, days} \| null, expiresAt}` — money as decimal strings, base currency (C-02) |
+| `variantId` (uuid), `couponCodes?` (≤ 10, ≤ 64 chars each), `grantId?` (a renewal — [contract.renewal.md](contract.renewal.md), F-305-c), or `grantId` + `gib` + `days` in place of `variantId` (F-305-e) | `{id, variantId, sku, nameKey, status: "pending", amount, discount, total, currencyCode, automaticDiscount: {ruleId, name, discount} \| null, applied: [{code, discount}], rejected: [{code, reason, message}], renewal: {grantId, bytes, days} \| null, expiresAt}` — money as decimal strings, base currency (C-02) |
 
 | Rule | Held by |
 |---|---|

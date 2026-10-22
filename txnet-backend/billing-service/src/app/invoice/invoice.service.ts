@@ -1,18 +1,17 @@
 import { Injectable } from '@nestjs/common';
-import { CouponChannel, GrantSource, InvoiceStatus, Prisma, RedemptionStatus, VariantBillingMode } from '@prisma/client';
-import { admitProductSale, TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
+import { CouponChannel, InvoiceStatus, Prisma, RedemptionStatus } from '@prisma/client';
+import { TenantContext, tenantTransaction, moneyText } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
-import { CatalogOffer, listOffersIn, sellableOfferById } from '../catalog/catalog-reads';
+import { CatalogOffer, listOffersIn } from '../catalog/catalog-reads';
 import { moveSales } from '../catalog/sales-counts';
 import { sellsTrafficToday } from '../catalog/traffic-quota';
 import { deliveryRouteOf } from '../entitlement/delivery';
-import { assertBuyerRoom } from '../entitlement/user-restrictions';
-import { assertPurchaseRoom } from '../entitlement/purchase-limits';
-import { assertPlatformGrantRoom } from '../entitlement/reseller-room';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
-import { RenewalPlansView, renewalPlansView, RenewalSale, renewalPlansOf, renewalSaleOf } from './renewal-invoice';
+import { CustomAmount, customRenewalSaleOf, CustomRenewalView, customRenewalView, renewalRateFor } from './custom-renewal';
+import { invoiceItemOf, renewalColumns } from './invoice-item';
+import { RenewalPlansView, renewalPlansView, renewalPlansOf } from './renewal-invoice';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import {
@@ -53,12 +52,15 @@ export const INVOICE_TTL_MS = 30 * 60 * 1000;
 export type InvoiceCreateRequest = {
   /** From `X-User-Id`. */
   userId: string;
-  variantId: string;
+  /** The variant bought, or the plan a Grant renews to; absent only for GiB and days typed (`custom`). */
+  variantId?: string;
   couponCodes: readonly string[];
   /** Where the codes were typed; absent = the panel. */
   channel?: CouponChannel;
   /** A Grant the caller holds: the invoice renews it to `variantId` instead of selling one (F-305-c). */
   grantId?: string;
+  /** With `grantId`, in place of `variantId`: GiB and days at the product's renewal rate (F-305-e). */
+  custom?: CustomAmount;
 };
 
 /** What a renewal invoice adds to which Grant (F-305-c); bytes as a string — they pass 2^53 (C-02). */
@@ -90,16 +92,14 @@ export type InvoiceCreated = {
 /** What a discount rule took, and its label for the buyer (F-114-h). */
 export type AutomaticDiscount = { ruleId: string; name: string; discount: string };
 
+/** A typed renewal priced (F-305-e): bytes as a string, money as a decimal string (C-02). */
+export type RenewalQuote = { grantId: string; gib: number; days: number; bytes: string; amount: string; currencyCode: string; rateId: string };
+
 /** One invoice as its owner reads it back (F-111-e): what it was priced at, without the coupon verdicts of its creation. */
 export type InvoiceView = Omit<InvoiceCreated, 'rejected'>;
 
-/** Not for sale to this caller: unknown, another tenant's, `admin_only`, switched off, or no price in effect — never told apart. */
-export class InvoiceVariantNotFound extends Error {
-  constructor(readonly variantId: string) {
-    super(`variant ${variantId} is not for sale to this tenant`);
-    this.name = 'InvoiceVariantNotFound';
-  }
-}
+// Thrown while pricing the item; its callers have always imported it from here.
+export { InvoiceVariantNotFound } from './invoice-item';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -126,16 +126,15 @@ export class InvoiceService {
 
   create(request: InvoiceCreateRequest): Promise<InvoiceCreated> {
     const tenant = TenantContext.current('invoice create');
-    const { userId, variantId, grantId } = request;
+    const { userId } = request;
 
     return tenantTransaction(this.prisma, async (tx) => {
       const now = new Date();
-      const renewal = grantId ? await renewalSaleOf(tx, { userId, grantId, variantId, at: now }) : null;
-      const offer = renewal?.offer ?? (await purchasableOffer(tx, { tenantId: tenant.id, userId, variantId, at: now }));
+      const item = await invoiceItemOf(tx, request, tenant.id, now);
+      const { amount, currencyCode } = item;
 
-      const amount = new Prisma.Decimal(offer.price.amount);
       // The best rule with no code comes first; the coupons see what it left (D-45).
-      const rule = await discountRuleFor(tx, { userId, productId: offer.productId, at: now, currencyCode: offer.price.currencyCode }, amount);
+      const rule = await discountRuleFor(tx, { userId, productId: item.productId, at: now, currencyCode }, amount);
       const ruleDiscount = rule?.discount ?? ZERO;
       const couponBase = amount.minus(ruleDiscount);
       const coupons: CouponValidation = couponBase.isZero()
@@ -150,8 +149,8 @@ export class InvoiceService {
             codes: request.couponCodes,
             amount: couponBase,
             // The price's own, which the invoice records (F-116-d, F-116-h6).
-            currencyCode: offer.price.currencyCode,
-            target: { kind: 'purchase', productId: offer.productId, variantId: offer.variantId },
+            currencyCode,
+            target: { kind: 'purchase', productId: item.productId, variantId: item.variantId },
             channel: request.channel ?? CouponChannel.panel,
             userId,
             // A purchase is inside this tenant's books: its own pin converts (F-116-j).
@@ -160,7 +159,7 @@ export class InvoiceService {
 
       // A purchase holds a unit of a capped variant for its 30 minutes, or is refused `sold_out` (F-513-b);
       // a renewal is never held or counted (ADR-0158 (2)).
-      if (!renewal) await moveSales(tx, offer.variantId, 'reserve');
+      if (!item.renewal) await moveSales(tx, item.variantId, 'reserve');
 
       const id = randomUUID();
       const invoice = await tx.invoice.create({
@@ -168,18 +167,19 @@ export class InvoiceService {
           id,
           tenantId: tenant.id,
           userId,
-          variantId: offer.variantId,
-          priceId: offer.price.id,
+          variantId: item.variantId,
+          priceId: item.priceId,
+          renewalRateId: item.renewalRateId,
           amount,
           // The price's own (F-116-d): the offer took only a price in the tenant's currency.
-          currencyCode: offer.price.currencyCode,
+          currencyCode,
           discount: ruleDiscount.plus(coupons.totalDiscount),
           total: coupons.payable,
           discountRuleId: rule?.rule.id ?? null,
           ruleDiscount,
           status: InvoiceStatus.pending,
-          salesCounted: !renewal,
-          ...renewalColumns(renewal),
+          salesCounted: !item.renewal,
+          ...renewalColumns(item.renewal),
           expiresAt: new Date(now.getTime() + INVOICE_TTL_MS),
         },
       });
@@ -189,9 +189,9 @@ export class InvoiceService {
 
       return {
         id,
-        variantId: offer.variantId,
-        sku: offer.sku,
-        nameKey: offer.nameKey,
+        variantId: item.variantId,
+        sku: item.sku,
+        nameKey: item.nameKey,
         status: InvoiceStatus.pending,
         amount: moneyText(amount),
         discount: moneyText(ruleDiscount.plus(coupons.totalDiscount)),
@@ -235,8 +235,25 @@ export class InvoiceService {
    * invoice refuses: another user's Grant `grant_not_found`, a closed one
    * `grant_not_renewable`.
    */
-  renewalPlans(userId: string, grantId: string, at: Date = new Date()): Promise<RenewalPlansView> {
-    return tenantTransaction(this.prisma, async (tx) => renewalPlansView(await renewalPlansOf(tx, { userId, grantId, at })));
+  renewalPlans(userId: string, grantId: string, at: Date = new Date()): Promise<RenewalPlansView & { custom: CustomRenewalView | null }> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const listed = await renewalPlansOf(tx, { userId, grantId, at });
+      // The typed form (F-305-e): the product's rate in effect and this Grant's bounds, or null when it is off.
+      return { ...renewalPlansView(listed), custom: customRenewalView(listed.grant, await renewalRateFor(tx, listed.grant, at)) };
+    });
+  }
+
+  /**
+   * What GiB and days typed would cost on the caller's Grant now (F-305-e) —
+   * the price the invoice would start from, before discounts, read for the
+   * sheet's form so the browser never multiplies. Writes nothing; refused as
+   * the invoice is.
+   */
+  renewalQuote(userId: string, grantId: string, typed: CustomAmount, at: Date = new Date()): Promise<RenewalQuote> {
+    return tenantTransaction(this.prisma, async (tx) => {
+      const { rate, priced } = await customRenewalSaleOf(tx, { userId, grantId, typed, at });
+      return { grantId, ...typed, bytes: priced.bytes.toString(), amount: moneyText(priced.amount), currencyCode: rate.currencyCode, rateId: rate.id };
+    });
   }
 
   /**
@@ -309,45 +326,6 @@ export class InvoiceService {
     });
   }
 }
-
-/**
- * The variant as a purchase may buy it (F-111-a), or a refusal: for sale to
- * this tenant and buyer, deliverable, and within every limit a new service is
- * asked — the buyer's, the reseller's room and its package quota.
- */
-async function purchasableOffer(tx: Prisma.TransactionClient, input: { tenantId: string; userId: string; variantId: string; at: Date }): Promise<CatalogOffer> {
-  const { tenantId, userId, variantId, at } = input;
-  // A product sold to chosen groups is not sold to anyone else (PT-1-b): the same neutral refusal.
-  const offer = await sellableOfferById(tx, variantId, at, userId);
-  if (!offer) throw new InvoiceVariantNotFound(variantId);
-  // Nothing is sold that nothing can deliver (F-111-d, the user's call
-  // 2026-09-25): a paid Grant with no handler could only be refunded.
-  const routed = await tx.productVariant.findUnique({ where: { id: offer.variantId }, select: { panelGroupId: true, billingMode: true } });
-  const groupId = routed?.panelGroupId ?? null;
-  const route = deliveryRouteOf(offer.fulfilmentKind, groupId);
-  // ...nor a prepaid network Grant with no traffic to fill it (F-111-p).
-  if (route === null || !sellsTrafficToday(offer)) throw new InvoiceVariantNotFound(variantId);
-  // ...nor what no panel of its group could ever place (F-111-i).
-  if (route === 'panel_group' && groupId && !(await deliverableGroupIds(tx, [groupId])).has(groupId)) {
-    throw new InvoiceVariantNotFound(variantId);
-  }
-
-  // A buy past the buyer's metered cap (F-118-ao) or a restriction staff set on them (F-030-e) is
-  // refused before an invoice exists, and again at issue under the same lock.
-  await assertBuyerRoom(tx, userId, { source: GrantSource.purchase, metered: routed?.billingMode === VariantBillingMode.metered });
-  // ...nor past the buyer's purchases in a day, week or month (F-019-t7), told before paying and again at issue.
-  await assertPurchaseRoom(tx, userId);
-  // ...nor past its reseller's room on the platform's panels (F-019-o), told before paying.
-  await assertPlatformGrantRoom(tx, groupId);
-  // ...nor past its reseller's package quota for the product, or overage it cannot pay (F-019-v6):
-  // asked now, consumed at issue.
-  await admitProductSale(tx, { tenantId, product: { id: offer.productId, tenantId: offer.tenantId }, now: at });
-  return offer;
-}
-
-/** The invoice columns a renewal fills (F-305-c): the Grant, and what the plan added when quoted. */
-const renewalColumns = (renewal: RenewalSale | null) =>
-  renewal ? { grantId: renewal.grantId, renewBytes: renewal.amount.bytes, renewDays: renewal.amount.days } : {};
 
 /** A stored invoice's renewal as its owner reads it, or null for a purchase. */
 function renewalView(row: { grantId: string | null; renewBytes: bigint | null; renewDays: number | null }): InvoiceRenewal | null {

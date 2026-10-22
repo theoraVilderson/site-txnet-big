@@ -24,12 +24,18 @@ export type RenewalRefusal =
   /** The Grant is not `active` or `suspended`: nothing to extend. */
   | 'grant_not_renewable'
   /** The plan is gone, off, unpriced, off the Grant's product, group or mode, or of a shape the Grant cannot take. */
-  | 'plan_not_renewable';
+  | 'plan_not_renewable'
+  /** GiB and days typed (F-305-e): the product has no renewal rate in effect, or the Grant can take neither part. */
+  | 'custom_renewal_off'
+  /** GiB and days typed outside this Grant's bounds, or both 0 (F-305-e); `facts` carries the bounds. */
+  | 'custom_out_of_bounds';
 
 export class RenewalRefused extends Error {
   constructor(
     readonly reason: RenewalRefusal,
     detail: string,
+    /** What a form shows beside the refusal: the bounds, for `custom_out_of_bounds`. */
+    readonly facts?: Record<string, number>,
   ) {
     super(`${reason}: ${detail}`);
     this.name = 'RenewalRefused';
@@ -87,7 +93,7 @@ export function renewalOf(grant: RenewableGrant, plan: CatalogOffer | null): Ren
 }
 
 /** Rule 1: only an `active` or `suspended` Grant has anything to extend. */
-function assertGrantRenewable(grant: RenewableGrant): void {
+export function assertGrantRenewable(grant: RenewableGrant): void {
   if (!RENEWABLE.has(grant.status)) throw new RenewalRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
 }
 
@@ -149,7 +155,7 @@ export async function renewalPlansOf(
  * The caller's Grant as a renewal reads it. Another user's is as absent as
  * another tenant's (RLS): `grant_not_found`, never told apart.
  */
-async function callersGrant(tx: Prisma.TransactionClient, userId: string, grantId: string): Promise<RenewableGrant> {
+export async function callersGrant(tx: Prisma.TransactionClient, userId: string, grantId: string): Promise<RenewableGrant> {
   const grant = await tx.grant.findFirst({
     where: { id: grantId, userId },
     select: { id: true, status: true, variantId: true, panelGroupId: true, billingMode: true, trafficUnlimited: true, endsAt: true },

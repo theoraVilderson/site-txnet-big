@@ -15,8 +15,8 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 [contract.reseller-grants.md](contract.reseller-grants.md). Both land in entitlement's
 `renewGrant` (entitlement `contract.admin.md` "Renew").
 
-**Status: the invoice (F-305-c), paying it (F-305-d) and the plans the sheet lists (F-305-j) are built.** F-305-e
-(GiB and days) builds the rest; the rate it reads is catalog's
+**Status: built** — the invoice (F-305-c), paying it (F-305-d), the plans the sheet lists
+(F-305-j) and GiB and days typed (F-305-e); the rate F-305-e reads is catalog's
 [contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
 (F-305-f/g), bot-app (F-305-i).
@@ -36,6 +36,25 @@ The invoice row records `grantId`, `renewBytes`, `renewDays` (all or none, CHECK
 | `404 errors.billing.invoice.grantNotFound`, `reason` `grant_not_found` | rule 1: not the caller's Grant, another tenant's (RLS), or unknown |
 | `409 errors.billing.invoice.grantNotRenewable`, `reason` `grant_not_renewable` | rule 1: the Grant is `pending`, `exhausted`, `expired` or `cancelled` |
 | `409 errors.billing.invoice.planNotRenewable`, `reason` `plan_not_renewable` | rules 3, 4, 6: the plan is gone, off, unpriced in the tenant's currency, of another product, panel group or billing mode; permanent against dated; a bag against unlimited; no traffic stated (F-111-p); or it adds nothing. A Grant issued with no plan (an import) has no product to renew within |
+
+## GiB and days typed (built — F-305-e)
+
+`invoice/custom-renewal.ts` (`customRenewalOf`, `customBoundsFor`, pure), proved by
+`invoice/custom-renewal.spec.ts`; the rate in effect is catalog's `renewalRateAt`, in the
+reader's currency. One pricing path for every invoice (`invoice/invoice-item.ts`).
+
+| Route | Answer |
+|---|---|
+| `POST /api/billing/invoices` `{grantId, gib, days, couponCodes?}` — no `variantId` | the invoice, named by the Grant's own variant; `priceId` null, `renewalRateId` the rate row (CHECK `invoice_priced_once`: exactly one); discounts as a plan renewal. `variantId` **and** `gib`/`days`, or `gib` without `grantId`, is `400` |
+| `GET /api/billing/gift/grants/:grantId/renewal-quote?gib=&days=` | `{grantId, gib, days, bytes, amount, currencyCode, rateId}` — the price before discounts, for the sheet's form as the user types; writes nothing. `SHOP_OFFERS` budget |
+| `GET …/renewal-plans` | also `custom: {rateId, pricePerGib, pricePerDay, currencyCode, minGib, maxGib, minDays, maxDays} \| null` — the rate with **this Grant's** bounds; null = off for it |
+
+| Rule | Why |
+|---|---|
+| `amount = roundCharge(gib × pricePerGib + days × pricePerDay)`, once, up, at the currency's places | rule 8, ADR-0153 |
+| A part typed as 0 is not bought; a part bought is within `[min, max]`; both 0 is refused. A part the Grant cannot take has a most of 0 for it (rule 6) | a bound is the seller's; 0 says "not this part" |
+| `409 custom_renewal_off` (`errors.billing.invoice.customRenewalOff`): no rate in effect in the reader's currency, an off row, a Grant with no plan, or one that can take neither part. `409 custom_out_of_bounds` (`customOutOfBounds`) with `error.facts` = this Grant's bounds | rule 5; the form shows the bounds beside the refusal |
+| Paying it asks only the Grant (`grant_not_renewable`), never the rate or the plan again: the rate quoted is the rate paid, and it switches no plan. Its `grant_renewal` row is `plan: false` | rule 9 |
 
 ## The plans the sheet lists (built — F-305-j)
 

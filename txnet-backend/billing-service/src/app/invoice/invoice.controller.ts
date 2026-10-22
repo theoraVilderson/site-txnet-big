@@ -9,6 +9,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,7 +27,7 @@ import { PurchaseLimitReached } from '../entitlement/purchase-limits';
 import { RESTRICTED_I18N_KEY, UserRestricted } from '../entitlement/user-restrictions';
 import { RateLimit } from '../request/rate-limit';
 import { InvoicePayRejection, InvoicePaymentService, InvoiceUnpayable } from './invoice-payment.service';
-import { InvoiceCreateBody, invoiceCreateSchema } from './invoice.schema';
+import { InvoiceCreateBody, invoiceCreateSchema, RenewalQuoteQuery, renewalQuoteSchema } from './invoice.schema';
 import { InvoiceCancelRefusal, InvoiceNotCancellable, InvoiceService, InvoiceVariantNotFound } from './invoice.service';
 import { RenewalRefusal, RenewalRefused } from './renewal-invoice';
 
@@ -46,6 +47,8 @@ const RENEWAL_REFUSAL_KEY: Record<RenewalRefusal, string> = {
   grant_not_found: E.invoice.grantNotFound,
   grant_not_renewable: E.invoice.grantNotRenewable,
   plan_not_renewable: E.invoice.planNotRenewable,
+  custom_renewal_off: E.invoice.customRenewalOff,
+  custom_out_of_bounds: E.invoice.customOutOfBounds,
 };
 
 /** Every way a cancel is refused (F-114-d), keyed exhaustively like a pay's. */
@@ -63,7 +66,8 @@ function toHttp(e: unknown): unknown {
   if (e instanceof InvoiceVariantNotFound) return new NotFoundException({ i18nKey: E.invoice.variantNotFound, message });
   // Not the caller's Grant is one neutral 404; a Grant or plan that cannot be renewed is the user's to know (F-305-c).
   if (e instanceof RenewalRefused) {
-    const body = { i18nKey: RENEWAL_REFUSAL_KEY[e.reason], reason: e.reason, message };
+    // The bounds ride as `facts`, so a form can show them beside the refusal (F-305-e).
+    const body = { i18nKey: RENEWAL_REFUSAL_KEY[e.reason], reason: e.reason, message, ...(e.facts ? { facts: e.facts } : {}) };
     return e.reason === 'grant_not_found' ? new NotFoundException(body) : new ConflictException(body);
   }
   // Every unit of a capped variant is sold or held by another invoice (F-513-b): nothing was written.
@@ -171,6 +175,7 @@ export class InvoiceController {
         couponCodes: body.couponCodes,
         channel,
         grantId: body.grantId,
+        custom: body.gib === undefined || body.days === undefined ? undefined : { gib: body.gib, days: body.days },
       });
       return {
         ...invoice,
@@ -265,6 +270,26 @@ export class RenewalPlansController {
   async list(@Param('grantId', new ParseUUIDPipe()) grantId: string, @Req() req: Request) {
     try {
       return await this.invoices.renewalPlans(identityOf(req).userId, grantId);
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+
+  /** GiB and days typed, priced now (F-305-e): the sheet's form reads it as the user types. Writes nothing. */
+  @TenantCapability('sell')
+  @Get(':grantId/renewal-quote')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.SHOP_OFFERS, identityOf(req).userId),
+    configKey: 'SHOP_OFFERS_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async quote(
+    @Param('grantId', new ParseUUIDPipe()) grantId: string,
+    @Query(new ZodValidationPipe(renewalQuoteSchema)) query: RenewalQuoteQuery,
+    @Req() req: Request,
+  ) {
+    try {
+      return await this.invoices.renewalQuote(identityOf(req).userId, grantId, { gib: query.gib, days: query.days });
     } catch (e) {
       throw toHttp(e);
     }

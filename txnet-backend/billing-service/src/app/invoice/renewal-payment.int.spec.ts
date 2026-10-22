@@ -38,6 +38,7 @@ const PLAN_30 = '66666666-6666-4666-8666-666666666661';
 const PLAN_90 = '66666666-6666-4666-8666-666666666662';
 const PRICE_30 = '77777777-7777-4777-8777-777777777771';
 const PRICE_90 = '77777777-7777-4777-8777-777777777772';
+const RATE = '78787878-7878-4878-8878-787878787878';
 
 const GIB = BigInt(1024 ** 3);
 const DAY_MS = 86_400_000;
@@ -86,6 +87,12 @@ beforeAll(async () => {
     `);
   }
 
+  // F-305-e: GiB and days typed are priced by the product's renewal rate.
+  await owner.$executeRawUnsafe(`
+    INSERT INTO catalog.renewal_rate (id, "tenantId", "productId", "pricePerGib", "pricePerDay", "minGib", "maxGib", "minDays", "maxDays", "currencyCode", "effectiveFrom")
+    VALUES ('${RATE}', '${PLATFORM}', '${PRODUCT}', 0.1, 0.05, 1, 500, 1, 365, 'USD', '2026-01-01')
+  `);
+
   const base = new PrismaService(pg.appUrl);
   app = base.$extends(withTenant(base)) as unknown as PrismaService;
   grants = new GrantService(app);
@@ -105,7 +112,7 @@ const grantOn30 = () =>
 
 let invoices = 0;
 /** A renewal invoice as F-305-c writes one: the plan's price, and what it added when quoted. */
-async function renewalInvoice(grantId: string, plan: { variantId: string; priceId: string; amount: string; gib: number; days: number }) {
+async function renewalInvoice(grantId: string, plan: { variantId: string; priceId: string | null; amount: string; gib: number; days: number; renewalRateId?: string }) {
   invoices += 1;
   const id = `bbbbbbbb-bbbb-4bbb-8bbb-${String(invoices).padStart(12, '0')}`;
   await owner.invoice.create({
@@ -115,6 +122,7 @@ async function renewalInvoice(grantId: string, plan: { variantId: string; priceI
       userId: USER,
       variantId: plan.variantId,
       priceId: plan.priceId,
+      renewalRateId: plan.renewalRateId ?? null,
       amount: new Prisma.Decimal(plan.amount),
       discount: new Prisma.Decimal(0),
       total: new Prisma.Decimal(plan.amount),
@@ -176,6 +184,21 @@ describe('paying a renewal invoice (F-305-d)', () => {
     expect(after.periodDays).toBe(90);
     expect(after.quotas).toMatchObject({ traffic_bytes: { limit: Number(BigInt(200) * GIB) } });
     expect(after.purchasedBytes).toBe(BigInt(250) * GIB);
+  });
+
+  it('GiB and days typed are paid as quoted, on the Grant’s own plan, and recorded as typed (F-305-e)', async () => {
+    const grantId = await grantOn30();
+    const before = await owner.grant.findUniqueOrThrow({ where: { id: grantId } });
+    // 7 × 0.1 + 10 × 0.05 = 1.20, quoted on the rate; the plan's own price is never read.
+    const id = await renewalInvoice(grantId, { variantId: PLAN_30, priceId: null, renewalRateId: RATE, amount: '1.20', gib: 7, days: 10 });
+
+    expect(await pay(id)).toMatchObject({ total: '1.20', grants: [{ id: grantId }] });
+
+    const after = await owner.grant.findUniqueOrThrow({ where: { id: grantId } });
+    expect(after.purchasedBytes - before.purchasedBytes).toBe(BigInt(7) * GIB);
+    expect(after.variantId).toBe(PLAN_30);
+    const [renewal] = await owner.grantRenewal.findMany({ where: { requestId: id } });
+    expect([renewal.plan, renewal.bytes, renewal.days]).toEqual([false, BigInt(7) * GIB, 10]);
   });
 
   it('a Grant closed since the invoice is refused, and nothing is written', async () => {

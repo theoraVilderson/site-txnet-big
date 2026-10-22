@@ -89,6 +89,7 @@ type LockedInvoice = {
   grantId: string | null;
   renewBytes: bigint | null;
   renewDays: number | null;
+  renewalRateId: string | null;
   expiresAt: Date;
 };
 
@@ -111,7 +112,7 @@ export class InvoicePaymentService {
       // RLS scopes the row to this tenant; the `userId` makes another user's
       // invoice as absent as another tenant's.
       const [invoice] = await tx.$queryRaw<LockedInvoice[]>`
-        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "grantId", "renewBytes", "renewDays", "expiresAt"
+        SELECT id, "userId", "variantId", total, "currencyCode", status, "salesCounted", "grantId", "renewBytes", "renewDays", "renewalRateId", "expiresAt"
           FROM billing.invoice
          WHERE id = ${invoiceId}::uuid AND "userId" = ${userId}::uuid
          FOR UPDATE`;
