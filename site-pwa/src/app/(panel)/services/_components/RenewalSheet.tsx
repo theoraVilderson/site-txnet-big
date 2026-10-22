@@ -50,8 +50,21 @@ export function Renewal({ row, name }: { row: GrantRow; name: string | null }) {
  * said and the shop linked (rule 3). **Paid closes the sheet and patches
  * nothing**: the row re-reads on `entitlement.grant.renewed` (rule 6). A
  * refusal stays here, in billing's words (rule 7).
+ *
+ * `initialPlan` is a plan picked before it opened — the suggestion card's
+ * `renew` (F-305-h); one billing does not list for this Grant is ignored.
  */
-function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onClose: () => void }) {
+export function RenewalSheet({
+  row,
+  name,
+  initialPlan,
+  onClose,
+}: {
+  row: GrantRow;
+  name: string;
+  initialPlan?: string;
+  onClose: () => void;
+}) {
   const { t } = useLocale();
   const toMessage = useApiErrorMessage();
   const [plans, setPlans] = useState<RenewalPlans | null>(null);
@@ -72,9 +85,10 @@ function RenewalSheet({ row, name, onClose }: { row: GrantRow; name: string; onC
     };
   }, [row.id, asked]);
 
-  // Billing answers the Grant's own plan first: that is the one picked until another is.
+  // Billing answers the Grant's own plan first: that is the one picked until another is, unless one came picked.
   const custom = plans?.custom ?? null;
-  const choice = picked ?? plans?.plans[0]?.variantId ?? (custom ? CUSTOM_CHOICE : null);
+  const wanted = plans?.plans.some((p) => p.variantId === initialPlan) ? initialPlan : undefined;
+  const choice = picked ?? wanted ?? plans?.plans[0]?.variantId ?? (custom ? CUSTOM_CHOICE : null);
   const isCustom = choice === CUSTOM_CHOICE && custom !== null;
   const plan = isCustom ? null : (plans?.plans.find((p) => p.variantId === choice) ?? null);
   const amount = isCustom ? typedAmount(typed, custom) : null;

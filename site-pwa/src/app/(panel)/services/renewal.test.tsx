@@ -9,7 +9,7 @@ import { billingApi, type GrantRow, type RenewalPlans, type ShopInvoice } from "
 import { PANEL_SHOP } from "@/lib/routes";
 import { ConfirmProvider } from "../_components/kit";
 import { ServiceRow } from "./_components/ServiceRow";
-import { Renewal } from "./_components/RenewalSheet";
+import { Renewal, RenewalSheet } from "./_components/RenewalSheet";
 import { readGrantRenewed } from "./_lib/my-services";
 import { renewalOffered } from "./_lib/renewal";
 
@@ -147,6 +147,16 @@ describe("rules 2 and 3: the plans", () => {
     expect(radios[0].textContent).toContain("$12.50");
     expect(radios[0].textContent).toContain(`${SHOP.duration}:30`);
     expect(radios[1].textContent).toContain("$30.00");
+  });
+
+  it("a plan picked before it opened (the suggestion's renew, F-305-h) is the one checked; one billing does not list is ignored", async () => {
+    const { unmount } = render(<RenewalSheet row={ROW} name="VPN" initialPlan="v-90" onClose={() => {}} />);
+    let radios = await screen.findAllByRole("radio");
+    expect(radios[1].getAttribute("aria-checked")).toBe("true");
+    unmount();
+    render(<RenewalSheet row={ROW} name="VPN" initialPlan="v-gone" onClose={() => {}} />);
+    radios = await screen.findAllByRole("radio");
+    expect(radios[0].getAttribute("aria-checked")).toBe("true");
   });
 
   it("an unlimited Grant's plan says unlimited, never 0 GB", async () => {

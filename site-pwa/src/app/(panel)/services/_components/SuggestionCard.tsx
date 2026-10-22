@@ -6,9 +6,12 @@ import { Lightbulb, X } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { aiApi, type SuggestionCard as Card, type SuggestionCardType } from "@/lib/ai-api";
-import { billingApi, type ShopOffer } from "@/lib/billing-api";
+import { billingApi, type GrantRow, type RenewalPlan } from "@/lib/billing-api";
 import { panelShopVariantPath } from "@/lib/routes";
 import { formatMoney } from "../../_lib/money";
+import { Button } from "../../_components/kit";
+import { serviceName } from "../_lib/my-services";
+import { RenewalSheet } from "./RenewalSheet";
 
 const S = FrontendI18nKeys.common.myServices.suggestion;
 
@@ -21,7 +24,29 @@ const TYPE_TEXT: Record<SuggestionCardType, { body: string; cta: string }> = {
 
 const DAY_MS = 86_400_000;
 
-type Shown = { card: Card; text: { body: string; cta: string }; plan: ShopOffer; from: ShopOffer | null };
+// Billing's `GET /gift/grants` answers at most this many a page; the renewal's Grant is looked for in one read.
+const GRANTS_READ_MAX = 100;
+
+/** A plan as the card names and prices it — a shop offer's or a renewal plan's fields. */
+type Plan = Pick<RenewalPlan, "variantId" | "sku" | "nameKey" | "price" | "currencyCode">;
+
+type Shown = { card: Card; text: { body: string; cta: string }; plan: Plan; from: Plan | null };
+
+/**
+ * The plan the card names, priced now: a `renew` as **this Grant's renewal**
+ * (F-305-h, billing's renewal plans — the shop would sell a new Grant), a
+ * resize as the shop's. `null` = the plan is not offered: no card.
+ */
+async function readPlan(card: Card): Promise<{ plan: Plan; from: Plan | null } | null> {
+  if (card.actionType === "renew") {
+    const { plans } = await billingApi.renewalPlans(card.grantId);
+    const plan = plans.find((p) => p.variantId === card.variantId);
+    return plan ? { plan, from: null } : null;
+  }
+  const offers = await billingApi.shopOffers();
+  const plan = offers.find((o) => o.variantId === card.variantId);
+  return plan ? { plan, from: offers.find((o) => o.variantId === card.fromVariantId) ?? null } : null;
+}
 
 /**
  * The user's current AI suggestion (F-038-h, ADR-0109 point 11), at the top of
@@ -29,19 +54,24 @@ type Shown = { card: Card; text: { body: string; cta: string }; plan: ShopOffer;
  * shop opened on the plan it names (F-1507) — a close, and "don't show this
  * again" (F-1505). Both of those are controls, not calls to action.
  *
- * **The plan and its price are the shop's, read now** — the engine's price
- * may be days old, and a plan the shop no longer offers shows no card, as the
+ * **A `renew` leads to the renewal** (F-305-h): its call opens the Grant's
+ * renewal sheet with the plan named already picked — the Grant from the page's
+ * rows, or read from the list when it is on another page.
+ *
+ * **The plan and its price are billing's, read now** — the engine's price
+ * may be days old, and a plan no longer offered shows no card, as the
  * bot tells none (`plan_unavailable`). Names come from the page's catalog texts.
  *
  * **Nothing shows unless everything was read.** A pitch is never worth an
  * error line: a failed read of ai or the shop renders nothing. A refused
  * close or opt-out keeps the card and says so in one line.
  */
-export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
+export function SuggestionCard({ texts, rows }: { texts: Record<string, string>; rows: readonly GrantRow[] }) {
   const { lang, t } = useLocale();
   const [shown, setShown] = useState<Shown | null>(null);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [renewing, setRenewing] = useState<GrantRow | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -50,10 +80,9 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
         const { suggestion } = await aiApi.current();
         const text = suggestion ? TYPE_TEXT[suggestion.actionType as SuggestionCardType] : undefined;
         if (!suggestion || !text) return;
-        const offers = await billingApi.shopOffers();
-        const plan = offers.find((o) => o.variantId === suggestion.variantId);
-        if (!plan || !alive) return;
-        setShown({ card: suggestion, text, plan, from: offers.find((o) => o.variantId === suggestion.fromVariantId) ?? null });
+        const read = await readPlan(suggestion);
+        if (!read || !alive) return;
+        setShown({ card: suggestion, text, ...read });
       } catch {
         // No card: see the comment above.
       }
@@ -65,7 +94,7 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
 
   if (!shown) return null;
   const { card, text, plan, from } = shown;
-  const name = (o: ShopOffer) => texts[o.nameKey] || o.sku;
+  const name = (o: Plan) => texts[o.nameKey] || o.sku;
   const days = card.deadline ? Math.max(1, Math.ceil((new Date(card.deadline).getTime() - Date.now()) / DAY_MS)) : null;
   const vars = {
     plan: name(plan),
@@ -86,6 +115,24 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
       setBusy(false);
     }
   };
+
+  // The Grant's row as the sheet takes it; one no longer listed says so, as a refused close does.
+  const openRenewal = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const row =
+        rows.find((r) => r.id === card.grantId) ??
+        (await billingApi.grants(1, GRANTS_READ_MAX, "current")).rows.find((r) => r.id === card.grantId);
+      if (row) setRenewing(row);
+      else setFailed(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cta = t("common", text.cta, { plan: vars.plan });
 
   return (
     <section className="rounded-3xl border border-card-border bg-card-bg p-5">
@@ -108,12 +155,18 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
         </button>
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-4">
-        <Link
-          href={panelShopVariantPath(plan.variantId)}
-          className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent hover:brightness-110"
-        >
-          {t("common", text.cta, { plan: vars.plan })}
-        </Link>
+        {card.actionType === "renew" ? (
+          <Button variant="primary" disabled={busy} onClick={() => void openRenewal()}>
+            {cta}
+          </Button>
+        ) : (
+          <Link
+            href={panelShopVariantPath(plan.variantId)}
+            className="rounded-2xl bg-primary px-5 py-2.5 text-sm font-bold text-on-accent hover:brightness-110"
+          >
+            {cta}
+          </Link>
+        )}
         <button
           type="button"
           disabled={busy}
@@ -127,6 +180,14 @@ export function SuggestionCard({ texts }: { texts: Record<string, string> }) {
         <p role="alert" className="mt-3 text-xs font-medium text-error">
           {t("common", S.failed)}
         </p>
+      )}
+      {renewing && (
+        <RenewalSheet
+          row={renewing}
+          name={serviceName(texts, renewing) ?? ""}
+          initialPlan={plan.variantId}
+          onClose={() => setRenewing(null)}
+        />
       )}
     </section>
   );

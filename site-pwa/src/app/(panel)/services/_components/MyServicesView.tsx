@@ -206,7 +206,7 @@ export function MyServicesView() {
       />
 
       {/* F-038-h: the user's one open AI suggestion, or nothing. */}
-      <SuggestionCard texts={state.texts} />
+      <SuggestionCard texts={state.texts} rows={state.rows ?? []} />
 
       <WalletFunds available={wallet.available} held={wallet.held} currencyCode={wallet.currencyCode} failed={wallet.failed} />
 
