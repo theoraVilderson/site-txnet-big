@@ -45,7 +45,7 @@ describe('TenantStatusPolicy', () => {
 
   it('suspended: panel read-only, billing open, end users sign in and buy nothing', () => {
     const open = TENANT_CAPABILITIES.filter((c) => tenantAllows(suspended, c, now));
-    expect(open.sort()).toEqual(['account', 'read', 'signIn', 'signOut', 'subscriptionLink', 'system', 'tenantBilling']);
+    expect(open.sort()).toEqual(['account', 'dataExport', 'read', 'signIn', 'signOut', 'subscriptionLink', 'system', 'tenantBilling']);
   });
 
   it('suspended: /sub is served until graceEndsAt, then refused', () => {
@@ -56,7 +56,7 @@ describe('TenantStatusPolicy', () => {
 
   it('terminated: everything closed but signing out and settling what already happened', () => {
     const open = TENANT_CAPABILITIES.filter((c) => tenantAllows({ status: 'terminated', graceEndsAt: later.toISOString() }, c, now));
-    expect(open.sort()).toEqual(['signOut', 'system']);
+    expect(open.sort()).toEqual(['dataExport', 'signOut', 'system']);
     expect(Object.keys(TenantStatusPolicy).sort()).toEqual(['active', 'suspended', 'terminated', 'trial']);
   });
 

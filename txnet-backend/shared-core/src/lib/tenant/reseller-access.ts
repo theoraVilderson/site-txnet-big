@@ -222,10 +222,14 @@ export class ResellerAccess {
     const owner = reseller.ownerUserId === actor.userId;
     const member = !viaPlatform && !owner && (await this.isMember(actor, reseller.id, now));
     if (!viaPlatform && !owner && !member) throw new ResellerAccessRefused('not_allowed', tenantId);
-    if (reseller.status === TenantStatus.terminated) throw new ResellerAccessRefused('reseller_terminated', tenantId);
+    const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
+    // Closed to everyone, save what the terminated column itself opens: taking
+    // its data (`dataExport`, F-212-a, catalog §14.8).
+    if (reseller.status === TenantStatus.terminated && !tenantAllows(state, capability, now)) {
+      throw new ResellerAccessRefused('reseller_terminated', tenantId);
+    }
 
     if (!viaPlatform) {
-      const state = { status: reseller.status, graceEndsAt: reseller.graceEndsAt?.toISOString() ?? null };
       if (!tenantAllows(state, capability, now)) throw new ResellerAccessRefused('reseller_suspended', tenantId);
     } else if (route === 'people' && !owner) {
       const support = await this.mustHoldConsent(actor, reseller.id, capability, now);

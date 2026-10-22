@@ -1,7 +1,7 @@
 ---
 id: tenant
 layer: domain
-updated: 2026-10-01
+updated: 2026-10-22
 ---
 
 # Data model — tenant
@@ -38,6 +38,7 @@ Source of truth: `txnet-backend/prisma/domains/tenant.prisma` (Postgres schema
 | reseller_overage_cap | the reseller's own ceiling on overage per subscription month, PK `tenantId`, `amount ≥ 0` `Decimal(20,4)`, `currencyCode` (the platform's), `setByUserId`; no row = none | yes, strict RLS | permanent |
 | reseller_quota_terms_lock | one reseller's terms for one quota key, frozen for one subscription period just before the platform first changed them in it (ADR-0107 point 8, F-019-v3; a product's window too, key `product:<productId>:<day|week|month>`, F-019-v6; `contract.limits.md`), PK `(tenantId, key, periodEnd)` (`periodEnd` = its `currentPeriodEnd`), `included` (null = no limit), `mode` + `unitPrice`/`currencyCode` (CHECK both or neither, as `quota_overage_setting`), `includedSource`/`overageSource` (CHECK a level), converted by the platform's currency change. Insert only. Strict tenant RLS, FK cascade |
 | package_product | a **platform** product a package lets its subscribers sell (ADR-0107 point 3, F-019-v5; catalog `contract.md`), and its sales quota (F-019-v6): `dayIncluded` / `weekIncluded` / `monthIncluded` (null = no bound, else ≥ 0), `mode` + `unitPrice` + `currencyCode` as `package_quota_overage`; PK `(packageId, productId)`, `updatedByUserId`; FK package and `catalog.product`, both cascade; trigger `package_product_is_platform` refuses a reseller's own product; no row = not sold by them | no tenant, no RLS | permanent |
+| tenant_data_export | one export of a tenant's data its owner asked for (F-212-a): `requestedByUserId` (no FK), `status` (`queued` \| `building` \| `ready` \| `failed` \| `expired`), `attempts` + `leaseUntil` (the drain's lease), the archive's `objectKey` / `sizeBytes` / `sha256` / `rowCount`, `failureReason`, `finishedAt`, `expiresAt`; strict RLS, FK RESTRICT ([contract.data-export.md](contract.data-export.md)) | yes | permanent; the archive is deleted at `expiresAt` |
 
 ## Relationships crossing unit boundaries
 | This table | -> | Other unit's table | Why it is allowed |

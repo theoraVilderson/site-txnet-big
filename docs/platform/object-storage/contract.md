@@ -3,7 +3,7 @@ id: object-storage
 layer: platform
 status: active
 version: 5
-updated: 2026-10-04
+updated: 2026-10-22
 ---
 
 # Contract — object-storage
@@ -54,7 +54,7 @@ does not own, which is a bug to surface.
    `put` overwrites, never a row pointing at nothing.
 4. A caller's allowed types and size are declared per use, never defaulted.
    A type is allowed only if its bytes can be checked (`SNIFFABLE_TYPES`: PNG,
-   WebP, JPEG, PDF, gzip — the last for support's archives, F-033-n — and MP4/WebM for guide videos, F-414-i) and `put` checks them: an HTML page declared a PNG is
+   WebP, JPEG, PDF, gzip — for support's archives, F-033-n, and data exports, F-212-a — and MP4/WebM for guide videos, F-414-i) and `put` checks them: an HTML page declared a PNG is
    `type_mismatch`. SVG has no signature, so no policy can name it (catalog
    13.8).
 5. **The `local` driver needs one node or a shared volume.** Replicas on
@@ -129,3 +129,4 @@ driver. No row changes.
 | guide video | MP4/WebM ≤ 50 MiB at the same path, served **only** by `guide-media` (rule 10), never by the file route's Host check (F-414-i, ADR-0118) |
 | support | attachments, `private`, scanned; URLs minted on each message read (F-033-c), uploads F-033-f ([contract.md](../../domains/support/contract.md)) |
 | billing | a manual transfer's receipt, `private`, scanned, under the gateway owner's prefix at `transfers/<paymentId>/receipt`; URLs minted on each queue read (F-805-a, [contract.manual-transfer.md](../../domains/billing/contract.manual-transfer.md)) |
+| tenant | a reseller's data export, `private`, written by the service at `exports/<exportId>.jsonl.gz` (gzip), deleted after 7 days; URLs minted per download (F-212-a, [contract.data-export.md](../../domains/tenant/contract.data-export.md)) |

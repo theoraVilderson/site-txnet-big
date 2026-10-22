@@ -43,6 +43,8 @@ export const RealtimeEventType = {
   GRANT_FREEZE_CHANGED: 'entitlement.grant.freeze_changed',
   /** RT-1-e / EDGE-1-e: a reseller domain's status or edge step changed (`TenantDomainService`). */
   TENANT_DOMAIN_CHANGED: 'tenant.domain.changed',
+  /** F-212-a: a reseller's data export was built, failed or expired — its requester's page re-reads its exports. */
+  TENANT_DATA_EXPORT_CHANGED: 'tenant.data_export.changed',
   /** F-019-c1: a reseller's renewal was paid — a new period, and a suspension for non-payment lifted (`TenantRenewalService`). */
   TENANT_SUBSCRIPTION_RENEWED: 'tenant.subscription.renewed',
   /** F-019-c2: a reseller's status or suspension cause changed, any writer (`applyTenantStatus`, `makeSuspensionManual`). */
@@ -233,6 +235,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_USAGE]: 'worker-service',
   [OutboxEventType.GRANT_FREEZE_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: 'worker-service',
+  [OutboxEventType.TENANT_DATA_EXPORT_CHANGED]: 'worker-service',
   [OutboxEventType.TENANT_SUBSCRIPTION_RENEWED]: 'worker-service',
   [OutboxEventType.TENANT_STATUS_CHANGED]: 'worker-service',
   [OutboxEventType.ACCESS_CHANGED]: 'worker-service',

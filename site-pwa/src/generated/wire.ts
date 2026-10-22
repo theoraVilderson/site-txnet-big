@@ -73,6 +73,7 @@ export const RealtimeEvents = {
   "grantUsage": "entitlement.grant.usage",
   "grantFreezeChanged": "entitlement.grant.freeze_changed",
   "tenantDomainChanged": "tenant.domain.changed",
+  "tenantDataExportChanged": "tenant.data_export.changed",
   "tenantSubscriptionRenewed": "tenant.subscription.renewed",
   "tenantStatusChanged": "tenant.status.changed",
   "tenantSubscriptionGraceExtended": "tenant.subscription.grace_extended",

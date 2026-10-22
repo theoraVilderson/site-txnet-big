@@ -228,6 +228,10 @@ enum AdminAction {
   // F-027-et (ADR-0127 decision 5). A Grant moved to another panel group:
   // `oldValue`/`newValue` {panelGroupId}, `newValue.outcome` {kept, moved}.
   grant_group_move
+  // F-212-a (catalog §14.8). A reseller's data export asked for, and its
+  // archive handed out as a signed URL — the delivery itself is audited.
+  tenant_data_export_request
+  tenant_data_export_delivery
 
   @@schema("audit")
 }
@@ -296,6 +300,8 @@ enum AuditTargetType {
   // AC-1-p. A role of a tenant, and a seat on a reseller's team.
   role
   staff_seat
+  // F-212-a. One export of a tenant's data.
+  tenant_data_export
 
   @@schema("audit")
 }

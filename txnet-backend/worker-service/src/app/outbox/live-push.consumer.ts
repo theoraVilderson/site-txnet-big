@@ -36,6 +36,8 @@ export const LIVE_PUSH_FIELDS: Partial<Record<OutboxEventType, { audience: reado
    * (`tenantId` is the platform owner's) are who look at it.
    */
   [OutboxEventType.TENANT_DOMAIN_CHANGED]: { audience: ['user', 'tenant'], fields: ['domainId'] },
+  /** F-212-a: a reseller's data export moved (built, failed, expired) — only its requester waits on it; ids only. */
+  [OutboxEventType.TENANT_DATA_EXPORT_CHANGED]: { audience: ['user'], fields: ['resellerId', 'exportId'] },
   /**
    * F-019-c1: a reseller's renewal was paid. Its owner's My services re-reads
    * the period; a paid renewal is no news worth a message, and the unpaid

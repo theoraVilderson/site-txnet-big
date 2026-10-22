@@ -3,7 +3,7 @@ id: tenant
 layer: domain
 status: active
 version: 3
-updated: 2026-09-28
+updated: 2026-10-22
 ---
 
 # Contract — tenant / feature entitlements
@@ -72,7 +72,9 @@ the host; the ambient routes stay for a tenant configuring itself.
   status matrix for the owner and a member, not at all for platform staff.
 - Reasons: `not_allowed` (403; also an unknown reseller, to all but staff),
   `reseller_not_found` (404, staff only), `reseller_suspended` (403),
-  `reseller_terminated` (409). Each service maps them to its own envelope.
+  `reseller_terminated` (409) — to everyone, save a capability the
+  terminated column opens: today `dataExport` alone (F-212-a, rules.md #18).
+  Each service maps them to its own envelope.
 - **Wiring.** Add `ResellerAccess` to the module's providers, and bind
   `RESELLER_ACCESS_READER` once to the service's **app pool** (tenant-service:
   `prisma.module.ts`, `useExisting: PrismaService`). Never the cross-tenant

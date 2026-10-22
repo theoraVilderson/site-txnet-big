@@ -3,7 +3,7 @@ id: realtime
 layer: platform
 status: active
 version: 2
-updated: 2026-10-06
+updated: 2026-10-22
 ---
 
 # Contract — live events: which event reaches which page
@@ -125,6 +125,12 @@ reaches nobody looking at it. Payload `{tenantId, userId, resellerId,
 domainId}`. ResellerDomainsView re-reads on both (EDGE-1-f, built); the button stays.
 The setup wizard and the workspace's setup row re-read the onboarding
 checklist on the same two (UX-2-c, UX-2-e).
+
+**F-212-a — a reseller's data export.** Type `tenant.data_export.changed`,
+`user:<requester>` only — they alone wait on it — body `{type, resellerId,
+exportId}`; payload `{userId, resellerId, exportId}`. Written by tenant-service
+in the transaction that marks an export `ready`, `failed` or `expired`
+(`announceExport`). Its page is F-212-c.
 
 **F-019-c1 — a reseller's paid renewal.** Type `tenant.subscription.renewed`,
 `user:<reseller owner>`, body `{type}`; payload `{tenantId, userId}`. Written

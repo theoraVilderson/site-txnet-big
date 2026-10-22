@@ -39,6 +39,7 @@ enforcer is not application code at all.
 | 18 | **`tenant_status_history` is append-only, and nothing a status change does deletes a row** | trigger `tenant_status_history_append_only` refuses UPDATE/DELETE; FK `RESTRICT` | the trail of who suspended a reseller and why is rewritable |
 | 23 | **A wholesale rate is never edited or deleted: a new price is a new row** (F-118-n1) | trigger `package_meter_rate_is_history` (only `isActive` changes); no DELETE for the app roles; FK `RESTRICT` to the package and the meter; CHECK `unitPrice > 0`; `package-meter-rates.spec.ts` | an edited row would reprice usage already sold under it (ADR-0073, F-118-n2) |
 | 22 | **A `tenant_branding` image column holds a key, never a URL, and only its own tenant's key for its own slot** (`tenants/<tenantId>/branding/<slot>`, F-018-h) | CHECKs `tenant_branding_{logo_light,logo_dark,favicon,og_image}_key` (migration `20260918000500_tenant_branding`); `TenantBrandingService` writes the bytes in the reseller's scope before the key; `tenant-branding.spec.ts` | one reseller's pages show another's logo, or a stored URL outlives the domain it named |
+| 24 | **A data export carries no credential, and every table of the schema has an export rule** (F-212-a/b, catalog §14.8) | `EXPORT_TABLES` is a `Record<Prisma.ModelName, …>`; `tenant-data-export.spec.ts` fails on a credential-named column neither omitted nor declared harmless | a new table is silently missing from the archive, or a password hash leaves the platform in one |
 
 ## How to test
 

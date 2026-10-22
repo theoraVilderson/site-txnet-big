@@ -9,6 +9,7 @@ import { OperatingCurrencyModule } from './currency/operating-currency.module';
 import { LEGACY_BRANDING_PATH } from './branding/tenant-branding.controller';
 import { envConfigOptions } from './config/env.validation';
 import { DomainsModule } from './domains/domains.module';
+import { DataExportModule } from './exports/data-export.module';
 import { LEGACY_FILES_PATH } from './files/files.controller';
 import { FilesModule } from './files/files.module';
 import { GuideModule } from './guide/guide.module';
@@ -53,7 +54,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
  * their branding with F-018-h, the vault's internal seams with F-018-ab,
  * a platform user's reseller purchase with F-019-h, their staff seats with F-018-j,
  * the onboarding console's checklist with F-018-l, the door's own verdict with
- * F-311-e.
+ * F-311-e, a reseller's data export with F-212-a.
  */
 @Module({
   imports: [
@@ -78,6 +79,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     OperatingCurrencyModule,
     TenantTimeZoneModule,
     VaultModule,
+    DataExportModule,
     GuideModule,
   ],
   providers: [

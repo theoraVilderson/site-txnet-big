@@ -2,7 +2,7 @@
 id: tenant
 layer: domain
 status: active
-updated: 2026-09-19
+updated: 2026-10-22
 ---
 
 # Business rules — tenant status
@@ -42,6 +42,7 @@ the two answers wins, and the platform owner is never in it.
 | `sell` — an end user buying a service (no route yet) | yes | **no** | no | **no** |
 | `endUserDeposit` — deposit quote/start, in-chat pre-checkout, gift redeem | yes | **no** | no | **no** |
 | `system` — gateway webhook and callback, in-chat `paid`, expiry, reconcile, notifications, vault maintenance | yes | yes | yes | yes |
+| `dataExport` — the reseller taking its data: ask, read, download (F-212-a, [contract.data-export.md](contract.data-export.md)) | yes | yes | **yes** | yes |
 | `subscriptionLink` — `/sub` | yes | until `graceEndsAt` | no | **no** |
 
 ## Rules
@@ -55,6 +56,7 @@ the two answers wins, and the platform owner is never in it.
 | 9 | A background tick that names a tenant runs only if the status allows its job's `tenantCapability` (unset = `staffWrite`); a refused tick is acked, is no run and takes no slot (`worker-service` `TenantStatusGate`, F-018-p) | every tick with `tenantId` | a platform tick is not judged; a missing key refuses nobody |
 | 6 | Redis follows Postgres at once: a trigger on `tenant.status`/`graceEndsAt` notifies `tenant_status_changed`, `TenantStatusListener` rewrites the key, and recomputes every tenant on each connect | commit | **a missing key refuses nobody** (F-101-b's trade) |
 | 7 | `system` is never closed | — | a payment already taken still settles, or the record of money that moved is lost |
+| 18 | `dataExport` is never closed either, and `ResellerAccess` admits a **terminated** reseller's owner and the platform's staff for it alone | — | catalog §14.8: a reseller can always take its data and leave, a closed one most of all (F-212-a) |
 | 8 | A refusal is `403` `{i18nKey: tenant.suspended \| tenant.terminated \| tenant.onboarding, reason: tenantSuspended \| tenantTerminated \| tenantOnboarding}` | — | a `trial` or `active` tenant only ever gets the onboarding one |
 | 10 | A due renewal the billing wallet covers is charged, and takes `trial` -> `active` (history `subscription_renewed`, actor null) | `currentPeriodEnd` passed (`contract.billing.md` "Subscription renewal") | a manual suspension stays |
 | 11 | A short renewal warns the owner at most once a day until `currentPeriodEnd` + `renewalGraceDays` (default 3) | the renewal finds the wallet short | an already suspended tenant is not warned |

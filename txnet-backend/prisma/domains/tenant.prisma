@@ -225,6 +225,7 @@ model Tenant {
   subscription        TenantSubscription?
   statusHistory       TenantStatusHistory[]
   storedObjects       StoredObject[]
+  dataExports         TenantDataExport[]
 
   @@map("tenant")
   @@schema("tenant")
@@ -1076,5 +1077,47 @@ model TenantCredentialAccess {
   @@index([tenantId, createdAt(sort: Desc)])
   @@index([credentialId, createdAt(sort: Desc)])
   @@map("tenant_credential_access")
+  @@schema("tenant")
+}
+
+/// F-212-a (catalog §14.8): where an export of a tenant's data is.
+enum TenantDataExportStatus {
+  queued
+  building
+  ready
+  failed
+  /// Past `expiresAt`: the archive is deleted, the row kept as the record.
+  expired
+
+  @@schema("tenant")
+}
+
+/// F-212-a (catalog §14.8) — one export of a tenant's data its owner asked
+/// for: queued by the request, built by worker-service's drain into one
+/// private archive on the storage port (`objectKey`), handed out only as a
+/// short-lived signed URL. At most one not-failed request per 24 h, in every
+/// tenant status; `TenantDataExportService` holds both rules.
+model TenantDataExport {
+  id                String                 @id @default(uuid()) @db.Uuid
+  tenantId          String                 @db.Uuid
+  requestedByUserId String                 @db.Uuid
+  status            TenantDataExportStatus @default(queued)
+  /// Builds started; a build whose lease ran out is taken again, up to a cap.
+  attempts          Int                    @default(0)
+  leaseUntil        DateTime?
+  objectKey         String?
+  sizeBytes         Int?
+  sha256            String?
+  rowCount          Int?
+  failureReason     String?
+  createdAt         DateTime               @default(now())
+  finishedAt        DateTime?
+  expiresAt         DateTime?
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([status, createdAt])
+  @@map("tenant_data_export")
   @@schema("tenant")
 }

@@ -39,7 +39,7 @@ describe('TenantOnboardingPolicy', () => {
     for (const status of ['trial', 'active'] as const) {
       const state = { status, graceEndsAt: null, onboarding: true };
       const open = TENANT_CAPABILITIES.filter((c) => tenantAllows(state, c, now));
-      expect(open.sort()).toEqual(['account', 'read', 'signIn', 'signOut', 'staffWrite', 'system', 'tenantBilling']);
+      expect(open.sort()).toEqual(['account', 'dataExport', 'read', 'signIn', 'signOut', 'staffWrite', 'system', 'tenantBilling']);
     }
   });
 

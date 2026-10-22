@@ -27,6 +27,8 @@ type SeamEnv = { baseUrl: string; timeoutMs: string };
 
 const AUTH_SEAM: SeamEnv = { baseUrl: 'AUTH_API_BASE_URL', timeoutMs: 'AUTH_API_TIMEOUT_MS' };
 const BILLING_SEAM: SeamEnv = { baseUrl: 'BILLING_API_BASE_URL', timeoutMs: 'BILLING_API_TIMEOUT_MS' };
+/** tenant-service's seam shares auth-service's timeout: it was auth's until F-018-t (`env.validation.ts`). */
+const TENANT_SEAM: SeamEnv = { baseUrl: 'TENANT_API_BASE_URL', timeoutMs: 'AUTH_API_TIMEOUT_MS' };
 
 /**
  * A service's internal route a sweep job calls, from the env. The env is
@@ -52,6 +54,11 @@ export function authInternalCall(config: ConfigService, path: string): () => Int
 /** The billing-service route a sweep job calls (F-1001-a). */
 export function billingInternalCall(config: ConfigService, path: string): () => InternalCall {
   return internalCall(config, BILLING_SEAM, path);
+}
+
+/** The tenant-service route a sweep job calls (F-212-a). */
+export function tenantInternalCall(config: ConfigService, path: string): () => InternalCall {
+  return internalCall(config, TENANT_SEAM, path);
 }
 
 /**

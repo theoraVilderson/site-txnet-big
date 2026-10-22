@@ -42,6 +42,10 @@ export type TenantStatusValue = (typeof TENANT_STATUSES)[number];
  * - `system` — the platform settling what already happened: a gateway webhook
  *   or callback for a payment already taken, expiry, notifications. Refusing
  *   it loses a record of money that moved, so no status closes it.
+ * - `dataExport` — the reseller taking its data (F-212-a, catalog §14.8):
+ *   asking for an export, reading its state, downloading it. Open in every
+ *   status and through onboarding — a reseller can always take its data and
+ *   leave, and a closed one most of all.
  * - `subscriptionLink` — `/sub`. Enforced by `sub-service` (Go,
  *   `internal/sub/tenant.go`), which copies this one column. Change it here
  *   and in `contracts/tenant/subscription-link.json`; the tests on both
@@ -58,6 +62,7 @@ export const TENANT_CAPABILITIES = [
   'sell',
   'endUserDeposit',
   'system',
+  'dataExport',
   'subscriptionLink',
 ] as const;
 export type TenantCapabilityName = (typeof TENANT_CAPABILITIES)[number];
@@ -76,6 +81,7 @@ const OPEN: Record<TenantCapabilityName, TenantStatusRule> = {
   sell: true,
   endUserDeposit: true,
   system: true,
+  dataExport: true,
   subscriptionLink: true,
 };
 
@@ -95,6 +101,7 @@ export const TenantStatusPolicy: Readonly<
     sell: false,
     endUserDeposit: false,
     system: true,
+    dataExport: true,
     subscriptionLink: 'hold',
   },
   terminated: {
@@ -108,6 +115,7 @@ export const TenantStatusPolicy: Readonly<
     sell: false,
     endUserDeposit: false,
     system: true,
+    dataExport: true,
     subscriptionLink: false,
   },
 };
@@ -141,6 +149,7 @@ export const TenantOnboardingPolicy: Readonly<Record<TenantCapabilityName, Tenan
   sell: false,
   endUserDeposit: false,
   system: true,
+  dataExport: true,
   subscriptionLink: false,
 };
 
