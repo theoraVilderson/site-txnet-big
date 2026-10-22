@@ -1,4 +1,4 @@
-import { renewalOpenCallback } from '@txnet-backend/shared-core';
+import { lotteryJoinCallback, PRIZE_SERVICE_OPEN_CALLBACK, renewalOpenCallback } from '@txnet-backend/shared-core';
 import { noticeButton } from './notice-buttons';
 
 /**
@@ -20,5 +20,20 @@ describe('the renew notices carry the bot renewal (F-305-i)', () => {
 
   it('a combined notice names no Grant, so it has none', () => {
     expect(noticeButton('serviceEnded', { count: '3' }, ns)).toBeUndefined();
+  });
+});
+
+describe('a lottery announcement offers the prize service to a member with a choice (F-707-z)', () => {
+  const ns = { engagement: { lotteryJoin: 'Join', prizeService: 'Prize service' } };
+  const ids = (k: ReturnType<typeof noticeButton>) => k?.inline_keyboard.map((row) => row.map((b) => b.callback_data));
+
+  it('under Join on an opt-in one, alone on an automatic one', () => {
+    expect(ids(noticeButton('lotteryOpened', { lotteryId: 'L', prizeChoice: '1' }, ns))).toEqual([[lotteryJoinCallback('L')], [PRIZE_SERVICE_OPEN_CALLBACK]]);
+    expect(ids(noticeButton('lotteryOpenedAutomatic', { lotteryId: 'L', prizeChoice: '1' }, ns))).toEqual([[PRIZE_SERVICE_OPEN_CALLBACK]]);
+  });
+
+  it('not to a member with nothing to choose', () => {
+    expect(ids(noticeButton('lotteryOpened', { lotteryId: 'L' }, ns))).toEqual([[lotteryJoinCallback('L')]]);
+    expect(noticeButton('lotteryOpenedAutomatic', { lotteryId: 'L' }, ns)).toBeUndefined();
   });
 });

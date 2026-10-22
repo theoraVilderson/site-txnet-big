@@ -14,11 +14,18 @@ import { UserNotifier } from './user-notifier';
  */
 
 const NOTIFICATIONS = {
-  engagement: { lotteryWon: '{{prize}} — {{where}}', lotteryWonOnService: 'to {{service}}', lotteryWonOnAccount: 'to your account' },
+  engagement: {
+    lotteryWon: '{{prize}} — {{where}}',
+    lotteryWonOnService: 'to {{service}}',
+    lotteryWonOnAccount: 'to your account',
+    lotteryOpenedAutomatic: 'In {{title}}.{{prizeNote}}',
+    lotteryPrizeNote: ' GB or days go {{where}}.',
+    lotteryPrizeAutomatic: 'to the service that runs longest',
+  },
   retention: { serviceNamed: '{{label}} ({{name}})' },
 };
 
-function tell(params: Record<string, string>) {
+function tell(params: Record<string, string>, template: 'lotteryWon' | 'lotteryOpenedAutomatic' = 'lotteryWon') {
   const client = { sendMessage: vi.fn(async (_chat: string, _text: string, _markup?: unknown) => undefined) };
   const locale = {
     getNamespace: vi.fn((_lang: string, ns: string) => (ns === 'notifications' ? NOTIFICATIONS : undefined)),
@@ -32,7 +39,7 @@ function tell(params: Record<string, string>) {
   const bots = { primaryClient: vi.fn(async () => client), canSend: vi.fn(async () => true) } as unknown as BotClientRegistry;
   const notifier = new UserNotifier(prisma, bots, locale);
   return runWithTenant({ id: 'tenant-1', slug: 'platform', via: 'domain' }, async () => {
-    await notifier.notify({ userId: 'u-1', channel: 'bot', template: 'lotteryWon', params: { title: 'Autumn', prize: '20 GB', ...params } });
+    await notifier.notify({ userId: 'u-1', channel: 'bot', template, params: { title: 'Autumn', prize: '20 GB', ...params } });
     return client.sendMessage.mock.calls[0]?.[1];
   });
 }
@@ -49,5 +56,13 @@ describe("a lottery winner is told where the prize went (F-707-y)", () => {
 
   it('says "your account" for a prize no service holds', async () => {
     expect(await tell({})).toContain('20 GB — to your account');
+  });
+});
+
+describe('a lottery announcement names where a prize would go now (F-707-z)', () => {
+  it('the chosen service, or automatic, to a member with a choice; nothing to the others', async () => {
+    expect(await tell({ lotteryId: 'L', prizeChoice: '1', serviceLabel: 'Family', serviceNameKey: 'catalog.p.gold' }, 'lotteryOpenedAutomatic')).toBe('In Autumn. GB or days go to Family (Gold 50 GB).');
+    expect(await tell({ lotteryId: 'L', prizeChoice: '1' }, 'lotteryOpenedAutomatic')).toBe('In Autumn. GB or days go to the service that runs longest.');
+    expect(await tell({ lotteryId: 'L' }, 'lotteryOpenedAutomatic')).toBe('In Autumn.');
   });
 });

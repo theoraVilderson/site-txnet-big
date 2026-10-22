@@ -46,6 +46,14 @@ export const LOTTERY_CALLBACK_PREFIX = 'lot:';
 export const lotteryJoinCallback = (lotteryId: string) => `${LOTTERY_CALLBACK_PREFIX}j:${lotteryId}`;
 
 /**
+ * The prize-service screen's bot buttons (F-707-t): `prz:o` opens it, `prz:a`
+ * and `prz:g:<grant id>` choose. A lottery announcement carries the open one
+ * (F-707-z), which auth-service sends and bot-service routes from any state.
+ */
+export const PRIZE_SERVICE_CALLBACK_PREFIX = 'prz:';
+export const PRIZE_SERVICE_OPEN_CALLBACK = `${PRIZE_SERVICE_CALLBACK_PREFIX}o`;
+
+/**
  * A support thread's bot buttons (F-309): `sup:<kind>:…`. A reply or resolve
  * notice carries the open one, which auth-service sends and bot-service routes
  * from any state — the tap lands in that thread, ready for a reply. 42 bytes.

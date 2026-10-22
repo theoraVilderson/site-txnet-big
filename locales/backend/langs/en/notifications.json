@@ -368,15 +368,18 @@
     "lotteryWonTitle": "You won in \"{{title}}\"",
     "lotteryWonMany": "🎉 You won {{count}} lottery prizes. They have been added to your account; each lottery's page shows its result.",
     "lotteryWonManyTitle": "Lottery prizes won ({{count}})",
-    "lotteryOpened": "🎟 A new lottery is open for you: \"{{title}}\". Entry is free — tap Join to take part before it closes. Its prizes and close time are in the bot's Lotteries and on the panel's Lotteries page.",
+    "lotteryOpened": "🎟 A new lottery is open for you: \"{{title}}\". Entry is free — tap Join to take part before it closes. Its prizes and close time are in the bot's Lotteries and on the panel's Lotteries page.{{prizeNote}}",
     "lotteryOpenedTitle": "New lottery: \"{{title}}\"",
     "lotteryOpenedMany": "🎟 {{count}} new lotteries are open for you. Join them in the bot's Lotteries or on the panel's Lotteries page.",
     "lotteryOpenedManyTitle": "New lotteries ({{count}})",
-    "lotteryOpenedAutomatic": "🎟 You are in a new lottery: \"{{title}}\". Every eligible member is entered when it closes — there is nothing to do. Its prizes are on the panel's Lotteries page.",
+    "lotteryOpenedAutomatic": "🎟 You are in a new lottery: \"{{title}}\". Every eligible member is entered when it closes — there is nothing to do. Its prizes are on the panel's Lotteries page.{{prizeNote}}",
     "lotteryOpenedAutomaticTitle": "You are in \"{{title}}\"",
     "lotteryOpenedAutomaticMany": "🎟 You are in {{count}} new lotteries; nothing to do. Their prizes are on the panel's Lotteries page.",
     "lotteryOpenedAutomaticManyTitle": "New lotteries you are in ({{count}})",
-    "lotteryJoin": "✅ Join"
+    "lotteryJoin": "✅ Join",
+    "lotteryPrizeNote": "\n🎁 GB or days you win go {{where}}; to change it, tap «🎁 Prize service» or choose on the lotteries page.",
+    "lotteryPrizeAutomatic": "to the service that runs longest",
+    "prizeService": "🎁 Prize service"
   },
   "support": {
     "replied": "💬 Support answered in \"{{subject}}\". Open Support to read it and reply.",

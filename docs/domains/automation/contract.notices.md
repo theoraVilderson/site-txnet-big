@@ -105,7 +105,7 @@ its own queue `AUTOMATION_LOTTERY_ANNOUNCEMENT_QUEUE` on `outbox.engagement.lott
 | Members come from billing's `GET internal/billing/engagement/lotteries/:id/audience?after&limit`, 500 a page in user-id order, every page asked while the lottery is open; `open: false` ends the fan-out | a cancel or the close stops it; nobody is told of a lottery they cannot enter |
 | Each member: one id per lottery and member (`announcementEventId`, name-based UUID), the ledger's `lottery/claim`, then the sender | a redelivered or half-done fan-out tells nobody twice |
 | `opt_in`: `lotteryOpened`, inbox + bot, class `important`, the bot message with Join (`lotteryJoinCallback`); `held` sends the inbox and `hold`s the bot | the user must join before the close |
-| `automatic`: `lotteryOpenedAutomatic`, the inbox alone (`info`), never held | it asks nothing of the user |
+| `automatic`: `lotteryOpenedAutomatic`, the inbox alone (`info`), never held — except to a member billing names in `prizeChoices`: inbox and bot, `important`, held as opt-in, with `prizeChoice` and the service's name parts so the notice says where a prize would go (`{{prizeNote}}`) and carries «🎁 سرویس جایزه»; an opt-in announcement carries the same under Join (F-707-z) | it asks nothing of the user — but a member with two services has a choice to make before the draw (user, 2026-10-22) |
 | `muted` (kind `lottery`) skips; one member failing is counted, the rest told, then the event throws and is delivered again | one bad member never silences a group |
 | Its own queue | a group of thousands never holds up a person notice |
 

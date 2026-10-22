@@ -1,5 +1,6 @@
 import {
   lotteryJoinCallback,
+  PRIZE_SERVICE_OPEN_CALLBACK,
   renewalOpenCallback,
   SUGGESTION_OPT_OUT_PREFIX,
   supportOpenCallback,
@@ -21,7 +22,8 @@ const one = (text: string, callbackData: string): NoticeKeyboard => ({ inline_ke
  * The one button a notice's bot message carries, or none. Each names one id,
  * never the person, and bot-service routes it from any state:
  * - an AI suggestion's "don't show this again", by action id (F-038-g4);
- * - an opt-in lottery's Join, by lottery id (F-707-q);
+ * - an opt-in lottery's Join, by lottery id (F-707-q), and under it — or alone on an
+ *   automatic one — «🎁 سرویس جایزه» for a member with a choice to make (F-707-z);
  * - a support reply's or resolve's Open — the thread, ready for an answer (F-309);
  * - a transfer proof's Review — the receipt, ready to confirm; a combined one
  *   (`count`) opens every receipt waiting (F-805-b);
@@ -32,7 +34,12 @@ export function noticeButton(template: string, params: Record<string, string>, n
   if (template.startsWith('suggestion') && params.actionId) {
     return one(ns?.suggestion?.optOut ?? "🔕 Don't show this again", `${SUGGESTION_OPT_OUT_PREFIX}${params.actionId}`);
   }
-  if (template === 'lotteryOpened' && params.lotteryId) return one(ns?.engagement?.lotteryJoin ?? '✅ Join', lotteryJoinCallback(params.lotteryId));
+  const prize = [{ text: ns?.engagement?.prizeService ?? '🎁 Prize service', callback_data: PRIZE_SERVICE_OPEN_CALLBACK }];
+  if (template === 'lotteryOpened' && params.lotteryId) {
+    const join = one(ns?.engagement?.lotteryJoin ?? '✅ Join', lotteryJoinCallback(params.lotteryId));
+    return params.prizeChoice ? { inline_keyboard: [...join.inline_keyboard, prize] } : join;
+  }
+  if (template === 'lotteryOpenedAutomatic' && params.prizeChoice) return { inline_keyboard: [prize] };
   if ((template === 'supportReplied' || template === 'supportResolved') && params.conversationId) {
     return one(ns?.support?.open ?? '💬 Open the conversation', supportOpenCallback(params.conversationId));
   }

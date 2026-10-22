@@ -4,7 +4,7 @@ import { tenantTransaction } from '@txnet-backend/shared-core';
 
 import { GrantService } from '../entitlement/grant';
 import { PrismaService } from '../prisma/prisma.service';
-import { takes } from './reward-issuer';
+import { takes, type PrizeServiceName } from './reward-issuer';
 
 /**
  * The user's prize service (F-707-r, user 2026-10-22): which of their Grants a
@@ -49,11 +49,39 @@ const SERVICES_MAX = 50;
 const CURRENT_PAGE = { pageSize: 100, scope: 'current' } as const;
 
 /** Active, and able to take GB or days — `takes` for either kind, as a query. */
-const offered = (userId: string): Prisma.GrantWhereInput => ({
+const offered = (userId: string | { in: string[] }): Prisma.GrantWhereInput => ({
   userId,
   status: GrantStatus.active,
   OR: [{ trafficUnlimited: false }, { endsAt: { not: null } }],
 });
+
+/**
+ * For a lottery announcement (F-707-z): each of these users who has a choice
+ * to make — two services or more a prize can reach — and the service their
+ * prize would go to now, named as My services names it; `null` is automatic
+ * (nothing chosen, or a choice that no longer applies). Users with one service
+ * or none are left out. In the caller's tenant transaction.
+ */
+export async function prizeChoicesOf(tx: Prisma.TransactionClient, userIds: string[]): Promise<Record<string, PrizeServiceName | null>> {
+  if (userIds.length === 0) return {};
+  const [grants, chosen] = await Promise.all([
+    tx.grant.findMany({
+      where: offered({ in: userIds }),
+      select: { id: true, userId: true, userLabel: true, variant: { select: { sku: true, nameKey: true, product: { select: { nameKey: true } } } } },
+    }),
+    tx.rewardTarget.findMany({ where: { userId: { in: userIds } }, select: { userId: true, grantId: true } }),
+  ]);
+  const byUser = new Map<string, typeof grants>();
+  for (const g of grants) byUser.set(g.userId, [...(byUser.get(g.userId) ?? []), g]);
+  const choiceOf = new Map(chosen.map((c) => [c.userId, c.grantId]));
+  const out: Record<string, PrizeServiceName | null> = {};
+  for (const [userId, own] of byUser) {
+    if (own.length < 2) continue;
+    const g = own.find((x) => x.id === choiceOf.get(userId));
+    out[userId] = g ? { label: g.userLabel, sku: g.variant?.sku ?? null, nameKey: g.variant ? (g.variant.nameKey ?? g.variant.product.nameKey) : null } : null;
+  }
+  return out;
+}
 
 @Injectable()
 export class RewardTargetService {

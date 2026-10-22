@@ -18,7 +18,15 @@ const CLAIM_PATH = '/api/internal/notifications/lottery/claim';
 const HOLD_PATH = '/api/internal/notifications/retention/hold';
 
 type Claim = { deliver: 'now' | 'muted' } | { deliver: 'held'; botAt: string };
-type AudiencePage = { open: boolean; tenantId: string | null; title: string | null; entryMode: string | null; userIds: string[]; next: string | null };
+type PrizeServiceName = { label: string | null; sku: string | null; nameKey: string | null };
+/** `prizeChoices`: members with a prize service to choose, and where a prize would go now; `null` = automatic (F-707-z). */
+type AudiencePage = { open: boolean; tenantId: string | null; title: string | null; entryMode: string | null; userIds: string[]; prizeChoices?: Record<string, PrizeServiceName | null>; next: string | null };
+
+/** The notice's prize-service params: the flag that draws the button, and the current service's name parts when one is chosen. */
+function prizeParams(choice: PrizeServiceName | null): Record<string, string> {
+  const parts = { serviceLabel: choice?.label ?? null, serviceSku: choice?.sku ?? null, serviceNameKey: choice?.nameKey ?? null };
+  return { prizeChoice: '1', ...Object.fromEntries(Object.entries(parts).filter((e): e is [string, string] => e[1] !== null)) };
+}
 
 /**
  * One id per lottery and member, the same on every delivery (a name-based
@@ -116,13 +124,16 @@ export class LotteryAnnouncementConsumer implements OnApplicationBootstrap {
     if (claim.deliver === 'muted') return false;
 
     const tenantId = page.tenantId as string;
-    const params = { title: page.title ?? '', lotteryId };
-    if (page.entryMode !== 'opt_in') {
+    const choice = page.prizeChoices?.[userId];
+    const params = { title: page.title ?? '', lotteryId, ...(choice === undefined ? {} : prizeParams(choice)) };
+    const automatic = page.entryMode !== 'opt_in';
+    // An automatic lottery asks nothing — unless the member has a prize service to choose (F-707-z): then the bot too.
+    if (automatic && choice === undefined) {
       const person: Person = { tenantId, userId, template: 'lotteryOpenedAutomatic', params };
       await this.sender.send({ consumer: CONSUMER, eventId, person, only: ['inbox'], class: 'info' });
       return true;
     }
-    const person: Person = { tenantId, userId, template: 'lotteryOpened', params };
+    const person: Person = { tenantId, userId, template: automatic ? 'lotteryOpenedAutomatic' : 'lotteryOpened', params };
     if (claim.deliver === 'held') {
       await this.sender.send({ consumer: CONSUMER, eventId, person, only: ['inbox'], class: 'important' });
       await this.call(this.notification, HOLD_PATH, {

@@ -324,7 +324,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   // F-707-q: an opt-in lottery opened to the user's group — the bot message carries Join (`lotteryJoinCallback`).
   lotteryOpened: {
     read: (ns) => ns?.engagement?.lotteryOpened,
-    fallback: '🎟 A new lottery is open for you: "{{title}}". Entry is free — tap Join to take part before it closes. Its prizes and close time are in the bot\'s Lotteries and on the panel\'s Lotteries page.',
+    fallback: '🎟 A new lottery is open for you: "{{title}}". Entry is free — tap Join to take part before it closes. Its prizes and close time are in the bot\'s Lotteries and on the panel\'s Lotteries page.{{prizeNote}}',
     inbox: { read: (ns) => ns?.engagement?.lotteryOpenedTitle, fallback: 'New lottery: "{{title}}"' },
     many: {
       read: (ns) => ns?.engagement?.lotteryOpenedMany,
@@ -335,7 +335,7 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   // F-707-q: an automatic lottery — the inbox alone, nothing to do.
   lotteryOpenedAutomatic: {
     read: (ns) => ns?.engagement?.lotteryOpenedAutomatic,
-    fallback: '🎟 You are in a new lottery: "{{title}}". Every eligible member is entered when it closes — there is nothing to do. Its prizes are on the panel\'s Lotteries page.',
+    fallback: '🎟 You are in a new lottery: "{{title}}". Every eligible member is entered when it closes — there is nothing to do. Its prizes are on the panel\'s Lotteries page.{{prizeNote}}',
     inbox: { read: (ns) => ns?.engagement?.lotteryOpenedAutomaticTitle, fallback: 'You are in "{{title}}"' },
     many: {
       read: (ns) => ns?.engagement?.lotteryOpenedAutomaticMany,
@@ -1043,6 +1043,11 @@ const LOTTERY_WON_WHERE: Record<'service' | 'account', Text> = {
   service: { read: (ns) => ns?.engagement?.lotteryWonOnService, fallback: 'to your service {{service}}' },
   account: { read: (ns) => ns?.engagement?.lotteryWonOnAccount, fallback: 'to your account' },
 };
+/** Where an announced lottery's GB or days would go now (F-707-z), for a member with a prize service to choose. */
+const LOTTERY_PRIZE: Record<'note' | 'automatic', Text> = {
+  note: { read: (ns) => ns?.engagement?.lotteryPrizeNote, fallback: '\n🎁 GB or days you win go {{where}}; change it with «🎁 Prize service».' },
+  automatic: { read: (ns) => ns?.engagement?.lotteryPrizeAutomatic, fallback: 'to the service that runs longest' },
+};
 const SERVICE_LIST = {
   line: { read: (ns) => ns?.retention?.serviceLine, fallback: '• {{name}}' },
   labelled: { read: (ns) => ns?.retention?.serviceLineLabelled, fallback: '• {{name}} — {{labels}}' },
@@ -1153,46 +1158,38 @@ export class UserNotifier {
     return tellOnBot({ prisma: this.prisma, bots: this.bots, logger: this.logger }, to, { text, markup: noticeButton(request.template, params, ns) });
   }
 
-  /**
-   * A quota notice names its quota in the user's language (F-019-v8): a registry key by `resellerQuotaKeys.<key>`,
-   * a product's sales by its catalog name. A name already given is kept.
-   */
+  /** A quota notice names its quota in the user's language (F-019-v8): a registry key by `resellerQuotaKeys.<key>`,
+   *  a product's sales by its catalog name. A name already given is kept. */
   private withQuotaName(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
     // F-038-o4: a package upgrade names its quota the same way, and its new number in words when there is none.
     if (template === 'suggestionPackageUpgrade' && params.newIncluded === 'unlimited') {
       params = { ...params, newIncluded: ns?.suggestion?.unlimited ?? 'no limit' };
     }
     if (!(template.startsWith('resellerQuota') || template === 'suggestionPackageUpgrade') || params.quota) return params;
-    const quota =
-      (params.quotaKey ? ns?.resellerQuotaKeys?.[params.quotaKey] : undefined) ??
-      this.catalogName(params.productNameKey ?? null, lang) ??
-      ns?.resellerQuota?.unnamed ??
-      'A quota';
+    const byKey = params.quotaKey ? ns?.resellerQuotaKeys?.[params.quotaKey] : undefined;
+    const quota = byKey ?? this.catalogName(params.productNameKey ?? null, lang) ?? ns?.resellerQuota?.unnamed ?? 'A quota';
     return { ...params, quota };
   }
 
-  /**
-   * An AI suggestion (F-038-g3), and a lottery win (F-707-y: `where` it went), name the service as a combined notice lists it —
-   * the buyer's own name, then the catalog name, else the sku. A suggestion's plan by its catalog name (else sku) with its size;
-   * a package (PK-1-e) by its key in the user's language alone, else `package` as sent, the source text (ADR-0154 (5)).
-   */
+  /** An AI suggestion (F-038-g3), a lottery win (F-707-y: `where` it went) and an announcement to a member with a prize service to
+   *  choose (F-707-z: `prizeNote`) name the service as a combined notice lists it — label, then catalog name, else sku. A suggestion's
+   *  plan by its catalog name (else sku) with its size; a package (PK-1-e) by its key in the user's language, else `package` as sent. */
   private withServiceNames(template: NotifyTemplate, params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
-    if (!template.startsWith('suggestion') && template !== 'lotteryWon') return params;
+    if (!template.startsWith('suggestion') && !template.startsWith('lottery')) return params;
     const say = (t: Text, vars: Record<string, string> = {}) => interpolate(t.read(ns) ?? t.fallback, vars);
     const catalog = this.catalogName(params.serviceNameKey ?? null, lang) ?? params.serviceSku ?? say(SERVICE_LIST.unnamed);
     const service = params.serviceLabel ? say(SERVICE_LIST.named, { label: params.serviceLabel, name: catalog }) : catalog;
-    if (template === 'lotteryWon') return { ...params, where: say(params.serviceLabel || params.serviceNameKey || params.serviceSku ? LOTTERY_WON_WHERE.service : LOTTERY_WON_WHERE.account, { service }) };
+    const onService = params.serviceLabel || params.serviceNameKey || params.serviceSku;
+    if (template === 'lotteryWon') return { ...params, where: say(onService ? LOTTERY_WON_WHERE.service : LOTTERY_WON_WHERE.account, { service }) };
+    if (template.startsWith('lottery')) return { ...params, prizeNote: params.prizeChoice ? say(LOTTERY_PRIZE.note, { where: say(onService ? LOTTERY_WON_WHERE.service : LOTTERY_PRIZE.automatic, { service }) }) : '' };
     const planName = this.catalogName(params.planNameKey ?? null, lang) ?? params.planSku ?? '';
     const plan = params.planSize ? say(SERVICE_LIST.named, { label: planName, name: params.planSize }) : planName;
     const packageText = params.packageNameKey?.startsWith(`${PACKAGE_TEXT_NAMESPACE}.`) ? this.locale.getKey(lang, PACKAGE_TEXT_NAMESPACE, params.packageNameKey.slice(PACKAGE_TEXT_NAMESPACE.length + 1)) : undefined;
     return { ...params, service, plan, ...(typeof packageText === 'string' && packageText !== '' ? { package: packageText } : {}) };
   }
 
-  /**
-   * The keys an access notice names, by the labels the role editor shows
-   * (AC-1-f's `permissions` namespace) in the user's language, else the
-   * default one, else the key itself — never an empty name (AC-1-s).
-   */
+  /** The keys an access notice names, by the labels the role editor shows (AC-1-f's `permissions` namespace) in the user's
+   *  language, else the default one, else the key itself — never an empty name (AC-1-s). */
   private withKeyLabels(params: Record<string, string>, lang: string, ns: NotificationsNamespace | undefined): Record<string, string> {
     if (!params.given && !params.taken) return params;
     const label = (key: string) => {

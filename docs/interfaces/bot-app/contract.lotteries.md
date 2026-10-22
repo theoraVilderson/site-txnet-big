@@ -41,7 +41,10 @@ delivery and the result"; ADR-0111 points 5, 6).
 8. **The winner's message is F-707-m's `lotteryWon` notice** (class
    `important`: the inbox and one messenger), not this flow.
 9. **The prize service row** sits under the list — the wheel's rule 6, one
-   choice for every lottery and the wheel (F-707-t).
+   choice for every lottery and the wheel (F-707-t). A member with a choice to
+   make also finds «🎁 سرویس جایزه» (`PRIZE_SERVICE_OPEN_CALLBACK`, shared-core)
+   under the announcement — under Join on an opt-in one; an automatic one
+   reaches the bot only for such members, `important`, held in quiet hours (F-707-z).
 
 The announcement of a published lottery (F-707-q) is sent by auth-service, not
 this flow; its Join button is `lotteryJoinCallback` (shared-core), the same

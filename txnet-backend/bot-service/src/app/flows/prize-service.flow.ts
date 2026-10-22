@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { BotAction, BotText } from '@txnet-backend/messenger';
+import { PRIZE_SERVICE_CALLBACK_PREFIX, PRIZE_SERVICE_OPEN_CALLBACK } from '@txnet-backend/shared-core';
 import { BillingApiClient, BillingCallContext } from '../billing-api/billing-api.client';
 import type { ChatPrizeService, ChatRewardTarget } from '../billing-api/engagement.types';
 import { ChatContext, FlowResult } from '../conversation/nav.types';
@@ -13,8 +14,8 @@ import { say, view } from './views';
 const REFUSAL_KEYS: Record<string, BotKey> = BotKeys.prizeService.refusals;
 
 /** `prz:o` opens the list, `prz:a` is automatic, `prz:g:<grantId>` a service (42 bytes): each names what it does, so none needs state. */
-export const PRIZE_SERVICE_ACTION_PREFIX = 'prz:';
-const OPEN = `${PRIZE_SERVICE_ACTION_PREFIX}o`;
+export const PRIZE_SERVICE_ACTION_PREFIX = PRIZE_SERVICE_CALLBACK_PREFIX;
+const OPEN = PRIZE_SERVICE_OPEN_CALLBACK;
 const AUTOMATIC = `${PRIZE_SERVICE_ACTION_PREFIX}a`;
 const GRANT = `${PRIZE_SERVICE_ACTION_PREFIX}g:`;
 

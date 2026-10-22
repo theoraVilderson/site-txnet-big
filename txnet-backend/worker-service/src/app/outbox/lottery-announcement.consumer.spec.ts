@@ -18,7 +18,7 @@ const TENANT = '11111111-1111-4111-8111-111111111111';
 const LOTTERY = '0f0e0d0c-0b0a-4908-8706-050403020100';
 const U = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
 
-type Page = { open: boolean; userIds: string[]; next: string | null; entryMode?: string };
+type Page = { open: boolean; userIds: string[]; next: string | null; entryMode?: string; prizeChoices?: Record<string, { label: string | null; sku: string | null; nameKey: string | null } | null> };
 
 function harness(o: { pages: Page[]; claims?: Record<string, unknown>; failClaim?: string }) {
   const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
@@ -110,6 +110,28 @@ describe('LotteryAnnouncementConsumer', () => {
     await consumer.handle(event({ tenantId: TENANT, lotteryId: LOTTERY, title: 'October draw', entryMode: 'automatic' }));
     expect(sent).toEqual([expect.objectContaining({ person: expect.objectContaining({ template: 'lotteryOpenedAutomatic' }), only: ['inbox'] })]);
     expect(calls.some((c) => c.url.endsWith('/retention/hold'))).toBe(false);
+  });
+
+  it('tells an automatic lottery on the bot too, held in quiet hours, to a member with a prize service to choose (F-707-z)', async () => {
+    const family = { label: 'Family', sku: 'GOLD-50', nameKey: null };
+    const { consumer, calls, sent } = harness({
+      pages: [{ open: true, userIds: [U(1), U(2), U(3)], next: null, entryMode: 'automatic', prizeChoices: { [U(1)]: family, [U(2)]: null } }],
+      claims: { [U(2)]: { deliver: 'held', botAt: '2026-10-03T20:30:00.000Z' } },
+    });
+    await consumer.handle(event({ tenantId: TENANT, lotteryId: LOTTERY, title: 'October draw', entryMode: 'automatic' }));
+    const base = { title: 'October draw', lotteryId: LOTTERY, prizeChoice: '1' };
+    expect(sent).toEqual([
+      expect.objectContaining({ person: expect.objectContaining({ userId: U(1), template: 'lotteryOpenedAutomatic', params: { ...base, serviceLabel: 'Family', serviceSku: 'GOLD-50' } }), only: ['inbox', 'bot'], class: 'important' }),
+      expect.objectContaining({ person: expect.objectContaining({ userId: U(2), params: base }), only: ['inbox'], class: 'important' }),
+      expect.objectContaining({ person: expect.objectContaining({ userId: U(3), template: 'lotteryOpenedAutomatic', params: { title: 'October draw', lotteryId: LOTTERY } }), only: ['inbox'], class: 'info' }),
+    ]);
+    expect(calls.find((c) => c.url.endsWith('/retention/hold'))?.body).toMatchObject({ template: 'lotteryOpenedAutomatic', params: base });
+  });
+
+  it("names the prize service in an opt-in lottery's announcement too (F-707-z)", async () => {
+    const { consumer, sent } = harness({ pages: [{ open: true, userIds: [U(1)], next: null, prizeChoices: { [U(1)]: null } }] });
+    await consumer.handle(event());
+    expect(sent[0]).toMatchObject({ person: { template: 'lotteryOpened', params: { title: 'October draw', lotteryId: LOTTERY, prizeChoice: '1' } }, only: ['inbox', 'bot'] });
   });
 
   it('stops when billing says the lottery is no longer open — cancelled or closed', async () => {
