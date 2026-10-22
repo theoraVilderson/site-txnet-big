@@ -41,6 +41,12 @@ export const CONFIG_ACTION_REJECTIONS = [
 ] as const;
 export type ConfigActionRejection = (typeof CONFIG_ACTION_REJECTIONS)[number];
 
+/**
+ * The `config_action_log` row a move writes on the config it leaves. A user's
+ * own (actor `user`) is what the self-move wait counts from (F-410-b).
+ */
+export const CONFIG_MOVE_OUT_ACTION = 'move_out';
+
 export class ConfigActionRefused extends Error {
   constructor(
     readonly reason: ConfigActionRejection,
@@ -292,7 +298,7 @@ export class ConfigActionsService {
     if (config.panelId === input.toPanelId) throw new ConfigActionRefused('same_panel', input.toPanelId);
     await this.panelFor(tx, input.toPanelId, config.tenantId);
 
-    await this.retireRow(tx, config, input.actor, 'move_out');
+    await this.retireRow(tx, config, input.actor, CONFIG_MOVE_OUT_ACTION);
     // Provisioned for the Grant's owner whoever asked: the new row is theirs,
     // and the planner splits the bag over it on its next turn.
     const made = await this.provision(tx, {

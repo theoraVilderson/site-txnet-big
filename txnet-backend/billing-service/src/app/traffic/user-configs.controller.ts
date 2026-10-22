@@ -97,6 +97,30 @@ export class UserConfigsController {
     }
   }
 
+  /**
+   * Where the user may move this config, and when (F-410-b): the panels its
+   * product allows, by id and region, and `nextMoveAt`. Under `CONFIG_LIST`:
+   * one more read of the user's configs.
+   */
+  @TenantCapability('subscriptionLink')
+  @Get('configs/:configId/move-targets')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.CONFIG_LIST, identityOf(req).userId),
+    configKey: 'CONFIG_LIST_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async moveTargets(@Param('configId', ParseUUIDPipe) configId: string, @Req() req: Request) {
+    try {
+      return await this.configs.moveTargets(identityOf(req).userId, configId);
+    } catch (e) {
+      // A retired config is no longer the user's to move: the same 404 as a missing one.
+      if (e instanceof ConfigActionRefused && (e.reason === 'config_not_found' || e.reason === 'config_retired')) {
+        throw new NotFoundException({ i18nKey: E.configNotFound, reason: e.reason, message: `${e.name}: ${e.message}` });
+      }
+      throw e;
+    }
+  }
+
   /** Always 200 with one outcome per config: a refusal of one is not a failure of the request (user, 2026-09-23). */
   @TenantCapability('subscriptionLink')
   @Post('configs/actions')

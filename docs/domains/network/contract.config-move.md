@@ -152,7 +152,27 @@ choice; its refusals are `resellerRefusal`'s. Budgets: catalog management's.
 | Rule | Why |
 |---|---|
 | **Resolved product -> tenant -> platform, setting by setting** (`resolveLayers`, the selling settings' rule): a null is "not set here"; `false` and `0` are values. The platform answers on, 24 h (`PLATFORM_SELF_MOVE_DEFAULTS`). Each effective value names its layer | every Grant moves by some answer, and the page says "inherited" without computing it |
+| A Grant reads its own tenant's rows and its variant's product (`selfMoveSettingOf`); a Grant of no product reads the tenant's | a platform product a reseller sells moves by the reseller's choice, not the platform's |
 | A product is the tenant's own or the platform's (the query names both, as RLS does), else `product_not_found` before any write | a reseller cannot hang a row on another reseller's product |
 | A layer set to nothing (both null) is deleted; the same values again write nothing. Every change is one `config_self_move_settings_set` row, target `tenant` or `product`, the layer's own values before and after; nobody is told | the history says who switched it off; a no-op leaves no noise |
 
 `self-move-settings.spec.ts` pins these.
+
+### Where a user may go, and when (F-410-b)
+
+`GET /api/billing/traffic/configs/:configId/move-targets` — the owner only (the
+gate's `X-User-Id`), capability `subscriptionLink`, budget `CONFIG_LIST`
+(`user-configs.controller.ts`, `traffic/self-move-targets.ts`). Answers
+`{configId, enabled, cooldownHours, nextMoveAt, panels[{id, region}]}`; another
+user's config, a missing one and a retired one are 404 `config_not_found` /
+`config_retired`.
+
+| Rule | Why |
+|---|---|
+| **Only panels the product already allows** (D-63): members of the Grant's own group (`grant.panelGroupId`, never the variant's — ADR-0127 decision 4), not `drain`, whose panel is a `moveTargetWhere` target (accepted, not retired, shared or the Grant's tenant's), at most 100, by region then id | a user can only go where their product is sold; a panel nothing provisions strands the config |
+| **Not a panel the Grant already holds a live config on** (not retired, not drained). A Grant of no group has no targets; a `mirror` Grant — on every member — has none either (user, 2026-10-22: targets stay the group's; self-move becomes useful once a one-panel strategy is built) | a Grant never gets two lines on one panel; the rule does not change when `priority` lands |
+| **A panel is its id and region, never its name or address** (user, 2026-10-22), as the config list answers | an admin's name for a server can be internal |
+| **`nextMoveAt` = the Grant's last move by its own user** (`config_action_log` `move_out`, actor `user`, over the Grant's configs; index `(configId, createdAt)`) plus `cooldownHours`; null when none, when it has passed, or when the wait is 0. An admin's or a job's move does not count | a move retires the config and makes a new one, so the wait is the Grant's; the reseller's own moves are not the user's quota |
+| Switched off answers `enabled: false`, no targets, `nextMoveAt` null | the page hides the action instead of guessing |
+
+`self-move-targets.spec.ts` pins these.

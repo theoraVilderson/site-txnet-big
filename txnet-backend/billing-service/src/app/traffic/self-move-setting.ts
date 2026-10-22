@@ -49,8 +49,14 @@ export async function productSelfMoveOf(tx: Prisma.TransactionClient, tenantId: 
   return row ?? { enabled: null, cooldownHours: null };
 }
 
+/** The setting a Grant of `productId` in `tenantId` moves by: what the move route and its refusal read (F-410-b). */
+export async function selfMoveSettingOf(tx: Prisma.TransactionClient, tenantId: string, productId: string | null): Promise<EffectiveSelfMove> {
+  const product = productId === null ? null : await productSelfMoveOf(tx, tenantId, productId);
+  return effectiveSelfMove(product, await tenantSelfMoveOf(tx, tenantId));
+}
+
 /** Nothing set at the layer: the row is deleted, not kept empty. */
 export const setsNothing = (own: SelfMoveOwn): boolean => own.enabled === null && own.cooldownHours === null;
 
 /** The same values at a layer: writing them changes nothing, so nothing is written or audited. */
-export const sameOwn =(a: SelfMoveOwn, b: SelfMoveOwn): boolean => a.enabled === b.enabled && a.cooldownHours === b.cooldownHours;
+export const sameOwn = (a: SelfMoveOwn, b: SelfMoveOwn): boolean => a.enabled === b.enabled && a.cooldownHours === b.cooldownHours;

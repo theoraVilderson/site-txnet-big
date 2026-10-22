@@ -902,6 +902,8 @@ model ConfigActionLog {
 
   config Config @relation(fields: [configId], references: [id])
 
+  /// A Grant's last move by its user is read per config (F-410-b `nextMoveAt`).
+  @@index([configId, createdAt])
   @@map("config_action_log")
   @@schema("network")
 }
