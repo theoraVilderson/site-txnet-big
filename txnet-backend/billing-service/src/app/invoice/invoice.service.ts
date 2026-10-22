@@ -12,7 +12,7 @@ import { assertPurchaseRoom } from '../entitlement/purchase-limits';
 import { assertPlatformGrantRoom } from '../entitlement/reseller-room';
 import { deliverableGroupIds } from '../traffic/group-fulfilment';
 import { discountRuleFor } from './discount/discount-rule';
-import { RenewalSale, renewalSaleOf } from './renewal-invoice';
+import { RenewalPlansView, renewalPlansView, RenewalSale, renewalPlansOf, renewalSaleOf } from './renewal-invoice';
 import { PrismaService } from '../prisma/prisma.service';
 import { CouponReservationService } from '../payment/coupon/coupon-reservation';
 import {
@@ -226,6 +226,17 @@ export class InvoiceService {
       );
       return routed.filter((r) => r.route !== 'panel_group' || deliverable.has(r.offer.panelGroupId ?? '')).map((r) => r.offer);
     });
+  }
+
+  /**
+   * The plans the caller's Grant may renew to (F-305-j), the Grant's own
+   * first — exactly what {@link create} accepts with that `grantId`, priced
+   * now (before any discount: the invoice prices those). Refused as the
+   * invoice refuses: another user's Grant `grant_not_found`, a closed one
+   * `grant_not_renewable`.
+   */
+  renewalPlans(userId: string, grantId: string, at: Date = new Date()): Promise<RenewalPlansView> {
+    return tenantTransaction(this.prisma, async (tx) => renewalPlansView(await renewalPlansOf(tx, { userId, grantId, at })));
   }
 
   /**

@@ -15,7 +15,7 @@ where a renewal differs. The admin's renewal (no money, F-311-d) is
 [contract.reseller-grants.md](contract.reseller-grants.md). Both land in entitlement's
 `renewGrant` (entitlement `contract.admin.md` "Renew").
 
-**Status: the invoice (F-305-c) and paying it (F-305-d) are built.** F-305-e
+**Status: the invoice (F-305-c), paying it (F-305-d) and the plans the sheet lists (F-305-j) are built.** F-305-e
 (GiB and days) builds the rest; the rate it reads is catalog's
 [contract.renewal-rate.md](../catalog/contract.renewal-rate.md) (F-305-b, built).
 Consumers: panel-web [contract.renewal.md](../../interfaces/panel-web/contract.renewal.md)
@@ -36,6 +36,20 @@ The invoice row records `grantId`, `renewBytes`, `renewDays` (all or none, CHECK
 | `404 errors.billing.invoice.grantNotFound`, `reason` `grant_not_found` | rule 1: not the caller's Grant, another tenant's (RLS), or unknown |
 | `409 errors.billing.invoice.grantNotRenewable`, `reason` `grant_not_renewable` | rule 1: the Grant is `pending`, `exhausted`, `expired` or `cancelled` |
 | `409 errors.billing.invoice.planNotRenewable`, `reason` `plan_not_renewable` | rules 3, 4, 6: the plan is gone, off, unpriced in the tenant's currency, of another product, panel group or billing mode; permanent against dated; a bag against unlimited; no traffic stated (F-111-p); or it adds nothing. A Grant issued with no plan (an import) has no product to renew within |
+
+## The plans the sheet lists (built — F-305-j)
+
+`GET /api/billing/gift/grants/:grantId/renewal-plans` — `RenewalPlansController` +
+`InvoiceService.renewalPlans`; `renewablePlans` (pure, `renewal-invoice.spec.ts`) over the
+product's variants read in one query (catalog `renewableOffersOf`). `@TenantCapability('sell')`,
+the shop list's `SHOP_OFFERS` budget.
+
+| Rule | Why |
+|---|---|
+| Answer `{grantId, ownPlanRenewable, plans: [{variantId, sku, nameKey, current, bytes, days, price, currencyCode, campaignEndsAt}]}`: exactly the plans `renewalOf` accepts, so the sheet never offers what the invoice refuses | one rule for the list and the invoice, as the shop's `forSale` and `create` |
+| The Grant's own plan first (`current: true`), the rest by price; `ownPlanRenewable: false` = its plan is no longer sold (panel-web rule 3) | ADR-0158 (3) |
+| `price` is the plan's in effect, before any discount; the invoice prices the codeless rule and the coupons | a discount depends on the codes typed |
+| Refused as the invoice: `404 grant_not_found`, `409 grant_not_renewable`. A Grant issued with no plan lists nothing | rule 1 |
 
 ## What may be renewed, and to what (F-305-c)
 

@@ -245,6 +245,17 @@ export async function renewableOfferById(tx: Prisma.TransactionClient, variantId
 }
 
 /**
+ * Every variant of one product a renewal could read (F-305-j), as
+ * {@link renewableOfferById} reads one — in one query, so the renewal sheet
+ * costs the same however many plans the product has.
+ */
+export async function renewableOffersOf(tx: Prisma.TransactionClient, productId: string, at: Date): Promise<CatalogOffer[]> {
+  const currencyCode = await tenantCurrency(tx);
+  const rows = await tx.productVariant.findMany({ where: { productId }, include: withPrices(at, currencyCode), orderBy: [{ sku: 'asc' }] });
+  return (await withLiveCounts(tx, rows)).flatMap((v) => toOffer(v, at, currencyCode, isRenewable) ?? []);
+}
+
+/**
  * Every listed variant the caller may buy, with the price in effect at `at`,
  * read on the caller's `tx` — what {@link CatalogReadService.listOffers}
  * answers, for a caller that narrows it further in its own transaction (the

@@ -10,12 +10,14 @@
  *    product, its own panel group or its own billing mode (rule 3, invariant 31);
  *  - only the limited part is sold (rule 6): a metered or unlimited Grant buys
  *    days, a permanent one bytes, and a plan whose shape the Grant cannot take
- *    is refused rather than charged for what renewGrant would drop.
+ *    is refused rather than charged for what renewGrant would drop;
+ *  - the sheet's list (F-305-j) is exactly what the invoice accepts, the
+ *    Grant's own plan first, and says when that plan is no longer sold.
  */
 import { FulfilmentKind, GrantStatus, VariantBillingMode, VariantVisibility } from '@prisma/client';
 
 import { CatalogOffer, isRenewable } from '../catalog/catalog-reads';
-import { RenewableGrant, RenewalRefused, renewalOf } from './renewal-invoice';
+import { RenewableGrant, RenewalRefused, renewablePlans, renewalOf } from './renewal-invoice';
 
 const GIB = 1024 ** 3;
 const PRODUCT = '44444444-4444-4444-8444-444444444444';
@@ -147,5 +149,31 @@ describe('renewalOf — only the limited part (rule 6)', () => {
   it('a plan that adds nothing is refused', () => {
     const metered = { billingMode: VariantBillingMode.metered };
     expect(refusal(() => renewalOf(grant({ ...metered, endsAt: null }), plan({ ...metered, quotas: {}, durationDays: null })))).toBe('plan_not_renewable');
+  });
+});
+
+describe('renewablePlans — what the sheet offers (F-305-j)', () => {
+  const smaller = plan({ variantId: '55555555-5555-4555-8555-555555555553', quotas: traffic(20 * GIB), price: { ...plan().price, id: 'p3', amount: '5' } });
+  const bigger = plan({ variantId: BIGGER_PLAN, quotas: traffic(200 * GIB), durationDays: 90, price: { ...plan().price, id: 'p2', amount: '30' } });
+  const otherGroup = plan({ variantId: '55555555-5555-4555-8555-555555555554', panelGroupId: '88888888-8888-4888-8888-888888888889' });
+
+  it('lists only what renewalOf accepts: the Grant’s own plan first, then the rest by price', () => {
+    const listed = renewablePlans(grant(), [bigger, otherGroup, smaller, plan()]);
+    expect(listed.ownRenewable).toBe(true);
+    expect(listed.plans.map((p) => [p.offer.variantId, p.amount.switched])).toEqual([
+      [OWN_PLAN, false],
+      [smaller.variantId, true],
+      [BIGGER_PLAN, true],
+    ]);
+  });
+
+  it('says when the Grant’s own plan is no longer sold, and still lists the others', () => {
+    const listed = renewablePlans(grant(), [bigger]);
+    expect(listed.ownRenewable).toBe(false);
+    expect(listed.plans.map((p) => p.offer.variantId)).toEqual([BIGGER_PLAN]);
+  });
+
+  it('a Grant that cannot be renewed lists nothing: refused as the invoice refuses it', () => {
+    expect(refusal(() => renewablePlans(grant({ status: GrantStatus.expired }), [plan()]))).toBe('grant_not_renewable');
   });
 });

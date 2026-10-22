@@ -246,6 +246,32 @@ export class InvoiceController {
 }
 
 /**
+ * The renewal sheet's plans for the caller's own Grant (F-305-j):
+ * `GET /api/billing/gift/grants/:grantId/renewal-plans` — beside the user's
+ * other acts on their own Grant. `sell`, like the invoice it leads to; the
+ * shop list's budget, as the same kind of read.
+ */
+@Controller('billing/gift/grants')
+export class RenewalPlansController {
+  constructor(private readonly invoices: InvoiceService) {}
+
+  @TenantCapability('sell')
+  @Get(':grantId/renewal-plans')
+  @RateLimit({
+    key: (req) => rateLimitBucketKey(RateLimitBucket.SHOP_OFFERS, identityOf(req).userId),
+    configKey: 'SHOP_OFFERS_RATE_LIMIT',
+    windowSec: 900,
+  })
+  async list(@Param('grantId', new ParseUUIDPipe()) grantId: string, @Req() req: Request) {
+    try {
+      return await this.invoices.renewalPlans(identityOf(req).userId, grantId);
+    } catch (e) {
+      throw toHttp(e);
+    }
+  }
+}
+
+/**
  * What the shop lists (F-111-e): `GET /api/billing/offers` — every listed
  * variant this tenant sells with the price in effect, less what nothing can
  * deliver (`InvoiceService.forSale`). `sell`, like buying: a tenant that

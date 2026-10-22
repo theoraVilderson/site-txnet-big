@@ -1,6 +1,6 @@
 import { GrantStatus, Prisma, VariantBillingMode } from '@prisma/client';
 
-import { CatalogOffer, renewableOfferById } from '../catalog/catalog-reads';
+import { CatalogOffer, renewableOfferById, renewableOffersOf } from '../catalog/catalog-reads';
 import { sellsTrafficToday, trafficQuotaOf } from '../catalog/traffic-quota';
 
 /**
@@ -66,7 +66,7 @@ const RENEWABLE: ReadonlySet<GrantStatus> = new Set([GrantStatus.active, GrantSt
  * `renewGrant` would drop.
  */
 export function renewalOf(grant: RenewableGrant, plan: CatalogOffer | null): RenewalAmount {
-  if (!RENEWABLE.has(grant.status)) throw new RenewalRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
+  assertGrantRenewable(grant);
   const refuse = (why: string) => new RenewalRefused('plan_not_renewable', `${plan?.variantId ?? 'plan'} for ${grant.id}: ${why}`);
   if (!plan) throw refuse('not live, unpriced or unknown');
   if (grant.productId === null || plan.productId !== grant.productId) throw refuse('another product');
@@ -86,6 +86,34 @@ export function renewalOf(grant: RenewableGrant, plan: CatalogOffer | null): Ren
   return { bytes, days, switched: plan.variantId !== grant.variantId };
 }
 
+/** Rule 1: only an `active` or `suspended` Grant has anything to extend. */
+function assertGrantRenewable(grant: RenewableGrant): void {
+  if (!RENEWABLE.has(grant.status)) throw new RenewalRefused('grant_not_renewable', `${grant.id} is ${grant.status}`);
+}
+
+/** One plan a Grant may renew to, priced now, and what it adds. */
+export type RenewablePlan = { offer: CatalogOffer; amount: RenewalAmount };
+
+/**
+ * The plans among `offers` that `grant` may renew to (F-305-j) — exactly
+ * those {@link renewalOf} accepts, so the sheet never offers what the invoice
+ * refuses — the Grant's own plan first, then the rest by price. `ownRenewable`
+ * false says the Grant's plan is no longer sold (panel-web renewal rule 3).
+ */
+export function renewablePlans(grant: RenewableGrant, offers: readonly CatalogOffer[]): { ownRenewable: boolean; plans: RenewablePlan[] } {
+  assertGrantRenewable(grant);
+  const plans = offers.flatMap((offer) => {
+    try {
+      return [{ offer, amount: renewalOf(grant, offer) }];
+    } catch (e) {
+      if (e instanceof RenewalRefused && e.reason === 'plan_not_renewable') return [];
+      throw e;
+    }
+  });
+  plans.sort((a, b) => Number(a.amount.switched) - Number(b.amount.switched) || new Prisma.Decimal(a.offer.price.amount).comparedTo(b.offer.price.amount));
+  return { ownRenewable: plans.some((p) => !p.amount.switched), plans };
+}
+
 /** A renewal ready to invoice: the plan priced now, and what it adds to which Grant. */
 export type RenewalSale = { offer: CatalogOffer; grantId: string; amount: RenewalAmount };
 
@@ -98,15 +126,71 @@ export async function renewalSaleOf(
   tx: Prisma.TransactionClient,
   input: { userId: string; grantId: string; variantId: string; at: Date },
 ): Promise<RenewalSale> {
-  const grant = await tx.grant.findFirst({
-    where: { id: input.grantId, userId: input.userId },
-    select: { id: true, status: true, variantId: true, panelGroupId: true, billingMode: true, trafficUnlimited: true, endsAt: true },
-  });
-  if (!grant) throw new RenewalRefused('grant_not_found', input.grantId);
-  const own = grant.variantId ? await tx.productVariant.findUnique({ where: { id: grant.variantId }, select: { productId: true } }) : null;
+  const grant = await callersGrant(tx, input.userId, input.grantId);
   const offer = await renewableOfferById(tx, input.variantId, input.at);
-  const amount = renewalOf({ ...grant, productId: own?.productId ?? null }, offer);
+  const amount = renewalOf(grant, offer);
   // `renewalOf` refused a null plan above; this narrows it for the caller.
   if (!offer) throw new RenewalRefused('plan_not_renewable', input.variantId);
   return { offer, grantId: grant.id, amount };
+}
+
+/** What the renewal sheet lists for the caller's Grant (F-305-j): {@link renewablePlans} over its product's plans at `at`. */
+export async function renewalPlansOf(
+  tx: Prisma.TransactionClient,
+  input: { userId: string; grantId: string; at: Date },
+): Promise<{ grant: RenewableGrant; ownRenewable: boolean; plans: RenewablePlan[] }> {
+  const grant = await callersGrant(tx, input.userId, input.grantId);
+  // A Grant issued with no plan (an import) has no product, so nothing to renew within.
+  const offers = grant.productId ? await renewableOffersOf(tx, grant.productId, input.at) : [];
+  return { grant, ...renewablePlans(grant, offers) };
+}
+
+/**
+ * The caller's Grant as a renewal reads it. Another user's is as absent as
+ * another tenant's (RLS): `grant_not_found`, never told apart.
+ */
+async function callersGrant(tx: Prisma.TransactionClient, userId: string, grantId: string): Promise<RenewableGrant> {
+  const grant = await tx.grant.findFirst({
+    where: { id: grantId, userId },
+    select: { id: true, status: true, variantId: true, panelGroupId: true, billingMode: true, trafficUnlimited: true, endsAt: true },
+  });
+  if (!grant) throw new RenewalRefused('grant_not_found', grantId);
+  const own = grant.variantId ? await tx.productVariant.findUnique({ where: { id: grant.variantId }, select: { productId: true } }) : null;
+  return { ...grant, productId: own?.productId ?? null };
+}
+
+/** One plan the renewal sheet offers (F-305-j): what it adds and costs now; bytes as a string (C-02). */
+export type RenewalPlanView = {
+  variantId: string;
+  sku: string;
+  nameKey: string;
+  /** The Grant's own plan; false = a switch to it. */
+  current: boolean;
+  bytes: string;
+  days: number;
+  price: string;
+  currencyCode: string;
+  campaignEndsAt: Date | null;
+};
+
+/** The renewal sheet's read (F-305-j); `ownPlanRenewable` false = the Grant's plan is no longer sold. */
+export type RenewalPlansView = { grantId: string; ownPlanRenewable: boolean; plans: RenewalPlanView[] };
+
+/** {@link renewalPlansOf}'s answer as the panel reads it. */
+export function renewalPlansView(listed: Awaited<ReturnType<typeof renewalPlansOf>>): RenewalPlansView {
+  return {
+    grantId: listed.grant.id,
+    ownPlanRenewable: listed.ownRenewable,
+    plans: listed.plans.map(({ offer, amount }) => ({
+      variantId: offer.variantId,
+      sku: offer.sku,
+      nameKey: offer.nameKey,
+      current: !amount.switched,
+      bytes: amount.bytes.toString(),
+      days: amount.days,
+      price: offer.price.amount,
+      currencyCode: offer.price.currencyCode,
+      campaignEndsAt: offer.campaignEndsAt,
+    })),
+  };
 }
