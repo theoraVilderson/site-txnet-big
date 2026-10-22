@@ -39,6 +39,8 @@ through `lotteryApi` in `lib/engagement-api.ts`:
    `ExclusionReason`, `REFUSAL_KEYS` over `LotteryEntryRejection`, and
    `result.passedOn` over `PassedOnReason`, each read from the service by the spec.
 6. **The menu entry asks nothing** — every signed-in user may open the page.
+7. **The prize service picker** sits under the header while any lottery is
+   listed — the wheel's rule 7, one choice for both pages (F-707-s).
 
 ## Proof
 

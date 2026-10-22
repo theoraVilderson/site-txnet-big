@@ -36,6 +36,14 @@ ADR-0111), both through `lib/engagement-api.ts`:
 5. **History is the caller's own** (`GET /wheel/history`, newest 30); a won
    coupon is shown with its code, so a code missed on the result is not lost.
 6. **The menu entry asks nothing** — every signed-in user may open the page.
+7. **The prize service** (F-707-s): `_components/PrizeServicePicker.tsx`, here
+   and on `/lotteries`, over `GET`/`PUT /api/billing/reward-target`
+   (`lib/billing/reward-target.ts`) — which service GB and days won are added
+   to. One choice for the wheel and both lottery kinds; «automatic» is `null`.
+   Shown only with two services or more a prize can reach; each named as My
+   services names it, a days-only or GB-only one marked. It draws billing's
+   answer and keeps no choice of its own, so a refusal leaves billing's in
+   place with the reason's sentence. A failed read hides it.
 
 ## The admin's settings (F-707-f)
 

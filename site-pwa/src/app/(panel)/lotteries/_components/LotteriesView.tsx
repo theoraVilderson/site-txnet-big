@@ -11,6 +11,7 @@ import { formatInstant } from "../../_lib/datetime";
 import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { LOTTERY_KEYS as K, entryState, excludedKeyOf, refusalKey, statusKey } from "../_lib/lotteries";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { PrizeServicePicker } from "../../_components/PrizeServicePicker";
 import { Alert, Button, buttonClass } from "../../_components/kit";
 
 /**
@@ -70,6 +71,8 @@ export function LotteriesView() {
         title={t("common", K.title)}
         subtitle={t("common", K.subtitle)}
       />
+
+      {lotteries && lotteries.length > 0 && <PrizeServicePicker />}
 
       {error && !lotteries ? (
         <div className="flex flex-wrap items-center gap-3">

@@ -5487,6 +5487,18 @@
       "refused": "Not spun — {{reason}}"
     }
   },
+  "prizeService": {
+    "title": "Prize service",
+    "hint": "GB and days you win on the wheel or in a lottery are added to this service.",
+    "automatic": "Automatic — the service that runs longest",
+    "daysOnly": "{{name}} (days only)",
+    "trafficOnly": "{{name}} (GB only)",
+    "saved": "Prize service saved.",
+    "refusals": {
+      "grant_not_found": "This service was not found. Open the page again.",
+      "grant_not_eligible": "Prizes can no longer go to this service. Choose another one."
+    }
+  },
   "wheelSettings": {
     "title": "Wheel settings",
     "subtitle": "Prizes, odds, the daily cost cap and who may spin. Every save is a new version that starts on the next day.",

@@ -11,6 +11,7 @@ import { TableSkeleton } from "../../_components/kit/TableSkeleton";
 import { WHEEL_KEYS as K, landingRotation, nextRequestId, plainNumber, refusalKey, refusalKeyOf, resultLine } from "../_lib/wheel";
 import { WheelDisc } from "./WheelDisc";
 import { PageHeader } from "../../_components/kit/PageHeader";
+import { PrizeServicePicker } from "../../_components/PrizeServicePicker";
 import { celebrate } from "../../_components/kit/celebrate";
 import { Alert, Button } from "../../_components/kit";
 
@@ -170,6 +171,7 @@ export function WheelView() {
           </section>
 
           <section className="space-y-6">
+            <PrizeServicePicker />
             <div className="rounded-2xl border border-card-border bg-card-bg p-4">
               <h2 className="text-sm font-bold text-text-primary">{t("common", K.odds.title)}</h2>
               <p className="mt-1 text-xs text-text-secondary">{t("common", K.odds.note)}</p>
