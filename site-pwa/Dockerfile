@@ -1,5 +1,7 @@
 ARG DOCKER_REGISTRY
-FROM ${DOCKER_REGISTRY}/node:22 AS base
+# Pinned to the patch, not the line: a floating tag stays on whatever was cached
+# (Node security release 2026-10-21: Brotli RCE, TLS hostname bypass). Bump on the next one.
+FROM ${DOCKER_REGISTRY}/node:22.23.4 AS base
 WORKDIR /app
 
 FROM base AS deps

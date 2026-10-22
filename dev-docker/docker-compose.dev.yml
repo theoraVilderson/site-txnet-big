@@ -34,7 +34,9 @@
 #     container that hits its ceiling is OOM-killed and restarted alone.
 
 x-host-node: &host-node
-  image: ${DOCKER_REGISTRY}/node:24-bookworm
+  # Exact patch: with pull_policy: missing a floating tag is never re-pulled, so a
+  # Node security fix (2026-10-21) never arrived. Bump with the host's nvm Node.
+  image: ${DOCKER_REGISTRY}/node:24.22.1-bookworm
   pull_policy: missing
   working_dir: /app
   command: ["node", "scripts/dev-serve.js"]

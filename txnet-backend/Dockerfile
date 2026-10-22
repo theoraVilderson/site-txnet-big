@@ -5,7 +5,9 @@ ARG DOCKER_REGISTRY
 # Node 24, as on the host and in CI (`.github/workflows/ci.yml`). Its npm 11 is
 # the npm that writes package-lock.json; npm 10 (node:20) rejected that lockfile
 # in `npm ci`, and some dependencies (undici 8) require Node >= 22.19.
-FROM ${DOCKER_REGISTRY}/node:24-alpine AS base
+# Pinned to the patch, not the line: a floating tag stays on whatever was cached
+# (Node security release 2026-10-21: Brotli RCE, TLS hostname bypass). Bump on the next one.
+FROM ${DOCKER_REGISTRY}/node:24.22.1-alpine AS base
 WORKDIR /app
 ARG APP_NAME
 ENV APP_NAME=${APP_NAME}

@@ -21,7 +21,8 @@ with `dev-docker/docker-compose.dev.yml` layered over the main file.
 the main file alone.
 
 `docker-compose.dev.yml` runs `billing-service` from the host checkout on stock
-`node:24-bookworm`: no image build, the host's own `node_modules`, and
+`node:24.22.1-bookworm` (an exact patch: `pull_policy: missing` never re-pulls a
+floating tag, so a Node security fix only lands by bumping it): no image build, the host's own `node_modules`, and
 `scripts/dev-serve.js` reloading on save. Packages are installed with npm **on
 the host**; a Prisma schema change needs `npx prisma generate` on the host and a
 container restart. The image must match the host's libc and Node major, or the

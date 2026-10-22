@@ -1,6 +1,8 @@
 # ---------- Base ----------
 ARG DOCKER_REGISTRY
-FROM ${DOCKER_REGISTRY}/node:22-alpine AS base
+# Pinned to the patch, not the line: a floating tag stays on whatever was cached
+# (Node security release 2026-10-21: Brotli RCE, TLS hostname bypass). Bump on the next one.
+FROM ${DOCKER_REGISTRY}/node:22.23.4-alpine AS base
 # پکیج libc6-compat برای سازگاری بهتر برخی ماژول‌های سیستمی C/C++ در آلپاین بسیار توصیه می‌شود
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
