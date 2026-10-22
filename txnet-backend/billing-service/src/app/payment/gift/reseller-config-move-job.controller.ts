@@ -2,6 +2,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Get,
   HttpCode,
   HttpException,
   HttpStatus,
@@ -49,6 +50,7 @@ export function moveJobRefusal(e: unknown): unknown {
  * then starts; the worker moves in batches; the page hears each batch
  * (`network.config_move_job.progress`) and re-reads the job.
  *
+ * - `GET …/move-jobs/panels` -> `{sources, targets}`, the page's two pickers (`read`, F-311-ae)
  * - `POST …/move-jobs/count` `{source, toPanelId}` -> `{count}` (`read`)
  * - `POST …/move-jobs` `{requestId, source, toPanelId, reason}` -> **202** the job (`staffWrite`)
  * - `GET …/move-jobs`, `GET …/move-jobs/:jobId`, `GET …/move-jobs/:jobId/outcomes` (`read`)
@@ -67,6 +69,13 @@ export class ResellerConfigMoveJobController extends ResellerJobRoutes {
 
   protected refusal(e: unknown): unknown {
     return moveJobRefusal(e);
+  }
+
+  /** Before the base's `:jobId`, which would take `panels` for an id and refuse it. */
+  @Get('panels')
+  @RateLimit(bulkReadLimit)
+  panels(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.answer(() => this.jobs.panels(actorOf(req), tenantId));
   }
 
   @Post('count')

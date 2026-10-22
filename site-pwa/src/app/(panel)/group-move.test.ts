@@ -22,7 +22,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RealtimeEvents } from "@/generated/wire";
 import { resellerGroupMovesApi, systemsGroupMovesApi } from "@/lib/billing/grant-group-moves";
-import { GROUP_MOVE_EVENTS, GROUP_MOVE_MAX_GRANTS, groupMoveChannel, groupMoveRefusalKey, groupMoveTargets, validateGroupMove } from "./_lib/group-move";
+import { GROUP_MOVE_MAX_GRANTS, groupMoveRefusalKey, groupMoveTargets, validateGroupMove } from "./_lib/group-move";
+import { MOVE_JOB_EVENTS, moveJobChannel } from "./_lib/move-job";
 
 const REPO = join(__dirname, "../../../..");
 const [EU, ASIA, GAMING] = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"];
@@ -125,9 +126,9 @@ describe("the two doors", () => {
 
 describe("the job, live", () => {
   it("is heard by its progress event on the reader's own user: channel, which billing names in the payload", () => {
-    expect(GROUP_MOVE_EVENTS).toEqual([RealtimeEvents.configMoveJobProgress]);
-    expect(groupMoveChannel("u-1")).toBe("user:u-1");
-    expect(groupMoveChannel(null)).toBeNull();
+    expect(MOVE_JOB_EVENTS).toEqual([RealtimeEvents.configMoveJobProgress]);
+    expect(moveJobChannel("u-1")).toBe("user:u-1");
+    expect(moveJobChannel(null)).toBeNull();
     const job = readFileSync(join(REPO, "txnet-backend/billing-service/src/app/payment/gift/config-move-job.ts"), "utf8");
     expect(job).toMatch(/CONFIG_MOVE_JOB_PROGRESS, payload: \{[^}]*userId: job\.actorUserId/);
     const push = readFileSync(join(REPO, "txnet-backend/worker-service/src/app/outbox/live-push.consumer.ts"), "utf8");

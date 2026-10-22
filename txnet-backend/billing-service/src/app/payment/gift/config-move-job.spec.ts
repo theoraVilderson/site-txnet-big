@@ -101,6 +101,7 @@ function build() {
   const moves: { configId: string; toPanelId: string; actor: unknown; scope: string | undefined }[] = [];
   const throwing = new Map<string, number>();
   const refusing = new Map<string, string>();
+  const targetWheres: Row[] = [];
   const jobOf = (id: unknown) => jobs.find((j) => j.id === id) as Row;
   const tenants: Record<string, unknown> = {
     [PLATFORM]: { id: PLATFORM, slug: 'platform', tenantType: 'platform_owner', ownerUserId: null, status: 'active', graceEndsAt: null, deletedAt: null },
@@ -117,7 +118,15 @@ function build() {
   const tx = {
     $executeRaw: async () => 1,
     // A move target: TO is shared and accepted; FOREIGN is another reseller's own.
-    panel: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === TO || where.id === FROM ? { id: where.id } : null) },
+    panel: {
+      findFirst: async ({ where }: { where: { id: string } }) => (where.id === TO || where.id === FROM ? { id: where.id } : null),
+      findMany: async ({ where }: { where: Row }) => {
+        targetWheres.push(where);
+        return [{ id: TO, name: 'nl-1', region: 'nl', tenantId: null }, { id: FROM, name: 'de-own', region: 'de', tenantId: RESELLER }];
+      },
+    },
+    // `panelsOfSelection`: the panels the reseller's live Grants are on, the retired one included.
+    $queryRaw: async () => [{ id: FROM, name: 'de-own', region: 'de', own: true, retired: true, grants: 3 }],
     config: {
       findFirst: async ({ where }: { where: { grantId?: string; panelId?: string; protocol?: ConfigProtocol; id?: string } }) => {
         if (where.id) {
@@ -196,7 +205,7 @@ function build() {
   };
   const service = new ResellerConfigMoveJobService(prisma as never, access);
   const drainer = new ConfigMoveJobDrainService(prisma as never, crossTenant as never, actions as never, {} as never, {} as never);
-  return { service, drainer, jobs, items, outbox, moves, throwing, refusing };
+  return { service, drainer, jobs, items, outbox, moves, throwing, refusing, targetWheres };
 }
 
 const body = (over: Row = {}) => ({ requestId: randomUUID(), source: { panelId: FROM }, toPanelId: TO, reason: 'de-2 is down', ...over }) as never;
@@ -282,6 +291,18 @@ describe('ConfigMoveJobDrainService.drain — each config once, as the job\'s ad
       { configId: c(2), ok: false, reason: 'config_retired' },
       { configId: c(3), ok: false, reason: 'failed' },
     ]);
+  });
+});
+
+describe('ResellerConfigMoveJobService.panels — the page\'s two pickers, behind the move\'s own door', () => {
+  it('answers the panels its configs are on as sources, and the move targets — fenced by the path\'s tenant — as targets', async () => {
+    const { service, targetWheres } = build();
+    expect(await service.panels(owner, RESELLER)).toEqual({
+      sources: [{ id: FROM, name: 'de-own', region: 'de', own: true, retired: true, grants: 3 }],
+      targets: [{ id: TO, name: 'nl-1', region: 'nl', own: false }, { id: FROM, name: 'de-own', region: 'de', own: true }],
+    });
+    // `network.panel` has no RLS: the tenant is in the filter, never another reseller's own panel.
+    expect(targetWheres).toEqual([expect.objectContaining({ retiredAt: null, OR: [{ tenantId: null }, { tenantId: RESELLER }] })]);
   });
 });
 

@@ -5,7 +5,8 @@ import { AdmittedReseller, OutboxEventType, ResellerAccess, ResellerAccessRefuse
 import { AuditActor, auditMoveJob } from '../../grant-audit/grant-audit';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigMoveJobBody, ConfigMoveSelection, ConfigMoveSource } from './config-move-job.schema';
-import { countMoveSelection, insertMoveSelection, moveTargetWhere } from './config-move-selection';
+import { countMoveSelection, insertMoveSelection, MoveTarget, moveTargetsOf, moveTargetWhere } from './config-move-selection';
+import { GrantBulkPanel, panelsOfSelection } from './grant-bulk-selection';
 import { GrantBulkPage } from './grant-bulk-job.schema';
 import { JobProgress, jobProgress } from './job-progress';
 import { bulkFingerprint } from './reseller-grants-bulk';
@@ -111,6 +112,18 @@ export class ResellerConfigMoveJobService {
 
   count(actor: ResellerActor, tenantId: string, selection: ConfigMoveSelection): Promise<number> {
     return this.admitted(actor, tenantId, 'read', () => tenantTransaction(this.prisma, (tx) => countMoveSelection(tx, tenantId, selection)));
+  }
+
+  /**
+   * The page's two pickers (F-311-ae), behind this door rather than the bulk
+   * job's `grant.assign`: the panels the reseller's live services are on — the
+   * retired one that went down included, it is the one being emptied — and
+   * the move targets.
+   */
+  panels(actor: ResellerActor, tenantId: string): Promise<{ sources: GrantBulkPanel[]; targets: MoveTarget[] }> {
+    return this.admitted(actor, tenantId, 'read', () =>
+      tenantTransaction(this.prisma, async (tx) => ({ sources: await panelsOfSelection(tx, tenantId), targets: await moveTargetsOf(tx, tenantId) })),
+    );
   }
 
   start(actor: AdminActor, tenantId: string, body: ConfigMoveJobBody): Promise<ConfigMoveJobView> {

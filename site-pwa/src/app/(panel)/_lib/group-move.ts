@@ -1,7 +1,5 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
-import { RealtimeEvents } from "@/generated/wire";
 import type { GroupMoveBody, GroupMoveSource, GroupMoveTarget } from "@/lib/billing-api";
-import { userChannel } from "@/lib/realtime";
 
 /**
  * "Move to another group" (F-027-ev -> billing F-027-et, ADR-0127 decision 5):
@@ -16,19 +14,6 @@ export const GROUP_MOVE_MAX_GRANTS = 500;
 
 /** billing's `reason` on a move. */
 const MAX_REASON = 500;
-
-/** A move job's progress (billing `announceProgress`): a batch moved, the job ended or was stopped. */
-export const GROUP_MOVE_EVENTS: readonly string[] = [RealtimeEvents.configMoveJobProgress];
-
-/**
- * Where the job's progress reaches its reader: the starter's own `user:`
- * channel, which billing names in the payload. A reseller's admin on the
- * platform's panel is on the platform tenant, so its `tenant:` channel is not
- * theirs to hold (`realtime/contract.channels.md`).
- */
-export function groupMoveChannel(userId: string | null): string | null {
-  return userId ? userChannel(userId) : null;
-}
 
 /** The groups a move may target: never the one being emptied (billing's `same_group` for each of its Grants). */
 export function groupMoveTargets(groups: GroupMoveTarget[], source: GroupMoveSource): GroupMoveTarget[] {

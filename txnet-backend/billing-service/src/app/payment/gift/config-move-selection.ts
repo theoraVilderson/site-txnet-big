@@ -10,6 +10,29 @@ import { ConfigMoveSelection } from './config-move-job.schema';
 export const moveTargetWhere = (tenantId: string) =>
   ({ retiredAt: null, reviewState: { in: [PanelReviewState.accepted, PanelReviewState.accepted_low_trust] }, OR: [{ tenantId: null }, { tenantId }] }) satisfies Prisma.PanelWhereInput;
 
+/** A panel a config may move to (F-311-v1); `own` is the reseller's dedicated one, else shared. */
+export interface MoveTarget {
+  id: string;
+  name: string;
+  region: string;
+  own: boolean;
+}
+
+/**
+ * The move targets themselves, region then name — one config's move (F-311-v1)
+ * and a move job's picker (F-311-ae) read the same list. **`network.panel` has
+ * no RLS**, so the tenant is written into the filter; no address and no
+ * credential is selected.
+ */
+export async function moveTargetsOf(tx: Prisma.TransactionClient, tenantId: string): Promise<MoveTarget[]> {
+  const panels = await tx.panel.findMany({
+    where: moveTargetWhere(tenantId),
+    select: { id: true, name: true, region: true, tenantId: true },
+    orderBy: [{ region: 'asc' }, { name: 'asc' }],
+  });
+  return panels.map((p) => ({ id: p.id, name: p.name, region: p.region, own: p.tenantId !== null }));
+}
+
 /**
  * The configs a move job takes (F-311-ad), as one `WHERE`: the reseller's own
  * — the tenant is in the query (C-15), `network.config` is read under its

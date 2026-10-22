@@ -2,10 +2,11 @@
 
 import { useEffect, useState, type ComponentProps } from "react";
 import { useLocale } from "@/context/LocaleContext";
-import type { GroupMoveCount, GroupMoveJob, GroupMoveSource, GroupMovesApi, GroupMoveTarget } from "@/lib/billing-api";
-import { GROUP_MOVE_KEYS as K, groupMoveRefusal, groupMoveTargets, normalSource, validateGroupMove, type GroupMoveForm } from "../../_lib/group-move";
+import type { GroupMoveJob, GroupMoveOutcome, GroupMoveSource, GroupMovesApi, GroupMoveTarget } from "@/lib/billing-api";
+import { GROUP_MOVE_KEYS as K, groupMoveRefusal, groupMoveRefusalKey, groupMoveTargets, normalSource, validateGroupMove, type GroupMoveForm } from "../../_lib/group-move";
 import { Alert, Button, Dialog, Field, NativeSelect, Textarea, useConfirm } from "../kit";
-import { GroupMoveJobCard } from "./GroupMoveJobCard";
+import { MoveJobCard } from "../MoveJobCard";
+import { MoveSheetActions, useMoveCount, useMoveStart } from "../move-sheet";
 
 /**
  * "Move to another group" (F-027-ev -> billing F-027-et, ADR-0127 decision 5):
@@ -14,7 +15,7 @@ import { GroupMoveJobCard } from "./GroupMoveJobCard";
  *  - **the preview is billing's count**, for the target picked: how many
  *    Grants, how many configs keep their link and how many get a new one;
  *  - **one sheet, one `requestId`**: a double click starts one job;
- *  - **the job is shown live** (`GroupMoveJobCard`), and closing the sheet
+ *  - **the job is shown live** (`MoveJobCard`), and closing the sheet
  *    never stops it.
  *
  * Who may move what, and into which group, is the door's (`api`) — the owner's
@@ -54,7 +55,14 @@ export function GroupMoveDialog({
   return (
     <Dialog open={open} onClose={close} title={t("common", K.title)} description={sourceLabel} size="md">
       {job ? (
-        <GroupMoveJobCard api={api} start={job} nameOf={nameOf} message={say} onEnded={onEnded} />
+        <MoveJobCard
+          api={api}
+          start={job}
+          keys={K}
+          problemOf={(o: GroupMoveOutcome) => (o.ok ? null : { id: o.grantId, label: nameOf(o.grantId), reasonKey: groupMoveRefusalKey(o.reason) })}
+          message={say}
+          onEnded={onEnded}
+        />
       ) : (
         <MoveForm api={api} source={source} message={say} onStarted={setJob} onCancel={close} />
       )}
@@ -94,38 +102,26 @@ function MoveForm({
   const confirm = useConfirm();
   const [targets, setTargets] = useState<GroupMoveTarget[] | null>(null);
   const [form, setForm] = useState<GroupMoveForm>({ toGroupId: "", reason: "" });
-  // The count answered for one target: a stale one never reads as the current pick's.
-  const [counted, setCounted] = useState<{ toGroupId: string; count: GroupMoveCount } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [requestId] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<unknown>(null);
+  const [loadError, setLoadError] = useState<unknown>(null);
   const sourceJson = JSON.stringify(normalSource(source));
+  const counted = useMoveCount(form.toGroupId ? { source: JSON.parse(sourceJson) as GroupMoveSource, toGroupId: form.toGroupId } : null, api.count);
+  const starting = useMoveStart(onStarted);
+  const count = counted.count;
+  const error = starting.error ?? counted.error ?? loadError;
 
   useEffect(() => {
     let alive = true;
     api.targets().then(
       (list) => alive && setTargets(groupMoveTargets(list, JSON.parse(sourceJson))),
-      (e: unknown) => alive && setError(e),
+      (e: unknown) => alive && setLoadError(e),
     );
     return () => {
       alive = false;
     };
   }, [api, sourceJson]);
 
-  useEffect(() => {
-    if (!form.toGroupId) return;
-    let alive = true;
-    api.count({ source: JSON.parse(sourceJson), toGroupId: form.toGroupId }).then(
-      (count) => alive && setCounted({ toGroupId: form.toGroupId, count }),
-      (e: unknown) => alive && setError(e),
-    );
-    return () => {
-      alive = false;
-    };
-  }, [api, sourceJson, form.toGroupId]);
-
-  const count = counted && counted.toGroupId === form.toGroupId ? counted.count : null;
   const target = targets?.find((g) => g.id === form.toGroupId);
 
   async function start() {
@@ -135,15 +131,7 @@ function MoveForm({
     if (!count || !target) return;
     const asked = t("common", K.confirm, { grants: String(count.grants), group: target.name, move: String(count.move) });
     if (!(await confirm({ title: asked, confirmLabel: t("common", K.start) }))) return;
-    setBusy(true);
-    setError(null);
-    try {
-      onStarted(await api.start(checked.body));
-    } catch (e) {
-      setError(e);
-    } finally {
-      setBusy(false);
-    }
+    await starting.run(() => api.start(checked.body));
   }
 
   return (
@@ -179,14 +167,14 @@ function MoveForm({
       </Field>
       {errors.source && <Alert tone="error">{t("common", errors.source)}</Alert>}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
-      <div className="flex gap-2">
-        <Button variant="primary" size="sm" loading={busy} disabled={!count || count.grants === 0} onClick={() => void start()}>
-          {t("common", K.start)}
-        </Button>
-        <Button variant="quiet" size="sm" onClick={onCancel}>
-          {t("common", K.close)}
-        </Button>
-      </div>
+      <MoveSheetActions
+        startLabel={t("common", K.start)}
+        closeLabel={t("common", K.close)}
+        busy={starting.busy}
+        disabled={!count || count.grants === 0}
+        onStart={() => void start()}
+        onCancel={onCancel}
+      />
     </div>
   );
 }

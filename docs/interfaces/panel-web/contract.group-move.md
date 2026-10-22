@@ -3,7 +3,7 @@ id: panel-web
 layer: interface
 status: active
 version: 43
-updated: 2026-10-17
+updated: 2026-10-22
 ---
 
 # Contract — panel-web: moving Grants to another panel group (F-027-ev)
@@ -14,7 +14,8 @@ A topic file of [contract.md](contract.md) beside
 a Grant moves to another group by the owner's choice — money, quota and end
 stay; a config on an inbound the target also sells keeps its link, the rest
 are placed anew. Code: `_components/group-move/GroupMoveDialog.tsx` (the
-sheet and `GroupMoveButton`), `GroupMoveJobCard.tsx` (the job), rules
+sheet and `GroupMoveButton`), `_components/MoveJobCard.tsx` (the job; shared with
+the panel move, F-311-ae, channel and event in `_lib/move-job.ts`), rules
 `_lib/group-move.ts`, calls `lib/billing/grant-group-moves.ts`; billing's
 routes are network [contract.config-move.md](../../domains/network/contract.config-move.md)
 "Moving Grants to another group".

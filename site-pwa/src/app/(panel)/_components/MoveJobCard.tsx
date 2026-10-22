@@ -1,83 +1,103 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Square } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import type { GroupMoveJob, GroupMoveOutcome, GroupMovesApi } from "@/lib/billing-api";
-import { usePanelSession } from "../../_context/PanelSessionContext";
-import { GROUP_MOVE_EVENTS, GROUP_MOVE_KEYS as K, groupMoveChannel, groupMoveRefusalKey } from "../../_lib/group-move";
-import { jobPercent } from "../../my-resellers/_lib/grant-bulk";
-import { JobProblemsPager } from "../JobProblemsPager";
-import { Alert, Button, useConfirm } from "../kit";
+import type { JobProgress } from "@/lib/billing-api";
+import { usePanelSession } from "../_context/PanelSessionContext";
+import { MOVE_JOB_EVENTS, moveJobChannel, type MoveJobKeys } from "../_lib/move-job";
+import { jobPercent } from "../my-resellers/_lib/grant-bulk";
+import { JobProblemsPager } from "./JobProblemsPager";
+import { Alert, Button, useConfirm } from "./kit";
 
 const OUTCOMES_PAGE_SIZE = 20;
 
+/** The three calls the card makes on one job, whichever door and kind it is. */
+export interface MoveJobCalls<J, O> {
+  job(jobId: string): Promise<J>;
+  /** The refused and failed rows only. */
+  outcomes(jobId: string, page: number, pageSize: number): Promise<{ rows: O[]; purgedAt: string | null }>;
+  cancel(jobId: string): Promise<J>;
+}
+
+/** A row that did not move, as the card lists it: a stable id, how it is named, and its reason's key. */
+export type MoveJobProblem = { id: string; label: string; reasonKey: string };
+
 /**
- * A group move as it runs (F-027-ev): progress over the total frozen at the
- * confirm, its counts, a stop, and every refused Grant with its sentence. It
+ * A move job as it runs — Grants to another group (F-027-ev), configs to
+ * another panel (F-311-ae): progress over the total frozen at the confirm, its
+ * counts, a stop, and every row that did not move with its sentence. It
  * re-reads on the job's progress event, for this job only (C-14), never by
  * polling; the refusals are read again when it ends.
  */
-export function GroupMoveJobCard({
+export function MoveJobCard<J extends JobProgress & { id: string }, O>({
   api,
   start,
-  nameOf,
+  keys: K,
+  problemOf,
   message,
   onEnded,
+  ended,
 }: {
-  api: GroupMovesApi;
-  start: GroupMoveJob;
-  nameOf: (grantId: string) => string;
+  api: MoveJobCalls<J, O>;
+  start: J;
+  keys: MoveJobKeys;
+  /** `null` for a row that moved. */
+  problemOf: (outcome: O) => MoveJobProblem | null;
   message: (e: unknown) => string;
-  onEnded?: () => void;
+  onEnded?: (job: J) => void;
+  /** The kind's own next step once the job has ended (a retry), under its counts. */
+  ended?: (job: J) => ReactNode;
 }) {
   const { t } = useLocale();
   const confirm = useConfirm();
   const { group } = usePanelSession();
   const [job, setJob] = useState(start);
-  const [problems, setProblems] = useState<{ rows: GroupMoveOutcome[]; page: number; purgedAt: string | null } | null>(null);
+  const [problems, setProblems] = useState<{ rows: MoveJobProblem[]; page: number; purgedAt: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  // A parent's inline callback must not re-run the mount read on every render.
+  // A parent's inline callbacks must not re-run the mount read on every render.
   const endedRef = useRef(onEnded);
+  const problemRef = useRef(problemOf);
   useEffect(() => {
     endedRef.current = onEnded;
+    problemRef.current = problemOf;
   });
 
   const readProblems = useCallback(
     (page: number) =>
-      api.outcomes(job.id, page, OUTCOMES_PAGE_SIZE).then(
-        (p) => setProblems({ rows: p.rows, page, purgedAt: p.purgedAt }),
+      api.outcomes(start.id, page, OUTCOMES_PAGE_SIZE).then(
+        (p) => setProblems({ rows: p.rows.flatMap((o) => problemRef.current(o) ?? []), page, purgedAt: p.purgedAt }),
         (e: unknown) => setError(e),
       ),
-    [api, job.id],
+    [api, start.id],
   );
 
   const settle = useCallback(
-    (next: GroupMoveJob) => {
+    (next: J) => {
       setJob(next);
       if (next.status === "running") return;
-      endedRef.current?.();
+      endedRef.current?.(next);
       if (next.refused + next.failed > 0) void readProblems(1);
     },
     [readProblems],
   );
 
   const read = useCallback(() => {
-    api.job(job.id).then(settle, (e: unknown) => setError(e));
-  }, [api, job.id, settle]);
+    api.job(start.id).then(settle, (e: unknown) => setError(e));
+  }, [api, start.id, settle]);
 
   // Once on mount: a small job may end between the start's answer and the subscription.
   useEffect(read, [read]);
-  useLiveReread(job.status === "running" ? groupMoveChannel(group?.current.userId ?? null) : null, GROUP_MOVE_EVENTS, read, (p) => p.jobId === job.id);
+  useLiveReread(job.status === "running" ? moveJobChannel(group?.current.userId ?? null) : null, MOVE_JOB_EVENTS, read, (p) => p.jobId === start.id);
 
   async function cancel() {
     if (!(await confirm({ title: t("common", K.cancelConfirm), confirmLabel: t("common", K.cancel), tone: "danger" }))) return;
     setBusy(true);
     setError(null);
     try {
-      settle(await api.cancel(job.id));
+      settle(await api.cancel(start.id));
     } catch (e) {
       setError(e);
     } finally {
@@ -113,17 +133,16 @@ export function GroupMoveJobCard({
           {problems.purgedAt ? (
             <p className="text-text-secondary">{t("common", K.purged)}</p>
           ) : (
-            problems.rows.map((o) =>
-              o.ok ? null : (
-                <p key={o.grantId} className="text-error" dir="auto">
-                  {t("common", K.problemLine, { id: nameOf(o.grantId), reason: t("common", groupMoveRefusalKey(o.reason)) })}
-                </p>
-              ),
-            )
+            problems.rows.map((p) => (
+              <p key={p.id} className="text-error" dir="auto">
+                {t("common", K.problemLine, { id: p.label, reason: t("common", p.reasonKey) })}
+              </p>
+            ))
           )}
           <JobProblemsPager page={problems.page} count={problemCount} pageSize={OUTCOMES_PAGE_SIZE} purged={problems.purgedAt !== null} onPage={(page) => void readProblems(page)} />
         </div>
       )}
+      {job.status !== "running" && ended?.(job)}
       {error !== null && <Alert tone="error">{message(error)}</Alert>}
     </div>
   );

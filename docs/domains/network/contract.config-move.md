@@ -26,6 +26,7 @@ cancel are `ResellerJobRoutes`', shared with the bulk job by filter):
 
 | Route | Door | Answers |
 |---|---|---|
+| `GET …/panels` | `read` | `{sources[{id, name, region, own, retired, grants}], targets[{id, name, region, own}]}` — the page's two pickers (F-311-ae): the panels its live services are on, the retired included (`panelsOfSelection`), and the move targets (`moveTargetsOf`), behind this door rather than the bulk job's `grant.assign` |
 | `POST …/count` `{source, toPanelId}` | `read` | `{count}` — what the confirm shows |
 | `POST …` `{requestId, source, toPanelId, reason}` | `staffWrite` | **202** the job; the same `requestId` again answers it |
 | `GET …?page&pageSize` | `read` | `{rows[job], page, pageSize, total}`, newest first |
@@ -66,7 +67,7 @@ Tenant RLS on both; the drain reads through `txnet_cross_tenant`
 | A started job finishes whatever its tenant's status; starting and cancelling are the `staffWrite` | a suspension must not strand half a panel's users mid-move |
 | 30 days after a job ended (`CONFIG_MOVE_RETENTION_DAYS`) the drain deletes its items and sets `purgedAt`, 5 jobs a call; the job row and counts stay | the per-config rows are the bulk; the summary is what is asked later |
 
-`config-move-job.spec.ts` pins the rules above. The drain is `config-move-drain.ts`.
+`config-move-job.spec.ts` pins the rules above and the pickers route. The drain is `config-move-drain.ts`.
 
 ## Releasing an inbound from groups (F-027-es)
 

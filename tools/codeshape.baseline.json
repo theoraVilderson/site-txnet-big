@@ -312,7 +312,7 @@
   "txnet-backend/billing-service/src/app/payment/deposit/deposit-start.service.ts": 433,
   "txnet-backend/billing-service/src/app/payment/gateway-admin/gateway-admin.service.ts": 718,
   "txnet-backend/billing-service/src/app/payment/gift/reseller-user-grants.controller.ts": 548,
-  "txnet-backend/billing-service/src/app/payment/gift/reseller-user-grants.service.ts": 448,
+  "txnet-backend/billing-service/src/app/payment/gift/reseller-user-grants.service.ts": 426,
   "txnet-backend/billing-service/src/app/payment/pricing/gateway-pricing.ts": 425,
   "txnet-backend/billing-service/src/app/revenue/reseller-revenue.service.ts": 451,
   "txnet-backend/billing-service/src/app/settlement/settlement.service.ts": 519,

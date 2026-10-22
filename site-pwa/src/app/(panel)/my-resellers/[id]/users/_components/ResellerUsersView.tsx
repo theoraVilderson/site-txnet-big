@@ -20,9 +20,12 @@ import { FreezeSettingsCard } from "../../../_components/FreezeSettingsCard";
 import { grantKeyHeld } from "../../../_lib/grant-actions";
 import { ConsentNeeded, PlatformAccessBanner } from "../../../_components/PlatformAccessBanner";
 import { consentRefusal } from "../../../_lib/support-access";
+import { BULK_MOVE_KEYS } from "../../../_lib/bulk-move";
+import { useTickedUsers } from "../_hooks/useTickedUsers";
 import { BulkByFilter } from "./BulkByFilter";
+import { BulkMove } from "./BulkMove";
 import { FindByLink } from "./FindByLink";
-import { Alert, Button, buttonClass, Dialog, Field, Input, PageHeader, Textarea, useConfirm } from "../../../../_components/kit";
+import { Alert, Button, buttonClass, Checkbox, Dialog, Field, Input, PageHeader, Textarea, useConfirm } from "../../../../_components/kit";
 
 /** How long typing rests before the list is asked again. */
 const TYPING_MS = 350;
@@ -52,7 +55,10 @@ const STATUS_TONE: Record<ResellerUser["status"], string> = {
  *  - **a service is found by a pasted link, and the ticked ones acted on at
  *    once** (F-311-x, `FindByLink`), across every user of the reseller;
  *  - **or chosen by a filter** — a panel, a product, every active service —
- *    and run as a job the page watches (F-311-x1, `BulkByFilter`).
+ *    and run as a job the page watches (F-311-x1, `BulkByFilter`);
+ *  - **the users ticked here, or one panel's, moved to another panel** as a
+ *    job (F-311-ae, `BulkMove`) — offered with `grant.repair`, a config
+ *    move's own key; the ticks survive paging and searching.
  */
 export function ResellerUsersView({ id, own = false }: { id: string; own?: boolean }) {
   const { t, lang } = useLocale();
@@ -78,6 +84,8 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
   const [asking, setAsking] = useState<{ user: ResellerUser; action: "restrict" | "ban" } | null>(null);
   const [reason, setReason] = useState("");
   const canBan = canBanHere(id, me);
+  const canMove = grantKeyHeld(me ?? null, id, "grant.repair");
+  const ticks = useTickedUsers();
 
   const nameOf = (user: ResellerUser) => user.fullName || user.username || t("common", K.unnamed);
 
@@ -205,6 +213,7 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
 
       <FindByLink id={id} own={own} />
       <BulkByFilter id={id} />
+      {canMove && <BulkMove id={id} tickedUserIds={ticks.ticked} onClearTicks={ticks.clear} />}
       <TenantGrantLimitCard tenantId={id} />
       <FreezeSettingsCard tenantId={id} />
       {/* Read by whoever compensates, set by `grant.assign` (KS-1-c); for the owner and the platform the door decides. */}
@@ -234,6 +243,13 @@ export function ResellerUsersView({ id, own = false }: { id: string; own?: boole
           <ul className="divide-y divide-card-border overflow-hidden rounded-2xl border border-card-border bg-card-bg">
             {answer.items.map((user) => (
               <li key={user.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                {canMove && (
+                  <Checkbox
+                    checked={ticks.ticked.includes(user.id)}
+                    onChange={() => ticks.toggle(user.id)}
+                    label={<span className="sr-only">{t("common", BULK_MOVE_KEYS.tick, { name: nameOf(user) })}</span>}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-text-primary">{user.fullName || t("common", K.unnamed)}</p>
                   <p className="flex flex-wrap gap-x-3 text-xs text-text-secondary">
