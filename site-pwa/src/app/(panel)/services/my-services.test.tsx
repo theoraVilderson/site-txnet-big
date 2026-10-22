@@ -91,6 +91,8 @@ vi.mock("@/lib/billing-api", async (importOriginal) => ({
     subscriptionLink: vi.fn(),
     resetSubscriptionLink: vi.fn(),
     grantConfigs: vi.fn(),
+    // «تغییر سرور» (F-410-d) is config-move.test.tsx's; here it never answers, so it draws nothing.
+    configMoveTargets: vi.fn(() => new Promise(() => {})),
     grantUsage: vi.fn(() => new Promise(() => {})),
     grantPeriod: vi.fn(() => new Promise(() => {})),
     configAction: vi.fn(),

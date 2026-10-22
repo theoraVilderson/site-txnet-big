@@ -2,6 +2,7 @@
 // This file is the address every caller and every spec's `vi.mock` names, so
 // it re-exports them all and assembles `billingApi` from their parts; the
 // transport and its header comment are in `./billing/client.ts`.
+import { configMoveCalls } from "./billing/config-moves";
 import { couponCalls } from "./billing/coupons";
 import { depositCalls } from "./billing/deposit";
 import { gatewayCalls } from "./billing/gateways";
@@ -14,6 +15,7 @@ import { systemsCalls } from "./billing/systems";
 import { walletCalls } from "./billing/wallet";
 
 export type { CursorPage, Paged } from "./billing/client";
+export * from "./billing/config-moves";
 export * from "./billing/coupons";
 export * from "./billing/deposit";
 export * from "./billing/gateways";
@@ -34,6 +36,7 @@ export const billingApi = {
   ...depositCalls,
   ...shopCalls,
   ...grantCalls,
+  ...configMoveCalls,
   ...manualPaymentCalls,
   ...transferCalls,
   ...systemsCalls,

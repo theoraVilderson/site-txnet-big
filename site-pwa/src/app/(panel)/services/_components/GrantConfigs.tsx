@@ -6,8 +6,9 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { ApiError } from "@/lib/api-error";
-import { billingApi, type ConfigAction, type ConfigActionOutcome, type RegenerateTerms, type UserConfigRow } from "@/lib/billing-api";
+import { billingApi, type ConfigAction, type ConfigActionOutcome, type ConfigMoveTargets, type RegenerateTerms, type UserConfigRow } from "@/lib/billing-api";
 import type { GrantConfigsState } from "../_hooks/useGrantConfigs";
+import { useMoveTargets } from "../_hooks/useMoveTargets";
 import {
   CONFIG_STATUS_KEYS,
   DRIFT_VERDICTS,
@@ -20,6 +21,7 @@ import {
 } from "../_lib/service-configs";
 import { rateDecimals } from "../../catalog/_lib/catalog-form";
 import { currencyDecimals, formatMoney } from "../../_lib/money";
+import { ConfigMove } from "./ConfigMove";
 
 const C = FrontendI18nKeys.common.myServices.configs;
 
@@ -48,6 +50,9 @@ type Refused = Extract<ConfigActionOutcome, { ok: false }>;
  * **Only what is shown is acted on.** `shown` is the row's search over the
  * list (user, 2026-09-26); a config ticked and then hidden by a search is not
  * a target, so "new link for selected" never reaches one the user cannot see.
+ *
+ * **«تغییر سرور» is per server** (F-410-d, `ConfigMove`): the targets are
+ * the Grant's, read once for the whole list.
  */
 export function GrantConfigs({
   configs,
@@ -60,6 +65,7 @@ export function GrantConfigs({
   const { t, lang } = useLocale();
   const toMessage = useApiErrorMessage();
   const { rows } = configs;
+  const moveTargets = useMoveTargets(rows);
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<ConfigAction | null>(null);
@@ -165,6 +171,8 @@ export function GrantConfigs({
               key={row.id}
               row={row}
               regenerate={configs.regenerate}
+              moveTargets={moveTargets}
+              onMoved={configs.reload}
               label={configName(row)}
               lang={lang}
               selectable={every.length > 1}
@@ -221,6 +229,8 @@ export function GrantConfigs({
 function ConfigItem({
   row,
   regenerate,
+  moveTargets,
+  onMoved,
   label,
   lang,
   selectable,
@@ -233,6 +243,8 @@ function ConfigItem({
 }: {
   row: UserConfigRow;
   regenerate: RegenerateTerms | null;
+  moveTargets: ConfigMoveTargets | null;
+  onMoved: () => void;
   label: string;
   lang: string;
   selectable: boolean;
@@ -310,6 +322,7 @@ function ConfigItem({
           {t("common", C.regenerate)}
         </button>
         <span className="text-xs text-text-secondary">{offerText(offer)}</span>
+        <ConfigMove configId={row.id} targets={moveTargets} onMoved={onMoved} />
       </div>
     </li>
   );

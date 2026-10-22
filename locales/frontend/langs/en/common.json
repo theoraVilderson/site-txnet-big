@@ -3492,6 +3492,17 @@
       "byHard": "Frozen by support. Only support can unfreeze it.",
       "until": "Until {{at}}",
       "limited": "This service was frozen {{limit}} times in the last 24 hours. The next freeze is allowed from {{at}}."
+    },
+    "move": {
+      "action": "Change server",
+      "title": "Move to another server",
+      "hint": "Choose where this config is served from. It moves at once and gets a new link: put the new link or QR in your app, as the old one stops working.",
+      "servers": "Servers",
+      "wait": "After a change, the next one is allowed {{hours}} hours later.",
+      "confirm": "Move",
+      "cancel": "Cancel",
+      "nextAt": "You can change the server again from {{at}}.",
+      "moved": "Moved to {{region}}. Its new link appears here in a moment."
     }
   },
   "systems": {
