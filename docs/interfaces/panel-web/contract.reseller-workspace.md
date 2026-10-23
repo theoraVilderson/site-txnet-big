@@ -13,6 +13,10 @@ console and one screen per section — is ADR-0064 (4) and
 [contract.resellers.md](contract.resellers.md). This file holds the two
 addresses it has and how the one menu leads through it.
 
+**ADR-0159 (2026-10-23) changes this file as TC-1 lands:** on its own domain a
+reseller's pages become top-level entries and `/reseller/…` redirects there.
+Until TC-1-b and TC-1-c are done, the rules below are what is built.
+
 ## Two addresses, one set of screens
 
 | who | address | id from |

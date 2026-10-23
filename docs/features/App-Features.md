@@ -1524,6 +1524,8 @@ The only real reason a reseller says "no" is fear of migration. This section tar
 | F-213  | Onboarding wizard: connect panel → import → pricing → **domain** → gateway → bot → first sale                        | changed | order changed: domain and gateway are now mandatory (D-01, D-03)          |
 | F-214  | Sandbox environment with a fake driver and sample data                                                               | base    | §7.1                                                                      |
 | F-1532 | AI onboarding and migration co-pilot                                                                                 | new     | §24                                                                       |
+| F-1601 | Import from MikroTik User Manager — each user stays on its router with its own login; a move to another panel only when asked | new | C-17 — the end user does nothing unless moved |
+| F-1602 | Import from IBSng — the same in-place import, once the IBSng driver exists | new | IBSng has no API docs: built from its open-source code |
 
 **Hard import rules:**
 

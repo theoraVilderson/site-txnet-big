@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 219
+- features: 221
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -143,7 +143,7 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 14.7 Protecting Reseller End Users | 4 |  |  |  |
 | `App-Features.md` · 14.8 Data Export and Deletion | 15 |  |  |  |
 | `App-Features.md` Multi-Tier Reseller | 27 | F-901 F-902 F-903 F-905 F-907 | C-15 C-18 D-01 D-03 D-05 |  |
-| `App-Features.md` Migration, Import and Onboarding | 31 | F-1532 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
+| `App-Features.md` Migration, Import and Onboarding | 33 | F-1532 F-1601 F-1602 F-201 F-202 F-203 F-204 F-205 F-206 F-207 F-208 F-209 F-210 F-211 F-212 F-213 F-214 | C-17 D-01 D-03 |  |
 | `App-Features.md` Retention, Anti-Churn and Growth | 2 |  |  |  |
 | `App-Features.md` · 17.1 Retention | 16 | F-1519 F-604 F-605 F-606 F-607 F-608 F-609 F-610 F-611 | C-09 |  |
 | `App-Features.md` · 17.2 Growth and Acquisition | 19 | F-701 F-702 F-703 F-704 F-705 F-706 F-708 F-709 | C-10 C-11 D-05 |  |
@@ -405,3 +405,5 @@ Rebuild: `python3 tools/features-scan.py`
 | F-1548 | A safety floor that can't be turned off: the attention budget, silence during outages, bot | new | 24.7 BYO-AI — Safety, Limits and Operations |
 | F-1549 | AI provider selection per message key, not one global key | new | 24.7 BYO-AI — Safety, Limits and Operations |
 | F-1550 | Factory default: AI off, default templates on, product fully functional | new | 24.7 BYO-AI — Safety, Limits and Operations |
+| F-1601 | Import from MikroTik User Manager — each user stays on its router with its own login; a mo | new | Migration, Import and Onboarding |
+| F-1602 | Import from IBSng — the same in-place import, once the IBSng driver exists | new | Migration, Import and Onboarding |
