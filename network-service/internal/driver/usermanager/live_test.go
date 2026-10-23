@@ -2,6 +2,7 @@ package usermanager
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"os"
 	"testing"
@@ -117,4 +118,87 @@ func clientNamed(ctx context.Context, t *testing.T, d *Driver, name string) driv
 	}
 	t.Fatalf("ListClients has no %s", name)
 	return driver.RemoteClient{}
+}
+
+// TestAdoptionOnARealRouter takes a reseller's own user over and hands it
+// back on the dev CHR (F-1601-b2): its password is the same row value after
+// both, its own profile alone after the hand back. Skipped without a router,
+// as TestOnARealRouter is.
+func TestAdoptionOnARealRouter(t *testing.T) {
+	base := os.Getenv("USERMANAGER_LIVE_URL")
+	if base == "" {
+		t.Skip("no router: set USERMANAGER_LIVE_URL (dev-docker/routeros/README.md)")
+	}
+	d, err := New(base, Credentials{Username: "admin", Password: os.Getenv("USERMANAGER_LIVE_PASSWORD")}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	const user, own = "live-adopted", "live-own"
+	put := func(menu string, body row) {
+		if err := d.call(ctx, "live", http.MethodPut, []string{menu}, nil, body, nil); err != nil {
+			t.Fatalf("seeding %s: %v", menu, err)
+		}
+	}
+	t.Cleanup(func() {
+		ctx := context.Background()
+		_ = d.unlinkProfiles(ctx, "live", user, func(string) bool { return true })
+		_ = d.remove(ctx, "live", "user", user)
+		_ = d.removeChain(ctx, "live", own)
+		_ = d.removeChain(ctx, "live", chainName(user))
+	})
+	put("limitation", row{"name": own, "transfer-limit": "1000000000"})
+	put("profile", row{"name": own, "validity": "unlimited"})
+	put("profile-limitation", row{"profile": own, "limitation": own})
+	put("user", row{"name": user, "password": "live-secret", "comment": "the reseller's"})
+	put("user-profile", row{"user": user, "profile": own})
+
+	if err := d.AdoptClient(ctx, driver.AdoptRequest{RemoteID: user, ClaimTag: "txn-live", DataLimitBytes: 3 << 30, Enabled: true}); err != nil {
+		t.Fatalf("AdoptClient: %v", err)
+	}
+	if got := liveProfiles(ctx, t, d, user); len(got) != 1 || got[0] != chainName(user) {
+		t.Fatalf("after adopting, %s holds %v, want our chain alone", user, got)
+	}
+	if u := liveUser(ctx, t, d, user); u["password"] != "live-secret" || u["comment"] != "txn-live" {
+		t.Fatalf("after adopting, %s is %v, want its own password and our tag", user, u)
+	}
+
+	if err := d.ReleaseClient(ctx, driver.ReleaseRequest{RemoteID: user, Profile: own, Label: "the reseller's"}); err != nil {
+		t.Fatalf("ReleaseClient: %v", err)
+	}
+	if got := liveProfiles(ctx, t, d, user); len(got) != 1 || got[0] != own {
+		t.Fatalf("after the hand back, %s holds %v, want its own profile alone", user, got)
+	}
+	if u := liveUser(ctx, t, d, user); u["password"] != "live-secret" || u["comment"] != "the reseller's" {
+		t.Fatalf("after the hand back, %s is %v, want it as it was", user, u)
+	}
+	if rows, err := d.list(ctx, "live", "profile", url.Values{"name": {chainName(user)}}); err != nil || len(rows) > 0 {
+		t.Fatalf("our profile is left after the hand back (err %v)", err)
+	}
+}
+
+func liveProfiles(ctx context.Context, t *testing.T, d *Driver, user string) []string {
+	t.Helper()
+	links, err := d.list(ctx, "live", "user-profile", url.Values{"user": {user}})
+	if err != nil {
+		t.Fatalf("reading %s's profiles: %v", user, err)
+	}
+	var out []string
+	for _, l := range links {
+		out = append(out, l["profile"])
+	}
+	return out
+}
+
+// liveUser reads the whole row, password included: the test's own seeded
+// secret, read to prove nothing wrote it.
+func liveUser(ctx context.Context, t *testing.T, d *Driver, user string) row {
+	t.Helper()
+	users, err := d.list(ctx, "live", "user", url.Values{"name": {user}})
+	if err != nil || len(users) != 1 {
+		t.Fatalf("reading %s: %v (%d rows)", user, err, len(users))
+	}
+	return users[0]
 }

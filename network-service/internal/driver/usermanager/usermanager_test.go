@@ -40,6 +40,9 @@ type farEnd struct {
 	// passwordServed is whether any answer carried a user's password: an
 	// import's read must never ask for one (ADR-0160 rule 2).
 	passwordServed bool
+	// passwordWritten is whether any write carried a user's password: an
+	// adopted login's must never be touched (F-1601-b2).
+	passwordWritten bool
 	// clockOffset is `/system/clock`'s gmt-offset; empty is UTC.
 	clockOffset string
 
@@ -162,6 +165,9 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			routerError(w, http.StatusBadRequest, "failure: entry already exists")
 			return
 		}
+		if _, ok := body["password"]; ok && menu == "user" {
+			f.passwordWritten = true
+		}
 		if detail := f.dangling(menu, body); detail != "" {
 			routerError(w, http.StatusBadRequest, detail)
 			return
@@ -184,6 +190,9 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				routerError(w, http.StatusBadRequest, "every value is a string on this API: "+err.Error())
 				return
+			}
+			if _, ok := body["password"]; ok && menu == "user" {
+				f.passwordWritten = true
 			}
 			for k, v := range body {
 				row[k] = v

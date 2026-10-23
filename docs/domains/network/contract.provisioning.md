@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 16
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # Provisioning — every action is desired state, and one pass carries it
@@ -98,6 +98,11 @@ client's id — a renamed or rebuilt client is re-keyed and carried on.
 | `present` | `enabled` differs | `SetClientEnabled` → `partial` |
 | `present` | matches, under another id | re-keys `remoteId` → `complete` |
 | `present` | matches | `complete` |
+
+**An adopted login** (`adoptedProfile`, F-1601-b2) is a User Manager user an
+import kept on its router: never a credential write, never a create, adopted
+instead of created and handed back instead of deleted on a rollback —
+`contract.usermanager.md` "Adoption in place".
 
 **`complete` is a read, never our write** — the rule `appliedCeilingBytes`
 keeps (invariant 36). That read is also where a config's link lines are

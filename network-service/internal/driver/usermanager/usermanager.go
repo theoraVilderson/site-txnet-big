@@ -433,19 +433,7 @@ func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
 	if err := d.remove(ctx, op, "user", remoteID); err != nil {
 		return err
 	}
-	links, err = d.list(ctx, op, "profile-limitation", url.Values{"profile": {chain}})
-	if err != nil {
-		return err
-	}
-	for _, l := range links {
-		if err := d.remove(ctx, op, "profile-limitation", l[".id"]); err != nil {
-			return err
-		}
-	}
-	if err := d.remove(ctx, op, "profile", chain); err != nil {
-		return err
-	}
-	return d.remove(ctx, op, "limitation", chain)
+	return d.removeChain(ctx, op, chain)
 }
 
 // SetClientDataLimit writes the user's own limitation, one request.

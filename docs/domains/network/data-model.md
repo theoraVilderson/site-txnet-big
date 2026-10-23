@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-10-17
+updated: 2026-10-23
 ---
 
 # Data model — network
@@ -12,7 +12,7 @@ Source of truth: `txnet-backend/prisma/domains/network.prisma` (Postgres schema 
 | Table | Purpose | Tenant-scoped? | Retention |
 |---|---|---|---|
 | panel | one remote management install, and its **declaration** — driver family, counter semantics, transport, capabilities, review verdict and why a connection test gave none (`connectionTest*`, [contract.registration.md](contract.registration.md)), health and request budget; `retiredAt` = archived (invariant 49); `ovpnProfile` = a User Manager router's shared `.ovpn` ([contract.links.md](contract.links.md) rule 9); `tick*`/`lag*` = the lease planner's clock and lag ([contract.lease.md](contract.lease.md)); `anchor*` = the client it is known by (contract.registration.md rule 11); `knownAddresses`/`addressMayMove` = the addresses its name is held to, and the CDN opt-out ([contract.address.md](contract.address.md)) | `tenantId` nullable | permanent; one with no history may be deleted (F-027-bz) |
-| config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling; `limitPeakBytes`/`writePending`/`rate*Bps` = the lease planner's replica ([contract.lease.md](contract.lease.md)); `sessionBaselineBytes` = a push client's offset, our Σ `radius_session` beyond the router's own total, and `sessionCounterBytes` = that total as last read (CHECKs `config_session_baseline_not_negative`, `config_session_counter_not_negative`, [contract.ceiling.md](contract.ceiling.md)) | `tenantId` NOT NULL (denormalized) | soft state via `status` — `retired` is deleted or moved away, CHECK `config_retired_is_absent` (F-027-z); the row outlives its remote client |
+| config | user credential on a panel (uuid + protocol + status), and its **desired state** — presence, enablement, drift verdict and ceiling; `limitPeakBytes`/`writePending`/`rate*Bps` = the lease planner's replica ([contract.lease.md](contract.lease.md)); `sessionBaselineBytes` = a push client's offset, our Σ `radius_session` beyond the router's own total, and `sessionCounterBytes` = that total as last read (CHECKs `config_session_baseline_not_negative`, `config_session_counter_not_negative`, [contract.ceiling.md](contract.ceiling.md)); `adoptedProfile`/`adoptedLabel`/`handBack` = an adopted login: the user's own profile and label at an import in place, never its password, and whether an absent row hands it back (F-1601-b2, CHECK `config_hand_back_is_an_adopted_login`) | `tenantId` NOT NULL (denormalized) | soft state via `status` — `retired` is deleted or moved away, CHECK `config_retired_is_absent` (F-027-z); the row outlives its remote client |
 | config_action_log | who did what to a config | via config | permanent |
 | traffic_raw_log | per-interval up/down bytes; **monthly partitioned** on `recordedAt`, PK `(id, recordedAt)` | `tenantId` NOT NULL (denormalized) | `DROP PARTITION` by the month |
 | traffic_daily_aggregate | nightly rollup, one row per `(configId, date)` | via config | long |

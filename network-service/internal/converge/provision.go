@@ -60,6 +60,8 @@ const (
 // it now.
 type DesiredConfig struct {
 	ConfigID string
+	// Adoption is an in-place login's (adopt.go, F-1601-b2); zero for ours.
+	Adoption
 	// RemoteID is the panel's id for the client, empty where none has been
 	// created or the last one was confirmed deleted.
 	RemoteID string
@@ -351,6 +353,9 @@ func (v *Provisioning) one(
 		}
 	}
 
+	if o, f, done := v.inPlace(ctx, p, row, client, matched, report, outcome, found); done {
+		return o, f
+	}
 	if !row.Present {
 		if !matched {
 			// Gone, by our delete or anyone's, under every key. The read is
@@ -411,7 +416,7 @@ func (v *Provisioning) one(
 		return outcome(client.RemoteID, StatePartial), found(ActionContested, client.RemoteID, nil)
 	}
 	switch {
-	case client.UUID != row.UUID || rebuilt:
+	case (client.UUID != row.UUID && !row.adopted()) || rebuilt:
 		// A regenerate, or a client made again without our tag. The update
 		// carries the whole client as it should now be. The ceiling is the one
 		// the panel holds, because sizing it is the ceiling pass's and it runs
@@ -474,22 +479,10 @@ func (v *Provisioning) create(
 	found func(Action, string, error) *ProvisionFinding,
 	refused func(string, error) (*Outcome, *ProvisionFinding),
 ) (*Outcome, *ProvisionFinding) {
-	var ceiling int64
-	switch {
-	case row.Unlimited:
-		// No limit is what was sold (F-111-r): nothing to wait for, and
-		// nothing to run out of.
-	case row.AllocatedBytes == nil:
+	ceiling, skip := firstBlock(row)
+	if skip != "" {
 		report.Skipped++
-		return nil, found(ActionAwaitingAllocation, "", nil)
-	default:
-		// A new client's counter starts at zero, so everything the config
-		// has already carried is the offset.
-		ceiling = firstCeiling(row)
-		if ceiling == 0 {
-			report.Skipped++
-			return nil, found(ActionAllowanceExhausted, "", nil)
-		}
+		return nil, found(skip, "", nil)
 	}
 
 	inbound, ok, err := inbounds.named(ctx, row.InboundRemoteID, row.Protocol)

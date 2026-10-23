@@ -95,6 +95,8 @@ var RequiredColumns = map[string][]string{
 		"linkLines", "linksRemoteId", "linksUuid", "linksCapturedAt", "linksInboundFingerprint", "linksCheckedAt",
 		// The first confirmation, announced once (F-111-o).
 		"confirmedAt",
+		// An adopted login and its hand back (F-1601-b2).
+		"adoptedProfile", "adoptedLabel", "handBack",
 		// The inbound fulfilment placed it on (F-114-b).
 		"inboundRemoteId",
 		// Its Grant sold no limit (F-111-r).

@@ -52,13 +52,13 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    commit of rule 16 would place every user by the product's group — a new
    login each, the thing this import exists to avoid (ADR-0160 decision 6).
 
-## Decided, not built yet
+## The adoption and the commit (F-1601-b2, F-1601-b3)
 
-- **F-1601-b2** (network): the router's user is adopted — our chain attached,
-  its own profiles detached, its password never written. A real RouterOS
-  answered ADR-0160 decision 9 (F-1601-e): `transfer-limit` counts from the
-  profile link, so the first ceiling is the remaining allocation, with no
-  pre-import usage added (network `contract.usermanager.md` rule 9).
+- **Built in network (F-1601-b2):** a config with `adoptedProfile` is adopted
+  on the router — our chain linked, its own profiles off, its password never
+  written — and with `handBack` handed back on a rollback. Its first ceiling
+  is the remaining allocation: `transfer-limit` counts from the profile link
+  (F-1601-e). Network `contract.usermanager.md` rules 13-14.
 - **F-1601-b3**: the commit issues each Grant with no panel group, its config
   that same user; a rollback hands the user back with its own profile; a
   normal end deletes it, as every config of ours (ADR-0160 decisions 6-8).

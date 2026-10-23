@@ -75,7 +75,8 @@ SELECT c.id::text, coalesce(c."remoteId", ''), c."claimTag", c.uuid, c.protocol:
        coalesce(rl."rateMbps"::bigint * 1000000, 0),
        CASE WHEN jsonb_typeof(g.quotas #> '{concurrent_devices,limit}') = 'number'
             THEN greatest((g.quotas #>> '{concurrent_devices,limit}')::numeric, 0)::int ELSE 0 END,
-       coalesce(pi.fingerprint, ''), coalesce(c."linksInboundFingerprint", ''), c."linksCheckedAt"
+       coalesce(pi.fingerprint, ''), coalesce(c."linksInboundFingerprint", ''), c."linksCheckedAt",
+       coalesce(c."adoptedProfile", ''), coalesce(c."adoptedLabel", ''), c."handBack"
   FROM network.config c
   LEFT JOIN network.panel_inbound pi ON pi."panelId" = c."panelId" AND pi."remoteId" = c."inboundRemoteId"
   LEFT JOIN network.grant_rate_limit rl ON rl."grantId" = c."grantId"
@@ -102,7 +103,8 @@ func (s PostgresDesired) For(ctx context.Context, panelID string) ([]DesiredConf
 			&d.Enabled, &d.Present, &d.AllocatedBytes, &d.ServedBytes, &d.SessionBytes, &d.SessionBaselineBytes,
 			&state, &drift, &d.RepairCount, &repairedAt,
 			&d.Links.Lines, &d.Links.RemoteID, &d.Links.UUID, &capturedAt, &d.Unlimited, &d.InboundResolved, &d.CredentialGroupID, &d.RateBps, &d.RateCapBps, &d.IPLimit,
-			&d.InboundFingerprint, &d.Links.InboundFingerprint, &checkedAt); err != nil {
+			&d.InboundFingerprint, &d.Links.InboundFingerprint, &checkedAt,
+			&d.AdoptedProfile, &d.AdoptedLabel, &d.HandBack); err != nil {
 			return nil, fmt.Errorf("reading panel %s desired state: %w", panelID, err)
 		}
 		d.State, d.Drift = EnforcementState(state), DriftState(drift)

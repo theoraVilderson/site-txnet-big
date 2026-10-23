@@ -126,3 +126,28 @@ its documentation says.
     total as a `cumulative` counter (F-027-ag-b, user 2026-10-23).
 12. **An unlimited validity's end is `unlimited`**, not a date: the import
     reads it as no end (`source.go`).
+
+## Adoption in place (F-1601-b2)
+
+A user an import keeps on its router (ADR-0160) is a config with
+`adoptedProfile` set: its name is the `remoteId` from the start, its `uuid`
+is ours and never the router's password. The driver's `driver.Adopter`
+(`adopt.go`) writes no password, ever:
+
+13. **`AdoptClient`**: our chain made and linked, then every other profile
+    link of the user removed, then our claim tag into its comment, last. The
+    tag is the mark the adoption is done; a call that died half way is
+    repeated by the next pass. Its first ceiling is the remaining allocation
+    (rule 9: the new link counts from zero).
+14. **`ReleaseClient`** (a hand back, ADR-0160 decision 7): the user's own
+    profile linked again first, then our link and chain removed, then its
+    own comment back. The user is never deleted. A profile the reseller
+    deleted since is refused before anything comes off: a user with no
+    profile logs nobody in. The profile's validity and limit start again.
+
+The pass (`converge/adopt.go`) for an adopted row: its `uuid` is never
+compared or written; a user not under our tag is adopted (once an
+allocation exists); a login gone under every key is `login_gone` and never
+made again; an absent row with `handBack` is handed back until a read shows
+the user without our tag, then its `remoteId` is cleared. Without `handBack`
+an absent row is deleted, as any config of ours (decision 8).
