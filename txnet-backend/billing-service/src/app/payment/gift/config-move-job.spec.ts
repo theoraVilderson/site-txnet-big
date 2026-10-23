@@ -14,7 +14,7 @@
  *    batch of 50 a drain; the item's outcome commits with its move, so a
  *    retry never reports a moved config as refused;
  *  - a refusal is kept at once, a throw nobody named is tried again and then
- *    `failed`; a Grant already served on the target with that protocol is
+ *    `failed`; a Grant already served on the target, of any protocol, is
  *    `already_on_target`, never given a second line there;
  *  - **progress by outbox event** — every batch and a cancel tell the job's
  *    tenant, so its page re-reads instead of polling (C-14);
@@ -128,12 +128,12 @@ function build() {
     // `panelsOfSelection`: the panels the reseller's live Grants are on, the retired one included.
     $queryRaw: async () => [{ id: FROM, name: 'de-own', region: 'de', own: true, retired: true, grants: 3 }],
     config: {
-      findFirst: async ({ where }: { where: { grantId?: string; panelId?: string; protocol?: ConfigProtocol; id?: string } }) => {
+      findFirst: async ({ where }: { where: { grantId?: string; panelId?: string; id?: string } }) => {
         if (where.id) {
           const own = CONFIGS.get(where.id);
-          return own ? { grantId: own.grantId, protocol: own.protocol } : null;
+          return own ? { grantId: own.grantId } : null;
         }
-        return [...CONFIGS.values()].find((x) => x.live && x.grantId === where.grantId && x.panelId === where.panelId && x.protocol === where.protocol) ? { id: 'held' } : null;
+        return [...CONFIGS.values()].find((x) => x.live && x.grantId === where.grantId && x.panelId === where.panelId) ? { id: 'held' } : null;
       },
     },
     inboundRelease: { deleteMany: async () => ({ count: 0 }) },
@@ -272,7 +272,8 @@ describe('ConfigMoveJobDrainService.drain — each config once, as the job\'s ad
 
   it('keeps a refusal at once, tries a throw again and then fails it, and refuses a Grant already on the target', async () => {
     const { service, drainer, items, refusing, throwing } = build();
-    CONFIGS.set(c(6), { id: c(6), tenantId: RESELLER, userId: 'u1', grantId: 'g1', panelId: TO, protocol: ConfigProtocol.vless, live: true });
+    // Another protocol than the one moved: the move would place on the target's picks, a second line there.
+    CONFIGS.set(c(6), { id: c(6), tenantId: RESELLER, userId: 'u1', grantId: 'g1', panelId: TO, protocol: ConfigProtocol.vmess, live: true });
     const job = await service.start(owner, RESELLER, body());
     refusing.set(c(2), 'config_retired');
     throwing.set(c(3), 5);

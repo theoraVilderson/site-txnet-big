@@ -50,7 +50,8 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
       findUnique: async ({ where }: { where: { id: string } }) =>
         ({
           [PANEL_A]: { id: PANEL_A, tenantId: null },
-          [PANEL_B]: { id: PANEL_B, tenantId: TENANT },
+          // Sells `vless`, so a move there keeps the protocol (ADR-0160 decision 10).
+          [PANEL_B]: { id: PANEL_B, tenantId: TENANT, inbounds: [{ remoteId: '1', protocol: 'vless', maxClients: null }] },
           [OTHER_TENANT_PANEL]: { id: OTHER_TENANT_PANEL, tenantId: '44444444-4444-4444-8444-444444444444' },
         })[where.id] ?? null,
     },

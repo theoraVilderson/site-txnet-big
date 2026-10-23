@@ -39,7 +39,7 @@ before the pass creates its client (`contract.lease.md` rules 5, 18).
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |
 | `retire(tx, {configId, actor})` | `retired`, `absent`, `desiredEnabled = false`, `pending` | — |
 | `drain(tx, {configId, actor})` | as `retire`, plus `drainedAt`: the panel is not held for the Grant (drain sweep only, `contract.groups.md` rules 9, 14) | — |
-| `move(tx, {configId, toPanelId, actor})` | the old row retired (`move_out`), then `provision` on the target | `same_panel`, `panel_not_found` |
+| `move(tx, {configId, toPanelId, actor})` | the old row retired (`move_out`), then the target placed on — see "A move places like a purchase" | `same_panel`, `panel_not_found`, `no_placement_on_target` |
 
 Every action on an existing row refuses `config_not_found` (unknown, or another
 user's — a user actor acts only on their own) and `config_retired`.
@@ -74,6 +74,20 @@ panel would compare the new panel's counter against the old one's cursor. The
 old client holds the old `uuid` until it is deleted, and `uuid` is unique
 system-wide. The Grant's subscription link follows; a copied single-config link
 does not.
+
+**A move places like a purchase** (ADR-0160 decision 10, F-1601-d1). Planned
+before the old row retires (`movePlacements`, `traffic/panel-load.ts`):
+
+- the target sells the config's protocol (an `every_group` pick of it): one
+  row of that protocol and no inbound, as before — the pass takes the lowest
+  such pick (`desiredSQL`);
+- else what a sale would be placed on there: the target as the Grant's group
+  member if it is one, else as a panel alone, read under the same panel lock
+  and caps as fulfilment (`membersWithLoad`, `moveTargets` over
+  `placementsOn`) — `provisionForGroup` rows under a new `credentialGroupId`.
+  A router login (`pppoe`) moved to an Xray panel gets that panel's picks;
+- nothing placeable now — no pick with room, or the target not accepted,
+  healthy and un-halted: `no_placement_on_target`, and the old row stays.
 
 ## The pass — `converge.Provisioning` (network-service)
 

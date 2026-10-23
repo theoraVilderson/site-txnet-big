@@ -4,7 +4,9 @@ import { Injectable, Optional } from '@nestjs/common';
 import { ActorType, ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, Prisma } from '@prisma/client';
 import { METER_KEYS } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { UsageDoorRefused, UsageDoorService, type UsageDoorRefusal } from '../usage/usage-door';
+import { movePlacements } from './panel-load';
 
 
 /**
@@ -37,6 +39,8 @@ export const CONFIG_ACTION_REJECTIONS = [
   'regenerate_unfunded',
   'config_changed',
   'same_panel',
+  /** A move's target has nothing this config can be placed on now (ADR-0160 decision 10). */
+  'no_placement_on_target',
   'actor_not_allowed',
 ] as const;
 export type ConfigActionRejection = (typeof CONFIG_ACTION_REJECTIONS)[number];
@@ -107,9 +111,12 @@ export class ConfigActionsService {
   /**
    * The per-use door (F-118-h). Optional so a spec of another action builds
    * this class bare; a priced regenerate without it is refused loudly, never
-   * done for free.
+   * done for free. The cross-tenant pool counts a move's target (`movePlacements`).
    */
-  constructor(@Optional() private readonly door: UsageDoorService | null = null) {}
+  constructor(
+    @Optional() private readonly door: UsageDoorService | null = null,
+    @Optional() private readonly crossTenant: CrossTenantPrismaService | null = null,
+  ) {}
 
   async provision(
     tx: Prisma.TransactionClient,
@@ -317,16 +324,16 @@ export class ConfigActionsService {
     const config = await this.live(tx, input.configId, input.actor);
     if (config.panelId === input.toPanelId) throw new ConfigActionRefused('same_panel', input.toPanelId);
     await this.panelFor(tx, input.toPanelId, config.tenantId);
+    // Planned before the retire: a target nothing can be placed on leaves the old row the user's.
+    const placements = await movePlacements(tx, this.crossTenant, { grantId: config.grantId, protocol: config.protocol, toPanelId: input.toPanelId });
+    if (placements?.length === 0) throw new ConfigActionRefused('no_placement_on_target', input.toPanelId);
 
     await this.retireRow(tx, config, input.actor, CONFIG_MOVE_OUT_ACTION);
-    // Provisioned for the Grant's owner whoever asked: the new row is theirs,
-    // and the planner splits the bag over it on its next turn.
-    const made = await this.provision(tx, {
-      grantId: config.grantId,
-      panelId: input.toPanelId,
-      protocol: config.protocol,
-      actor: input.actor,
-    });
+    // Provisioned for the Grant's owner whoever asked: the new rows are theirs,
+    // and the planner splits the bag over them on its next turn.
+    const [made] = placements
+      ? await this.provisionForGroup(tx, { grantId: config.grantId, placements, credentialGroupId: randomUUID(), actor: input.actor })
+      : [await this.provision(tx, { grantId: config.grantId, panelId: input.toPanelId, protocol: config.protocol, actor: input.actor })];
     return { ...made, retiredConfigId: config.id };
   }
 
@@ -358,17 +365,7 @@ export class ConfigActionsService {
   private async live(tx: Prisma.TransactionClient, configId: string, actor: ConfigActor): Promise<ConfigRow> {
     const config = (await tx.config.findUnique({
       where: { id: configId },
-      select: {
-        id: true,
-        tenantId: true,
-        userId: true,
-        grantId: true,
-        panelId: true,
-        protocol: true,
-        status: true,
-        regenerateUsedCount: true,
-        maxRegenerateCount: true,
-      },
+      select: { id: true, tenantId: true, userId: true, grantId: true, panelId: true, protocol: true, status: true, regenerateUsedCount: true, maxRegenerateCount: true },
     })) as ConfigRow | null;
     if (!config || !this.owns(actor, config.userId)) throw new ConfigActionRefused('config_not_found', configId);
     if (config.status === ConfigStatus.retired) throw new ConfigActionRefused('config_retired', configId);

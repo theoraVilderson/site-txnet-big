@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, GrantStatus, InboundAudience, PanelGroupMemberRole, PanelGroupStrategy, Prisma } from '@prisma/client';
+import { ActorType, GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, Prisma } from '@prisma/client';
 import { runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { markDelivered } from '../entitlement/delivered';
@@ -9,9 +9,10 @@ import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionsService, ConfigActor } from './config-actions';
-import { MemberFacts, placementSettings, planFulfilment } from './group-plan';
-import { HALTING_DRIFT_EVENT, PANEL_P_NOT_HALTED, PLACEABLE_PANEL_FIELDS, PLACEABLE_REVIEW_STATES, placeableMember } from './panel-placeable';
-import { PLATFORM_SELLING_DEFAULTS, sellingInbounds } from './selling-settings';
+import { MemberFacts, planFulfilment } from './group-plan';
+import { EVERY_GROUP_INBOUND, MEMBER_FIELDS, membersWithLoad, PLACEABLE_INBOUND } from './panel-load';
+import { HALTING_DRIFT_EVENT, PANEL_P_NOT_HALTED, PLACEABLE_REVIEW_STATES } from './panel-placeable';
+import { PLATFORM_SELLING_DEFAULTS } from './selling-settings';
 
 /**
  * Who placed a group's configs in `config_action_log`: the fulfilment job, not
@@ -32,44 +33,6 @@ export class GroupFulfilmentRefused extends Error {
     this.name = 'GroupFulfilmentRefused';
   }
 }
-
-/** An inbound a buyer may be placed on (network `contract.inbounds.md` rule 2), before who sells it. */
-const PLACEABLE_INBOUND = { enabled: true, goneAt: null, protocol: { not: null } } satisfies Prisma.PanelInboundWhereInput;
-
-/** What every group of the panel sells: `every_group`, picked and placeable (F-027-ep). */
-const EVERY_GROUP_INBOUND = { sold: true, ...PLACEABLE_INBOUND, audience: InboundAudience.every_group } satisfies Prisma.PanelInboundWhereInput;
-
-/**
- * A member's panel as fulfilment reads it: its health, how it places, its cap,
- * and its `every_group` inbounds (network `contract.inbounds.md` rules 2, 3a) —
- * the unpicked, disabled, gone and listed ones are never loaded here.
- */
-const MEMBER_PANEL_FIELDS = {
-  ...PLACEABLE_PANEL_FIELDS,
-  inboundPlacement: true,
-  maxClients: true,
-  inboundsPerBuyer: true,
-  inbounds: { where: EVERY_GROUP_INBOUND, select: { remoteId: true, protocol: true, maxClients: true } },
-} satisfies Prisma.PanelSelect;
-
-/**
- * The member's own layer of the selling settings (F-027-cg; null = the
- * panel's) and its listed inbounds, sold beside the every-group ones
- * (F-027-ep), each with the group's share of it (F-027-eq).
- */
-const MEMBER_FIELDS = {
-  panelId: true,
-  role: true,
-  inboundPlacement: true,
-  maxClients: true,
-  inboundsPerBuyer: true,
-  inbounds: { select: { maxClients: true, inbound: { select: { remoteId: true, protocol: true, maxClients: true, enabled: true, goneAt: true } } } },
-  // Inbounds a running release job is taking from this group: placed on by nobody new (F-027-es).
-  releases: { select: { inboundRemoteId: true } },
-  panel: { select: MEMBER_PANEL_FIELDS },
-} satisfies Prisma.PanelGroupMemberSelect;
-
-type MemberRow = Prisma.PanelGroupMemberGetPayload<{ select: typeof MEMBER_FIELDS }>;
 
 /**
  * The groups among `groupIds` that can deliver a new sale (F-111-i): at least
@@ -166,7 +129,7 @@ export class GroupFulfilmentService {
       where: { grantId },
       select: { panelId: true, inboundRemoteId: true, status: true, desiredRemote: true, enforcementState: true, credentialGroupId: true, drainedAt: true },
     });
-    const members = await this.withLoad(tx, grant.panelGroupId, group.members);
+    const members = await membersWithLoad(tx, this.crossTenant, grant.panelGroupId, group.members);
     const plan = planFulfilment({ grantId, grantStatus: grant.status, group: { ...group, members }, configs });
 
     const made = await this.actions.provisionForGroup(tx, {
@@ -184,57 +147,12 @@ export class GroupFulfilmentService {
 
   /**
    * A group's members as fulfilment reads them, with their load and under the
-   * same panel locks (`withLoad`): where a Grant moved into it from another
+   * same panel locks (`membersWithLoad`): where a Grant moved into it from another
    * group may keep a config, and whether the group has a seat for it (F-027-et).
    */
   async membersOf(tx: Prisma.TransactionClient, groupId: string): Promise<MemberFacts[]> {
     const members = await tx.panelGroupMember.findMany({ where: { groupId }, select: MEMBER_FIELDS });
-    return this.withLoad(tx, groupId, members);
-  }
-
-  /**
-   * Each member's picked inbounds with how full they are (`contract.inbounds.md`
-   * rule 5): every config and Grant, and `groupId`'s own among them, for the
-   * group's shares (F-027-eq). The count is every tenant's, so it is read on the cross-tenant
-   * pool — **after** a transaction lock on each placeable panel, in panel-id
-   * order: a second fulfilment on the same panel (the sweep and the purchase
-   * consumer, F-114-i) waits for this one to commit and then counts its rows,
-   * so two buyers never take an inbound's last seat together.
-   */
-  private async withLoad(tx: Prisma.TransactionClient, groupId: string, members: MemberRow[]): Promise<MemberFacts[]> {
-    const panelIds = members.filter(placeableMember).map((m) => m.panelId).sort();
-    for (const id of panelIds) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`panel_inbound:${id}`}))`;
-    type Load = { panelId: string; inboundRemoteId: string | null; total: number; clients: bigint; users: bigint; groupClients: bigint; groupUsers: bigint };
-    const load = panelIds.length === 0 ? [] : await this.crossTenant.$queryRaw<Load[]>`
-      SELECT c."panelId"::text AS "panelId", c."inboundRemoteId", GROUPING(c."inboundRemoteId")::int AS total,
-             count(*) AS clients, count(DISTINCT c."grantId") AS users,
-             count(*) FILTER (WHERE g."panelGroupId" = ${groupId}::uuid) AS "groupClients",
-             count(DISTINCT c."grantId") FILTER (WHERE g."panelGroupId" = ${groupId}::uuid) AS "groupUsers"
-        FROM "network"."config" c
-        LEFT JOIN "entitlement"."grant" g ON g."id" = c."grantId"
-       WHERE c."panelId" = ANY(${panelIds}::uuid[]) AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
-       GROUP BY GROUPING SETS ((c."panelId", c."inboundRemoteId"), (c."panelId"))`;
-    // `total = 1` is the grouping set without the inbound: the panel's own row, its `users`.
-    const panelRow = (id: string) => load.find((r) => r.panelId === id && r.total === 1);
-    return members.map((m) => {
-      const inboundRow = (remoteId: string) => load.find((r) => r.panelId === m.panelId && r.total === 0 && r.inboundRemoteId === remoteId);
-      return {
-        panelId: m.panelId,
-        role: m.role,
-        panel: {
-          ...m.panel,
-          ...placementSettings(m),
-          users: Number(panelRow(m.panelId)?.users ?? 0),
-          groupUsers: Number(panelRow(m.panelId)?.groupUsers ?? 0),
-          // The membership's listed inbounds plus the every-group ones (F-027-ep).
-          inbounds: sellingInbounds(m).map((i) => ({
-            ...i,
-            clients: Number(inboundRow(i.remoteId)?.clients ?? 0),
-            groupClients: Number(inboundRow(i.remoteId)?.groupClients ?? 0),
-          })),
-        },
-      };
-    });
+    return membersWithLoad(tx, this.crossTenant, groupId, members);
   }
 
   /**

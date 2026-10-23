@@ -2,7 +2,7 @@
 id: handoff
 status: empty            # empty | active
 item:                    # the backlog id currently mid-flight
-updated: 2026-10-06
+updated: 2026-10-23
 ---
 
 # Handoff — the state a fresh session cannot recover on its own

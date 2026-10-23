@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, ConfigMoveJob, ConfigMoveJobKind, ConfigMoveJobStatus, ConfigStatus, DesiredRemote, Prisma } from '@prisma/client';
+import { ActorType, ConfigMoveJob, ConfigMoveJobKind, ConfigMoveJobStatus, Prisma } from '@prisma/client';
 import { ResellerLimitReached, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { auditedConfigAct } from '../../grant-audit/grant-audit';
@@ -8,6 +8,7 @@ import { CrossTenantPrismaService } from '../../prisma/cross-tenant-prisma.servi
 import { PrismaService } from '../../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService } from '../../traffic/config-actions';
 import { GrantRegroupActs, GrantRegroupRefused } from '../../traffic/grant-regroup';
+import { LIVE_CONFIG } from '../../traffic/group-plan';
 import { applyRelease, InboundReleaseActs, MoveItemRefused } from '../../traffic/inbound-release';
 import { announceProgress, CONFIG_MOVE_BATCH_SIZE, CONFIG_MOVE_FAILED, CONFIG_MOVE_JOB_ATTEMPTS, CONFIG_MOVE_RETENTION_DAYS } from './config-move-job';
 
@@ -184,14 +185,15 @@ export class ConfigMoveJobDrainService {
     return count > 0 ? result : 'skipped';
   }
 
-  /** The Grant already has a live config of this protocol on the target: moving this one would give it a second line there. */
+  /**
+   * The Grant already has a live config on the target, of any protocol: a move
+   * places on the target's own picks (ADR-0160 decision 10), so this one would
+   * be a second line there, or nothing left to place.
+   */
   private async refuseIfOnTarget(tx: Prisma.TransactionClient, configId: string, toPanelId: string) {
-    const config = await tx.config.findFirst({ where: { id: configId }, select: { grantId: true, protocol: true } });
+    const config = await tx.config.findFirst({ where: { id: configId }, select: { grantId: true } });
     if (!config) return; // the move refuses it as `config_not_found`
-    const held = await tx.config.findFirst({
-      where: { grantId: config.grantId, panelId: toPanelId, protocol: config.protocol, status: { not: ConfigStatus.retired }, desiredRemote: DesiredRemote.present, drainedAt: null },
-      select: { id: true },
-    });
+    const held = await tx.config.findFirst({ where: { grantId: config.grantId, panelId: toPanelId, ...LIVE_CONFIG }, select: { id: true } });
     if (held) throw new MoveItemRefused('already_on_target');
   }
 }

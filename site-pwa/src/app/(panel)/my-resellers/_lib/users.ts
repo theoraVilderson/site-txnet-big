@@ -149,6 +149,7 @@ export const ADMIN_REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
   ...REFUSAL_KEYS,
   same_panel: K.actions.refusal.same_panel,
   panel_not_found: K.actions.refusal.panel_not_found,
+  no_placement_on_target: K.actions.refusal.no_placement_on_target,
 };
 
 /**

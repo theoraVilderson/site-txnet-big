@@ -6,7 +6,7 @@ updated: 2026-10-23
 
 # ADR 0160 — A RADIUS panel's users are imported in place, and moved only on request
 
-- **Status:** accepted (built by F-1601-a … F-1601-d, F-1602, F-027-ay)
+- **Status:** accepted (built by F-1601-a … F-1601-d2, F-1602, F-027-ay)
 - **Date:** 2026-10-23
 - **Decision:** the user's (2026-10-23)
 - **Affects units:** network, entitlement, panel-web
@@ -68,6 +68,21 @@ to another panel, move them and rebuild their logins.
    **Answered 2026-10-23 (F-1601-e): from the profile link.** A fresh link
    starts at zero, so the first ceiling is the remaining allocation
    (network `contract.usermanager.md` rule 9).
+
+## Decided while building the move (user, 2026-10-23, F-1601-d)
+
+10. **A move places like a purchase on its target.** Where the target sells
+    the config's protocol, the move keeps it. Where it does not — a router
+    login (`pppoe`) moved to an Xray panel — the new config is placed on the
+    target's own picked inbounds by its placement settings and caps, as a
+    sale placed on that panel would be (`placementsOn`), and the user gets a
+    link. A target nothing can be placed on is refused before anything is
+    retired. Today's move kept the protocol, so such a user's login was
+    deleted and nothing was made (`no_inbound`).
+11. **The old login waits for the new one.** The router login is not
+    removed at the move: it stays until the new config is confirmed, then a
+    grace of 3 days, so the user is never without service while changing
+    their device. Both draw on the one Grant.
 
 ## Consequences
 

@@ -76,7 +76,7 @@ controller, over `ResellerUserGrantsService.act` -> `UserConfigsService.actAsAdm
 | **A config must be the path's user's**, read in the action's own transaction; any other — another user of the same reseller included — is the outcome `config_not_found` and is never acted on | an `admin` actor passes `ConfigActionsService`'s ownership check for every config; this is the only fence |
 | One transaction per config, ids deduplicated, in the order named; `reason` is `CONFIG_ACTION_REJECTIONS` or `failed` — the owner route's rules (`contract.gift.md`), unchanged | one refused config must not stop the others |
 | **An admin's regenerate is outside the user's cap**: not checked, not counted (network `contract.provisioning.md`); the log row says `admin` | support rotating a leaked credential must not spend one of the user's three |
-| A move goes to a panel shared or dedicated to the Grant's tenant, not archived, not the config's own (`panel_not_found`, `same_panel`), and only while the Grant is `active` (`grant_not_active`) — `ConfigActionsService.move`, unchanged | the new row is provisioned like a purchase's |
+| A move goes to a panel shared or dedicated to the Grant's tenant, not archived, not the config's own (`panel_not_found`, `same_panel`), and only while the Grant is `active` (`grant_not_active`) and the target can take it (`no_placement_on_target`, network `contract.provisioning.md`) — `ConfigActionsService.move` | the new row is provisioned like a purchase's |
 | Bucket `RESELLER_USER_CONFIG_ACTION`, default **60**/900s per caller, per request | acting must not spend the budget for looking |
 
 ## An admin freezes one of a user's Grants (built — F-311-h, F-0401-d)

@@ -1,5 +1,6 @@
 // The caller's own Grants and their configs — the "my services" page (F-502-s, F-307-u, F-118-j).
 import { type Paged, call } from "./client";
+import type { ConfigAction, ConfigActionOutcome, ConfigStatus, DriftState } from "./config-actions";
 
 /**
  * The statuses a Grant can be in, as `entitlement.prisma` declares them (C-09).
@@ -74,53 +75,6 @@ export type FreezeMode = (typeof FREEZE_MODES)[number];
 export type GrantScope = "current" | "all";
 
 export type GrantsPage = Paged<GrantRow> & { hidden: number };
-
-/**
- * The convergence loop's verdicts on a config (F-027-aa/ab), as `network.prisma`
- * declares `DriftState` (C-09). Only `synced` is quiet: every other one is a
- * button on the service page that says why (F-027-ac).
- */
-export const DRIFT_STATES = [
-  "synced",
-  "reset",
-  "renamed",
-  "rebuilt",
-  "missing",
-  "orphan",
-  "limit_overridden",
-  "contested",
-] as const;
-
-export type DriftState = (typeof DRIFT_STATES)[number];
-
-/** A config's own status, as `network.prisma` declares `ConfigStatus`, minus `retired` — the list never answers one. */
-export const CONFIG_STATUSES = ["active", "frozen", "disabled_by_admin", "disabled_by_system"] as const;
-
-export type ConfigStatus = (typeof CONFIG_STATUSES)[number];
-
-/** The one action a user may take on a config: a new link. No delete (F-027-ac1). */
-export type ConfigAction = "regenerate";
-
-/**
- * Why one config's action wrote nothing: billing's `CONFIG_ACTION_REJECTIONS`
- * (`traffic/config-actions.ts`) plus `failed` for a throw that was not a
- * refusal. The page has a sentence for each; the spec reads the tuple.
- */
-export const CONFIG_ACTION_REFUSALS = [
-  "grant_not_found",
-  "grant_not_active",
-  "panel_not_found",
-  "config_not_found",
-  "config_retired",
-  "regenerate_limit_reached",
-  "regenerate_unfunded",
-  "config_changed",
-  "same_panel",
-  "actor_not_allowed",
-  "failed",
-] as const;
-
-export type ConfigActionRefusal = (typeof CONFIG_ACTION_REFUSALS)[number];
 
 /**
  * What a new link costs on one Grant (F-118-r): the `vpn.config.regenerate`
@@ -231,10 +185,6 @@ export interface GrantPeriodView {
   currencyCode: string | null;
   coversBytes: string | null;
 }
-
-export type ConfigActionOutcome =
-  | { configId: string; ok: true }
-  | { configId: string; ok: false; reason: ConfigActionRefusal };
 
 /** `GET /traffic/collection-health` (F-027-w): whether anything is metering the user's configs right now. */
 export interface CollectionHealth {

@@ -1,7 +1,8 @@
 // A reseller's users' Grants, limits, revenue and bulk jobs, scoped by tenant id (F-311-v, F-019-r).
 import type { BillingMode } from "../catalog-api";
 import { type Paged, call } from "./client";
-import type { ConfigActionRefusal, FreezeMode, GrantRow, GrantScope, GrantStatus, GrantUsage, GrantsPage, UserConfigRow } from "./grants";
+import type { ConfigActionRefusal } from "./config-actions";
+import type { FreezeMode, GrantRow, GrantScope, GrantStatus, GrantUsage, GrantsPage, UserConfigRow } from "./grants";
 
 /**
  * What a reseller's admin may take on a user's config (F-311-g): billing's

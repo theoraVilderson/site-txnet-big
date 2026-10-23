@@ -70,6 +70,7 @@ export const REFUSAL_KEYS: Record<ConfigActionRefusal, string> = {
   regenerate_unfunded: C.refusal.regenerate_unfunded,
   config_changed: C.refusal.config_changed,
   same_panel: C.refusal.failed,
+  no_placement_on_target: C.refusal.no_placement_on_target,
   actor_not_allowed: C.refusal.failed,
   failed: C.refusal.failed,
 };

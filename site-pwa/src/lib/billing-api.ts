@@ -17,6 +17,7 @@ import { walletCalls } from "./billing/wallet";
 
 export type { CursorPage, Paged } from "./billing/client";
 export * from "./billing/config-move-jobs";
+export * from "./billing/config-actions";
 export * from "./billing/config-moves";
 export * from "./billing/coupons";
 export * from "./billing/deposit";

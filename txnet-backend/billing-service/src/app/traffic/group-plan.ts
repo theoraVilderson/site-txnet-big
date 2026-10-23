@@ -1,6 +1,6 @@
 import { ConfigProtocol, ConfigStatus, DesiredRemote, EnforcementState, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelGroupStrategy, PanelReviewState, PanelState, Prisma } from '@prisma/client';
 
-import { InboundPlacementTarget } from './config-actions';
+import type { InboundPlacementTarget } from './config-actions';
 import { hrwPick } from './hrw';
 import { PlaceablePanel, placeableMember, servingPanel } from './panel-placeable';
 import { byRemoteId, effectiveSellingSettings } from './selling-settings';
@@ -144,6 +144,18 @@ function placementsOn(grantId: string, m: MemberFacts, held: (string | null)[], 
   // A panel at its cap takes no new user; a user already on it still gets the inbounds it lacks.
   const full = !live && panelFull(m.panel);
   return { targets: full ? [] : missing.filter(hasRoom), owed: true };
+}
+
+/**
+ * Where a move places a config whose protocol its target does not sell
+ * (ADR-0160 decision 10): what a sale would be placed on there now, by the
+ * panel's placement settings and caps. `held`: the inbounds of the Grant's
+ * live configs already on the target. Empty: nothing can be placed now.
+ */
+export function moveTargets(grantId: string, m: MemberFacts, held: (string | null)[]): InboundPlacementTarget[] {
+  if (!placeableMember(m)) return [];
+  const { targets } = placementsOn(grantId, m, held, held.length > 0);
+  return targets.map((i) => ({ panelId: m.panelId, inboundRemoteId: i.remoteId, protocol: i.protocol }));
 }
 
 /**
