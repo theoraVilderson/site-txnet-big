@@ -83,14 +83,17 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
     = the name, `protocol` empty: a profile serves whatever the NAS dials in
     with) — what the run maps to a product. **A client is a user**: its name,
     `comment` as the label, `disabled`, the most permissive ceiling it holds
-    (rule 4 of the driver's section in [contract.drivers.md](contract.drivers.md)),
+    (rule 4 of [contract.usermanager.md](contract.usermanager.md)),
     and as `inboundRemoteId` its current profile — running, else the first
     waiting, else the last used; none is empty. Its end is that profile's
     `end-time` in the router's `/system/clock` `gmt-offset` (ISO, or the
-    pre-7.10 `nov/15/2026` form); a waiting profile has none yet, and an end
+    pre-7.10 `nov/15/2026` form); `unlimited` and a waiting profile have
+    none, and an end
     in neither form fails the snapshot (`source_unreadable`) rather than
     import an endless user. Used bytes are User Manager's own per-user
-    total (`ClientTotals`), not the open sessions. **The password is never
+    lifetime total (`ClientTotals`), not the open sessions — more than a
+    renewed user's current profile counts (contract.usermanager.md rule 9,
+    F-1601-f). **The password is never
     asked for**: the user list is read with `.proplist` without it, so
     `uuid` is empty. 5-7 requests, whatever the number of users. No
     subscription URL and no lines (a login is not a link).

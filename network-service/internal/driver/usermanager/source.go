@@ -25,6 +25,10 @@ var _ driver.AccountsReader = (*Driver)(nil)
 // for the length of a request (ADR-0160 rule 2).
 const accountFields = ".id,name,comment,disabled"
 
+// noEnd is the end-time of a profile of unlimited validity (a v7.24 CHR,
+// F-1601-e): no end, never a date to parse.
+const noEnd = "unlimited"
+
 // endFormats are the two shapes RouterOS writes a date in: ISO from 7.10,
 // `nov/15/2026` before it. Both are the router's local time.
 var endFormats = []string{"2006-01-02 15:04:05", "Jan/02/2006 15:04:05"}
@@ -60,7 +64,7 @@ func (d *Driver) ListAccounts(ctx context.Context) ([]driver.RemoteClient, error
 		c := &read.clients[i]
 		p := current[c.RemoteID]
 		c.InboundRemoteID = p["profile"]
-		if end := p["end-time"]; end != "" && p["state"] != "waiting" {
+		if end := p["end-time"]; end != "" && end != noEnd && p["state"] != "waiting" {
 			if zone == nil {
 				if zone, err = d.routerZone(ctx, op); err != nil {
 					return nil, err

@@ -2,15 +2,20 @@ package usermanager
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
+	"strings"
+	"time"
 
 	"network-service/internal/driver"
 )
 
-// The two reads of the user table: ListClients for a panel we provision, and
-// ListAccounts (source.go) for a reseller's router an import reads in place.
-// Both see a user under the ceiling and rate it can actually use.
+// The reads of the user table: ListClients for a panel we provision,
+// ListAccounts (source.go) for a reseller's router an import reads in place —
+// both see a user under the ceiling and rate it can actually use — and
+// ClientTotals, each user's lifetime total.
 
 // userRead is one read of every user: the rows as the router gave them, its
 // profile links, and each user as a client with its ceiling and rate.
@@ -128,4 +133,48 @@ func permissive(limits []row) (ceilingBytes, rateBps int64, err error) {
 		rateBps = 0
 	}
 	return ceilingBytes, rateBps, nil
+}
+
+var _ driver.TotalsReader = (*Driver)(nil)
+
+// ClientTotals reads User Manager's own lifetime total for every user in two
+// requests: the users' ids, then one `monitor ... once` over all of them
+// (F-027-du). `numbers` takes row ids, never names — a name is a 404 on a
+// real router — and the answer comes back in the order asked (both proved on
+// a CHR, F-1601-e). Ids are listed first because an unknown one fails the
+// whole command, and a user deleted on the router must not stop every other
+// user being read. The total restarts with the user, which is the point: it
+// shows a user made again by hand. It is not what `transfer-limit` is checked
+// against — that counts from the profile link (contract.drivers.md).
+func (d *Driver) ClientTotals(ctx context.Context) ([]driver.ClientUsage, error) {
+	const op = "ClientTotals"
+	users, err := d.list(ctx, op, "user", url.Values{".proplist": {".id,name"}})
+	if err != nil || len(users) == 0 {
+		return nil, err
+	}
+	names := make([]string, len(users))
+	ids := make([]string, len(users))
+	for i, u := range users {
+		names[i], ids[i] = u["name"], u[".id"]
+	}
+	var answers []row
+	body := row{"numbers": strings.Join(ids, ","), "once": ""}
+	if err := d.call(ctx, op, http.MethodPost, []string{"user", "monitor"}, nil, body, &answers); err != nil {
+		return nil, err
+	}
+	if len(answers) != len(names) {
+		return nil, driver.NewFault(driver.FaultProtocol, op, 0,
+			fmt.Errorf("monitor answered %d users for %d asked", len(answers), len(names)))
+	}
+	at := time.Now()
+	out := make([]driver.ClientUsage, len(names))
+	for i, a := range answers {
+		up, errUp := quantity(a["total-upload"], 1024)
+		down, errDown := quantity(a["total-download"], 1024)
+		if err := errors.Join(errUp, errDown); err != nil {
+			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("user %q: %w", names[i], err))
+		}
+		out[i] = driver.ClientUsage{RemoteID: names[i], UpBytes: up, DownBytes: down, ObservedAt: at}
+	}
+	return out, nil
 }

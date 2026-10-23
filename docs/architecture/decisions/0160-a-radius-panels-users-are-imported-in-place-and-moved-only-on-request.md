@@ -65,6 +65,9 @@ to another panel, move them and rebuild their logins.
    profile decides the first ceiling written at adoption. The two answers
    err in opposite directions, by the user's pre-import usage, so it is
    proved on a RouterOS CHR in `dev-docker` before F-1601-b2 is built.
+   **Answered 2026-10-23 (F-1601-e): from the profile link.** A fresh link
+   starts at zero, so the first ceiling is the remaining allocation
+   (network `contract.usermanager.md` rule 9).
 
 ## Consequences
 

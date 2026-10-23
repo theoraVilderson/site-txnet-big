@@ -319,6 +319,13 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 		return driver.Capabilities{}, driver.NewFault(driver.FaultProtocol, "Capabilities", 0,
 			errors.New("user manager is disabled on this router: /user-manager set enabled=yes"))
 	}
+	// A fresh install has use-profiles off, and then every profile and
+	// limitation is ignored: a login is name and password alone, and no
+	// ceiling we write would hold (proved on a CHR, F-1601-e).
+	if settings["use-profiles"] != "true" {
+		return driver.Capabilities{}, driver.NewFault(driver.FaultProtocol, "Capabilities", 0,
+			errors.New("user manager ignores profiles and limits on this router: /user-manager set use-profiles=yes"))
+	}
 	yes := func(detail string) driver.Answer { return driver.Answer{Supported: true, Detail: detail} }
 	no := func(detail string) driver.Answer { return driver.Answer{Supported: false, Detail: detail} }
 	return driver.Capabilities{
@@ -505,47 +512,6 @@ func (d *Driver) usage(ctx context.Context, op string, want map[string]bool) ([]
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].RemoteID < out[j].RemoteID })
-	return out, nil
-}
-
-var _ driver.TotalsReader = (*Driver)(nil)
-
-// ClientTotals reads User Manager's own total for every user — the figure a
-// limitation's `transfer-limit` is checked against — in two requests: the
-// users' names, then one `monitor ... once` over all of them (F-027-du). The
-// answer comes back in the order asked. Names are listed first because an
-// unknown name fails the whole command, and a user deleted on the router
-// must not stop every other user being read. The total restarts with the
-// user, which is the point: it shows a user made again by hand.
-func (d *Driver) ClientTotals(ctx context.Context) ([]driver.ClientUsage, error) {
-	const op = "ClientTotals"
-	users, err := d.list(ctx, op, "user", url.Values{".proplist": {"name"}})
-	if err != nil || len(users) == 0 {
-		return nil, err
-	}
-	names := make([]string, len(users))
-	for i, u := range users {
-		names[i] = u["name"]
-	}
-	var answers []row
-	body := row{"numbers": strings.Join(names, ","), "once": ""}
-	if err := d.call(ctx, op, http.MethodPost, []string{"user", "monitor"}, nil, body, &answers); err != nil {
-		return nil, err
-	}
-	if len(answers) != len(names) {
-		return nil, driver.NewFault(driver.FaultProtocol, op, 0,
-			fmt.Errorf("monitor answered %d users for %d asked", len(answers), len(names)))
-	}
-	at := time.Now()
-	out := make([]driver.ClientUsage, len(names))
-	for i, a := range answers {
-		up, errUp := quantity(a["total-upload"], 1024)
-		down, errDown := quantity(a["total-download"], 1024)
-		if err := errors.Join(errUp, errDown); err != nil {
-			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("user %q: %w", names[i], err))
-		}
-		out[i] = driver.ClientUsage{RemoteID: names[i], UpBytes: up, DownBytes: down, ObservedAt: at}
-	}
 	return out, nil
 }
 

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 17
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # The ceiling — one bag, split across the configs that draw on it
@@ -111,7 +111,13 @@ under `reset_on_read` (the read spent it) — the conservative reading.
 
 Under `session` (User Manager) the lifetime is the Σ of the config's
 `radius_session` marks, and the counter is User Manager's per-user total,
-which starts at zero when the user is created. So the offset is
+which starts at zero when the user is created. That is what
+`transfer-limit` counts only while the user's profile link is the one made
+with it: the router counts from the link, and a link made again restarts
+at zero where this total does not drop (proved on a CHR,
+`contract.usermanager.md` rule 9) — F-027-du-b tracks the link's `.id`. And
+no `radius_session` mark comes from a real User Manager NAS (rule 11):
+F-027-ag-b reads the total as a `cumulative` counter instead. So the offset is
 `sessionBaselineBytes`: what our Σ holds beyond the router's total
 (F-027-du). The planner, the ceiling pass and the shutdown extension all
 read it through `collect.SessionCounter`. It moves at two moments only:

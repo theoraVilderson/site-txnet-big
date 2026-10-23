@@ -200,3 +200,37 @@ services:
     mem_limit: 512m
   pg-backup:
     mem_limit: 512m
+
+  # A real RouterOS v7 with User Manager (F-1601-e, ADR-0160 decision 9): the
+  # router the usermanager driver's wire shapes are proved on. Dev only and
+  # behind a profile, so `up` never starts it:
+  #   scripts/dev.compose.sh --profile routeros up -d --build routeros-chr
+  # qemu emulates with no /dev/kvm, so it is held to one core. Its REST root
+  # is http://routeros-chr (admin / CHR_ADMIN_PASSWORD); probes in
+  # dev-docker/routeros/README.md.
+  routeros-chr:
+    profiles: ["routeros"]
+    build:
+      context: ./routeros
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        ROUTEROS_VERSION: ${ROUTEROS_VERSION:-7.24.5}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    container_name: ${STACK_NAME:-txnet}-routeros-chr
+    restart: "no"
+    environment:
+      - CHR_ADMIN_PASSWORD=${CHR_ADMIN_PASSWORD:-txnet-dev-chr}
+      - CHR_RADIUS_SECRET=${CHR_RADIUS_SECRET:-txnet-dev-radius}
+    # The NAS probe dials the guest's OpenVPN server from this container.
+    cap_add: [NET_ADMIN]
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    volumes:
+      - routeros_chr_data:/data
+    cpus: 1
+    mem_limit: 512m
+    networks:
+      - private_backend_network
+
+volumes:
+  routeros_chr_data:

@@ -55,9 +55,10 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
 ## Decided, not built yet
 
 - **F-1601-b2** (network): the router's user is adopted — our chain attached,
-  its own profiles detached, its password never written. Waits for a real
-  RouterOS (F-1601-e): whether `transfer-limit` counts the user's lifetime
-  total or its profile decides the first ceiling (ADR-0160 decision 9).
+  its own profiles detached, its password never written. A real RouterOS
+  answered ADR-0160 decision 9 (F-1601-e): `transfer-limit` counts from the
+  profile link, so the first ceiling is the remaining allocation, with no
+  pre-import usage added (network `contract.usermanager.md` rule 9).
 - **F-1601-b3**: the commit issues each Grant with no panel group, its config
   that same user; a rollback hands the user back with its own profile; a
   normal end deletes it, as every config of ours (ADR-0160 decisions 6-8).

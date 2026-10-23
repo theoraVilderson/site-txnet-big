@@ -102,6 +102,23 @@ func TestAnUnreadableEndFailsTheSnapshot(t *testing.T) {
 	}
 }
 
+// A profile of unlimited validity has the end-time `unlimited` — what a
+// v7.24 CHR writes for it (F-1601-e) — and its user has no end.
+func TestAnUnlimitedProfileHasNoEnd(t *testing.T) {
+	f, d := sourceRouter(t)
+	f.put("user", map[string]string{"name": "omid", "comment": "", "disabled": "false"})
+	f.put("user-profile", map[string]string{"user": "omid", "profile": "unlimited", "state": "running", "end-time": "unlimited"})
+	accounts, err := d.ListAccounts(context.Background())
+	if err != nil {
+		t.Fatalf("ListAccounts: %v", err)
+	}
+	for _, a := range accounts {
+		if a.RemoteID == "omid" && (!a.ExpiresAt.IsZero() || a.InboundRemoteID != "unlimited") {
+			t.Fatalf("read %+v, want omid on profile unlimited with no end", a)
+		}
+	}
+}
+
 // contract.source.md rule 1: every family an import reads proves its reads
 // change nothing on the reseller's live router.
 func TestReadingASourceWritesNothing(t *testing.T) {

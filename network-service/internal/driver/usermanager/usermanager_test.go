@@ -30,6 +30,10 @@ type farEnd struct {
 	abandoned map[string]bool
 	calls     int
 	enabled   string
+	// useProfiles is the settings' `use-profiles`. A fresh router has it
+	// off, and then User Manager ignores every profile and limitation
+	// (proved on a CHR, F-1601-e).
+	useProfiles string
 	// writes counts requests that change the far end (RunReadOnly): every
 	// PUT, PATCH and DELETE, and a POST but `monitor`, which only reads.
 	writes int
@@ -51,7 +55,7 @@ var menus = map[string]bool{
 }
 
 func newFarEnd(t *testing.T) *farEnd {
-	return &farEnd{t: t, tables: map[string][]map[string]string{}, abandoned: map[string]bool{}, enabled: "true"}
+	return &farEnd{t: t, tables: map[string][]map[string]string{}, abandoned: map[string]bool{}, enabled: "true", useProfiles: "true"}
 }
 
 func routerError(w http.ResponseWriter, status int, detail string) {
@@ -101,7 +105,7 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	path := strings.TrimPrefix(r.URL.Path, "/rest/user-manager")
 	if path == "" && r.Method == http.MethodGet {
-		writeJSON(w, map[string]string{"enabled": f.enabled, "use-profiles": "true"})
+		writeJSON(w, map[string]string{"enabled": f.enabled, "use-profiles": f.useProfiles})
 		return
 	}
 	menu, ref, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
@@ -112,18 +116,22 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case menu == "user" && ref == "monitor" && r.Method == http.MethodPost:
-		// `/user-manager/user monitor numbers=a,b once`: one answer per
-		// user, in the order asked; an unknown name fails the whole command.
+		// `/user-manager/user monitor numbers=*1,*2 once`: one answer per
+		// user, in the order asked. As a v7.24 CHR answers it (F-1601-e):
+		// `numbers` are row ids — a user's name is a 404 — and one unknown
+		// id fails the whole command.
 		var body map[string]string
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body["once"] != "" {
 			routerError(w, http.StatusBadRequest, "monitor wants numbers and once")
 			return
 		}
 		out := []map[string]string{}
-		for _, name := range strings.Split(body["numbers"], ",") {
-			u := f.find("user", name)
+		for _, id := range strings.Split(body["numbers"], ",") {
+			u := f.byID("user", id)
 			if u == nil {
-				routerError(w, http.StatusBadRequest, "no such item ("+name+")")
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusNotFound)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": http.StatusNotFound, "message": "Not Found"})
 				return
 			}
 			up, down := u["total-upload"], u["total-download"]
@@ -232,6 +240,17 @@ func (f *farEnd) projected(row map[string]string, proplist string) map[string]st
 func (f *farEnd) find(menu, ref string) map[string]string {
 	for _, row := range f.tables[menu] {
 		if row[".id"] == ref || (row["name"] != "" && row["name"] == ref) {
+			return row
+		}
+	}
+	return nil
+}
+
+// byID is a row by its `.id` alone: a command that takes `numbers`, as
+// monitor does, reads no name.
+func (f *farEnd) byID(menu, id string) map[string]string {
+	for _, row := range f.tables[menu] {
+		if row[".id"] == id {
 			return row
 		}
 	}
@@ -639,6 +658,19 @@ func TestADisabledUserManagerFailsTheConnectionTest(t *testing.T) {
 	v := caps.Verdict(driver.TransportPush, driver.CounterSession)
 	if v.ReviewState != driver.ReviewAccepted || !v.MeteredSaleAllowed {
 		t.Errorf("verdict = %+v, want accepted with metered sale", v)
+	}
+}
+
+// A router left at `use-profiles=no` — the default on a fresh install —
+// logs a user in on name and password alone and ignores every profile and
+// limitation, so no ceiling of ours would hold (proved on a CHR, F-1601-e).
+// The connection test fails and names the setting.
+func TestAUserManagerIgnoringProfilesFailsTheConnectionTest(t *testing.T) {
+	f, d := open(t)
+	f.useProfiles = "false"
+	_, err := d.Capabilities(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "use-profiles=yes") {
+		t.Fatalf("Capabilities gave %v on a router that ignores profiles, want a refusal naming use-profiles=yes", err)
 	}
 }
 
