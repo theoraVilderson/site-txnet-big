@@ -94,6 +94,14 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
     asked for**: the user list is read with `.proplist` without it, so
     `uuid` is empty. 5-7 requests, whatever the number of users. No
     subscription URL and no lines (a login is not a link).
+11. **Read in place, by the registered panel** (F-1601-b1). A family whose
+    users stay on their source (`source.ReadInPlace`: User Manager) is named
+    by `panelId`, never `credentialRef`: `register.InPlacePanels` reads the
+    tenant's own panel of that family, `accepted`/`accepted_low_trust` and
+    not retired, and opens it through the Opener with its own login, guard
+    and pin, as the loops do. Any other panel is `panel_not_found`; a family
+    named the other way round, or both fields, is `bad_request`. Its run is
+    entitlement's [contract.import-in-place.md](../entitlement/contract.import-in-place.md).
 
 ## Routes
 
@@ -102,7 +110,7 @@ shared envelope: `{data}` or `{error: {reason, detail}}`.
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`, `telegramId?`) |
+| `POST /api/internal/source/snapshot` | `tenantId`, `family`, `credentialRef` (the run id) — or `panelId` for a family read in place (rule 11) | `inbounds[]` (`remoteId`, `tag`, `protocol`, `port`, `enabled`), `clients[]` (`remoteId`, `label`, `uuid`, `inboundRemoteId`, `protocol`, `enabled`, `dataLimitBytes`, `upBytes`, `downBytes`, `expiresAt` or null, `lines`, `linesRead`, `subscriptionUrl?`, `telegramId?`) |
 | `POST /api/internal/source/links` | the same, plus `clients[]` (≤ 200: `remoteId`, `uuid`, `label`, `inboundRemoteId`, `linesRead`) | `clients[]`: `remoteId`, `subscriptionUrl?`, `lines`, `linesRead`, `failure?` |
 | `POST /api/internal/source/link` | `url` — one old subscription link (F-201-g); billing's test of an old host pointed here (entitlement `contract.legacy-host.md`, F-204-b) | `userinfo` (`uploadBytes`, `downloadBytes`, `totalBytes`, `expiresAt` unix s; 0 = not given) from `Subscription-Userinfo`, `lines` |
 
@@ -121,6 +129,7 @@ user's own.
 | `service_only` | 403 | no or wrong service token; an unset token refuses every call |
 | `bad_request` | 400 | a field missing, not an import family, not an absolute `http(s)` url, an empty or oversized batch |
 | `credential_unavailable` | 422 | the vault would not answer the address and login, or the address is not a url |
+| `panel_not_found` | 422 | in place: not the tenant's accepted, live panel of the family (rule 11) |
 | `login_malformed` | 422 | the stored login is not in the family's form |
 | `no_driver` | 422 | an import family with no driver yet |
 | `address_refused` | 422 | the guard refused the address (inward, metadata, …) |

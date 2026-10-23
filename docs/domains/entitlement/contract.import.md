@@ -2,8 +2,8 @@
 id: entitlement
 layer: domain
 status: active
-version: 41
-updated: 2026-10-22
+version: 42
+updated: 2026-10-23
 ---
 
 # Contract — entitlement / an import from another panel: one client (F-202), the dry run (F-206), the commit (F-207), its usage (F-208), the rollback (F-211), the old link (F-203-a)
@@ -219,7 +219,7 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 
 | Route | Body | Answers |
 |---|---|---|
-| `POST` | `family` (a `DriverType`), `sourceAddress` (absolute http(s), kept as its origin) | 201 the run, `draft` |
+| `POST` | `family` (a `DriverType`), `sourceAddress` (absolute http(s), kept as its origin) — or `panelId` for a family read in place ([contract.import-in-place.md](contract.import-in-place.md)) | 201 the run, `draft` |
 | `GET` | `page`, `pageSize` | the runs, newest first |
 | `GET /:runId` | — | the run: status, `failureReason`, counts, `rollbackUntil`, `snapshotsPurgedAt`, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
 | `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null | the run |

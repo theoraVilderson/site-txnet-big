@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, Prisma, VariantBillingMode, type MigrationRun } from '@prisma/client';
+import { GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, PanelReviewState, Prisma, VariantBillingMode, type MigrationRun } from '@prisma/client';
 import {
   productCategoriesInclude,
   productCategoriesLive,
@@ -15,7 +15,7 @@ import { BALANCE_FILE_REFUSALS } from '../wallet/balance-import';
 import { isDeliverableVariant } from './admin-issue';
 import { assignable } from './grant';
 import { admitMigration } from './migration-door';
-import { TELEGRAM_CLAIMED } from './migration-plan';
+import { isInPlaceFamily, TELEGRAM_CLAIMED } from './migration-plan';
 import { announceRun, itemView, runView, type MigrationRunView } from './migration-run-view';
 import { MigrationInbounds, MigrationRunCreate } from './migration-run.schema';
 import { destroySourceLogin, SourceLoginVault } from './migration-seams';
@@ -39,6 +39,14 @@ export const MIGRATION_RUN_REJECTIONS = [
   'user_not_found',
   /** A link run committed before the admin chose its product (F-201-g). */
   'variant_unchosen',
+  /** An in-place run's panel is not the tenant's accepted, live panel of its family (F-1601-b1). */
+  'panel_not_found',
+  /** A family imported in place named by an address: it is read with its registered panel's own login (ADR-0160). */
+  'panel_required',
+  /** A panel named for a family read through a source login. */
+  'family_not_in_place',
+  /** An in-place run's commit, until the adoption on the router exists (F-1601-b3). */
+  'in_place_commit_not_built',
   /** A balance file no row can be read from (F-209-a): no run is made. */
   ...BALANCE_FILE_REFUSALS,
 ] as const;
@@ -90,9 +98,8 @@ export class MigrationRunService {
   create(actor: ResellerActor, tenantId: string, body: MigrationRunCreate): Promise<MigrationRunView> {
     return this.admitted(actor, tenantId, 'staffWrite', () =>
       tenantTransaction(this.prisma, async (tx) => {
-        const run = await tx.migrationRun.create({
-          data: { tenantId, kind: MigrationRunKind.panel, sourceFamily: body.family, sourceAddress: body.sourceAddress, actorUserId: actor.userId },
-        });
+        const source = await sourceOf(tx, tenantId, body);
+        const run = await tx.migrationRun.create({ data: { tenantId, kind: MigrationRunKind.panel, sourceFamily: body.family, ...source, actorUserId: actor.userId } });
         return runView(run, []);
       }),
     );
@@ -183,8 +190,8 @@ export class MigrationRunService {
         return runView(after);
       }),
     );
-    // A link run never had a login (F-201-g).
-    if (view.kind === MigrationRunKind.panel) await destroySourceLogin(this.logins, this.logger, tenantId, runId);
+    // A link run never had a login (F-201-g), nor one read in place: its login is its panel's (ADR-0160).
+    if (view.kind === MigrationRunKind.panel && !view.sourcePanelId) await destroySourceLogin(this.logins, this.logger, tenantId, runId);
     return view;
   }
 
@@ -203,6 +210,8 @@ export class MigrationRunService {
         if (run.status !== MigrationRunStatus.previewed) throw new MigrationRunRefused('run_closed', run.status);
         // A link run has no inbounds to map: its one client becomes the product the admin chose (F-201-g).
         if (run.kind === MigrationRunKind.link && !run.variantId) throw new MigrationRunRefused('variant_unchosen', run.id);
+        // The commit would place every user by the product's group, a new login each (ADR-0160 decision 6).
+        if (run.sourcePanelId) throw new MigrationRunRefused('in_place_commit_not_built', run.id);
         const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.committing, workerClaimedAt: null } });
         await announceRun(tx, after);
         return runView(after);
@@ -254,6 +263,28 @@ export class MigrationRunService {
   }
 }
 
+
+/**
+ * A run's source as the body names it: an address read through a source
+ * login, or — for a family imported in place (ADR-0160) — the tenant's own
+ * registered panel, accepted and live, whose origin is the import key's
+ * address (`remoteIdentityOf`), so a re-run of that router finds its Grants.
+ */
+async function sourceOf(tx: Prisma.TransactionClient, tenantId: string, body: MigrationRunCreate): Promise<{ sourceAddress: string; sourcePanelId?: string }> {
+  const { family, sourceAddress, panelId } = body;
+  const inPlace = isInPlaceFamily(family);
+  if (!panelId) {
+    if (inPlace || !sourceAddress) throw new MigrationRunRefused('panel_required', family);
+    return { sourceAddress };
+  }
+  if (!inPlace) throw new MigrationRunRefused('family_not_in_place', family);
+  const panel = await tx.panel.findFirst({
+    where: { id: panelId, tenantId, driverType: family, reviewState: { in: [PanelReviewState.accepted, PanelReviewState.accepted_low_trust] }, retiredAt: null },
+    select: { apiBaseUrl: true },
+  });
+  if (!panel?.apiBaseUrl || !URL.canParse(panel.apiBaseUrl)) throw new MigrationRunRefused('panel_not_found', panelId);
+  return { sourceAddress: new URL(panel.apiBaseUrl).origin, sourcePanelId: panelId };
+}
 
 function assertMappable(run: MigrationRun): void {
   if (run.status === MigrationRunStatus.previewing) throw new MigrationRunRefused('run_busy', run.status);

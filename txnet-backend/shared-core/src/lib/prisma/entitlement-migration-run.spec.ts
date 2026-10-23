@@ -97,6 +97,11 @@ describe('entitlement.migration_run: one import, its source and its state', () =
   it('a panel run names its family and address; a csv run names neither', () => {
     expect(sql).toContain('migration_run_source_fits_kind');
   });
+
+  it('only a panel run names a registered panel to read in place (F-1601-b1)', () => {
+    expect(block('model', 'MigrationRun')).toMatch(/sourcePanelId\s+String\?\s+@db\.Uuid/);
+    expect(migrationSql('a_run_reads_a_registered_router_in_place')).toMatch(/"migration_run_in_place_is_a_panel_run"\s+CHECK \("sourcePanelId" IS NULL OR "kind" = 'panel'\)/);
+  });
 });
 
 describe('entitlement.migration_item: one source client, planned then done', () => {
@@ -120,7 +125,7 @@ describe('entitlement.migration_item: one source client, planned then done', () 
 
   it('names the skip reasons F-206, F-208 and a balance file (F-209-a) report', () => {
     expect(enumValues('MigrationItemAction')).toEqual(['create', 'update', 'skip']);
-    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable', 'traffic_mismatch', 'unknown_user', 'ambiguous_user', 'currency_mismatch']);
+    expect(enumValues('MigrationSkipReason')).toEqual(['expired', 'duplicate', 'over_cap', 'unknown_protocol', 'unreadable', 'traffic_mismatch', 'unknown_user', 'ambiguous_user', 'currency_mismatch', 'no_inbound']);
   });
 
   it('holds one item per source client in a run, in its run’s tenant', () => {

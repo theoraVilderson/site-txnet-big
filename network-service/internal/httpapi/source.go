@@ -15,6 +15,7 @@ import (
 	"network-service/internal/driver"
 	"network-service/internal/egress"
 	"network-service/internal/opener"
+	"network-service/internal/register"
 	"network-service/internal/source"
 )
 
@@ -44,9 +45,17 @@ type SourceLogins interface {
 	SourceLogin(ctx context.Context, tenantID, credentialRef string) (opener.SourcePanel, error)
 }
 
+// InPlacePanels opens a tenant's own registered panel for an import read in
+// place (ADR-0160, register.InPlacePanels).
+type InPlacePanels interface {
+	OpenInPlace(ctx context.Context, tenantID, panelID string, family driver.DriverType) (driver.Driver, error)
+}
+
 // Source serves the source routes.
 type Source struct {
 	Logins SourceLogins
+	// Panels opens a run's registered panel, for a family imported in place.
+	Panels InPlacePanels
 	// HTTP is the client a source is dialed through: source.HTTPClient over
 	// the bare guard.
 	HTTP *http.Client
@@ -76,15 +85,20 @@ func (s *Source) serviceOnly(next http.HandlerFunc) http.HandlerFunc {
 
 // panelRequest names a source panel: whose run, which family, and the vault
 // reference its address and login are sealed under (F-201-d) — never the
-// address itself, which is as secret as the login.
+// address itself, which is as secret as the login. A family imported in
+// place names the tenant's registered panel instead (ADR-0160, F-1601-b1).
 type panelRequest struct {
 	TenantID      string            `json:"tenantId"`
 	Family        driver.DriverType `json:"family"`
 	CredentialRef string            `json:"credentialRef"`
+	PanelID       string            `json:"panelId"`
 }
 
 func (p panelRequest) valid() bool {
-	return p.TenantID != "" && p.CredentialRef != "" && source.IsFamily(p.Family)
+	if p.TenantID == "" || !source.IsFamily(p.Family) || (p.CredentialRef == "") == (p.PanelID == "") {
+		return false
+	}
+	return (p.PanelID != "") == source.ReadInPlace(p.Family)
 }
 
 func absolute(raw string) bool {
@@ -157,6 +171,13 @@ func (s *Source) link(w http.ResponseWriter, r *http.Request) {
 // open reads the login and builds the family's driver, paced: the source is
 // a reseller's live panel (source.RequestsPerMinute).
 func (s *Source) open(ctx context.Context, req panelRequest) (source.Reader, error) {
+	if req.PanelID != "" {
+		d, err := s.Panels.OpenInPlace(ctx, req.TenantID, req.PanelID, req.Family)
+		if err != nil {
+			return nil, err
+		}
+		return driver.Pace(d, driver.Budget{MaxRequests: source.RequestsPerMinute}), nil
+	}
 	panel, err := s.Logins.SourceLogin(ctx, req.TenantID, req.CredentialRef)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", errCredential, err)
@@ -195,6 +216,8 @@ func reasonOf(err error) (string, int) {
 	switch {
 	case errors.Is(err, errCredential):
 		return "credential_unavailable", http.StatusUnprocessableEntity
+	case errors.Is(err, register.ErrNoInPlacePanel):
+		return "panel_not_found", http.StatusUnprocessableEntity
 	case errors.Is(err, opener.ErrNoDriver):
 		return "no_driver", http.StatusUnprocessableEntity
 	case errors.Is(err, egress.ErrRefused):

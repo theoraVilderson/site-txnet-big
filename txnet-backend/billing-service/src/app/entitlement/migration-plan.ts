@@ -1,4 +1,4 @@
-import { ConfigProtocol, GrantSource, type DriverType, type MigrationSkipReason } from '@prisma/client';
+import { ConfigProtocol, DriverType, GrantSource, type MigrationSkipReason } from '@prisma/client';
 import { z } from 'zod';
 
 import { EntitlementRefused } from './entitlement-refusals';
@@ -57,6 +57,15 @@ export const LINK_SOURCE = 'link';
 export type ImportSource = { family: DriverType | typeof LINK_SOURCE; sourceAddress: string };
 
 /**
+ * A family imported in place (ADR-0160): its users keep their login on the
+ * source, the tenant's registered panel, so a run names that panel rather
+ * than an address and a login, and a client has no protocol of its own — the
+ * login serves whatever the router's NAS dials in with. The one place the
+ * question is answered (C-18).
+ */
+export const isInPlaceFamily = (family: ImportSource['family']): boolean => family === DriverType.mikrotik_user_manager;
+
+/**
  * The run's source, the prepaid variant the reseller chose for this client's
  * inbound (a product, not a server — user, 2026-10-21) and the moment of the plan.
  */
@@ -71,10 +80,11 @@ export type PlannedImport = {
   grant: { source: typeof GrantSource.migration; startsAt: Date; endsAt: Date | null; trafficUnlimited: boolean; purchasedBytes: bigint; consumedBytes: bigint };
   /**
    * Placed by the variant's group, as any Grant of it (F-027-bl): the protocol
-   * is the client's, for the report. `uuid` null where the list did not read
-   * it (S-UI from v1.1).
+   * is the client's, for the report — null in place, where the router's login
+   * names none. `uuid` null where the list did not read it (S-UI from v1.1,
+   * User Manager, whose password is never read).
    */
-  config: { variantId: string; protocol: ConfigProtocol; uuid: string | null };
+  config: { variantId: string; protocol: ConfigProtocol | null; uuid: string | null };
   /** The source's own on/off, kept apart from the Grant's status: a client disabled there is not a suspended Grant here. */
   enabled: boolean;
 };
@@ -106,12 +116,13 @@ export const isUnlimitedClient = (client: Pick<SourceClient, 'dataLimitBytes'>):
 
 /**
  * What the client alone says against importing it (F-202): an end at or
- * before the plan's moment, or a protocol we do not sell. A duplicate, an
- * update and the cap need the run, and are the dry run's.
+ * before the plan's moment, or a protocol we do not sell — asked of no
+ * client imported in place, which names none. A duplicate, an update and the
+ * cap need the run, and are the dry run's.
  */
-export function ownSkipOf(client: SourceClient, now: Date): SkippedImport['skipReason'] | null {
+export function ownSkipOf(client: SourceClient, now: Date, inPlace = false): SkippedImport['skipReason'] | null {
   if (client.expiresAt && client.expiresAt.getTime() <= now.getTime()) return 'expired';
-  return protocolOf(client.protocol) ? null : 'unknown_protocol';
+  return inPlace || protocolOf(client.protocol) ? null : 'unknown_protocol';
 }
 
 /**
@@ -126,9 +137,10 @@ export function ownSkipOf(client: SourceClient, now: Date): SkippedImport['skipR
  */
 export function planMigrationItem(client: SourceClient, source: MigrationSource): MigrationItemPlan {
   const remoteIdentity = remoteIdentityOf(source, client.remoteId);
-  const skipReason = ownSkipOf(client, source.now);
+  const inPlace = isInPlaceFamily(source.family);
+  const skipReason = ownSkipOf(client, source.now, inPlace);
   const protocol = protocolOf(client.protocol);
-  if (skipReason || !protocol) return { remoteIdentity, skipReason: skipReason ?? 'unknown_protocol' };
+  if (skipReason || (!protocol && !inPlace)) return { remoteIdentity, skipReason: skipReason ?? 'unknown_protocol' };
   const trafficUnlimited = isUnlimitedClient(client);
   return {
     remoteIdentity,

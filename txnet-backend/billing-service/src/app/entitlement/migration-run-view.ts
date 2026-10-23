@@ -16,6 +16,7 @@ export type MigrationRunView = Pick<
   | 'kind'
   | 'sourceFamily'
   | 'sourceAddress'
+  | 'sourcePanelId'
   | 'status'
   | 'failureReason'
   | 'plannedCreate'
@@ -37,6 +38,7 @@ export const runView = (r: MigrationRun, inbounds?: MigrationInbound[]): Migrati
   kind: r.kind,
   sourceFamily: r.sourceFamily,
   sourceAddress: r.sourceAddress,
+  sourcePanelId: r.sourcePanelId,
   status: r.status,
   failureReason: r.failureReason,
   plannedCreate: r.plannedCreate,

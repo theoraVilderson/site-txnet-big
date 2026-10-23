@@ -234,7 +234,11 @@ func main() {
 	mux.HandleFunc("/metrics", api.Metrics(plannerMetrics))
 	// An import's source panel, read-only (F-201-b): always a tenant's
 	// choice, so the bare guard — never PANEL_EGRESS_ALLOW_CIDRS.
-	sources := &httpapi.Source{Logins: vault, HTTP: source.HTTPClient(egress.Guard{}), ServiceToken: cfg.ServiceAuthToken, Log: log}
+	sources := &httpapi.Source{
+		Logins: vault, HTTP: source.HTTPClient(egress.Guard{}), ServiceToken: cfg.ServiceAuthToken, Log: log,
+		// A family read in place opens the tenant's registered panel as the loops do (ADR-0160).
+		Panels: register.InPlacePanels{DB: pool, Opener: panelOpener},
+	}
 	sources.Register(mux)
 
 	srv := &http.Server{

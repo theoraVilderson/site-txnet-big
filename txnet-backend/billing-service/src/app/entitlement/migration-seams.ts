@@ -95,9 +95,15 @@ const snapshotSchema = z.object({
 export type SourceSnapshot = z.infer<typeof snapshotSchema>;
 
 /**
+ * Where a run's source is read from: the vault's address and login, by the
+ * run's id (F-201-d), or — in place (ADR-0160) — the tenant's registered
+ * panel, with its own login. Neither carries an address or a login.
+ */
+export type SourceRead = { credentialRef: string } | { panelId: string };
+
+/**
  * Reads a run's source panel through `network-service` (F-201-b): the bulk
- * calls only, never a write. The address and login are the vault's, by the
- * run's id (F-201-d) — never in this request.
+ * calls only, never a write. The address and login are never in this request.
  */
 @Injectable()
 export class SourceSnapshotReader {
@@ -107,8 +113,8 @@ export class SourceSnapshotReader {
     this.seam = seamOf(config, 'NETWORK_API_BASE_URL', 'NETWORK_API_TIMEOUT_MS');
   }
 
-  async snapshot(tenantId: string, family: DriverType, runId: string): Promise<SourceSnapshot> {
-    const data = await postToSeam(this.seam, SNAPSHOT_PATH, { tenantId, family, credentialRef: runId });
+  async snapshot(tenantId: string, family: DriverType, from: SourceRead): Promise<SourceSnapshot> {
+    const data = await postToSeam(this.seam, SNAPSHOT_PATH, { tenantId, family, ...from });
     const parsed = snapshotSchema.safeParse(data);
     if (!parsed.success) throw new MigrationSeamUnavailable(`${SNAPSHOT_PATH} answered no snapshot`);
     return parsed.data;

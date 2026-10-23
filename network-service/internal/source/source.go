@@ -46,6 +46,13 @@ func IsFamily(f driver.DriverType) bool {
 	return false
 }
 
+// ReadInPlace is whether an import reads the family's users in place
+// (ADR-0160): from the tenant's registered panel with its own login, never a
+// source login. The one place the question is answered (C-18).
+func ReadInPlace(f driver.DriverType) bool {
+	return f == driver.DriverMikrotikUserManager
+}
+
 // DefaultMaxClients is the most clients one source may hold (F-201-b). A
 // reseller past it is a conversation, not a batch: the dry run's report and
 // the commit are sized for it.

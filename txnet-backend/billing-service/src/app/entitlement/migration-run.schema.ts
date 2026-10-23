@@ -23,8 +23,13 @@ const originSchema = z
  * driver; network-service answers one it cannot read as `bad_request`, and
  * the preview says so. The address is the origin only — the web path is the
  * login's, sealed in the vault (tenant `contract.source-login.md` rule 1).
+ * A family imported in place names the tenant's registered panel instead
+ * (ADR-0160, F-1601-b1): its address and login are the panel's own.
  */
-export const migrationRunCreateSchema = z.object({ family: z.nativeEnum(DriverType), sourceAddress: originSchema }).strict();
+export const migrationRunCreateSchema = z
+  .object({ family: z.nativeEnum(DriverType), sourceAddress: originSchema.optional(), panelId: z.string().uuid().optional() })
+  .strict()
+  .refine((b) => (b.sourceAddress === undefined) !== (b.panelId === undefined), 'an address or a registered panel, not both');
 export type MigrationRunCreate = z.infer<typeof migrationRunCreateSchema>;
 
 /** `PUT …/migration-runs/:runId/inbounds`: each source inbound to one of the reseller's prepaid variants, or none. */

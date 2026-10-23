@@ -46,7 +46,8 @@ export function clientsPerInbound(clients: readonly unknown[]): Map<string, numb
   const counts = new Map<string, number>();
   for (const raw of clients) {
     const inbound = raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['inboundRemoteId'] : undefined;
-    if (typeof inbound === 'string') counts.set(inbound, (counts.get(inbound) ?? 0) + 1);
+    // A client on no inbound is skipped (`no_inbound`), never an inbound to map.
+    if (typeof inbound === 'string' && inbound !== '') counts.set(inbound, (counts.get(inbound) ?? 0) + 1);
   }
   return counts;
 }
@@ -58,6 +59,8 @@ export function clientsPerInbound(clients: readonly unknown[]): Map<string, numb
  * - **unreadable** — the client fails `sourceClientSchema` (catalog §16); one
  *   with no id at all has no row and is only counted.
  * - **expired**, **unknown_protocol** — what the client alone says (F-202).
+ * - **no_inbound** — a client on no source inbound: a User Manager user
+ *   holding no profile, which cannot log in there (F-1601-b1).
  * - **traffic_mismatch** — an unlimited client on an inbound mapped to a
  *   limited product, or the other way round (F-208): the reseller maps it
  *   again or leaves it, rather than the commit failing it.
@@ -102,6 +105,10 @@ export function planRun(clients: readonly unknown[], ctx: RunPlanContext): RunPl
     }
     const client = parsed.data;
     const snapshot = snapshotOf(client);
+    if (client.inboundRemoteId === '') {
+      skip(remoteIdentity, snapshot, 'no_inbound');
+      continue;
+    }
     const variantId = ctx.variantOf.get(client.inboundRemoteId);
     // `previewOf` refuses a plan with an inbound left unmapped; this is the belt to it.
     if (!variantId) throw new Error(`inbound ${client.inboundRemoteId} has no variant`);

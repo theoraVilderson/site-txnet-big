@@ -11,7 +11,7 @@ import { linkPlanOf, readLinkRun } from './migration-link-run';
 import { remoteIdentityOf } from './migration-plan';
 import { announceRun } from './migration-run-view';
 import { clientsPerInbound, planRun, type RunPlan } from './migration-run-plan';
-import { MigrationSeamRefused, SourceSnapshotReader, SubscriptionLinkProbe, type SourceSnapshot } from './migration-seams';
+import { MigrationSeamRefused, SourceSnapshotReader, SubscriptionLinkProbe, type SourceRead, type SourceSnapshot } from './migration-seams';
 
 /** How long a tick holds a run: past it, a tick that died mid-read is taken over (F-206). */
 export const MIGRATION_RUN_LEASE_MS = 10 * 60_000;
@@ -44,6 +44,9 @@ export async function claimRun(db: CrossTenantPrismaService, status: MigrationRu
 
 /** The run is still this tick's: in `status`, under the lease it took. A cancel or a re-preview meanwhile is theirs. */
 export const stillOurs = (run: MigrationRun, status: MigrationRunStatus): Prisma.MigrationRunWhereInput => ({ id: run.id, status, workerClaimedAt: run.workerClaimedAt });
+
+/** Where a panel run is read from: its registered panel in place (ADR-0160), else its source login by the run's id. */
+const sourceReadOf = (run: Pick<MigrationRun, 'id' | 'sourcePanelId'>): SourceRead => (run.sourcePanelId ? { panelId: run.sourcePanelId } : { credentialRef: run.id });
 
 export type MigrationPreviewResult = 'none' | 'previewed' | 'returned' | 'lost';
 
@@ -91,7 +94,7 @@ export class MigrationPreviewService {
     if (run.kind === MigrationRunKind.csv) return this.previewCsv(run);
     let snapshot: SourceSnapshot;
     try {
-      snapshot = await this.source.snapshot(run.tenantId, panelSourceOf(run).family, run.id);
+      snapshot = await this.source.snapshot(run.tenantId, panelSourceOf(run).family, sourceReadOf(run));
     } catch (e) {
       const reason = e instanceof MigrationSeamRefused ? e.reason : SOURCE_UNREACHABLE;
       this.logger.warn(`run ${run.id}: source not read (${reason}): ${errorLine(e)}`);

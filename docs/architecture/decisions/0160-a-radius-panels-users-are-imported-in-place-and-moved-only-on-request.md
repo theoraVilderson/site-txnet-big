@@ -50,6 +50,22 @@ to another panel, move them and rebuild their logins.
    conformance suite. A difference is fixed in the one driver, never forked
    into a second.
 
+## Decided while building it (user, 2026-10-23, F-1601-b)
+
+6. **An in-place Grant stays on its router.** It is issued with no panel
+   group, so no group places more configs for it; a move (decision 4) is
+   what puts it anywhere else.
+7. **A rollback hands the user back.** Our chain comes off, the user's own
+   profile goes back on, and the user is never deleted. User Manager counts
+   a profile's validity from its assignment, so that profile starts again.
+8. **A normal end deletes**, as for every config of ours: a purge after the
+   suspension window, or an admin's delete.
+9. **Adoption waits for a real router** (F-1601-e). Whether User Manager
+   checks `transfer-limit` against the user's lifetime total or against its
+   profile decides the first ceiling written at adoption. The two answers
+   err in opposite directions, by the user's pre-import usage, so it is
+   proved on a RouterOS CHR in `dev-docker` before F-1601-b2 is built.
+
 ## Consequences
 
 - Positive: a reseller with 3,000 RADIUS users switches billing to TXNet

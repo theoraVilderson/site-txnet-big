@@ -617,6 +617,8 @@ enum MigrationSkipReason {
   ambiguous_user
   /// A balance file's row in another currency than the person's wallet (F-209-a): never converted.
   currency_mismatch
+  /// A client on no source inbound: a User Manager user holding no profile, which cannot log in there (F-1601-b1).
+  no_inbound
 
   @@schema("entitlement")
 }
@@ -646,6 +648,8 @@ model MigrationRun {
   sourceFamily   DriverType?
   /// The source's origin as read (`scheme://host[:port]`); on a `link` run the whole old link (F-201-g); null on a `csv` run.
   sourceAddress  String?
+  /// An import read in place (ADR-0160, F-1601-b1): the tenant's registered panel, read with its own login; null on a run read through a source login. No foreign key: network's.
+  sourcePanelId  String?            @db.Uuid
   /// The person a `link` run is for, and only on one (`migration_run_link_names_its_person`, F-201-g). No foreign key: identity's.
   userId         String?            @db.Uuid
   /// The prepaid variant a `link` run's client becomes, chosen by the admin (F-201-g); a panel run maps inbounds instead.
