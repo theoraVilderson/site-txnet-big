@@ -82,7 +82,11 @@ to another panel, move them and rebuild their logins.
 11. **The old login waits for the new one.** The router login is not
     removed at the move: it stays until the new config is confirmed, then a
     grace of 3 days, so the user is never without service while changing
-    their device. Both draw on the one Grant.
+    their device. Both draw on the one Grant. *(User 2026-10-23, F-1601-d2:)*
+    every move, not only a router login's — an Xray config copied by hand is
+    cut off the same way; "confirmed" is the new config built on its target
+    (`confirmedAt`), when the user is told and the 3 days start; one old row
+    waits per config, so moving the new one again retires the waiting one.
 
 ## Consequences
 

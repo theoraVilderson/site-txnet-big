@@ -213,6 +213,11 @@ export const OutboxEventType = {
   GRANT_ADMIN_CONFIG_RETIRED: 'entitlement.grant.admin_config_retired',
   /** F-311-s: an admin moved one of its configs to another server. */
   GRANT_ADMIN_CONFIG_MOVED: 'entitlement.grant.admin_config_moved',
+  /**
+   * F-1601-d2 (ADR-0160 decision 11): a moved config's replacement is confirmed on its panel — use the
+   * new link or login; the old one stops in `days`. Told once per move (period = the old config).
+   */
+  GRANT_CONFIG_MOVE_READY: 'entitlement.grant.config_move_ready',
 } as const;
 export type OutboxEventType = (typeof OutboxEventType)[keyof typeof OutboxEventType];
 
@@ -316,6 +321,7 @@ export const OUTBOX_EVENT_BINDER: Record<OutboxEventType, 'worker-service' | 'me
   [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: 'worker-service',
   [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: 'worker-service',
   [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: 'worker-service',
+  [OutboxEventType.GRANT_CONFIG_MOVE_READY]: 'worker-service',
 };
 
 /** Every tick routing key starts with this. The suffix is the worker key. */

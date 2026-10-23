@@ -5,11 +5,13 @@ import { BotWorkerCategory } from '@prisma/client';
 import { DefaultSchedule, Job, JobResult } from '../automation/job';
 import { envelopeData } from '../automation/internal-answer';
 
-/** The two routes this job exists to call. Service callers only; 404 otherwise. */
+/** The three routes this job exists to call. Service callers only; 404 otherwise. */
 const FULFIL_DUE_PATH = '/api/internal/billing/network/fulfil-due';
 const FULFIL_COUNTS = ['scanned', 'configsPlaced', 'grantsActivated', 'grantsFailed'] as const;
 const DRAIN_DUE_PATH = '/api/internal/billing/network/drain-due';
 const DRAIN_COUNTS = ['scanned', 'configsRetired', 'grantsHeld', 'membersRemoved', 'failed'] as const;
+const HANDOFF_DUE_PATH = '/api/internal/billing/network/handoff-due';
+const HANDOFF_COUNTS = ['scanned', 'told', 'retired', 'failed'] as const;
 
 /**
  * The clock on panel-group fulfilment (F-027-bl, network `contract.groups.md`).
@@ -29,6 +31,10 @@ const DRAIN_COUNTS = ['scanned', 'configsRetired', 'grantsHeld', 'membersRemoved
  * and remove the member. Placing first, so a replacement is never waiting on
  * the drain; an idle drain scan is one query too.
  *
+ * **A move's handoff rides it last** (F-1601-d2, ADR-0160 decision 11): the
+ * old row of a move starts its grace once its replacement is confirmed — the
+ * user told then — and retires when the grace is over. One query when idle.
+ *
  * **Safe to run twice** (ADR-0027): a covered panel is never placed on again,
  * `config_group_panel_once` refuses the loser of two concurrent runs, and a
  * retired config or a removed member is not named again.
@@ -41,7 +47,7 @@ export class GrantGroupFulfilmentJob implements Job {
   readonly key = 'grant_group_fulfilment';
   readonly name = 'Panel group fulfilment';
   readonly description =
-    'Places a config on every non-drain healthy member of a Grant\'s panel group and activates it at minHealthyPanels (F-027-bl); retires a drained member\'s configs after 2 × subscriptionTtl and removes it (F-027-bm).';
+    'Places a config on every non-drain healthy member of a Grant\'s panel group and activates it at minHealthyPanels (F-027-bl); retires a drained member\'s configs after 2 × subscriptionTtl and removes it (F-027-bm); ends a move\'s handoff (F-1601-d2).';
   readonly category = BotWorkerCategory.other;
   /** Unscheduled, a grouped Grant never activates. Every minute: a buyer waits on it. */
   readonly defaultSchedule: DefaultSchedule = { scheduleType: 'cron_expression', cronExpression: '* * * * *' };
@@ -65,14 +71,15 @@ export class GrantGroupFulfilmentJob implements Job {
 
     const result = await this.ask(FULFIL_DUE_PATH, FULFIL_COUNTS);
     const drain = await this.ask(DRAIN_DUE_PATH, DRAIN_COUNTS);
+    const handoff = await this.ask(HANDOFF_DUE_PATH, HANDOFF_COUNTS);
     if (result.configsPlaced > 0 || result.grantsActivated > 0 || drain.configsRetired > 0 || drain.membersRemoved > 0) {
       this.logger.log(
         `placed ${result.configsPlaced} config(s), activated ${result.grantsActivated} Grant(s); drained ${drain.configsRetired} config(s), removed ${drain.membersRemoved} member(s)`,
       );
     }
     return {
-      itemsProcessed: result.configsPlaced + result.grantsActivated + drain.configsRetired + drain.membersRemoved,
-      errorsCount: result.grantsFailed + drain.failed,
+      itemsProcessed: result.configsPlaced + result.grantsActivated + drain.configsRetired + drain.membersRemoved + handoff.told + handoff.retired,
+      errorsCount: result.grantsFailed + drain.failed + handoff.failed,
       metrics: {
         ...result,
         drainScanned: drain.scanned,
@@ -80,6 +87,9 @@ export class GrantGroupFulfilmentJob implements Job {
         grantsHeld: drain.grantsHeld,
         membersRemoved: drain.membersRemoved,
         drainFailed: drain.failed,
+        handoffTold: handoff.told,
+        handoffRetired: handoff.retired,
+        handoffFailed: handoff.failed,
       },
     };
   }

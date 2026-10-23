@@ -160,6 +160,19 @@ purge (`purge-due` answers `told` beside its counts).
 | Prepaid, or any Grant suspended as `period_ended`: `entitlement.grant.purge_soon` ("renew"); metered out of money: `.purge_soon_metered` ("top up"); stopped by its spending cap (`cap_reached`): `.purge_soon_capped` ("raise the cap", F-118-t) | a metered renewal revives only a lapsed Grant (F-027-do); a top-up only one out of money (as "Cutoff"); a cap-cut one comes back when its cap lets money through |
 | Never muted, never held for quiet hours (F-601-m) | the last chance to keep a config as it is |
 
+**A moved config is ready (F-1601-d2, ADR-0160 decision 11)** — the old
+config of a move serves until the new one is confirmed on its panel, then 3
+days (network `contract.provisioning.md` "The old row waits"). Billing's
+`MoveHandoffService` tells it in the write that starts the 3 days:
+`entitlement.grant.config_move_ready`, payload `tenantId, userId, grantId,
+period` (= the old config) and `days`; template `configMoveReady`.
+
+| Rule | Why |
+|---|---|
+| Told once per move: the write that sets `retireAt` carries it, and only where it was unset | a sweep run twice tells nothing twice |
+| A cutoff: never muted, never held for quiet hours | the old config is about to stop |
+| It says to copy the new config from My services only if the old one was added by hand; a subscription link follows on its own | the one action that is the user's |
+
 
 **Active again (F-601-k, beyond the catalog)** — the answer to a cutoff: a
 stopped Grant that runs again is told so, in the transaction that brought it

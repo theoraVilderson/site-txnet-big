@@ -891,11 +891,11 @@ const TEMPLATE_TEXT: Record<NotifyTemplate, Notice & { many: Notice }> = {
   },
   configMovedByAdmin: {
     read: (ns) => ns?.retention?.adminConfigMoved,
-    fallback: '🔀 Support moved one of your service\'s configs to another server. If you added it to your app by hand, copy it again from My services; a subscription link updates on its own.',
+    fallback: '🔀 Support moved one of your service\'s configs to another server. The old one keeps working until the new one is ready, and we will tell you then.',
     inbox: { read: (ns) => ns?.retention?.adminConfigMovedTitle, fallback: 'A config of your service moved server' },
     many: {
       read: (ns) => ns?.retention?.adminConfigMovedMany,
-      fallback: '🔀 Support moved {{count}} of your configs to other servers. If you added them to your app by hand, copy them again from My services; a subscription link updates on its own.',
+      fallback: '🔀 Support moved {{count}} of your configs to other servers. The old ones keep working until the new ones are ready, and we will tell you then.',
       inbox: { read: (ns) => ns?.retention?.adminConfigMovedManyTitle, fallback: '{{count}} configs moved server' },
     },
   },

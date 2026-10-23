@@ -35,6 +35,8 @@ export function insertReleaseSelection(tx: Prisma.TransactionClient, jobId: stri
      WHERE c."panelId" = ${source.panelId}::uuid AND c."inboundRemoteId" = ${source.remoteId}
        AND g."panelGroupId" = ANY(${source.groupIds}::uuid[])
        AND c."status" <> 'retired' AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
+       -- A row a move left retires by its handoff, not by a second move (ADR-0160 decision 11).
+       AND c."supersededById" IS NULL
      ORDER BY c."id"
      LIMIT ${limit}`;
 }

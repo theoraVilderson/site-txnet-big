@@ -657,9 +657,18 @@ model Config {
   /// chain removed) instead of deleting it: an import's rollback. CHECK
   /// `config_hand_back_is_an_adopted_login` (raw SQL).
   handBack                 Boolean   @default(false)
+  /// The row a move made to replace this one (ADR-0160 decision 11,
+  /// F-1601-d2): this row keeps serving until that one is confirmed, plus the
+  /// grace. Set only on a row still live; one row waits per config.
+  supersededById           String?   @db.Uuid
+  /// When the handoff retires this row: the grace counted from the sweep that
+  /// saw the replacement confirmed and told the user. Null until then.
+  retireAt                 DateTime?
 
   panel Panel @relation(fields: [panelId], references: [id])
   grant Grant @relation(fields: [grantId], references: [id])
+  supersededBy Config?  @relation("ConfigHandoff", fields: [supersededById], references: [id])
+  supersedes   Config[] @relation("ConfigHandoff")
 
   actionLogs       ConfigActionLog[]
   trafficRawLogs   TrafficRawLog[]
@@ -677,6 +686,7 @@ model Config {
   /// `/sub` reads a Grant's configs oldest first on every cache miss (F-027-bn).
   @@index([grantId, createdAt])
   @@index([panelId, enforcementState])
+  @@index([supersededById])
   @@map("config")
   @@schema("network")
 }

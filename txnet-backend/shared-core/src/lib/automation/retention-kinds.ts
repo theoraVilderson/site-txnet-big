@@ -64,6 +64,8 @@ export const RETENTION_KIND_OF: Readonly<Partial<Record<OutboxEventType, Retenti
   [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: 'cutoff',
   [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: 'cutoff',
   [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: 'cutoff',
+  // F-1601-d2: the old config of a move is about to stop — a cutoff, so never muted.
+  [OutboxEventType.GRANT_CONFIG_MOVE_READY]: 'cutoff',
 };
 
 export function retentionKindOf(notice: string): RetentionKind {

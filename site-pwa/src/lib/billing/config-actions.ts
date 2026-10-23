@@ -43,6 +43,7 @@ export const CONFIG_ACTION_REFUSALS = [
   "config_changed",
   "same_panel",
   "no_placement_on_target",
+  "config_leaving",
   "actor_not_allowed",
   "failed",
 ] as const;

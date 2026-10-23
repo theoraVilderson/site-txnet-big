@@ -30,8 +30,11 @@ const OWNER = { actorType: ActorType.user, actorId: USER };
 
 type Row = Record<string, unknown> & { id: string };
 
+/** Equality (an absent field reads as null), and `{ not }` — the shapes the writes use. */
 function matches(row: Row, where: Record<string, unknown>) {
-  return Object.entries(where).every(([key, want]) => row[key] === want);
+  return Object.entries(where).every(([key, want]) =>
+    want !== null && typeof want === 'object' && 'not' in want ? row[key] !== (want as { not: unknown }).not : (row[key] ?? null) === want,
+  );
 }
 
 function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false, door: UsageDoorService | null = null) {
@@ -72,6 +75,7 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
         return row;
       },
       findUnique: async ({ where }: { where: { id: string } }) => configs.find((c) => c.id === where.id) ?? null,
+      findMany: async ({ where }: { where: Record<string, unknown> }) => configs.filter((c) => matches(c, where)),
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
         const hit = configs.filter((c) => matches(c, where));
         for (const row of hit) {
@@ -279,7 +283,7 @@ describe('ConfigActionsService', () => {
     await expect(service.regenerate(tx, { configId, actor: OWNER })).rejects.toEqual(refusal('config_retired'));
   });
 
-  it('moves by retiring the old row and creating a new one on the target panel', async () => {
+  it('moves by creating a new row on the target panel; the old one waits on it (ADR-0160 decision 11)', async () => {
     const { service, tx, configs } = build();
     const { configId, uuid } = await service.provision(tx, { grantId: GRANT, panelId: PANEL_A, protocol: 'vless', actor: OWNER });
 
@@ -287,14 +291,14 @@ describe('ConfigActionsService', () => {
 
     expect(moved.retiredConfigId).toBe(configId);
     expect(configs).toHaveLength(2);
-    expect(configs[0]).toMatchObject({ panelId: PANEL_A, status: ConfigStatus.retired, desiredRemote: DesiredRemote.absent });
+    expect(configs[0]).toMatchObject({ panelId: PANEL_A, status: ConfigStatus.active, desiredRemote: DesiredRemote.present, supersededById: moved.configId });
     expect(configs[1]).toMatchObject({ id: moved.configId, panelId: PANEL_B, grantId: GRANT, protocol: 'vless', desiredRemote: DesiredRemote.present });
     // `uuid` is unique across the system, and the old client holds the old one until it is deleted.
     expect(configs[1].uuid).not.toBe(uuid);
     expect(configs[1].claimTag).not.toBe(configs[0].claimTag);
 
     await expect(service.move(tx, { configId: moved.configId, toPanelId: PANEL_B, actor: ADMIN })).rejects.toEqual(refusal('same_panel'));
-    await expect(service.move(tx, { configId, toPanelId: PANEL_B, actor: ADMIN })).rejects.toEqual(refusal('config_retired'));
+    await expect(service.move(tx, { configId, toPanelId: PANEL_B, actor: ADMIN })).rejects.toEqual(refusal('config_leaving'));
   });
 
   it('refuses an unknown config with a typed reason', async () => {

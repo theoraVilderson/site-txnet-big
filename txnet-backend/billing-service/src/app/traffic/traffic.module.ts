@@ -12,6 +12,7 @@ import { GrantCloseService } from './grant-close';
 import { GroupFulfilmentController } from './group-fulfilment.controller';
 import { GroupFulfilmentService } from './group-fulfilment';
 import { GroupDrainService } from './group-drain';
+import { MoveHandoffService } from './move-handoff.service';
 import { GrantRegroupActs } from './grant-regroup';
 import { InboundReleaseActs } from './inbound-release';
 import { BlockRequestQueue } from './block-request.queue';
@@ -50,7 +51,7 @@ import { VpnReserveSweep } from './vpn-reserve';
 @Module({
   imports: [WalletModule, UsageModule],
   controllers: [CollectionHealthController, UserConfigsController, GroupFulfilmentController, VpnReserveController, SelfMoveSettingsController],
-  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GrantPeriodService, GroupFulfilmentService, GroupDrainService, InboundReleaseActs, GrantRegroupActs, GrantCloseService, VpnReserveSweep, SelfMoveSettingsService, ResellerAccess],
+  providers: [BlockPurchaseService, BlockRequestService, RemainderCreditService, BlockRequestQueue, CollectionHealthService, ConfigActionsService, UserConfigsService, GrantUsageService, GrantPeriodService, GroupFulfilmentService, GroupDrainService, MoveHandoffService, InboundReleaseActs, GrantRegroupActs, GrantCloseService, VpnReserveSweep, SelfMoveSettingsService, ResellerAccess],
   exports: [BlockPurchaseService, RemainderCreditService, ConfigActionsService, GroupFulfilmentService, UserConfigsService, GrantUsageService, InboundReleaseActs, GrantRegroupActs],
 })
 export class TrafficModule {}

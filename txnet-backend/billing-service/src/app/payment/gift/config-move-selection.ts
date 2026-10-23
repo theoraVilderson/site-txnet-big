@@ -43,8 +43,9 @@ function selectionWhere(tenantId: string, s: ConfigMoveSelection): Prisma.Sql {
   // The schema allows exactly one of the two; read both, so either shape types.
   const { panelId, userIds = [] } = s.source as { panelId?: string; userIds?: string[] };
   const source = panelId ? Prisma.sql`c."panelId" = ${panelId}::uuid` : Prisma.sql`c."userId" = ANY(${userIds}::uuid[])`;
+  // A row already left by a move waits on its replacement, which is the one to move (ADR-0160 decision 11).
   return Prisma.sql`c."tenantId" = ${tenantId}::uuid
-    AND c."status" <> 'retired' AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL
+    AND c."status" <> 'retired' AND c."desiredRemote" = 'present' AND c."drainedAt" IS NULL AND c."supersededById" IS NULL
     AND c."panelId" <> ${s.toPanelId}::uuid
     AND ${source}`;
 }

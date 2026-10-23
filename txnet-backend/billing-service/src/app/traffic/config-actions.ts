@@ -6,6 +6,7 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { UsageDoorRefused, UsageDoorService, type UsageDoorRefusal } from '../usage/usage-door';
+import { MOVE_HANDOFF_ACTOR, handOver, waitingOn } from './move-handoff';
 import { movePlacements } from './panel-load';
 
 
@@ -41,6 +42,8 @@ export const CONFIG_ACTION_REJECTIONS = [
   'same_panel',
   /** A move's target has nothing this config can be placed on now (ADR-0160 decision 10). */
   'no_placement_on_target',
+  /** The row is on its way out of a move, waiting on its replacement (ADR-0160 decision 11): move that one. */
+  'config_leaving',
   'actor_not_allowed',
 ] as const;
 export type ConfigActionRejection = (typeof CONFIG_ACTION_REJECTIONS)[number];
@@ -71,6 +74,7 @@ type ConfigRow = {
   status: ConfigStatus;
   regenerateUsedCount: number;
   maxRegenerateCount: number;
+  supersededById: string | null;
 };
 
 /**
@@ -92,10 +96,9 @@ type ConfigRow = {
  * never deleted and `remoteId` is never cleared here — the pass clears it when
  * the panel is read without the client (network invariant 15).
  *
- * **A move is a new row.** The counter cursor, the traffic history and
- * `(panelId, remoteId)` all belong to one panel, so the old row retires and a
- * new one is provisioned on the target with a fresh `uuid` — the old client
- * holds the old one until it is deleted, and `uuid` is unique system-wide.
+ * **A move is a new row** on the target with a fresh `uuid` (network
+ * `contract.provisioning.md`); the old row serves until the handoff retires it
+ * (`move-handoff.ts`, ADR-0160 decision 11).
  */
 /** A door refusal as the user is told it; any other is not the user's to act on and is rethrown. */
 const DOOR_REFUSALS: Partial<Record<UsageDoorRefusal, ConfigActionRejection>> = {
@@ -322,18 +325,22 @@ export class ConfigActionsService {
     input: { configId: string; toPanelId: string; actor: ConfigActor },
   ): Promise<{ configId: string; uuid: string; retiredConfigId: string }> {
     const config = await this.live(tx, input.configId, input.actor);
+    if (config.supersededById) throw new ConfigActionRefused('config_leaving', config.id);
     if (config.panelId === input.toPanelId) throw new ConfigActionRefused('same_panel', input.toPanelId);
     await this.panelFor(tx, input.toPanelId, config.tenantId);
     // Planned before the retire: a target nothing can be placed on leaves the old row the user's.
     const placements = await movePlacements(tx, this.crossTenant, { grantId: config.grantId, protocol: config.protocol, toPanelId: input.toPanelId });
     if (placements?.length === 0) throw new ConfigActionRefused('no_placement_on_target', input.toPanelId);
 
-    await this.retireRow(tx, config, input.actor, CONFIG_MOVE_OUT_ACTION);
+    // One old row waits per config: the one still waiting on this row goes now.
+    for (const waiting of await waitingOn(tx, config.id)) await this.retireRow(tx, waiting, MOVE_HANDOFF_ACTOR, 'retire');
     // Provisioned for the Grant's owner whoever asked: the new rows are theirs,
     // and the planner splits the bag over them on its next turn.
     const [made] = placements
       ? await this.provisionForGroup(tx, { grantId: config.grantId, placements, credentialGroupId: randomUUID(), actor: input.actor })
       : [await this.provision(tx, { grantId: config.grantId, panelId: input.toPanelId, protocol: config.protocol, actor: input.actor })];
+    if (!(await handOver(tx, config, made.configId))) throw new ConfigActionRefused('config_changed', config.id);
+    await this.log(tx, config.id, input.actor, CONFIG_MOVE_OUT_ACTION);
     return { ...made, retiredConfigId: config.id };
   }
 
@@ -365,7 +372,7 @@ export class ConfigActionsService {
   private async live(tx: Prisma.TransactionClient, configId: string, actor: ConfigActor): Promise<ConfigRow> {
     const config = (await tx.config.findUnique({
       where: { id: configId },
-      select: { id: true, tenantId: true, userId: true, grantId: true, panelId: true, protocol: true, status: true, regenerateUsedCount: true, maxRegenerateCount: true },
+      select: { id: true, tenantId: true, userId: true, grantId: true, panelId: true, protocol: true, status: true, regenerateUsedCount: true, maxRegenerateCount: true, supersededById: true },
     })) as ConfigRow | null;
     if (!config || !this.owns(actor, config.userId)) throw new ConfigActionRefused('config_not_found', configId);
     if (config.status === ConfigStatus.retired) throw new ConfigActionRefused('config_retired', configId);

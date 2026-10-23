@@ -5,6 +5,7 @@ import type { ClosedVerdict } from './exhaustion';
 import { GrantCloseService } from './grant-close';
 import { DrainDueResult, GroupDrainService } from './group-drain';
 import { FulfilDueResult, FulfilNowOutcome, GroupFulfilmentService } from './group-fulfilment';
+import { HandoffDueResult, MoveHandoffService } from './move-handoff.service';
 
 /**
  * The seam `worker-service`'s `grant_group_fulfilment` tick reaches group
@@ -23,6 +24,7 @@ export class GroupFulfilmentController {
     private readonly fulfilment: GroupFulfilmentService,
     private readonly drain: GroupDrainService,
     private readonly close: GrantCloseService,
+    private readonly handoff: MoveHandoffService,
   ) {}
 
   /** One batch: place the configs that are due, activate the Grants that are. Raw counts, for the job's run log. */
@@ -59,5 +61,12 @@ export class GroupFulfilmentController {
   @HttpCode(200)
   drainDue(): Promise<DrainDueResult> {
     return this.drain.drainDue();
+  }
+
+  /** One batch of moves' handoffs (F-1601-d2): start the grace of the confirmed, retire the rows whose grace is over. */
+  @Post('handoff-due')
+  @HttpCode(200)
+  handoffDue(): Promise<HandoffDueResult> {
+    return this.handoff.handoffDue();
   }
 }

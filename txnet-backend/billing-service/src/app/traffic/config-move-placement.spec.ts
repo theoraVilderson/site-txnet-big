@@ -54,8 +54,9 @@ function build(target: { inbounds: Inbound[]; inboundPlacement?: InboundPlacemen
         return row;
       },
       findUnique: async ({ where }: { where: { id: string } }) => configs.find((c) => c.id === where.id) ?? null,
-      findMany: async ({ where }: { where: { grantId: string; panelId: string } }) =>
-        configs.filter((c) => c.grantId === where.grantId && c.panelId === where.panelId && c.status !== ConfigStatus.retired),
+      // A live row matching every equality in `where`; `{ not: retired }` is the live part.
+      findMany: async ({ where }: { where: Record<string, unknown> }) =>
+        configs.filter((c) => c.status !== ConfigStatus.retired && Object.entries(where).every(([k, v]) => (typeof v === 'object' && v !== null) || c[k] === v)),
       updateMany: async ({ where, data }: { where: { id: string; status: ConfigStatus }; data: Record<string, unknown> }) => {
         const hit = configs.filter((c) => c.id === where.id && c.status === where.status);
         for (const row of hit) Object.assign(row, data);
@@ -99,7 +100,8 @@ describe('a move places like a purchase on its target (ADR-0160 decision 10)', (
 
     const moved = await service.move(tx, { configId, toPanelId: XRAY, actor: ADMIN });
 
-    expect(configs[0]).toMatchObject({ status: ConfigStatus.retired, desiredRemote: DesiredRemote.absent });
+    // The login stays until the new config is confirmed, plus the grace (decision 11).
+    expect(configs[0]).toMatchObject({ status: ConfigStatus.active, desiredRemote: DesiredRemote.present });
     const made = configs.slice(1);
     expect(made.map((c) => [c.panelId, c.inboundRemoteId, c.protocol])).toEqual([
       [XRAY, '1', ConfigProtocol.vless],

@@ -97,4 +97,6 @@ export const RETENTION_NOTICES: Partial<Record<OutboxEventType, RetentionNotice>
   [OutboxEventType.GRANT_ADMIN_CONFIG_ENABLED]: { template: 'configEnabledByAdmin', params: [] },
   [OutboxEventType.GRANT_ADMIN_CONFIG_RETIRED]: { template: 'configRetiredByAdmin', params: [] },
   [OutboxEventType.GRANT_ADMIN_CONFIG_MOVED]: { template: 'configMovedByAdmin', params: [] },
+  // F-1601-d2: a move's new config is ready on its server — use it; the old one stops in `days`. Never muted.
+  [OutboxEventType.GRANT_CONFIG_MOVE_READY]: { template: 'configMoveReady', params: ['days'] },
 };

@@ -39,7 +39,7 @@ before the pass creates its client (`contract.lease.md` rules 5, 18).
 | `enable(tx, {configId, actor})` | `active`; `desiredEnabled` = the Grant is `active` | `actor_not_allowed` for a user |
 | `retire(tx, {configId, actor})` | `retired`, `absent`, `desiredEnabled = false`, `pending` | — |
 | `drain(tx, {configId, actor})` | as `retire`, plus `drainedAt`: the panel is not held for the Grant (drain sweep only, `contract.groups.md` rules 9, 14) | — |
-| `move(tx, {configId, toPanelId, actor})` | the old row retired (`move_out`), then the target placed on — see "A move places like a purchase" | `same_panel`, `panel_not_found`, `no_placement_on_target` |
+| `move(tx, {configId, toPanelId, actor})` | the target placed on — see "A move places like a purchase" — and the old row left serving, `supersededById` the new one (`move_out`) — see "The old row waits" | `same_panel`, `panel_not_found`, `no_placement_on_target`, `config_leaving` |
 
 Every action on an existing row refuses `config_not_found` (unknown, or another
 user's — a user actor acts only on their own) and `config_retired`.
@@ -67,8 +67,8 @@ re-enabling one an admin disabled. The row is never deleted.
 
 ## A move is a new row
 
-The old row retires and a new one is provisioned on the target panel with a
-fresh `uuid` — never a rewrite of `panelId`. The counter cursor, the traffic
+A new row is provisioned on the target panel with a fresh `uuid` — never a
+rewrite of `panelId` — and the old one retires when its handoff ends. The counter cursor, the traffic
 history and `(panelId, remoteId)` all belong to one panel; a row that changed
 panel would compare the new panel's counter against the old one's cursor. The
 old client holds the old `uuid` until it is deleted, and `uuid` is unique
@@ -88,6 +88,21 @@ before the old row retires (`movePlacements`, `traffic/panel-load.ts`):
   A router login (`pppoe`) moved to an Xray panel gets that panel's picks;
 - nothing placeable now — no pick with room, or the target not accepted,
   healthy and un-halted: `no_placement_on_target`, and the old row stays.
+
+**The old row waits for the new one** (ADR-0160 decision 11, F-1601-d2;
+`traffic/move-handoff.ts`). Every move, whoever asked:
+
+- the old row keeps its status, desired state and client, and names its
+  replacement (`supersededById`); both draw on the one Grant. Moving it again
+  is `config_leaving`, and the bulk move and an inbound's release skip it;
+- one row waits per config: moving the replacement retires the row still
+  waiting on it, at once (actor `MOVE_HANDOFF_ACTOR`);
+- `MoveHandoffService` on the `grant_group_fulfilment` tick (`handoff-due`):
+  once the replacement has `confirmedAt`, `retireAt` = now + 3 days and the
+  user is told the new link or login is ready (`entitlement.grant.config_move_ready`,
+  a cutoff, period = the old row); once `retireAt` passes — or the replacement
+  was retired before it was confirmed — the old row retires and the open
+  My services re-reads (`network.grant.linksCaptured`, cause `move_handoff`).
 
 ## The pass — `converge.Provisioning` (network-service)
 

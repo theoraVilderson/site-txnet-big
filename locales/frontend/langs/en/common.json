@@ -3266,6 +3266,7 @@
         "regenerate_unfunded": "not enough money in your wallet for a new link.",
         "config_changed": "it changed while you were acting on it. Try again.",
         "no_placement_on_target": "that panel cannot take this config right now.",
+        "config_leaving": "this config is being replaced by a new one after a move. Move the new one instead.",
         "failed": "could not be done. Try again."
       },
       "title": "This service's configs",
