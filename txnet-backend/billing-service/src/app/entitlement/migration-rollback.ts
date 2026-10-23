@@ -235,6 +235,8 @@ export class MigrationRollbackService {
   private async close(tx: Prisma.TransactionClient, run: MigrationRun, grantId: string, now: Date): Promise<void> {
     const actorUserId = run.rollbackActorUserId ?? run.actorUserId;
     await deleteGrant(tx, grantId, { at: now, actorUserId, reason: MIGRATION_ROLLED_BACK, refund: false, statusReason: MIGRATION_ROLLED_BACK }, (t, id, clock) => this.remainders.settle(t, { grantId: id, ...clock }));
+    // An in-place run's user goes back to its router as it was, never deleted (ADR-0160 decision 7).
+    if (run.sourcePanelId) await tx.config.updateMany({ where: { grantId, adoptedProfile: { not: null } }, data: { handBack: true } });
     await removeLegacyLinks(tx, grantId);
     await this.meters.settleAtClose(tx, { grantId, refund: false });
     await this.remainders.wholesaleAtClose(tx, grantId);

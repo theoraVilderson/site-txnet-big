@@ -72,7 +72,7 @@ const after = (v: unknown, where: unknown) => !(where && typeof where === 'objec
 
 /** The run, its items, the Grants and the billing facts the rollback reads, in memory. */
 function fakeDb(items: Row[], grants: Row[], facts: Facts = {}, run: Row = {}) {
-  const state = { run: { ...RUN, ...run } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as string[] };
+  const state = { run: { ...RUN, ...run } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as string[], handBacks: [] as Row[] };
   const itemMatches = (i: Row, where: Row): boolean =>
     Object.entries(where).every(([k, v]) => {
       if (k === 'OR') return (v as Row[]).some((w) => itemMatches(i, w));
@@ -91,6 +91,7 @@ function fakeDb(items: Row[], grants: Row[], facts: Facts = {}, run: Row = {}) {
     return [...by].map(([k, at]) => ({ [key]: k, _max: { createdAt: at }, _count: { _all: rows.filter((r) => String(r[key]) === k).length } }));
   };
   const models: Record<string, Row> = {
+    config: { updateMany: async (args: Row) => (state.handBacks.push(args), { count: 1 }) },
     migrationRun: {
       findFirst: async () => ({ ...state.run }),
       findMany: async () => [{ ...state.run }],
@@ -152,6 +153,19 @@ const closed = () => vi.mocked(deleteGrant).mock.calls.map((c) => c[1]);
 
 describe('MigrationRollbackService (F-211)', () => {
   beforeEach(() => vi.mocked(deleteGrant).mockClear());
+
+  it("hands an in-place run's users back to their router instead of deleting them (ADR-0160 decision 7)", async () => {
+    const db = fakeDb([item('ali')], [grant('ali')], {}, { sourcePanelId: '00000000-0000-4000-8000-0000000016a1' });
+    await rollback(db).run();
+    expect(closed()).toEqual(['grant-ali']);
+    expect(db.state.handBacks).toEqual([{ where: { grantId: 'grant-ali', adoptedProfile: { not: null } }, data: { handBack: true } }]);
+  });
+
+  it('marks nothing to hand back on a run that recreated its users elsewhere', async () => {
+    const db = fakeDb([item('ali')], [grant('ali')]);
+    await rollback(db).run();
+    expect(db.state.handBacks).toEqual([]);
+  });
 
   it('closes an untouched Grant as an admin delete with no refund, and removes the person the run made', async () => {
     const db = fakeDb([item('ali')], [grant('ali')]);

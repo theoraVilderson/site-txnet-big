@@ -125,6 +125,24 @@ export class ConfigActionsService {
   }
 
   /**
+   * An import in place (F-1601-b3, ADR-0160): the config *is* the router's
+   * user — its name as `remoteId` from the start, its own profile and label
+   * kept for a hand back — so the pass adopts it, never creates it, and never
+   * writes the `uuid` minted here as its password (network
+   * `contract.usermanager.md` rules 13-14). A RADIUS login serves whatever
+   * the NAS dials, so its protocol is recorded as `pppoe`.
+   */
+  async adoptInPlace(
+    tx: Prisma.TransactionClient,
+    input: { grantId: string; panelId: string; remoteId: string; adoptedProfile: string; adoptedLabel: string; actor: ConfigActor },
+  ): Promise<{ configId: string; uuid: string }> {
+    const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, trafficUnlimited: true } });
+    if (!grant) throw new ConfigActionRefused('grant_not_found', input.grantId);
+    const { remoteId, adoptedProfile, adoptedLabel } = input;
+    return this.create(tx, grant, input.panelId, ConfigProtocol.pppoe, null, input.actor, null, { remoteId, adoptedProfile, adoptedLabel });
+  }
+
+  /**
    * A panel group's placement (F-027-bl): one row per placement — a panel and
    * the picked inbound it is on (F-114-b) — all under one `credentialGroupId`. The caller is `GroupFulfilmentService`,
    * which chose them from the group's members and their panels' picks — the
@@ -159,6 +177,7 @@ export class ConfigActionsService {
     credentialGroupId: string | null,
     actor: ConfigActor,
     inboundRemoteId: string | null = null,
+    adopted: { remoteId: string; adoptedProfile: string; adoptedLabel: string } | null = null,
   ): Promise<{ configId: string; uuid: string }> {
     const uuid = randomUUID();
     const config = await tx.config.create({
@@ -178,6 +197,7 @@ export class ConfigActionsService {
         desiredRemote: DesiredRemote.present,
         desiredEnabled: true,
         enforcementState: EnforcementState.pending,
+        ...adopted,
       },
       select: { id: true },
     });

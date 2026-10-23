@@ -51,7 +51,6 @@ const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
   panel_not_found: 404,
   panel_required: 422,
   family_not_in_place: 422,
-  in_place_commit_not_built: 409,
   run_busy: 409,
   run_closed: 409,
   run_not_previewed: 409,

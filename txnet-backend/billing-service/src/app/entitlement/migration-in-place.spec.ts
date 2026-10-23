@@ -17,9 +17,7 @@ vi.mock('@txnet-backend/shared-core', async (actual) => ({ ...(await actual<type
  * profile to a product, as an Xray import maps an inbound. What fails
  * silently here: every user skipped `unknown_protocol` (a profile names no
  * protocol), a user holding no profile left as an inbound nobody can map so
- * the run never previews, another tenant's router read, and a commit that
- * would hand every user a new login on the product's group before the
- * adoption on the router exists (F-1601-b3).
+ * the run never previews, and another tenant's router read.
  */
 const NOW = new Date('2026-10-23T12:00:00Z');
 const GIB = 1024 ** 3;
@@ -159,9 +157,8 @@ describe('MigrationRunService — an in-place run', () => {
     expect(db.state.created).toEqual([]);
   });
 
-  it('refuses the commit until the adoption on the router is built (F-1601-b3)', async () => {
+  it('starts the commit: each user is adopted where it is, never placed by a group (F-1601-b3)', async () => {
     const db = fakeDb({ ...IN_PLACE_RUN, status: MigrationRunStatus.previewed });
-    await expect(service(db).commit(ACTOR, TENANT, IN_PLACE_RUN.id)).rejects.toMatchObject({ reason: 'in_place_commit_not_built' });
-    expect(db.state.run?.['status']).toBe(MigrationRunStatus.previewed);
+    await expect(service(db).commit(ACTOR, TENANT, IN_PLACE_RUN.id)).resolves.toMatchObject({ status: MigrationRunStatus.committing });
   });
 });

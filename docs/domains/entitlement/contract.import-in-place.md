@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: active
-version: 42
+version: 43
 updated: 2026-10-23
 ---
 
@@ -47,21 +47,34 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    is `unknown_protocol`. A user holding no profile cannot log in there: it
    is skipped `no_inbound`, and counts toward no inbound, so it never holds
    the run in `inbounds_unmapped`. The other skips are rule 11's.
-6. **Its commit is refused until the adoption exists**: `POST …/commit` on a
-   run with a `sourcePanelId` is `in_place_commit_not_built` (409). The
-   commit of rule 16 would place every user by the product's group — a new
-   login each, the thing this import exists to avoid (ADR-0160 decision 6).
 
-## The adoption and the commit (F-1601-b2, F-1601-b3)
+## The commit and the rollback (F-1601-b3)
 
-- **Built in network (F-1601-b2):** a config with `adoptedProfile` is adopted
-  on the router — our chain linked, its own profiles off, its password never
-  written — and with `handBack` handed back on a rollback. Its first ceiling
-  is the remaining allocation: `transfer-limit` counts from the profile link
-  (F-1601-e). Network `contract.usermanager.md` rules 13-14.
-- **F-1601-b3**: the commit issues each Grant with no panel group, its config
-  that same user; a rollback hands the user back with its own profile; a
-  normal end deletes it, as every config of ours (ADR-0160 decisions 6-8).
+`migration-commit.ts` (`adopt`), `traffic/config-actions.ts`
+(`adoptInPlace`), `migration-rollback.ts` (`close`).
+
+6. **Each user's Grant stays on its router** (ADR-0160 decision 6). The
+   commit is rule 18's — people, the Grant from the snapshot, its usage,
+   frozen if the router had it off — except the placement: the Grant's
+   `panelGroupId` is cleared in the same transaction, so no group places a
+   second login for it, and its one config is that same user: the run's
+   `sourcePanelId`, the user's name as `remoteId` from the start, its
+   profile and label as `adoptedProfile` and `adoptedLabel`, protocol
+   `pppoe` (a RADIUS login serves whatever the NAS dials). The `uuid` minted
+   for it is never the router's password.
+7. **Network adopts it** (F-1601-b2, network `contract.usermanager.md` rules
+   13-14): our chain linked, the user's own profiles off, its password never
+   written; the first ceiling is the remaining allocation, since
+   `transfer-limit` counts from the link (F-1601-e).
+8. **A rollback hands the user back** (decision 7): rule 25's close, and in
+   the same transaction each adopted config of the Grant is marked
+   `handBack`, so the pass links the user's own profile again, removes ours
+   and restores its label — never deleting it. Its on/off is left as the
+   router has it. **A normal end deletes it** (decision 8): an admin's
+   delete or the purge, as for every config of ours.
+9. **Not yet**: no usage reaches these Grants until F-027-ag-b, and a link
+   made again restarts the router's count until F-027-du-b — so the page
+   (F-1601-c) waits for both.
 
 ## Refusals
 
@@ -70,4 +83,3 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
 | `panel_not_found` | 404 | not the tenant's accepted, live panel of the run's family |
 | `panel_required` | 422 | a family imported in place named by an address |
 | `family_not_in_place` | 422 | a panel named for a family read through a source login |
-| `in_place_commit_not_built` | 409 | rule 6 |

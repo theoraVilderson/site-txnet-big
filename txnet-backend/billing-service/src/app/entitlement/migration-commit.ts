@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, type MigrationItem, type MigrationRun, type Prisma } from '@prisma/client';
+import { ActorType, FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, type MigrationItem, type MigrationRun, type Prisma } from '@prisma/client';
 import { ResellerLimitReached, runWithTenant, tenantTransaction } from '@txnet-backend/shared-core';
 
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { ConfigActionRefused } from '../traffic/config-actions';
+import { ConfigActionRefused, ConfigActionsService, type ConfigActor } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
 import { BalanceRowRefused, creditBalanceRow, csvPeopleOf, withCsvTelegram } from '../wallet/balance-import';
 import { WalletCreditService } from '../wallet/wallet-credit.service';
@@ -23,6 +23,9 @@ import { destroySourceLogin, ImportedPeople, MigrationSeamRefused, MigrationSeam
 /** Items committed per tick: identity's own batch (≤ 200, identity rule 2), each item one short transaction. */
 export const MIGRATION_COMMIT_BATCH_SIZE = 200;
 const DAY_MS = 86_400_000;
+
+/** Who an in-place commit's config writes are logged under: the import, not a person (`config_action_log`). */
+const MIGRATION_ACTOR: ConfigActor = { actorType: ActorType.system, actorId: '00000000-0000-4000-8000-000000f1601b' };
 
 /** Why an item failed though nothing threw a reason of its own. */
 const UNEXPECTED = 'unexpected';
@@ -92,7 +95,8 @@ function linkPeopleOf(run: MigrationRun, batch: MigrationItem[]): People {
  *   the item before anything else, so a rollback (F-211) removes only them.
  * - **One transaction per item**: a Grant of the inbound's variant with the
  *   source's end, bag and usage (`importedGrantShape`), placed by its group
- *   at once (`GroupFulfilmentService.fulfil`), its old link kept (F-203-a),
+ *   at once (`GroupFulfilmentService.fulfil`) — or, read in place, pinned to
+ *   its router with that same user as its config (F-1601-b3) — its old link kept (F-203-a),
  *   frozen by an admin if the source had it switched off — its clock
  *   running, as it ran there.
  * - **A re-run never duplicates**: a key the tenant already holds a Grant of
@@ -115,6 +119,7 @@ export class MigrationCommitService {
     private readonly fulfilment: GroupFulfilmentService,
     private readonly logins: SourceLoginVault,
     private readonly credits: WalletCreditService,
+    private readonly configs: ConfigActionsService,
   ) {}
 
   async commitNext(now: Date = new Date()): Promise<MigrationCommitResult> {
@@ -221,7 +226,8 @@ export class MigrationCommitService {
       startsAt: now,
       imported: { remoteIdentity, endsAt: planned.endsAt, purchasedBytes: planned.purchasedBytes, consumedBytes: planned.consumedBytes, trafficUnlimited: planned.trafficUnlimited },
     });
-    await this.place(tx, grant.id);
+    if (run.sourcePanelId) await this.adopt(tx, run.sourcePanelId, grant.id, client);
+    else await this.place(tx, grant.id);
     const link = await recordLegacyLink(tx, { tenantId: run.tenantId, grantId: grant.id, migrationItemId: item.id, subscriptionUrl: client.subscriptionUrl });
     if (link === 'taken') this.logger.warn(`run ${run.id}: item ${item.id}'s old link is another Grant's already; left to it (F-203-a)`);
     if (!plan.enabled) await freezeGrant(tx, grant.id, { at: now, mode: FreezeMode.hard, stopsClock: false });
@@ -242,6 +248,16 @@ export class MigrationCommitService {
     const variantId = variantOf.get(client.inboundRemoteId);
     if (!variantId) throw new ItemRefused('inbound_unmapped');
     return { client, variantId };
+  }
+
+  /**
+   * An in-place run's user stays where it is (ADR-0160 decision 6): its Grant
+   * has no panel group, so no group places a second login for it, and its one
+   * config is that same user on the run's router, adopted by network's pass.
+   */
+  private async adopt(tx: Prisma.TransactionClient, panelId: string, grantId: string, client: SourceClient): Promise<void> {
+    await tx.grant.update({ where: { id: grantId }, data: { panelGroupId: null } });
+    await this.configs.adoptInPlace(tx, { grantId, panelId, remoteId: client.remoteId, adoptedProfile: client.inboundRemoteId, adoptedLabel: client.label, actor: MIGRATION_ACTOR });
   }
 
   /** Placed now where its group can; a member that cannot take it yet is the sweep's (F-027-bl), never the item's failure. */

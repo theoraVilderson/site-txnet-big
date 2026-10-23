@@ -46,7 +46,6 @@ export const MIGRATION_RUN_REJECTIONS = [
   /** A panel named for a family read through a source login. */
   'family_not_in_place',
   /** An in-place run's commit, until the adoption on the router exists (F-1601-b3). */
-  'in_place_commit_not_built',
   /** A balance file no row can be read from (F-209-a): no run is made. */
   ...BALANCE_FILE_REFUSALS,
 ] as const;
@@ -210,8 +209,6 @@ export class MigrationRunService {
         if (run.status !== MigrationRunStatus.previewed) throw new MigrationRunRefused('run_closed', run.status);
         // A link run has no inbounds to map: its one client becomes the product the admin chose (F-201-g).
         if (run.kind === MigrationRunKind.link && !run.variantId) throw new MigrationRunRefused('variant_unchosen', run.id);
-        // The commit would place every user by the product's group, a new login each (ADR-0160 decision 6).
-        if (run.sourcePanelId) throw new MigrationRunRefused('in_place_commit_not_built', run.id);
         const after = await tx.migrationRun.update({ where: { id: run.id }, data: { status: MigrationRunStatus.committing, workerClaimedAt: null } });
         await announceRun(tx, after);
         return runView(after);

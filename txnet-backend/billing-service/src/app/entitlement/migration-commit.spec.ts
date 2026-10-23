@@ -3,6 +3,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import type { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import type { PrismaService } from '../prisma/prisma.service';
+import type { ConfigActionsService } from '../traffic/config-actions';
 import type { GroupFulfilmentService } from '../traffic/group-fulfilment';
 import { freezeGrant } from './freeze';
 import { EntitlementRefused, type GrantService } from './grant';
@@ -80,7 +81,7 @@ const item = (remoteId: string, plannedAction: MigrationItemAction = MigrationIt
 
 /** The run, its items, the tenant's imported Grants and configs, in memory. */
 function fakeDb(items: Row[], grants: Row[] = []) {
-  const state = { run: { ...RUN } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as Row[] };
+  const state = { run: { ...RUN } as Row, items, grants, outbox: [] as Row[], oldLinks: [] as Row[], grantUpdates: [] as Row[] };
   const runMatches = (where: Row) =>
     Object.entries(where).every(([k, v]) => k === 'OR' || (v instanceof Date ? (state.run[k] as Date | null)?.getTime() === v.getTime() : v === null ? state.run[k] === null : state.run[k] === v));
   const itemMatches = (i: Row, where: Row) => Object.entries(where).every(([k, v]) => i[k] === v);
@@ -99,7 +100,7 @@ function fakeDb(items: Row[], grants: Row[] = []) {
         return { count: 1 };
       },
     },
-    migrationInbound: { findMany: async () => [{ inboundRemoteId: 'vless-tcp', variantId: 'variant-20gb' }] },
+    migrationInbound: { findMany: async () => [{ inboundRemoteId: 'vless-tcp', variantId: 'variant-20gb' }, { inboundRemoteId: 'monthly-20G', variantId: 'variant-um' }] },
     migrationItem: {
       findMany: async ({ where, take }: { where: Row; take: number }) =>
         state.items.filter((i) => i['outcome'] === where['outcome'] && (where['plannedAction'] === undefined || i['plannedAction'] !== MigrationItemAction.skip)).slice(0, take),
@@ -109,7 +110,10 @@ function fakeDb(items: Row[], grants: Row[] = []) {
         return { count: hit.length };
       },
     },
-    grant: { findFirst: async ({ where }: { where: Row }) => state.grants.find((g) => g['remoteIdentity'] === where['remoteIdentity']) ?? null },
+    grant: {
+      findFirst: async ({ where }: { where: Row }) => state.grants.find((g) => g['remoteIdentity'] === where['remoteIdentity']) ?? null,
+      update: async (args: Row) => state.grantUpdates.push(args),
+    },
     config: { findMany: async ({ where }: { where: Row }) => [{ id: `config-of-${String(where['grantId'])}` }] },
     outboxEvent: { create: async ({ data }: { data: Row }) => state.outbox.push(data) },
     legacySubLink: { createMany: async ({ data }: { data: Row[] }) => ({ count: state.oldLinks.push(...data) && data.length }) },
@@ -127,6 +131,7 @@ function commit(db: ReturnType<typeof fakeDb>, opts: { people?: (asked: { remote
   const issue = vi.fn(opts.issue ?? (async (_tx: unknown, input: { sourceReferenceId?: string | null }) => ({ grant: { id: `grant-${input.sourceReferenceId}` }, token: 'token' })));
   const fulfil = vi.fn(async () => ({ placed: 1, waiting: [], activated: false }));
   const destroy = vi.fn(async () => undefined);
+  const adoptInPlace = vi.fn(async () => ({ configId: 'config-adopted', uuid: 'uuid-ours' }));
   const service = new MigrationCommitService(
     db.prisma,
     db.crossTenant,
@@ -135,8 +140,9 @@ function commit(db: ReturnType<typeof fakeDb>, opts: { people?: (asked: { remote
     { fulfil } as unknown as GroupFulfilmentService,
     { destroy } as unknown as SourceLoginVault,
     { credit: vi.fn() } as never,
+    { adoptInPlace } as unknown as ConfigActionsService,
   );
-  return { run: () => service.commitNext(NOW), people, issue, fulfil, destroy };
+  return { run: () => service.commitNext(NOW), people, issue, fulfil, destroy, adoptInPlace };
 }
 
 const byId = (db: ReturnType<typeof fakeDb>, remoteId: string) => db.state.items.find((i) => i['remoteIdentity'] === key(remoteId)) as Row;
@@ -319,5 +325,35 @@ describe('MigrationCommitService — a link run, one person from one old link (F
     await c.run();
     expect(c.issue).not.toHaveBeenCalled();
     expect(db.state.items[0]).toMatchObject({ outcome: MigrationItemOutcome.failed, failureReason: 'variant_unchosen' });
+  });
+});
+
+describe('MigrationCommitService — a User Manager router imported in place (F-1601-b3)', () => {
+  const ROUTER = 'https://10.20.0.1';
+  const PANEL = '00000000-0000-4000-8000-0000000016a1';
+
+  function inPlaceDb() {
+    const um = { uuid: '', protocol: '', inboundRemoteId: 'monthly-20G', label: 'Ali R.' };
+    const db = fakeDb([item('ali', MigrationItemAction.create, { remoteIdentity: `${DriverType.mikrotik_user_manager}|${ROUTER}|ali`, sourceSnapshot: snapshot('ali', um) })]);
+    Object.assign(db.state.run, { sourceFamily: DriverType.mikrotik_user_manager, sourceAddress: ROUTER, sourcePanelId: PANEL });
+    return db;
+  }
+
+  it('issues the Grant pinned to its router — no panel group — and its config that same user, never a new login (ADR-0160 decision 6)', async () => {
+    const db = inPlaceDb();
+    const c = commit(db);
+    expect(await c.run()).toMatchObject({ outcome: 'batch', items: 1 });
+
+    expect(c.issue).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ variantId: 'variant-um', source: GrantSource.migration }));
+    expect(c.fulfil).not.toHaveBeenCalled();
+    expect(db.state.grantUpdates).toEqual([{ where: { id: 'grant-item-ali' }, data: { panelGroupId: null } }]);
+    expect(c.adoptInPlace).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      grantId: 'grant-item-ali',
+      panelId: PANEL,
+      remoteId: 'ali',
+      adoptedProfile: 'monthly-20G',
+      adoptedLabel: 'Ali R.',
+    }));
+    expect(db.state.items[0]).toMatchObject({ outcome: MigrationItemOutcome.created, createdGrantId: 'grant-item-ali', createdConfigIds: ['config-of-grant-item-ali'] });
   });
 });
