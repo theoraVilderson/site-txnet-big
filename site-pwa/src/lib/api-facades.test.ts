@@ -3,6 +3,7 @@ import { accountCalls } from "./auth/account";
 import { sessionCalls } from "./auth/credential";
 import { signInCalls } from "./auth/sign-in";
 import { authApi } from "./auth-api";
+import { configMoveCalls } from "./billing/config-moves";
 import { couponCalls } from "./billing/coupons";
 import { depositCalls } from "./billing/deposit";
 import { gatewayCalls } from "./billing/gateways";
@@ -10,6 +11,7 @@ import { grantCalls } from "./billing/grants";
 import { manualPaymentCalls } from "./billing/manual-payments";
 import { transferCalls } from "./billing/manual-transfer";
 import { panelGroupCalls } from "./billing/panel-groups";
+import { renewalCalls } from "./billing/renewal";
 import { shopCalls } from "./billing/shop";
 import { systemsCalls } from "./billing/systems";
 import { walletCalls } from "./billing/wallet";
@@ -33,7 +35,7 @@ function collisions(parts: Record<string, object>): string[] {
 
 const billingParts = {
   walletCalls, depositCalls, shopCalls, grantCalls, manualPaymentCalls, transferCalls,
-  systemsCalls, panelGroupCalls, gatewayCalls, couponCalls,
+  systemsCalls, panelGroupCalls, gatewayCalls, couponCalls, configMoveCalls, renewalCalls,
 };
 const authParts = { signInCalls, sessionCalls, accountCalls };
 
