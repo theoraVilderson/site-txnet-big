@@ -78,6 +78,115 @@ func (d *Driver) ListAccounts(ctx context.Context) ([]driver.RemoteClient, error
 	return read.clients, nil
 }
 
+// AccountUsage is what each user's current profile counts (F-1601-f): the
+// import's "used". REST reports no per-link count (contract.usermanager.md
+// rule 9), so it is rebuilt from sessions: those open, or ended after the
+// user's boundary — the end of its last used link other than the current
+// one — capped at the lifetime total. A user with no boundary, or any date
+// that does not parse, keeps the lifetime total: more than the profile
+// counts, the safe side. Five requests, or four when no user was renewed.
+func (d *Driver) AccountUsage(ctx context.Context) ([]driver.ClientUsage, error) {
+	const op = "AccountUsage"
+	lifetime, err := d.totals(ctx, op, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := driver.NextPage(ctx, op); err != nil {
+		return nil, err
+	}
+	links, err := d.list(ctx, op, "user-profile", url.Values{".proplist": {".id,user,state,end-time"}})
+	if err != nil {
+		return nil, err
+	}
+	since := boundaries(links)
+	if len(since) == 0 {
+		return lifetime, nil
+	}
+	if err := driver.NextPage(ctx, op); err != nil {
+		return nil, err
+	}
+	sessions, err := d.list(ctx, op, "session", url.Values{".proplist": {"user,upload,download,ended,active"}})
+	if err != nil {
+		return nil, err
+	}
+	counted := sinceBoundaries(sessions, since)
+	for i := range lifetime {
+		u := &lifetime[i]
+		if c, ok := counted[u.RemoteID]; ok && !c.doubt {
+			u.UpBytes, u.DownBytes = min(u.UpBytes, c.up), min(u.DownBytes, c.down)
+		}
+	}
+	return lifetime, nil
+}
+
+// boundary is the instant a user's current profile started counting, or
+// doubt when a date on the way did not parse.
+type boundary struct {
+	at    time.Time
+	doubt bool
+}
+
+// boundaries is each user's latest used-link end, the current link left out.
+// Both dates compared are router-local, so one zone keeps their order and the
+// router's clock is not asked for.
+func boundaries(links []row) map[string]boundary {
+	current := currentProfiles(links)
+	out := map[string]boundary{}
+	for _, l := range links {
+		user, end := l["user"], l["end-time"]
+		if l["state"] != "used" || l[".id"] == current[user][".id"] || end == "" || end == noEnd {
+			continue
+		}
+		at, err := parseEnd(end, time.UTC)
+		have := out[user]
+		if err != nil || have.doubt {
+			out[user] = boundary{doubt: true}
+		} else if at.After(have.at) {
+			out[user] = boundary{at: at}
+		}
+	}
+	return out
+}
+
+// counted is one user's sessions since its boundary.
+type counted struct {
+	up, down int64
+	doubt    bool
+}
+
+// sinceBoundaries sums, per user with a boundary, its sessions open or ended
+// at or after it. Every such user has an entry, so none counted reads zero.
+func sinceBoundaries(sessions []row, since map[string]boundary) map[string]counted {
+	out := make(map[string]counted, len(since))
+	for user, b := range since {
+		out[user] = counted{doubt: b.doubt}
+	}
+	for _, s := range sessions {
+		c, ok := out[s["user"]]
+		if !ok || c.doubt {
+			continue
+		}
+		if s["active"] != "true" {
+			ended, err := parseEnd(s["ended"], time.UTC)
+			if err != nil {
+				out[s["user"]] = counted{doubt: true}
+				continue
+			}
+			if ended.Before(since[s["user"]].at) {
+				continue
+			}
+		}
+		up, errUp := quantity(s["upload"], 1024)
+		down, errDown := quantity(s["download"], 1024)
+		if errors.Join(errUp, errDown) != nil {
+			out[s["user"]] = counted{doubt: true}
+			continue
+		}
+		out[s["user"]] = counted{up: c.up + up, down: c.down + down}
+	}
+	return out
+}
+
 // currentProfiles picks the one profile each user is on: the running one,
 // else the first waiting (bought, not started), else the last used — an
 // expired user is still mapped, and its end in the past says so.

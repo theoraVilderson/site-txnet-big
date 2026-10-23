@@ -16,13 +16,15 @@ import (
 //   - ListAccounts is every user with its profile as InboundRemoteID, its
 //     ceiling, rate, on/off and the profile's end — and never its secret:
 //     UUID is empty, and the panel is not asked for it.
-//
-// What each user has used is the family's GetUsage, as on any other source.
+//   - AccountUsage is what each user's current profile counts, which is what
+//     an import calls used (F-1601-f) — not GetUsage's lifetime total, which
+//     keeps a renewed user's earlier profiles.
 //
 // It is optional, so ask through AccountsOf: a paced driver hides its family's.
 type AccountsReader interface {
 	ListProfiles(ctx context.Context) ([]Inbound, error)
 	ListAccounts(ctx context.Context) ([]RemoteClient, error)
+	AccountUsage(ctx context.Context) ([]ClientUsage, error)
 }
 
 // AccountsOf is the reader's AccountsReader, if its family has one, looked up
@@ -65,5 +67,16 @@ func (p *paced) ListAccounts(ctx context.Context) ([]RemoteClient, error) {
 			return nil, err
 		}
 		return a.ListAccounts(ctx)
+	})
+}
+
+// AccountUsage is the family's AccountsReader, paced.
+func (p *paced) AccountUsage(ctx context.Context) ([]ClientUsage, error) {
+	return share(ctx, p, "AccountUsage", "AccountUsage", func(ctx context.Context) ([]ClientUsage, error) {
+		a, err := p.accounts("AccountUsage")
+		if err != nil {
+			return nil, err
+		}
+		return a.AccountUsage(ctx)
 	})
 }

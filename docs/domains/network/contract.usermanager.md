@@ -114,8 +114,11 @@ its documentation says.
    - a link made again would hand the user its ceiling again; the cursor
      keeps our link's `.id` and the total it was first read at, and the
      ceiling counts from there (F-027-du-b, `contract.ceiling.md`);
-   - the import's "used" is the lifetime total, more than a renewed user's
-     current profile counts — the safe direction (F-1601-f).
+   - the import's "used" is rebuilt from sessions: those open or ended
+     after the user's previous `used` link ended, capped at the lifetime
+     total; any doubt keeps the lifetime total (F-1601-f,
+     `contract.source.md` rule 10). A session open across a renewal counts
+     whole under the new link, which overstates: the safe direction.
    The limit is not sent to the NAS: an Access-Accept carries
    `Mikrotik-Rate-Limit` but no total-limit attribute. Whether User Manager
    ends a session that crosses the limit mid-way was not tested.
@@ -131,6 +134,13 @@ its documentation says.
     ADR-0161).
 12. **An unlimited validity's end is `unlimited`**, not a date: the import
     reads it as no end (`source.go`).
+13. **A link's dates are fixed when it is made** (F-1601-f). Its `end-time`
+    does not move when the profile's `validity` is edited later, so no link
+    start can be derived from it. An ended link turns `used` and keeps its
+    date; a link made again gets a new `.id` (`*1` becomes `*2`). A `session`
+    row names its user, never its link, and `user-profile` carries only
+    `.id,end-time,profile,state,user`. `monitor numbers=` also takes row
+    positions (`0,1,2`), but its answer names no user, so ids stay the key.
 
 ## Adoption in place (F-1601-b2)
 

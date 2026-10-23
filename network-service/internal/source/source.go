@@ -152,11 +152,11 @@ type bulkRead struct {
 }
 
 // bulkReadOf is the family's: an Xray panel's inbounds, clients and usage, or
-// — imported in place (ADR-0160) — its profiles and its users without their
-// passwords, with the same usage read.
+// — imported in place (ADR-0160) — its profiles, its users without their
+// passwords, and what each user's current profile counts (F-1601-f).
 func bulkReadOf(r Reader) bulkRead {
 	if a, ok := driver.AccountsOf(r); ok {
-		return bulkRead{inbounds: a.ListProfiles, clients: a.ListAccounts, usage: r.GetUsage}
+		return bulkRead{inbounds: a.ListProfiles, clients: a.ListAccounts, usage: a.AccountUsage}
 	}
 	return bulkRead{inbounds: r.ListInbounds, clients: r.ListClients, usage: r.GetUsage}
 }

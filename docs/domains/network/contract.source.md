@@ -90,12 +90,17 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
     pre-7.10 `nov/15/2026` form); `unlimited` and a waiting profile have
     none, and an end
     in neither form fails the snapshot (`source_unreadable`) rather than
-    import an endless user. Used bytes are User Manager's own per-user
-    lifetime total (`GetUsage`), not the open sessions — more than a
-    renewed user's current profile counts (contract.usermanager.md rule 9,
-    F-1601-f). **The password is never
+    import an endless user. **Used bytes are what the current profile
+    counts** (`AccountUsage`, F-1601-f), not the lifetime total, which keeps
+    a renewed user's earlier profiles: the sessions open, or ended at or
+    after the user's boundary — the latest end of its `used` links other
+    than the current one — each figure capped at the lifetime total. Both
+    dates are router-local, so no clock is read. No boundary, or any date
+    or byte count that does not parse, keeps the lifetime total: the
+    overstatement is the safe side (contract.usermanager.md rule 9).
+    **The password is never
     asked for**: the user list is read with `.proplist` without it, so
-    `uuid` is empty. 5-7 requests, whatever the number of users. No
+    `uuid` is empty. 9-11 requests, whatever the number of users. No
     subscription URL and no lines (a login is not a link).
 11. **Read in place, by the registered panel** (F-1601-b1). A family whose
     users stay on their source (`source.ReadInPlace`: User Manager) is named

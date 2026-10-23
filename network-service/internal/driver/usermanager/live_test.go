@@ -81,6 +81,24 @@ func TestOnARealRouter(t *testing.T) {
 		t.Errorf("GetUsage has no row for %s", name)
 	}
 
+	// The import's used (F-1601-f): every user, never above its lifetime.
+	current, err := d.AccountUsage(ctx)
+	if err != nil {
+		t.Fatalf("AccountUsage: %v", err)
+	}
+	life := map[string]driver.ClientUsage{}
+	for _, u := range totals {
+		life[u.RemoteID] = u
+	}
+	if len(current) != len(totals) {
+		t.Errorf("AccountUsage read %d users, GetUsage %d", len(current), len(totals))
+	}
+	for _, u := range current {
+		if l := life[u.RemoteID]; u.UpBytes > l.UpBytes || u.DownBytes > l.DownBytes {
+			t.Errorf("%s reads %d/%d, above its lifetime %d/%d", u.RemoteID, u.UpBytes, u.DownBytes, l.UpBytes, l.DownBytes)
+		}
+	}
+
 	accounts, err := d.ListAccounts(ctx)
 	if err != nil {
 		t.Fatalf("ListAccounts: %v", err)
