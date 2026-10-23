@@ -390,6 +390,7 @@ same `BotView`, so a row is never per-platform — if something differs, it is a
 |---|---|---|---|---|---|---|
 | bot-link-webhook | telegram webhook, bale webhook, bot webhook, ربات جواب نمیده, وبهوک تلگرام, وبهوک بله, ربات مخاطب رو قبول نمیکنه | POST /auth/bots/:platform/webhook/:secret | auth-api | txnet-backend/auth-service/src/app/auth/bot-link/bot-link.controller.ts | F-0203 | the bot's `/start <token>` + shared-contact conversation. Wrong/absent secret -> 404. Handling is best-effort and always answers 200, so the platform never redelivers |
 | bot-otp-delivery | otp in telegram, code in bale, ربات کد نمیفرسته, کد تو تلگرام نمیاد | (outgoing sendMessage) | identity | txnet-backend/auth-service/src/app/auth/otp/senders/ | F-0202 | only delivers to a `linked_bot_account` with `contactVerifiedAt` set |
+| ops-server-move | move the platform to another server, move to another datacenter, server move, datacenter move, migrate the server, cutover, presync, انتقال سرور, جابه‌جایی سرور, جا به جایی سرور, بردن به دیتاسنتر دیگر, از یه دیتاسنتر برم یه دیتاسنتر وسط کار, بک آپ بگیرم و سیستم قطع کنم ببرم یه دیتاسنتر دیگه دوباره بیارم بالا, بک آپ دوباره برگردونم, انتقال ردیس, ردیس هم اطلاعاتش باشه, اخرین بکاپ همون لحظه | `python3 scripts/move/server_move.py check\|presync\|cutover\|rollback` (operator, on the old server) | hosting | scripts/move/server_move.py | — | OPS-1-ac, H23. Runbook [runbook-move-server.md](operations/runbook-move-server.md). A lost server is the restore runbook (3c), not this. |
 
 ## Flows
 

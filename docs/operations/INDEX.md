@@ -1,7 +1,7 @@
 ---
 id: operations
 status: active
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # Operations
@@ -12,6 +12,7 @@ updated: 2026-10-14
 | [migrations.md](migrations.md) | schema/data migration policy + the not-yet-applied "section 99" SQL |
 | [observability.md](observability.md) | the monitoring + bug-tracker + registry stacks |
 | [runbook-restore-database.md](runbook-restore-database.md) | restore Postgres whole, to a point in time, or onto a new server (OPS-1-e) |
+| [runbook-move-server.md](runbook-move-server.md) | move the whole platform to another server or datacenter, every byte of state (OPS-1-ac) |
 | runbook-<incident>.md | one per known failure mode |
 | slo.md | what "working" means numerically (not written yet) |
 

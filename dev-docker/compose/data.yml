@@ -144,6 +144,10 @@ services:
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      # One node name for the life of the volume (OPS-1-ac, hosting H23). The
+      # default is rabbit@<container id>, so every recreate — and every move to
+      # another server — started an empty node and left the queues behind it.
+      - RABBITMQ_NODENAME=rabbit@localhost
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:

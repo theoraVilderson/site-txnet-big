@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # Contract — hosting
@@ -75,6 +75,14 @@ Each routes to the existing Alertmanager receiver.
 point-in-time restore (`--type=time --target="…"`), restore to a new server,
 where the passphrase lives, and "test it on dev first". Template in
 `operations/INDEX.md`.
+
+**H23 — Server move** (`scripts/move/`, OPS-1-ac, user 2026-10-23): a live
+presync, then a clean stop (apps, WAL flush, data services), a final pass
+(volumes by content, write-once repositories by name and size), and two gates:
+equal digests before the new server starts, equal figures after its data
+services do (rows and TTL-less keys exact; expiring keys and queued messages
+fewer, never zero). `.moved-to` fences the old server's compose wrappers.
+RabbitMQ is `rabbit@localhost`. Runbook `operations/runbook-move-server.md`.
 
 ## Connections
 

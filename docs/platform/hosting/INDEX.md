@@ -3,11 +3,11 @@ id: hosting
 layer: platform
 status: active
 version: 1
-keywords: [hosting, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, kubernetes, k8s, k3s, k3d, kustomize, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
-source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**, tools/k8s_render.py, tools/k8s_render_test.py, tools/k8srender/**]
+keywords: [hosting, server move, move server, migrate server, new datacenter, datacenter move, cutover, presync, rabbitmq node name, انتقال سرور, جابه‌جایی سرور, جا به جایی سرور, دیتاسنتر, بردن به دیتاسنتر دیگر, از یه دیتاسنتر برم یه دیتاسنتر, بک آپ دوباره برگردونم, انتقال ردیس, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, kubernetes, k8s, k3s, k3d, kustomize, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
+source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**, tools/k8s_render.py, tools/k8s_render_test.py, tools/k8srender/**, scripts/move/**, scripts/moved-guard.sh, scripts/dev.compose.sh, scripts/prod.compose.sh]
 owns_tables: []
 depends_on: [automation, i18n]
-updated: 2026-10-14
+updated: 2026-10-23
 ---
 
 # hosting
@@ -23,7 +23,7 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 ## Files
 | File | Read it when |
 |---|---|
-| [contract.md](contract.md) | building any OPS-1 row — rules H1…H22 are the spec |
+| [contract.md](contract.md) | building any OPS-1 row — rules H1…H23 are the spec |
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose (OPS-1-o-a … -g) — rules K1…K12 |
 | [open-questions.md](open-questions.md) | the production server (OPS-1-p) and the standby server (OPS-1-y) |
@@ -40,7 +40,7 @@ shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f
 -g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs);
 -i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev);
 -j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback);
--v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`).
+-v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a server move, `runbook-move-server.md`).
 -o-a (K2-K7, `tools/k8srender/`: 80 objects, kubeconform-strict clean). `k8s/**` and `scripts/{prod.k8s,k8s-rehearse}.sh` join `source:` as their rows land.
 
 ## Changelog
