@@ -1,7 +1,7 @@
 ---
 id: network
 layer: domain
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
 # Contract — reading an import's source panel (F-201-b)
@@ -14,7 +14,8 @@ file says what the read does and what it never does.
 
 Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
 (the routes), `internal/driver/conformance/readonly.go` (the proof),
-`internal/driver/sui` (S-UI, read-only).
+`internal/driver/sui` (S-UI, read-only), `internal/driver/usermanager/source.go`
+(User Manager, read in place; `driver.AccountsReader`).
 
 ## Rules
 
@@ -53,8 +54,9 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
    Hiddify's API key alone) — `opener.Build` is the one place a driver is
    built from a login.
 7. **Families.** Marzban, Marzneshin, both x-ui forks, 3x-ui, S-UI, Hiddify
-   (`source.IsFamily`). One without a driver yet answers `no_driver` until it
-   ships (legacy x-ui `x_ui_vaxilu`).
+   (`source.IsFamily`), and Mikrotik User Manager (F-1601-a, rule 10). One
+   without a driver yet answers `no_driver` until it ships (legacy x-ui
+   `x_ui_vaxilu`).
 8. **S-UI is read-only** (F-201-c, `internal/driver/sui`). A reseller leaves
    it; nobody registers a panel on it, so `opener.HasDriver` leaves it off
    (registration answers `no_driver`) and `opener.HasReader` lets
@@ -74,6 +76,24 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
    form saved), a Marzban or Marzneshin note that is a plain id. Only ASCII
    digits making a positive 64-bit id count (`driver.TelegramIDOf`); 0, a
    group id or any other text is none. S-UI and Hiddify name none here.
+10. **User Manager is read for an import in place** (ADR-0160, F-1601-a). Its
+    users keep their login on the router, so its snapshot is not its
+    provisioning list: a family with `driver.AccountsReader` is read through
+    it, paced like the rest. **Inbounds are its profiles** (`remoteId` = `tag`
+    = the name, `protocol` empty: a profile serves whatever the NAS dials in
+    with) — what the run maps to a product. **A client is a user**: its name,
+    `comment` as the label, `disabled`, the most permissive ceiling it holds
+    (rule 4 of the driver's section in [contract.drivers.md](contract.drivers.md)),
+    and as `inboundRemoteId` its current profile — running, else the first
+    waiting, else the last used; none is empty. Its end is that profile's
+    `end-time` in the router's `/system/clock` `gmt-offset` (ISO, or the
+    pre-7.10 `nov/15/2026` form); a waiting profile has none yet, and an end
+    in neither form fails the snapshot (`source_unreadable`) rather than
+    import an endless user. Used bytes are User Manager's own per-user
+    total (`ClientTotals`), not the open sessions. **The password is never
+    asked for**: the user list is read with `.proplist` without it, so
+    `uuid` is empty. 5-7 requests, whatever the number of users. No
+    subscription URL and no lines (a login is not a link).
 
 ## Routes
 

@@ -168,7 +168,12 @@ func quantity(s string, base int64) (int64, error) {
 // ---- transport -------------------------------------------------------------
 
 func (d *Driver) call(ctx context.Context, op, method string, path []string, query url.Values, body row, out any) error {
-	u := d.base.JoinPath(append([]string{"rest", "user-manager"}, path...)...)
+	return d.callAt(ctx, op, method, append([]string{"user-manager"}, path...), query, body, out)
+}
+
+// callAt is call at any path under `/rest`: the source read's clock is outside User Manager.
+func (d *Driver) callAt(ctx context.Context, op, method string, path []string, query url.Values, body row, out any) error {
+	u := d.base.JoinPath(append([]string{"rest"}, path...)...)
 	u.RawQuery = query.Encode()
 	var reader io.Reader
 	if body != nil {
@@ -358,96 +363,6 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 		out = append(out, driver.Inbound{RemoteID: r["name"], Tag: r["name"], Host: r["address"], Enabled: r["disabled"] != "true"})
 	}
 	return out, nil
-}
-
-// ListClients reads every user with the ceiling and rate it is actually
-// under: four requests, whatever the number of users. A user's ceiling is the
-// most permissive of the profiles it holds, because that is what it can use —
-// a second, unlimited profile attached by hand reads as no limit, which is the
-// money-hole finding (ADR-0072 rule 2), not ours hidden behind it.
-func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error) {
-	const op = "ListClients"
-	users, err := d.list(ctx, op, "user", nil)
-	if err != nil {
-		return nil, err
-	}
-	userProfiles, err := d.list(ctx, op, "user-profile", nil)
-	if err != nil {
-		return nil, err
-	}
-	profileLimitations, err := d.list(ctx, op, "profile-limitation", nil)
-	if err != nil {
-		return nil, err
-	}
-	limitations, err := d.list(ctx, op, "limitation", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	byName := map[string]row{}
-	for _, l := range limitations {
-		byName[l["name"]] = l
-	}
-	limitsOf := map[string][]row{}
-	for _, pl := range profileLimitations {
-		if l, ok := byName[pl["limitation"]]; ok {
-			limitsOf[pl["profile"]] = append(limitsOf[pl["profile"]], l)
-		}
-	}
-	held := map[string][]row{}
-	for _, up := range userProfiles {
-		if up["state"] != "used" { // a used profile has ended and grants nothing
-			held[up["user"]] = append(held[up["user"]], limitsOf[up["profile"]]...)
-		}
-	}
-
-	out := make([]driver.RemoteClient, 0, len(users))
-	for _, u := range users {
-		c := driver.RemoteClient{RemoteID: u["name"], Label: u["comment"], UUID: u["password"], Enabled: u["disabled"] != "true"}
-		if c.DataLimitBytes, c.RateLimitBps, err = permissive(held[u["name"]]); err != nil {
-			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("user %q: %w", u["name"], err))
-		}
-		out = append(out, c)
-	}
-	return out, nil
-}
-
-// permissive is the largest ceiling and rate among limitations, where any one
-// without a figure (0) makes the answer 0: no limit.
-func permissive(limits []row) (ceilingBytes, rateBps int64, err error) {
-	if len(limits) == 0 {
-		return 0, 0, nil
-	}
-	ceilingUnbounded, rateUnbounded := false, false
-	for _, l := range limits {
-		c, err := quantity(l["transfer-limit"], 1024)
-		if err != nil {
-			return 0, 0, fmt.Errorf("transfer-limit %q: %w", l["transfer-limit"], err)
-		}
-		if c == 0 {
-			ceilingUnbounded = true
-		} else if c > ceilingBytes {
-			ceilingBytes = c
-		}
-		for _, field := range []string{"rate-limit-rx", "rate-limit-tx"} {
-			r, err := quantity(l[field], 1000)
-			if err != nil {
-				return 0, 0, fmt.Errorf("%s %q: %w", field, l[field], err)
-			}
-			if r == 0 {
-				rateUnbounded = true
-			} else if r > rateBps {
-				rateBps = r
-			}
-		}
-	}
-	if ceilingUnbounded {
-		ceilingBytes = 0
-	}
-	if rateUnbounded {
-		rateBps = 0
-	}
-	return ceilingBytes, rateBps, nil
 }
 
 // CreateClient names the user after its uuid without hyphens — the User-Name

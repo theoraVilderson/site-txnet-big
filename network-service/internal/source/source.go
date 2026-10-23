@@ -32,13 +32,15 @@ type Reader interface {
 var _ Reader = driver.Driver(nil)
 
 // IsFamily is whether an import reads panels of the family (catalog F-201:
-// Marzban, Marzneshin, the x-ui forks, 3x-ui, S-UI, Hiddify). One with no
+// Marzban, Marzneshin, the x-ui forks, 3x-ui, S-UI, Hiddify; F-1601: User
+// Manager, whose users are imported in place, ADR-0160). One with no
 // driver yet is still a source; opening it answers opener.ErrNoDriver
 // until its driver ships (legacy x-ui `x_ui_vaxilu`).
 func IsFamily(f driver.DriverType) bool {
 	switch f {
 	case driver.DriverMarzban, driver.DriverMarzneshin, driver.DriverSanaee, driver.DriverThreeXUI,
-		driver.DriverXUIAlireza, driver.DriverXUIVaxilu, driver.DriverSUI, driver.DriverHiddify:
+		driver.DriverXUIAlireza, driver.DriverXUIVaxilu, driver.DriverSUI, driver.DriverHiddify,
+		driver.DriverMikrotikUserManager:
 		return true
 	}
 	return false
@@ -109,20 +111,22 @@ type Panel struct {
 // Snapshot reads the whole source in its bulk calls only — inbounds, clients,
 // usage and, where the family lists them, subscription URLs — so a 20 000-client
 // panel costs a few requests. Per-client reads (links) are Links', in batches
-// (user, 2026-10-21).
+// (user, 2026-10-21). A family imported in place (driver.AccountsReader) is
+// read through its own three instead.
 func Snapshot(ctx context.Context, r Reader, lim Limits) (Panel, error) {
-	inbounds, err := r.ListInbounds(ctx)
+	read := bulkReadOf(r)
+	inbounds, err := read.inbounds(ctx)
 	if err != nil {
 		return Panel{}, err
 	}
-	remote, err := r.ListClients(ctx)
+	remote, err := read.clients(ctx)
 	if err != nil {
 		return Panel{}, err
 	}
 	if len(remote) > lim.maxClients() {
 		return Panel{}, fmt.Errorf("%w: %d, the cap is %d", ErrTooManyClients, len(remote), lim.maxClients())
 	}
-	usage, err := r.GetUsage(ctx)
+	usage, err := read.usage(ctx)
 	if err != nil {
 		return Panel{}, err
 	}
@@ -131,6 +135,23 @@ func Snapshot(ctx context.Context, r Reader, lim Limits) (Panel, error) {
 		return Panel{}, err
 	}
 	return Panel{Inbounds: inboundsOf(inbounds), Clients: clients}, nil
+}
+
+// bulkRead is the three calls a snapshot is made of.
+type bulkRead struct {
+	inbounds func(context.Context) ([]driver.Inbound, error)
+	clients  func(context.Context) ([]driver.RemoteClient, error)
+	usage    func(context.Context) ([]driver.ClientUsage, error)
+}
+
+// bulkReadOf is the family's: an Xray panel's inbounds, clients and usage, or
+// — imported in place (ADR-0160) — its profiles, its users without their
+// passwords, and each user's own total, which open sessions alone would miss.
+func bulkReadOf(r Reader) bulkRead {
+	if a, ok := driver.AccountsOf(r); ok {
+		return bulkRead{inbounds: a.ListProfiles, clients: a.ListAccounts, usage: a.ClientTotals}
+	}
+	return bulkRead{inbounds: r.ListInbounds, clients: r.ListClients, usage: r.GetUsage}
 }
 
 // withSubscriptions writes each client's own subscription URL onto it. The

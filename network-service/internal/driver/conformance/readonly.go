@@ -25,9 +25,9 @@ type WriteCounter interface {
 func RunReadOnly(t *testing.T, setup Setup) {
 	t.Helper()
 	t.Run("source_snapshot_writes_nothing", func(t *testing.T) {
-		h, ok := setup(t, pull(driver.CounterCumulative))
+		h, ok := sourceHarness(t, setup)
 		if !ok {
-			t.Fatal("an import source must take the pull, cumulative shape")
+			t.Fatal("an import source must take the pull, cumulative shape or, read in place (ADR-0160), a push one")
 		}
 		counter, ok := h.(WriteCounter)
 		if !ok {
@@ -58,4 +58,16 @@ func RunReadOnly(t *testing.T, setup Setup) {
 			t.Fatalf("reading the source made %d write call(s) to it", got)
 		}
 	})
+}
+
+// sourceHarness is the family's harness in the shape it is read in: an Xray
+// panel pulled with cumulative counters, or a RADIUS panel (User Manager,
+// F-1601-a) whose users are imported in place and whose NAS pushes sessions.
+func sourceHarness(t *testing.T, setup Setup) (Harness, bool) {
+	for _, shape := range []Shape{pull(driver.CounterCumulative), push(true), push(false)} {
+		if h, ok := setup(t, shape); ok {
+			return h, true
+		}
+	}
+	return nil, false
 }

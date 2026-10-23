@@ -259,7 +259,7 @@
   "network-service/internal/driver/marzneshin/marzneshin.go": 797,
   "network-service/internal/driver/pace.go": 465,
   "network-service/internal/driver/threexui/threexui.go": 679,
-  "network-service/internal/driver/usermanager/usermanager.go": 661,
+  "network-service/internal/driver/usermanager/usermanager.go": 576,
   "network-service/internal/driver/xraylink.go": 733,
   "network-service/internal/lease/quota/planner.go": 614,
   "network-service/internal/lease/sim/sim.go": 430,

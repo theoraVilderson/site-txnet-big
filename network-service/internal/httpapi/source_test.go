@@ -64,7 +64,7 @@ func TestSourceSnapshotRefusesWhatItCannotRead(t *testing.T) {
 		code       int
 		reason     string
 	}{
-		{"not an import family", `{"tenantId":"t1","family":"mikrotik_user_manager","credentialRef":"r"}`,
+		{"not an import family", `{"tenantId":"t1","family":"core_xray","credentialRef":"r"}`,
 			logins{login: "a:b", at: "https://h"}, http.StatusBadRequest, "bad_request"},
 		{"the vault refuses", marzban,
 			logins{err: errors.New("not_owner")}, http.StatusUnprocessableEntity, "credential_unavailable"},

@@ -30,6 +30,14 @@ type farEnd struct {
 	abandoned map[string]bool
 	calls     int
 	enabled   string
+	// writes counts requests that change the far end (RunReadOnly): every
+	// PUT, PATCH and DELETE, and a POST but `monitor`, which only reads.
+	writes int
+	// passwordServed is whether any answer carried a user's password: an
+	// import's read must never ask for one (ADR-0160 rule 2).
+	passwordServed bool
+	// clockOffset is `/system/clock`'s gmt-offset; empty is UTC.
+	clockOffset string
 
 	nextStall  time.Duration
 	nextStatus int
@@ -55,6 +63,9 @@ func routerError(w http.ResponseWriter, status int, detail string) {
 func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.calls++
+	if r.Method != http.MethodGet && !strings.HasSuffix(r.URL.Path, "/monitor") {
+		f.writes++
+	}
 	stall, status := f.nextStall, f.nextStatus
 	f.nextStall, f.nextStatus = 0, 0
 	f.mu.Unlock()
@@ -80,6 +91,14 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if r.URL.Path == "/rest/system/clock" && r.Method == http.MethodGet {
+		offset := f.clockOffset
+		if offset == "" {
+			offset = "+00:00"
+		}
+		writeJSON(w, map[string]string{"time-zone-name": "manual", "gmt-offset": offset})
+		return
+	}
 	path := strings.TrimPrefix(r.URL.Path, "/rest/user-manager")
 	if path == "" && r.Method == http.MethodGet {
 		writeJSON(w, map[string]string{"enabled": f.enabled, "use-profiles": "true"})
@@ -121,7 +140,7 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		out := []map[string]string{}
 		for _, row := range f.tables[menu] {
 			if matches(row, r.URL.Query()) {
-				out = append(out, row)
+				out = append(out, f.projected(row, r.URL.Query().Get(".proplist")))
 			}
 		}
 		writeJSON(w, out)
@@ -151,7 +170,7 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		switch r.Method {
 		case http.MethodGet:
-			writeJSON(w, row)
+			writeJSON(w, f.projected(row, r.URL.Query().Get(".proplist")))
 		case http.MethodPatch:
 			var body map[string]string
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -189,6 +208,24 @@ func matches(row map[string]string, query map[string][]string) bool {
 		}
 	}
 	return true
+}
+
+// projected is the row as `.proplist` asks for it: the listed fields only,
+// or all of them when none is listed. It notes an answer that carries a password.
+func (f *farEnd) projected(row map[string]string, proplist string) map[string]string {
+	out := row
+	if proplist != "" {
+		out = map[string]string{}
+		for _, field := range strings.Split(proplist, ",") {
+			if v, ok := row[field]; ok {
+				out[field] = v
+			}
+		}
+	}
+	if _, ok := out["password"]; ok {
+		f.passwordServed = true
+	}
+	return out
 }
 
 // find addresses a row by `.id` or by `name`, as RouterOS does.
@@ -352,6 +389,12 @@ func (h *harness) AbandonSession(remoteID string) {
 
 // DelayCeilingBy is a pull scenario's, and setup refuses every pull shape.
 func (h *harness) DelayCeilingBy(int) { h.f.t.Fatal("a push family is never asked for a late ceiling") }
+
+func (h *harness) WriteCalls() int {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	return h.f.writes
+}
 
 func (h *harness) TotalCalls() int {
 	h.f.mu.Lock()
