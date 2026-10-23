@@ -1,10 +1,12 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadGatewayException, BadRequestException, ConflictException, ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
 
 import { ConfigMoveJobRefused } from '../payment/gift/config-move-job';
 import { moveJobRefusal } from '../payment/gift/reseller-config-move-job.controller';
 import { GRANT_REGROUP_STATUS, GrantRegroupRefused } from '../traffic/grant-regroup';
 import { InboundHeldElsewhere } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
+import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
+import { PanelResubmitRefused } from './panel-registration';
 import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused, SystemsRejection } from './systems-read';
 
@@ -64,6 +66,21 @@ export async function refusing<T>(work: () => Promise<T>): Promise<T> {
       if (CONFLICTS.has(e.reason)) throw new ConflictException({ reason: e.reason, message: e.message });
       if (BAD_REQUESTS.has(e.reason)) throw new BadRequestException({ reason: e.reason, message: e.message });
       throw new NotFoundException({ reason: e.reason, message: e.message });
+    }
+    throw e;
+  }
+}
+
+/** The routes that write a login or a secret: the scope as 403, the vault seam's refusals relayed, its silence a 502. */
+export async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (e) {
+    if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
+    if (e instanceof PanelResubmitRefused) throw new ConflictException({ reason: e.reason, message: e.message });
+    if (e instanceof PanelCredentialRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
+    if (e instanceof PanelCredentialUnavailable) {
+      throw new BadGatewayException({ reason: 'credentials_unavailable', message: 'the credential vault could not be reached' });
     }
     throw e;
   }

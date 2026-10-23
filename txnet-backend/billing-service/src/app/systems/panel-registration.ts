@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { claimingAddress, claimingPushAddress } from './panel-address';
-import { panelScopeOf, SystemsActor } from './panel-scope';
+import { panelScopeOf, PanelScope, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
 /** A panel as its owner declares it. The questionnaire is the connection test's to answer, not this. */
@@ -28,6 +28,9 @@ export type RegisterPanelInput = {
   /** A push panel's RADIUS shared secret (F-027-az), relayed the same way. Absent on a pull panel. */
   radiusSecret?: string;
 };
+
+/** Whose panel a registration writes, and the tenant its secrets are sealed under in the vault. */
+export type PanelOwner = { scope: PanelScope; vaultTenantId: string };
 
 /** What the vault says about a stored login: no value, no fingerprint. */
 export type PanelCredentialState = { configured: boolean; version: number | null; rotatedAt: string | null };
@@ -89,17 +92,27 @@ export class PanelRegistrationService {
   ) {}
 
   async register(actor: SystemsActor, input: RegisterPanelInput) {
-    const owner = await panelScopeOf(this.prisma, actor);
+    const scope = await panelScopeOf(this.prisma, actor);
+    return this.registerFor({ scope, vaultTenantId: actor.tenantId }, actor.adminId, input);
+  }
+
+  /**
+   * {@link register} for an owner already admitted: the platform's, or a
+   * reseller's own router through the import's door (ADR-0162), which is
+   * written under the reseller and its login sealed under it.
+   */
+  async registerFor(owner: PanelOwner, adminId: string, input: RegisterPanelInput) {
+    const { scope, vaultTenantId } = owner;
     const id = randomUUID();
 
     // Registered once (F-027-cd; a push panel's IP, F-027-ff): 409 `panel_already_registered`, naming the holder if it is ours to see.
     const pushAddress = input.transport === PanelTransport.push ? input.ipAddress : null;
-    await claimingAddress(this.all, owner, input.apiBaseUrl, null, () =>
-      claimingPushAddress(this.all, owner, pushAddress, null, () =>
+    await claimingAddress(this.all, scope, input.apiBaseUrl, null, () =>
+      claimingPushAddress(this.all, scope, pushAddress, null, () =>
         this.all.panel.create({
           data: {
             id,
-            ...owner,
+            ...scope,
             name: input.name,
             ipAddress: input.ipAddress ?? null,
             apiBaseUrl: input.apiBaseUrl ?? null,
@@ -111,19 +124,19 @@ export class PanelRegistrationService {
             region: input.region,
             ...(input.maxRequestsPerMinute !== undefined ? { maxRequestsPerMinute: input.maxRequestsPerMinute } : {}),
             reviewState: PanelReviewState.pending,
-            panelApiCredentials: panelCredentialRef(actor.tenantId, id),
-            ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(actor.tenantId, id) } : {}),
+            panelApiCredentials: panelCredentialRef(vaultTenantId, id),
+            ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(vaultTenantId, id) } : {}),
           },
         }),
       ),
     );
 
-    const target = { tenantId: actor.tenantId, panelId: id };
+    const target = { tenantId: vaultTenantId, panelId: id };
     let credentials: PanelCredentialState;
     let radiusSecret: PanelCredentialState | undefined;
     try {
-      credentials = await this.vault.set(target, input.credentials, actor.adminId, 'login');
-      if (input.radiusSecret !== undefined) radiusSecret = await this.vault.set(target, input.radiusSecret, actor.adminId, 'radius_secret');
+      credentials = await this.vault.set(target, input.credentials, adminId, 'login');
+      if (input.radiusSecret !== undefined) radiusSecret = await this.vault.set(target, input.radiusSecret, adminId, 'radius_secret');
     } catch (err) {
       // A login already stored stays in the vault under a panel id nothing
       // names any more: unreachable, and never read.
@@ -131,7 +144,7 @@ export class PanelRegistrationService {
       throw err;
     }
 
-    this.logger.log(`panel ${id} (${input.driverType}) registered by ${actor.adminId}; pending its connection test`);
+    this.logger.log(`panel ${id} (${input.driverType}) registered by ${adminId}; pending its connection test`);
     return { id, reviewState: PanelReviewState.pending, credentials, ...(radiusSecret ? { radiusSecret } : {}) };
   }
 
@@ -155,12 +168,20 @@ export class PanelRegistrationService {
    */
   async resubmitCredentials(actor: SystemsActor, panelId: string, credentials: string) {
     const scope = await panelScopeOf(this.prisma, actor);
+    return this.resubmitFor({ scope, vaultTenantId: actor.tenantId }, actor.adminId, panelId, credentials);
+  }
+
+  /** {@link resubmitCredentials} for an owner already admitted, as {@link registerFor}. */
+  async resubmitFor(owner: PanelOwner, adminId: string, panelId: string, credentials: string) {
+    const { scope, vaultTenantId } = owner;
+    // Read on the cross-tenant pool, the scope in the `where`: `tenant_isolation`
+    // hides a reseller's panel from a bare app-pool read (ADR-0162).
     const where = { id: panelId, ...scope };
-    const panel = await this.prisma.panel.findFirst({ where, select: { reviewState: true, connectionTestFault: true } });
+    const panel = await this.all.panel.findFirst({ where, select: { reviewState: true, connectionTestFault: true } });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.reviewState === PanelReviewState.refused) throw new PanelResubmitRefused('panel_refused');
 
-    const stored = await this.vault.set({ tenantId: actor.tenantId, panelId }, credentials, actor.adminId, 'login');
+    const stored = await this.vault.set({ tenantId: vaultTenantId, panelId }, credentials, adminId, 'login');
 
     let reviewState: PanelReviewState = panel.reviewState;
     let retest = false;
@@ -170,10 +191,10 @@ export class PanelRegistrationService {
         data: { connectionTestedAt: null, connectionTestFault: null, connectionTestDetail: null },
       });
       retest = cleared.count > 0;
-      if (!retest) reviewState = (await this.prisma.panel.findFirst({ where, select: { reviewState: true } }))?.reviewState ?? reviewState;
+      if (!retest) reviewState = (await this.all.panel.findFirst({ where, select: { reviewState: true } }))?.reviewState ?? reviewState;
     }
 
-    this.logger.log(`panel ${panelId}: login re-submitted by ${actor.adminId}${retest ? '; re-tested on the next tick' : ''}`);
+    this.logger.log(`panel ${panelId}: login re-submitted by ${adminId}${retest ? '; re-tested on the next tick' : ''}`);
     return { id: panelId, reviewState, retest, credentials: stored };
   }
 

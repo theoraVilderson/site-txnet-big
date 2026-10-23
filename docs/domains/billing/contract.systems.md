@@ -29,8 +29,10 @@ Every route opens with `panelScopeOf`, which answers the `where` of every read
 and the ownership of every write: for the owner, the **platform's** panels
 (`ownershipType = platform`, `tenantId` null), not a reseller's dedicated one.
 Opening the page to a reseller is a change to that one function, not to a
-route (ADR-0080 decision 2). **Registering** stays owner-only: the collector
-would dial an address a tenant chose (`network/open-questions.md`).
+route (ADR-0080 decision 2). **Registering** here stays owner-only. A
+reseller registers its own router only for an import in place, through the
+import's door: the same `registerFor` / `resubmitFor` with the reseller as
+owner (entitlement `contract.import-in-place.md` rules 10-13, ADR-0162).
 
 ## Routes
 

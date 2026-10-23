@@ -22,9 +22,12 @@ import { bulkReadLimit, bulkWriteLimit, ResellerJobRoutes } from '../payment/gif
 import { actorOf, resellerRefusal } from '../payment/gift/reseller-user-grants.controller';
 import { ResellerUserGrantsRefused } from '../payment/gift/reseller-user-grants.service';
 import { RateLimit } from '../request/rate-limit';
+import { resubmitCredentialsSchema, type ResubmitCredentialsBody } from '../systems/panel-registration.schema';
+import { refusing, relayingVault } from '../systems/systems-refusals';
 import { BalanceImportService } from '../wallet/balance-import-run';
 import { LegacyHostService } from './legacy-host';
 import { MigrationLinkService } from './migration-link-run';
+import { MigrationRouterService } from './migration-router';
 import { MigrationDrainService, type MigrationDrainResult } from './migration-drain';
 import { MigrationRunRefused, MigrationRunService, type MigrationRunRejection } from './migration-run';
 import {
@@ -34,10 +37,12 @@ import {
   migrationAnyRunCreateSchema,
   migrationInboundsSchema,
   migrationLinkCorrectionSchema,
+  migrationRouterSchema,
   type LegacyHostTest,
   type MigrationAnyRunCreate,
   type MigrationInbounds,
   type MigrationLinkCorrection,
+  type MigrationRouterBody,
 } from './migration-run.schema';
 
 const STATUS: Record<MigrationRunRejection, 404 | 409 | 422> = {
@@ -87,6 +92,8 @@ function migrationRefusal(e: unknown): unknown {
  * - `POST …/migration-runs/:runId/rollback` -> **202** the run, `rolling_back` (F-211, inside its 7 days)
  * - `GET …/migration-runs`, `GET …/:runId`, `GET …/:runId/outcomes` (the report's table), `POST …/:runId/cancel`
  * - `GET …/migration-runs/legacy-hosts`, `POST …/legacy-hosts/test` `{host}` — the old hosts to point here and a test of one (F-204-b)
+ * - `GET …/migration-runs/routers`, `POST …/routers` `{family, name, apiBaseUrl, credentials}` -> **201** `pending`,
+ *   `PUT …/routers/:panelId/credentials` `{credentials}` — the reseller's own routers for an import in place (F-1601-g, ADR-0162)
  *
  * All `migration.manage`: `staffWrite` to change, `read` to look. The page
  * hears every move of the run (`entitlement.migration_run.progress`, C-14).
@@ -98,6 +105,7 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
     private readonly legacy: LegacyHostService,
     private readonly links: MigrationLinkService,
     private readonly balances: BalanceImportService,
+    private readonly routers: MigrationRouterService,
   ) {
     super();
   }
@@ -119,6 +127,31 @@ export class ResellerMigrationRunController extends ResellerJobRoutes {
   @RateLimit(bulkWriteLimit)
   testLegacyHost(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(legacyHostTestSchema)) body: LegacyHostTest, @Req() req: Request) {
     return this.answer(() => this.legacy.test(actorOf(req), tenantId, body.host));
+  }
+
+  @Get('routers')
+  @RateLimit(bulkReadLimit)
+  routerList(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Req() req: Request) {
+    return this.answer(() => this.routers.list(actorOf(req), tenantId));
+  }
+
+  /** The panel's own refusals (an address registered already, the vault's) are the systems routes' (`refusing`, `relayingVault`). */
+  @Post('routers')
+  @RateLimit(bulkWriteLimit)
+  // The cast is for the non-strict tsconfig, as in the systems `register`.
+  registerRouter(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Body(new ZodValidationPipe(migrationRouterSchema)) body: MigrationRouterBody, @Req() req: Request) {
+    return this.answer(() => relayingVault(() => refusing(() => this.routers.register(actorOf(req), tenantId, body as Required<MigrationRouterBody>))));
+  }
+
+  @Put('routers/:panelId/credentials')
+  @RateLimit(bulkWriteLimit)
+  resubmitRouterLogin(
+    @Param('tenantId', new ParseUUIDPipe()) tenantId: string,
+    @Param('panelId', new ParseUUIDPipe()) panelId: string,
+    @Body(new ZodValidationPipe(resubmitCredentialsSchema)) body: ResubmitCredentialsBody,
+    @Req() req: Request,
+  ) {
+    return this.answer(() => relayingVault(() => refusing(() => this.routers.resubmit(actorOf(req), tenantId, panelId, body.credentials))));
   }
 
   @Post()

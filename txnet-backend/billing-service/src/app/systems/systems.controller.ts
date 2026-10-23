@@ -1,14 +1,11 @@
 import {
-  BadGatewayException,
   Body,
   CanActivate,
   Controller,
   ExecutionContext,
-  ConflictException,
   ForbiddenException,
   Get,
   HttpCode,
-  HttpException,
   HttpStatus,
   Injectable,
   Delete,
@@ -26,8 +23,7 @@ import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
-import { PanelCredentialRefused, PanelCredentialUnavailable } from './panel-credential.client';
-import { PanelRegistrationService, PanelResubmitRefused, RegisterPanelInput } from './panel-registration';
+import { PanelRegistrationService, RegisterPanelInput } from './panel-registration';
 import { MemberSellingInput, PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
 import { PanelInboundsInput, PanelInboundsService } from './panel-inbounds';
 import { PanelLifecycleService, PanelSettingsInput } from './panel-lifecycle';
@@ -67,10 +63,10 @@ import {
   WriteOffHoldBody,
   writeOffHoldSchema,
 } from './panel-registration.schema';
-import { PanelScopeRefused, SystemsActor } from './panel-scope';
+import { SystemsActor } from './panel-scope';
 import { MemberInboundsService } from './member-inbounds';
 import { SystemsReadService } from './systems-read';
-import { refusing } from './systems-refusals';
+import { refusing, relayingVault } from './systems-refusals';
 import { UsageHoldsService } from './usage-holds';
 
 /** The permission the systems surface needs (F-027-ar; `panel.manage` until AC-1-d, ADR-0135). SuperAdmin holds it as `*`. */
@@ -440,21 +436,6 @@ export class SystemsController {
     return relayingVault(() =>
       refusing(() => this.registration.resubmitRadiusSecret(actorOf(req), id, body.radiusSecret as string)),
     );
-  }
-}
-
-/** The routes that write a login or a secret: the scope as 403, the vault seam's refusals relayed, its silence a 502. */
-async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
-  try {
-    return await work();
-  } catch (e) {
-    if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
-    if (e instanceof PanelResubmitRefused) throw new ConflictException({ reason: e.reason, message: e.message });
-    if (e instanceof PanelCredentialRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
-    if (e instanceof PanelCredentialUnavailable) {
-      throw new BadGatewayException({ reason: 'credentials_unavailable', message: 'the credential vault could not be reached' });
-    }
-    throw e;
   }
 }
 

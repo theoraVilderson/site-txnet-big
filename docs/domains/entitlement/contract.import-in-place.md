@@ -2,7 +2,7 @@
 id: entitlement
 layer: domain
 status: active
-version: 43
+version: 44
 updated: 2026-10-23
 ---
 
@@ -77,6 +77,36 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    counts from our profile link, so a link made again hands out nothing
    twice (F-027-du-b). Nothing network-side holds the page (F-1601-c) back.
 
+## A reseller's own router (F-1601-g, ADR-0162)
+
+`migration-router.ts`, beside the run's routes on `migration-run.controller.ts`.
+
+10. **The reseller registers the router a run names.** `POST
+    …/migration-runs/routers` `{family, name, apiBaseUrl, credentials}`
+    (the systems page's field rules, `.strict()`) -> **201** `{id,
+    reviewState: 'pending', credentials}`. A family not imported in place
+    is `family_not_in_place`: the systems page is the owner's alone. The
+    panel is the **path's** tenant's (`ownershipType tenant`), never the
+    session's, and its login is sealed under that tenant; the owner in a
+    reseller's workspace registers the reseller's router.
+11. **The family decides the declaration** (`IN_PLACE_DECLARATION`, with
+    `isInPlaceFamily` in `migration-plan.ts`): User Manager is `pull` /
+    `cumulative`, role `active`, region `reseller` (no group places a user
+    on it). Network then tests it as any panel; a tenant's panel never gets
+    the egress allowlist (ADR-0095), so a private address is unreachable.
+12. **The list** `GET …/migration-runs/routers` -> `{routers: [{id, name,
+    family, address, reviewState, fault, testedAt}]}`: the tenant's own live
+    panels of a family imported in place, by name, at most 100. `address` is
+    the origin only: a path can be a secret. The verdict reaches the
+    reseller's `tenant:` channel (`network.panel.tested`).
+13. **A login re-entered** `PUT …/routers/:panelId/credentials`
+    `{credentials}`: the systems re-submit (a `pending` panel is tested
+    again), on the tenant's own router only, else `panel_not_found`. It is
+    read on the cross-tenant pool with the owner in its `where`:
+    `tenant_isolation` hides a reseller's panel from a bare app-pool read.
+
+All three routes are `migration.manage`: `staffWrite` to write, `read` to list.
+
 ## Refusals
 
 | Reason | Status | Meaning |
@@ -84,3 +114,5 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
 | `panel_not_found` | 404 | not the tenant's accepted, live panel of the run's family |
 | `panel_required` | 422 | a family imported in place named by an address |
 | `family_not_in_place` | 422 | a panel named for a family read through a source login |
+| `panel_already_registered` | 409 | a router's address is registered already, anyone's (`facts.panelId` only when it is the tenant's) |
+| `panel_refused` | 409 | a login re-entered on a router its test refused |

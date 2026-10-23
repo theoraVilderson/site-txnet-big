@@ -29,13 +29,14 @@ export class PanelScopeRefused extends Error {
  * Read on the app pool: `tenant.tenant` has no RLS policy (as in
  * `GatewayAdminService.isOwner`).
  */
-export async function panelScopeOf(prisma: PrismaService, actor: SystemsActor) {
+export async function panelScopeOf(prisma: PrismaService, actor: SystemsActor): Promise<PanelScope> {
   const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
   if (!isPlatformTenant(tenant?.tenantType)) throw new PanelScopeRefused('not_platform_owner');
   return { ownershipType: PanelOwnershipType.platform, tenantId: null };
 }
 
-export type PanelScope = Awaited<ReturnType<typeof panelScopeOf>>;
+/** Whose panels a read or write is scoped to: the platform's (`tenantId` null), or one tenant's own (ADR-0162). */
+export type PanelScope = { ownershipType: PanelOwnershipType; tenantId: string | null };
 
 /**
  * Whether a panel met through another one — the panel a duplicate is, the one

@@ -1,4 +1,4 @@
-import { ConfigProtocol, DriverType, GrantSource, type MigrationSkipReason } from '@prisma/client';
+import { ConfigProtocol, CounterSemantics, DriverType, GrantSource, PanelTransport, type MigrationSkipReason } from '@prisma/client';
 import { z } from 'zod';
 
 import { EntitlementRefused } from './entitlement-refusals';
@@ -57,13 +57,29 @@ export const LINK_SOURCE = 'link';
 export type ImportSource = { family: DriverType | typeof LINK_SOURCE; sourceAddress: string };
 
 /**
+ * The families imported in place (ADR-0160), each with how its panel is read:
+ * the declaration a reseller's own router is registered under, never chosen
+ * on the form (ADR-0162 decision 4). User Manager is pulled, its users'
+ * lifetime totals a cumulative counter (ADR-0161).
+ */
+export const IN_PLACE_DECLARATION = {
+  [DriverType.mikrotik_user_manager]: { transport: PanelTransport.pull, counterSemantics: CounterSemantics.cumulative },
+} as const satisfies Partial<Record<DriverType, { transport: PanelTransport; counterSemantics: CounterSemantics }>>;
+
+/** A family {@link IN_PLACE_DECLARATION} names. */
+export type InPlaceFamily = keyof typeof IN_PLACE_DECLARATION;
+
+/** Every family imported in place, for a query over a tenant's routers. */
+export const IN_PLACE_FAMILIES = Object.keys(IN_PLACE_DECLARATION) as InPlaceFamily[];
+
+/**
  * A family imported in place (ADR-0160): its users keep their login on the
  * source, the tenant's registered panel, so a run names that panel rather
  * than an address and a login, and a client has no protocol of its own — the
  * login serves whatever the router's NAS dials in with. The one place the
  * question is answered (C-18).
  */
-export const isInPlaceFamily = (family: ImportSource['family']): boolean => family === DriverType.mikrotik_user_manager;
+export const isInPlaceFamily = (family: ImportSource['family']): family is InPlaceFamily => family in IN_PLACE_DECLARATION;
 
 /**
  * The run's source, the prepaid variant the reseller chose for this client's

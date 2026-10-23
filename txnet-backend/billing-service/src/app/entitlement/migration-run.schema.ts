@@ -1,6 +1,7 @@
 import { DriverType } from '@prisma/client';
 import { z } from 'zod';
 
+import { panelAddressSchema, panelLoginSchema, panelNameSchema } from '../systems/panel-registration.schema';
 import { BALANCE_FILE_MAX_CHARS } from '../wallet/balance-import';
 import { legacyPathOf } from './legacy-sub-link';
 
@@ -104,3 +105,14 @@ export const migrationLinkCorrectionSchema = z
   .strict()
   .refine((c) => Object.keys(c).length > 0, 'at least one field');
 export type MigrationLinkCorrection = z.infer<typeof migrationLinkCorrectionSchema>;
+
+/**
+ * `POST …/migration-runs/routers` (F-1601-g, ADR-0162): a reseller's own
+ * router, by the systems page's field rules. `.strict()`: the transport,
+ * counting, owner and review are the family's and the test's to set, never
+ * the body's.
+ */
+export const migrationRouterSchema = z
+  .object({ family: z.nativeEnum(DriverType), name: panelNameSchema, apiBaseUrl: panelAddressSchema, credentials: panelLoginSchema })
+  .strict();
+export type MigrationRouterBody = z.infer<typeof migrationRouterSchema>;

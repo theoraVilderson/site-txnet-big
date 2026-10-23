@@ -46,5 +46,7 @@ import { UsageHoldsService } from './usage-holds';
     PanelCredentialClient,
     { provide: PANEL_CREDENTIAL_WRITER, useExisting: PanelCredentialClient },
   ],
+  // A reseller's own router is registered behind the import's door (F-1601-g, ADR-0162).
+  exports: [PanelRegistrationService],
 })
 export class SystemsModule {}

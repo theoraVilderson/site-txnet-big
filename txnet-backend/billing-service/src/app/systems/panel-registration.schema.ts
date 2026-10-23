@@ -15,11 +15,16 @@ import { z } from 'zod';
  * one without it too (`panel_pull_has_base_url`), but a 400 naming the field
  * beats a 500 naming a constraint.
  */
+/** The fields a registrant types whatever its door: also a reseller's own router (ADR-0162). */
+export const panelNameSchema = z.string().trim().min(1).max(100);
+export const panelAddressSchema = z.string().url().max(500);
+export const panelLoginSchema = z.string().min(1).max(4096);
+
 export const registerPanelSchema = z
   .object({
-    name: z.string().trim().min(1).max(100),
+    name: panelNameSchema,
     ipAddress: z.union([z.string().ip({ version: 'v4' }), z.string().ip({ version: 'v6' })]).optional(),
-    apiBaseUrl: z.string().url().max(500).nullable().optional(),
+    apiBaseUrl: panelAddressSchema.nullable().optional(),
     clientBaseUrl: z.string().trim().url().max(500).nullable().optional(),
     driverType: z.nativeEnum(DriverType),
     counterSemantics: z.nativeEnum(CounterSemantics),
@@ -27,7 +32,7 @@ export const registerPanelSchema = z
     role: z.nativeEnum(PanelRole),
     region: z.string().trim().min(1).max(50),
     maxRequestsPerMinute: z.number().int().positive().max(6000).optional(),
-    credentials: z.string().min(1).max(4096),
+    credentials: panelLoginSchema,
     radiusSecret: z.string().min(1).max(4096).optional(),
   })
   .strict()
@@ -64,7 +69,7 @@ export type RegisterPanelBody = z.infer<typeof registerPanelSchema>;
  * registration and not trimmed — a password may start or end with a space.
  * `.strict()`, so a body naming `reviewState` is refused, not dropped.
  */
-export const resubmitCredentialsSchema = z.object({ credentials: z.string().min(1).max(4096) }).strict();
+export const resubmitCredentialsSchema = z.object({ credentials: panelLoginSchema }).strict();
 
 export type ResubmitCredentialsBody = z.infer<typeof resubmitCredentialsSchema>;
 

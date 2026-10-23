@@ -56,15 +56,14 @@ function harness(row: Partial<Row> | null, opts: { vaultFails?: boolean; duringV
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === OWNER ? { tenantType: TenantType.platform_owner } : { tenantType: TenantType.reseller },
     },
+  };
+  // Every panel read and write of a re-submit is on the cross-tenant pool, the scope in its `where` (ADR-0162).
+  const all = {
     panel: {
       findFirst: async ({ where }: { where: { id: string; ownershipType: string; tenantId: null } }) =>
         panel && panel.id === where.id && panel.ownershipType === where.ownershipType && panel.tenantId === where.tenantId
           ? { reviewState: panel.reviewState, connectionTestFault: panel.connectionTestFault }
           : null,
-    },
-  };
-  const all = {
-    panel: {
       updateMany: async (args: { where: { id: string; reviewState: PanelReviewState }; data: Record<string, unknown> }) => {
         updates.push(args);
         if (!panel || panel.reviewState !== args.where.reviewState) return { count: 0 };
