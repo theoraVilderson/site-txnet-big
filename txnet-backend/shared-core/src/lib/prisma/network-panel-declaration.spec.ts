@@ -133,7 +133,9 @@ describe('network.Panel declares its driver, its counter and its transport', () 
   });
 
   it('carries every protocol a driver family can report', () => {
-    expect(enumValues('ConfigProtocol')).toHaveLength(9);
+    // Nine wire protocols, and `router_login`: a User Manager login every dial-in service takes (F-1601-d3).
+    expect(enumValues('ConfigProtocol')).toHaveLength(10);
+    expect(enumValues('ConfigProtocol')).toContain('router_login');
   });
 
   it('has no `panelType` left to disagree with `driverType`', () => {

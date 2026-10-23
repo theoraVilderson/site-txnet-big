@@ -217,7 +217,7 @@ first (`(grantId, createdAt)`, F-027-bn). Traffic: ingestion writes, reporting r
 `20260921000100_panel_declares_its_driver` adds the declaration, drops
 `panelType` with its enum, renames `PanelStatus` -> `PanelState` and widens
 `ConfigProtocol` from the four Xray protocols to nine (adding `hysteria2`,
-`tuic`, `wireguard`, `openvpn`, `pppoe`). Both enums are dropped and recreated
+`tuic`, `wireguard`, `openvpn`, `pppoe`; `router_login` added by F-1601-d3 in a file of its own, its rows moved by the next). Both enums are dropped and recreated
 rather than altered — a value added by `ALTER TYPE` cannot be used in the
 transaction that added it, and `prisma migrate` runs a file as one. It is
 destructive, and asserts both tables are empty before it starts.

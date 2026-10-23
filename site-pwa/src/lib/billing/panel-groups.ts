@@ -4,7 +4,7 @@ import type { JobProgress } from "./reseller-grants";
 import type { PanelReviewState, PanelState } from "./systems";
 
 /** `network.ConfigProtocol`: what a panel's inbound serves, and so a config placed on it. */
-export type ConfigProtocol = "vmess" | "vless" | "trojan" | "shadowsocks" | "hysteria2" | "tuic" | "wireguard" | "openvpn" | "pppoe";
+export type ConfigProtocol = "vmess" | "vless" | "trojan" | "shadowsocks" | "hysteria2" | "tuic" | "wireguard" | "openvpn" | "pppoe" | "router_login";
 
 /** `network.PanelGroupMemberRole` — the member's, not the panel's HA `role`. */
 export type PanelGroupMemberRole = "primary" | "replica" | "drain";

@@ -73,7 +73,7 @@ to another panel, move them and rebuild their logins.
 
 10. **A move places like a purchase on its target.** Where the target sells
     the config's protocol, the move keeps it. Where it does not — a router
-    login (`pppoe`) moved to an Xray panel — the new config is placed on the
+    login (`router_login`) moved to an Xray panel — the new config is placed on the
     target's own picked inbounds by its placement settings and caps, as a
     sale placed on that panel would be (`placementsOn`), and the user gets a
     link. A target nothing can be placed on is refused before anything is
@@ -87,6 +87,13 @@ to another panel, move them and rebuild their logins.
     cut off the same way; "confirmed" is the new config built on its target
     (`confirmedAt`), when the user is told and the 3 days start; one old row
     waits per config, so moving the new one again retires the waiting one.
+12. **A router login is its own protocol, `router_login`** (user 2026-10-23,
+    F-1601-d3). A User Manager login is one name and password that every
+    dial-in service of the router takes, so it names the login, not PPPoE or
+    L2TP; each NAS is a `router_login` inbound, and a purchase or a move
+    places there like anywhere else. A push panel's `pppoe` stays PPPoE.
+    Chosen over calling it `pppoe`, which would have been wrong for a user on
+    L2TP and would need a split the day one protocol is sold alone.
 
 ## Consequences
 

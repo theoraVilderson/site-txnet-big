@@ -33,6 +33,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -64,7 +65,12 @@ var _ driver.Driver = (*Driver)(nil)
 // authenticates PPP and OpenVPN sessions on the NAS; an Xray client is not a
 // thing it can hold. Empty is a login for whatever the NAS dials in with:
 // ListInbounds names no protocol, so the anchor is made under none.
-var protocols = []string{"", "pppoe", "openvpn"}
+// RouterLogin is the protocol of a User Manager login (F-1601-d3): a name and
+// password that every dial-in service of the router takes — PPPoE, L2TP,
+// OpenVPN alike — so it names the login, not one of them.
+const RouterLogin = "router_login"
+
+var protocols = []string{"", RouterLogin, "openvpn"}
 
 // chainPrefix names the limitation and profile that belong to one user.
 const chainPrefix = "txnet-"
@@ -361,7 +367,8 @@ func (d *Driver) HealthCheck(ctx context.Context) error {
 
 // ListInbounds lists the NASes User Manager answers. A NAS is where a login
 // is used, which is the nearest thing this family has to an inbound; it serves
-// several protocols, so Protocol is left empty rather than guessed.
+// several dial-in protocols with the one login, so its protocol is the login's
+// (RouterLogin) — an empty one would never be placed on (F-1601-d3).
 func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	routers, err := d.list(ctx, "ListInbounds", "router", nil)
 	if err != nil {
@@ -369,7 +376,7 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 	}
 	out := make([]driver.Inbound, 0, len(routers))
 	for _, r := range routers {
-		out = append(out, driver.Inbound{RemoteID: r["name"], Tag: r["name"], Host: r["address"], Enabled: r["disabled"] != "true"})
+		out = append(out, driver.Inbound{RemoteID: r["name"], Tag: r["name"], Protocol: RouterLogin, Host: r["address"], Enabled: r["disabled"] != "true"})
 	}
 	return out, nil
 }
@@ -381,7 +388,7 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 // rows the first attempt made.
 func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientRequest) (driver.RemoteClient, error) {
 	const op = "CreateClient"
-	if !isProtocol(req.Protocol) {
+	if !slices.Contains(protocols, req.Protocol) {
 		return driver.RemoteClient{}, driver.NewFault(driver.FaultUnsupported, op, 0,
 			fmt.Errorf("user manager has no %q login", req.Protocol))
 	}
@@ -474,12 +481,3 @@ func (d *Driver) SubscriptionURL(context.Context, string) (string, bool) { retur
 // ClientLinks: none to give (contract.links.md). A PPP client is configured
 // with its name and password, not a link.
 func (d *Driver) ClientLinks(context.Context, driver.RemoteClient) ([]string, error) { return nil, nil }
-
-func isProtocol(p string) bool {
-	for _, known := range protocols {
-		if p == known {
-			return true
-		}
-	}
-	return false
-}

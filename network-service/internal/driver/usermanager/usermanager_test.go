@@ -476,7 +476,7 @@ const testName = "8a3c1e2b00004000800000000000abcd"
 func create(t *testing.T, d *Driver, enabled bool) driver.RemoteClient {
 	t.Helper()
 	c, err := d.CreateClient(context.Background(), driver.CreateClientRequest{
-		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: "pppoe",
+		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: RouterLogin,
 		DataLimitBytes: 5 << 30, RateLimitBps: 8_000_000, Enabled: enabled,
 	})
 	if err != nil {
@@ -767,6 +767,39 @@ func TestAUserManagerIgnoringProfilesFailsTheConnectionTest(t *testing.T) {
 func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
 	_, d := open(t)
 	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
-		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: "pppoe", Enabled: true,
+		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: RouterLogin, Enabled: true,
 	}, 0)
+}
+
+// A NAS is a router-login inbound (F-1601-d3): one login serves every dial-in
+// service of the router, so each NAS names that protocol, and a purchase or a
+// move can be placed on it as on any picked inbound.
+func TestEachNASIsARouterLoginInbound(t *testing.T) {
+	f, d := open(t)
+	ctx := context.Background()
+	f.tables["router"] = []map[string]string{
+		{".id": "*1", "name": "nas-tehran", "address": "10.0.0.1", "disabled": "false"},
+		{".id": "*2", "name": "nas-old", "address": "10.0.0.2", "disabled": "true"},
+	}
+	inbounds, err := d.ListInbounds(ctx)
+	if err != nil {
+		t.Fatalf("ListInbounds: %v", err)
+	}
+	if len(inbounds) != 2 {
+		t.Fatalf("ListInbounds = %d inbounds, want one per NAS", len(inbounds))
+	}
+	for _, in := range inbounds {
+		if in.Protocol != "router_login" {
+			t.Errorf("NAS %s protocol = %q, want router_login: an empty one is never placed on", in.RemoteID, in.Protocol)
+		}
+	}
+	if inbounds[1].Enabled {
+		t.Errorf("a disabled NAS was listed enabled")
+	}
+	if _, err := d.CreateClient(ctx, driver.CreateClientRequest{ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: RouterLogin, Enabled: true}); err != nil {
+		t.Errorf("CreateClient(router_login) = %v, want a login made", err)
+	}
+	if _, err := d.CreateClient(ctx, driver.CreateClientRequest{UUID: testUUID, Protocol: "pppoe"}); !driver.IsUnsupported(err) {
+		t.Errorf("CreateClient(pppoe) = %v, want unsupported: a User Manager login is a router_login", err)
+	}
 }

@@ -44,7 +44,7 @@ func TestOnARealRouter(t *testing.T) {
 	name := "0f1e2d3c4b5a49688778695a4b3c2d1e"
 	t.Cleanup(func() { _ = d.DeleteClient(context.Background(), name) })
 	created, err := d.CreateClient(ctx, driver.CreateClientRequest{
-		ClaimTag: "txnet-live", UUID: uuid, Protocol: "pppoe", DataLimitBytes: 5 << 30, Enabled: true,
+		ClaimTag: "txnet-live", UUID: uuid, Protocol: RouterLogin, DataLimitBytes: 5 << 30, Enabled: true,
 	})
 	if err != nil {
 		t.Fatalf("CreateClient: %v", err)
@@ -54,7 +54,7 @@ func TestOnARealRouter(t *testing.T) {
 	}
 	// A retry of the same create finishes the chain rather than failing on it.
 	if _, err := d.CreateClient(ctx, driver.CreateClientRequest{
-		ClaimTag: "txnet-live", UUID: uuid, Protocol: "pppoe", DataLimitBytes: 5 << 30, Enabled: true,
+		ClaimTag: "txnet-live", UUID: uuid, Protocol: RouterLogin, DataLimitBytes: 5 << 30, Enabled: true,
 	}); err != nil {
 		t.Fatalf("a repeated CreateClient: %v", err)
 	}

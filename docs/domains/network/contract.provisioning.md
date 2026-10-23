@@ -85,7 +85,8 @@ before the old row retires (`movePlacements`, `traffic/panel-load.ts`):
   member if it is one, else as a panel alone, read under the same panel lock
   and caps as fulfilment (`membersWithLoad`, `moveTargets` over
   `placementsOn`) — `provisionForGroup` rows under a new `credentialGroupId`.
-  A router login (`pppoe`) moved to an Xray panel gets that panel's picks;
+  A router login (`router_login`) moved to an Xray panel gets that panel's picks,
+  and an Xray config moved to a User Manager router its NAS's (F-1601-d3);
 - nothing placeable now — no pick with room, or the target not accepted,
   healthy and un-halted: `no_placement_on_target`, and the old row stays.
 

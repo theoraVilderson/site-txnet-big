@@ -140,7 +140,7 @@ export class ConfigActionsService {
    * kept for a hand back — so the pass adopts it, never creates it, and never
    * writes the `uuid` minted here as its password (network
    * `contract.usermanager.md` rules 13-14). A RADIUS login serves whatever
-   * the NAS dials, so its protocol is recorded as `pppoe`.
+   * the NAS dials, so its protocol is `router_login` (F-1601-d3).
    */
   async adoptInPlace(
     tx: Prisma.TransactionClient,
@@ -149,7 +149,7 @@ export class ConfigActionsService {
     const grant = await tx.grant.findUnique({ where: { id: input.grantId }, select: { id: true, tenantId: true, userId: true, trafficUnlimited: true } });
     if (!grant) throw new ConfigActionRefused('grant_not_found', input.grantId);
     const { remoteId, adoptedProfile, adoptedLabel } = input;
-    return this.create(tx, grant, input.panelId, ConfigProtocol.pppoe, null, input.actor, null, { remoteId, adoptedProfile, adoptedLabel });
+    return this.create(tx, grant, input.panelId, ConfigProtocol.router_login, null, input.actor, null, { remoteId, adoptedProfile, adoptedLabel });
   }
 
   /**

@@ -60,7 +60,7 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    second login for it, and its one config is that same user: the run's
    `sourcePanelId`, the user's name as `remoteId` from the start, its
    profile and label as `adoptedProfile` and `adoptedLabel`, protocol
-   `pppoe` (a RADIUS login serves whatever the NAS dials). The `uuid` minted
+   `router_login` (a RADIUS login serves whatever the NAS dials; F-1601-d3). The `uuid` minted
    for it is never the router's password.
 7. **Network adopts it** (F-1601-b2, network `contract.usermanager.md` rules
    13-14): our chain linked, the user's own profiles off, its password never

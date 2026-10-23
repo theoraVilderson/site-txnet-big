@@ -2,7 +2,7 @@
  * A move places like a purchase on its target (ADR-0160 decision 10). What
  * would break silently, and nowhere else:
  *
- *  - **a protocol the target does not sell** — a router login (`pppoe`) moved
+ *  - **a protocol the target does not sell** — a router login (`router_login`) moved
  *    to an Xray panel — was kept on the new row, network found no inbound of
  *    it (`no_inbound`), and the user lost the old login for nothing. The move
  *    now places on the target's picked inbounds, by its settings and caps;
@@ -70,7 +70,7 @@ function build(target: { inbounds: Inbound[]; inboundPlacement?: InboundPlacemen
   return { service, tx: tx as unknown as Prisma.TransactionClient, configs, locks };
 }
 
-/** The Grant's router login, adopted in place (F-1601-b3): `pppoe`, no inbound of its own. */
+/** The Grant's router login, adopted in place (F-1601-b3): `router_login` (F-1601-d3), no inbound of its own. */
 function onRouter(configs: Row[]): string {
   configs.push({
     id: 'router-login',
@@ -78,7 +78,7 @@ function onRouter(configs: Row[]): string {
     userId: USER,
     grantId: GRANT,
     panelId: ROUTER,
-    protocol: ConfigProtocol.pppoe,
+    protocol: ConfigProtocol.router_login,
     status: ConfigStatus.active,
     desiredRemote: DesiredRemote.present,
     enforcementState: EnforcementState.complete,
@@ -125,12 +125,12 @@ describe('a move places like a purchase on its target (ADR-0160 decision 10)', (
   });
 
   it('keeps the protocol where the target sells it: one row, the inbound left to the pass, no credential group', async () => {
-    const { service, tx, configs, locks } = build({ inbounds: [{ remoteId: '7', protocol: ConfigProtocol.pppoe, maxClients: null }] });
+    const { service, tx, configs, locks } = build({ inbounds: [{ remoteId: '7', protocol: ConfigProtocol.router_login, maxClients: null }] });
     const configId = onRouter(configs);
 
     await service.move(tx, { configId, toPanelId: XRAY, actor: ADMIN });
 
-    expect(configs.slice(1)).toEqual([expect.objectContaining({ panelId: XRAY, protocol: ConfigProtocol.pppoe, inboundRemoteId: null, credentialGroupId: null })]);
+    expect(configs.slice(1)).toEqual([expect.objectContaining({ panelId: XRAY, protocol: ConfigProtocol.router_login, inboundRemoteId: null, credentialGroupId: null })]);
     expect(locks).toHaveLength(0);
   });
 
@@ -144,5 +144,22 @@ describe('a move places like a purchase on its target (ADR-0160 decision 10)', (
     await expect(service.move(tx, { configId, toPanelId: XRAY, actor: ADMIN })).rejects.toMatchObject({ name: 'ConfigActionRefused', reason: 'no_placement_on_target' });
     expect(configs).toHaveLength(1);
     expect(configs[0]).toMatchObject({ status: ConfigStatus.active, desiredRemote: DesiredRemote.present });
+  });
+
+  it('places on a User Manager router: its NAS is a `router_login` pick, so a moved Xray config gets a router login there (F-1601-d3)', async () => {
+    const { service, tx, configs } = build({ inbounds: [{ remoteId: 'nas-tehran', protocol: ConfigProtocol.router_login, maxClients: null }] });
+    configs.push({ id: 'xray-1', tenantId: TENANT, userId: USER, grantId: GRANT, panelId: ROUTER, protocol: ConfigProtocol.vless, status: ConfigStatus.active, regenerateUsedCount: 0, maxRegenerateCount: 3 });
+
+    await service.move(tx, { configId: 'xray-1', toPanelId: XRAY, actor: ADMIN });
+
+    expect(configs.slice(1).map((c) => [c.inboundRemoteId, c.protocol])).toEqual([['nas-tehran', ConfigProtocol.router_login]]);
+  });
+
+  it('records an adopted router login as `router_login`, the protocol its NAS names (F-1601-d3)', async () => {
+    const { service, tx, configs } = build({ inbounds: [] });
+
+    await service.adoptInPlace(tx, { grantId: GRANT, panelId: ROUTER, remoteId: 'ali', adoptedProfile: 'gold', adoptedLabel: 'Ali', actor: ADMIN });
+
+    expect(configs[0]).toMatchObject({ protocol: ConfigProtocol.router_login, remoteId: 'ali' });
   });
 });

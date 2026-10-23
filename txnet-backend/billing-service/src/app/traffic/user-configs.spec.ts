@@ -244,7 +244,7 @@ describe('UserConfigsService.listForGrant', () => {
     });
 
     it('answers a PPPoE config its login and no file', async () => {
-      const { service, inTenant } = build({ configs: [um({ protocol: ConfigProtocol.pppoe })] });
+      const { service, inTenant } = build({ configs: [um({ protocol: ConfigProtocol.router_login })] });
       const [row] = await inTenant(() => service.listForGrant(USER, GRANT));
       expect(row.login).toEqual({ username: 'a1b2c3d4', password: 'a1b2-c3d4' });
       expect(row.ovpnProfile).toBeNull();

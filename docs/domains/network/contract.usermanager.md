@@ -33,7 +33,7 @@ name, so no router id is kept.
 | limitation `transfer-limit` | `DataLimitBytes`, counted against upload plus download |
 | limitation `rate-limit-rx` / `-tx` | `RateLimitBps`, the same figure both ways |
 | `user/monitor` `total-upload` / `total-download` | `GetUsage`: each user's lifetime total, `UpBytes` / `DownBytes` |
-| `router` | `ListInbounds`: one per NAS, with `Protocol` left empty because a NAS serves several |
+| `router` | `ListInbounds`: one per NAS, protocol `router_login` — one login every dial-in service of the router takes, so a purchase or a move places on it (F-1601-d3) |
 
 The rules:
 
@@ -71,8 +71,8 @@ The rules:
    that is already open. The ceiling is what ends that session's traffic.
 7. **Some calls have nothing to do.** `ResetUsage` and `BuildLink` return
    `unsupported`, `SubscriptionURL` returns false and `ClientLinks` none.
-   `CreateClient` accepts `pppoe`, `openvpn` and none — the anchor, since
-   `ListInbounds` names no protocol — and refuses any Xray protocol.
+   `CreateClient` accepts `router_login`, `openvpn` and none (the anchor),
+   and refuses any other — Xray's, and `pppoe`, a push panel's session.
 
 The connection test fails, rather than answering, on a router whose User
 Manager is disabled or ignores profiles (rule 8). Its answers are yes on every pull-scope row except

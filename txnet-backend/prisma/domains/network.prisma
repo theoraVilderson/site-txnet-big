@@ -196,6 +196,9 @@ enum ConfigProtocol {
   wireguard
   openvpn
   pppoe
+  /// A User Manager login (F-1601-d3): one name and password every dial-in
+  /// service of the router takes, so it names the login, not PPPoE or L2TP.
+  router_login
 
   @@schema("network")
 }
