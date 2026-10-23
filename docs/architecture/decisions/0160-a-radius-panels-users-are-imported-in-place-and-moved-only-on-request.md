@@ -6,7 +6,7 @@ updated: 2026-10-23
 
 # ADR 0160 — A RADIUS panel's users are imported in place, and moved only on request
 
-- **Status:** accepted (built by F-1601-a … F-1601-d2, F-1602, F-027-ay)
+- **Status:** accepted (built by F-1601-a … F-1601-d2, F-1602, F-027-ay-a … -c)
 - **Date:** 2026-10-23
 - **Decision:** the user's (2026-10-23)
 - **Affects units:** network, entitlement, panel-web
@@ -94,6 +94,23 @@ to another panel, move them and rebuild their logins.
     places there like anywhere else. A push panel's `pppoe` stays PPPoE.
     Chosen over calling it `pppoe`, which would have been wrong for a user on
     L2TP and would need a split the day one protocol is sold alone.
+
+## Decided while building the IBSng driver (user, 2026-10-23, F-027-ay)
+
+13. **IBSng's ceiling is its traffic accounting, its credit switched off.**
+    IBSng A1.24 can refuse a user on two things: its credit, spent by a
+    charge's rules, and a periodic traffic limit
+    (`traffic_periodic_accounting_daily`: a limit in bytes, upload plus
+    download, over a period of N days, with the usage it is checked against
+    kept per user). The second is our ceiling: we write the limit, and IBSng
+    ends the session itself when the usage reaches it. Its period is set so
+    long that it never comes round, so its usage is a counter that never
+    resets on its own. Every user of ours is under one charge, `txnet`, that
+    prices nothing, and its credit never runs out, so the credit refuses
+    nobody (decision 3). Rejected (user, 2026-10-23, after first choosing
+    it): the credit as the allowance, one credit per KB. It is a balance
+    IBSng spends, so every write would be a remaining figure net of the open
+    session, and a reseller using credit for money would lose it.
 
 ## Consequences
 

@@ -232,5 +232,46 @@ services:
     networks:
       - private_backend_network
 
+  # IBSng A1.24, the last open-source release (F-027-ay-a, ADR-0160 decision
+  # 5): the install the ibsng driver's wire shapes are proved on. Dev only and
+  # behind a profile, so `up` never starts it:
+  #   scripts/dev.compose.sh --profile ibsng up -d --build ibsng
+  # XML-RPC at http://ibsng:1235 (system / IBSNG_SYSTEM_PASSWORD); its own
+  # Postgres, never main-db. Probes in dev-docker/ibsng/README.md.
+  ibsng-db:
+    profiles: ["ibsng"]
+    image: ${DOCKER_REGISTRY}/postgres:18-alpine
+    container_name: ${STACK_NAME:-txnet}-ibsng-db
+    restart: "no"
+    environment:
+      - POSTGRES_DB=IBSng
+      - POSTGRES_USER=ibs
+      - POSTGRES_PASSWORD=${IBSNG_DB_PASSWORD:-ibsdbpass}
+    volumes:
+      - ibsng_db_data:/var/lib/postgresql
+    cpus: 1
+    mem_limit: 256m
+    networks:
+      - private_backend_network
+  ibsng:
+    profiles: ["ibsng"]
+    build:
+      context: ./ibsng
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    container_name: ${STACK_NAME:-txnet}-ibsng
+    restart: "no"
+    depends_on: [ibsng-db]
+    environment:
+      - IBSNG_DB_PASSWORD=${IBSNG_DB_PASSWORD:-ibsdbpass}
+      - IBSNG_SYSTEM_PASSWORD=${IBSNG_SYSTEM_PASSWORD:-txnet-dev-ibsng}
+    cpus: 1
+    mem_limit: 256m
+    networks:
+      - private_backend_network
+
 volumes:
   routeros_chr_data:
+  ibsng_db_data:
