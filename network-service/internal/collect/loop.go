@@ -78,13 +78,8 @@ type Planner interface {
 // Σ its client was created at. It is the figure the panel's own per-user
 // limit is checked against, and the bytes are already billed, so the turn
 // plans on it and publishes nothing.
-//
-// router is the panel's own totals where this turn read them
-// (driver.TotalsReader), nil where it did not. A client whose total went
-// down since the last read was made again on the router, and its baseline
-// moves to what our Σ held beyond the router's figure (F-027-du).
 type SessionTotals interface {
-	Totals(ctx context.Context, panelID string, router []driver.ClientUsage) ([]driver.ClientUsage, error)
+	Totals(ctx context.Context, panelID string) ([]driver.ClientUsage, error)
 }
 
 // PanelHealth is told how each panel's turn went and says whether a panel may

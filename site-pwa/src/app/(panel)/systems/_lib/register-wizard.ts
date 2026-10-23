@@ -70,7 +70,8 @@ export const DRIVER_PROFILES: Record<DriverType, DriverProfile> = {
   hiddify: pull("xray", true, { login: "apiKey", clientBaseUrl: true }),
   s_ui: pull("xray", false),
   core_xray: pull("xray", false),
-  mikrotik_user_manager: pull("router", true, { transport: "push", counterSemantics: "session" }),
+  // Read off its REST API: its NAS sends us no accounting (ADR-0161).
+  mikrotik_user_manager: pull("router", true),
   mikrotik_wireguard: pull("router", false),
   ibsng: pull("router", false),
   cloudius: pull("router", false),

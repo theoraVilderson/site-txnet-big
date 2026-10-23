@@ -123,7 +123,7 @@ func TestAnUnlimitedProfileHasNoEnd(t *testing.T) {
 // change nothing on the reseller's live router.
 func TestReadingASourceWritesNothing(t *testing.T) {
 	conformance.RunReadOnly(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
-		if shape.Transport != driver.TransportPush || !shape.GigawordsReported {
+		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative {
 			return nil, false
 		}
 		f, d := open(t)

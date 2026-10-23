@@ -27,7 +27,7 @@ func RunReadOnly(t *testing.T, setup Setup) {
 	t.Run("source_snapshot_writes_nothing", func(t *testing.T) {
 		h, ok := sourceHarness(t, setup)
 		if !ok {
-			t.Fatal("an import source must take the pull, cumulative shape or, read in place (ADR-0160), a push one")
+			t.Fatal("an import source must take the pull, cumulative shape")
 		}
 		counter, ok := h.(WriteCounter)
 		if !ok {
@@ -60,14 +60,9 @@ func RunReadOnly(t *testing.T, setup Setup) {
 	})
 }
 
-// sourceHarness is the family's harness in the shape it is read in: an Xray
-// panel pulled with cumulative counters, or a RADIUS panel (User Manager,
-// F-1601-a) whose users are imported in place and whose NAS pushes sessions.
+// sourceHarness is the family's harness in the shape it is read in: pulled,
+// with cumulative counters — an Xray panel, or User Manager read in place
+// (ADR-0160), whose users' totals are read off the router (F-027-ag-b).
 func sourceHarness(t *testing.T, setup Setup) (Harness, bool) {
-	for _, shape := range []Shape{pull(driver.CounterCumulative), push(true), push(false)} {
-		if h, ok := setup(t, shape); ok {
-			return h, true
-		}
-	}
-	return nil, false
+	return setup(t, pull(driver.CounterCumulative))
 }

@@ -15,7 +15,7 @@ import (
 // The reads of the user table: ListClients for a panel we provision,
 // ListAccounts (source.go) for a reseller's router an import reads in place —
 // both see a user under the ceiling and rate it can actually use — and
-// ClientTotals, each user's lifetime total.
+// totals, each user's lifetime total, which GetUsage reads.
 
 // userRead is one read of every user: the rows as the router gave them, its
 // profile links, and each user as a client with its ceiling and rate.
@@ -135,30 +135,36 @@ func permissive(limits []row) (ceilingBytes, rateBps int64, err error) {
 	return ceilingBytes, rateBps, nil
 }
 
-var _ driver.TotalsReader = (*Driver)(nil)
-
-// ClientTotals reads User Manager's own lifetime total for every user in two
-// requests: the users' ids, then one `monitor ... once` over all of them
-// (F-027-du). `numbers` takes row ids, never names — a name is a 404 on a
-// real router — and the answer comes back in the order asked (both proved on
-// a CHR, F-1601-e). Ids are listed first because an unknown one fails the
-// whole command, and a user deleted on the router must not stop every other
-// user being read. The total restarts with the user, which is the point: it
-// shows a user made again by hand. It is not what `transfer-limit` is checked
-// against — that counts from the profile link (contract.drivers.md).
-func (d *Driver) ClientTotals(ctx context.Context) ([]driver.ClientUsage, error) {
-	const op = "ClientTotals"
+// totals is User Manager's own lifetime total for every user, or for the
+// named ones, in two requests whatever their number: the users' ids, then one
+// `monitor ... once` over them (F-027-ag-b). `numbers` takes row ids, never
+// names — a name is a 404 on a real router — and the answer comes back in the
+// order asked (both proved on a CHR, F-1601-e). Ids are listed first because
+// an unknown one fails the whole command, and a user deleted on the router
+// must not stop every other user being read. The total restarts with the
+// user, which is a reset to the normaliser. It is not what `transfer-limit`
+// is checked against: that counts from the profile link (rule 9).
+func (d *Driver) totals(ctx context.Context, op string, want map[string]bool) ([]driver.ClientUsage, error) {
 	users, err := d.list(ctx, op, "user", url.Values{".proplist": {".id,name"}})
-	if err != nil || len(users) == 0 {
+	if err != nil {
 		return nil, err
 	}
-	names := make([]string, len(users))
-	ids := make([]string, len(users))
-	for i, u := range users {
-		names[i], ids[i] = u["name"], u[".id"]
+	var names, ids []string
+	for _, u := range users {
+		if want == nil || want[u["name"]] {
+			names, ids = append(names, u["name"]), append(ids, u[".id"])
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	// The monitor is the read's second request: it pays the panel's budget
+	// as a page does (ADR-0081).
+	if err := driver.NextPage(ctx, op); err != nil {
+		return nil, err
 	}
 	var answers []row
-	body := row{"numbers": strings.Join(ids, ","), "once": ""}
+	body := row{"numbers": strings.Join(ids, ","), "once": "", ".proplist": "total-upload,total-download"}
 	if err := d.call(ctx, op, http.MethodPost, []string{"user", "monitor"}, nil, body, &answers); err != nil {
 		return nil, err
 	}

@@ -14,8 +14,9 @@ every family is" holds here unchanged. What governs
 `contract.drivers.md` on 2026-10-23, when a real router (F-1601-e) added
 rules 8-12.
 
-`internal/driver/usermanager`. Push, `session`: the NAS sends accounting to
-`internal/radius`, and this driver is the router's REST API (RouterOS v7,
+`internal/driver/usermanager`. Pull, `cumulative` (ADR-0161, F-027-ag-b):
+the NAS sends its accounting only to User Manager (rule 11), so each user's
+lifetime total is read off the router's REST API (RouterOS v7,
 `/rest/user-manager/…`, basic auth on every request). IBSng is F-027-ay.
 
 User Manager has no per-user ceiling. A ceiling is a limitation on a profile on
@@ -25,13 +26,13 @@ name, so no router id is kept.
 
 | User Manager | ours |
 |---|---|
-| `user.name` | `RemoteID`: the uuid without hyphens, which is the `User-Name` the receiver places bytes by. Never renamed |
+| `user.name` | `RemoteID`: the uuid without hyphens, the `User-Name` the NAS logs in with. Never renamed |
 | `user.password` | `UUID`. Regenerating a config gives it a new password |
 | `user.comment` | `Label`, the claim tag |
 | `user.disabled` | `Enabled` |
 | limitation `transfer-limit` | `DataLimitBytes`, counted against upload plus download |
 | limitation `rate-limit-rx` / `-tx` | `RateLimitBps`, the same figure both ways |
-| `session` where `active=true` | `GetUsage`: one request. `upload`→`UpBytes`, `download`→`DownBytes`, `acct-session-id`→`SessionID` |
+| `user/monitor` `total-upload` / `total-download` | `GetUsage`: each user's lifetime total, `UpBytes` / `DownBytes` |
 | `router` | `ListInbounds`: one per NAS, with `Protocol` left empty because a NAS serves several |
 
 The rules:
@@ -57,34 +58,33 @@ The rules:
    limit: the money-hole finding of ADR-0072 rule 2. It is not our ceiling
    hiding the extra profile. A profile in state `used` grants nothing and is
    ignored.
-5. **`GetUsage` reads open sessions only**, assuming a closed one's `Stop`
-   reached the receiver — which a real router does not send (rule 11;
-   F-027-ag-b replaces this read). `GetUsageFor` shares that request.
-   `ClientTotals` is each user's lifetime total, in two requests: the users'
-   `.id`s, then one `monitor` over them (rule 10; `contract.ceiling.md`,
-   F-027-du).
+5. **`GetUsage` is each user's lifetime total**, in two requests whatever
+   the number of users: their `.id`s, then one `monitor` over them (rule
+   10). The second pays the budget as a page does (ADR-0081), and the
+   conformance suite holds the family to two (`conformance.ReadCost`).
+   `GetUsageFor` asks the monitor for the named users alone. The total
+   starts again only with the user, which the normaliser reads as a reset.
 6. **Disabling refuses the next login.** User Manager does not cut a session
    that is already open. The ceiling is what ends that session's traffic.
 7. **Some calls have nothing to do.** `ResetUsage` and `BuildLink` return
    `unsupported`, `SubscriptionURL` returns false and `ClientLinks` none.
-   `CreateClient` accepts `pppoe` and `openvpn` and refuses any Xray protocol.
+   `CreateClient` accepts `pppoe`, `openvpn` and none — the anchor, since
+   `ListInbounds` names no protocol — and refuses any Xray protocol.
 
 The connection test fails, rather than answering, on a router whose User
-Manager is disabled or ignores profiles (rule 8). Its answers are yes on every push-scope row except
-`usage_reset_supported`, `stable_remote_id` (we key on the name),
-`native_subscription_link` and `server_side_expiry` (validity is a duration
-from assignment, not a date). Verdict: `accepted`, metered sale allowed.
+Manager is disabled or ignores profiles (rule 8). Its answers are yes on every pull-scope row except
+`usage_reset_supported`, `per_client_ip_limit`, `stable_remote_id` (we key
+on the name), `native_subscription_link` and `server_side_expiry` (validity
+is a duration from assignment, not a date). They do not fit a push panel.
+Verdict: `accepted`, metered sale allowed.
 
-Conformance: the three push scenarios pass. `missing_gigawords` is skipped by
-name, because a RouterOS NAS sends Gigawords, and the receiver holds any session
-that arrives without them anyway. The eleven pull scenarios and
-`ceiling_refused` are skipped too. `usermanager_test.go` also pins rules 1-5 and
+Conformance: the eleven pull scenarios pass; the four push ones and
+`ceiling_refused` are skipped. `usermanager_test.go` also pins rules 1-5 and
 the connection test; its far end answers as the router of rules 8-12 does.
 
 **Opened by `internal/opener`** (F-027-az) with the panel's login, typed
 `username:password` as Marzban's is, against `apiBaseUrl`, the router's REST
-root. The NAS's RADIUS secret is a separate vault reference, which only the
-allowlist reads (`contract.collection.md`).
+root. A pulled panel keeps no RADIUS secret: the NAS's is User Manager's.
 
 ## Proved on a real router (F-1601-e)
 
@@ -123,7 +123,8 @@ its documentation says.
     entry, the second hears `Accounting-On` and nothing of any session: no
     Start, Interim or Stop. So `RADIUS_ACCT_ADDR` never hears a User Manager
     deployment, and its usage is read from the router: each user's lifetime
-    total as a `cumulative` counter (F-027-ag-b, user 2026-10-23).
+    total as a `cumulative` counter, on a panel declared `pull` (rule 5,
+    ADR-0161).
 12. **An unlimited validity's end is `unlimited`**, not a date: the import
     reads it as no end (`source.go`).
 

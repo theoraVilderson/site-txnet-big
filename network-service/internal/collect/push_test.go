@@ -13,15 +13,12 @@ import (
 )
 
 // sessionTotals is the receiver's side of a push panel, scripted: what each
-// client's sessions have been accounted, as `radius_session` holds it. It
-// keeps the router's own totals each turn handed it to rebase on.
+// client's sessions have been accounted, as `radius_session` holds it.
 type sessionTotals struct {
-	bytes  map[string]int64
-	router [][]driver.ClientUsage
+	bytes map[string]int64
 }
 
-func (s *sessionTotals) Totals(_ context.Context, _ string, router []driver.ClientUsage) ([]driver.ClientUsage, error) {
-	s.router = append(s.router, router)
+func (s *sessionTotals) Totals(context.Context, string) ([]driver.ClientUsage, error) {
 	out := make([]driver.ClientUsage, 0, len(s.bytes))
 	for id, bytes := range s.bytes {
 		out = append(out, driver.ClientUsage{RemoteID: id, DownBytes: bytes})
@@ -106,32 +103,13 @@ func TestAPushPanelsTurnPlansOnTheReceiversBytes(t *testing.T) {
 		t.Fatalf("planner readings = %+v, want c1 at 3 GiB", got)
 	}
 	if n := r.turns.count("panel-push"); n != 1 {
-		t.Fatalf("converged %d time(s), want 1: the ceiling has to reach User Manager", n)
+		t.Fatalf("converged %d time(s), want 1: the ceiling has to reach the panel", n)
 	}
 }
 
-// The ceiling is enforced through the router's REST API, so a push panel's
-// turn still asks it one thing: whether that API answers. A panel that does
-// not is an outage the planner hears of, and nothing is planned on it.
-// The router's own totals ride the same turn: they are what shows a user
-// deleted and made again by hand, which our Σ cannot (F-027-du). Reading
-// them proves the API answers, so no HealthCheck is spent beside them.
-func TestAPushPanelsTurnHandsTheRoutersOwnTotalsOn(t *testing.T) {
-	r := newPushRig(t, map[string]int64{"c1": 3 * gb})
-	r.panel.Serve("c1", 0, 2*gb)
-
-	if _, err := r.loop.Pass(context.Background()); err != nil {
-		t.Fatalf("pass: %v", err)
-	}
-	router := r.loop.Sessions.(*sessionTotals).router
-	if len(router) != 1 || len(router[0]) != 1 || router[0][0].RemoteID != "c1" || router[0][0].DownBytes != 2*gb {
-		t.Fatalf("router totals handed on = %+v, want c1 at 2 GiB", router)
-	}
-	if n := r.panel.CallCount("HealthCheck"); n != 0 {
-		t.Fatalf("HealthCheck called %d time(s) beside a read that already proves the API", n)
-	}
-}
-
+// The ceiling is enforced through the panel's API, so a push panel's turn
+// still asks it one thing: whether that API answers. A panel that does not
+// is an outage the planner hears of, and nothing is planned on it.
 func TestAPushPanelWhoseApiDoesNotAnswerIsNotPlanned(t *testing.T) {
 	r := newPushRig(t, map[string]int64{"c1": gb})
 	r.panel.FailNextCall(http.StatusBadGateway)
@@ -140,8 +118,8 @@ func TestAPushPanelWhoseApiDoesNotAnswerIsNotPlanned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pass: %v", err)
 	}
-	if len(report.Failed) != 1 || report.Failed[0].Op != "ClientTotals" {
-		t.Fatalf("failed = %+v, want the router's totals", report.Failed)
+	if len(report.Failed) != 1 || report.Failed[0].Op != "HealthCheck" {
+		t.Fatalf("failed = %+v, want the health check", report.Failed)
 	}
 	if r.planner.failed != 1 || len(r.planner.readings) != 0 {
 		t.Fatalf("planner failed=%d turns=%d, want the outage and no plan", r.planner.failed, len(r.planner.readings))

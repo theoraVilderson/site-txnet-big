@@ -16,12 +16,11 @@ import (
 //   - ListAccounts is every user with its profile as InboundRemoteID, its
 //     ceiling, rate, on/off and the profile's end — and never its secret:
 //     UUID is empty, and the panel is not asked for it.
-//   - ClientTotals (TotalsReader) is each user's own running total: what it
-//     has used, which open sessions alone would miss.
+//
+// What each user has used is the family's GetUsage, as on any other source.
 //
 // It is optional, so ask through AccountsOf: a paced driver hides its family's.
 type AccountsReader interface {
-	TotalsReader
 	ListProfiles(ctx context.Context) ([]Inbound, error)
 	ListAccounts(ctx context.Context) ([]RemoteClient, error)
 }

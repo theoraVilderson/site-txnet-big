@@ -1,7 +1,8 @@
 // Package usermanager is the driver for Mikrotik User Manager on RouterOS v7
-// (F-027-ag): the first push family. The NAS pushes RADIUS accounting to our
-// receiver (`internal/radius`), and this driver is the other half — the
-// router's REST API, through which a client is made, capped and removed.
+// (F-027-ag): the router's REST API, through which a client is made, capped
+// and removed, and its usage read. A pull family (F-027-ag-b): the NAS sends
+// a session's accounting only to User Manager, which logged it in, so each
+// user's lifetime total is read off the router as a cumulative counter.
 //
 // User Manager has no per-user byte ceiling of its own: a ceiling is a
 // limitation, attached to a profile, attached to the user. So every client is
@@ -32,7 +33,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,8 +60,9 @@ var _ driver.Driver = (*Driver)(nil)
 
 // protocols are the services a User Manager login is used for. It
 // authenticates PPP and OpenVPN sessions on the NAS; an Xray client is not a
-// thing it can hold.
-var protocols = []string{"pppoe", "openvpn"}
+// thing it can hold. Empty is a login for whatever the NAS dials in with:
+// ListInbounds names no protocol, so the anchor is made under none.
+var protocols = []string{"", "pppoe", "openvpn"}
 
 // chainPrefix names the limitation and profile that belong to one user.
 const chainPrefix = "txnet-"
@@ -332,12 +333,13 @@ func (d *Driver) Capabilities(ctx context.Context) (driver.Capabilities, error) 
 		Version:    driver.CapabilitiesVersion,
 		AnsweredAt: time.Now().UTC(),
 		Answers: map[driver.RowKey]driver.Answer{
-			driver.RowPerClientUsage:          yes("upload and download per session, per user"),
-			driver.RowUsageResetSupported:     no("no reset is used; a session's counters end with the session"),
-			driver.RowCounterSurvivesUpdate:   yes("a session's counters belong to the session; editing the user or its limitation leaves them"),
-			driver.RowGigawordsReported:       yes("a RouterOS NAS sends Acct-*-Gigawords; the receiver still holds any session that arrives without them"),
+			driver.RowPerClientUsage:          yes("each user's lifetime upload and download, from user monitor"),
+			driver.RowBulkUsageInOneCall:      yes("two requests whatever the number of users: their ids, then one monitor over them"),
+			driver.RowUsageForNamedSubset:     yes("the monitor is asked for the named users alone, after the same id list"),
+			driver.RowUsageResetSupported:     no("nothing here zeroes a user's total; it starts again only with the user"),
+			driver.RowCounterSurvivesUpdate:   yes("the total is the user's; editing the user, its limitation or its profile link leaves it"),
 			driver.RowPerClientDataLimit:      yes("transfer-limit on the user's own limitation, enforced by User Manager; zero is written as one byte, since 0 is no limit there"),
-			driver.RowDataLimitCountsSameByte: yes("transfer-limit is checked against upload plus download, the octets the NAS reports to us"),
+			driver.RowDataLimitCountsSameByte: yes("transfer-limit is checked against upload plus download, the octets the total counts"),
 			driver.RowPerClientRateLimit:      yes("rate-limit-rx and rate-limit-tx on the user's own limitation"),
 			driver.RowPerClientIPLimit:        no("shared-users on the user would hold it; this driver does not write it yet"),
 			driver.RowEnableDisableClient:     yes("disabled=yes refuses the next login; an open session is not cut"),
@@ -457,17 +459,15 @@ func (d *Driver) SetClientRateLimit(ctx context.Context, remoteID string, rateBp
 	return d.patch(ctx, "SetClientRateLimit", "limitation", chainName(remoteID), rateBody(rateBps))
 }
 
-// GetUsage reads the open sessions, one request. A closed session's last
-// figure came in its Stop, to the receiver; reading it again here would offer
-// the same bytes twice. The filter is also applied here, so a router that
-// ignored it returns more rows, never more readings.
+// GetUsage is every user's lifetime total (users.go): what User Manager has
+// counted, which no RADIUS packet to us carries (contract.usermanager.md
+// rule 11).
 func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
-	return d.usage(ctx, "GetUsage", nil)
+	return d.totals(ctx, "GetUsage", nil)
 }
 
-// GetUsageFor is served from the one bulk read: User Manager filters sessions
-// by one user at a time, and a request per user is what catalog 8.4 forbids.
-// An empty set sends nothing.
+// GetUsageFor is the named users' totals, in the same two requests: the
+// monitor is asked for them alone. An empty set sends nothing.
 func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.ClientUsage, error) {
 	if len(remoteIDs) == 0 {
 		return nil, nil
@@ -476,37 +476,12 @@ func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.
 	for _, id := range remoteIDs {
 		want[id] = true
 	}
-	return d.usage(ctx, "GetUsageFor", want)
+	return d.totals(ctx, "GetUsageFor", want)
 }
 
-func (d *Driver) usage(ctx context.Context, op string, want map[string]bool) ([]driver.ClientUsage, error) {
-	sessions, err := d.list(ctx, op, "session", url.Values{"active": {"true"}})
-	if err != nil {
-		return nil, err
-	}
-	at := time.Now()
-	out := make([]driver.ClientUsage, 0, len(sessions))
-	for _, s := range sessions {
-		if s["active"] != "true" || (want != nil && !want[s["user"]]) {
-			continue
-		}
-		up, errUp := strconv.ParseInt(s["upload"], 10, 64)
-		down, errDown := strconv.ParseInt(s["download"], 10, 64)
-		if err := errors.Join(errUp, errDown); err != nil {
-			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("session %q: %w", s["acct-session-id"], err))
-		}
-		out = append(out, driver.ClientUsage{
-			RemoteID: s["user"], UpBytes: up, DownBytes: down, ObservedAt: at, SessionID: s["acct-session-id"],
-		})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].RemoteID < out[j].RemoteID })
-	return out, nil
-}
-
-// ResetUsage: a session's counters end with the session, and nothing here
-// zeroes one.
+// ResetUsage: nothing here zeroes a user's total.
 func (d *Driver) ResetUsage(context.Context, string) error {
-	return driver.NewFault(driver.FaultUnsupported, "ResetUsage", 0, errors.New("user manager counters are per session"))
+	return driver.NewFault(driver.FaultUnsupported, "ResetUsage", 0, errors.New("user manager keeps a user's total for its life"))
 }
 
 // BuildLink: a PPP login is a username and a password, not a link.

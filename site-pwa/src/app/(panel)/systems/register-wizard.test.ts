@@ -62,7 +62,7 @@ describe("register wizard steps", () => {
     expect(registerStepErrors(form, parts, "details").ipAddress).toBeUndefined();
     // A pull panel is reached at its address alone; only a push panel's NAS needs an IP (F-027-br).
     expect(Object.keys(registerStepErrors(form, parts, "connection")).sort()).toEqual(["apiBaseUrl"]);
-    const push = applyDriver(form, "mikrotik_user_manager");
+    const push = { ...form, apiBaseUrl: "https://nas.example", transport: "push" as const, counterSemantics: "session" as const };
     expect(Object.keys(registerStepErrors(push, parts, "connection"))).toEqual(["ipAddress"]);
   });
 
@@ -82,9 +82,10 @@ describe("a family fills what it is", () => {
   });
 
   it("sets transport and counting from the family", () => {
-    const um = applyDriver(emptyRegisterForm(), "mikrotik_user_manager");
-    expect(um.transport).toBe("push");
-    expect(um.counterSemantics).toBe("session");
+    // User Manager is read off its router, never heard from (ADR-0161).
+    const um = applyDriver({ ...emptyRegisterForm(), transport: "push", counterSemantics: "session" }, "mikrotik_user_manager");
+    expect(um.transport).toBe("pull");
+    expect(um.counterSemantics).toBe("cumulative");
     const hiddify = applyDriver(um, "hiddify");
     expect(hiddify.transport).toBe("pull");
     expect(hiddify.counterSemantics).toBe("cumulative");
@@ -150,8 +151,11 @@ describe("the login", () => {
   });
 
   it("asks a push panel for its RADIUS secret on the login step", () => {
-    const { form, parts } = ready("mikrotik_user_manager");
-    expect(registerStepErrors({ ...form, radiusSecret: "" }, parts, "login").radiusSecret).toBe(SYSTEMS_KEYS.register.invalid.radiusSecret);
+    const { form, parts } = ready("ibsng");
+    const push = { ...form, transport: "push" as const, counterSemantics: "session" as const, radiusSecret: "" };
+    expect(registerStepErrors(push, parts, "login").radiusSecret).toBe(SYSTEMS_KEYS.register.invalid.radiusSecret);
+    // User Manager is pulled (ADR-0161): no secret is asked of it.
+    expect(registerStepErrors({ ...ready("mikrotik_user_manager").form, radiusSecret: "" }, parts, "login").radiusSecret).toBeUndefined();
   });
 });
 

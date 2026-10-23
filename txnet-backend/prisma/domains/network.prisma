@@ -641,10 +641,9 @@ model Config {
   /// is our Σ less this, and this is its offset. 0 on a pull panel. CHECK
   /// `config_session_baseline_not_negative` (raw SQL).
   sessionBaselineBytes     BigInt    @default(0)
-  /// User Manager's own total for this client as the push turn last read it
-  /// (F-027-du): a lower one is a user made again on the router, and moves
-  /// the baseline. Null until read since the client was created. CHECK
-  /// `config_session_counter_not_negative` (raw SQL).
+  /// No reader since F-027-ag-b (ADR-0161): it held User Manager's total as a
+  /// push turn last read it, and User Manager is pulled now. Dropped by its
+  /// contract step, F-027-ag-c (C-39). CHECK `config_session_counter_not_negative`.
   sessionCounterBytes      BigInt?
   /// An adopted login (F-1601-b2, ADR-0160): the User Manager profile the user
   /// held when it was imported in place. Non-null means the login is the

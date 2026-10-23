@@ -17,19 +17,17 @@ import (
 
 // farEnd is a scripted RouterOS v7 REST API over User Manager: menus of rows,
 // every value a string, a row addressed by `.id` or by `name`, and a GET
-// filtered by any property in the query. It holds the sessions a NAS reported
-// to User Manager, which is what a push family's GetUsage reads (F-027-ag).
+// filtered by any property in the query. Each user row carries its lifetime
+// total, which `monitor` answers and GetUsage reads (F-027-ag-b).
 type farEnd struct {
 	t *testing.T
 
-	mu        sync.Mutex
-	tables    map[string][]map[string]string
-	backup    map[string][]map[string]string
-	nextID    int
-	sessions  int
-	abandoned map[string]bool
-	calls     int
-	enabled   string
+	mu      sync.Mutex
+	tables  map[string][]map[string]string
+	backup  map[string][]map[string]string
+	nextID  int
+	calls   int
+	enabled string
 	// useProfiles is the settings' `use-profiles`. A fresh router has it
 	// off, and then User Manager ignores every profile and limitation
 	// (proved on a CHR, F-1601-e).
@@ -48,6 +46,16 @@ type farEnd struct {
 
 	nextStall  time.Duration
 	nextStatus int
+
+	// ceilingDelay is how many reads of the limitations a `transfer-limit`
+	// write waits before it shows (DelayCeilingBy); pending holds it by row.
+	ceilingDelay int
+	pending      map[string]pendingLimit
+}
+
+type pendingLimit struct {
+	transfer string
+	reads    int
 }
 
 // menus are the User Manager menus the driver may touch. Anything else is a
@@ -58,7 +66,7 @@ var menus = map[string]bool{
 }
 
 func newFarEnd(t *testing.T) *farEnd {
-	return &farEnd{t: t, tables: map[string][]map[string]string{}, abandoned: map[string]bool{}, enabled: "true", useProfiles: "true"}
+	return &farEnd{t: t, tables: map[string][]map[string]string{}, pending: map[string]pendingLimit{}, enabled: "true", useProfiles: "true"}
 }
 
 func routerError(w http.ResponseWriter, status int, detail string) {
@@ -148,6 +156,9 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, out)
 	case ref == "" && r.Method == http.MethodGet:
+		if menu == "limitation" {
+			f.landLateCeilings()
+		}
 		out := []map[string]string{}
 		for _, row := range f.tables[menu] {
 			if matches(row, r.URL.Query()) {
@@ -194,6 +205,10 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if _, ok := body["password"]; ok && menu == "user" {
 				f.passwordWritten = true
 			}
+			if transfer, ok := body["transfer-limit"]; ok && menu == "limitation" && f.ceilingDelay > 0 {
+				f.pending[row[".id"]] = pendingLimit{transfer: transfer, reads: f.ceilingDelay}
+				delete(body, "transfer-limit")
+			}
 			for k, v := range body {
 				row[k] = v
 			}
@@ -212,6 +227,22 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	default:
 		routerError(w, http.StatusBadRequest, "no such command")
+	}
+}
+
+// landLateCeilings counts one read of the limitations against every delayed
+// write, and shows those whose wait is over.
+func (f *farEnd) landLateCeilings() {
+	for id, p := range f.pending {
+		if p.reads > 0 {
+			p.reads--
+			f.pending[id] = p
+			continue
+		}
+		if row := f.byID("limitation", id); row != nil {
+			row["transfer-limit"] = p.transfer
+		}
+		delete(f.pending, id)
 	}
 }
 
@@ -306,50 +337,33 @@ func writeJSON(w http.ResponseWriter, v any) {
 }
 
 // harness is conformance's view of the pair. Serving bytes is a NAS reporting
-// a session to User Manager: the open session rises, or a new one opens.
+// a session to User Manager, which adds them to the user's lifetime total.
 type harness struct {
 	f *farEnd
 	d *Driver
 }
 
+var _ conformance.ReadCost = (*harness)(nil)
+
 func (h *harness) Driver() driver.Driver { return h.d }
 
+// RequestsPerRead: the users' ids, then one monitor over them.
+func (h *harness) RequestsPerRead() int { return 2 }
+
+// Given is a user as CreateClient leaves it: the user and its own chain.
 func (h *harness) Given(remoteID string) {
+	chain := chainName(remoteID)
 	h.f.put("user", map[string]string{"name": remoteID, "password": "uuid-" + remoteID, "disabled": "false", "comment": ""})
+	h.f.put("limitation", map[string]string{"name": chain, "transfer-limit": "1G", "reset-counters-interval": "disabled"})
+	h.f.put("profile", map[string]string{"name": chain, "price": "0", "validity": "unlimited"})
+	h.f.put("profile-limitation", map[string]string{"profile": chain, "limitation": chain})
+	h.f.put("user-profile", map[string]string{"user": remoteID, "profile": chain, "state": "running-active", "end-time": "unlimited"})
 }
 
 func (h *harness) Serve(remoteID string, up, down int64) {
 	h.f.mu.Lock()
 	defer h.f.mu.Unlock()
-	if h.f.abandoned[remoteID] {
-		return
-	}
-	var open map[string]string
-	for _, s := range h.f.tables["session"] {
-		if s["user"] == remoteID && s["active"] == "true" {
-			open = s
-		}
-	}
-	if open == nil {
-		h.f.sessions++
-		h.f.nextID++
-		open = map[string]string{
-			".id": fmt.Sprintf("*%X", h.f.nextID), "user": remoteID, "active": "true",
-			"acct-session-id": fmt.Sprintf("81%06d", h.f.sessions), "nas-ip-address": "10.0.0.1",
-			"upload": "0", "download": "0", "status": "start",
-		}
-		h.f.tables["session"] = append(h.f.tables["session"], open)
-	}
-	add := func(field string, n int64) {
-		var have int64
-		fmt.Sscan(open[field], &have)
-		open[field] = fmt.Sprint(have + n)
-	}
-	add("upload", up)
-	add("download", down)
-	open["status"] = "start,interim"
 	if u := h.f.find("user", remoteID); u != nil {
-		// User Manager's own total is the user's: it restarts with the user.
 		for field, n := range map[string]int64{"total-upload": up, "total-download": down} {
 			var have int64
 			fmt.Sscan(u[field], &have)
@@ -358,14 +372,13 @@ func (h *harness) Serve(remoteID string, up, down int64) {
 	}
 }
 
-// ZeroCounter is the session ending: the next traffic opens a new one.
+// ZeroCounter is the user deleted and made again by hand under its name: its
+// total starts again, the one way a lifetime total goes down.
 func (h *harness) ZeroCounter(remoteID string) {
 	h.f.mu.Lock()
 	defer h.f.mu.Unlock()
-	for _, s := range h.f.tables["session"] {
-		if s["user"] == remoteID && s["active"] == "true" {
-			s["active"], s["status"] = "false", "start,interim,stop"
-		}
+	if u := h.f.find("user", remoteID); u != nil {
+		u["total-upload"], u["total-download"] = "0", "0"
 	}
 }
 
@@ -407,16 +420,17 @@ func (h *harness) FailNextCall(status int) {
 	h.f.nextStatus = status
 }
 
-// AbandonSession is the NAS that never sends a Stop: the session stays open at
-// its last figure and nothing served afterwards reaches User Manager.
-func (h *harness) AbandonSession(remoteID string) {
-	h.f.mu.Lock()
-	defer h.f.mu.Unlock()
-	h.f.abandoned[remoteID] = true
+// AbandonSession and the other push scenarios are never asked: setup
+// refuses every push shape.
+func (h *harness) AbandonSession(string) {
+	h.f.t.Fatal("a pull family is never asked to abandon a session")
 }
 
-// DelayCeilingBy is a pull scenario's, and setup refuses every pull shape.
-func (h *harness) DelayCeilingBy(int) { h.f.t.Fatal("a push family is never asked for a late ceiling") }
+func (h *harness) DelayCeilingBy(reads int) {
+	h.f.mu.Lock()
+	defer h.f.mu.Unlock()
+	h.f.ceilingDelay = reads
+}
 
 func (h *harness) WriteCalls() int {
 	h.f.mu.Lock()
@@ -442,13 +456,13 @@ func open(t *testing.T) (*farEnd, *Driver) {
 	return f, d
 }
 
-// TestConformance is the acceptance of the family (F-027-j): push, session
-// counters, a ceiling the router enforces, Gigawords from a RouterOS NAS. The
-// pull scenarios, missing_gigawords and ceiling_refused are skipped by name.
+// TestConformance is the acceptance of the family (F-027-j): pull, each
+// user's lifetime total as a cumulative counter, a ceiling the router
+// enforces (F-027-ag-b). The push scenarios and ceiling_refused are skipped.
 func TestConformance(t *testing.T) {
 	conformance.Run(t, func(t *testing.T, shape conformance.Shape) (conformance.Harness, bool) {
-		if shape.Transport != driver.TransportPush || shape.CounterSemantics != driver.CounterSession ||
-			!shape.CeilingSupported || !shape.GigawordsReported {
+		if shape.Transport != driver.TransportPull || shape.CounterSemantics != driver.CounterCumulative ||
+			!shape.CeilingSupported {
 			return nil, false
 		}
 		f, d := open(t)
@@ -563,36 +577,57 @@ func TestDeleteTakesTheChainAndCanBeRepeated(t *testing.T) {
 	}
 }
 
-// GetUsage is one request for the open sessions, split up/down as the NAS
-// reported them. A closed session's last figure came in its Stop, to the
-// receiver; reading it again here would offer the same bytes twice.
-func TestUsageIsTheOpenSessionsInOneRequest(t *testing.T) {
+// GetUsage is each user's lifetime total, the figure User Manager keeps
+// whatever its NAS sends us — which is nothing (contract.usermanager.md rule
+// 11, F-027-ag-b). It is two requests whatever the number of users, and a
+// user made again by hand reads from zero: the reset the normaliser sees.
+func TestUsageIsEachUsersLifetimeTotalInTwoRequests(t *testing.T) {
 	f, d := open(t)
 	h := &harness{f: f, d: d}
-	h.Given("c1")
-	h.Given("c2")
-	h.Serve("c1", 10, 20)
-	h.ZeroCounter("c1")
-	h.Serve("c1", 1, 2)
-	h.Serve("c2", 3, 4)
+	a := create(t, d, true)
+	h.Given("other")
+	h.Serve(a.RemoteID, 100, 2_000)
+	h.Serve("other", 5, 7)
 
 	before := h.TotalCalls()
 	readings, err := d.GetUsage(context.Background())
 	if err != nil {
 		t.Fatalf("GetUsage: %v", err)
 	}
-	if got := h.TotalCalls() - before; got != 1 {
-		t.Errorf("GetUsage cost %d requests, want 1 (catalog 8.4)", got)
+	if n := h.TotalCalls() - before; n != 2 {
+		t.Fatalf("%d requests, want 2: the users, then one monitor over all of them", n)
 	}
-	if len(readings) != 2 {
-		t.Fatalf("readings = %+v, want the two open sessions", readings)
+	got := map[string]driver.ClientUsage{}
+	for _, r := range readings {
+		if r.SessionID != "" {
+			t.Errorf("reading %+v carries a session id: a lifetime total is no session's", r)
+		}
+		got[r.RemoteID] = r
+	}
+	if r := got[a.RemoteID]; r.UpBytes != 100 || r.DownBytes != 2_000 || got["other"].UpBytes+got["other"].DownBytes != 12 {
+		t.Fatalf("readings = %+v", readings)
+	}
+
+	hot, err := d.GetUsageFor(context.Background(), []string{"other"})
+	if err != nil || len(hot) != 1 || hot[0].RemoteID != "other" {
+		t.Fatalf("GetUsageFor(other) = %+v, %v; want other alone", hot, err)
+	}
+
+	f.mu.Lock()
+	remade := f.find("user", a.RemoteID)
+	fresh := map[string]string{"name": remade["name"], "password": remade["password"], "comment": remade["comment"], "disabled": "false"}
+	f.mu.Unlock()
+	if err := d.DeleteClient(context.Background(), a.RemoteID); err != nil {
+		t.Fatalf("DeleteClient: %v", err)
+	}
+	f.put("user", fresh) // an operator, by hand, under the same name
+	readings, err = d.GetUsage(context.Background())
+	if err != nil {
+		t.Fatalf("GetUsage: %v", err)
 	}
 	for _, r := range readings {
-		if r.SessionID == "" {
-			t.Errorf("reading %+v has no SessionID", r)
-		}
-		if r.RemoteID == "c1" && (r.UpBytes != 1 || r.DownBytes != 2) {
-			t.Errorf("c1 = %d/%d, want the open session's 1/2", r.UpBytes, r.DownBytes)
+		if r.RemoteID == a.RemoteID && r.UpBytes+r.DownBytes != 0 {
+			t.Fatalf("a re-made user reads %d, want 0", r.UpBytes+r.DownBytes)
 		}
 	}
 }
@@ -661,10 +696,13 @@ func TestADisabledUserManagerFailsTheConnectionTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Capabilities: %v", err)
 	}
-	if err := caps.Validate(driver.TransportPush); err != nil {
-		t.Fatalf("the answers do not fit a push panel: %v", err)
+	if err := caps.Validate(driver.TransportPull); err != nil {
+		t.Fatalf("the answers do not fit a pull panel: %v", err)
 	}
-	v := caps.Verdict(driver.TransportPush, driver.CounterSession)
+	if err := caps.Validate(driver.TransportPush); err == nil {
+		t.Fatal("the answers fit a push panel: User Manager sends us no accounting (F-027-ag-b)")
+	}
+	v := caps.Verdict(driver.TransportPull, driver.CounterCumulative)
 	if v.ReviewState != driver.ReviewAccepted || !v.MeteredSaleAllowed {
 		t.Errorf("verdict = %+v, want accepted with metered sale", v)
 	}
@@ -690,51 +728,4 @@ func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
 	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
 		ClaimTag: "cfg_7f3a", UUID: testUUID, Protocol: "pppoe", Enabled: true,
 	}, 0)
-}
-
-// A push panel's limit is checked against User Manager's own per-user total,
-// not ours (F-027-du). It is read for every user in two requests whatever
-// their number, and a user deleted and made again by hand reads from zero —
-// which is how a re-made user is seen at all.
-func TestClientTotalsAreUserManagersOwnAndStartAgainWithTheUser(t *testing.T) {
-	f, d := open(t)
-	h := &harness{f: f, d: d}
-	a := create(t, d, true)
-	h.Given("other")
-	h.Serve(a.RemoteID, 100, 2_000)
-	h.Serve("other", 5, 7)
-
-	before := h.TotalCalls()
-	got, err := d.ClientTotals(context.Background())
-	if err != nil {
-		t.Fatalf("ClientTotals: %v", err)
-	}
-	if n := h.TotalCalls() - before; n != 2 {
-		t.Fatalf("%d requests, want 2: the users, then one monitor over all of them", n)
-	}
-	totals := map[string]int64{}
-	for _, u := range got {
-		totals[u.RemoteID] = u.UpBytes + u.DownBytes
-	}
-	if totals[a.RemoteID] != 2_100 || totals["other"] != 12 {
-		t.Fatalf("totals = %v", totals)
-	}
-
-	f.mu.Lock()
-	remade := f.find("user", a.RemoteID)
-	fresh := map[string]string{"name": remade["name"], "password": remade["password"], "comment": remade["comment"], "disabled": "false"}
-	f.mu.Unlock()
-	if err := d.DeleteClient(context.Background(), a.RemoteID); err != nil {
-		t.Fatalf("DeleteClient: %v", err)
-	}
-	f.put("user", fresh) // an operator, by hand, under the same name
-	got, err = d.ClientTotals(context.Background())
-	if err != nil {
-		t.Fatalf("ClientTotals: %v", err)
-	}
-	for _, u := range got {
-		if u.RemoteID == a.RemoteID && u.UpBytes+u.DownBytes != 0 {
-			t.Fatalf("a re-made user reads %d, want 0", u.UpBytes+u.DownBytes)
-		}
-	}
 }

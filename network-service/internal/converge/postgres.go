@@ -157,8 +157,7 @@ const ConfirmedEvent = "network.config.confirmed"
 // The inbound a client was found on ($16, F-027-ch) is written only over none,
 // and not where another live row of the Grant holds it on the panel: that is
 // `config_group_panel_once`, and one row's guess must not fail the batch.
-// A create's session baseline ($17, F-027-du) is written with it, and the
-// router's last total forgotten: the new client's is read afresh. Null keeps both.
+// A create's session baseline ($17, F-027-du) is written with it; null keeps it.
 // A recreate ($19, F-027-fc) restarts the raw cursor at zero, as the panel's new
 // counter does, and keeps the lifetime and reset count: it is not a reset. It is
 // not held to the desired-state guard, because the client was made either way.
@@ -186,8 +185,7 @@ UPDATE network.config
                            WHERE o."grantId" = config."grantId" AND o."panelId" = config."panelId" AND o.id <> config.id
                              AND o."inboundRemoteId" = $16 AND o."credentialGroupId" IS NOT NULL AND o."drainedAt" IS NULL)
          THEN $16 ELSE "inboundRemoteId" END,
-       "sessionBaselineBytes" = coalesce($17::bigint, "sessionBaselineBytes"),
-       "sessionCounterBytes" = CASE WHEN $17::bigint IS NULL THEN "sessionCounterBytes" END
+       "sessionBaselineBytes" = coalesce($17::bigint, "sessionBaselineBytes")
  WHERE id = $1::uuid
    AND uuid = $5
    AND ("desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = config."grantId")) = $6

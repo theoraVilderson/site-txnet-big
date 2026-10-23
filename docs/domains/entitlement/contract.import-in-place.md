@@ -72,9 +72,10 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    and restores its label — never deleting it. Its on/off is left as the
    router has it. **A normal end deletes it** (decision 8): an admin's
    delete or the purge, as for every config of ours.
-9. **Not yet**: no usage reaches these Grants until F-027-ag-b, and a link
-   made again restarts the router's count until F-027-du-b — so the page
-   (F-1601-c) waits for both.
+9. **Their usage is the router's**: each user's lifetime total, read as a
+   `cumulative` counter (network ADR-0161, F-027-ag-b). Not yet: a link made
+   again restarts the router's count until F-027-du-b, so the page (F-1601-c)
+   waits for it.
 
 ## Refusals
 

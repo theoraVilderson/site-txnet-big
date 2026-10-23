@@ -69,16 +69,16 @@ func TestOnARealRouter(t *testing.T) {
 		t.Errorf("listed as %+v, want 3 GiB, disabled, its uuid and claim tag", mine)
 	}
 
-	totals, err := d.ClientTotals(ctx)
+	totals, err := d.GetUsage(ctx)
 	if err != nil {
-		t.Fatalf("ClientTotals: %v", err)
+		t.Fatalf("GetUsage: %v", err)
 	}
 	found := false
 	for _, u := range totals {
 		found = found || u.RemoteID == name
 	}
 	if !found {
-		t.Errorf("ClientTotals has no row for %s", name)
+		t.Errorf("GetUsage has no row for %s", name)
 	}
 
 	accounts, err := d.ListAccounts(ctx)

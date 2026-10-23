@@ -109,33 +109,15 @@ ceiling = max(0, allocatedCeilingBytes - offset)
 and "what the counter reads now" is the raw figure under `cumulative`, and zero
 under `reset_on_read` (the read spent it) — the conservative reading.
 
-Under `session` (User Manager) the lifetime is the Σ of the config's
-`radius_session` marks, and the counter is User Manager's per-user total,
-which starts at zero when the user is created. That is what
-`transfer-limit` counts only while the user's profile link is the one made
-with it: the router counts from the link, and a link made again restarts
-at zero where this total does not drop (proved on a CHR,
-`contract.usermanager.md` rule 9) — F-027-du-b tracks the link's `.id`. And
-no `radius_session` mark comes from a real User Manager NAS (rule 11):
-F-027-ag-b reads the total as a `cumulative` counter instead. So the offset is
-`sessionBaselineBytes`: what our Σ holds beyond the router's total
-(F-027-du). The planner, the ceiling pass and the shutdown extension all
-read it through `collect.SessionCounter`. It moves at two moments only:
-
-- **A create** by provisioning sizes the first ceiling past our Σ, records
-  that Σ, and forgets `sessionCounterBytes`, the router's last total.
-- **A drop** in the router's total. Each push turn reads it
-  (`driver.TotalsReader`: User Manager's users, then one `user/monitor ...
-  once` over all of them). A total below the last one, or the first since a
-  create, is a user made again, by us or by hand, and the baseline becomes
-  our Σ less that total (`rebaseSQL`).
-
-It only rises, and never on the gap alone. The two totals are read a moment
-apart, so a gap that shrinks is the router counting a packet we have not
-yet, and a baseline chasing the gap would climb by a packet a turn. So a
-re-made user is never served its allocation twice. Accounting that reaches
-only User Manager makes its total run ahead of ours, and the user is cut
-early: the safe direction.
+Under `session` (a push family) the lifetime is the Σ of the config's
+`radius_session` marks, and the counter is the panel's own per-user total,
+which starts at zero when the client is created. So the offset is
+`sessionBaselineBytes`: that Σ when provisioning last created the client
+(F-027-du), recorded by the create, which sizes the first ceiling past it.
+The planner, the ceiling pass and the shutdown extension all read it through
+`collect.SessionCounter`. User Manager is not one: its NAS sends us nothing,
+so its users' lifetime totals are a `cumulative` counter read off the router
+(ADR-0161, `contract.usermanager.md` rules 5 and 11).
 
 **The translation only ever lowers** — that is what the two `max`es are for,
 and it is why `Σ ceilings ≤ purchasedBytes` survives it. Bytes the far end's

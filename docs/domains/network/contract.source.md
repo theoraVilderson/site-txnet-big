@@ -91,7 +91,7 @@ Code: `network-service/internal/source` (the read), `internal/httpapi/source.go`
     none, and an end
     in neither form fails the snapshot (`source_unreadable`) rather than
     import an endless user. Used bytes are User Manager's own per-user
-    lifetime total (`ClientTotals`), not the open sessions — more than a
+    lifetime total (`GetUsage`), not the open sessions — more than a
     renewed user's current profile counts (contract.usermanager.md rule 9,
     F-1601-f). **The password is never
     asked for**: the user list is read with `.proplist` without it, so
