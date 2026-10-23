@@ -28,6 +28,21 @@ class Host:
             raise RuntimeError("%s: `%s …` failed: %s" % (self.name, what, done.stderr.strip()))
         return done.stdout
 
+    def run_to_file(self, argv, path, stdin=None):
+        """argv's stdout, binary, into path, on this server; for dumps too large to hold as text."""
+        with open(path, "wb") as out:
+            done = subprocess.run(argv, input=stdin, stdout=out, stderr=subprocess.PIPE)
+        if done.returncode != 0:
+            raise RuntimeError("%s: `%s …` failed: %s" % (self.name, " ".join(argv[:3]), done.stderr.decode().strip()))
+
+    def run_from_file(self, argv, path):
+        """argv with path as its binary stdin, on this server; for restoring dumps."""
+        with open(path, "rb") as source:
+            done = subprocess.run(argv, stdin=source, capture_output=True)
+        if done.returncode != 0:
+            raise RuntimeError("%s: `%s …` failed: %s" % (self.name, " ".join(argv[:3]), done.stderr.decode().strip()))
+        return done.stdout.decode()
+
     def sh(self, script, *args):
         return self.run(["sh", "-c", script, "_", *args])
 

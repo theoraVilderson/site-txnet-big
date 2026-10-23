@@ -58,6 +58,39 @@ tests:
             value: 1
           - labels: 'ALERTS{alertname="PgRestoreDrillStale",alertstate="firing",severity="warning",unit="hosting"}'
             value: 1
+          - labels: 'ALERTS{alertname="BackupBundleStale",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+
+  # The bundle was made at epoch 0: stale after 26 hours and the hour's wait.
+  - interval: 1h
+    input_series:
+      - series: txnet_backup_bundle_last_success_timestamp_seconds
+        values: "0x40"
+    promql_expr_test:
+      - expr: ALERTS{alertname="BackupBundleStale",alertstate="firing"}
+        eval_time: 26h
+        exp_samples: []
+      - expr: ALERTS{alertname="BackupBundleStale",alertstate="firing"}
+        eval_time: 28h
+        exp_samples:
+          - labels: 'ALERTS{alertname="BackupBundleStale",alertstate="firing",severity="critical",unit="hosting"}'
+            value: 1
+
+  # One bundle waiting is the ten minutes before ship.py runs; two for an hour fire.
+  # (1m samples: 10m ones would fall outside the 5m lookback between them.)
+  - interval: 1m
+    input_series:
+      - series: txnet_backup_bundle_unshipped
+        values: "1x120 2x120"
+    promql_expr_test:
+      - expr: ALERTS{alertname="BackupBundleNotShipped",alertstate="firing"}
+        eval_time: 2h
+        exp_samples: []
+      - expr: ALERTS{alertname="BackupBundleNotShipped",alertstate="firing"}
+        eval_time: 3h20m
+        exp_samples:
+          - labels: 'ALERTS{alertname="BackupBundleNotShipped",alertstate="firing",severity="warning",unit="hosting"}'
+            value: 1
 
   # The drill passed at epoch 0: stale after 8 days.
   - interval: 1h

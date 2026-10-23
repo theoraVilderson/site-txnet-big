@@ -12,8 +12,8 @@ uploaded files, runtime-written text, the three keys, the env files, the TLS
 certificates, both backup repositories, and the monitoring history. Hosting
 `contract.md` H23; the tool is `scripts/move/server_move.py`.
 
-For a server that is already **lost**, this does not apply: restore from the
-backups, `runbook-restore-database.md` 3c.
+For a server that is already **lost**, this does not apply: bring up the
+newest backup bundle, `runbook-backup-bundle.md`.
 
 ```bash
 MOVE="python3 scripts/move/server_move.py --stack dev --to root@<new server> --monitor-project txnet_monitor_dev"

@@ -30,8 +30,14 @@ REQUIRED_FILES = (
     "dev-docker/secrets/pg-backup-passphrase",
     "dev-docker/secrets/object-backup-password",
 )
+# What encrypts the backup bundles (OPS-1-ad); not required for a move, carried when present.
+BUNDLE_PASSPHRASE_FILE = "dev-docker/secrets/backup-bundle-passphrase"
+# Where ship.py reads its write-only S3 key (OPS-1-ad).
+SHIP_ENV_FILE = "dev-docker/secrets/backup-ship.env"
 # Git-ignored, so a checkout on the new server does not have them.
 CARRIED_FILES = REQUIRED_FILES + (
+    BUNDLE_PASSPHRASE_FILE,
+    SHIP_ENV_FILE,
     ".env",
     ".env.dev",
     ".env.prod",

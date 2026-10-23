@@ -13,6 +13,9 @@
 # A backup that is not running writes nothing, so "never recorded" fires too.
 # The restore runbook is docs/operations/runbook-restore-database.md.
 #
+# The backup bundle (OPS-1-ad): backup.py writes backup_bundle.prom, and the
+# count of bundles not yet in S3 to backup_bundle_ship.prom.
+#
 # hosting.broker-redis (OPS-1-v, H21): the broker and Redis, the two stores a
 # full memory stops without a word — RabbitMQ blocks every publisher, Redis
 # (noeviction) refuses every write.
@@ -72,6 +75,40 @@ groups:
             Run it by hand with
             `docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh drill`
             and read its log lines.
+
+      # The nightly bundle (OPS-1-ad, 03:00 UTC): 26h is one missed night plus two
+      # hours. Written by scripts/bundle/backup.py into backup_bundle.prom.
+      - alert: BackupBundleStale
+        expr: |
+          (time() - txnet_backup_bundle_last_success_timestamp_seconds) > 26 * 3600
+            or absent(txnet_backup_bundle_last_success_timestamp_seconds)
+        for: 1h
+        labels:
+          severity: critical
+          unit: hosting
+        annotations:
+          summary: "No backup bundle has been made in 26 hours"
+          description: >-
+            The one file a lost server is restored from (runbook-backup-bundle.md)
+            is older than a day. Last bundle:
+            {{ with query "txnet_backup_bundle_last_success_timestamp_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ else }}never{{ end }}.
+            `journalctl -u txnet-backup.service`; by hand,
+            `python3 scripts/bundle/backup.py now`.
+
+      # Two bundles waiting means S3 is a day behind, or shipping was never set
+      # up: either way S3 holds nothing newer than the last one it got.
+      - alert: BackupBundleNotShipped
+        expr: txnet_backup_bundle_unshipped >= 2
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "{{ $value }} backup bundles are not in S3"
+          description: >-
+            ship.py has not sent them. No dev-docker/secrets/backup-ship.env
+            means shipping is not set up yet; otherwise
+            `journalctl -u txnet-backup-ship.service` says why.
 
       # Postgres retries a failed segment every minute: the count rising while
       # the newest failure is later than the newest success is a stuck archive,

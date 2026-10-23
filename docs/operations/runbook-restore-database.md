@@ -23,6 +23,8 @@ COMPOSE=scripts/prod.compose.sh     # dev: scripts/dev.compose.sh
 
 Data is gone or wrong (a dropped table, a bad migration, a mistaken bulk
 update), or `main-db` will not start on its volume, or the server is lost.
+A lost server with a backup bundle in S3 comes back whole — Redis, files,
+keys too — by `runbook-backup-bundle.md`; this runbook is Postgres alone.
 
 ## How it pages
 

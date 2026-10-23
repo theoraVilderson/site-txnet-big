@@ -9,7 +9,11 @@ Parsing and comparison only; server_move.py runs the commands that produce the t
 # minutes the move takes — never grow, which would mean a second writer.
 EXACT = "exact"
 AT_MOST = "at_most"
-_RULES = {"redis:volatile": AT_MOST, "mq:messages": AT_MOST}
+# All of them gone is a flush, not expiry, when the copy took minutes: sessions alone live 30 days.
+SOME_LEFT = "some_left"
+MOVE_RULES = {"redis:volatile": SOME_LEFT, "mq:messages": SOME_LEFT}
+# A restore can come days after its bundle, so any expiring key may be gone.
+RESTORE_RULES = {"redis:volatile": AT_MOST, "mq:messages": AT_MOST}
 
 # Prints `schema.table|rows` for every base table. Run as the superuser, whom
 # RLS does not filter (hosting H4).
@@ -64,18 +68,18 @@ def parse_queues(rows):
     return {"mq:messages": sum(int(line) for line in rows.split() if line.strip())}
 
 
-def compare(source, target):
-    """Every way target falls short of source, one line each; [] when the move is whole."""
+def compare(source, target, rules=MOVE_RULES):
+    """Every way target falls short of source, one line each; [] when it is whole.
+    `rules` names the figures that may shrink; every other one is exact."""
     problems = []
     for name, expected in sorted(source.items()):
         if name not in target:
             problems.append("%s: missing on the new server" % name)
             continue
         found = target[name]
-        rule = _RULES.get(name, EXACT)
-        # all of them gone is a flush, not expiry: sessions alone live 30 days
-        if rule == AT_MOST and (found > expected or found == 0 < expected):
-            problems.append("%s: %s here, %s on the new server (may only shrink by expiry)" % (name, expected, found))
-        elif rule == EXACT and found != expected:
-            problems.append("%s: %s here, %s on the new server" % (name, expected, found))
+        rule = rules.get(name, EXACT)
+        if rule == EXACT and found != expected:
+            problems.append("%s: %s before, %s now" % (name, expected, found))
+        elif rule != EXACT and (found > expected or (rule == SOME_LEFT and found == 0 < expected)):
+            problems.append("%s: %s before, %s now (may only shrink by expiry)" % (name, expected, found))
     return problems
