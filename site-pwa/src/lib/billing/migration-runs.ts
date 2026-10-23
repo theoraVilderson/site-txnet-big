@@ -3,8 +3,11 @@
 // billing's `/tenants/:id/migration-runs` (entitlement `contract.import.md`,
 // `contract.link-import.md`, billing `contract.balance-import.md`) and the
 // source login, stored on tenant-service (tenant `contract.source-login.md`).
+// A family imported in place reads the reseller's own registered router
+// instead, with no source login (F-1601-g, entitlement `contract.import-in-place.md`).
 import { call as tenantCall } from "../tenant-call";
 import { call, type Paged } from "./client";
+import type { ConnectionTestFault, PanelReviewState } from "./systems";
 
 /** `migration_run.status` (entitlement `MigrationRunStatus`). */
 export type MigrationRunStatus =
@@ -35,6 +38,8 @@ export interface MigrationRun {
   sourceFamily: string | null;
   /** A panel run's origin; a link run's whole old link — its path is its owner's token, never shown; null on a balance file's run. */
   sourceAddress: string | null;
+  /** The reseller's own router an in-place run reads (F-1601-b1); null on every other run. */
+  sourcePanelId: string | null;
   status: MigrationRunStatus;
   failureReason: string | null;
   plannedCreate: number;
@@ -101,6 +106,26 @@ export interface LegacyHost {
 /** One imported link fetched from outside: the servers it carried, or network's reason it did not answer. */
 export type LegacyTestResult = { host: string; label: string | null } & ({ outcome: "ok"; servers: number } | { outcome: "failed"; reason: string });
 
+/** One of the reseller's own routers an import in place reads (F-1601-g): its address's origin, and its connection test. */
+export interface ResellerRouter {
+  id: string;
+  name: string;
+  family: string;
+  address: string | null;
+  reviewState: PanelReviewState;
+  /** Why the last test got no answer; null once there is a verdict, or before the first test. */
+  fault: ConnectionTestFault | null;
+  testedAt: string | null;
+}
+
+/** A router as the reseller registers it: the family decides the rest (ADR-0162). */
+export interface RegisterRouterBody {
+  family: string;
+  name: string;
+  apiBaseUrl: string;
+  credentials: string;
+}
+
 /** What is sealed in the vault for one run: the full address (its web path too) and the login in the family's form. */
 export interface SourceLoginBody {
   apiBaseUrl: string;
@@ -114,7 +139,15 @@ export function migrationRunsApi(tenantId: string) {
   const run = (runId: string) => `${at}/${encodeURIComponent(runId)}`;
   const post = (path: string) => call<MigrationRun>(path, { method: "POST" });
   return {
-    create: (body: { family: string; sourceAddress: string }) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify(body) }),
+    /** A panel run: an address whose login the vault gets next, or — imported in place — the reseller's own router (F-1601-b1). */
+    create: (body: { family: string; sourceAddress: string } | { family: string; panelId: string }) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify(body) }),
+    /** The reseller's own routers of a family imported in place, with their tests (F-1601-g). */
+    routers: async () => (await call<{ routers: ResellerRouter[] }>(`${at}/routers`, { method: "GET" })).routers,
+    /** `pending` until network tests it; the verdict arrives on the reseller's `tenant:` channel. */
+    registerRouter: (body: RegisterRouterBody) => call<{ id: string; reviewState: string }>(`${at}/routers`, { method: "POST", body: JSON.stringify(body) }),
+    /** A login typed again for one of its routers; a pending one is tested again. */
+    resubmitRouterLogin: (panelId: string, credentials: string) =>
+      call<{ id: string; reviewState: string; retest: boolean }>(`${at}/routers/${encodeURIComponent(panelId)}/credentials`, { method: "PUT", body: JSON.stringify({ credentials }) }),
     /** One person's import from their old link; billing reads it at once (F-201-g). */
     createLink: (body: { url: string; userId: string }) => call<MigrationRun>(at, { method: "POST", body: JSON.stringify(body) }),
     /** A reseller's balances from a file's text; billing answers it previewed, with its report (F-209-a). */

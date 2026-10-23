@@ -42,6 +42,7 @@ const run = (over: Partial<MigrationRun> = {}): MigrationRun => ({
   kind: "panel",
   sourceFamily: "marzban",
   sourceAddress: "https://old.example.com:8443",
+  sourcePanelId: null,
   status: "draft",
   failureReason: null,
   plannedCreate: 0,
@@ -88,7 +89,8 @@ describe("the connect form", () => {
   it("offers only families an import reads, each one the systems page knows", () => {
     for (const f of IMPORT_FAMILIES) expect(DRIVER_TYPES).toContain(f);
     expect(IMPORT_FAMILIES).not.toContain("x_ui_vaxilu");
-    expect(IMPORT_FAMILIES).not.toContain("mikrotik_user_manager");
+    // Read in place from the reseller's own router (F-1601-c), not through a login typed here.
+    expect(IMPORT_FAMILIES).toContain("mikrotik_user_manager");
   });
 
   it("sends the origin to billing and the whole address, web path too, to the vault", () => {

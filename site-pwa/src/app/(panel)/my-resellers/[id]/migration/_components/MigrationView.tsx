@@ -74,7 +74,7 @@ export function MigrationView({ id }: { id: string }) {
       {runId && <MigrationRunCard key={runId} api={api} tenantId={id} runId={runId} />}
       {!runId && starting === "panel" && (
         <Card>
-          <SourceLoginForm api={api} run={null} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
+          <SourceLoginForm api={api} tenantId={id} run={null} onDone={(run) => open(run.id)} onCancel={() => setStarting(null)} />
         </Card>
       )}
       {!runId && starting === "link" && (

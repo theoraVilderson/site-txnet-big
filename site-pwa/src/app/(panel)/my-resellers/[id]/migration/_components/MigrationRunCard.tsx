@@ -7,6 +7,7 @@ import type { MigrationRun, MigrationRunsApi } from "@/lib/billing-api";
 import { formatInstant } from "../../../../_lib/datetime";
 import { IMPORT_FAMILIES, MIGRATION_KEYS as K, commitProgress, isCancellable, rollbackDaysLeft, stageOf, type ImportFamily, type RunStage } from "../../../_lib/migration";
 import { runTitleOf } from "../../../_lib/migration-link";
+import { recheckKeyOf } from "../../../_lib/migration-router";
 import { useFailureText, useMigrationLive, useMigrationMessage } from "../_hooks/useMigrationLive";
 import { InboundMapping } from "./InboundMapping";
 import { LegacyHostStep } from "./LegacyHostStep";
@@ -83,7 +84,7 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
   const commitKeys = { panel: { title: K.commitConfirm, label: K.commit }, csv: { title: K.csv.commitConfirm, label: K.csv.commit }, link: { title: K.link.commitConfirm, label: K.link.commit } }[run.kind];
   const commitText = { title: t("common", commitKeys.title, { count: String(issued) }), label: t("common", commitKeys.label, { count: String(issued) }) };
   const commit = () => act(commitText, api.commit);
-  const recheckLabel = t("common", run.kind === "csv" ? K.csv.recheck : K.link.retry);
+  const recheckLabel = t("common", recheckKeyOf(run));
   const reread = () => act({ title: recheckLabel, label: recheckLabel }, api.preview);
   const rollback = () => act({ title: t("common", run.kind === "csv" ? K.csv.rollbackConfirm : K.rollbackConfirm), label: t("common", K.rollback), danger: true }, api.rollback);
   const cancel = () => act({ title: t("common", K.cancelConfirm), label: t("common", K.cancel), danger: true }, api.cancel);
@@ -102,7 +103,7 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
         </Button>
       )}
 
-      {stage === "login" && (family ? <SourceLoginForm api={api} run={run} family={family} onDone={setRun} /> : <Alert tone="error">{failureText("no_driver")}</Alert>)}
+      {stage === "login" && (family ? <SourceLoginForm api={api} tenantId={tenantId} run={run} family={family} onDone={setRun} /> : <Alert tone="error">{failureText("no_driver")}</Alert>)}
       {isPanel && (stage === "mapping" || stage === "report") && <InboundMapping api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
       {isLink && stage === "report" && <LinkReview api={api} tenantId={tenantId} run={run} onSaved={setRun} />}
       {stage === "reading" && <Progress label={t("common", { panel: K.reading, link: K.link.reading, csv: K.csv.checking }[run.kind])} />}
@@ -147,7 +148,8 @@ export function MigrationRunCard({ api, tenantId, runId }: { api: MigrationRunsA
         ) : (
           <p className="text-xs text-text-secondary">{t("common", K.rollbackClosed)}</p>
         ))}
-      {stage === "imported" && run.kind !== "csv" && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily ?? ""} />}
+      {/* A balance file brings no link, and a user read in place keeps a login on its router, not a link (F-1601-c). */}
+      {stage === "imported" && run.kind !== "csv" && run.sourcePanelId === null && <LegacyHostStep api={api} tenantId={tenantId} family={run.sourceFamily ?? ""} />}
       {run.status === "rolled_back" && <Alert tone="success">{t("common", K.rolledBackNote)}</Alert>}
       {(run.status === "cancelled" || run.status === "expired") && <Alert tone="info">{t("common", K.closed)}</Alert>}
 

@@ -7678,7 +7678,10 @@
       "none": "Do not import",
       "noOptions": "You have no active prepaid plan yet. Add one in your catalog first.",
       "save": "Save and read again",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "titleProfiles": "What each profile becomes here",
+      "introProfiles": "Each profile's users get a service of the plan you choose, and keep their login on your router. Only prepaid plans can be chosen.",
+      "profile": "{{tag}}"
     },
     "report": {
       "title": "Who would come over",
@@ -7788,7 +7791,12 @@
       "variant_unchosen": "Choose a plan before confirming.",
       "csv_columns": "The file's first row must name the columns user, amount and currency.",
       "csv_empty": "The file has no rows.",
-      "csv_too_many_rows": "The file has more than 5,000 rows. Split it into smaller files."
+      "csv_too_many_rows": "The file has more than 5,000 rows. Split it into smaller files.",
+      "panel_not_found": "This router is not yours, or not accepted yet.",
+      "panel_already_registered": "This address is registered already.",
+      "panel_refused": "This router's test refused it; a new login does not change that.",
+      "family_not_in_place": "This panel type is not imported in place.",
+      "panel_required": "This panel type is read from your registered router, not from an address."
     },
     "historyCol": {
       "source": "Panel",
@@ -7901,6 +7909,29 @@
       },
       "commitNothing": "Nothing to credit: every row is skipped.",
       "rollbackConfirm": "Undo these balances? Each credit is taken back from its wallet — except wallets used since the credit: they keep it."
+    },
+    "router": {
+      "intro": "A MikroTik User Manager is imported in place: each user keeps its own username and password on your router, and nothing changes on your customers' devices. Pick your router, or register it first.",
+      "listTitle": "Your routers",
+      "empty": "No router registered yet. Register your User Manager router to import its users.",
+      "read": "Read this router",
+      "notReady": "It can be read once its connection test accepts it.",
+      "loginAgain": "Enter the login again",
+      "add": "Add a router",
+      "registerIntro": "Your router's address and an admin login for its REST API (RouterOS v7). The connection test runs within a minute.",
+      "name": "Router name",
+      "namePlaceholder": "e.g. Office router",
+      "address": "Router address",
+      "addressHint": "Its address, with the port if not the default, and without /rest — e.g. https://203.0.113.9",
+      "save": "Register router",
+      "saving": "Registering…",
+      "saveLogin": "Save the login",
+      "registered": "Registered. Its connection test runs within a minute.",
+      "retry": "Read the router again",
+      "invalid": {
+        "name": "Enter a name (at most 100 characters).",
+        "addressPath": "Enter the router's address only, with no path or /rest."
+      }
     }
   },
   "dataExport": {

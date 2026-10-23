@@ -3,10 +3,10 @@ id: panel-web
 layer: interface
 status: active
 version: 43
-updated: 2026-10-22
+updated: 2026-10-23
 ---
 
-# Contract — panel-web: a reseller's import from another panel (F-201-f), one user's from an old link (F-201-h-1), its old address (F-204-b), balances from a file (F-209-b)
+# Contract — panel-web: a reseller's import from another panel (F-201-f), its own router read in place (F-1601-c), one user's from an old link (F-201-h-1), its old address (F-204-b), balances from a file (F-209-b)
 
 A topic file of [contract.md](contract.md) (§10), and a screen of the reseller
 workspace described in [contract.resellers.md](contract.resellers.md) "A
@@ -15,7 +15,7 @@ reseller leaving another panel brings its users with it (D-63).
 
 | page | route | files |
 |---|---|---|
-| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address), `LinkImportForm.tsx` + `LinkReview.tsx` (one user from a link), `BalanceFileForm.tsx` (balances from a file), `_hooks/usePrepaidPlans.ts`; rules `my-resellers/_lib/migration.ts`, `migration-link.ts`, `migration-csv.ts` |
+| the import | `/my-resellers/[id]/migration`, `/reseller/migration` (`myResellerMigrationPath`); `?run=` opens one run | `my-resellers/[id]/migration/_components/MigrationView.tsx` (history, new), `MigrationRunCard.tsx` (one run), `SourceLoginForm.tsx`, `RouterPicker.tsx` + `RouterForm.tsx` + `_hooks/useResellerRouters.ts` (a router read in place), `LoginFields.tsx`, `InboundMapping.tsx`, `MigrationReport.tsx`, `LegacyHostStep.tsx` (the old address), `LinkImportForm.tsx` + `LinkReview.tsx` (one user from a link), `BalanceFileForm.tsx` (balances from a file), `_hooks/usePrepaidPlans.ts`; rules `my-resellers/_lib/migration.ts`, `migration-link.ts`, `migration-csv.ts`, `migration-router.ts` |
 
 Its calls are `migrationRunsApi(tenantId)` (`lib/billing/migration-runs.ts`):
 billing's `/tenants/:id/migration-runs` routes and tenant-service's
@@ -30,7 +30,7 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
 1. **One step per state** (`stageOf`): a draft with inbounds read and nothing
    wrong but the mapping (`inbounds_unmapped`) is the mapping; any other draft
    asks for the login — a new run, a login the source refused, or one past its
-   7 days unused (tenant rule 4). `previewing` reads, `previewed` is the report
+   7 days unused (tenant rule 4) — except a run read in place (rule 13). `previewing` reads, `previewed` is the report
    and the confirm, `committing` the progress, `committed` the result and the
    rollback, `rolling_back` its progress; the rest are closed.
 2. **The preview is the connection's test.** "Read my panel" creates the run
@@ -44,6 +44,7 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
    opener reads it (`composeLogin`); Hiddify's is its API key. Never read back.
 4. **Families**: the ones network reads (`source.IsFamily`) less legacy x-ui
    (vaxilu), which has no reader yet and could only fail (`no_driver`).
+   MikroTik User Manager is among them, read in place (rule 13).
 5. **An inbound maps to a prepaid plan only** (entitlement rules 7 and 10): the
    active prepaid plans of active products from the users-admin door's
    catalog (`users-catalog`, its `billingMode`) — no `catalog.manage`. An
@@ -112,6 +113,22 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
     added since is found); the commit names the count it credits; the
     rollback's confirm says a used wallet keeps its money. No login, mapping
     or old address step: a draft is `retry` (`stageOf`).
+
+13. **A router read in place** (F-1601-c; entitlement
+    [contract.import-in-place.md](../../domains/entitlement/contract.import-in-place.md)):
+    a family `isInPlaceFamily` names swaps the address and login for the
+    reseller's own routers (`RouterPicker`), each with its test (the systems
+    page's `REVIEW_KEYS` / `FAULT_KEYS`). Only an accepted one is read
+    (`isPickable`): the run is created naming it (`{family, panelId}`) and
+    previewed, once (a retry previews the same run). None yet opens the
+    register form (`RouterForm`): a name, the bare address — a path is
+    refused, the driver adds `/rest` (`routerFormErrors`) — and the login,
+    composed as the register form's. A pending router whose test got no
+    answer has its login entered again. The list re-reads on
+    `network.panel.tested` on the reseller's `tenant:` channel
+    (`routersChannelOf`); the owner, not on it, has the refresh button. Such a
+    run sent back is `retry`, never the login form (`stageOf`); its mapping
+    names profiles, and it has no old-address step: a login is not a link.
 
 **Not covered:** a user handing in their own link, its queue and notice (not
 built, user 2026-10-22).

@@ -16,7 +16,10 @@ import {
   type ConnectForm,
   type ImportFamily,
 } from "../../../_lib/migration";
+import { isInPlaceFamily } from "../../../_lib/migration-router";
 import { useMigrationMessage } from "../_hooks/useMigrationLive";
+import { UserPasswordFields } from "./LoginFields";
+import { RouterPicker } from "./RouterPicker";
 import { Alert, Button, Field, Input, NativeSelect, PasswordInput } from "../../../../_components/kit";
 
 const W = SYSTEMS_KEYS.register.wizard;
@@ -27,16 +30,20 @@ const W = SYSTEMS_KEYS.register.wizard;
  * refusal comes back on the run as its `failureReason`. With no `run` it
  * starts one; with one (a login refused, or past its 7 days) it stores the
  * login again for that run's panel. The login is sent once to the vault and
- * never shown back (tenant `contract.source-login.md` rule 3).
+ * never shown back (tenant `contract.source-login.md` rule 3). A family read
+ * in place asks for none: it is read from the reseller's own router
+ * (`RouterPicker`, F-1601-c).
  */
 export function SourceLoginForm({
   api,
+  tenantId,
   run,
   family: fixed,
   onDone,
   onCancel,
 }: {
   api: MigrationRunsApi;
+  tenantId: string;
   run: MigrationRun | null;
   /** The run's family, when there is one: a run reads one panel. */
   family?: ImportFamily;
@@ -83,18 +90,29 @@ export function SourceLoginForm({
     }
   }
 
+  const familyField = (
+    <Field label={t("common", K.family)}>
+      <NativeSelect value={form.family} disabled={fixed !== undefined || created !== null} onChange={(e) => set({ family: e.target.value as ImportFamily })}>
+        {IMPORT_FAMILIES.map((f) => (
+          <option key={f} value={f}>
+            {DRIVER_LABELS[f]}
+          </option>
+        ))}
+      </NativeSelect>
+    </Field>
+  );
+  if (isInPlaceFamily(form.family))
+    return (
+      <div className="space-y-4">
+        {familyField}
+        <RouterPicker api={api} tenantId={tenantId} family={form.family} onDone={onDone} onCancel={onCancel} />
+      </div>
+    );
+
   return (
     <form className="space-y-4" onSubmit={(e) => void submit(e)} noValidate>
       <p className="text-sm text-text-secondary">{t("common", run ? K.loginAgain : K.loginIntro)}</p>
-      <Field label={t("common", K.family)}>
-        <NativeSelect value={form.family} disabled={fixed !== undefined || created !== null} onChange={(e) => set({ family: e.target.value as ImportFamily })}>
-          {IMPORT_FAMILIES.map((f) => (
-            <option key={f} value={f}>
-              {DRIVER_LABELS[f]}
-            </option>
-          ))}
-        </NativeSelect>
-      </Field>
+      {familyField}
       <Field label={t("common", K.address)} hint={t("common", form.family === "hiddify" ? W.apiBaseUrlHint.hiddify : W.apiBaseUrlHint.default)} error={err("address")}>
         <Input dir="ltr" inputMode="url" autoComplete="off" value={form.address} onChange={(e) => set({ address: e.target.value })} placeholder={t("common", W.placeholder.apiBaseUrl)} />
       </Field>
@@ -106,14 +124,7 @@ export function SourceLoginForm({
           <PasswordInput dir="ltr" autoComplete="off" value={form.apiKey} onChange={(e) => set({ apiKey: e.target.value })} />
         </Field>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t("common", W.login.username)} error={err("username")}>
-            <Input dir="ltr" autoComplete="off" value={form.username} onChange={(e) => set({ username: e.target.value })} />
-          </Field>
-          <Field label={t("common", W.login.password)} error={err("password")}>
-            <PasswordInput dir="ltr" autoComplete="new-password" value={form.password} onChange={(e) => set({ password: e.target.value })} />
-          </Field>
-        </div>
+        <UserPasswordFields parts={form} onChange={set} errorOf={err} />
       )}
       <p className="text-xs text-text-secondary">{t("common", W.login.safe)}</p>
       {error !== null && <Alert tone="error">{message(error)}</Alert>}

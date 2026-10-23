@@ -23,6 +23,7 @@ const run = (over: Partial<MigrationRun> = {}): MigrationRun => ({
   kind: "csv",
   sourceFamily: null,
   sourceAddress: null,
+  sourcePanelId: null,
   status: "previewed",
   failureReason: null,
   plannedCreate: 2,

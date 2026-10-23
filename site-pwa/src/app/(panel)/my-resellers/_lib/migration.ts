@@ -23,8 +23,9 @@ type DriverType = (typeof DRIVER_TYPES)[number];
  * The families an import reads (network `source.IsFamily`), in the register
  * form's order. Legacy x-ui (vaxilu) is one of them but has no reader yet
  * (`no_driver`, network `contract.source.md` rule 7): offered, it could only fail.
+ * User Manager is read in place, from the reseller's own router (`migration-router.ts`).
  */
-export const IMPORT_FAMILIES = ["marzban", "marzneshin", "sanaee", "three_x_ui", "x_ui_alireza", "s_ui", "hiddify"] as const satisfies readonly DriverType[];
+export const IMPORT_FAMILIES = ["marzban", "marzneshin", "sanaee", "three_x_ui", "x_ui_alireza", "s_ui", "hiddify", "mikrotik_user_manager"] as const satisfies readonly DriverType[];
 export type ImportFamily = (typeof IMPORT_FAMILIES)[number];
 
 /** tenant `contract.source-login.md`: an address and a login are at most this long. */
@@ -42,13 +43,15 @@ const INBOUNDS_UNMAPPED = "inbounds_unmapped";
  * source refused, or never read, asks for the login (again) — it also lasts
  * only 7 days unused (tenant rule 4), so a later preview may need it anew.
  */
-export function stageOf(run: Pick<MigrationRun, "kind" | "status" | "failureReason" | "inbounds">): RunStage {
+export function stageOf(run: Pick<MigrationRun, "kind" | "status" | "failureReason" | "inbounds" | "sourcePanelId">): RunStage {
   switch (run.status) {
     case "draft": {
       // A link run or a balance file needs no login: checking again is all it can ask (F-201-g, F-209-a).
       if (run.kind !== "panel") return "retry";
       const mappable = (run.inbounds?.length ?? 0) > 0 && (run.failureReason === null || run.failureReason === INBOUNDS_UNMAPPED);
-      return mappable ? "mapping" : "login";
+      if (mappable) return "mapping";
+      // A run on the reseller's own router has its login on the router, not the run: it is read again (F-1601-c).
+      return run.sourcePanelId !== null ? "retry" : "login";
     }
     case "previewing":
       return "reading";
@@ -77,7 +80,7 @@ export function emptyConnectForm(family: ImportFamily = IMPORT_FAMILIES[0]): Con
 }
 
 /** An absolute http(s) URL within the vault's bound, or null. */
-function httpUrl(raw: string): URL | null {
+export function httpUrl(raw: string): URL | null {
   const value = raw.trim();
   if (!value || value.length > ADDRESS_MAX || !URL.canParse(value)) return null;
   const url = new URL(value);

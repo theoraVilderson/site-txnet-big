@@ -24,6 +24,7 @@ const run = (over: Partial<MigrationRun> = {}): MigrationRun => ({
   kind: "link",
   sourceFamily: null,
   sourceAddress: LINK,
+  sourcePanelId: null,
   status: "previewed",
   failureReason: null,
   plannedCreate: 1,
