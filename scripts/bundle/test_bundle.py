@@ -103,6 +103,31 @@ class ShipSettings(unittest.TestCase):
                          ["BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_ENDPOINT", "BACKUP_S3_SECRET_ACCESS_KEY"])
 
 
+class HasData(unittest.TestCase):
+    """Postgres 18 keeps its cluster in <volume>/18/docker, not at the volume's root."""
+
+    def setUp(self):
+        import tempfile, shutil
+        self.volume = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.volume)
+
+    def test_an_empty_volume_holds_no_data(self):
+        self.assertFalse(bp.holds_data(self.volume))
+
+    def test_a_cluster_below_the_root_is_data(self):
+        os.makedirs(os.path.join(self.volume, "18", "docker"))
+        open(os.path.join(self.volume, "18", "docker", "PG_VERSION"), "w").close()
+        self.assertTrue(bp.holds_data(self.volume))
+
+    def test_anything_at_all_in_the_volume_counts(self):
+        # a restore that replaces an unknown layout without --replace is the failure this guards
+        open(os.path.join(self.volume, "something"), "w").close()
+        self.assertTrue(bp.holds_data(self.volume))
+
+    def test_a_volume_that_does_not_exist_holds_no_data(self):
+        self.assertFalse(bp.holds_data(os.path.join(self.volume, "missing")))
+
+
 class Restore(unittest.TestCase):
     def test_keys_missing_here_are_restored_and_different_ones_are_kept_and_reported(self):
         in_bundle = {".env": "1", "dev-docker/secrets/vault-kek": "2", ".env.prod": "3"}

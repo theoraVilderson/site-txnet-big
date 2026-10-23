@@ -4,7 +4,11 @@ ARG DOCKER_REGISTRY
 # (Node security release 2026-10-21: Brotli RCE, TLS hostname bypass). Bump on the next one.
 FROM ${DOCKER_REGISTRY}/node:22.23.4-alpine AS base
 # پکیج libc6-compat برای سازگاری بهتر برخی ماژول‌های سیستمی C/C++ در آلپاین بسیار توصیه می‌شود
-RUN apk add --no-cache libc6-compat
+# APK_MIRROR (.env): an Alpine mirror every server we build on reaches; dl-cdn
+# stalls mid-TLS from Iranian datacenters (OPS-1-af). Empty keeps dl-cdn.
+ARG APK_MIRROR
+RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org/alpine#$APK_MIRROR#" /etc/apk/repositories; fi \
+ && apk add --no-cache libc6-compat
 WORKDIR /app
 
 # ---------- Dependencies ----------

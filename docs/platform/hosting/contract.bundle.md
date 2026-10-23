@@ -24,7 +24,9 @@ renamed last, so nothing ever reads half of one. Owner-only (0600, directory 070
 **B2 — Contents.** `manifest.json` (format, time, project, host, commit, every
 file's sha256, the figures of B3); `postgres/roles.sql` (`pg_dumpall
 --roles-only`) and one `pg_dump -Fc -Z zstd:3` per database; `redis/dump.rdb`;
-`rabbitmq/messages.json` (every queued message, read with requeue);
+`rabbitmq/messages.json` (every queued message, read with requeue) and
+`rabbitmq/definitions.json` (users with password hashes, vhosts, permissions,
+policies, queues — `rabbitmqctl export_definitions`);
 `volumes/<key>.tar` for every state volume not in B4's logical set (today
 `object_storage`, `locales_runtime`); `keys.tar` — `move_plan.CARRIED_FILES`
 except the passphrase. One classification of state for the move and the
@@ -70,8 +72,14 @@ compares, touching nothing. `backup.py restore` refuses code older than the
 bundle's commit (or unrelated), and newer code without `--allow-newer-code`;
 writes the keys and env files the checkout lacks and keeps — and reports —
 any it has with other content; on a server holding data, needs `--replace` and
-makes a safety bundle first (user, 2026-10-23). Then: every volume emptied and
-unpacked, RabbitMQ's emptied, Redis loaded as AOF, each database dropped and
-restored, `db-login-roles.sh` (this server's passwords), rows exact and Redis's
-TTL-less keys exact (expiring ones may be fewer), the stack up, the messages
-published back, a pgBackRest full started.
+makes a safety bundle first (user, 2026-10-23) — "holds data" is anything in
+the Postgres volume, since PG 18 keeps its cluster in `18/docker/`. Then: every
+image built one at a time, bounded and retried, before anything stops; every
+volume emptied and unpacked, RabbitMQ's emptied, Redis loaded as AOF; the
+three data services up and healthy **before anything else** (a broker booting
+beside the compiling services timed out its first boot and kept a user with no
+rights); the definitions imported and the env's user set from this server's
+env; each database dropped and restored, `db-login-roles.sh` (this server's
+passwords); rows exact and Redis's TTL-less keys exact (expiring ones may be
+fewer); the stack up, the messages published back (a failure there is
+reported, not fatal), a pgBackRest full when data was replaced.

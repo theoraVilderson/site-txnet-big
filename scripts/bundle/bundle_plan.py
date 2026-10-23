@@ -157,3 +157,11 @@ def rclone_env(settings):
         env["RCLONE_CONFIG_S3_REGION"] = settings["BACKUP_S3_REGION"]
     env.update({k: settings[k] for k in SHIP_PASSTHROUGH if settings.get(k)})
     return env
+
+
+def holds_data(volume_dir):
+    """True when the volume has anything in it. Not a test for PG_VERSION at its
+    root: Postgres 18 keeps its cluster in <volume>/18/docker, and a check for the
+    root file read a full server as empty (restore test, 2026-10-23) — a restore
+    would then have replaced it with no --replace and no safety bundle."""
+    return os.path.isdir(volume_dir) and bool(os.listdir(volume_dir))

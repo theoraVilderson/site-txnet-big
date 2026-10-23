@@ -16,6 +16,7 @@ services:
       context: ./backup
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/object-backup:dev
     container_name: ${STACK_NAME:-txnet}-object-backup
     restart: unless-stopped

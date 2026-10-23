@@ -21,6 +21,10 @@ import move_plan as mp
 UNSEAL = 'gpg --batch --quiet --pinentry-mode loopback --passphrase-file "$2" -d "$1" | zstd -dq | tar -C "$3" -xf -'
 READY_TRIES = 60
 WAIT_TIMEOUT_S = "600"
+# One image at a time, each attempt bounded: built together on the 2026-10-23
+# fresh server, three `apk add`s hung on stalled connections (apk has no timeout).
+BUILD_TIMEOUT_S = "600"
+BUILD_ATTEMPTS = 3
 DRILL_CONTAINER = "txnet-bundle-drill"
 PSQL = 'psql -U "$POSTGRES_USER" -d "$1" -Atq'
 PG_RESTORE = 'pg_restore -U "$POSTGRES_USER" --create --exit-on-error -d postgres'
@@ -151,19 +155,27 @@ def restore(host, root, work, manifest, passphrase, options, say):
         say("KEPT this server's %s: it differs from the bundle's (keys.tar in the bundle has the old one)", path)
     config = host.config()
     volumes = mp.state_volumes(config)
-    had_data = has_data(host, volumes["postgres_data"])
+    had_data = bp.holds_data(host.volume_dir(volumes["postgres_data"]))
     if had_data:
         if not options.replace_here:
             raise Abort("this server holds data; --replace replaces it (a safety bundle of it is made first)")
         say("this server holds data: a safety bundle of it first")
         say("safety bundle: %s", bm.make(host, root, bm.now())[0])
+    build_images(host, config, say)
     say("stopping the stack; the platform is down from here")
     host.compose("up", "--no-start")
     host.compose("stop")
     restore_volumes(host, work, manifest, volumes)
     keyspace = bm.load_redis(host, config, os.path.join(work, "redis"), volume=volumes["redis_vol_internal"])
     say("Redis: %d figures match", gate(manifest, mf.parse_keyspace(keyspace), ("redis:",), "Redis keys"))
-    host.compose("up", "-d", "--wait", "--wait-timeout", WAIT_TIMEOUT_S, "main-db")
+    # the stores first and alone: a broker booting beside eleven compiling services
+    # timed out its first boot on the 2026-10-23 test, and every consumer that
+    # found no broker exited (dev-serve then waits for a file change)
+    host.compose("up", "-d", "--wait", "--wait-timeout", WAIT_TIMEOUT_S, *mp.DATA_SERVICES)
+    definitions = os.path.join(work, "rabbitmq", "definitions.json")
+    mq.restore_definitions(host, definitions if os.path.exists(definitions) else None)
+    say("RabbitMQ: %s, and the env's user set from this server's env",
+        "users, vhosts, permissions and queues imported" if os.path.exists(definitions) else "no definitions in this bundle")
     in_main = [host.wrapper(), "exec", "-T", "main-db", "sh", "-c"]
     restore_databases(host, in_main, work, manifest)
     # the bundle's roles carry the bundle's passwords; the services log in with this server's env
@@ -177,8 +189,18 @@ def restore(host, root, work, manifest, passphrase, options, say):
         say("a full pgBackRest backup has started: the baseline after this restore")
 
 
-def has_data(host, volume):
-    return os.path.exists(os.path.join(host.volume_dir(volume), "PG_VERSION"))
+def build_images(host, config, say):
+    """Every image the stack builds, one at a time, while this server still serves."""
+    for service in sorted(name for name, spec in config["services"].items() if spec.get("build")):
+        for attempt in range(1, BUILD_ATTEMPTS + 1):
+            try:
+                host.run(["timeout", BUILD_TIMEOUT_S, host.wrapper(), "build", "-q", service])
+                break
+            except RuntimeError:
+                if attempt == BUILD_ATTEMPTS:
+                    raise Abort("%s did not build in %d attempts; nothing was stopped" % (service, BUILD_ATTEMPTS))
+                say("%s: build attempt %d failed or stalled; again", service, attempt)
+    say("every image built")
 
 
 def restore_volumes(host, work, manifest, volumes):
@@ -201,6 +223,11 @@ def start(host, work, relation, say):
         say("WARNING: not every service became healthy (%s); the data is restored, look at `ps`", err)
     with open(os.path.join(work, "rabbitmq", "messages.json")) as f:
         messages = json.load(f)
-    lost = mq.load(mq.Broker(host), messages)
+    try:
+        lost = mq.load(mq.Broker(host), messages)
+    except (OSError, RuntimeError) as err:  # urllib's HTTPError and URLError are OSErrors
+        say("WARNING: the %d queued messages were not published back (%s); they are in the bundle's "
+            "rabbitmq/messages.json", len(messages), err)
+        return
     say("RabbitMQ: %d of %d queued messages published back%s", len(messages) - len(lost), len(messages),
         "" if not lost else "; NOT routed: " + ", ".join(sorted(set(lost))))

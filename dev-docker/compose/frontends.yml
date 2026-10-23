@@ -135,6 +135,7 @@ services:
         - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        APK_MIRROR: ${APK_MIRROR:-}
     container_name: ${STACK_NAME:-txnet}-coinsite
     restart: unless-stopped
     volumes:

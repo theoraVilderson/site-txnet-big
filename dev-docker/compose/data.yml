@@ -55,6 +55,7 @@ services:
       context: ./postgres
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-postgres
     # The port other services call; Kubernetes makes its Service from it (hosting K4).

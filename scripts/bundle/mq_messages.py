@@ -14,6 +14,29 @@ MANAGEMENT_PORT = 15672
 REQUEST_TIMEOUT_S = 10
 # Queues are declared by the services as they connect; a restore waits this long for them.
 QUEUE_WAIT_S = 180
+# Users (with password hashes), vhosts, permissions, policies, queues, bindings.
+# A fresh node gets only the env's user, and only if its first boot completes:
+# on the 2026-10-23 restore test a first boot starved by eleven compiling
+# services timed out creating it, and the second boot left it with no permissions.
+EXPORT_DEFINITIONS = ("exec", "-T", "rabbitmq", "rabbitmqctl", "export_definitions", "-", "--format", "json", "-q")
+DEFINITIONS_IN_CONTAINER = "/tmp/txnet-definitions.json"
+# The env's user as this server's env says: its password and its rights on `/`.
+# The password is expanded inside the container, from the variable it already holds.
+ENV_USER = (
+    'rabbitmqctl list_users -q | cut -f1 | grep -qx "$RABBITMQ_DEFAULT_USER" '
+    '|| rabbitmqctl add_user "$RABBITMQ_DEFAULT_USER" "$RABBITMQ_DEFAULT_PASS" -q; '
+    'rabbitmqctl change_password "$RABBITMQ_DEFAULT_USER" "$RABBITMQ_DEFAULT_PASS" -q '
+    '&& rabbitmqctl set_user_tags "$RABBITMQ_DEFAULT_USER" administrator -q '
+    '&& rabbitmqctl set_permissions -p / "$RABBITMQ_DEFAULT_USER" ".*" ".*" ".*" -q'
+)
+
+
+def restore_definitions(host, definitions_path):
+    """Imports a bundle's definitions (when it has them), then sets the env's user from this server's env."""
+    if definitions_path:
+        host.compose("cp", definitions_path, "rabbitmq:" + DEFINITIONS_IN_CONTAINER)
+        host.compose("exec", "-T", "rabbitmq", "rabbitmqctl", "import_definitions", DEFINITIONS_IN_CONTAINER, "-q")
+    host.compose("exec", "-T", "rabbitmq", "sh", "-c", ENV_USER)
 
 
 class Broker:

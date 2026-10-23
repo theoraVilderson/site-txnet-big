@@ -51,6 +51,7 @@ def make(host, root, when):
         dump_redis(host, config, staging, manifest)
         messages = mq.save(mq.Broker(host))
         write_json(os.path.join(staging, "rabbitmq", "messages.json"), messages)
+        write_json(os.path.join(staging, "rabbitmq", "definitions.json"), json.loads(host.compose(*mq.EXPORT_DEFINITIONS)))
         manifest["figures"]["mq:messages"] = len(messages)
         manifest["volumes"] = pack_volumes(host, config, staging)
         manifest["keys"] = pack_keys(root, staging)

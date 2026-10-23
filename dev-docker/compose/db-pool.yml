@@ -12,6 +12,7 @@ services:
       context: ./pgbouncer
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/db-pool:1.25
     container_name: ${STACK_NAME:-txnet}-db-pool
     # The port other services call; Kubernetes makes its Service from it (hosting K4).

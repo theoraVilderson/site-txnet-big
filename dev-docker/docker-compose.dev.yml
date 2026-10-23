@@ -214,6 +214,7 @@ services:
       context: ./routeros
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        APK_MIRROR: ${APK_MIRROR:-}
         ROUTEROS_VERSION: ${ROUTEROS_VERSION:-7.24.5}
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
