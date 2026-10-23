@@ -105,7 +105,7 @@ The *why* is **ADR-0080**.
    password, or Hiddify's API key — and composed as the Opener splits it
    (`composeLogin`); a username with `:` is refused here, since the Opener
    would test it as someone else. `role` reads as primary / standby, an HA
-   pair's (network `contract.groups.md` rule 6), never as on / off.
+   pair's (network `contract.groups.md` rule 6), never as on / off. User Manager's address is an origin (`originOnly`: its driver adds `/rest`), refused with a path here and on edit (F-1601-h).
 
 11. **Panel groups: where a VPN variant's Grants are placed** (F-027-bx,
    network `contract.groups.md`). A group lists its members — whether new
@@ -233,7 +233,7 @@ The *why* is **ADR-0080**.
 19. **A panel's monthly cost** (F-1002-c, network `contract.panel-cost.md`): the sheet's Cost section (`PanelCost.tsx`) shows the price in effect or "no cost set", adds one (USD as typed, ≤ 2 places; from today, never before this UTC month — `_lib/panel-cost.ts` refuses first, in billing's own sentence) and lists every price; a save adds, never edits. The month's traffic the price buys rides with it (F-1005-b): optional whole GB, sent as bytes 1024-based as sizes are shown, kept in the history line. Refusal words: `_lib/systems-refusals.ts`.
 ## Proof
 
-`systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names.
+`systems/register-wizard.test.ts` — rule 10: the steps, each blocking on its own fields, the family profiles (the ready set read out of `opener.go`), the composed login, the IP an address names, an origin-only family's path refused (F-1601-h).
 `systems/systems.test.ts` — every set above against its declared home
 (`network.prisma` enums, `contracts/network/capabilities.json` in order,
 billing's `SystemsRejection` / `PanelScopeRejection` / `ResubmitRejection`),

@@ -3610,6 +3610,7 @@
         "name": "Enter a name of 1 to 100 characters.",
         "ipAddress": "Enter an IPv4 or IPv6 address.",
         "apiBaseUrl": "Enter the http(s) address we poll (up to 500 characters). A pull panel needs one.",
+        "apiBaseUrlPath": "Enter the router's address only, with no path or /rest: the REST API path is added for you.",
         "clientBaseUrl": "Enter the http(s) address users are served at (up to 500 characters), or leave it blank.",
         "region": "Enter a region of 1 to 50 characters.",
         "maxRequestsPerMinute": "Enter a whole number from 1 to 6000, or leave it blank.",
@@ -3684,7 +3685,7 @@
         "apiBaseUrlHint": {
           "default": "The panel's login page address, with its port and path (if any).",
           "hiddify": "Hiddify's admin proxy path address — the one you open the admin panel with.",
-          "router": "The router's REST API root (RouterOS v7), e.g. https://router.example.com/rest"
+          "router": "The router's address only, with its port if not the default — no path, since /rest is added for you. E.g. https://203.0.113.9"
         },
         "useIp": "Use {{ip}}",
         "advanced": {

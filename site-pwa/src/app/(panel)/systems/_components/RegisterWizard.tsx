@@ -217,7 +217,7 @@ export function RegisterWizard({ onClose, onRegistered }: { onClose: () => void;
     <SecretInput id={`rp-${k}`} value={value} onChange={onChange} showLabel={t("common", W.login.show)} hideLabel={t("common", W.login.hide)} />
   );
 
-  const apiHint = form.driverType === "hiddify" ? W.apiBaseUrlHint.hiddify : profile.group === "router" ? W.apiBaseUrlHint.router : W.apiBaseUrlHint.default;
+  const apiHint = form.driverType === "hiddify" ? W.apiBaseUrlHint.hiddify : profile.originOnly ? W.apiBaseUrlHint.router : W.apiBaseUrlHint.default;
   const suggestedIp = ipOfUrl(form.apiBaseUrl);
 
   const steps: Record<RegisterStepId, ReactNode> = {

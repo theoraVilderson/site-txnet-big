@@ -1,6 +1,6 @@
 import type { PanelGroup, PanelSettingsBody, RemovedPanel, SystemsPanel } from "@/lib/billing-api";
 import { SYSTEMS_KEYS, isIp, isUrl, validateLogin } from "./systems";
-import { composeLogin, loginErrors, loginKindOf, type LoginParts } from "./register-wizard";
+import { addressHasRefusedPath, composeLogin, loginErrors, loginKindOf, type LoginParts } from "./register-wizard";
 
 /**
  * A registered panel's life on the systems page (F-027-cb): editing its
@@ -73,6 +73,7 @@ export function validatePanelEdit(form: PanelEditForm, panel: SystemsPanel): Pan
   if (region.length < 1 || region.length > 50) errors.region = K.register.invalid.region;
   if (push ? !isIp(ipAddress) : ipAddress !== "" && !isIp(ipAddress)) errors.ipAddress = K.register.invalid.ipAddress;
   if (!push && (apiBaseUrl.length > 500 || !isUrl(apiBaseUrl))) errors.apiBaseUrl = K.register.invalid.apiBaseUrl;
+  else if (!push && addressHasRefusedPath(panel.driverType, apiBaseUrl)) errors.apiBaseUrl = K.register.invalid.apiBaseUrlPath;
   if (!push && clientBaseUrl && (clientBaseUrl.length > 500 || !isUrl(clientBaseUrl))) errors.clientBaseUrl = K.register.invalid.clientBaseUrl;
   if (!(Number.isInteger(budget) && budget >= 1 && budget <= 6000)) errors.maxRequestsPerMinute = K.edit.invalidBudget;
   let credentials: string | null = null;

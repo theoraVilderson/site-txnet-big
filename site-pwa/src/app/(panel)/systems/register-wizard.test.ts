@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { SystemsPanel } from "@/lib/billing-api";
+import { panelEditFormOf, validatePanelEdit } from "./_lib/panel-lifecycle";
 import { DRIVER_TYPES, SYSTEMS_KEYS, emptyRegisterForm, validateRegister } from "./_lib/systems";
 import {
   DRIVER_PROFILES,
@@ -156,6 +158,29 @@ describe("the login", () => {
     expect(registerStepErrors(push, parts, "login").radiusSecret).toBe(SYSTEMS_KEYS.register.invalid.radiusSecret);
     // User Manager is pulled (ADR-0161): no secret is asked of it.
     expect(registerStepErrors({ ...ready("mikrotik_user_manager").form, radiusSecret: "" }, parts, "login").radiusSecret).toBeUndefined();
+  });
+});
+
+describe("a family whose driver adds its own API path (F-1601-h)", () => {
+  // usermanager.go joins `rest` onto the address: one typed with `/rest` is read at `/rest/rest/…` and never answers.
+  it("refuses a path for User Manager, on register and on edit, and keeps one for the rest", () => {
+    const { form, parts } = ready("mikrotik_user_manager");
+    const path = SYSTEMS_KEYS.register.invalid.apiBaseUrlPath;
+    for (const apiBaseUrl of ["https://203.0.113.9/rest", "https://203.0.113.9/?x=1"]) {
+      expect(registerStepErrors({ ...form, apiBaseUrl }, parts, "connection").apiBaseUrl).toBe(path);
+    }
+    expect(registerStepErrors({ ...form, apiBaseUrl: "https://203.0.113.9:8443" }, parts, "connection")).toEqual({});
+    expect(registerStepErrors({ ...ready("marzban").form, apiBaseUrl: "https://de1.example.com/dashboard" }, parts, "connection")).toEqual({});
+
+    const um = { id: "p1", name: "um", region: "ir", transport: "pull", driverType: "mikrotik_user_manager", ipAddress: null, apiBaseUrl: "https://203.0.113.9", clientBaseUrl: null, budget: { maxRequestsPerMinute: 60 } } as unknown as SystemsPanel;
+    expect(validatePanelEdit({ ...panelEditFormOf(um), apiBaseUrl: "https://203.0.113.9/rest" }, um)).toMatchObject({ ok: false, errors: { apiBaseUrl: path } });
+  });
+
+  it("the router hint asks for the bare address", () => {
+    for (const lang of ["en", "fa"]) {
+      const common = JSON.parse(readFileSync(join(REPO, `locales/frontend/langs/${lang}/common.json`), "utf8"));
+      expect(common.systems.register.wizard.apiBaseUrlHint.router).not.toMatch(/https?:\/\/\S*\/rest/);
+    }
   });
 });
 

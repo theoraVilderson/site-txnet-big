@@ -42,6 +42,12 @@ export type DriverProfile = {
   clientBaseUrl: boolean;
   /** `internal/opener` has a case for it. Any other family registers and stays `pending` as `unopenable`. */
   supported: boolean;
+  /**
+   * Its driver joins its own API path onto the address (User Manager's `/rest`,
+   * network `contract.usermanager.md`), so the address is an origin: one with a
+   * path is read at `/rest/rest/…` and never answers (F-1601-h).
+   */
+  originOnly: boolean;
 };
 
 const pull = (group: FamilyGroup, supported: boolean, extra: Partial<DriverProfile> = {}): DriverProfile => ({
@@ -51,6 +57,7 @@ const pull = (group: FamilyGroup, supported: boolean, extra: Partial<DriverProfi
   login: "userPassword",
   clientBaseUrl: false,
   supported,
+  originOnly: false,
   ...extra,
 });
 
@@ -71,7 +78,7 @@ export const DRIVER_PROFILES: Record<DriverType, DriverProfile> = {
   s_ui: pull("xray", false),
   core_xray: pull("xray", false),
   // Read off its REST API: its NAS sends us no accounting (ADR-0161).
-  mikrotik_user_manager: pull("router", true),
+  mikrotik_user_manager: pull("router", true, { originOnly: true }),
   mikrotik_wireguard: pull("router", false),
   ibsng: pull("router", false),
   cloudius: pull("router", false),
@@ -127,12 +134,22 @@ export function loginErrors(kind: LoginKind, parts: LoginParts): WizardErrors {
   return out;
 }
 
+/** Whether a family refuses this address for carrying a path, a query or a fragment; the migration page's router form holds the same rule. */
+export function addressHasRefusedPath(driverType: string, apiBaseUrl: string): boolean {
+  if (!(DRIVER_PROFILES as Partial<Record<string, DriverProfile>>)[driverType]?.originOnly || !URL.canParse(apiBaseUrl)) return false;
+  const url = new URL(apiBaseUrl);
+  return url.pathname !== "/" || url.search !== "" || url.hash !== "";
+}
+
 export function registerStepErrors(form: RegisterForm, parts: LoginParts, step: RegisterStepId): WizardErrors {
   const checked = validateRegister(form);
   const all: WizardErrors = checked.ok ? {} : { ...checked.errors };
   const fields = REGISTER_STEPS.find((s) => s.id === step)?.fields ?? [];
   const out: WizardErrors = {};
   for (const k of fields) if (all[k]) out[k] = all[k];
+  if (fields.includes("apiBaseUrl") && !out.apiBaseUrl && addressHasRefusedPath(form.driverType, form.apiBaseUrl.trim())) {
+    out.apiBaseUrl = SYSTEMS_KEYS.register.invalid.apiBaseUrlPath;
+  }
   if (step === "login") {
     const parts_ = loginErrors(DRIVER_PROFILES[form.driverType].login, parts);
     // A missing half says which half; the composed login's own limit only when both are there.
