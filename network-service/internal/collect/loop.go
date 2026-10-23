@@ -402,12 +402,12 @@ func (l *Loop) plan(ctx context.Context, p Panel, readings []driver.ClientUsage,
 	return owed
 }
 
-// sawReset: a counter on this turn went backward. The ceiling the panel holds
-// is then in the counter's old origin, and it is restated on this turn
-// whatever the plan did (ADR-0072, `converge.Ceilings`).
+// sawReset: a counter on this turn went backward, or its limit took a new
+// origin. The ceiling the panel holds is then in the old one, and it is
+// restated on this turn whatever the plan did (ADR-0072, `converge.Ceilings`).
 func sawReset(res Result) bool {
 	for _, a := range res.Advances {
-		if !a.Counter.LastResetAt.IsZero() && a.Counter.LastResetAt.Equal(res.ObservedAt) {
+		if Restated(a.Counter, res.ObservedAt) {
 			return true
 		}
 	}

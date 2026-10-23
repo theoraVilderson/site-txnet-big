@@ -89,11 +89,7 @@ func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return nil, fmt.Errorf("threexui: base url %q is not an absolute url", baseURL)
 	}
-	if client == nil {
-		// No client timeout: the caller's context is the deadline (driver.Driver).
-		client = &http.Client{}
-	}
-	d := &Driver{base: base, creds: creds, http: client}
+	d := &Driver{base: base, creds: creds, http: driver.HTTPClient(client)}
 	d.BulkUsage = d.usage
 	return d, nil
 }

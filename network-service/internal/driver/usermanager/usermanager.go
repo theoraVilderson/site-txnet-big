@@ -54,6 +54,8 @@ type Driver struct {
 	base  *url.URL
 	creds Credentials
 	http  *http.Client
+	// BulkUsage is GetUsage and GetUsageFor, over totals' one read.
+	driver.BulkUsage
 }
 
 var _ driver.Driver = (*Driver)(nil)
@@ -76,11 +78,9 @@ func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return nil, fmt.Errorf("usermanager: base url %q is not an absolute url", baseURL)
 	}
-	if client == nil {
-		// No client timeout: the caller's context is the deadline (driver.Driver).
-		client = &http.Client{}
-	}
-	return &Driver{base: base, creds: creds, http: client}, nil
+	d := &Driver{base: base, creds: creds, http: driver.HTTPClient(client)}
+	d.BulkUsage = d.totals
+	return d, nil
 }
 
 // ---- wire ------------------------------------------------------------------
@@ -457,26 +457,6 @@ func (d *Driver) SetClientIPLimit(_ context.Context, _ string, limit int) error 
 
 func (d *Driver) SetClientRateLimit(ctx context.Context, remoteID string, rateBps int64) error {
 	return d.patch(ctx, "SetClientRateLimit", "limitation", chainName(remoteID), rateBody(rateBps))
-}
-
-// GetUsage is every user's lifetime total (users.go): what User Manager has
-// counted, which no RADIUS packet to us carries (contract.usermanager.md
-// rule 11).
-func (d *Driver) GetUsage(ctx context.Context) ([]driver.ClientUsage, error) {
-	return d.totals(ctx, "GetUsage", nil)
-}
-
-// GetUsageFor is the named users' totals, in the same two requests: the
-// monitor is asked for them alone. An empty set sends nothing.
-func (d *Driver) GetUsageFor(ctx context.Context, remoteIDs []string) ([]driver.ClientUsage, error) {
-	if len(remoteIDs) == 0 {
-		return nil, nil
-	}
-	want := map[string]bool{}
-	for _, id := range remoteIDs {
-		want[id] = true
-	}
-	return d.totals(ctx, "GetUsageFor", want)
 }
 
 // ResetUsage: nothing here zeroes a user's total.

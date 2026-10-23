@@ -50,9 +50,10 @@ var _ Store = PostgresStore{}
 // `radius_session` (F-027-du). A config is a replica while it can carry
 // traffic — the split's own rule (`contract.ceiling.md` "Who is in the
 // split"). The counter a ceiling is measured on is the panel's last figure on
-// a cumulative panel, the lifetime sum where a read zeroes it, and the
+// a cumulative panel, less the origin its limit counts from (User Manager's
+// link, F-027-du-b), the lifetime sum where a read zeroes it, and the
 // sessions' sum less the sum the client was created at on a session panel,
-// which is what User Manager checks its limit against. A Grant the planner closed
+// which is what a push panel checks its limit against. A Grant the planner closed
 // carries its `lease_close` row, and its configs read disabled (F-027-dd).
 const loadSQL = `
 WITH touched AS (
@@ -70,7 +71,7 @@ SELECT g.id::text, g."purchasedBytes", g."endsAt", lc."quotaBytes", lc."expiresA
        c.status = 'active' AND c."desiredEnabled" AND c."desiredRemote" = 'present',
        c."remoteId" IS NOT NULL,
        CASE p."counterSemantics"
-            WHEN 'cumulative' THEN coalesce(s."lastUpBytes" + s."lastDownBytes", 0)
+            WHEN 'cumulative' THEN greatest(coalesce(s."lastUpBytes" + s."lastDownBytes" - s."limitOriginBytes", 0), 0)
             WHEN 'session' THEN greatest(coalesce(rs.bytes, 0) - c."sessionBaselineBytes", 0)
             ELSE coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) END::bigint,
        (coalesce(s."lifetimeUpBytes" + s."lifetimeDownBytes", 0) + coalesce(rs.bytes, 0))::bigint,

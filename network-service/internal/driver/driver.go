@@ -232,6 +232,12 @@ type ClientUsage struct {
 	// the session this reading belongs to, which is what makes a restored
 	// backup harmless (ADR-0074).
 	SessionID string
+	// LimitOrigin is the panel's name for where its own per-client limit
+	// counts from, set only where that is not the counter's own origin: User
+	// Manager's profile link `.id`, since `transfer-limit` counts from the
+	// link and the total from the user (F-027-du-b). A new one restarts the
+	// limit's count, never the bill's. Empty is a family with none.
+	LimitOrigin string
 }
 
 // BulkUsage is a family that reads every client's counters in one call: the

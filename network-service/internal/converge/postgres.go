@@ -159,13 +159,14 @@ const ConfirmedEvent = "network.config.confirmed"
 // `config_group_panel_once`, and one row's guess must not fail the batch.
 // A create's session baseline ($17, F-027-du) is written with it; null keeps it.
 // A recreate ($19, F-027-fc) restarts the raw cursor at zero, as the panel's new
-// counter does, and keeps the lifetime and reset count: it is not a reset. It is
+// counter does, and its limit's origin with it (F-027-du-b), and keeps the
+// lifetime and reset count: it is not a reset. It is
 // not held to the desired-state guard, because the client was made either way.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt", "linkLines", "linksUuid" FROM network.config WHERE id = $1::uuid),
 restarted AS (
 UPDATE network.config_counter_state
-   SET "lastUpBytes" = 0, "lastDownBytes" = 0, "updatedAt" = now()
+   SET "lastUpBytes" = 0, "lastDownBytes" = 0, "limitOriginBytes" = 0, "updatedAt" = now()
  WHERE "configId" = $1::uuid AND $19::boolean),
 recorded AS (
 UPDATE network.config

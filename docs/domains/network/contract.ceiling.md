@@ -109,6 +109,21 @@ ceiling = max(0, allocatedCeilingBytes - offset)
 and "what the counter reads now" is the raw figure under `cumulative`, and zero
 under `reset_on_read` (the read spent it) — the conservative reading.
 
+**A limit can count from somewhere else than the figure** (F-027-du-b). User
+Manager's reading is the user's lifetime total, but `transfer-limit` counts
+from the user's profile link (`contract.usermanager.md` rule 9). So each
+reading names our link's `.id` as its `LimitOrigin`, and the cursor keeps it
+with the raw figure it was first read at (`limitOriginBytes`). The counter is
+then the raw figure less that (`Counter.LimitCounted`), in this translation
+and in the planner's Used alike. A link made again — by the pass repairing a
+removed one, or by hand — is a new id. The pass that reads it takes the new
+origin and restates the ceiling (`collect.Restated`, reason `counter_reset`),
+so the old link's count is not handed out again. A link made between two
+reads is measured from the later one, which leaves the limit lower, the safe
+side. It is not a reset: the bill reads the raw figure, which did not go
+back, and containment never counts it, so a population re-linked at once is
+not a mass restore.
+
 Under `session` (a push family) the lifetime is the Σ of the config's
 `radius_session` marks, and the counter is the panel's own per-user total,
 which starts at zero when the client is created. So the offset is

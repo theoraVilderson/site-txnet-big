@@ -55,6 +55,7 @@ SELECT c."panelId"::text, c.id::text, c."remoteId", c.protocol::text,
        coalesce(s."lastUpBytes", 0), coalesce(s."lastDownBytes", 0),
        coalesce(s."lifetimeUpBytes", 0), coalesce(s."lifetimeDownBytes", 0),
        s."lastObservedAt", coalesce(s."resetCount", 0), s."lastResetAt",
+       coalesce(s."limitOriginId", ''), coalesce(s."limitOriginBytes", 0), s."limitOriginAt",
        p.transport = 'push', rs."in", rs."out", c."sessionBaselineBytes"
   FROM network.config c
   JOIN network.panel p ON p.id = c."panelId"
@@ -85,12 +86,13 @@ func (c *PostgresCursors) reload(ctx context.Context, panelIDs []string) (map[st
 		var ref ConfigRef
 		var has bool
 		var cur Counter
-		var observed, reset *time.Time
+		var observed, reset, origin *time.Time
 		var push bool
 		var in, out, baseline int64
 		if err := rows.Scan(&panelID, &ref.ConfigID, &remoteID, &ref.Protocol, &has, &semantics,
 			&cur.LastUpBytes, &cur.LastDownBytes, &cur.LifetimeUpBytes, &cur.LifetimeDownBytes,
-			&observed, &cur.ResetCount, &reset, &push, &in, &out, &baseline); err != nil {
+			&observed, &cur.ResetCount, &reset, &cur.LimitOriginID, &cur.LimitOriginBytes, &origin,
+			&push, &in, &out, &baseline); err != nil {
 			return nil, fmt.Errorf("reading cursors: %w", err)
 		}
 		if configs[panelID] == nil {
@@ -110,6 +112,9 @@ func (c *PostgresCursors) reload(ctx context.Context, panelIDs []string) (map[st
 		}
 		if reset != nil {
 			cur.LastResetAt = reset.UTC()
+		}
+		if origin != nil {
+			cur.LimitOriginAt = origin.UTC()
 		}
 		counters[key(panelID, remoteID)] = cur
 	}
@@ -162,12 +167,15 @@ const applySQL = `
 INSERT INTO network.config_counter_state AS s
        (id, "configId", "panelId", "counterSemantics", "lastUpBytes", "lastDownBytes",
         "lifetimeUpBytes", "lifetimeDownBytes", "lastObservedAt", "lastPublishedAt",
-        "resetCount", "lastResetAt", "updatedAt")
+        "resetCount", "lastResetAt", "limitOriginId", "limitOriginBytes", "limitOriginAt", "updatedAt")
 SELECT gen_random_uuid(), v.config::uuid, v.panel::uuid, v.semantics::network."CounterSemantics",
-       v.up, v.down, v.lifetime_up, v.lifetime_down, v.observed, $11, v.resets, v.reset_at, now()
+       v.up, v.down, v.lifetime_up, v.lifetime_down, v.observed, $11, v.resets, v.reset_at,
+       NULLIF(v.origin, ''), v.origin_bytes, v.origin_at, now()
   FROM unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::bigint[], $6::bigint[],
-              $7::bigint[], $8::timestamp(3)[], $9::int[], $10::timestamp(3)[])
-       AS v(config, panel, semantics, up, down, lifetime_up, lifetime_down, observed, resets, reset_at)
+              $7::bigint[], $8::timestamp(3)[], $9::int[], $10::timestamp(3)[],
+              $12::text[], $13::bigint[], $14::timestamp(3)[])
+       AS v(config, panel, semantics, up, down, lifetime_up, lifetime_down, observed, resets, reset_at,
+            origin, origin_bytes, origin_at)
 ON CONFLICT ("configId") DO UPDATE
    SET "panelId" = EXCLUDED."panelId",
        "counterSemantics" = EXCLUDED."counterSemantics",
@@ -179,6 +187,9 @@ ON CONFLICT ("configId") DO UPDATE
        "lastPublishedAt" = EXCLUDED."lastPublishedAt",
        "resetCount" = EXCLUDED."resetCount",
        "lastResetAt" = EXCLUDED."lastResetAt",
+       "limitOriginId" = EXCLUDED."limitOriginId",
+       "limitOriginBytes" = EXCLUDED."limitOriginBytes",
+       "limitOriginAt" = EXCLUDED."limitOriginAt",
        "updatedAt" = EXCLUDED."updatedAt"`
 
 // ErrUnstorableAdvance is an advance this table has no place for: a session
@@ -194,8 +205,9 @@ func (c *PostgresCursors) Apply(ctx context.Context, res Result) error {
 	n := len(res.Advances)
 	configs, panels, semantics := make([]string, n), make([]string, n), make([]string, n)
 	up, down, lifeUp, lifeDown := make([]int64, n), make([]int64, n), make([]int64, n), make([]int64, n)
-	observed, resetAt := make([]*time.Time, n), make([]*time.Time, n)
+	observed, resetAt, originAt := make([]*time.Time, n), make([]*time.Time, n), make([]*time.Time, n)
 	resets := make([]int32, n)
+	origins, originBytes := make([]string, n), make([]int64, n)
 	for i, a := range res.Advances {
 		if a.Session != nil || a.ConfigID == "" {
 			return fmt.Errorf("%w: panel %s client %s", ErrUnstorableAdvance, a.PanelID, a.RemoteID)
@@ -204,12 +216,13 @@ func (c *PostgresCursors) Apply(ctx context.Context, res Result) error {
 		configs[i], panels[i], semantics[i] = a.ConfigID, a.PanelID, string(cur.Semantics)
 		up[i], down[i], lifeUp[i], lifeDown[i] = cur.LastUpBytes, cur.LastDownBytes, cur.LifetimeUpBytes, cur.LifetimeDownBytes
 		observed[i], resetAt[i], resets[i] = nullableTime(cur.LastObservedAt), nullableTime(cur.LastResetAt), int32(cur.ResetCount)
+		origins[i], originBytes[i], originAt[i] = cur.LimitOriginID, cur.LimitOriginBytes, nullableTime(cur.LimitOriginAt)
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, err := c.DB.Exec(ctx, applySQL, configs, panels, semantics, up, down, lifeUp, lifeDown,
-		observed, resets, resetAt, res.ObservedAt); err != nil {
+		observed, resets, resetAt, res.ObservedAt, origins, originBytes, originAt); err != nil {
 		return fmt.Errorf("moving panel %s cursors: %w", res.PanelID, err)
 	}
 	if c.counters == nil {

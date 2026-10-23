@@ -97,7 +97,9 @@ total, which is what makes a counter going backward a reset rather than
 negative usage; `lifetime*Bytes` is the total across resets. It also stores the
 `counterSemantics` the cursor was computed under, because a panel re-declared
 from `cumulative` to `session` invalidates it and a cursor that does not say
-what it meant cannot be invalidated. `lastPublishedAt` is written only after a
+what it meant cannot be invalidated. `limitOrigin*` is where the panel's own
+limit counts from when that is not the raw figure's origin — User Manager's
+profile link — and the raw figure when it was first read (F-027-du-b). `lastPublishedAt` is written only after a
 successful publish (F-027-n), so a crash between read and publish re-reads
 rather than loses.
 

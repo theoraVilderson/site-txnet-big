@@ -73,9 +73,9 @@ answered — C-18), `migration-run-plan.ts`, `migration-preview.ts`
    router has it. **A normal end deletes it** (decision 8): an admin's
    delete or the purge, as for every config of ours.
 9. **Their usage is the router's**: each user's lifetime total, read as a
-   `cumulative` counter (network ADR-0161, F-027-ag-b). Not yet: a link made
-   again restarts the router's count until F-027-du-b, so the page (F-1601-c)
-   waits for it.
+   `cumulative` counter (network ADR-0161, F-027-ag-b), and the ceiling
+   counts from our profile link, so a link made again hands out nothing
+   twice (F-027-du-b). Nothing network-side holds the page (F-1601-c) back.
 
 ## Refusals
 

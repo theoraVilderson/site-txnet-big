@@ -10,6 +10,15 @@ import (
 	"time"
 )
 
+// HTTPClient is c, or a client with no timeout of its own when c is nil: the
+// caller's context is every call's deadline (Driver).
+func HTTPClient(c *http.Client) *http.Client {
+	if c == nil {
+		return &http.Client{}
+	}
+	return c
+}
+
 // Send is one request to a panel with its failures classified (Fault): a
 // transport error after the deadline is a timeout, any other one unavailable,
 // and a status of 300 or more is FaultForStatus's, carrying the panel's

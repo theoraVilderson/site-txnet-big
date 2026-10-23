@@ -138,20 +138,6 @@ type Advance struct {
 	Session   *SessionMark
 }
 
-// Counter mirrors `network.config_counter_state`: the last **raw** figures
-// read off the source, not a total, which is what makes a counter going
-// backward a reset rather than negative usage.
-type Counter struct {
-	Semantics         driver.CounterSemantics
-	LastUpBytes       int64
-	LastDownBytes     int64
-	LifetimeUpBytes   int64
-	LifetimeDownBytes int64
-	LastObservedAt    time.Time
-	ResetCount        int
-	LastResetAt       time.Time
-}
-
 // SessionMark is how much of one session's high-water mark has already left as
 // a delta — `radius_session.published*Bytes` under another name. It is what
 // makes a restored backup harmless: the restore brings back a session id whose
@@ -230,7 +216,7 @@ func (n Normaliser) counter(res *Result, reading driver.ClientUsage, ref ConfigR
 		return
 	}
 
-	next := cur
+	next := withOrigin(cur, reading, at)
 	next.LastUpBytes, next.LastDownBytes = reading.UpBytes, reading.DownBytes
 	next.LastObservedAt = later(cur.LastObservedAt, at)
 
@@ -363,12 +349,12 @@ func (n Normaliser) session(res *Result, reading driver.ClientUsage, ref ConfigR
 // ADR-0074 accepts for a low-trust source, and it is bounded to exactly one
 // pass.
 func (n Normaliser) adopt(res *Result, reading driver.ClientUsage, at time.Time, mark *SessionMark) {
-	n.advance(res, reading.RemoteID, reading.SessionID, Counter{
+	n.advance(res, reading.RemoteID, reading.SessionID, withOrigin(Counter{
 		Semantics:      n.Panel.CounterSemantics,
 		LastUpBytes:    reading.UpBytes,
 		LastDownBytes:  reading.DownBytes,
 		LastObservedAt: at,
-	}, mark)
+	}, reading, at), mark)
 }
 
 // markFor is the session baseline a reading supports: a mark can only exist

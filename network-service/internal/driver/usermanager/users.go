@@ -135,15 +135,17 @@ func permissive(limits []row) (ceilingBytes, rateBps int64, err error) {
 	return ceilingBytes, rateBps, nil
 }
 
-// totals is User Manager's own lifetime total for every user, or for the
-// named ones, in two requests whatever their number: the users' ids, then one
-// `monitor ... once` over them (F-027-ag-b). `numbers` takes row ids, never
-// names — a name is a 404 on a real router — and the answer comes back in the
-// order asked (both proved on a CHR, F-1601-e). Ids are listed first because
-// an unknown one fails the whole command, and a user deleted on the router
-// must not stop every other user being read. The total restarts with the
-// user, which is a reset to the normaliser. It is not what `transfer-limit`
-// is checked against: that counts from the profile link (rule 9).
+// totals is GetUsage: User Manager's own lifetime total for every user, or
+// for the named ones, with the link its limit counts from, in three requests
+// whatever their number: the users' ids, one `monitor ... once` over them,
+// and the profile links (F-027-ag-b, F-027-du-b). `numbers` takes row ids,
+// never names — a name is a 404 on a real router — and the answer comes back
+// in the order asked (both proved on a CHR, F-1601-e). Ids are listed first
+// because an unknown one fails the whole command, and a user deleted on the
+// router must not stop every other user being read. The total restarts with
+// the user, which is a reset to the normaliser. `transfer-limit` counts from
+// the profile link instead (rule 9), so each reading names our link's `.id`
+// as its LimitOrigin: a link made again has a new one.
 func (d *Driver) totals(ctx context.Context, op string, want map[string]bool) ([]driver.ClientUsage, error) {
 	users, err := d.list(ctx, op, "user", url.Values{".proplist": {".id,name"}})
 	if err != nil {
@@ -158,8 +160,8 @@ func (d *Driver) totals(ctx context.Context, op string, want map[string]bool) ([
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	// The monitor is the read's second request: it pays the panel's budget
-	// as a page does (ADR-0081).
+	// The monitor and the links are the read's second and third requests:
+	// each pays the panel's budget as a page does (ADR-0081).
 	if err := driver.NextPage(ctx, op); err != nil {
 		return nil, err
 	}
@@ -172,6 +174,10 @@ func (d *Driver) totals(ctx context.Context, op string, want map[string]bool) ([
 		return nil, driver.NewFault(driver.FaultProtocol, op, 0,
 			fmt.Errorf("monitor answered %d users for %d asked", len(answers), len(names)))
 	}
+	links, err := d.ourLinks(ctx, op)
+	if err != nil {
+		return nil, err
+	}
 	at := time.Now()
 	out := make([]driver.ClientUsage, len(names))
 	for i, a := range answers {
@@ -180,7 +186,27 @@ func (d *Driver) totals(ctx context.Context, op string, want map[string]bool) ([
 		if err := errors.Join(errUp, errDown); err != nil {
 			return nil, driver.NewFault(driver.FaultProtocol, op, 0, fmt.Errorf("user %q: %w", names[i], err))
 		}
-		out[i] = driver.ClientUsage{RemoteID: names[i], UpBytes: up, DownBytes: down, ObservedAt: at}
+		out[i] = driver.ClientUsage{RemoteID: names[i], UpBytes: up, DownBytes: down, ObservedAt: at, LimitOrigin: links[names[i]]}
+	}
+	return out, nil
+}
+
+// ourLinks is each user's link to its own chain's profile, by user name: the
+// row `transfer-limit` counts from. A user with none — not ours, or a chain
+// half made — has no entry.
+func (d *Driver) ourLinks(ctx context.Context, op string) (map[string]string, error) {
+	if err := driver.NextPage(ctx, op); err != nil {
+		return nil, err
+	}
+	rows, err := d.list(ctx, op, "user-profile", url.Values{".proplist": {".id,user,profile"}})
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, l := range rows {
+		if l["profile"] == chainName(l["user"]) {
+			out[l["user"]] = l[".id"]
+		}
 	}
 	return out, nil
 }

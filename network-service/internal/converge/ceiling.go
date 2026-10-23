@@ -427,14 +427,13 @@ func held(stopped map[string]DriftState, configID string, overridden bool, want,
 	return ok && have > 0 && want > have && (overridden || was == DriftContested)
 }
 
-// sawReset asks whether **this** pass is the one that found the counter going
-// backward. It reads the cursor's own reset mark rather than the delta stream,
-// because a counter zeroed between two reads publishes no delta at all — the
-// post-reset figure can be zero — and that is exactly the case the rewrite
-// exists for.
+// sawReset asks whether **this** pass moved the counter's origin: a reset, or
+// a new limit origin (F-027-du-b). It reads the cursor's own marks, not the
+// delta stream: a counter zeroed between two reads publishes no delta at all,
+// and that is exactly the case the rewrite exists for.
 func (c *Ceilings) sawReset(p collect.Panel, remoteID string, res collect.Result) bool {
 	counter, seen := c.Counters.Counter(p.ID, remoteID)
-	return seen && !counter.LastResetAt.IsZero() && counter.LastResetAt.Equal(res.ObservedAt)
+	return seen && collect.Restated(counter, res.ObservedAt)
 }
 
 // OffsetBytes is what the panel's counter no longer holds: the lifetime bytes
@@ -459,18 +458,19 @@ func OffsetBytes(counters Counters, p collect.Panel, remoteID string) int64 {
 	return offset
 }
 
-// panelCounterBytes is what the far end's own counter reads now, which is not
+// panelCounterBytes is what the far end's own limit has counted, which is not
 // the same question as what the config has served.
 //
-//   - cumulative: the raw figure we just read off it.
+//   - cumulative: the raw figure we just read off it, less the origin its
+//     limit counts from (User Manager's profile link, F-027-du-b).
 //   - reset_on_read: zero — the act of reading spent it.
-//   - session: User Manager's per-user total, which starts at the client's
+//   - session: the panel's per-user total, which starts at the client's
 //     create — `collect.SessionCounter`, our Σ less its baseline (F-027-du).
 func panelCounterBytes(semantics driver.CounterSemantics, counter collect.Counter) int64 {
 	if semantics == driver.CounterResetOnRead {
 		return 0
 	}
-	return counter.LastUpBytes + counter.LastDownBytes
+	return counter.LimitCounted()
 }
 
 // PanelCeiling turns a lifetime allowance into the figure that panel's counter

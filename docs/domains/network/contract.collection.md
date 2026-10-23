@@ -33,7 +33,8 @@ family a byte came from (ADR-0074):
 
 - **cumulative** — the rise above the cursor's last *raw* figure. A lower
   figure is a reset: the post-reset figure is published whole and flagged
-  `AfterReset`, and no negative delta exists anywhere.
+  `AfterReset`, and no negative delta exists anywhere. A new `LimitOrigin`
+  on a reading is not one (F-027-du-b, `contract.ceiling.md`).
 - **reset_on_read** — the reading *is* the delta; the read spent the counter.
 - **session** — the rise above that session id's published high-water. A
   restored backup returns an id already at its mark, so it is worth nothing,

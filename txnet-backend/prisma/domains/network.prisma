@@ -994,6 +994,14 @@ model ConfigCounterState {
   lastPublishedAt   DateTime?
   resetCount        Int              @default(0)
   lastResetAt       DateTime?
+  /// Where the panel's own limit counts from, when that is not the raw
+  /// figure's origin: User Manager's profile link `.id` (F-027-du-b). The
+  /// limit has counted the raw figure less `limitOriginBytes`, its value when
+  /// that origin was first read, at `limitOriginAt`. Not a reset. CHECK
+  /// `config_counter_state_limit_origin_not_negative` (raw SQL).
+  limitOriginId     String?
+  limitOriginBytes  BigInt           @default(0)
+  limitOriginAt     DateTime?
   updatedAt         DateTime         @updatedAt
 
   config Config @relation(fields: [configId], references: [id])

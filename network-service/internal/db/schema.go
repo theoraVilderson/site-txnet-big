@@ -113,6 +113,8 @@ var RequiredColumns = map[string][]string{
 		"id", "configId", "panelId", "counterSemantics",
 		"lastUpBytes", "lastDownBytes", "lifetimeUpBytes", "lifetimeDownBytes",
 		"lastObservedAt", "lastPublishedAt", "resetCount", "lastResetAt", "updatedAt",
+		// Where the panel's own limit counts from (F-027-du-b).
+		"limitOriginId", "limitOriginBytes", "limitOriginAt",
 	},
 	// A figure we measured and do not believe (invariant 18: it is held or
 	// quarantined, never dropped).

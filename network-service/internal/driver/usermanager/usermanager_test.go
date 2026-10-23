@@ -347,8 +347,8 @@ var _ conformance.ReadCost = (*harness)(nil)
 
 func (h *harness) Driver() driver.Driver { return h.d }
 
-// RequestsPerRead: the users' ids, then one monitor over them.
-func (h *harness) RequestsPerRead() int { return 2 }
+// RequestsPerRead: the users' ids, one monitor over them, the profile links.
+func (h *harness) RequestsPerRead() int { return 3 }
 
 // Given is a user as CreateClient leaves it: the user and its own chain.
 func (h *harness) Given(remoteID string) {
@@ -579,9 +579,11 @@ func TestDeleteTakesTheChainAndCanBeRepeated(t *testing.T) {
 
 // GetUsage is each user's lifetime total, the figure User Manager keeps
 // whatever its NAS sends us — which is nothing (contract.usermanager.md rule
-// 11, F-027-ag-b). It is two requests whatever the number of users, and a
-// user made again by hand reads from zero: the reset the normaliser sees.
-func TestUsageIsEachUsersLifetimeTotalInTwoRequests(t *testing.T) {
+// 11, F-027-ag-b) — with our profile link's `.id` as the origin its limit
+// counts from (F-027-du-b). It is three requests whatever the number of
+// users, and a user made again by hand reads from zero: the reset the
+// normaliser sees.
+func TestUsageIsEachUsersLifetimeTotalAndItsLink(t *testing.T) {
 	f, d := open(t)
 	h := &harness{f: f, d: d}
 	a := create(t, d, true)
@@ -594,8 +596,8 @@ func TestUsageIsEachUsersLifetimeTotalInTwoRequests(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetUsage: %v", err)
 	}
-	if n := h.TotalCalls() - before; n != 2 {
-		t.Fatalf("%d requests, want 2: the users, then one monitor over all of them", n)
+	if n := h.TotalCalls() - before; n != 3 {
+		t.Fatalf("%d requests, want 3: the users, one monitor over all of them, the links", n)
 	}
 	got := map[string]driver.ClientUsage{}
 	for _, r := range readings {
@@ -606,6 +608,45 @@ func TestUsageIsEachUsersLifetimeTotalInTwoRequests(t *testing.T) {
 	}
 	if r := got[a.RemoteID]; r.UpBytes != 100 || r.DownBytes != 2_000 || got["other"].UpBytes+got["other"].DownBytes != 12 {
 		t.Fatalf("readings = %+v", readings)
+	}
+	link := f.rows("user-profile")
+	ours := ""
+	for _, l := range link {
+		if l["user"] == a.RemoteID {
+			ours = l[".id"]
+		}
+	}
+	if got[a.RemoteID].LimitOrigin != ours || ours == "" {
+		t.Fatalf("origin = %q, want our link %q", got[a.RemoteID].LimitOrigin, ours)
+	}
+	f.put("user", map[string]string{"name": "theirs", "disabled": "false"})
+	f.put("profile", map[string]string{"name": "monthly"})
+	f.put("user-profile", map[string]string{"user": "theirs", "profile": "monthly", "state": "running"})
+
+	// A link made again — removed, then the chain repaired — is a new origin.
+	if err := d.remove(context.Background(), "test", "user-profile", ours); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if err := d.UpdateClient(context.Background(), driver.UpdateClientRequest{
+		RemoteID: a.RemoteID, UUID: testUUID, ClaimTag: "cfg_7f3a", Enabled: true, DataLimitBytes: 5 << 30,
+	}); err != nil {
+		t.Fatalf("UpdateClient: %v", err)
+	}
+	again, err := d.GetUsage(context.Background())
+	if err != nil {
+		t.Fatalf("GetUsage: %v", err)
+	}
+	for _, r := range again {
+		switch r.RemoteID {
+		case a.RemoteID:
+			if r.LimitOrigin == "" || r.LimitOrigin == ours {
+				t.Errorf("origin after the link was made again = %q, want a new one (was %q)", r.LimitOrigin, ours)
+			}
+		case "theirs":
+			if r.LimitOrigin != "" {
+				t.Errorf("a user on its own profile reads origin %q, want none: its limit is not ours", r.LimitOrigin)
+			}
+		}
 	}
 
 	hot, err := d.GetUsageFor(context.Background(), []string{"other"})

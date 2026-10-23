@@ -58,12 +58,15 @@ The rules:
    limit: the money-hole finding of ADR-0072 rule 2. It is not our ceiling
    hiding the extra profile. A profile in state `used` grants nothing and is
    ignored.
-5. **`GetUsage` is each user's lifetime total**, in two requests whatever
-   the number of users: their `.id`s, then one `monitor` over them (rule
-   10). The second pays the budget as a page does (ADR-0081), and the
-   conformance suite holds the family to two (`conformance.ReadCost`).
-   `GetUsageFor` asks the monitor for the named users alone. The total
-   starts again only with the user, which the normaliser reads as a reset.
+5. **`GetUsage` is each user's lifetime total**, in three requests whatever
+   the number of users: their `.id`s, one `monitor` over them (rule 10),
+   and the profile links. Each request past the first pays the budget as a
+   page does (ADR-0081), and the conformance suite holds the family to three
+   (`conformance.ReadCost`). `GetUsageFor` asks the monitor for the named
+   users alone (`driver.BulkUsage`). The total starts again only with the
+   user, which the normaliser reads as a reset. Each reading names our link
+   (profile `txnet-<user>`) as its `LimitOrigin`, none for a user without
+   one (rule 9, `contract.ceiling.md`).
 6. **Disabling refuses the next login.** User Manager does not cut a session
    that is already open. The ceiling is what ends that session's traffic.
 7. **Some calls have nothing to do.** `ResetUsage` and `BuildLink` return
@@ -108,8 +111,9 @@ its documentation says.
    REST reports the count itself. So:
    - an adoption's first ceiling is the remaining allocation, with no
      pre-import usage added (ADR-0160 decision 9, F-1601-b2);
-   - a link we make again hands the user its ceiling again — closed by
-     tracking the link's `.id` (F-027-du-b, user 2026-10-23);
+   - a link made again would hand the user its ceiling again; the cursor
+     keeps our link's `.id` and the total it was first read at, and the
+     ceiling counts from there (F-027-du-b, `contract.ceiling.md`);
    - the import's "used" is the lifetime total, more than a renewed user's
      current profile counts — the safe direction (F-1601-f).
    The limit is not sent to the NAS: an Access-Accept carries

@@ -72,11 +72,7 @@ func New(baseURL string, creds Credentials, client *http.Client) (*Driver, error
 	if err != nil || base.Scheme == "" || base.Host == "" {
 		return nil, fmt.Errorf("marzban: base url %q is not an absolute url", baseURL)
 	}
-	if client == nil {
-		// No client timeout: the caller's context is the deadline (driver.Driver).
-		client = &http.Client{}
-	}
-	return &Driver{base: base, creds: creds, http: client}, nil
+	return &Driver{base: base, creds: creds, http: driver.HTTPClient(client)}, nil
 }
 
 // ---- wire ------------------------------------------------------------------
