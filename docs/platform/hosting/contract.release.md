@@ -44,9 +44,14 @@ installing k3s, as it copies `k8s/k3s/config.yaml` (S6); after a change,
 name `docker.io`, which the node reaches only through the mirror every compose
 `image:` already names.
 
-**R4 — The node never builds.** `prod.k8s.sh build` refuses when `$K3S_ETC`
-exists. A release is `build` and `push` off the node, at the commit `deploy`
-then runs on it: both take `IMAGE_TAG` from the commit (K16).
+**R4 — Never built where the release runs.** `prod.k8s.sh build` refuses on
+the k3s server node (`$K3S_ETC/k3s.yaml`), and on an agent unless the agent's
+own node carries `txnet.io/no-release` (`NO_RELEASE_TAINT`, read through the
+kubelet's kubeconfig), which keeps every release pod off it. The dev host builds
+under that taint (user, 2026-10-24: one node runs the release for now, and no
+build server is bought); a node without it fails closed. A release is `build`
+and `push` there, at the commit `deploy` then runs: both take `IMAGE_TAG` from
+the commit (K16).
 
 **R10 — The registry answers before anything is sent** (OPS-1-o-t). `push`
 asks `https://<registry>/v2/` once (15s, `--noproxy`) before its first image, and

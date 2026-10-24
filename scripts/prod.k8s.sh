@@ -23,6 +23,7 @@
 #   KUBECTL       the kubectl to run (default: kubectl)
 #   TOOLS_DIR     where install-tools puts sops and age-keygen (default: /usr/local/bin)
 #   K3S_ETC       k3s's config directory; its presence marks the node (default: /etc/rancher/k3s)
+#   NODE_NAME     this host's k3s node name, read for its taint before a build on an agent (default: hostname)
 #
 # The compose files stay the only definition of a service; this renders them
 # (tools/k8s_render.py: the main stack, and the monitoring one into
@@ -48,6 +49,10 @@ DATA_LABEL=txnet.io/data=true
 ROLLOUT_FAILED=()
 TOOLS_DIR="${TOOLS_DIR:-/usr/local/bin}"
 K3S_ETC="${K3S_ETC:-/etc/rancher/k3s}"
+# K14: an agent with this taint carries no release pod, so it may build.
+NO_RELEASE_TAINT=txnet.io/no-release=true:NoSchedule
+KUBELET_KUBECONFIG=/var/lib/rancher/k3s/agent/kubelet.kubeconfig
+NODE_NAME="${NODE_NAME:-$(hostname)}"
 # Every temporary path here holds secrets: removed however the script exits.
 TEMPS=()
 # A rollback's worktree is one of them; `worktree prune` then forgets it.
@@ -69,11 +74,23 @@ images() {
   python3 "$ROOT_DIR/tools/k8s_render.py" --images --tag "$IMAGE_TAG"
 }
 
+# K14: never where the release runs — the 2026-10-23 restore's build starved its
+# services. The server node always runs it; an agent may build only while it
+# carries NO_RELEASE_TAINT, which keeps every release pod off it (user 2026-10-24).
+require_build_host() {
+  [ -e "$K3S_ETC" ] || return 0
+  [ ! -e "$K3S_ETC/k3s.yaml" ] || die "this is the k3s server node, where the release runs: build off it and push (K14)"
+  local taints
+  taints="$(k3s kubectl --kubeconfig "$KUBELET_KUBECONFIG" get node "$NODE_NAME" \
+    -o jsonpath='{.spec.taints[*].key}' 2>/dev/null)" || true
+  [[ " $taints " == *" ${NO_RELEASE_TAINT%%=*} "* ]] ||
+    die "this k3s agent has no ${NO_RELEASE_TAINT%%=*} taint, so release pods may run here (K14)"
+}
+
 # One service at a time: a parallel build starves whatever else runs on the host.
-# Never on the node itself (K14): the 2026-10-23 restore's build starved its services.
 build() {
   local service local_image remote
-  [ ! -e "$K3S_ETC" ] || die "$K3S_ETC exists, so this is the k3s node: build off it and push (K14)"
+  require_build_host
   while IFS=$'\t' read -r service local_image remote; do
     echo "== build $service -> $remote"
     compose build "$service" </dev/null
@@ -366,5 +383,5 @@ case "${1:-}" in
   rollback) rollback "${2:-}" ;;
   secrets) shift && exec python3 "$ROOT_DIR/tools/k8s_secrets.py" "$@" ;;
   install-tools) install_tools ;;
-  *) sed -n '2,24p' "$0" >&2 && exit 2 ;;
+  *) sed -n '2,26p' "$0" >&2 && exit 2 ;;
 esac

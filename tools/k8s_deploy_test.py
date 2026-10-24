@@ -153,14 +153,35 @@ class ScriptTest(unittest.TestCase):
     def test_prod_k8s_parses(self):
         subprocess.run(["bash", "-n", str(REPO / "scripts/prod.k8s.sh")], check=True)
 
-    # K14: a build on the node starves what it runs; it refuses before docker is asked.
-    def test_build_refuses_on_a_k3s_node(self):
+    def build_on(self, files, taints):
+        """`build` with K3S_ETC holding `files`, the node's taint keys `taints`, and docker recorded, not run."""
         with tempfile.TemporaryDirectory() as node:
-            run = subprocess.run([str(REPO / "scripts/prod.k8s.sh"), "build"], capture_output=True, text=True,
-                                 env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
+            for name in files:
+                Path(node, name).touch()
+            script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
+                      "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
+                      f"k3s() {{ printf '%s' '{taints}'; }}\n"
+                      "compose() { :; }\ndocker() { :; }\nbuild")
+            return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                                  env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
+
+    # K14: a build where the release runs starves it; it refuses before docker is asked.
+    def test_build_refuses_on_the_server_node(self):
+        run = self.build_on(["config.yaml", "k3s.yaml"], "txnet.io/no-release")
         self.assertNotEqual(run.returncode, 0)
         self.assertIn("K14", run.stderr)
         self.assertNotIn("== build", run.stdout)
+
+    def test_build_refuses_on_an_agent_release_pods_may_reach(self):
+        run = self.build_on(["config.yaml"], "")
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("txnet.io/no-release", run.stderr)
+        self.assertNotIn("== build", run.stdout)
+
+    def test_build_runs_on_an_agent_marked_no_release(self):
+        run = self.build_on(["config.yaml"], "node.kubernetes.io/unreachable txnet.io/no-release")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("== build billing-service", run.stdout)
 
     def run_with_registry(self, command, status):
         """`command` with the registry's /v2/ answering `status` and docker recorded, not run."""
