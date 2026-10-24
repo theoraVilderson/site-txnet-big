@@ -18,6 +18,11 @@ __all__ = ["RenderError", "render"]
 PART_OF = {"app.kubernetes.io/part-of": "txnet"}
 # K3: compose's stop grace when a service names none.
 _DEFAULT_GRACE_S = 10
+# K8: a Job is applied on its own, before the base (K10), so it is written beside it.
+JOBS_DIR = "jobs"
+# K8: a run-once Job's limits. A failed migration is read, not retried (C-39);
+# its pod is kept a day for its log.
+_JOB_DEADLINE_S, _JOB_KEPT_S = 900, 86400
 _MAPPED_KEYS = {"command", "entrypoint", "environment", "expose", "extra_hosts", "healthcheck", "image",
                 "labels", "mem_limit", "cpus", "ports", "restart", "shm_size", "stop_grace_period",
                 "tmpfs", "volumes", "working_dir"}
@@ -46,22 +51,33 @@ def render(model: dict, repo: Path, options: dict) -> dict:
     _check_calls(services, traefik)
     builders = {s["image"]: n for n, s in services.items() if s.get("build") and s.get("image")}
     stack = _Stack(services, builders, options, repo, traefik, backend_index(traefik))
-    files, shared = {}, {}
+    files, jobs, shared = {}, {}, {}
     for name in sorted(services):
         if name in SIDECARS:
             continue
-        files[f"{name}.yaml"], mounted = _pod(stack, name)
+        objects, mounted = _pod(stack, name)
+        (jobs if _runs_once(services[name]) else files)[f"{name}.yaml"] = objects
         shared.update(mounted)
     files["storage.yaml"] = [o for k, o in sorted(shared.items()) if k.startswith("pvc/")]
     files["files.yaml"] = [o for k, o in sorted(shared.items()) if k.startswith("file/")]
     files["namespace.yaml"] = [{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}}]
     files = {k: v for k, v in files.items() if v}
-    files["kustomization.yaml"] = {
-        "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
-        "namespace": NAMESPACE, "resources": sorted(files),
-        "labels": [{"pairs": PART_OF, "includeSelectors": False}],
-    }
+    files["kustomization.yaml"] = _kustomization(files)
+    if jobs:
+        files.update({f"{JOBS_DIR}/{k}": v for k, v in jobs.items()})
+        files[f"{JOBS_DIR}/kustomization.yaml"] = _kustomization(jobs)
     return files
+
+
+def _kustomization(files: dict) -> dict:
+    return {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "namespace": NAMESPACE, "resources": sorted(files),
+            "labels": [{"pairs": PART_OF, "includeSelectors": False}]}
+
+
+def _runs_once(service: dict) -> bool:
+    """K8: a compose service that exits when done (`restart: "no"`) is a Job, not a workload."""
+    return service.get("restart") == "no"
 
 
 def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
@@ -90,7 +106,8 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
         as_edge(pod)
     template = {"metadata": {"labels": labels}, "spec": pod}
     routing = edge_objects(name, stack.traefik[name], stack.backends)
-    return [_workload(name, template), *_services(name, service, stack.traefik[name]), *routing, *secrets], \
+    workload = _job(name, template) if _runs_once(service) else _workload(name, template)
+    return [workload, *_services(name, service, stack.traefik[name]), *routing, *secrets], \
         mounts.objects
 
 
@@ -103,6 +120,14 @@ def _workload(name: str, template: dict) -> dict:
     spec.update(strategy={"type": "RollingUpdate", "rollingUpdate": {"maxSurge": 1, "maxUnavailable": 0}},
                 minReadySeconds=10, progressDeadlineSeconds=300)
     return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": dns_name(name)}, "spec": spec}
+
+
+def _job(name: str, template: dict) -> dict:
+    template["spec"]["restartPolicy"] = "Never"
+    spec = {"backoffLimit": 0, "activeDeadlineSeconds": _JOB_DEADLINE_S, "ttlSecondsAfterFinished": _JOB_KEPT_S,
+            "template": template}
+    return {"apiVersion": "batch/v1", "kind": "Job",
+            "metadata": {"name": dns_name(name), "labels": {"app.kubernetes.io/name": name}}, "spec": spec}
 
 
 def _services(name: str, service: dict, traefik: Labels) -> list:
@@ -159,7 +184,7 @@ def _check_keys(name: str, service: dict) -> None:
     unknown = set(service) - _MAPPED_KEYS - DROPPED_KEYS
     if unknown:
         raise RenderError(f"{name}: compose key(s) {', '.join(sorted(unknown))} not mapped (K2)")
-    if service.get("restart") not in ALWAYS_RESTART:
+    if service.get("restart") not in ALWAYS_RESTART and not _runs_once(service):
         raise RenderError(f"{name}: restart {service['restart']!r} — a pod always restarts (K3)")
 
 

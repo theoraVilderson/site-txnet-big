@@ -33,7 +33,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/auth-handler ./cmd/server
 # ---------- prod: minimal image ----------
 FROM ${DOCKER_REGISTRY}/alpine:3.19 AS prod
 RUN apk --no-cache add ca-certificates
-WORKDIR /root/
+# Where compose's `working_dir` and PERMISSIONS_FILE_PATH say the gateway and
+# its configs are; dev mounts the source over the same path (K8).
+WORKDIR /src/auth-handler
 COPY --from=builder /out/auth-handler .
 COPY --from=builder /src/auth-handler/configs ./configs
 ENV HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY="" \

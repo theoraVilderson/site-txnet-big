@@ -19,6 +19,13 @@ def image_for(name: str, service: dict, builders: dict[str, str], options: dict)
     return service["image"]
 
 
+def built_images(services: dict, project: str, options: dict) -> list[tuple[str, str, str]]:
+    """K8: (service, the name compose tags its build with, the name the node pulls)
+    for every service compose builds."""
+    return [(name, service.get("image") or f"{project}-{name}", image_for(name, service, {}, options))
+            for name, service in sorted(services.items()) if service.get("build")]
+
+
 def environment_secret(name: str, service: dict) -> dict | None:
     """K5: the service's whole rendered environment, and nothing else. Values are not
     expanded by Kubernetes through envFrom, so they need no escaping."""

@@ -16,7 +16,9 @@ The gRPC contract is the source of truth:
 `locale-service` reads `locales/` and serves it over gRPC on `:50051`. Every
 consumer blocks on boot until the first snapshot is cached, then holds a `Watch`
 stream so edits reload live. One Go client, one Node client — no per-service
-copies.
+copies. On Kubernetes `locales/` is baked into the `locale-service` image
+(hosting K8), so a change to it ships with `prod.k8s.sh build` + `deploy`; dev
+mounts the live tree, and runtime-written text stays on its volume (ADR-0050).
 
 ## RPCs
 

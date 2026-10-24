@@ -1,0 +1,13 @@
+# Production (hosting K10): the rendered base (`scripts/prod.k8s.sh render`
+# writes ../../base, never committed) and Traefik's CRDs and RBAC. Every object
+# carries part-of=txnet, the label `deploy` prunes by; what it may prune is
+# PRUNE_KINDS in scripts/prod.k8s.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+  - ../../traefik
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: txnet
+    includeSelectors: false

@@ -1,6 +1,8 @@
 node_modules
 **/node_modules
 .nx
+# webpack's filesystem cache on the host (443 MB); the image builds its own.
+.webpack-cache
 dist
 dist-*
 .git

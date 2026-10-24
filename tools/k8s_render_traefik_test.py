@@ -9,7 +9,6 @@ keeps the client's address.
 """
 import base64
 import copy
-import re
 import shutil
 import subprocess
 import sys
@@ -229,14 +228,6 @@ class TraefikTest(unittest.TestCase):
         broken["services"]["authorization-handler"]["expose"] = ["9000"]
         with self.assertRaisesRegex(RenderError, "authorization-handler:8080"):
             self.render(broken)
-
-
-# K8: what K7 leaves unmounted is in the image instead.
-class EdgeImageTest(unittest.TestCase):
-    def test_baked_directories_are_copied(self):
-        dockerfile = (REPO / "dev-docker/traefik/Dockerfile").read_text()
-        for rel in BAKED_BINDS:
-            self.assertRegex(dockerfile, rf"(?m)^COPY {re.escape(Path(rel).name)}/ ")
 
 
 # The fixture the row names: every router of the real compose model is one

@@ -43,19 +43,18 @@ DEV_ONLY_BINDS = {
     "/var/run/docker.sock",
 }
 
-# K8: bound directories another row turns into an image layer.
-# The value is the row that does; until it lands the mount is left out.
-LATER_BINDS = {
-    "locales": "OPS-1-o-c",
+# K8/K9: bound directories copied into an image instead of mounted, and the
+# Dockerfile that copies each (tools/k8s_deploy_test.py holds the two together).
+BAKED_BINDS = {
+    "locales": "i18n-platform/services/locale-service/Dockerfile",
+    "dev-docker/traefik/dynamic": "dev-docker/traefik/Dockerfile",
+    "dev-docker/traefik/plugins-local": "dev-docker/traefik/Dockerfile",
+    "dev-docker/traefik/origin-pull": "dev-docker/traefik/Dockerfile",
 }
 
-# K8/K9: Traefik's file config, local plugins and origin-pull CA, copied into
-# its image by dev-docker/traefik/Dockerfile instead of mounted.
-BAKED_BINDS = {
-    "dev-docker/traefik/dynamic",
-    "dev-docker/traefik/plugins-local",
-    "dev-docker/traefik/origin-pull",
-}
+# K8: compose profiles whose services are rendered too — `migrate` holds
+# db-migrate, which `up` must never start but `deploy` runs as a Job.
+PROFILES = ["migrate"]
 
 # K7/K9: a bound directory that holds state, and the claim that holds it instead.
 BIND_CLAIMS = {"dev_letsencrypt": "letsencrypt"}
@@ -82,4 +81,5 @@ DROPPED_KEYS = {
     "logging",  # the kubelet rotates container logs (K1)
     "memswap_limit",  # Kubernetes runs without swap
     "build",  # read for the image name (K8), not a pod field
+    "profiles",  # K8: chose which services compose printed; PROFILES above
 }

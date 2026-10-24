@@ -2,6 +2,7 @@
 """Render the production compose stack into a Kustomize base (ADR-0147, hosting K2).
 
     python3 tools/k8s_render.py <out-dir> --host-gateway IP [--tag T] [--env-file F]... [--set K=V]...
+    python3 tools/k8s_render.py --images [--tag T]   service, local image, registry image per build (K8)
 
 Compose does the interpolation (`docker compose config`), so a variable means
 here exactly what it means to `scripts/prod.compose.sh`. The output holds every
@@ -21,6 +22,8 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, render  # noqa: E402
+from k8srender.container import built_images  # noqa: E402
+from k8srender.tables import PROFILES  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 MAIN_COMPOSE = REPO / "dev-docker/docker-compose.main.yml"
@@ -32,6 +35,8 @@ def compose(args: list[str], env_files: list[str], overrides: dict) -> str:
     cmd = ["docker", "compose", "-p", PROJECT]
     for env_file in env_files:
         cmd += ["--env-file", str(REPO / env_file)]
+    for profile in PROFILES:
+        cmd += ["--profile", profile]
     cmd += ["-f", str(MAIN_COMPOSE), "config", *args]
     return subprocess.run(cmd, check=True, capture_output=True, text=True,
                           env={**os.environ, **overrides}).stdout
@@ -54,12 +59,14 @@ def write(out: Path, files: dict) -> None:
     out.mkdir(parents=True, mode=0o700)
     for name, content in files.items():
         docs = content if isinstance(content, list) else [content]
+        (out / name).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         (out / name).write_text(yaml.safe_dump_all(docs, sort_keys=False, width=120))
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("out", type=Path)
+    parser.add_argument("out", type=Path, nargs="?")
+    parser.add_argument("--images", action="store_true", help="list the images to build and push, then exit")
     parser.add_argument("--tag", help="image tag (default: the current commit)")
     parser.add_argument("--host-gateway", help="the node's address, for compose's host-gateway (K3)")
     parser.add_argument("--env-file", action="append", dest="env_files")
@@ -72,6 +79,12 @@ def main() -> int:
     options = {"registry": variables["LOCAL_DOCKER_REGISTRY"], "tag": args.tag or git_tag(),
                "host_gateway": args.host_gateway}
     model = load_model(env_files, overrides)
+    if args.images:
+        for row in built_images(model["services"], PROJECT, options):
+            print("\t".join(row))
+        return 0
+    if not args.out:
+        parser.error("an output directory is required unless --images")
     try:
         files = render(model, REPO, options)
     except RenderError as error:

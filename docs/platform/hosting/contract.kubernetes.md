@@ -110,9 +110,20 @@ its compose `image:`. Two directories are baked in instead of mounted:
 `locales/` into `locale-service` (36 MB, past a ConfigMap's 1 MiB), and
 Traefik's `dynamic/`, `plugins-local/` and `origin-pull/` into
 `dev-docker/traefik/Dockerfile`'s image (`gateway-handler`'s `build:`, so pushed as
-`txnet/gateway-handler` by the rule above; dev still mounts the three over it). Migrations run as Job
+`txnet/gateway-handler` by the rule above; dev still mounts the three over it);
+`locales/` arrives as the compose build context `locales`. Migrations run as Job
 `db-migrate` (`prisma migrate deploy --schema prisma/domains`) from the
 backend Dockerfile's `dependencies` stage, before any Deployment is applied.
+It is the compose service `db-migrate` (`dev-docker/compose/db-migrate.yml`,
+profile `migrate`, `restart: "no"`); the renderer makes any run-once service a
+Job (`backoffLimit: 0`) written to `<base>/jobs/`, outside the base, and reads
+the `migrate` profile (`tables.py` PROFILES).
+A prod image runs with no source mount, so it holds what it runs: the backend
+`prod` stage is `dist/<app>/` beside the workspace's production `node_modules`,
+pruned once in a shared `prod-deps` stage (Prisma's generated client and
+argon2's native build kept); `APP_NAME` is declared after the shared stages, so
+the eleven apps share one install. A Go image's `WORKDIR` is its compose
+`working_dir`, where dev mounts the source.
 
 **K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8) runs as a Deployment behind a
 `LoadBalancer` Service on 80/443 (k3s `servicelb`). `--providers.docker*`
@@ -136,12 +147,20 @@ Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's
 
 ## Deploying
 
-**K10 — `scripts/prod.k8s.sh build|push|render|deploy`.** `deploy` renders,
-runs `db-migrate` to completion, applies the overlay
-(`kubectl apply -k k8s/overlays/<env> --prune -l app.kubernetes.io/part-of=txnet`),
-then waits on `kubectl rollout status --timeout=300s` for every workload; a
+**K10 — `scripts/prod.k8s.sh build|push|render|deploy`.** `build` builds one
+service at a time (`k8s_render.py --images` lists them) and tags each for the
+registry. `deploy` renders into `k8s/base/` (git-ignored), applies `k8s/traefik`
+and waits for its CRDs, applies everything but the Deployments
+(`tools/k8s_manifest.py stores`) and waits on the StatefulSets, runs
+`db-migrate` to completion, applies the overlay
+(`kubectl kustomize k8s/overlays/<env>`), then waits on
+`kubectl rollout status --timeout=300s` for every workload; a
 workload that does not become ready is `kubectl rollout undo`ne and the script
-fails — Swarm's `failure_action: rollback`. Overlays: `prod`, `rehearsal`.
+fails — Swarm's `failure_action: rollback`. Only after every rollout is ready
+does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so an undone pod
+still finds the hashed Secrets it names; `--prune-allowlist` never names a
+claim, a Namespace, a CRD or a Job. Overlays: `prod` (the base and
+`k8s/traefik`); `rehearsal` lands with K12 (OPS-1-o-f).
 
 **K11 — Monitoring.** `docker-compose.sys-monitor.yml` is rendered the same
 way into `txnet-monitoring`. Promtail runs as a DaemonSet reading

@@ -3,8 +3,8 @@ objects behind them (claims, file Secrets, file ConfigMaps)."""
 from pathlib import Path
 
 from .objects import RenderError, dns_name, hashed
-from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DEV_ONLY_BINDS, LATER_BINDS,
-                     POD_LOCAL_VOLUMES, SECRET_DIR, VOLUME_SIZES)
+from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DEV_ONLY_BINDS, POD_LOCAL_VOLUMES,
+                     SECRET_DIR, VOLUME_SIZES)
 
 
 class Mounts:
@@ -57,7 +57,7 @@ class Mounts:
     def _bind(self, service: str, entry: dict, dropped: list[str]) -> dict | None:
         source = Path(entry["source"])
         rel = _repo_relative(source, self.repo)
-        if rel in DEV_ONLY_BINDS or str(source) in DEV_ONLY_BINDS or rel in LATER_BINDS or rel in BAKED_BINDS:
+        if rel in DEV_ONLY_BINDS or str(source) in DEV_ONLY_BINDS or rel in BAKED_BINDS:
             dropped.append(entry["target"])
             return None
         if rel in BIND_CLAIMS:

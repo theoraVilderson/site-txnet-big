@@ -1,0 +1,33 @@
+# db-migrate: applies the pending Prisma migrations once, then exits (hosting K8).
+# Included by ../docker-compose.main.yml with `project_directory: .`, so every
+# relative path below resolves from dev-docker/, not from this folder.
+#
+# Under the `migrate` profile, so `up` never starts it. By hand on compose:
+#   scripts/prod.compose.sh --profile migrate run --rm db-migrate
+# On Kubernetes it is the Job `scripts/prod.k8s.sh deploy` runs to completion
+# before any Deployment is applied (K10).
+
+services:
+  db-migrate:
+    extends: { file: compose/logging.yml, service: rotated-logs }
+    profiles: [migrate]
+    build:
+      context: ../txnet-backend
+      dockerfile: Dockerfile
+      # The stage with the Prisma CLI and the migration history; the prod
+      # stage carries one app's bundle and neither.
+      target: dependencies
+      extra_hosts:
+        - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
+      args:
+        - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+    container_name: ${STACK_NAME:-txnet}-db-migrate
+    # Runs once: a failed migration is read and fixed, never retried (C-39).
+    restart: "no"
+    command: ["npx", "prisma", "migrate", "deploy", "--schema", "prisma/domains"]
+    environment:
+      # The owner, straight to Postgres: DDL through PgBouncer's transaction
+      # pool, or as the RLS-bound app user, fails (H7, H8).
+      - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+    networks:
+      - private_backend_network

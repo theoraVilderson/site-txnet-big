@@ -12,6 +12,9 @@ services:
     build:
       context: ../i18n-platform/services/locale-service
       dockerfile: Dockerfile
+      # The translations the image carries (K8); dev mounts ../locales over them.
+      additional_contexts:
+        locales: ../locales
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-locale-service

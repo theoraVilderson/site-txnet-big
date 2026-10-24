@@ -24,7 +24,10 @@ FROM scratch
 COPY --from=build /out/passwd /etc/passwd
 COPY --from=build /out/group /etc/group
 COPY --from=build /out/locale-service /usr/local/bin/locale-service
-# Mount or COPY the repo's locales/ tree here.
+# The repo's locales/ tree, baked in (hosting K8: 36 MB, past a ConfigMap's
+# 1 MiB). Compose passes it as the `locales` build context; dev mounts the
+# live tree over it.
+COPY --from=locales . /locales
 ENV LOCALES_DIR=/locales
 # The writable overlay (F-1533-b). Owned by nonroot so a fresh named volume
 # mounted here inherits a directory the service can write; unset

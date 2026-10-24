@@ -93,3 +93,6 @@ txnetsite-perv.zip
 # A server move (OPS-1-ac): its working state and the marker left on the old server.
 /.move/
 /.moved-to
+
+# The rendered Kustomize base: every service's Secrets (hosting K2, scripts/prod.k8s.sh render).
+k8s/base/

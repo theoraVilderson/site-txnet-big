@@ -29,7 +29,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/sub-ser
 # ---------- prod: minimal image ----------
 FROM ${DOCKER_REGISTRY}/alpine:3.19 AS prod
 RUN apk --no-cache add ca-certificates wget
-WORKDIR /srv
+# compose's `working_dir`, where dev mounts the source; `./sub-service` runs from here (K8).
+WORKDIR /src
 COPY --from=builder /out/sub-service .
 ENV HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY="" \
     http_proxy="" https_proxy="" no_proxy=""
