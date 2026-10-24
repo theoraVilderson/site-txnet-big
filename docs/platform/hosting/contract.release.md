@@ -52,15 +52,20 @@ under that taint (user, 2026-10-24: one node runs the release for now, and no
 build server is bought); a node without it fails closed. A release is `build`
 and `push` there, at the commit `deploy` then runs, from a clean checkout (R12).
 
-**R12 — An image is tagged by its source** (OPS-1-o-y). `k8srender/tags.py`: the
-first 12 hex of sha256 over the git ids, at HEAD, of the build context, any
-extra context, a Dockerfile outside the context, and the target stage. Build
-args are left out: they name a mirror or a proxy and differ between hosts. A
-commit that leaves a service's source alone leaves its tag, so the pod neither
-rolls nor pulls; `build` and `push` skip a tag `docker manifest inspect` finds
-in the registry, and `build` refuses a checkout `git status` shows changed. The
-release is still the commit (R5): a rollback renders an older commit with its
-own renderer, so a release made before R12 comes back on its commit tags.
+**R12 — An image is tagged by its source** (OPS-1-o-y). `k8srender/tags.py`
+hashes, from git at HEAD so the node needs no npm or Nx: for an app of an Nx
+workspace (`APP_NAME`, `nx.json` in the context) the workspace minus the
+projects it does not import (`@scope/name` imports, `tsconfig.base.json` paths,
+transitively) and minus `prisma/seed*.js`, which only db-migrate's stage runs;
+for any other image what its Dockerfile `COPY`/`ADD`s, or the whole context
+for `.`, a variable or a glob. Plus the Dockerfile, extra contexts and the
+stage. Build args are left out: they name a mirror or a proxy and differ
+between hosts. So a seed change rebuilds db-migrate alone, a billing change
+billing alone, a `shared-core` or lockfile change every app. `build` and `push`
+skip a tag `docker manifest inspect` finds in the registry, and `build` refuses
+a checkout `git status` shows changed. The release is still the commit (R5): a
+rollback renders an older commit with its own renderer, so a release made
+before R12 comes back on its commit tags.
 
 **R10 — The registry answers before anything is sent** (OPS-1-o-t). `push`
 asks `https://<registry>/v2/` once (15s, `--noproxy`) before its first image, and

@@ -95,12 +95,14 @@ class ImagesTest(unittest.TestCase):
 # whose commit left a service alone keeps that service's tag: nothing rolls,
 # nothing is pulled. 22 commit tags rolled every pod on the test server, ~5 min.
 class ContentTagTest(unittest.TestCase):
+    FILES = {"api/Dockerfile": "COPY . .", "api/main.ts": "x", "db/Dockerfile": "COPY . .", "locales/fa.json": "{}"}
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self.tmp.name)
-        for rel in ("api/Dockerfile", "api/main.ts", "db/Dockerfile", "locales/fa.json"):
+        for rel, text in self.FILES.items():
             Path(self.repo, rel).parent.mkdir(parents=True, exist_ok=True)
-            Path(self.repo, rel).write_text(rel)
+            Path(self.repo, rel).write_text(text)
         self.git("init", "-q")
         self.commit()
 
@@ -181,6 +183,75 @@ class SeedPasswordTest(unittest.TestCase):
     def test_with_no_file_one_is_made_and_shown(self):
         run = self.owner_password({})
         self.assertEqual(json.loads(run.stdout), {"password": "made", "printable": True})
+
+
+# R12 (OPS-1-o-y): one Nx workspace builds many apps, so its folder as a whole
+# moved every app's tag: a change to prisma/seed.js rebuilt all 12 images,
+# though an app's image holds only node_modules and its own dist/.
+class NxTagTest(ContentTagTest):
+    FILES = {
+        "be/nx.json": "{}", "be/package-lock.json": "1", "be/Dockerfile": "COPY . .",
+        "be/tsconfig.base.json": '{ // paths\n "compilerOptions": {"paths": {"@be/core": ["./core/src/index.ts"]}}}',
+        "be/core/project.json": '{"name": "core"}', "be/core/src/index.ts": "export const x = 1;",
+        "be/api/project.json": '{"name": "api"}', "be/api/src/main.ts": "import { x } from '@be/core/sub';",
+        "be/web/project.json": '{"name": "web"}', "be/web/src/main.ts": "console.log(1);",
+        "be/prisma/domains/schema.prisma": "model A {}", "be/prisma/seed.js": "seed",
+    }
+
+    def services(self):
+        ctx = str(self.repo / "be")
+        app = lambda name: {"build": {"context": ctx, "target": "prod", "args": {"APP_NAME": name}}}
+        return {"api": app("api"), "web": app("web"),
+                "migrate": {"build": {"context": ctx, "target": "dependencies"}}}
+
+    def moved(self, rel):
+        before = content_tags(self.services(), self.repo)
+        Path(self.repo, rel).write_text("changed")
+        self.commit()
+        after = content_tags(self.services(), self.repo)
+        return sorted(name for name in before if before[name] != after[name])
+
+    def test_an_app_moves_alone(self):
+        self.assertEqual(self.moved("be/web/src/main.ts"), ["migrate", "web"])
+
+    def test_a_library_moves_the_apps_that_import_it(self):
+        self.assertEqual(self.moved("be/core/src/index.ts"), ["api", "migrate"])
+
+    def test_the_seed_moves_only_the_image_that_holds_it(self):
+        self.assertEqual(self.moved("be/prisma/seed.js"), ["migrate"])
+
+    def test_the_lock_and_the_schema_move_every_app(self):
+        self.assertEqual(self.moved("be/package-lock.json"), ["api", "migrate", "web"])
+        self.assertEqual(self.moved("be/prisma/domains/schema.prisma"), ["api", "migrate", "web"])
+
+    # test_the_image_names_its_content_tag etc. are ContentTagTest's own.
+    test_a_service_left_alone_keeps_its_tag = None
+    test_a_stage_and_an_extra_context_are_part_of_the_source = None
+    test_build_args_do_not_change_the_tag = None
+    test_the_image_names_its_content_tag = None
+
+
+# R12: an image outside a workspace is what its Dockerfile copies, so the repo
+# root as a context (authorization-handler) no longer moves with every commit.
+class CopiedTagTest(ContentTagTest):
+    FILES = {"Dockerfile": "FROM x AS base\nCOPY a/go.mod ./a/\nCOPY lib/ ./lib/\nFROM base\nCOPY --from=base /x /y\n",
+             "a/go.mod": "m", "lib/l.go": "l", "other/o.md": "o"}
+
+
+    def services(self):
+        return {"h": {"build": {"context": str(self.repo), "dockerfile": "Dockerfile"}}}
+
+    moved = NxTagTest.moved
+
+    def test_only_what_the_dockerfile_copies_moves_the_tag(self):
+        self.assertEqual(self.moved("other/o.md"), [])
+        self.assertEqual(self.moved("lib/l.go"), ["h"])
+        self.assertEqual(self.moved("Dockerfile"), ["h"])
+
+    test_a_service_left_alone_keeps_its_tag = None
+    test_a_stage_and_an_extra_context_are_part_of_the_source = None
+    test_build_args_do_not_change_the_tag = None
+    test_the_image_names_its_content_tag = None
 
 
 # K14: the node's registries.yaml, from the sealed env files' variables.
