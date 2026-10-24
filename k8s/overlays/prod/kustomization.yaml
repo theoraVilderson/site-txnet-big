@@ -1,5 +1,6 @@
-# Production (hosting K10): the rendered base (`scripts/prod.k8s.sh render`
-# writes ../../base, never committed) and Traefik's CRDs and RBAC. Every object
+# Production (hosting K10): the rendered bases (`scripts/prod.k8s.sh render`
+# writes ../../base and ../../monitoring/base, never committed), Traefik's CRDs
+# and RBAC, and the monitoring stack's accounts (K11). Every object
 # carries part-of=txnet, the label `deploy` prunes by; what it may prune is
 # PRUNE_KINDS in scripts/prod.k8s.sh.
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -7,6 +8,7 @@ kind: Kustomization
 resources:
   - ../../base
   - ../../traefik
+  - ../../monitoring
 labels:
   - pairs:
       app.kubernetes.io/part-of: txnet

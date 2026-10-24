@@ -94,5 +94,6 @@ txnetsite-perv.zip
 /.move/
 /.moved-to
 
-# The rendered Kustomize base: every service's Secrets (hosting K2, scripts/prod.k8s.sh render).
+# The rendered Kustomize bases: every service's Secrets (hosting K2, K11, scripts/prod.k8s.sh render).
 k8s/base/
+k8s/monitoring/base/

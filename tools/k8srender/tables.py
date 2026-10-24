@@ -3,12 +3,44 @@
 This is their one home. Everything else comes from the compose model; a fact
 that could live in compose belongs there instead (K4's `expose:` is one).
 """
+from dataclasses import dataclass
 
-# K1: the namespace every platform object lives in.
+
+@dataclass(frozen=True)
+class Stack:
+    """One compose project rendered into one namespace (K2, K11)."""
+    compose: str  # repo-relative
+    project: str
+    env_files: tuple  # repo-relative, read in order as compose's --env-file
+    namespace: str
+    # K8: profiles whose services are rendered too.
+    profiles: tuple = ()
+    # K11: a published port is a LoadBalancer on the node's address, or (False)
+    # nothing: the monitoring stack has no login, so it stays inside the cluster.
+    publish: bool = True
+    # K11: the stack whose Services this one calls by name, across namespaces.
+    peer: str | None = None
+
+
+# K1: the namespace every platform object lives in, and K11's for monitoring.
 NAMESPACE = "txnet"
+MONITORING_NAMESPACE = "txnet-monitoring"
+# K11: what a Service name resolves under across namespaces (k3s's default).
+CLUSTER_DOMAIN = "cluster.local"
+
+# K2, K11: `migrate` holds db-migrate, which `up` must never start but
+# `deploy` runs as a Job (K8). The monitoring env file holds Grafana's login.
+STACKS = {
+    "main": Stack("dev-docker/docker-compose.main.yml", "txnet", (".env", ".env.prod"), NAMESPACE,
+                  profiles=("migrate",)),
+    "monitoring": Stack("dev-docker/monitoring/docker-compose.sys-monitor.yml", "txnet-monitor",
+                        (".env", ".env.prod", "dev-docker/monitoring/.env.prod"), MONITORING_NAMESPACE,
+                        publish=False, peer="main"),
+}
 
 # K3: one pod, its claim, a stop before the start — two writers corrupt a volume.
-STATEFUL = {"main-db", "memory-data", "rabbitmq"}
+# K11's three hold a lock or a SQLite file on theirs: Prometheus, Loki, Grafana.
+STATEFUL = {"main-db", "memory-data", "rabbitmq", "prometheus", "loki", "grafana"}
 
 # K3: a service that runs as a second container in another service's pod.
 # pg-backup reaches Postgres over the shared socket only (H3).
@@ -40,8 +72,27 @@ DEV_ONLY_BINDS = {
     "i18n-platform/clients/go",
     "network-service",
     "sub-service",
-    "/var/run/docker.sock",
 }
+
+# K7, K11: Docker's own state, bound by the containers that read it (Traefik's
+# Docker provider, Promtail). A k3s node runs containerd: mounted, it is empty.
+DOCKER_HOST_BINDS = {"/var/run/docker.sock", "/var/lib/docker/containers"}
+
+# K11: the compose services that ship logs and scrape metrics, whose config
+# files monitoring.py rewrites for Kubernetes.
+LOG_SHIPPER, SCRAPER = "promtail", "prometheus"
+
+# K11: a workload on every node rather than one replica: each node's pod logs.
+DAEMONSETS = {LOG_SHIPPER}
+
+# K11: the pods that read the Kubernetes API, as the service account
+# k8s/monitoring/rbac.yaml grants it to: Promtail lists pods, Prometheus nodes.
+SERVICE_ACCOUNTS = {LOG_SHIPPER: "promtail", SCRAPER: "prometheus"}
+
+# K11 (user, 2026-10-24): a compose service Kubernetes already provides, not
+# rendered. cAdvisor runs `--docker_only`, which sees no pod; the kubelet
+# serves the same metrics for every container (monitoring.py's scrape job).
+PROVIDED_BY_KUBERNETES = {"cadvisor"}
 
 # K8/K9: bound directories copied into an image instead of mounted, and the
 # Dockerfile that copies each (tools/k8s_deploy_test.py holds the two together).
@@ -51,10 +102,6 @@ BAKED_BINDS = {
     "dev-docker/traefik/plugins-local": "dev-docker/traefik/Dockerfile",
     "dev-docker/traefik/origin-pull": "dev-docker/traefik/Dockerfile",
 }
-
-# K8: compose profiles whose services are rendered too — `migrate` holds
-# db-migrate, which `up` must never start but `deploy` runs as a Job.
-PROFILES = ["migrate"]
 
 # K7/K9: a bound directory that holds state, and the claim that holds it instead.
 BIND_CLAIMS = {"dev_letsencrypt": "letsencrypt"}
@@ -81,5 +128,5 @@ DROPPED_KEYS = {
     "logging",  # the kubelet rotates container logs (K1)
     "memswap_limit",  # Kubernetes runs without swap
     "build",  # read for the image name (K8), not a pod field
-    "profiles",  # K8: chose which services compose printed; PROFILES above
+    "profiles",  # K8: chose which services compose printed; Stack.profiles above
 }

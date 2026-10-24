@@ -239,7 +239,8 @@ class RepoTraefikTest(unittest.TestCase):
     def setUpClass(cls):
         sys.path.insert(0, str(REPO / "tools"))
         import k8s_render
-        cls.model = k8s_render.load_model(k8s_render.DEFAULT_ENV_FILES, {})
+        main = k8s_render.STACKS["main"]
+        cls.model = k8s_render.load_model(main, list(main.env_files), {})
         cls.objects = objects(render(cls.model, REPO, OPTIONS))
 
     def label_sets(self, kind: str) -> set:

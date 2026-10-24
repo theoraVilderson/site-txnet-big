@@ -105,9 +105,9 @@ the pod out of its Service.
 - A bound file under `dev-docker/secrets/` is a Secret `secret-<file>` mounted
   read-only at the same path with `subPath`; any other bound file is a
   ConfigMap `cfg-<file>` the same way; both names hashed as in K5.
-- A bound directory is either listed in the renderer's dev-only table (source
-  trees, `node_modules`, `.next`, `/var/run/docker.sock`) and dropped, or
-  baked into the image (K8). Anything else fails the render.
+- A bound directory is either in a dropped table — dev-only (source trees,
+  `node_modules`, `.next`) or Docker's own state (`/var/run/docker.sock`,
+  `/var/lib/docker/containers`) — or baked into the image (K8); else the render fails.
 - `tmpfs` and `shm_size` are `emptyDir` with `medium: Memory`.
 
 **K8 — Images.** Every compose service with `build:` is built with its compose
@@ -124,7 +124,7 @@ backend Dockerfile's `dependencies` stage, before any Deployment is applied.
 It is the compose service `db-migrate` (`dev-docker/compose/db-migrate.yml`,
 profile `migrate`, `restart: "no"`); the renderer makes any run-once service a
 Job (`backoffLimit: 0`) written to `<base>/jobs/`, outside the base, and reads
-the `migrate` profile (`tables.py` PROFILES).
+the `migrate` profile (`tables.py` STACKS).
 A prod image runs with no source mount, so it holds what it runs: the backend
 `prod` stage is `dist/<app>/` beside the workspace's production `node_modules`,
 pruned once in a shared `prod-deps` stage (Prisma's generated client and
@@ -134,7 +134,7 @@ the eleven apps share one install. A Go image's `WORKDIR` is its compose
 
 **K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8) runs as a Deployment behind a
 `LoadBalancer` Service on 80/443 (k3s `servicelb`). `--providers.docker*`
-becomes `--providers.kubernetescrd` (namespace `txnet`, as service account
+becomes `--providers.kubernetescrd` (namespaces `txnet`, `txnet-monitoring`, as service account
 `traefik-ingress-controller`) with `--providers.file` kept for the
 baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
 `IngressRoute` `<r>` (`match` = rule, `priority`, `entryPoints`,
@@ -156,9 +156,9 @@ Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's
 
 **K10 — `scripts/prod.k8s.sh build|push|render|deploy`.** `build` builds one
 service at a time (`k8s_render.py --images` lists them) and tags each for the
-registry. `deploy` renders into `k8s/base/` (git-ignored), applies `k8s/traefik`
-and waits for its CRDs, applies everything but the Deployments
-(`tools/k8s_manifest.py stores`) and waits on the StatefulSets, runs
+registry. `deploy` renders into `k8s/base/` and `k8s/monitoring/base/` (git-ignored,
+K11), applies `k8s/traefik` and waits for its CRDs, applies all but the Deployments
+and DaemonSets (`tools/k8s_manifest.py stores`), waits on the StatefulSets, runs
 `db-migrate` to completion, applies the overlay
 (`kubectl kustomize k8s/overlays/<env>`), then waits on
 `kubectl rollout status --timeout=300s` for every workload; a
@@ -166,13 +166,27 @@ workload that does not become ready is `kubectl rollout undo`ne and the script
 fails — Swarm's `failure_action: rollback`. Only after every rollout is ready
 does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so an undone pod
 still finds the hashed Secrets it names; `--prune-allowlist` never names a
-claim, a Namespace, a CRD or a Job. Overlays: `prod` (the base and
-`k8s/traefik`); `rehearsal` lands with K12 (OPS-1-o-f).
+claim, a Namespace, a CRD or a Job. Overlays: `prod` (both bases, `k8s/traefik`,
+`k8s/monitoring`); `rehearsal` lands with K12 (OPS-1-o-f).
 
 **K11 — Monitoring.** `docker-compose.sys-monitor.yml` is rendered the same
-way into `txnet-monitoring`. Promtail runs as a DaemonSet reading
-`/var/log/pods` (the `txnet.logging=true` label becomes the pod label
-`txnet.io/logging: "true"`); Prometheus scrapes by Service DNS name.
+way (`k8s_render.py --stack monitoring`, `tables.py` STACKS; env files `.env`,
+`.env.prod`, `dev-docker/monitoring/.env.prod`) into `txnet-monitoring`, plus
+`k8s/monitoring/` (the accounts of the two pods that read the API). A compose
+`configs:`/`secrets:` entry is a ConfigMap/Secret at its target, the rule files
+byte for byte. The stack publishes nothing (user, 2026-10-24): a ClusterIP
+from `expose:`, `kubectl port-forward` for an operator, Grafana through Traefik.
+A name the main stack serves (`rabbitmq`, `main-db`, …) is an ExternalName
+Service, so Prometheus scrapes by the same names, each target checked as K4
+checks a call. Promtail is a DaemonSet on `/var/log/pods` (pod label
+`txnet.io/logging: "true"`; `service` = the container; the CRI frame read
+before H13's `level`), offsets in `/var/lib/txnet/promtail`. cAdvisor is not
+rendered (user, 2026-10-24): Prometheus reads each kubelet's `/metrics/cadvisor`,
+TLS verified. Prometheus, Loki, Grafana are StatefulSets (K3). The node sets
+`fs.inotify.max_user_instances=512` at install (OPS-1-o-f): at 128 Promtail
+exited "too many open files". Proven 2026-10-24 in a throwaway k3s: every
+target up, two of them across namespaces; Loki held the labelled pod's lines
+with `level`, none of the unlabelled one's.
 
 ## The rehearsal
 

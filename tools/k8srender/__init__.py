@@ -1,4 +1,4 @@
-"""Render the production compose model into a Kustomize base (ADR-0147, hosting K2-K7).
+"""Render a production compose model into a Kustomize base (ADR-0147, hosting K2-K7, K11).
 
 `render(model, repo, options)` takes what `docker compose config --format json`
 prints and returns {file name: objects}; `tools/k8s_render.py` writes them.
@@ -8,12 +8,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .container import container, environment_secret, image_for
-from .objects import RenderError, dns_name, seconds, undo_compose_escaping
-from .tables import ALWAYS_RESTART, DROPPED_KEYS, NAMESPACE, SIDECARS, STATEFUL, TRAEFIK
+from .monitoring import as_log_shipper, peer_services, scrape_calls
+from .objects import RenderError, dns_name, port_number, seconds, undo_compose_escaping
+from .tables import (ALWAYS_RESTART, DAEMONSETS, DROPPED_KEYS, LOG_SHIPPER, NAMESPACE, PROVIDED_BY_KUBERNETES,
+                     SERVICE_ACCOUNTS, SIDECARS, STATEFUL, TRAEFIK)
 from .traefik import Labels, as_edge, backend_index, edge_objects, labels_of
 from .volumes import Mounts
 
-__all__ = ["RenderError", "render"]
+__all__ = ["RenderError", "exposed_ports", "render"]
 
 PART_OF = {"app.kubernetes.io/part-of": "txnet"}
 # K3: compose's stop grace when a service names none.
@@ -23,9 +25,9 @@ JOBS_DIR = "jobs"
 # K8: a run-once Job's limits. A failed migration is read, not retried (C-39);
 # its pod is kept a day for its log.
 _JOB_DEADLINE_S, _JOB_KEPT_S = 900, 86400
-_MAPPED_KEYS = {"command", "entrypoint", "environment", "expose", "extra_hosts", "healthcheck", "image",
-                "labels", "mem_limit", "cpus", "ports", "restart", "shm_size", "stop_grace_period",
-                "tmpfs", "volumes", "working_dir"}
+_MAPPED_KEYS = {"command", "configs", "entrypoint", "environment", "expose", "extra_hosts", "healthcheck",
+                "image", "labels", "mem_limit", "cpus", "ports", "restart", "secrets", "shm_size",
+                "stop_grace_period", "tmpfs", "volumes", "working_dir"}
 # K11: the compose label Promtail selects on, and the pod label it becomes.
 _LOGGING_LABEL, _POD_LOGGING_LABEL = "txnet.logging", "txnet.io/logging"
 # A `host:port` or `//host` inside an environment value (K4).
@@ -41,16 +43,23 @@ class _Stack:
     repo: Path
     traefik: dict  # compose service -> its Traefik labels (K9)
     backends: dict  # Traefik service name -> (compose service, port)
+    declared: dict  # the model's top-level `configs:` and `secrets:` (K11)
 
 
 def render(model: dict, repo: Path, options: dict) -> dict:
-    services = undo_compose_escaping(model)["services"]
+    """options: registry, tag, host_gateway; namespace (default K1's), `publish`
+    (False: no LoadBalancer, K11) and `peer` — {namespace, exposed: {service:
+    {ports}}} of the stack this one calls by name across namespaces."""
+    namespace, peer = options.get("namespace", NAMESPACE), options.get("peer")
+    services = {name: service for name, service in undo_compose_escaping(model)["services"].items()
+                if name not in PROVIDED_BY_KUBERNETES}
+    declared = {kind: model.get(kind) or {} for kind in ("configs", "secrets")}
     for name, service in services.items():
         _check_keys(name, service)
     traefik = {name: labels_of(name, service) for name, service in services.items()}
-    _check_calls(services, traefik)
+    peers = _check_calls(services, traefik, peer) | scrape_calls(services, declared, peer)
     builders = {s["image"]: n for n, s in services.items() if s.get("build") and s.get("image")}
-    stack = _Stack(services, builders, options, repo, traefik, backend_index(traefik))
+    stack = _Stack(services, builders, options, repo, traefik, backend_index(traefik), declared)
     files, jobs, shared = {}, {}, {}
     for name in sorted(services):
         if name in SIDECARS:
@@ -60,18 +69,19 @@ def render(model: dict, repo: Path, options: dict) -> dict:
         shared.update(mounted)
     files["storage.yaml"] = [o for k, o in sorted(shared.items()) if k.startswith("pvc/")]
     files["files.yaml"] = [o for k, o in sorted(shared.items()) if k.startswith("file/")]
-    files["namespace.yaml"] = [{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": NAMESPACE}}]
+    files["namespace.yaml"] = [{"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": namespace}}]
+    files["peers.yaml"] = peer_services(peers, peer["namespace"]) if peers else []
     files = {k: v for k, v in files.items() if v}
-    files["kustomization.yaml"] = _kustomization(files)
+    files["kustomization.yaml"] = _kustomization(files, namespace)
     if jobs:
         files.update({f"{JOBS_DIR}/{k}": v for k, v in jobs.items()})
-        files[f"{JOBS_DIR}/kustomization.yaml"] = _kustomization(jobs)
+        files[f"{JOBS_DIR}/kustomization.yaml"] = _kustomization(jobs, namespace)
     return files
 
 
-def _kustomization(files: dict) -> dict:
+def _kustomization(files: dict, namespace: str) -> dict:
     return {"apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
-            "namespace": NAMESPACE, "resources": sorted(files),
+            "namespace": namespace, "resources": sorted(files),
             "labels": [{"pairs": PART_OF, "includeSelectors": False}]}
 
 
@@ -83,7 +93,7 @@ def _runs_once(service: dict) -> bool:
 def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
     """K3: the workload for `name`, its sidecars as extra containers, its Services
     and every container's environment Secret; plus the claims and files it mounts."""
-    services, mounts = stack.services, Mounts(stack.repo)
+    services, mounts = stack.services, Mounts(stack.repo, stack.declared)
     members = [name, *sorted(n for n, owner in SIDECARS.items() if owner == name and n in services)]
     containers, secrets, grace = [], [], 0
     for member in members:
@@ -104,15 +114,24 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
         pod["hostAliases"] = aliases
     if name == TRAEFIK:
         as_edge(pod)
+    if name == LOG_SHIPPER:
+        as_log_shipper(pod)
+    if name in SERVICE_ACCOUNTS:
+        pod["serviceAccountName"] = SERVICE_ACCOUNTS[name]
     template = {"metadata": {"labels": labels}, "spec": pod}
     routing = edge_objects(name, stack.traefik[name], stack.backends)
     workload = _job(name, template) if _runs_once(service) else _workload(name, template)
-    return [workload, *_services(name, service, stack.traefik[name]), *routing, *secrets], \
-        mounts.objects
+    services = _services(name, service, stack.traefik[name], stack.options.get("publish", True))
+    return [workload, *services, *routing, *secrets], mounts.objects
 
 
 def _workload(name: str, template: dict) -> dict:
     selector = {"matchLabels": {"app.kubernetes.io/name": name}}
+    if name in DAEMONSETS:
+        # K11: one pod per node, replaced one node at a time.
+        spec = {"selector": selector, "revisionHistoryLimit": 3, "minReadySeconds": 10, "template": template,
+                "updateStrategy": {"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": 1}}}
+        return {"apiVersion": "apps/v1", "kind": "DaemonSet", "metadata": {"name": dns_name(name)}, "spec": spec}
     spec = {"replicas": 1, "selector": selector, "revisionHistoryLimit": 3, "template": template}
     if name in STATEFUL:
         spec.update(serviceName=dns_name(name), updateStrategy={"type": "RollingUpdate"})
@@ -130,16 +149,17 @@ def _job(name: str, template: dict) -> dict:
             "metadata": {"name": dns_name(name), "labels": {"app.kubernetes.io/name": name}}, "spec": spec}
 
 
-def _services(name: str, service: dict, traefik: Labels) -> list:
+def _services(name: str, service: dict, traefik: Labels, publish: bool) -> list:
     """K4: a ClusterIP Service from `expose:` and the ports Traefik calls (K9);
-    published ports as a LoadBalancer that keeps the client's address."""
+    published ports as a LoadBalancer that keeps the client's address, unless
+    the stack publishes nothing (K11)."""
     out, selector = [], {"app.kubernetes.io/name": name}
-    exposed = sorted({_port(p) for p in service.get("expose") or []} | set(traefik.backends.values()))
+    exposed = sorted({port_number(p) for p in service.get("expose") or []} | set(traefik.backends.values()))
     if exposed:
         ports = [{"name": f"p{p}", "port": p, "targetPort": p} for p in exposed]
         out.append(_service(dns_name(name), "ClusterIP", ports, selector))
     published = [{"name": f"p{p['published']}", "port": int(p["published"]), "targetPort": int(p["target"])}
-                 for p in service.get("ports") or []]
+                 for p in service.get("ports") or []] if publish else []
     if published:
         public = _service(f"{dns_name(name)}-public", "LoadBalancer", published, selector)
         # Local: a request reaches the pod on its own node with its source
@@ -188,20 +208,33 @@ def _check_keys(name: str, service: dict) -> None:
         raise RenderError(f"{name}: restart {service['restart']!r} — a pod always restarts (K3)")
 
 
-def _check_calls(services: dict, traefik: dict) -> None:
+def _check_calls(services: dict, traefik: dict, peer: dict | None) -> set:
     """K4: every service named in an environment value answers on that port, and so
-    does every ForwardAuth address, which Traefik calls (K9)."""
-    exposed = {n: {_port(p) for p in s.get("expose") or []} for n, s in services.items()}
+    does every ForwardAuth address, which Traefik calls (K9). A name the peer
+    stack serves is checked against its `expose:`; returns the peer names called (K11)."""
+    exposed = exposed_ports(services)
     calls = [(name, value) for name, service in services.items()
              for value in (service.get("environment") or {}).values()]
     calls += [(TRAEFIK, address) for labels in traefik.values() for address in labels.forward_auth_addresses()]
+    called = set()
     for caller, value in calls:
         for host, port in _HOST_REF.findall(str(value or "")):
-            if host not in services or host == caller:
+            if host == caller:
                 continue
-            if not exposed[host] or (port and int(port) not in exposed[host]):
+            if host in services:
+                ports = exposed[host]
+            elif peer and host in peer["exposed"]:
+                ports = peer["exposed"][host]
+                called.add(host)
+            else:
+                continue
+            if not ports or (port and int(port) not in ports):
                 raise RenderError(f"{caller}: calls {host}:{port or '?'}, which {host} does not expose (K4)")
+    return called
 
 
-def _port(value) -> int:
-    return int(str(value).split("/", 1)[0])
+def exposed_ports(services: dict) -> dict:
+    """K4: each compose service's `expose:` ports — what it answers on, here or
+    for a stack that calls it by name (K11)."""
+    return {name: {port_number(p) for p in service.get("expose") or []} for name, service in services.items()}
+

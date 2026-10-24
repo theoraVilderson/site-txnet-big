@@ -99,16 +99,22 @@ metadata: {name: main-db, namespace: txnet}
 apiVersion: apps/v1
 kind: Deployment
 metadata: {name: billing-service, namespace: txnet}
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: {name: promtail, namespace: txnet-monitoring}
 """
 
 
-# K10: `deploy` applies what the Deployments need first, then waits on each workload.
+# K10: `deploy` applies what the Deployments need first, then waits on each
+# workload in its own namespace (K11's are in txnet-monitoring).
 class ManifestTest(unittest.TestCase):
-    def test_stores_leave_out_deployments(self):
+    def test_stores_leave_out_what_is_rolled_out_after_the_migration(self):
         self.assertEqual([o["kind"] for o in yaml.safe_load_all(stores(MANIFEST))], ["Secret", "StatefulSet"])
 
     def test_workloads(self):
-        self.assertEqual(workloads(MANIFEST), ["statefulset/main-db", "deployment/billing-service"])
+        self.assertEqual(workloads(MANIFEST), ["txnet:statefulset/main-db", "txnet:deployment/billing-service",
+                                               "txnet-monitoring:daemonset/promtail"])
 
 
 # K8: what the renderer leaves unmounted is copied in by the Dockerfile named for it.

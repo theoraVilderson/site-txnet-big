@@ -1,0 +1,8 @@
+# The monitoring stack (hosting K11): the base `scripts/prod.k8s.sh render`
+# writes from docker-compose.sys-monitor.yml (base/, never committed) and the
+# accounts its two API readers run as.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - base
+  - rbac.yaml

@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass, field
 
 from .objects import RenderError, dns_name, hashed
-from .tables import NAMESPACE, TRAEFIK_DROPPED_ARG, TRAEFIK_PROVIDER_ARGS, TRAEFIK_SERVICE_ACCOUNT
+from .tables import STACKS, TRAEFIK_DROPPED_ARG, TRAEFIK_PROVIDER_ARGS, TRAEFIK_SERVICE_ACCOUNT
 
 _API = "traefik.io/v1alpha1"
 _DOCKER_SUFFIX = "@docker"
@@ -92,10 +92,12 @@ def edge_objects(owner: str, labels: Labels, backends: dict) -> list:
 
 def as_edge(pod: dict) -> None:
     """Traefik's own pod: the CRD provider in place of the Docker socket, read as
-    the service account k8s/traefik/ grants it to."""
+    the service account k8s/traefik/ grants it to, in every stack's namespace —
+    Grafana's IngressRoute is in txnet-monitoring (K11)."""
     container = pod["containers"][0]
     args = [a for a in container.get("args", []) if not a.startswith(TRAEFIK_DROPPED_ARG)]
-    container["args"] = [*TRAEFIK_PROVIDER_ARGS, f"--providers.kubernetescrd.namespaces={NAMESPACE}", *args]
+    namespaces = ",".join(stack.namespace for stack in STACKS.values())
+    container["args"] = [*TRAEFIK_PROVIDER_ARGS, f"--providers.kubernetescrd.namespaces={namespaces}", *args]
     pod["serviceAccountName"] = TRAEFIK_SERVICE_ACCOUNT
 
 

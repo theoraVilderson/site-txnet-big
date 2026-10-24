@@ -148,8 +148,9 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/rabbitmq:4.2-management-alpine
     container_name: ${STACK_NAME:-txnet}-rabbitmq
-    # The port other services call; Kubernetes makes its Service from it (hosting K4).
-    expose: ["5672"]
+    # The ports other services call; Kubernetes makes its Service from them
+    # (hosting K4): AMQP, and the Prometheus plugin the monitoring stack scrapes (K11).
+    expose: ["5672", "15692"]
     restart: unless-stopped
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}

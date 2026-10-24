@@ -1,0 +1,64 @@
+# The two monitoring pods that read the Kubernetes API (hosting K11), named in
+# tools/k8srender/tables.py SERVICE_ACCOUNTS. Read-only, and nothing else.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: promtail
+  namespace: txnet-monitoring
+---
+# Promtail finds the pods labelled txnet.io/logging=true and reads their logs
+# from the node's /var/log/pods.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: txnet-promtail
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: txnet-promtail
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: txnet-promtail
+subjects:
+  - kind: ServiceAccount
+    name: promtail
+    namespace: txnet-monitoring
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: txnet-monitoring
+---
+# Prometheus finds the nodes and reads each kubelet's cAdvisor, which replaces
+# the compose stack's Docker-only cAdvisor (user, 2026-10-24).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: txnet-prometheus
+rules:
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [nodes/metrics]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: txnet-prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: txnet-prometheus
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: txnet-monitoring

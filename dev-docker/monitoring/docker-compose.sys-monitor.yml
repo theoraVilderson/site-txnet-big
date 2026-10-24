@@ -67,6 +67,11 @@ services:
     image: ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0
     container_name: txnet-prometheus
     restart: unless-stopped
+    # The port each service is called on; Kubernetes makes its Service from it
+    # and fails the render when a scrape target names a port nobody exposes
+    # (hosting K4, K11). Published ports stay a Docker-host convenience: on
+    # Kubernetes this stack publishes nothing (`kubectl port-forward`).
+    expose: ["9090"]
     ports:
       - "${PROMETHEUS_PORT}:9090"
     command:
@@ -123,6 +128,7 @@ services:
     image: ${DOCKER_REGISTRY}/grafana/loki:3.1.0
     container_name: txnet-loki
     restart: unless-stopped
+    expose: ["3100"]
     # Loopback only (H11): Loki has no auth, so a public port let anyone read
     # every service's logs or push fake ones. Grafana and promtail reach it
     # over private_backend_network; the host reaches it on 127.0.0.1.
@@ -161,6 +167,7 @@ services:
     image: ${DOCKER_REGISTRY}/prom/node-exporter:latest
     container_name: txnet-node-exporter
     restart: unless-stopped
+    expose: ["9100"]
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -222,6 +229,7 @@ services:
     image: ${DOCKER_REGISTRY}/prometheuscommunity/postgres-exporter:v0.15.0
     container_name: txnet-postgres-exporter
     restart: unless-stopped
+    expose: ["9187"]
     environment:
       - DATA_SOURCE_NAME=postgresql://txnet_app_user:${DB_APP_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}?sslmode=disable
       # Only the custom queries. The exporter's built-in collectors are
@@ -245,6 +253,7 @@ services:
     image: ${DOCKER_REGISTRY}/oliver006/redis_exporter:v1.62.0
     container_name: txnet-redis-exporter
     restart: unless-stopped
+    expose: ["9121"]
     environment:
       - REDIS_ADDR=redis://memory-data:${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
@@ -258,6 +267,7 @@ services:
     image: ${DOCKER_REGISTRY}/prom/alertmanager:v0.27.0
     container_name: txnet-alertmanager
     restart: unless-stopped
+    expose: ["9093"]
     ports:
       - "${ALERTMANAGER_PORT}:9093"
     configs:

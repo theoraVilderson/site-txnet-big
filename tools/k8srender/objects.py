@@ -30,6 +30,11 @@ def seconds(duration, default: int) -> int:
     return max(1, math.ceil(h * 3600 + m * 60 + s + ms / 1000))
 
 
+def port_number(value) -> int:
+    """A compose `expose:` entry ("3000", 3000, "8472/udp") as its port."""
+    return int(str(value).split("/", 1)[0])
+
+
 def undo_compose_escaping(value):
     """`docker compose config` prints every literal `$` as `$$`, so its output reads
     back as compose input; a pod needs the value itself (K2, K5)."""
