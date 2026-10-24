@@ -72,6 +72,12 @@ service lists, as today, and no value in a pod spec. Kubernetes expands `$(X)`
 in `env`, `command` and `args`; the renderer writes every literal `$(` as `$$(`
 so a shell `$(date)` survives. The Secret's name carries a hash of its data,
 as Kustomize's generators do, so a changed value rolls the pod.
+The values come from SOPS files encrypted to an age key (user, 2026-10-24,
+ADR-0164): `.env.prod` and `dev-docker/secrets/*` committed encrypted, decrypted
+only in memory by `prod.k8s.sh render` on the node. The age key lives on the
+node outside the checkout, rides in the bundle (B5) and is kept off the server
+beside the bundle's passphrase; k3s stores Secrets encrypted
+(`--secrets-encryption`). Rotation is `sops edit` then `deploy` (OPS-1-o-j).
 
 **K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`
@@ -159,7 +165,7 @@ puts secrets. K8's images are built off the node and `prod.k8s.sh push`ed
 
 **K15 — Backups off the node.** pgBackRest gains `repo2` on S3 beside the host
 path: WAL is archived to both, a full and diffs to both (H3's schedule). The
-bucket has object lock in compliance mode for the retention period, so a key
+bucket has object lock in compliance mode for 30 days (user, 2026-10-24), so a key
 that can list and expire still cannot destroy what is locked (OPS-1-o-o). The
 bundle (B6, B7) is unchanged and remains the restore of everything else.
 

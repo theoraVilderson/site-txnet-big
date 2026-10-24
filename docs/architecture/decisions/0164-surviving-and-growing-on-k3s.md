@@ -34,7 +34,7 @@ rollback (K10), environment as hashed Secrets (K5, K7) and Traefik behind
 
 1. **Backups leave the node continuously** (K15): pgBackRest `repo2` on S3 with
    object lock. Its key must list and expire, so B7's write-only rule moves to
-   the bucket's lock. Which bucket and retention is OPS-1-o-o's question.
+   the bucket's lock. Locked for 30 days (user, 2026-10-24); the bucket is named at OPS-1-p.
 2. **A release rolls back as one** (K16): tags are commits, a smoke check
    follows every deploy, and a failure sets every workload of the release back.
    Migrations are not rolled back; C-39 already makes that safe.
@@ -44,12 +44,16 @@ rollback (K10), environment as hashed Secrets (K5, K7) and Traefik behind
    (ADR-0147 point 5) give the zero downtime; K16 gives the way back.
 4. **A risky feature is switched per tenant instead** (OPS-1-ag): shipped off,
    on for the platform's own tenant, then for resellers, off without a deploy.
-   Its owning unit and store are still to decide.
+   Owned by `tenant` (user, 2026-10-24).
 5. **A node joins over WireGuard** (K17), data stores pinned by label; **a move
    is a join, a standby promotion and a drain** (K18). Both wait for a second
    server; until then a move is a bundle restore (~10 min).
 6. **Traefik sees the visitor's address** (K9: `externalTrafficPolicy: Local`),
    and **Secrets are encrypted at rest** (`--secrets-encryption`, OPS-1-o-j).
+7. **Secrets are SOPS files encrypted to an age key, in the repo** (user,
+   2026-10-24; K5): versioned, no extra service on 11 GB, unchanged on a second
+   node or a move. Rejected: Vault or Infisical (a service to run and back up),
+   Sealed Secrets (a controller, and the key is the cluster's).
 
 ## Consequences
 
