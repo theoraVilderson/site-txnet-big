@@ -8,7 +8,7 @@ updated: 2026-10-24
 
 # Contract — hosting: Kubernetes
 
-The build spec for ADR-0147 and ADR-0163 (OPS-1-o-a … -n). Every value here is decided; a
+The build spec for ADR-0147, ADR-0163 and ADR-0164 (OPS-1-o-a … -r). Every value here is decided; a
 building session does not reopen one. H15's healthchecks and H3's shared socket
 are inputs; nothing here changes what a service does once it is up.
 
@@ -115,7 +115,8 @@ baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
 `loadbalancer.server.port` label); each `traefik.http.middlewares.<m>.*` set is
 one `Middleware` `<m>`; `@file` references stay as they are. Traefik's CRDs and
 RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
-is claim `letsencrypt`. On a k3s host O7's chain is reached from `FORWARD`
+is claim `letsencrypt`. The Service is `externalTrafficPolicy: Local`, so
+Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chain is reached from `FORWARD`
 (`--ctorigdstport 80|443`) where Docker's host used `DOCKER-USER` (OPS-1-o-g).
 
 ## Deploying
@@ -153,3 +154,31 @@ before k3s is installed (OPS-1-o-l).
 names `${LOCAL_DOCKER_REGISTRY}` with a pull-only login, kept where OPS-1-o-j
 puts secrets. K8's images are built off the node and `prod.k8s.sh push`ed
 (OPS-1-o-m): a build on the node starves the running services.
+
+## Surviving and growing (ADR-0164)
+
+**K15 — Backups off the node.** pgBackRest gains `repo2` on S3 beside the host
+path: WAL is archived to both, a full and diffs to both (H3's schedule). The
+bucket has object lock in compliance mode for the retention period, so a key
+that can list and expire still cannot destroy what is locked (OPS-1-o-o). The
+bundle (B6, B7) is unchanged and remains the restore of everything else.
+
+**K16 — A release is one unit.** `IMAGE_TAG` is the commit; `deploy` records
+the previous tag. After every rollout is ready, `prod.k8s.sh smoke` asks each
+service's health and one request per IngressRoute; a failure, or a rollout
+not ready in K10's 300s, sets **every** workload of the release back to the
+previous tag. `prod.k8s.sh rollback [tag]` does the same by hand. `db-migrate`
+is never undone: C-39 keeps the previous release correct on the new schema
+(OPS-1-o-p).
+
+**K17 — A second node.** `k3s agent --server https://<node1>:6443` with the
+token from a Secret; flannel `--flannel-backend=wireguard-native`, since node
+traffic crosses the public network; K13 opens 6443, 10250 and 51820/udp to the
+node addresses only. `main-db`, `memory-data`, `rabbitmq` are pinned by the node
+label `txnet.io/data=true` (their `local-path` volume cannot follow them); the
+LoadBalancer answers on both nodes, and Cloudflare reaches both (OPS-1-o-q).
+
+**K18 — A move between servers.** With a second node: join it (K17), promote
+Postgres's standby there (H22), stop and copy Redis and RabbitMQ, move the data
+label, drain and remove the old node (OPS-1-o-r). Until then a move is a bundle
+restored into a new cluster (OPS-1-o-k, B9).
