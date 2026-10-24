@@ -4,6 +4,7 @@
     python3 tools/k8s_deploy_test.py
 """
 import base64
+import json
 import os
 import re
 import shutil
@@ -148,6 +149,38 @@ class ContentTagTest(unittest.TestCase):
         options = {**OPTIONS, "tags": content_tags(self.services(), self.repo)}
         rows = dict((s, remote) for s, _, remote in built_images(self.services(), "txnet", options))
         self.assertEqual(rows["api"], f"registry.example/txnet/api:{options['tags']['api']}")
+
+
+# R13 (OPS-1-o-x): the platform owner's first password. On a release it is the
+# sealed file's, and never printed (a Job's log reaches Loki); with no file, as
+# on the dev host, one is made and shown once, as before.
+class SeedPasswordTest(unittest.TestCase):
+    HELPER = REPO / "txnet-backend/prisma/seed-owner-password.js"
+
+    def owner_password(self, env):
+        script = (f"const {{ ownerPassword }} = require({str(self.HELPER)!r});"
+                  "try { console.log(JSON.stringify(ownerPassword(process.env, () => 'made'))); }"
+                  "catch (e) { console.error(e.message); process.exit(1); }")
+        return subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                              env={"PATH": os.environ["PATH"], **env})
+
+    def test_the_sealed_file_is_the_password_and_is_not_printed(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt") as f:
+            f.write("s3cret-from-file\n")
+            f.flush()
+            run = self.owner_password({"PLATFORM_OWNER_PASSWORD_FILE": f.name})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertEqual(json.loads(run.stdout), {"password": "s3cret-from-file", "printable": False})
+
+    def test_an_empty_file_is_refused(self):
+        with tempfile.NamedTemporaryFile("w") as f:
+            run = self.owner_password({"PLATFORM_OWNER_PASSWORD_FILE": f.name})
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("empty", run.stderr)
+
+    def test_with_no_file_one_is_made_and_shown(self):
+        run = self.owner_password({})
+        self.assertEqual(json.loads(run.stdout), {"password": "made", "printable": True})
 
 
 # K14: the node's registries.yaml, from the sealed env files' variables.

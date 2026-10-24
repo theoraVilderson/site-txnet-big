@@ -2,7 +2,7 @@
 // creates: the `platform_owner` Tenant, the default RBAC roles, one owner
 // User for that tenant, and the `tenant_domain` row for the host its API is
 // served on, the two ADR-0019 currencies and the schedules of the three jobs that must never wait for an operator. Idempotent — safe to run on every `db push` / `migrate dev` /
-// `migrate reset`.
+// `migrate reset`, and every release runs it after the migrations (hosting R13).
 //
 // The domain row is not a convenience. There is no fallback tenant (ADR-0025):
 // a request whose Host matches no row is answered a neutral 404, so without
@@ -20,6 +20,7 @@
 const { PrismaClient } = require('@prisma/client');
 const argon2 = require('argon2');
 const { randomBytes, randomUUID } = require('crypto');
+const { ownerPassword } = require('./seed-owner-password');
 
 const prisma = new PrismaClient();
 
@@ -200,7 +201,7 @@ async function main() {
   const superAdminRole = await systemRoleOrThrow('SuperAdmin');
 
   const ownerId = randomUUID();
-  const password = generatePassword();
+  const { password, printable } = ownerPassword(process.env, generatePassword);
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
 
   const tenant = await prisma.tenant.create({
@@ -233,8 +234,12 @@ async function main() {
 
   console.log('[seed] created platform_owner tenant + roles + owner user.');
   console.log('[seed]   owner username: platform_owner');
-  console.log(`[seed]   owner password: ${password}`);
-  console.log('[seed]   (shown once — save it now, only the argon2 hash is stored)');
+  if (printable) {
+    console.log(`[seed]   owner password: ${password}`);
+    console.log('[seed]   (shown once — save it now, only the argon2 hash is stored)');
+  } else {
+    console.log('[seed]   owner password: the sealed PLATFORM_OWNER_PASSWORD_FILE');
+  }
   // bot-service has no host to resolve a tenant from and there is no fallback
   // (ADR-0025), so it states this id as X-Tenant-Id. Printed here because it
   // is generated here and needed in .env — F-066-h/F-066-i replace it with a

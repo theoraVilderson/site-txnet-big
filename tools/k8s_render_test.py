@@ -358,7 +358,7 @@ class RepoModelTest(unittest.TestCase):
             cls.result = subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), f"{out}/base",
                                          "--host-gateway", "10.0.0.5", "--tag", "t1"],
                                         capture_output=True, text=True)
-            cls.objects = [o for f in Path(out, "base").glob("*.yaml") for o in yaml.safe_load_all(f.read_text())
+            cls.objects = [o for f in Path(out, "base").rglob("*.yaml") for o in yaml.safe_load_all(f.read_text())
                            if o] if cls.result.returncode == 0 else []
 
     def test_the_production_model_renders(self):
@@ -392,6 +392,21 @@ class RepoModelTest(unittest.TestCase):
             drain = pod["containers"][0].get("lifecycle", {}).get("preStop", {}).get("sleep", {}).get("seconds", 0)
             self.assertGreater(drain, 0, name)
             self.assertGreater(pod["terminationGracePeriodSeconds"], drain, name)
+
+    # R13 (OPS-1-o-x): an empty database has no platform tenant until seed.js runs,
+    # and auth-service does not start without one. Every release seeds after the
+    # migrations; the owner's password is read from a mounted file, never env.
+    def test_every_release_seeds_after_its_migrations(self):
+        job = next(o for o in self.objects if o["kind"] == "Job" and o["metadata"]["name"] == "db-migrate")
+        pod = job["spec"]["template"]["spec"]
+        command = " ".join(pod["containers"][0].get("command", []) + pod["containers"][0].get("args", []))
+        self.assertRegex(command, r"prisma migrate deploy .*&& node prisma/seed\.js")
+        env = next(o for o in self.objects if o["kind"] == "Secret"
+                   and o["metadata"]["name"] == pod["containers"][0]["envFrom"][0]["secretRef"]["name"])["data"]
+        self.assertIn("DOMAIN_NAME", env)
+        password_file = base64.b64decode(env["PLATFORM_OWNER_PASSWORD_FILE"]).decode()
+        mounts = [m["mountPath"] for m in pod["containers"][0]["volumeMounts"]]
+        self.assertIn(password_file, mounts)
 
     # K5 (OPS-1-o-i): a value that is a Secret in one pod is written in no pod
     # spec — memory-data's password reached its args and probe from compose.

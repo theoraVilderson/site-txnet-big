@@ -101,6 +101,16 @@ runs through `kubectl exec -i` into `main-db`, logged in as the pod's own
 `POSTGRES_USER`; the three passwords are compose's reading of the opened env files
 and reach psql on stdin, never an argv. A rollback runs it too: a rotated password stays rotated.
 
+**R13 — Every release seeds** (OPS-1-o-x). `db-migrate` runs `prisma/seed.js`
+after `migrate deploy`, with `DOMAIN_NAME`: an empty database has no platform
+tenant, roles or `api.`/`panel.`/`sub.` doors, and auth-service does not start
+without them (the rehearsal's first deploy, 2026-10-24). The seed is idempotent,
+so every release runs it. The owner's first password is the sealed
+`dev-docker/secrets/platform-owner-password`, read through
+`PLATFORM_OWNER_PASSWORD_FILE` and never printed, since a Job's output reaches
+Loki (`prisma/seed-owner-password.js`); an empty file fails the Job. With no file
+set, as on the dev host, one is made and shown once.
+
 **R8 — The record.** ConfigMap `txnet-release` in `txnet`: `history` (the last
 ten tags, the running one last) and `overlay`. It carries no `part-of` label,
 so no prune removes it. A deploy appends its tag; a rollback to a tag drops

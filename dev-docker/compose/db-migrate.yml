@@ -24,10 +24,18 @@ services:
     container_name: ${STACK_NAME:-txnet}-db-migrate
     # Runs once: a failed migration is read and fixed, never retried (C-39).
     restart: "no"
-    command: ["npx", "prisma", "migrate", "deploy", "--schema", "prisma/domains"]
+    # Then the seed (R13, OPS-1-o-x): an empty database has no platform tenant,
+    # and auth-service does not start without one. Idempotent, so every release.
+    command: ["sh", "-c", "npx prisma migrate deploy --schema prisma/domains && node prisma/seed.js"]
     environment:
       # The owner, straight to Postgres: DDL through PgBouncer's transaction
       # pool, or as the RLS-bound app user, fails (H7, H8).
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
+      # The platform's own doors (api., panel., sub.) the seed registers.
+      - DOMAIN_NAME=${DOMAIN_NAME}
+      # Read, never printed: a Job's output reaches Loki.
+      - PLATFORM_OWNER_PASSWORD_FILE=/run/secrets/platform-owner-password
+    volumes:
+      - ./secrets/platform-owner-password:/run/secrets/platform-owner-password:ro
     networks:
       - private_backend_network
