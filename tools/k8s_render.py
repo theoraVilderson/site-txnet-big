@@ -4,6 +4,7 @@
     python3 tools/k8s_render.py <out-dir> [--stack main|monitoring] [--host-gateway IP] [--tag T]
                                 [--sealed DIR | --env-file F...] [--set K=V]...
     python3 tools/k8s_render.py --images [--tag T]   service, local image, registry image per build (K8)
+    python3 tools/k8s_render.py --registries [--sealed DIR]   the node's registries.yaml, to stdout (K14)
 
 Compose does the interpolation (`docker compose config`), so a variable means
 here exactly what it means to `scripts/prod.compose.sh`. The output holds every
@@ -28,6 +29,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, exposed_ports, render  # noqa: E402
 from k8srender.container import built_images  # noqa: E402
+from k8srender.registries import registries_yaml  # noqa: E402
 from k8srender.tables import STACKS, Stack  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -70,6 +72,7 @@ def main() -> int:
     parser.add_argument("out", type=Path, nargs="?")
     parser.add_argument("--stack", choices=sorted(STACKS), default="main")
     parser.add_argument("--images", action="store_true", help="list the images to build and push, then exit")
+    parser.add_argument("--registries", action="store_true", help="print the node's registries.yaml, then exit")
     parser.add_argument("--tag", help="image tag (default: the current commit)")
     parser.add_argument("--host-gateway", help="the node's address, for compose's host-gateway (K3)")
     parser.add_argument("--env-file", action="append", dest="env_files")
@@ -86,6 +89,13 @@ def main() -> int:
     overrides = dict(kv.split("=", 1) for kv in args.set)
     variables = dict(line.split("=", 1) for line in
                      compose(stack, ["--environment"], env_files, overrides).splitlines() if "=" in line)
+    if args.registries:
+        try:
+            print(registries_yaml(variables), end="")
+        except RenderError as error:
+            print(f"k8s_render: {error}", file=sys.stderr)
+            return 1
+        return 0
     options = {"registry": variables.get("LOCAL_DOCKER_REGISTRY", ""), "tag": args.tag or git_tag(),
                "host_gateway": args.host_gateway, "namespace": stack.namespace, "publish": stack.publish,
                "sealed_root": args.sealed}

@@ -15,9 +15,8 @@ updated: 2026-10-24
 **Responsibility (one sentence):** how the services run and survive — the
 Kubernetes (k3s, ADR-0147) and compose stacks, Postgres's backup, the whole-platform backup bundle, tuning and
 connection pool, the log pipeline's bounds and format, healthchecks, and housekeeping of operational tables.
-**Explicitly NOT responsible for:** uploaded files' backup (`object-storage`,
-ADR-0120), Redis key layout (`redis-keyspace`), alert rules owned by a
-business unit (`billing.rules.yml`, …), what a service does once it is up.
+**Explicitly NOT responsible for:** uploaded files' backup (`object-storage`, ADR-0120), Redis key layout
+(`redis-keyspace`), alert rules owned by a business unit (`billing.rules.yml`, …), what a service does once it is up.
 
 ## Files
 | File | Read it when |
@@ -26,22 +25,23 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose, its monitoring and its ports (OPS-1-o-a … -r) — rules K1…K18 |
 | [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j) — rules S1…S7 |
+| [contract.registry.md](contract.registry.md) | where the k3s node gets its images: built and pushed off it, pulled with a sealed pull-only login, Docker Hub through the mirror (OPS-1-o-m) — rules R1…R4 |
 | [contract.health.md](contract.health.md) | a healthcheck on a container that is not a Nest app: auth-handler, Traefik, the Next apps, guide-media, mailpit, the backup loops (OPS-1-aa) — rule H24 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped write-only to S3, restored here or elsewhere (OPS-1-ad) — rules B1…B9 |
 | [open-questions.md](open-questions.md) | production's starting data (OPS-1-p) and the standby server (OPS-1-y) |
 
 ## Status
 
-`active` since 2026-10-14 (OPS-1-ab). Opened 2026-10-06 by ADR-0126 (D-62). Built: EDGE-1-g, -h, -j, -k, -m
-(`contract.origin.md`); OPS-1-k, -l, -z (H12/H13, `shared-core/src/lib/logging` in every Nest service, the gate, the
-queue); OPS-1-a (H1/H2, WAL archived, `pgbackrest-repo.sh` → `conf.d/repo.conf`); -b (H3, `compose/pg-backup.yml`,
-shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f (H10, `main-db` `command:`, sizing in
-`operations/environments.md`); -d (H5, `database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed);
--g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5
-`LISTEN`s direct; 15 of 100 on dev); -j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days,
-loopback); -v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a
-server move, `runbook-move-server.md`). -ad (B1–B9, `scripts/bundle/`). -o-a…-d, -o-i (K2–K10, `tools/k8srender/`,
-`k8s/`, `scripts/prod.k8s.sh`); -o-e (K11), -o-g/-o-l (K9/K13, `scripts/edge/`), -o-j (S1–S7). -aa (H24).
+`active` since 2026-10-14. Built: EDGE-1-g, -h, -j, -k, -m (`contract.origin.md`); OPS-1-k, -l, -z (H12/H13,
+`shared-core/src/lib/logging` in every Nest service, the gate, the queue); OPS-1-a (H1/H2, WAL archived,
+`pgbackrest-repo.sh` → `conf.d/repo.conf`); -b (H3, `compose/pg-backup.yml`, shared socket); -c (H4, `pg-backup.sh
+drill`, `pg_restore_drill.prom`); -f (H10, `main-db` `command:`, sizing in `operations/environments.md`); -d (H5,
+`database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed); -g (H9, C-41's check); -h (H7, `db-pool`:
+PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev); -j
+(H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback); -v (H21, `hosting.broker-redis` in
+`database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a server move, `runbook-move-server.md`). -ad
+(B1–B9, `scripts/bundle/`). -o-a…-e, -o-g, -o-i, -o-j, -o-l, -o-m (K2–K14, S1–S7, R1–R4: `tools/k8srender/`, `k8s/`,
+`scripts/prod.k8s.sh`, `scripts/edge/`). -aa (H24).
 
 ## Changelog
 | Date | Change |

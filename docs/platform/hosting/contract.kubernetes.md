@@ -215,10 +215,8 @@ stand-in pod too, while 9090 DNATed and 9999 still answered; the node reached
 6443/8472 on localhost and its public address; an `ACCEPT` above ours held
 until the next `apply`; `remove` reopened them. Tests: `test_k3s_ports.py`.
 
-**K14 — The node pulls; it does not build.** `/etc/rancher/k3s/registries.yaml`
-names `${LOCAL_DOCKER_REGISTRY}` with a pull-only login, kept where OPS-1-o-j
-puts secrets. K8's images are built off the node and `prod.k8s.sh push`ed
-(OPS-1-o-m): a build on the node starves the running services.
+**K14 — The node pulls; it does not build.** K8's images are built off the node
+and pushed; it pulls with a sealed pull-only login. Rules R1–R4 in `contract.registry.md` (OPS-1-o-m).
 
 ## Surviving and growing (ADR-0164)
 

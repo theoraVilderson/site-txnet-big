@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Spec for images and deploy (OPS-1-o-c, hosting contract.kubernetes.md K8, K10).
+"""Spec for images, the node's pulls and deploy (OPS-1-o-c, -m; hosting contract.kubernetes.md K8, K10, K14).
 
     python3 tools/k8s_deploy_test.py
 """
 import base64
+import os
 import re
 import shutil
 import subprocess
@@ -16,8 +17,9 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8s_manifest import stores, workloads  # noqa: E402
-from k8srender import render  # noqa: E402
+from k8srender import RenderError, render  # noqa: E402
 from k8srender.container import built_images  # noqa: E402
+from k8srender.registries import registries_yaml  # noqa: E402
 from k8srender.tables import BAKED_BINDS, NAMESPACE  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -87,6 +89,28 @@ class ImagesTest(unittest.TestCase):
         ])
 
 
+# K14: the node's registries.yaml, from the sealed env files' variables.
+class RegistriesTest(unittest.TestCase):
+    VARIABLES = {"DOCKER_REGISTRY": "mirror.example", "LOCAL_DOCKER_REGISTRY": "registry.example",
+                 "LOCAL_DOCKER_REGISTRY_PULL_USER": "puller", "LOCAL_DOCKER_REGISTRY_PULL_PASSWORD": "a: #b'\""}
+
+    def test_the_pull_login_is_for_our_registry(self):
+        config = yaml.safe_load(registries_yaml(self.VARIABLES))
+        self.assertEqual(config["configs"], {"registry.example": {"auth": {
+            "username": "puller", "password": "a: #b'\""}}})
+
+    # k3s's own images (pause, coredns, servicelb) name docker.io, which the
+    # node reaches only through the mirror every compose image already uses.
+    def test_docker_hub_goes_through_the_mirror(self):
+        config = yaml.safe_load(registries_yaml(self.VARIABLES))
+        self.assertEqual(config["mirrors"], {"docker.io": {"endpoint": ["https://mirror.example"]}})
+
+    def test_a_missing_login_fails(self):
+        variables = {**self.VARIABLES, "LOCAL_DOCKER_REGISTRY_PULL_PASSWORD": ""}
+        with self.assertRaisesRegex(RenderError, "LOCAL_DOCKER_REGISTRY_PULL_PASSWORD"):
+            registries_yaml(variables)
+
+
 MANIFEST = """
 apiVersion: v1
 kind: Secret
@@ -128,6 +152,15 @@ class BakedTest(unittest.TestCase):
 class ScriptTest(unittest.TestCase):
     def test_prod_k8s_parses(self):
         subprocess.run(["bash", "-n", str(REPO / "scripts/prod.k8s.sh")], check=True)
+
+    # K14: a build on the node starves what it runs; it refuses before docker is asked.
+    def test_build_refuses_on_a_k3s_node(self):
+        with tempfile.TemporaryDirectory() as node:
+            run = subprocess.run([str(REPO / "scripts/prod.k8s.sh"), "build"], capture_output=True, text=True,
+                                 env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("K14", run.stderr)
+        self.assertNotIn("== build", run.stdout)
 
     @unittest.skipUnless(shutil.which("shellcheck"), "shellcheck not installed")
     def test_prod_k8s_is_clean(self):

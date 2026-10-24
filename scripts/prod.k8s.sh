@@ -3,6 +3,8 @@
 #
 #   scripts/prod.k8s.sh build              build every image compose builds, tagged for the registry
 #   scripts/prod.k8s.sh push               push them: the node pulls, it never builds (K14)
+#   scripts/prod.k8s.sh registries         on the node: write /etc/rancher/k3s/registries.yaml, the
+#                                          registry's pull-only login from the sealed .env.prod (K14)
 #   scripts/prod.k8s.sh render             the Kustomize bases into k8s/base/ and k8s/monitoring/base/,
 #                                          from the sealed secrets opened in /dev/shm (K5); never committed
 #   scripts/prod.k8s.sh deploy [overlay]   render, migrate, apply, wait on every rollout; a workload
@@ -15,6 +17,7 @@
 #   HOST_GATEWAY  the node's address, which compose's `host-gateway` means (K3); render and deploy
 #   KUBECTL       the kubectl to run (default: kubectl)
 #   TOOLS_DIR     where install-tools puts sops and age-keygen (default: /usr/local/bin)
+#   K3S_ETC       k3s's config directory; its presence marks the node (default: /etc/rancher/k3s)
 #
 # The compose files stay the only definition of a service; this renders them
 # (tools/k8s_render.py: the main stack, and the monitoring one into
@@ -36,6 +39,7 @@ PRUNE_KINDS=(core/v1/ConfigMap core/v1/Secret core/v1/Service apps/v1/Deployment
   apps/v1/DaemonSet traefik.io/v1alpha1/IngressRoute traefik.io/v1alpha1/Middleware)
 TRAEFIK_CRDS=(crd/ingressroutes.traefik.io crd/middlewares.traefik.io)
 TOOLS_DIR="${TOOLS_DIR:-/usr/local/bin}"
+K3S_ETC="${K3S_ETC:-/etc/rancher/k3s}"
 # Every temporary path here holds secrets: removed however the script exits.
 TEMPS=()
 trap 'rm -rf "${TEMPS[@]}"' EXIT
@@ -57,8 +61,10 @@ images() {
 }
 
 # One service at a time: a parallel build starves whatever else runs on the host.
+# Never on the node itself (K14): the 2026-10-23 restore's build starved its services.
 build() {
   local service local_image remote
+  [ ! -e "$K3S_ETC" ] || die "$K3S_ETC exists, so this is the k3s node: build off it and push (K14)"
   while IFS=$'\t' read -r service local_image remote; do
     echo "== build $service -> $remote"
     compose build "$service" </dev/null
@@ -74,18 +80,36 @@ push() {
   done < <(images)
 }
 
-# K5: the sealed secrets are opened into memory for the render alone.
+# K5: the sealed secrets, opened into memory at $OPENED, which the caller
+# removes as soon as it is done (and the exit trap does on failure). Not
+# `$(open_sealed)`: a subshell's TEMPS would never reach the trap.
+open_sealed() {
+  OPENED="$(mktemp -d /dev/shm/txnet-secrets.XXXXXX)"
+  TEMPS+=("$OPENED")
+  python3 "$ROOT_DIR/tools/k8s_secrets.py" open "$OPENED"
+}
+
 render() {
-  local opened
   [ -n "${HOST_GATEWAY:-}" ] || die "HOST_GATEWAY=<node ip> is required (K3)"
-  opened="$(mktemp -d /dev/shm/txnet-secrets.XXXXXX)"
-  TEMPS+=("$opened")
-  python3 "$ROOT_DIR/tools/k8s_secrets.py" open "$opened"
+  open_sealed
   python3 "$ROOT_DIR/tools/k8s_render.py" "$BASE" --tag "$IMAGE_TAG" --host-gateway "$HOST_GATEWAY" \
-    --sealed "$opened"
+    --sealed "$OPENED"
   python3 "$ROOT_DIR/tools/k8s_render.py" "$MONITORING_BASE" --stack monitoring --tag "$IMAGE_TAG" \
-    --sealed "$opened"
-  rm -rf "$opened"
+    --sealed "$OPENED"
+  rm -rf "$OPENED"
+}
+
+# K14: containerd reads registries.yaml when k3s starts, so it is written before
+# k3s is installed (OPS-1-o-f), or k3s is restarted after. Owner-only: it holds the login.
+registries() {
+  local written
+  open_sealed
+  written="$(mktemp "$K3S_ETC/.registries.XXXXXX")" || die "no $K3S_ETC: make it, or run this on the node"
+  TEMPS+=("$written")
+  python3 "$ROOT_DIR/tools/k8s_render.py" --registries --sealed "$OPENED" >"$written"
+  rm -rf "$OPENED"
+  mv "$written" "$K3S_ETC/registries.yaml"
+  echo "wrote $K3S_ETC/registries.yaml; if k3s is running, 'systemctl restart k3s' reads it"
 }
 
 # sops and age-keygen at their pins, each checked against its sha256 (K5).
@@ -168,9 +192,10 @@ deploy() {
 case "${1:-}" in
   build) build ;;
   push) push ;;
+  registries) registries ;;
   render) render ;;
   deploy) deploy "${2:-}" ;;
   secrets) shift && exec python3 "$ROOT_DIR/tools/k8s_secrets.py" "$@" ;;
   install-tools) install_tools ;;
-  *) sed -n '2,17p' "$0" >&2 && exit 2 ;;
+  *) sed -n '2,20p' "$0" >&2 && exit 2 ;;
 esac
