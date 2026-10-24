@@ -1,0 +1,8 @@
+# The k3s server's flags (hosting K1, K5), copied to /etc/rancher/k3s/config.yaml
+# on the node before k3s is installed (OPS-1-o-f). servicelb and local-path stay on.
+# We run our own Traefik (K9).
+disable:
+  - traefik
+# Secrets are stored encrypted in k3s's datastore (ADR-0164 point 6), so a copy
+# of /var/lib/rancher holds no Secret in the clear.
+secrets-encryption: true

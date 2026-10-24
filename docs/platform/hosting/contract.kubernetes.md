@@ -22,8 +22,8 @@ before stopping the old one.
 ## The cluster
 
 **K1 — Distribution.** k3s, version pinned once in `k8s/versions.env`
-(`K3S_IMAGE`, `TRAEFIK_CRD_VERSION`). Server flags: `--disable=traefik` (we run
-ours, K9). `servicelb` and `local-path` stay on. Namespace `txnet` for the
+(`K3S_IMAGE`, `TRAEFIK_CRD_VERSION`). Server flags in `k8s/k3s/config.yaml`:
+`disable: [traefik]` (ours, K9), `secrets-encryption` (S6); `servicelb`, `local-path` on. Namespace `txnet` for the
 platform, `txnet-monitoring` for K11. The node is the test server (ADR-0163).
 An agent never installs k3s on the dev host (ADR-0147 point 6); the test
 server's install is OPS-1-o-f's, with the user, after K13.
@@ -80,7 +80,7 @@ ADR-0164): `.env.prod` and `dev-docker/secrets/*` committed encrypted, decrypted
 only in memory by `prod.k8s.sh render` on the node. The age key lives on the
 node outside the checkout, rides in the bundle (B5) and is kept off the server
 beside the bundle's passphrase; k3s stores Secrets encrypted
-(`--secrets-encryption`). Rotation is `sops edit` then `deploy` (OPS-1-o-j).
+(`--secrets-encryption`). Rules S1–S7 in `contract.secrets.md` (OPS-1-o-j).
 
 **K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`

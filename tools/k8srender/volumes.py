@@ -4,6 +4,7 @@ from pathlib import Path, PurePosixPath
 
 from .monitoring import rewrite
 from .objects import RenderError, dns_name, hashed
+from .sealed import read_secret
 from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DEV_ONLY_BINDS, DOCKER_HOST_BINDS,
                      POD_LOCAL_VOLUMES, SECRET_DIR, VOLUME_SIZES)
 
@@ -13,11 +14,13 @@ _SECRETS_ROOT = "/run/secrets"
 
 class Mounts:
     """What one pod mounts, collected across its containers (K3's sidecar shares it).
-    `declared` is the model's top-level `configs:` and `secrets:` (K7, K11)."""
+    `declared` is the model's top-level `configs:` and `secrets:` (K7, K11);
+    `sealed_root`, when given, is where the secret files were opened (K5)."""
 
-    def __init__(self, repo: Path, declared: dict | None = None):
+    def __init__(self, repo: Path, declared: dict | None = None, sealed_root: Path | None = None):
         self.repo = repo
         self.declared = declared or {}
+        self.sealed_root = sealed_root
         self.volumes: dict[str, dict] = {}
         self.objects: dict[str, dict] = {}
 
@@ -74,7 +77,8 @@ class Mounts:
             name = f"host-{dns_name(str(source)) or 'root'}"  # `/` itself: node-exporter's rootfs
             self.volumes[name] = {"name": name, "hostPath": {"path": str(source), "type": "DirectoryOrCreate"}}
             return _mount(name, entry["target"], entry)
-        if not source.is_file():
+        # A secret file is a file even where only its sealed copy exists (the node, K5).
+        if not (source.is_file() or (self.sealed_root and rel.startswith(SECRET_DIR + "/"))):
             raise RenderError(f"{service}: bound directory {rel} is neither dev-only nor baked (K7)")
         return self._file(rel, source, entry)
 
@@ -82,7 +86,7 @@ class Mounts:
         key = source.name
         is_secret = rel.startswith(SECRET_DIR + "/")
         base = dns_name(("secret-" if is_secret else "cfg-") + key)
-        data = {key: source.read_bytes() if is_secret else source.read_text()}
+        data = {key: read_secret(source, self.repo, self.sealed_root) if is_secret else source.read_text()}
         obj = hashed("Secret" if is_secret else "ConfigMap", base, data)
         self.objects[f"file/{base}"] = obj
         ref = {"secret": {"secretName": obj["metadata"]["name"]}} if is_secret else \
@@ -103,7 +107,7 @@ class Mounts:
         path, key = Path(declared["file"]), PurePosixPath(target).name
         if kind == "secrets":
             base = dns_name(f"secret-{source}")
-            obj = hashed("Secret", base, {key: path.read_bytes()})
+            obj = hashed("Secret", base, {key: read_secret(path, self.repo, self.sealed_root)})
             ref = {"secret": {"secretName": obj["metadata"]["name"]}}
         else:
             base = dns_name(f"cfg-{source}")

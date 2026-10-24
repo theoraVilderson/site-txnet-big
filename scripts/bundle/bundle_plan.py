@@ -8,8 +8,11 @@ import datetime
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "move"))
+_SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_SCRIPTS, "move"))
+sys.path.insert(0, os.path.join(os.path.dirname(_SCRIPTS), "tools"))
 import move_plan as mp  # noqa: E402
+from k8s_secrets import AGE_KEY_FILE  # noqa: E402
 
 BUNDLE_PREFIX = "txnet-backup-"
 BUNDLE_SUFFIX = ".tar.zst.gpg"
@@ -22,8 +25,10 @@ BUNDLES_KEPT = 7
 # server too (a password manager): it is the one thing a restore needs besides the file.
 PASSPHRASE_FILE = mp.BUNDLE_PASSPHRASE_FILE
 SHIP_ENV_FILE = mp.SHIP_ENV_FILE
-# Inside the bundle; the passphrase is not, since it is what opens it.
-KEY_FILES = tuple(path for path in mp.CARRIED_FILES if path != PASSPHRASE_FILE)
+# Inside the bundle; the passphrase is not, since it is what opens it. The
+# node's age key is (hosting K5): absolute, outside the checkout, it opens
+# the sealed secrets a restored checkout carries.
+KEY_FILES = tuple(path for path in mp.CARRIED_FILES if path != PASSPHRASE_FILE) + (AGE_KEY_FILE,)
 # Volumes read through their own service, never copied as files: a file copy
 # of a running Postgres or Redis is not consistent.
 LOGICAL_VOLUMES = frozenset({"postgres_data", "redis_vol_internal", "rabbitmq_data"})
@@ -88,6 +93,14 @@ def verify_files(expected, actual):
         elif actual[path] != digest:
             problems.append("%s: changed since the bundle was made" % path)
     return problems
+
+
+def key_tar_args(root, paths):
+    """tar's arguments for `paths`: checkout-relative ones under root, absolute
+    ones (the age key) from the filesystem's root, stored without the slash."""
+    relative = [p for p in paths if not os.path.isabs(p)]
+    absolute = [p.lstrip("/") for p in paths if os.path.isabs(p)]
+    return ["-C", root, *relative] + (["-C", "/", *absolute] if absolute else [])
 
 
 def keys_to_restore(in_bundle, here):

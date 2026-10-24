@@ -134,8 +134,12 @@ def restore_keys(root, work, manifest, passphrase):
     """Writes the keys and env files this checkout lacks; returns (written, kept because different)."""
     here = {p: bio.path_digest(os.path.join(root, p)) for p in manifest["keys"]}
     write, differ = bp.keys_to_restore(manifest["keys"], here)
-    if write:
-        subprocess.run(["tar", "-C", root, "-xpf", os.path.join(work, "keys.tar"), *write], check=True)
+    # Two extractions: a checkout path lands under root, the age key at its own
+    # absolute place (bp.key_tar_args stored it from /).
+    for base, members in ((root, [p for p in write if not os.path.isabs(p)]),
+                          ("/", [p.lstrip("/") for p in write if os.path.isabs(p)])):
+        if members:
+            subprocess.run(["tar", "-C", base, "-xpf", os.path.join(work, "keys.tar"), *members], check=True)
     target = os.path.join(root, bp.PASSPHRASE_FILE)
     if not os.path.exists(target):
         shutil.copyfile(passphrase, target)  # so the nightly bundle runs here too

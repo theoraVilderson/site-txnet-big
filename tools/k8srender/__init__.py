@@ -48,8 +48,9 @@ class _Stack:
 
 def render(model: dict, repo: Path, options: dict) -> dict:
     """options: registry, tag, host_gateway; namespace (default K1's), `publish`
-    (False: no LoadBalancer, K11) and `peer` — {namespace, exposed: {service:
-    {ports}}} of the stack this one calls by name across namespaces."""
+    (False: no LoadBalancer, K11), `peer` — {namespace, exposed: {service:
+    {ports}}} of the stack this one calls by name across namespaces — and
+    `sealed_root`, the directory the secret files were opened into (K5)."""
     namespace, peer = options.get("namespace", NAMESPACE), options.get("peer")
     services = {name: service for name, service in undo_compose_escaping(model)["services"].items()
                 if name not in PROVIDED_BY_KUBERNETES}
@@ -93,7 +94,7 @@ def _runs_once(service: dict) -> bool:
 def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
     """K3: the workload for `name`, its sidecars as extra containers, its Services
     and every container's environment Secret; plus the claims and files it mounts."""
-    services, mounts = stack.services, Mounts(stack.repo, stack.declared)
+    services, mounts = stack.services, Mounts(stack.repo, stack.declared, stack.options.get("sealed_root"))
     members = [name, *sorted(n for n, owner in SIDECARS.items() if owner == name and n in services)]
     containers, secrets, grace = [], [], 0
     for member in members:

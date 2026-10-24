@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # Contract — hosting: the whole platform as one file
@@ -45,7 +45,9 @@ consistent. They come back through their service.
 **B5 — Encrypted, keys inside, one passphrase outside** (user, 2026-10-23).
 `gpg --symmetric --cipher-algo AES256` with `dev-docker/secrets/backup-bundle-passphrase`.
 The passphrase is the only thing kept off the server besides the file; it is
-never inside a bundle. A wrong one is refused before anything is touched.
+never inside a bundle, nor sealed in the repo (S1). The node's age key is
+inside, at its absolute path (`/etc/txnet/age.key`, `key_tar_args`): it opens
+the sealed secrets a restored checkout carries (S3). A wrong one is refused before anything is touched.
 
 ## Making and shipping
 

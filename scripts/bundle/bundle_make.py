@@ -149,7 +149,7 @@ def pack_volumes(host, config, staging):
 def pack_keys(root, staging):
     """keys.tar of the keys and env files present; returns {path: digest}."""
     present = [p for p in bp.KEY_FILES if os.path.exists(os.path.join(root, p))]
-    subprocess.run(["tar", "-C", root, "-cf", os.path.join(staging, "keys.tar"), *present], check=True)
+    subprocess.run(["tar", "-cf", os.path.join(staging, "keys.tar"), *bp.key_tar_args(root, present)], check=True)
     return {p: bio.path_digest(os.path.join(root, p)) for p in present}
 
 

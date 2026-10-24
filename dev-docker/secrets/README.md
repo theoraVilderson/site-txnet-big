@@ -20,9 +20,11 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 | `backup-ship.env` | `scripts/bundle/ship.py` (OPS-1-ad, B7) | the write-only S3 key and bucket bundles are sent with; absent, nothing is sent (`runbook-backup-bundle.md`) |
 | `origin-pull/` | nothing at runtime — `scripts/edge/origin-pull.sh` (EDGE-1-g) | our origin-pull CA's key and the client pair Cloudflare holds; `ca.pem` sits in `traefik/origin-pull/`. Lost: run `issue` with `FORCE=1`, then `upload` |
 
-In production these are real `secrets:` entries in `swarm/docker-stack.yml`,
-mounted at the same `/run/secrets/<name>` path, so the application code does
-not change between the two.
+In production on Kubernetes each bound file is a Secret mounted at the same
+`/run/secrets/<name>` path (hosting K7), so the application code does not
+change between the two. There the files are committed encrypted under
+`k8s/sealed/` and never read from here (`contract.secrets.md`, OPS-1-o-j) —
+except `backup-bundle-passphrase`, which is never sealed.
 
 **Losing `vault-kek` makes every stored tenant credential unrecoverable.**
 ADR-0026 accepted that; backing it up is an operational requirement, not a

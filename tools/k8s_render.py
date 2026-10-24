@@ -2,7 +2,7 @@
 """Render a production compose stack into a Kustomize base (ADR-0147, hosting K2, K11).
 
     python3 tools/k8s_render.py <out-dir> [--stack main|monitoring] [--host-gateway IP] [--tag T]
-                                [--env-file F]... [--set K=V]...
+                                [--sealed DIR | --env-file F...] [--set K=V]...
     python3 tools/k8s_render.py --images [--tag T]   service, local image, registry image per build (K8)
 
 Compose does the interpolation (`docker compose config`), so a variable means
@@ -12,6 +12,8 @@ committed. `--set` overrides a variable the way the shell's environment does
 for compose (the rehearsal's `ENVIRONMENT=prod` over dev's env files, K12).
 `--stack monitoring` renders the sys-monitor stack into txnet-monitoring and
 reads the main stack (its default env files) for the names it calls (K11).
+`--sealed DIR` takes the env files and secret files from DIR, where
+`tools/k8s_secrets.py open` decrypted them, and never from the checkout (K5).
 """
 import argparse
 import json
@@ -71,19 +73,26 @@ def main() -> int:
     parser.add_argument("--tag", help="image tag (default: the current commit)")
     parser.add_argument("--host-gateway", help="the node's address, for compose's host-gateway (K3)")
     parser.add_argument("--env-file", action="append", dest="env_files")
+    parser.add_argument("--sealed", type=Path, help="the opened sealed secrets (K5)")
     parser.add_argument("--set", action="append", default=[], metavar="KEY=VALUE")
     args = parser.parse_args()
     stack = STACKS[args.stack]
-    env_files = args.env_files or list(stack.env_files)
+    if args.sealed and args.env_files:
+        parser.error("--sealed takes the env files from the sealed copies; --env-file would bypass them")
+
+    def env_files_of(of: Stack) -> list[str]:
+        return [str(args.sealed / f) for f in of.env_files] if args.sealed else list(of.env_files)
+    env_files = args.env_files or env_files_of(stack)
     overrides = dict(kv.split("=", 1) for kv in args.set)
     variables = dict(line.split("=", 1) for line in
                      compose(stack, ["--environment"], env_files, overrides).splitlines() if "=" in line)
     options = {"registry": variables.get("LOCAL_DOCKER_REGISTRY", ""), "tag": args.tag or git_tag(),
-               "host_gateway": args.host_gateway, "namespace": stack.namespace, "publish": stack.publish}
+               "host_gateway": args.host_gateway, "namespace": stack.namespace, "publish": stack.publish,
+               "sealed_root": args.sealed}
     if stack.peer:
         peer = STACKS[stack.peer]
         options["peer"] = {"namespace": peer.namespace,
-                           "exposed": exposed_ports(load_model(peer, list(peer.env_files), overrides)["services"])}
+                           "exposed": exposed_ports(load_model(peer, env_files_of(peer), overrides)["services"])}
     model = load_model(stack, env_files, overrides)
     if args.images:
         for row in built_images(model["services"], stack.project, options):
