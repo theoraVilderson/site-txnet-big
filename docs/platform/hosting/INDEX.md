@@ -24,7 +24,7 @@ connection pool, the log pipeline's bounds and format, healthchecks, and houseke
 | [contract.md](contract.md) | building any OPS-1 row — rules H1…H23 are the spec |
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose, its monitoring, ports and memory (OPS-1-o-a … -r) — rules K1…K19 |
-| [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j) — rules S1…S7 |
+| [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j, -u) — rules S1…S8 |
 | [contract.release.md](contract.release.md) | a release: built and pushed off the k3s node, pulled with a sealed pull-only login, smoke-checked, set back whole on a failure or by `rollback [tag]` (OPS-1-o-m, -p) — rules R1…R9 |
 | [contract.health.md](contract.health.md) | a healthcheck on a container that is not a Nest app: auth-handler, Traefik, the Next apps, guide-media, mailpit, the backup loops (OPS-1-aa) — rule H24 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped write-only to S3, restored here or elsewhere (OPS-1-ad) — rules B1…B9 |
@@ -40,7 +40,7 @@ drill`, `pg_restore_drill.prom`); -f (H10, `main-db` `command:`, sizing in `oper
 PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev); -j
 (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback); -v (H21, `hosting.broker-redis` in
 `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a server move, `runbook-move-server.md`). -ad
-(B1–B9, `scripts/bundle/`). -o-a…-e, -o-g, -o-i, -o-j, -o-l, -o-m, -o-p, -o-v (K2–K16, S1–S7, R1–R9: `tools/k8srender/`, `k8s/`,
+(B1–B9, `scripts/bundle/`). -o-a…-e, -o-g, -o-i, -o-j, -o-l, -o-m, -o-p, -o-u, -o-v (K2–K16, S1–S8, R1–R9: `tools/k8srender/`, `k8s/`,
 `scripts/prod.k8s.sh`, `scripts/edge/`). -aa (H24).
 
 ## Changelog

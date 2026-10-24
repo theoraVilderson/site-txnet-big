@@ -46,6 +46,7 @@ CARRIED_FILES = REQUIRED_FILES + (
     "dev-docker/traefik/origin-pull/ca.pem",
     "dev_letsencrypt/",
     "dev-docker/monitoring/.env.dev",
+    "dev-docker/monitoring/.env.prod",
     "dev-docker/monitoring/config-dev/bale_token.txt",
 )
 

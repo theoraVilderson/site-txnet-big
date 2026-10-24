@@ -80,7 +80,7 @@ ADR-0164): `.env.prod` and `dev-docker/secrets/*` committed encrypted, decrypted
 only in memory by `prod.k8s.sh render` on the node. The age key lives on the
 node outside the checkout, rides in the bundle (B5) and is kept off the server
 beside the bundle's passphrase; k3s stores Secrets encrypted
-(`--secrets-encryption`). Rules S1–S7 in `contract.secrets.md` (OPS-1-o-j).
+(`--secrets-encryption`). Rules S1–S8 in `contract.secrets.md` (OPS-1-o-j).
 
 **K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`

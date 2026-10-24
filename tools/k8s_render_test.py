@@ -261,6 +261,37 @@ class RenderTest(unittest.TestCase):
 REPO = Path(__file__).resolve().parent.parent
 
 
+def render_cli(*args: str) -> subprocess.CompletedProcess:
+    with tempfile.TemporaryDirectory() as out:
+        return subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), f"{out}/base", "--tag", "t1",
+                               *args], capture_output=True, text=True)
+
+
+# K2 before compose runs (OPS-1-o-u, -w): what the env files lack is named, and
+# nothing is written. No real env file is read, so no value can reach the output.
+@unittest.skipUnless(shutil.which("docker"), "needs docker compose")
+class EnvFilesTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def env_file(self, name: str, text: str) -> str:
+        (self.dir / name).write_text(text)
+        return str(self.dir / name)
+
+    def test_a_missing_env_file_is_named_with_what_it_sets(self):
+        present = self.env_file("base.env", "DOMAIN_NAME=example.test\n")
+        run = render_cli("--stack", "monitoring", "--env-file", present, "--env-file", str(self.dir / "absent.env"))
+        self.assertEqual(run.returncode, 1, run.stderr)
+        self.assertIn("absent.env is missing", run.stderr)
+        self.assertIn("GRAFANA_ADMIN_PASS", run.stderr)
+        self.assertNotIn("DOMAIN_NAME", run.stderr.split("missing", 1)[1])
+        self.assertNotIn("Traceback", run.stderr)
+
+
 # K4 at HEAD (OPS-1-o-h): the miniature above cannot see a call one real service
 # makes to another, so the repo's own production model is rendered too. It needs
 # docker's compose CLI and the env files; without them it is skipped, not passed.
