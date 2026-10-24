@@ -241,6 +241,15 @@ class RenderTest(unittest.TestCase):
         for script in ("scripts/k8s-add-node.sh", "scripts/prod.k8s.sh"):
             self.assertIn(f"\nDATA_LABEL={label}\n", (REPO / script).read_text(), script)
 
+    # K10 (OPS-1-o-f): a release is a new tag for every image, so the kubelet asks
+    # the registry for all 22. One at a time, the last waited ~3 min in the queue
+    # on the test server and five rollouts missed their 300s.
+    def test_the_node_pulls_images_in_parallel(self):
+        config = yaml.safe_load((REPO / "k8s/k3s/config.yaml").read_text())
+        args = dict(a.split("=", 1) for a in config.get("kubelet-arg", []))
+        self.assertEqual(args.get("serialize-image-pulls"), "false")
+        self.assertGreater(int(args.get("max-parallel-image-pulls", "1")), 1)
+
     # K7 (OPS-1-o-v): a source tree is dev's (docker-compose.dev.yml). In the
     # production model it would hide the image's own code, so it fails the render.
     def test_a_source_tree_fails_the_render(self):

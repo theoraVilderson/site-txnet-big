@@ -13,3 +13,9 @@ flannel-backend: wireguard-native
 # or a host path stay on this node (K17); a server registers with the label.
 node-label:
   - txnet.io/data=true
+# A release is a new tag for every image, so the kubelet asks the registry for
+# each one; serially, the last of 22 waited ~3 min and missed K10's 300s
+# (OPS-1-o-f). Four at once: a cached image is a manifest round trip.
+kubelet-arg:
+  - serialize-image-pulls=false
+  - max-parallel-image-pulls=4

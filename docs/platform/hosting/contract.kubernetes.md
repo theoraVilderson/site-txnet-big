@@ -158,11 +158,12 @@ installs it with K13's chain, before k3s binds 80/443, and `down` keeps it.
 **K10 — `scripts/prod.k8s.sh build|push|render|deploy|smoke|rollback`.** `build` builds one
 service at a time (`k8s_render.py --images` lists them) and tags each for the
 registry. `deploy` renders into `k8s/base/` and `k8s/monitoring/base/` (git-ignored,
-K11), applies `k8s/traefik` and waits for its CRDs, applies all but the Deployments
+K11), applies the two namespaces, then `k8s/traefik` and waits for its CRDs, applies all but the Deployments
 and DaemonSets (`tools/k8s_manifest.py stores`), waits on the StatefulSets, runs
 `db-migrate` to completion, then the login roles (R11), applies the overlay
 (`kubectl kustomize k8s/overlays/<env>`), then waits on
-`kubectl rollout status --timeout=300s` for every workload; one not ready
+`kubectl rollout status --timeout=300s` for every workload (the kubelet pulls four
+images at once, `k8s/k3s/config.yaml`); one not ready
 sets the release back (K16; on the first release, the failed ones are
 `rollout undo`ne). Only after every rollout is ready and the smoke check passed
 does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so a pod set back
