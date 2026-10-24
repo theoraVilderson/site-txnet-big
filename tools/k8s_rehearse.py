@@ -55,6 +55,7 @@ MARKER_TABLE = "public.k8s_rehearsal"
 MARKER_KEY = "txnet:k8s-rehearsal"
 MARKER_QUEUE = "k8s-rehearsal"
 PERSISTENT = 2  # AMQP delivery_mode
+HTTP_NOT_FOUND = 404
 _BUNDLE_PATH = re.compile(r"^backup: (/\S+) \(\d+ MB, \d+s\)$")
 
 
@@ -223,7 +224,11 @@ class Markers:
     def remove(self):
         self.sql(f"DROP TABLE IF EXISTS {MARKER_TABLE};")
         self.redis("DEL", MARKER_KEY)
-        self.mq("DELETE", f"queues/%2F/{MARKER_QUEUE}")
+        try:
+            self.mq("DELETE", f"queues/%2F/{MARKER_QUEUE}")
+        except urllib.error.HTTPError as error:
+            if error.code != HTTP_NOT_FOUND:  # no queue is what clean means
+                raise
 
 
 def restarts(pod, container):

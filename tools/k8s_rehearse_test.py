@@ -61,8 +61,8 @@ class KillTest(unittest.TestCase):
 class MarkersTest(unittest.TestCase):
     class Stores(kr.Markers):
         """The three stores in memory, a message left by an aborted run already queued."""
-        def __init__(self):
-            self.rows, self.keys, self.queue = set(), {}, ["left-over"]
+        def __init__(self, left=("left-over",)):
+            self.rows, self.keys, self.queue = set(), {}, list(left) or None
 
         def sql(self, statement):
             if statement.startswith("DROP"):
@@ -79,8 +79,12 @@ class MarkersTest(unittest.TestCase):
             return self.keys.get(args[1], "")
 
         def mq(self, method, path, body=None):
+            if method != "PUT" and self.queue is None:  # what the management API answers for no queue
+                raise kr.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
             if method == "DELETE":
-                self.queue = []
+                self.queue = None
+            elif method == "PUT":
+                self.queue = self.queue if self.queue is not None else []
             elif method == "POST":
                 self.queue.append(body["payload"])
             return {"messages": len(self.queue)} if method == "GET" else {}
@@ -89,6 +93,13 @@ class MarkersTest(unittest.TestCase):
         stores = self.Stores()
         stores.write("t1")
         self.assertEqual(stores.read("t1"), {"main-db": True, "memory-data": True, "rabbitmq": True})
+
+    # The usual case: the run before cleaned up, so there is no queue to delete.
+    def test_nothing_left_is_nothing_to_clear(self):
+        stores = self.Stores(left=())
+        stores.write("t1")
+        self.assertEqual(stores.read("t1")["rabbitmq"], True)
+        stores.remove()
 
 
 class ReadyTest(unittest.TestCase):
