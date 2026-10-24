@@ -55,9 +55,9 @@ def container(name: str, service: dict, image: str, env_secret: dict | None, mou
 
 def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dict:
     """K6: the compose healthcheck as readiness and liveness, with a startup probe
-    holding both off for the start period. A sidecar gets no readiness: a pod is
-    ready only when every container is, and pg-backup failing must restart the
-    backup, never take main-db out of its Service."""
+    holding both off for the start period and the retries compose allows after it.
+    A sidecar gets no readiness: a pod is ready only when every container is, and
+    pg-backup failing must restart the backup, never take main-db out of its Service."""
     if not healthcheck or healthcheck.get("disable"):
         return {}
     test = healthcheck.get("test") or []
@@ -76,7 +76,9 @@ def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dic
     out = {"livenessProbe": dict(base)} if sidecar else {"readinessProbe": dict(base), "livenessProbe": dict(base)}
     start = seconds(healthcheck.get("start_period"), 0) if healthcheck.get("start_period") else 0
     if start:
-        out["startupProbe"] = {**base, "failureThreshold": math.ceil(start / period)}
+        # Compose ignores misses inside the start period and then still waits for
+        # `retries` of them; the start period alone gave main-db one probe (OPS-1-o-d).
+        out["startupProbe"] = {**base, "failureThreshold": math.ceil(start / period) + base["failureThreshold"]}
     return out
 
 

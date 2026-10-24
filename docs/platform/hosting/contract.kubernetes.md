@@ -82,8 +82,10 @@ beside the bundle's passphrase; k3s stores Secrets encrypted
 **K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`
 with compose's interval, timeout and retries; a `startupProbe` with
-`failureThreshold = ceil(start_period / interval)` holds both off for the start
-period. Every container has one (H15, H24). A sidecar (`pg-backup`) gets
+`failureThreshold = ceil(start_period / interval) + retries` holds both off for
+the start period and the misses compose still allows after it — the start period
+alone gave `main-db` one probe, and a first `initdb` was killed (OPS-1-o-d).
+Every container has one (H15, H24). A sidecar (`pg-backup`) gets
 liveness and startup probes but no readiness probe, so its failure never takes
 the pod out of its Service.
 

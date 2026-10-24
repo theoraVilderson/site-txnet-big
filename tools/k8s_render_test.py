@@ -137,7 +137,7 @@ class RenderTest(unittest.TestCase):
         self.assertIn("readinessProbe", db)
         self.assertNotIn("readinessProbe", backup)
         self.assertEqual(backup["livenessProbe"]["exec"]["command"], ["sh", "-c", "test -f /tmp/healthy"])
-        self.assertEqual(backup["startupProbe"]["failureThreshold"], 2)
+        self.assertEqual(backup["startupProbe"]["failureThreshold"], 5)
 
     # K5: the environment is one Secret per service; command `$(` is escaped.
     def test_environment_secret_and_escaping(self):
@@ -168,9 +168,18 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(c["readinessProbe"]["exec"]["command"], ["node", "-e", "1"])
         self.assertEqual(c["readinessProbe"]["periodSeconds"], 10)
         self.assertEqual(c["livenessProbe"]["failureThreshold"], 3)
-        self.assertEqual(c["startupProbe"]["failureThreshold"], 6)
+        self.assertEqual(c["startupProbe"]["failureThreshold"], 9)
         db = by_kind(objs, "StatefulSet", "main-db")["spec"]["template"]["spec"]["containers"][0]
         self.assertEqual(db["readinessProbe"]["exec"]["command"], ["sh", "-c", "pg_isready -U admin"])
+
+    # K6 (OPS-1-o-d): the startup probe allows what compose does — the start period,
+    # then `retries` misses after it. A threshold of the start period alone gave
+    # main-db one probe, so a first initdb or a crash recovery was killed mid-way.
+    def test_a_slow_start_is_not_killed(self):
+        _, objs = self.run_render()
+        db = by_kind(objs, "StatefulSet", "main-db")["spec"]["template"]["spec"]["containers"][0]
+        startup = db["startupProbe"]
+        self.assertEqual(startup["periodSeconds"] * startup["failureThreshold"], 10 + 5 * 10)
 
     # K7: named volume -> claim, host dir -> hostPath, secret file -> Secret,
     # source tree and the node_modules shadow under it -> dropped.
