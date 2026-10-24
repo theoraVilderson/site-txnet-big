@@ -205,6 +205,8 @@ class Markers:
         return json.loads(text) if text else {}
 
     def write(self, token):
+        # A run that failed mid-step left its markers; a second queued message read as LOST.
+        self.remove()
         self.write_row(token)
         self.redis("SET", MARKER_KEY, token)
         self.mq("PUT", f"queues/%2F/{MARKER_QUEUE}", {"durable": True})
@@ -267,13 +269,14 @@ def report(found):
 def check_stores(stack):
     markers, token = Markers(stack), secrets.token_hex(8)
     markers.write(token)
-    kill_postgres()
-    ok = markers.has_row(token)
-    say(f"{'ok  ' if ok else 'LOST'}  main-db's row after the kill")
-    delete_store_pods()
-    ok &= report(markers.read(token))
-    markers.remove()
-    return ok
+    try:
+        kill_postgres()
+        ok = markers.has_row(token)
+        say(f"{'ok  ' if ok else 'LOST'}  main-db's row after the kill")
+        delete_store_pods()
+        return ok & report(markers.read(token))
+    finally:
+        markers.remove()
 
 
 # --- drill, bundle -------------------------------------------------------

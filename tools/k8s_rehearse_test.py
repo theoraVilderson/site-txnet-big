@@ -56,6 +56,41 @@ class KillTest(unittest.TestCase):
         self.assertFalse([a for a in calls if "stop" in a])
 
 
+# K12 (OPS-1-o-f): a run that failed mid-step left its queued message behind;
+# the next run queued a second, counted 2 and reported rabbitmq LOST.
+class MarkersTest(unittest.TestCase):
+    class Stores(kr.Markers):
+        """The three stores in memory, a message left by an aborted run already queued."""
+        def __init__(self):
+            self.rows, self.keys, self.queue = set(), {}, ["left-over"]
+
+        def sql(self, statement):
+            if statement.startswith("DROP"):
+                self.rows.clear()
+            elif "INSERT" in statement:
+                self.rows.add(statement.split("'")[1])
+            return "1" if statement.startswith("SELECT") and statement.split("'")[1] in self.rows else ""
+
+        def redis(self, *args):
+            if args[0] == "SET":
+                self.keys[args[1]] = args[2]
+            elif args[0] == "DEL":
+                self.keys.pop(args[1], None)
+            return self.keys.get(args[1], "")
+
+        def mq(self, method, path, body=None):
+            if method == "DELETE":
+                self.queue = []
+            elif method == "POST":
+                self.queue.append(body["payload"])
+            return {"messages": len(self.queue)} if method == "GET" else {}
+
+    def test_what_an_aborted_run_left_is_cleared_first(self):
+        stores = self.Stores()
+        stores.write("t1")
+        self.assertEqual(stores.read("t1"), {"main-db": True, "memory-data": True, "rabbitmq": True})
+
+
 class ReadyTest(unittest.TestCase):
     def test_short_workloads_are_named(self):
         listing = {"items": [workload("Deployment", "billing-service", 1, 1),
