@@ -18,6 +18,8 @@ services:
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-locale-service
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 128m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["${LOCALE_SERVICE_HOST_PORT:-50051}"]
     restart: unless-stopped
@@ -52,6 +54,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/libretranslate/libretranslate:v1.6.2
     container_name: ${STACK_NAME:-txnet}-translator
+    mem_reservation: 512m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 1536m
     restart: unless-stopped
     volumes:
       - translator_models:/home/libretranslate/.local
@@ -83,6 +87,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/ollama/ollama:0.6.8
     container_name: ${STACK_NAME:-txnet}-translator-llm
+    mem_reservation: 2560m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 3g
     restart: unless-stopped
     volumes:
       - translator_llm_models:/root/.ollama

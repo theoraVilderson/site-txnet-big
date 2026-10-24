@@ -26,7 +26,7 @@ JOBS_DIR = "jobs"
 # its pod is kept a day for its log.
 _JOB_DEADLINE_S, _JOB_KEPT_S = 900, 86400
 _MAPPED_KEYS = {"command", "configs", "entrypoint", "environment", "expose", "extra_hosts", "healthcheck",
-                "image", "labels", "mem_limit", "cpus", "ports", "restart", "secrets", "shm_size",
+                "image", "labels", "mem_limit", "mem_reservation", "cpus", "ports", "restart", "secrets", "shm_size",
                 "stop_grace_period", "tmpfs", "volumes", "working_dir"}
 # K11: the compose label Promtail selects on, and the pod label it becomes.
 _LOGGING_LABEL, _POD_LOGGING_LABEL = "txnet.logging", "txnet.io/logging"

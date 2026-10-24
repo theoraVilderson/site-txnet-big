@@ -13,6 +13,8 @@ services:
     extends: { file: compose/health.yml, service: loop-health }
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-pg-backup
+    mem_reservation: 64m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 512m
     restart: unless-stopped
     entrypoint: ["/bin/sh", "/usr/local/bin/pg-backup.sh"]
     command: []

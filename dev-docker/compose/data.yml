@@ -10,6 +10,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/redis:8.8-alpine
     container_name: ${STACK_NAME:-txnet}-redis
+    mem_reservation: 64m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 256m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["6379"]
     restart: unless-stopped
@@ -60,6 +62,8 @@ services:
         APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/postgres:18
     container_name: ${STACK_NAME:-txnet}-postgres
+    mem_reservation: 768m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 2g
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["5432"]
     restart: unless-stopped
@@ -122,6 +126,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/axllent/mailpit:v1.27
     container_name: ${STACK_NAME:-txnet}-mailpit
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 128m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["${SMTP_PORT:-1025}"]
     restart: unless-stopped
@@ -148,6 +154,8 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: ${DOCKER_REGISTRY}/rabbitmq:4.2-management-alpine
     container_name: ${STACK_NAME:-txnet}-rabbitmq
+    mem_reservation: 256m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 1g
     # The ports other services call; Kubernetes makes its Service from them
     # (hosting K4): AMQP, and the Prometheus plugin the monitoring stack scrapes (K11).
     expose: ["5672", "15692"]

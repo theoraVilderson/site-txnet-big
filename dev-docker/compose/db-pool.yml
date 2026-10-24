@@ -15,6 +15,8 @@ services:
         APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/db-pool:1.25
     container_name: ${STACK_NAME:-txnet}-db-pool
+    mem_reservation: 16m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 64m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["6432"]
     restart: unless-stopped

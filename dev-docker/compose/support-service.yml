@@ -22,6 +22,8 @@ services:
         - APP_NAME=support-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-support-service
+    mem_reservation: 160m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 512m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["3000"]
     restart: unless-stopped

@@ -23,6 +23,8 @@ services:
         - APP_NAME=currency-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-currency-service
+    mem_reservation: 160m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 512m
     restart: unless-stopped
     volumes:
       - ../txnet-backend:/app:delegated

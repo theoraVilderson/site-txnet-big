@@ -66,6 +66,8 @@ services:
   prometheus:
     image: ${DOCKER_REGISTRY}/prom/prometheus:v2.53.0
     container_name: txnet-prometheus
+    mem_reservation: 256m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 1g
     restart: unless-stopped
     # The port each service is called on; Kubernetes makes its Service from it
     # and fails the render when a scrape target names a port nobody exposes
@@ -104,6 +106,8 @@ services:
   grafana:
     image: ${DOCKER_REGISTRY}/grafana/grafana:11.1.0
     container_name: txnet-grafana
+    mem_reservation: 128m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 256m
     restart: unless-stopped
     ports:
       - "${GRAFANA_PORT}:3000"
@@ -127,6 +131,8 @@ services:
   loki:
     image: ${DOCKER_REGISTRY}/grafana/loki:3.1.0
     container_name: txnet-loki
+    mem_reservation: 128m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 512m
     restart: unless-stopped
     expose: ["3100"]
     # Loopback only (H11): Loki has no auth, so a public port let anyone read
@@ -149,6 +155,8 @@ services:
   promtail:
     image: ${DOCKER_REGISTRY}/grafana/promtail:3.1.0
     container_name: txnet-promtail
+    mem_reservation: 64m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 256m
     restart: unless-stopped
     volumes:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
@@ -166,6 +174,8 @@ services:
   node-exporter:
     image: ${DOCKER_REGISTRY}/prom/node-exporter:latest
     container_name: txnet-node-exporter
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 64m
     restart: unless-stopped
     expose: ["9100"]
     volumes:
@@ -228,6 +238,8 @@ services:
   postgres-exporter:
     image: ${DOCKER_REGISTRY}/prometheuscommunity/postgres-exporter:v0.15.0
     container_name: txnet-postgres-exporter
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 64m
     restart: unless-stopped
     expose: ["9187"]
     environment:
@@ -252,6 +264,8 @@ services:
   redis-exporter:
     image: ${DOCKER_REGISTRY}/oliver006/redis_exporter:v1.62.0
     container_name: txnet-redis-exporter
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 64m
     restart: unless-stopped
     expose: ["9121"]
     environment:
@@ -266,6 +280,8 @@ services:
   alertmanager:
     image: ${DOCKER_REGISTRY}/prom/alertmanager:v0.27.0
     container_name: txnet-alertmanager
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 128m
     restart: unless-stopped
     expose: ["9093"]
     ports:

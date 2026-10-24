@@ -44,9 +44,9 @@ def container(name: str, service: dict, image: str, env_secret: dict | None, mou
         spec["workingDir"] = service["working_dir"]
     if env_secret:
         spec["envFrom"] = [{"secretRef": {"name": env_secret["metadata"]["name"]}}]
-    limits = _limits(service)
-    if limits:
-        spec["resources"] = {"limits": limits}
+    resources = _resources(service)
+    if resources:
+        spec["resources"] = resources
     spec.update(probes(name, service.get("healthcheck"), sidecar=sidecar))
     if mounts:
         spec["volumeMounts"] = mounts
@@ -87,13 +87,20 @@ def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dic
     return out
 
 
-def _limits(service: dict) -> dict:
-    limits = {}
+def _resources(service: dict) -> dict:
+    """K19: `mem_reservation` is the request, apart from the limit — a container
+    with a limit and no request is requested its whole limit, and limits sized as
+    ceilings would then not fit the node."""
+    limits, out = {}, {}
     if service.get("mem_limit"):
         limits["memory"] = str(service["mem_limit"])
     if service.get("cpus"):
         limits["cpu"] = str(service["cpus"])
-    return limits
+    if limits:
+        out["limits"] = limits
+    if service.get("mem_reservation"):
+        out["requests"] = {"memory": str(service["mem_reservation"])}
+    return out
 
 
 def _argv(value) -> list[str]:

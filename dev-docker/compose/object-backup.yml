@@ -19,6 +19,8 @@ services:
         APK_MIRROR: ${APK_MIRROR:-}
     image: txnet/object-backup:dev
     container_name: ${STACK_NAME:-txnet}-object-backup
+    mem_reservation: 64m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 512m
     restart: unless-stopped
     volumes:
       - object_storage:/data/objects:ro

@@ -194,7 +194,7 @@ with `level`, none of the unlabelled one's.
 point 6). `scripts/k8s-rehearse.sh up|deploy|check|down`: k3s from `K3S_IMAGE`
 on the host itself, beside Docker, the compose stack stopped for it, overlay
 `rehearsal` (the test server's env files, no ACME), images pulled as K14 says,
-replicas as OPS-1-o-n measured. `check` proves the row: every workload ready, a
+one replica each (K19). `check` proves the row: every workload ready, a
 rolling update of `billing-service` under a request loop with zero failed
 requests, the three data stores' pods deleted and back with their rows, keys
 and queued messages and `pg-backup.sh drill` passing in `main-db`'s, a bundle restored
@@ -240,3 +240,11 @@ LoadBalancer answers on both nodes, and Cloudflare reaches both (OPS-1-o-q).
 Postgres's standby there (H22), stop and copy Redis and RabbitMQ, move the data
 label, drain and remove the old node (OPS-1-o-r). Until then a move is a bundle
 restored into a new cluster (OPS-1-o-k, B9).
+
+**K19 — The memory fit** (OPS-1-o-n). Each workload's compose file sets
+`mem_reservation`, its request (measured peak + headroom), and `mem_limit`, its
+ceiling: a limit alone is requested whole, and the ceilings (19.6 GB) fit no node.
+`tools/k8s_memfit.py report` holds requests + host + k3s (789 + 456 + 7.5/pod MiB)
+under the test server's 11,959 MiB: 9,236 on 2026-10-24, translators in; `sample`
+re-measures, a peak over its request fails. Short, `translator-llm` goes to zero
+first (drafts fall back to LibreTranslate), then `translator`.

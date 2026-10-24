@@ -28,6 +28,8 @@ services:
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-network-service
+    mem_reservation: 64m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 256m
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["${NETWORK_SERVICE_PORT:-8090}"]
     restart: unless-stopped

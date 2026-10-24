@@ -14,6 +14,8 @@ services:
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-gateway
+    mem_reservation: 96m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 256m
     restart: unless-stopped
     command:
       - "--api.dashboard=true"
@@ -111,6 +113,8 @@ services:
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-auth-handler
+    mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
+    mem_limit: 128m
     restart: unless-stopped
     working_dir: /src/auth-handler
     # Traefik calls it for every ForwardAuth (K4, K9).

@@ -60,6 +60,7 @@ def model(repo: Path) -> dict:
                 "build": {"context": str(repo / "txnet-backend")},
                 "expose": ["3000"],
                 "mem_limit": "536870912",
+                "mem_reservation": 167772160,
                 "environment": {
                     "PORT": "3000",
                     "DATABASE_URL": "postgresql://u:p@main-db:5432/db",
@@ -245,6 +246,8 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(tpl["spec"]["containers"][0]["image"], "registry.example/txnet/billing-service:t1")
         self.assertEqual(tpl["metadata"]["labels"]["txnet.io/logging"], "true")
         self.assertEqual(tpl["spec"]["containers"][0]["resources"]["limits"]["memory"], "536870912")
+        # K19: requested apart from the limit, or Kubernetes requests the limit itself.
+        self.assertEqual(tpl["spec"]["containers"][0]["resources"]["requests"]["memory"], "167772160")
         self.assertIn("kustomization.yaml", files)
 
 
