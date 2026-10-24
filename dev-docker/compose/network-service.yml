@@ -11,7 +11,7 @@ services:
   # so it reads every tenant's rows and has no request-tenant to scope them to.
   # A router in front of it would turn "the collector sees everything" into
   # "anyone who reaches this route sees everything". It lives on the private
-  # network and is reached by nothing but the health check.
+  # network: billing-service calls it for an import (F-201-b), nothing public does.
   #
   # It writes no migrations either: Prisma owns the schema. At boot it checks
   # the role it connected as and every `network.*` column it depends on, and
@@ -28,6 +28,8 @@ services:
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
     container_name: ${STACK_NAME:-txnet}-network-service
+    # The port other services call; Kubernetes makes its Service from it (hosting K4).
+    expose: ["${NETWORK_SERVICE_PORT:-8090}"]
     restart: unless-stopped
     working_dir: /src
     volumes:

@@ -8,6 +8,8 @@ Each test feeds a small compose model — the shape `docker compose config
 """
 import base64
 import copy
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -210,6 +212,23 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(tpl["metadata"]["labels"]["txnet.io/logging"], "true")
         self.assertEqual(tpl["spec"]["containers"][0]["resources"]["limits"]["memory"], "536870912")
         self.assertIn("kustomization.yaml", files)
+
+
+REPO = Path(__file__).resolve().parent.parent
+
+
+# K4 at HEAD (OPS-1-o-h): the miniature above cannot see a call one real service
+# makes to another, so the repo's own production model is rendered too. It needs
+# docker's compose CLI and the env files; without them it is skipped, not passed.
+@unittest.skipUnless(shutil.which("docker") and (REPO / ".env").exists() and (REPO / ".env.prod").exists(),
+                     "needs docker compose and the repo's .env / .env.prod")
+class RepoModelTest(unittest.TestCase):
+    def test_the_production_model_renders(self):
+        with tempfile.TemporaryDirectory() as out:
+            result = subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), f"{out}/base",
+                                     "--host-gateway", "10.0.0.5", "--tag", "t1"],
+                                    capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 if __name__ == "__main__":
