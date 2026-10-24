@@ -248,7 +248,8 @@ class RenderTest(unittest.TestCase):
         config = yaml.safe_load((REPO / "k8s/k3s/config.yaml").read_text())
         args = dict(a.split("=", 1) for a in config.get("kubelet-arg", []))
         self.assertEqual(args.get("serialize-image-pulls"), "false")
-        self.assertGreater(int(args.get("max-parallel-image-pulls", "1")), 1)
+        # Not a kubelet flag in 1.34: the kubelet exits, and k3s with it.
+        self.assertNotIn("max-parallel-image-pulls", args)
 
     # K7 (OPS-1-o-v): a source tree is dev's (docker-compose.dev.yml). In the
     # production model it would hide the image's own code, so it fails the render.

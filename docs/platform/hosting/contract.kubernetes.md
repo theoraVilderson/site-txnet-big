@@ -162,8 +162,8 @@ K11), applies the two namespaces, then `k8s/traefik` and waits for its CRDs, app
 and DaemonSets (`tools/k8s_manifest.py stores`), waits on the StatefulSets, runs
 `db-migrate` to completion, then the login roles (R11), applies the overlay
 (`kubectl kustomize k8s/overlays/<env>`), then waits on
-`kubectl rollout status --timeout=300s` for every workload (the kubelet pulls four
-images at once, `k8s/k3s/config.yaml`); one not ready
+`kubectl rollout status --timeout=300s` for every workload (the kubelet pulls
+images in parallel, `k8s/k3s/config.yaml`); one not ready
 sets the release back (K16; on the first release, the failed ones are
 `rollout undo`ne). Only after every rollout is ready and the smoke check passed
 does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so a pod set back

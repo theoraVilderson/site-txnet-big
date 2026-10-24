@@ -15,7 +15,8 @@ node-label:
   - txnet.io/data=true
 # A release is a new tag for every image, so the kubelet asks the registry for
 # each one; serially, the last of 22 waited ~3 min and missed K10's 300s
-# (OPS-1-o-f). Four at once: a cached image is a manifest round trip.
+# (OPS-1-o-f). In parallel, uncapped: a cached image is a manifest round trip,
+# and Kubernetes 1.34 takes the cap only from a kubelet config file — as a flag
+# (max-parallel-image-pulls) the kubelet refused to start.
 kubelet-arg:
   - serialize-image-pulls=false
-  - max-parallel-image-pulls=4
