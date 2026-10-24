@@ -150,7 +150,8 @@ renderer undoes that once, for every value, before K5's own escaping. Traefik's 
 RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
 is claim `letsencrypt`. The Service is `externalTrafficPolicy: Local`, so
 Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chain is reached from `FORWARD`
-(`--ctorigdstport 80|443`) where Docker's host used `DOCKER-USER` (OPS-1-o-g).
+(`--ctorigdstport 80|443`) where Docker's host used `DOCKER-USER` (OPS-1-o-g); `k8s-rehearse.sh up`
+installs it with K13's chain, before k3s binds 80/443, and `down` keeps it.
 
 ## Deploying
 
