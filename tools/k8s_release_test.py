@@ -17,6 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent))
 from k8s_release import (Exec, Request, after_deploy, after_rollback, current, curl_argv, health_checks,  # noqa: E402
                          passed, previous, route_requests)
+import k8s_release  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -95,6 +96,39 @@ class RouteTest(unittest.TestCase):
 
 
 # K16: the release record — what runs, and what `rollback` with no tag goes back to.
+# R6 (OPS-1-o-f): on the test server a port-forward to Traefik ended before it
+# listened, the smoke check read it as "did not listen in 30s" and set a good
+# release back. kubectl's own words are kept, and a forward that ends is tried
+# again on fresh ports: it is the check's tool, not the release, that failed.
+class ForwardTest(unittest.TestCase):
+    def fake_kubectl(self, tmp, fail_times):
+        """A kubectl whose port-forward ends with an error `fail_times` times, then listens."""
+        count = Path(tmp, "count")
+        script = Path(tmp, "kubectl")
+        script.write_text(f"""#!/bin/sh
+n=$(cat {count} 2>/dev/null || echo 0); echo $((n + 1)) > {count}
+if [ "$n" -lt {fail_times} ]; then echo "error: lost connection to pod"; exit 1; fi
+for door in "$@"; do case "$door" in *:*) echo "Forwarding from 127.0.0.1:${{door%%:*}} -> ${{door#*:}}";; esac; done
+sleep 30
+""")
+        script.chmod(0o755)
+        return str(script), count
+
+    def test_a_forward_that_ends_is_tried_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kubectl, count = self.fake_kubectl(tmp, fail_times=1)
+            proc, ports = k8s_release._forward(kubectl)
+            proc.kill()
+            self.assertEqual(set(ports), set(k8s_release._DOORS))
+            self.assertEqual(count.read_text().strip(), "2")
+
+    def test_a_forward_that_keeps_ending_names_kubectls_words(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            kubectl, _ = self.fake_kubectl(tmp, fail_times=99)
+            with self.assertRaisesRegex(RuntimeError, "lost connection to pod"):
+                k8s_release._forward(kubectl)
+
+
 class HistoryTest(unittest.TestCase):
     def test_a_deploy_appends_once_and_keeps_ten(self):
         history = [f"t{i}" for i in range(10)]

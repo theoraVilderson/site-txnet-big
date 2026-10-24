@@ -31,6 +31,7 @@ HISTORY_KEPT = 10
 _DOORS = {"http": 80, "https": 443}
 _SECURE_ENTRYPOINT = "websecure"
 _FORWARD_READY_S = 30
+_FORWARD_TRIES = 3  # a forward that ends is retried; one the API never answers is not
 _REQUEST_TIMEOUT_S = 15
 _EXEC_GRACE_S = 10  # kubectl's own round trip on top of the probe's timeout
 _SERVER_ERROR = 500
@@ -147,20 +148,35 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def _forward(kubectl: str) -> tuple[subprocess.Popen, dict]:
-    """`kubectl port-forward` to Traefik's pod, waited on until both doors listen."""
+def _forward_once(kubectl: str) -> tuple[subprocess.Popen | None, dict, str]:
+    """One `kubectl port-forward` to Traefik's pod: (the process once both doors
+    listen, or None, its ports, what kubectl said)."""
     ports = {scheme: _free_port() for scheme in _DOORS}
     proc = subprocess.Popen([kubectl, "-n", NAMESPACE, "port-forward", f"deployment/{TRAEFIK}",
                              *(f"{ports[s]}:{_DOORS[s]}" for s in _DOORS)],
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    listening = 0
+    said, listening = [], 0
     while listening < len(_DOORS):
         line = proc.stdout.readline() if select.select([proc.stdout], [], [], _FORWARD_READY_S)[0] else ""
-        if not line:
+        if not line:  # ended, or silent for _FORWARD_READY_S
             proc.kill()
-            raise RuntimeError(f"port-forward to {TRAEFIK} did not listen in {_FORWARD_READY_S}s")
+            return None, ports, "".join(said).strip() or f"nothing in {_FORWARD_READY_S}s"
+        said.append(line)
         listening += line.startswith("Forwarding from 127.0.0.1")
-    return proc, ports
+    return proc, ports, ""
+
+
+def _forward(kubectl: str) -> tuple[subprocess.Popen, dict]:
+    """`kubectl port-forward` to Traefik's pod, waited on until both doors listen.
+    A forward that ends is the check's tool failing, not the release (OPS-1-o-f):
+    tried again on fresh ports, then failed with kubectl's own words."""
+    said = []
+    for _ in range(_FORWARD_TRIES):
+        proc, ports, why = _forward_once(kubectl)
+        if proc:
+            return proc, ports
+        said.append(why)
+    raise RuntimeError(f"port-forward to {TRAEFIK} did not listen in {_FORWARD_TRIES} tries: " + " | ".join(said))
 
 
 def _api_host(sealed: Path) -> str:
