@@ -58,8 +58,9 @@ RUN mkdir .next && chown nextjs:nodejs .next
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
-EXPOSE 82
-ENV PORT=82
+# The port Traefik's label calls (compose/frontends.yml, OPS-1-o-s).
+EXPOSE 8181
+ENV PORT=8181
 ENV HOSTNAME="0.0.0.0"
 ENV HTTP_PROXY="" \
     HTTPS_PROXY="" \

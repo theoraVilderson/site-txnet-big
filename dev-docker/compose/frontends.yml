@@ -35,7 +35,9 @@ services:
       - ENVIRONMENT=${ENVIRONMENT}
       - PORT=8181
       - HEALTH_PATH=/api/health
-      - HOSTNAME=${DOMAIN_NAME}
+      # The address the standalone server.js listens on — every interface.
+      # It was the domain name, which no container owns (OPS-1-o-s).
+      - HOSTNAME=0.0.0.0
       - JWT_SECRET=${JWT_SECRET}
       - REDIS_PORT=${REDIS_PORT:-6379}
       - MAIN_DB_USERNAME=${MAIN_DB_USERNAME}

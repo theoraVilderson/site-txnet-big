@@ -22,7 +22,7 @@ belongs to that dependency's own check.
 |---|---|---|
 | `authorization-handler` | `wget` `127.0.0.1:${GATEWAY_PORT}/health`, `start_period` 90s | it listens only after the boot's wait for translations (`LOCALE_BOOT_TIMEOUT`, 60s) |
 | `gateway-handler` (Traefik) | `traefik healthcheck --ping`, with `--ping=true` | `/ping` sits on the internal `traefik` entrypoint (:8080, never published); every router names its entrypoints, so none joins it |
-| `site-pwa`, `coinsite` | H15's `http-health` with `HEALTH_PATH=/api/health` on `PORT` | `src/app/api/health/route.ts` is `force-static`: built once, so a check renders nothing and asks no session or tenant. `PORT` is the port Traefik's label calls |
+| `site-pwa`, `coinsite` | H15's `http-health` with `HEALTH_PATH=/api/health` on `PORT` | `src/app/api/health/route.ts` is `force-static`: built once, so a check renders nothing and asks no session or tenant. `PORT` is the port Traefik's label calls, and the prod images listen there on `0.0.0.0` (OPS-1-o-s) |
 | `guide-media` | `wget` `127.0.0.1:8082/healthz` | a loopback-only server in `guide-media.conf`, so the two servers that serve keys still answer nothing else |
 | `mailpit` | `/mailpit readyz` | the image's own command |
 | `pg-backup`, `object-backup` | `compose/health.yml` `loop-health` | see below |

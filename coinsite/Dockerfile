@@ -58,8 +58,10 @@ COPY --from=builder --chown=nodeuser:nodejs /app ./
 # سوئیچ کردن به کاربر محدود
 USER nodeuser
 
-EXPOSE 80
-ENV PORT=80
+# The port Traefik's label calls (compose/frontends.yml); `next start` reads
+# PORT, and a non-root user may not bind below 1024 on k3s (OPS-1-o-s).
+EXPOSE 8080
+ENV PORT=8080
 
 # =====================================================================
 # خالی کردن متغیرهای پروکسی و تنظیمات npm برای زمان اجرای کانتینر (Runtime)

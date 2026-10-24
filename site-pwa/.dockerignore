@@ -32,6 +32,13 @@ yarn-debug.log*
 yarn-error.log*
 coverage/
 test/
+# Specs never reach the image: `next build` type-checks every .ts it finds,
+# and a spec may import another project's source (result-token.test.ts reads
+# billing-service's), which is outside this build context (OPS-1-o-s).
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
 
 # IDE files
 .vscode
