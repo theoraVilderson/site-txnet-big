@@ -318,35 +318,33 @@ class ScriptTest(unittest.TestCase):
     def test_prod_k8s_parses(self):
         subprocess.run(["bash", "-n", str(REPO / "scripts/prod.k8s.sh")], check=True)
 
-    def build_on(self, files, taints):
-        """`build` with K3S_ETC holding `files`, the node's taint keys `taints`, and docker recorded, not run."""
+    def build_on(self, files):
+        """`build` with K3S_ETC holding `files`, and docker recorded, not run."""
         with tempfile.TemporaryDirectory() as node:
             for name in files:
                 Path(node, name).touch()
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
-                      f"k3s() {{ printf '%s' '{taints}'; }}\n"
-                      "require_clean() { :; }\ncompose() { :; }\ndocker() { [ \"$1\" != manifest ] && [ \"$1\" != image ]; }\nbuild")
+                      "require_clean() { :; }\nrenice() { echo \"renice $*\" >&2; }\ncompose() { :; }\n"
+                      "docker() { [ \"$1\" != manifest ] && [ \"$1\" != image ]; }\nbuild")
             return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                   env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
 
-    # K14: a build where the release runs starves it; it refuses before docker is asked.
+    # K14: the server node runs the control plane and the stores; a build there
+    # starved them on 2026-10-23. It refuses before docker is asked.
     def test_build_refuses_on_the_server_node(self):
-        run = self.build_on(["config.yaml", "k3s.yaml"], "txnet.io/no-release")
+        run = self.build_on(["config.yaml", "k3s.yaml"])
         self.assertNotEqual(run.returncode, 0)
         self.assertIn("K14", run.stderr)
         self.assertNotIn("== build", run.stdout)
 
-    def test_build_refuses_on_an_agent_release_pods_may_reach(self):
-        run = self.build_on(["config.yaml"], "")
-        self.assertNotEqual(run.returncode, 0)
-        self.assertIn("txnet.io/no-release", run.stderr)
-        self.assertNotIn("== build", run.stdout)
-
-    def test_build_runs_on_an_agent_marked_no_release(self):
-        run = self.build_on(["config.yaml"], "node.kubernetes.io/unreachable txnet.io/no-release")
+    # R4 (user, 2026-10-25): the dev host is an agent that runs release pods and
+    # builds; the build yields to them.
+    def test_build_runs_on_an_agent_and_yields(self):
+        run = self.build_on(["config.yaml"])
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("== build billing-service", run.stdout)
+        self.assertRegex(run.stderr, r"renice -n \d+ -p \d+")
 
     # K8 (OPS-1-o-y): a tag the registry already holds is that source, built:
     # build and push skip it, so an unchanged service costs nothing.

@@ -72,12 +72,12 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   last good list) on the node before k3s, since svclb binds 80/443 there too.
   Reaching both nodes is OPS-1-o-r's, with the standby, through
   `edge_zone.py repoint`.
-- **The dev host is the second node, and carries no release (user,
-  2026-10-24).** It stays an agent past the trial, tainted
-  `txnet.io/no-release=true:NoSchedule` so the release runs on the server alone
-  and the dev host may build (R4); its dev stack, site and bot stay stopped
-  while it is joined. OPS-1-y's standby is to tolerate the taint. Its 21 GiB free is
-  under `MIN_NODE_DISK_GIB`; OPS-1-y frees room before the standby lands.
+- **The dev host is the second node, and a worker (user, 2026-10-24/25).** It
+  stays an agent past the trial; the stateless release pods run on both nodes
+  (1–2 ms apart, under K17's 10 ms), the stores stay on the data node, and the
+  dev host also builds (R4). Its dev stack, site and bot stay stopped while it is
+  joined. Its 21 GiB free is under `MIN_NODE_DISK_GIB`: images pulled there too
+  narrow it, so room is freed before OPS-1-y's standby lands.
 
 Proven 2026-10-24, the dev host joining the test server as a trial (the user set
 ADR-0147 point 6 aside for it; the dev stack, site and bot stopped first).

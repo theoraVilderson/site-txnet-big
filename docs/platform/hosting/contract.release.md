@@ -44,13 +44,13 @@ installing k3s, as it copies `k8s/k3s/config.yaml` (S6); after a change,
 name `docker.io`, which the node reaches only through the mirror every compose
 `image:` already names.
 
-**R4 — Never built where the release runs.** `prod.k8s.sh build` refuses on
-the k3s server node (`$K3S_ETC/k3s.yaml`), and on an agent unless the agent's
-own node carries `txnet.io/no-release` (`NO_RELEASE_TAINT`, read through the
-kubelet's kubeconfig), which keeps every release pod off it. The dev host builds
-under that taint (user, 2026-10-24: one node runs the release for now, and no
-build server is bought); a node without it fails closed. A release is `build`
-and `push` there, at the commit `deploy` then runs, from a clean checkout (R12).
+**R4 — Never built on the server node.** `prod.k8s.sh build` refuses where
+`$K3S_ETC/k3s.yaml` exists: the control plane and every store run there, and the
+2026-10-23 restore's build starved them. An agent builds, though release pods
+run on it too (user, 2026-10-25: the dev host does both, and no build server is
+bought); the build renices itself to `BUILD_NICENESS` and runs one image at a
+time, so it yields to them. A release is `build` and `push` there, at the commit
+`deploy` then runs, from a clean checkout (R12).
 
 **R12 — An image is tagged by its source** (OPS-1-o-y). `k8srender/tags.py`
 hashes, from git at HEAD so the node needs no npm or Nx: for an app of an Nx

@@ -23,7 +23,6 @@
 #   KUBECTL       the kubectl to run (default: kubectl)
 #   TOOLS_DIR     where install-tools puts sops and age-keygen (default: /usr/local/bin)
 #   K3S_ETC       k3s's config directory; its presence marks the node (default: /etc/rancher/k3s)
-#   NODE_NAME     this host's k3s node name, read for its taint before a build on an agent (default: hostname)
 #
 # The compose files stay the only definition of a service; this renders them
 # (tools/k8s_render.py: the main stack, and the monitoring one into
@@ -49,10 +48,8 @@ DATA_LABEL=txnet.io/data=true
 ROLLOUT_FAILED=()
 TOOLS_DIR="${TOOLS_DIR:-/usr/local/bin}"
 K3S_ETC="${K3S_ETC:-/etc/rancher/k3s}"
-# K14: an agent with this taint carries no release pod, so it may build.
-NO_RELEASE_TAINT=txnet.io/no-release=true:NoSchedule
-KUBELET_KUBECONFIG=/var/lib/rancher/k3s/agent/kubelet.kubeconfig
-NODE_NAME="${NODE_NAME:-$(hostname)}"
+# R4: a build on an agent yields its CPU to the pods running there.
+BUILD_NICENESS=10
 # Every temporary path here holds secrets: removed however the script exits.
 TEMPS=()
 # A rollback's worktree is one of them; `worktree prune` then forgets it.
@@ -74,17 +71,11 @@ images() {
   python3 "$ROOT_DIR/tools/k8s_render.py" --images --tag "$IMAGE_TAG"
 }
 
-# K14: never where the release runs — the 2026-10-23 restore's build starved its
-# services. The server node always runs it; an agent may build only while it
-# carries NO_RELEASE_TAINT, which keeps every release pod off it (user 2026-10-24).
+# K14: never on the server node, which holds the control plane and the stores —
+# the 2026-10-23 restore's build starved them. An agent builds (user 2026-10-25:
+# the dev host runs release pods and builds), and the build yields to its pods.
 require_build_host() {
-  [ -e "$K3S_ETC" ] || return 0
-  [ ! -e "$K3S_ETC/k3s.yaml" ] || die "this is the k3s server node, where the release runs: build off it and push (K14)"
-  local taints
-  taints="$(k3s kubectl --kubeconfig "$KUBELET_KUBECONFIG" get node "$NODE_NAME" \
-    -o jsonpath='{.spec.taints[*].key}' 2>/dev/null)" || true
-  [[ " $taints " == *" ${NO_RELEASE_TAINT%%=*} "* ]] ||
-    die "this k3s agent has no ${NO_RELEASE_TAINT%%=*} taint, so release pods may run here (K14)"
+  [ ! -e "$K3S_ETC/k3s.yaml" ] || die "this is the k3s server node, where the stores run: build off it and push (K14)"
 }
 
 # K8 (OPS-1-o-y): a tag is its source's fingerprint, so a tag the registry holds is built.
@@ -110,6 +101,7 @@ build() {
   local service local_image remote
   require_build_host
   require_clean
+  renice -n "$BUILD_NICENESS" -p $$ >/dev/null
   while IFS=$'\t' read -r service local_image remote; do
     if in_registry "$remote" </dev/null || built_here "$remote" </dev/null; then
       echo "== built already: $service ($remote)"
@@ -410,5 +402,5 @@ case "${1:-}" in
   rollback) rollback "${2:-}" ;;
   secrets) shift && exec python3 "$ROOT_DIR/tools/k8s_secrets.py" "$@" ;;
   install-tools) install_tools ;;
-  *) sed -n '2,26p' "$0" >&2 && exit 2 ;;
+  *) sed -n '2,25p' "$0" >&2 && exit 2 ;;
 esac
