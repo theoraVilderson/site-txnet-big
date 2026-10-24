@@ -8,12 +8,14 @@ _HC_INTERVAL_S, _HC_TIMEOUT_S, _HC_RETRIES = 30, 30, 3
 
 
 def image_for(name: str, service: dict, builders: dict[str, str], options: dict) -> str:
-    """K8: a built image is pushed as `<registry>/txnet/<builder>:<tag>`; a pulled one
-    keeps its name. `builders` maps a compose image name to the service building it,
+    """K8: a built image is pushed as `<registry>/txnet/<builder>:<tag>`, the tag its
+    source's (`options["tags"]`, tags.py) or else the release's; a pulled one keeps
+    its name. `builders` maps a compose image name to the service building it,
     so pg-backup runs main-db's image without building it twice."""
     builder = name if service.get("build") else builders.get(service.get("image", ""))
     if builder:
-        return f"{options['registry']}/txnet/{builder}:{options['tag']}"
+        tag = (options.get("tags") or {}).get(builder, options["tag"])
+        return f"{options['registry']}/txnet/{builder}:{tag}"
     if not service.get("image"):
         raise RenderError(f"{name}: neither build nor image")
     return service["image"]

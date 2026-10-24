@@ -31,6 +31,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, exposed_ports, render  # noqa: E402
+from k8srender.tags import content_tags  # noqa: E402
 from k8srender.container import built_images  # noqa: E402
 from k8srender.registries import registries_yaml  # noqa: E402
 from k8srender.tables import STACKS, Stack  # noqa: E402
@@ -146,8 +147,10 @@ def run(args: argparse.Namespace) -> int:
     options = {"registry": variables.get("LOCAL_DOCKER_REGISTRY", ""), "tag": args.tag or git_tag(),
                "host_gateway": args.host_gateway, "namespace": stack.namespace, "publish": stack.publish,
                "sealed_root": args.sealed}
+    model = load_model(stack, env_files, overrides)
+    options["tags"] = content_tags(model["services"], REPO)
     if args.images:
-        for row in built_images(load_model(stack, env_files, overrides)["services"], stack.project, options):
+        for row in built_images(model["services"], stack.project, options):
             print("\t".join(row))
         return 0
     require_db_passwords(stack, env_files, overrides, variables)
@@ -155,7 +158,7 @@ def run(args: argparse.Namespace) -> int:
         peer = STACKS[stack.peer]
         options["peer"] = {"namespace": peer.namespace,
                            "exposed": exposed_ports(load_model(peer, env_files_of(peer), overrides)["services"])}
-    files = render(load_model(stack, env_files, overrides), REPO, options)
+    files = render(model, REPO, options)
     write(args.out, files)
     print(f"{len(files)} files in {args.out} (tag {options['tag']})")
     return 0

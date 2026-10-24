@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Production on Kubernetes (hosting K8, K10, K16, ADR-0147, ADR-0164).
 #
-#   scripts/prod.k8s.sh build              build every image compose builds, tagged for the registry
+#   scripts/prod.k8s.sh build              build each image compose builds whose source's tag the registry lacks (K8)
 #   scripts/prod.k8s.sh push               push them: the node pulls, it never builds (K14); a registry
 #                                          that does not answer is named before the first image
 #   scripts/prod.k8s.sh registries         on the node: write /etc/rancher/k3s/registries.yaml, the
@@ -87,11 +87,28 @@ require_build_host() {
     die "this k3s agent has no ${NO_RELEASE_TAINT%%=*} taint, so release pods may run here (K14)"
 }
 
+# K8 (OPS-1-o-y): a tag is its source's fingerprint, so a tag the registry holds is built.
+in_registry() {
+  docker manifest inspect "$1" >/dev/null 2>&1
+}
+
+# A tag fingerprints HEAD's source: built from uncommitted files, an image would
+# carry a tag that names something else.
+require_clean() {
+  [ -z "$(git -C "$ROOT_DIR" status --porcelain)" ] ||
+    die "the checkout has uncommitted changes: an image is tagged by HEAD's source, not the files on disk (K8)"
+}
+
 # One service at a time: a parallel build starves whatever else runs on the host.
 build() {
   local service local_image remote
   require_build_host
+  require_clean
   while IFS=$'\t' read -r service local_image remote; do
+    if in_registry "$remote" </dev/null; then
+      echo "== in registry $service ($remote)"
+      continue
+    fi
     echo "== build $service -> $remote"
     compose build "$service" </dev/null
     docker tag "$local_image" "$remote"
@@ -118,6 +135,7 @@ push() {
   first="${first##*$'\t'}"
   require_registry "${first%%/*}" "nothing was pushed"
   while IFS=$'\t' read -r service local_image remote; do
+    ! in_registry "$remote" </dev/null || continue
     echo "== push $service"
     docker push "$remote" </dev/null
   done <<<"$listed"

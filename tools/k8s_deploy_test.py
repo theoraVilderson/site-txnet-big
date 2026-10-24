@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from k8s_manifest import stores, workloads  # noqa: E402
 from k8srender import RenderError, render  # noqa: E402
 from k8srender.container import built_images  # noqa: E402
+from k8srender.tags import content_tags  # noqa: E402
 from k8srender.registries import registries_yaml  # noqa: E402
 from k8srender.tables import BAKED_BINDS, NAMESPACE  # noqa: E402
 
@@ -87,6 +88,66 @@ class ImagesTest(unittest.TestCase):
             ("locale-service", "txnet-locale-service", "registry.example/txnet/locale-service:t1"),
             ("main-db", "txnet/postgres:18", "registry.example/txnet/main-db:t1"),
         ])
+
+
+# K8 (OPS-1-o-y): an image's tag is its source's fingerprint, so a release
+# whose commit left a service alone keeps that service's tag: nothing rolls,
+# nothing is pulled. 22 commit tags rolled every pod on the test server, ~5 min.
+class ContentTagTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self.tmp.name)
+        for rel in ("api/Dockerfile", "api/main.ts", "db/Dockerfile", "locales/fa.json"):
+            Path(self.repo, rel).parent.mkdir(parents=True, exist_ok=True)
+            Path(self.repo, rel).write_text(rel)
+        self.git("init", "-q")
+        self.commit()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def git(self, *argv):
+        return subprocess.run(["git", "-C", str(self.repo), *argv], check=True, capture_output=True, text=True)
+
+    def commit(self):
+        self.git("add", "-A")
+        self.git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "c", "--allow-empty")
+
+    def services(self):
+        r = str(self.repo)
+        return {"api": {"build": {"context": f"{r}/api", "dockerfile": "Dockerfile", "target": "prod",
+                                  "args": {"HTTP_PROXY": "anything"}}},
+                "migrate": {"build": {"context": f"{r}/api", "dockerfile": "Dockerfile", "target": "dependencies"}},
+                "db": {"build": {"context": f"{r}/db", "dockerfile": "Dockerfile",
+                                 "additional_contexts": {"locales": f"{r}/locales"}}},
+                "redis": {"image": "redis:8"}}
+
+    def test_a_service_left_alone_keeps_its_tag(self):
+        before = content_tags(self.services(), self.repo)
+        Path(self.repo, "api/main.ts").write_text("changed")
+        self.commit()
+        after = content_tags(self.services(), self.repo)
+        self.assertNotEqual(before["api"], after["api"])
+        self.assertEqual(before["db"], after["db"])
+        self.assertNotIn("redis", after)
+
+    def test_a_stage_and_an_extra_context_are_part_of_the_source(self):
+        tags = content_tags(self.services(), self.repo)
+        self.assertNotEqual(tags["api"], tags["migrate"])
+        Path(self.repo, "locales/fa.json").write_text("changed")
+        self.commit()
+        self.assertNotEqual(tags["db"], content_tags(self.services(), self.repo)["db"])
+
+    # A build arg names where to fetch from (a mirror, a proxy), not what is built.
+    def test_build_args_do_not_change_the_tag(self):
+        services = self.services()
+        services["api"]["build"]["args"] = {"HTTP_PROXY": "elsewhere"}
+        self.assertEqual(content_tags(services, self.repo)["api"], content_tags(self.services(), self.repo)["api"])
+
+    def test_the_image_names_its_content_tag(self):
+        options = {**OPTIONS, "tags": content_tags(self.services(), self.repo)}
+        rows = dict((s, remote) for s, _, remote in built_images(self.services(), "txnet", options))
+        self.assertEqual(rows["api"], f"registry.example/txnet/api:{options['tags']['api']}")
 
 
 # K14: the node's registries.yaml, from the sealed env files' variables.
@@ -161,7 +222,7 @@ class ScriptTest(unittest.TestCase):
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
                       f"k3s() {{ printf '%s' '{taints}'; }}\n"
-                      "compose() { :; }\ndocker() { :; }\nbuild")
+                      "require_clean() { :; }\ncompose() { :; }\ndocker() { [ \"$1\" != manifest ]; }\nbuild")
             return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                   env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
 
@@ -183,6 +244,21 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("== build billing-service", run.stdout)
 
+    # K8 (OPS-1-o-y): a tag the registry already holds is that source, built:
+    # build and push skip it, so an unchanged service costs nothing.
+    def test_an_image_the_registry_holds_is_neither_built_nor_pushed(self):
+        script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
+                  "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:old\\n'; }\n"
+                  "require_registry() { :; }\ncompose() { echo \"compose $*\"; }\n"
+                  'docker() { case "$1 $2 ${3:-}" in "manifest inspect reg.example/txnet/web:old") return 0 ;;'
+                  ' "manifest inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
+        run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("compose build api", run.stdout)
+        self.assertIn("docker push reg.example/txnet/api:new", run.stdout)
+        self.assertNotIn("compose build web", run.stdout)
+        self.assertNotIn("docker push reg.example/txnet/web:old", run.stdout)
+
     def run_with_registry(self, command, status):
         """`command` with the registry's /v2/ answering `status` and docker recorded, not run."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -190,7 +266,7 @@ class ScriptTest(unittest.TestCase):
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
                       f'curl() {{ echo "curl $*" >>"{calls}"; printf {status}; }}\n'
-                      f'docker() {{ echo "docker $*" >>"{calls}"; }}\n{command}')
+                      f'docker() {{ echo "docker $*" >>"{calls}"; [ "$1" != manifest ]; }}\n{command}')
             run = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                  env={**os.environ, "IMAGE_TAG": "t1"})
             return run, calls.read_text() if calls.exists() else ""

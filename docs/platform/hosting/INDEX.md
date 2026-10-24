@@ -25,7 +25,7 @@ connection pool, the log pipeline's bounds and format, healthchecks, and houseke
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose, its monitoring, ports and memory (OPS-1-o-a … -r) — rules K1…K19 |
 | [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j, -u, -w) — rules S1…S8 |
-| [contract.release.md](contract.release.md) | a release: built and pushed off the k3s node, pulled with a sealed pull-only login, smoke-checked, set back whole on a failure or by `rollback [tag]` (OPS-1-o-m, -p) — rules R1…R11 |
+| [contract.release.md](contract.release.md) | a release: built and pushed off the k3s node, pulled with a sealed pull-only login, each image tagged by its source, smoke-checked, set back whole on a failure or by `rollback [tag]` (OPS-1-o-m, -p, -y) — rules R1…R12 |
 | [contract.health.md](contract.health.md) | a healthcheck on a container that is not a Nest app: auth-handler, Traefik, the Next apps, guide-media, mailpit, the backup loops (OPS-1-aa) — rule H24 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped write-only to S3, restored here, elsewhere or into the cluster (OPS-1-ad, -o-k) — rules B1…B10 |
 | [contract.nodes.md](contract.nodes.md) | a second k3s node: joined or removed by one command from the server, WireGuard between nodes, K13's peers, the preflight that refuses a server (OPS-1-o-q) — rule K17 |

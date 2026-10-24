@@ -50,8 +50,17 @@ own node carries `txnet.io/no-release` (`NO_RELEASE_TAINT`, read through the
 kubelet's kubeconfig), which keeps every release pod off it. The dev host builds
 under that taint (user, 2026-10-24: one node runs the release for now, and no
 build server is bought); a node without it fails closed. A release is `build`
-and `push` there, at the commit `deploy` then runs: both take `IMAGE_TAG` from
-the commit (K16).
+and `push` there, at the commit `deploy` then runs, from a clean checkout (R12).
+
+**R12 — An image is tagged by its source** (OPS-1-o-y). `k8srender/tags.py`: the
+first 12 hex of sha256 over the git ids, at HEAD, of the build context, any
+extra context, a Dockerfile outside the context, and the target stage. Build
+args are left out: they name a mirror or a proxy and differ between hosts. A
+commit that leaves a service's source alone leaves its tag, so the pod neither
+rolls nor pulls; `build` and `push` skip a tag `docker manifest inspect` finds
+in the registry, and `build` refuses a checkout `git status` shows changed. The
+release is still the commit (R5): a rollback renders an older commit with its
+own renderer, so a release made before R12 comes back on its commit tags.
 
 **R10 — The registry answers before anything is sent** (OPS-1-o-t). `push`
 asks `https://<registry>/v2/` once (15s, `--noproxy`) before its first image, and
