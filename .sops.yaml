@@ -1,0 +1,5 @@
+# The recipient every sealed file is encrypted to (hosting K5, contract.secrets.md).
+# Written by `tools/k8s_secrets.py init` on the node; the private key is /etc/txnet/age.key.
+creation_rules:
+  - path_regex: (^|/)k8s/sealed/.*\.sops$
+    age: age1t4l4cw0n64danvful0ym8j4e7mde5yflq7dze8awag66lnq6ddsq44jg5c
