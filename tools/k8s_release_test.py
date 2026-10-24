@@ -5,6 +5,7 @@
 """
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -147,6 +148,8 @@ elif argv[:3] == ["apply", "-f", "-"]:
         open(f"{state}/record", "w").write(text)
 elif argv[:2] == ["apply", "-f"]:
     open(f"{state}/applied", "w").write(re.search(r"release: (\S+)", open(argv[2]).read()).group(1))
+elif argv[:1] == ["exec"]:
+    open(f"{state}/exec-stdin", "w").write(sys.stdin.read())
 elif argv[:2] == ["rollout", "status"]:
     sys.exit(1 if read("applied") == os.environ.get("FAKE_BAD") else 0)
 """
@@ -164,6 +167,7 @@ build_manifest() {
     "$RENDERED" >"$MANIFEST"
 }
 migrate() { log migrate; }
+login_roles() { log login-roles; }
 smoke_check() { log smoke; [ "$(cat "$FAKE_STATE/applied")" != "${FAKE_SMOKE_BAD:-}" ]; }
 """
 
@@ -204,6 +208,10 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(record["history"], f"{self.OLD} {self.NEW}")
         self.assertLess(calls.index("smoke"), next(i for i, c in enumerate(calls) if "--prune" in c))
+        # OPS-1-o-w: the migration makes the group roles the logins join; the services then log in.
+        release = next(i for i, c in enumerate(calls) if c.startswith("apply -f /"))
+        self.assertLess(calls.index("migrate"), calls.index("login-roles"))
+        self.assertLess(calls.index("login-roles"), release)
 
     # The whole release goes back, rendered from the earlier commit, and db-migrate is not run again.
     def test_a_workload_not_ready_sets_the_release_back(self):
@@ -235,9 +243,56 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn(f"render worktree {self.OLD}", calls)
         self.assertNotIn("migrate", calls)
+        self.assertIn("login-roles", calls)  # a rotated password stays rotated (R7)
         self.assertEqual(record["history"], f"{self.OLDER} {self.OLD}")
         worktrees = subprocess.run(["git", "-C", str(REPO), "worktree", "list"], capture_output=True, text=True)
         self.assertNotIn("/tmp", worktrees.stdout)
+
+
+
+# OPS-1-o-w: the login roles from the opened env files, read by compose as the
+# services read them; each password reaches psql on stdin, never in an argv.
+@unittest.skipUnless(shutil.which("docker"), "needs docker compose")
+class LoginRolesTest(unittest.TestCase):
+    PASSWORDS = {"DB_APP_PASSWORD": "it's\\x", "DB_CROSS_TENANT_PASSWORD": "cross-pw-1", "DB_AI_READER_PASSWORD": "ai-pw-1"}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.state = Path(self.tmp.name)
+        kubectl = self.state / "kubectl"
+        kubectl.write_text(FAKE_KUBECTL)
+        kubectl.chmod(0o755)
+        (self.state / "opened").mkdir()
+        (self.state / "opened/.env").write_text("DOMAIN_NAME=example.test\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def login_roles(self, passwords):
+        (self.state / "opened/.env.prod").write_text("".join(f"{k}={v}\n" for k, v in passwords.items()))
+        script = f'source "{REPO}/scripts/prod.k8s.sh"\nOPENED="{self.state}/opened"\nlogin_roles'
+        run = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                             env={**os.environ, "FAKE_STATE": str(self.state), "KUBECTL": str(self.state / "kubectl"),
+                                  "IMAGE_TAG": "t1"})
+        calls = (self.state / "calls").read_text() if (self.state / "calls").exists() else ""
+        stdin = (self.state / "exec-stdin").read_text() if (self.state / "exec-stdin").exists() else ""
+        return run, calls, stdin
+
+    def test_each_password_reaches_psql_on_stdin(self):
+        run, calls, stdin = self.login_roles(self.PASSWORDS)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertTrue(calls.startswith("-n txnet exec -i statefulset/main-db -c main-db -- sh -c"), calls)
+        for value in self.PASSWORDS.values():
+            self.assertNotIn(value, calls)
+        self.assertIn("\\set app_pw 'it''s\\\\x'\n", stdin)
+        self.assertIn("\\set ai_pw 'ai-pw-1'\n", stdin)
+        self.assertIn("ALTER ROLE txnet_app_user          PASSWORD :'app_pw';", stdin)
+
+    def test_a_blank_password_is_named_and_nothing_runs(self):
+        run, calls, _ = self.login_roles({**self.PASSWORDS, "DB_AI_READER_PASSWORD": ""})
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn("DB_AI_READER_PASSWORD", run.stderr)
+        self.assertNotIn("exec", calls)
 
 
 if __name__ == "__main__":

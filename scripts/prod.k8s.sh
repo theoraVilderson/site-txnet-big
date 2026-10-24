@@ -181,6 +181,14 @@ migrate() {
   done
 }
 
+# OPS-1-o-w: the RLS login roles every service connects as, with the passwords in
+# the opened env files. After db-migrate, which makes the group roles they join;
+# on a rollback too, so a password rotated since stays rotated (R7). Idempotent.
+login_roles() {
+  ENV_DIR="$OPENED" ENV_FILE=.env.prod DB_EXEC="$KUBECTL -n $NAMESPACE exec -i statefulset/main-db -c main-db --" \
+    "$ROOT_DIR/scripts/db-login-roles.sh"
+}
+
 # `tree`'s rendered bases through `overlay`, into MANIFEST (0600: it holds Secrets).
 build_manifest() {
   local overlay="$1/k8s/overlays/$2"
@@ -191,7 +199,7 @@ build_manifest() {
 }
 
 # K10's order for `tree`: Traefik's CRDs, the stores, db-migrate unless $2 is
-# `no` (K16: a rollback never undoes it), then the workloads. Stops at the
+# `no` (K16: a rollback never undoes it), the login roles, then the workloads. Stops at the
 # first set with a workload in ROLLOUT_FAILED.
 apply_release() {
   local workloads
@@ -205,6 +213,7 @@ apply_release() {
   roll_out $(grep ':statefulset/' <<<"$workloads" || true)
   [ ${#ROLLOUT_FAILED[@]} -eq 0 ] || return 0
   [ "$2" = no ] || migrate "$1"
+  login_roles
   "$KUBECTL" apply -f "$MANIFEST"
   # shellcheck disable=SC2046
   roll_out $(grep -E ':(deployment|daemonset)/' <<<"$workloads" || true)

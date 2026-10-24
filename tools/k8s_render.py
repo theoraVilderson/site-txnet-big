@@ -16,11 +16,12 @@ reads the main stack (its default env files) for the names it calls (K11).
 `--sealed DIR` takes the env files and secret files from DIR, where
 `tools/k8s_secrets.py open` decrypted them, and never from the checkout (K5).
 Before compose reads the model, a missing env file is named with the variables
-it has to set.
+it has to set, and a render with a blank database password is refused.
 """
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -35,6 +36,9 @@ from k8srender.registries import registries_yaml  # noqa: E402
 from k8srender.tables import STACKS, Stack  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
+# OPS-1-o-w: compose turns an unset `${DB_APP_PASSWORD}` into "", and every
+# service then fails P1000 at boot instead of the render failing here.
+DB_PASSWORD = re.compile(r"(^|_)DB_\w*PASSWORD$")
 
 
 def compose(stack: Stack, args: list[str], env_files: list[str], overrides: dict) -> str:
@@ -72,6 +76,15 @@ def require_env_files(stack: Stack, env_files: list[str], overrides: dict) -> No
                    if not var["DefaultValue"] and not have.get(name))
     raise RenderError(f"{', '.join(missing)} is missing: make it (it sets {', '.join(needs) or 'nothing yet'}), "
                       "then `prod.k8s.sh secrets seal` it (S1)")
+
+
+def require_db_passwords(stack: Stack, env_files: list[str], overrides: dict, variables: dict) -> None:
+    """OPS-1-o-w: every database password the stack names is set and not blank."""
+    blank = sorted(name for name in referenced(stack, env_files, overrides)
+                   if DB_PASSWORD.search(name) and not variables.get(name, "").strip())
+    if blank:
+        raise RenderError(f"{', '.join(blank)} blank in {', '.join(env_files)}: compose would log in with an "
+                          "empty password (OPS-1-o-w)")
 
 
 def load_model(stack: Stack, env_files: list[str], overrides: dict) -> dict:
@@ -137,6 +150,7 @@ def run(args: argparse.Namespace) -> int:
         for row in built_images(load_model(stack, env_files, overrides)["services"], stack.project, options):
             print("\t".join(row))
         return 0
+    require_db_passwords(stack, env_files, overrides, variables)
     if stack.peer:
         peer = STACKS[stack.peer]
         options["peer"] = {"namespace": peer.namespace,

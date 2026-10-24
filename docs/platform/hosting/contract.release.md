@@ -73,6 +73,12 @@ release's hashed Secrets still exist while it comes back. The first release has
 nothing before it: K10's undo of each failed workload. A rollback that fails too
 stops there and says so; it never loops.
 
+**R11 — The login roles, every release** (OPS-1-o-w). After `db-migrate`, which
+makes the group roles they join, and before the workloads, `scripts/db-login-roles.sh`
+runs through `kubectl exec -i` into `main-db`, logged in as the pod's own
+`POSTGRES_USER`; the three passwords are compose's reading of the opened env files
+and reach psql on stdin, never an argv. A rollback runs it too: a rotated password stays rotated.
+
 **R8 — The record.** ConfigMap `txnet-release` in `txnet`: `history` (the last
 ten tags, the running one last) and `overlay`. It carries no `part-of` label,
 so no prune removes it. A deploy appends its tag; a rollback to a tag drops
@@ -95,6 +101,9 @@ standing in for the pull-only one: a 2 MB image pushed as `txnet/k14-proof:t1`;
 from it pulled through `registries.yaml` and ran; coredns and local-path came
 from `docker.io` through the mirror. The tag was deleted after. Tests:
 `tools/k8s_deploy_test.py` `RegistriesTest`, `test_build_refuses_on_a_k3s_node`.
+
+R11, 2026-10-24: `k8s_release_test.py` `LoginRolesTest` (a quote and a backslash through stdin) and the
+order in `ScriptTest`; the dev path re-run on dev's Postgres, its logins unchanged.
 
 R5–R9, 2026-10-24: `tools/k8s_release_test.py` — the probe and route plans,
 every one of the production model's IngressRoutes given a request, the record,

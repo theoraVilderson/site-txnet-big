@@ -67,9 +67,11 @@ exist yet, so the stale plaintext left on disk cannot undo a rotation;
 `k8s/versions.env`'s pins into `/usr/local/bin`, each checked against its
 sha256. Nothing else needs them: sops embeds age.
 
-**S8 — What the render needs is there** (OPS-1-o-u). Before compose reads
+**S8 — What the render needs is there** (OPS-1-o-u, -w). Before compose reads
 the model, `k8s_render.py` names a missing env file with the variables only it
-would set (no default, no other file sets them) rather than compose's traceback.
+would set (no default, no other file sets them) rather than compose's traceback;
+then it refuses a `*DB_*PASSWORD` the stack names that the env files leave blank,
+which compose would hand every service as an empty password (P1000 at boot).
 `dev-docker/monitoring/.env.prod` holds only what `.env`/`.env.prod` leave unset
 (ports, Grafana's host and login); the move carries it (`move_plan.py`).
 

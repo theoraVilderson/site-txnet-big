@@ -291,6 +291,17 @@ class EnvFilesTest(unittest.TestCase):
         self.assertNotIn("DOMAIN_NAME", run.stderr.split("missing", 1)[1])
         self.assertNotIn("Traceback", run.stderr)
 
+    # Compose turns an unset ${DB_APP_PASSWORD} into "", and every service then fails P1000.
+    def test_a_blank_database_password_is_refused(self):
+        env = self.env_file("blank.env", "DB_APP_PASSWORD=\nDB_CROSS_TENANT_PASSWORD=set-but-not-blank\n")
+        run = render_cli("--env-file", env)
+        self.assertEqual(run.returncode, 1, run.stderr)
+        named = run.stderr.split("blank", 1)[0]
+        self.assertIn("DB_APP_PASSWORD", named)
+        self.assertIn("DB_AI_READER_PASSWORD", named)
+        self.assertNotIn("DB_CROSS_TENANT_PASSWORD", named)
+        self.assertNotIn("set-but-not-blank", run.stderr)
+
 
 # K4 at HEAD (OPS-1-o-h): the miniature above cannot see a call one real service
 # makes to another, so the repo's own production model is rendered too. It needs
