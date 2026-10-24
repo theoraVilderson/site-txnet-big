@@ -129,8 +129,6 @@ services:
       retries: 3
       start_period: 90s
     volumes:
-      - ../auth-handler:/src/auth-handler
-      - ../i18n-platform/clients/go:/src/i18n-platform/clients/go:ro
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
     environment:

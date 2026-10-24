@@ -21,8 +21,6 @@ services:
     expose: ["3000"]
     restart: unless-stopped
     volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
       # The object-storage `local` driver's root (F-018-m). One node or one

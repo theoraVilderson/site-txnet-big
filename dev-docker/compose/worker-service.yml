@@ -26,9 +26,6 @@ services:
     mem_reservation: 160m # the k8s request: measured peak + headroom (K19)
     mem_limit: 512m
     restart: unless-stopped
-    volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       # Which app `scripts/dev-serve.js` builds and runs. The Dockerfile bakes
@@ -36,8 +33,8 @@ services:
       # stage, so giving it a new value invalidates the cache from layer one
       # and re-runs `npm ci` — which needs egress this host does not have.
       # Setting it here overrides the image's own ENV, so every backend app can
-      # share one built image. The source tree is bind-mounted and
-      # node_modules is a volume, so nothing else about the image differs.
+      # share one built image. In dev the source tree is bind-mounted
+      # (docker-compose.dev.yml), so nothing else about the image differs.
       - APP_NAME=worker-service
       # The same NOBYPASSRLS login role auth-service uses, and no fallback to
       # the owner connection (F-066-m-a). automation's three worker tables

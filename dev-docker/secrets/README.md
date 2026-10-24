@@ -20,6 +20,10 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 | `backup-ship.env` | `scripts/bundle/ship.py` (OPS-1-ad, B7) | the write-only S3 key and bucket bundles are sent with; absent, nothing is sent (`runbook-backup-bundle.md`) |
 | `origin-pull/` | nothing at runtime — `scripts/edge/origin-pull.sh` (EDGE-1-g) | our origin-pull CA's key and the client pair Cloudflare holds; `ca.pem` sits in `traefik/origin-pull/`. Lost: run `issue` with `FORCE=1`, then `upload` |
 
+`scripts/prod.compose.sh` makes this directory 0700 and each file a compose
+service binds 0644: a bind keeps the host's mode, and the prod images run as
+`node`, not root (OPS-1-o-v). Only root on the host reads them still.
+
 In production on Kubernetes each bound file is a Secret mounted at the same
 `/run/secrets/<name>` path (hosting K7), so the application code does not
 change between the two. There the files are committed encrypted under

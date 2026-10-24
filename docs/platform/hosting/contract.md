@@ -193,7 +193,8 @@ Every other container: H24, `contract.health.md`.
 
 **H16 — Orchestration (ADR-0147).** Production is Kubernetes (k3s), rendered
 from the compose files; every value is in `contract.kubernetes.md` (K1…K12).
-`scripts/prod.compose.sh` stays until the cutover (OPS-1-p) and is then removed.
+`scripts/prod.compose.sh` stays until the cutover (OPS-1-p), then is removed. It runs the images as
+built — no source mounted, dev's binds are `docker-compose.dev.yml`'s — with each bound secret 0644 in a 0700 `secrets/` (OPS-1-o-v).
 
 **H17 — Translations from disk.** The Node locale client takes `cacheDir`
 (env `LOCALE_CACHE_DIR`, default `/var/cache/txnet-locale`). After every

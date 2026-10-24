@@ -40,7 +40,7 @@ drill`, `pg_restore_drill.prom`); -f (H10, `main-db` `command:`, sizing in `oper
 PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev); -j
 (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback); -v (H21, `hosting.broker-redis` in
 `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a server move, `runbook-move-server.md`). -ad
-(B1–B9, `scripts/bundle/`). -o-a…-e, -o-g, -o-i, -o-j, -o-l, -o-m, -o-p (K2–K16, S1–S7, R1–R9: `tools/k8srender/`, `k8s/`,
+(B1–B9, `scripts/bundle/`). -o-a…-e, -o-g, -o-i, -o-j, -o-l, -o-m, -o-p, -o-v (K2–K16, S1–S7, R1–R9: `tools/k8srender/`, `k8s/`,
 `scripts/prod.k8s.sh`, `scripts/edge/`). -aa (H24).
 
 ## Changelog

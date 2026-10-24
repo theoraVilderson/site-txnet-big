@@ -27,10 +27,6 @@ services:
     mem_reservation: 512m # the k8s request: measured peak + headroom (K19)
     mem_limit: 1g
     restart: unless-stopped
-    volumes:
-      - ../site-pwa:/app:delegated
-      - ../site-pwa/node_modules:/app/node_modules
-      - ../site-pwa/.next:/app/.next
     environment:
       - DOMAIN_NAME=${DOMAIN_NAME}
       - DEV_ALLOWED_ORIGINS=${DEV_ALLOWED_ORIGINS:-}
@@ -147,9 +143,6 @@ services:
     mem_reservation: 160m # the k8s request: measured peak + headroom (K19)
     mem_limit: 512m
     restart: unless-stopped
-    volumes:
-      - ../coinsite:/app:delegated
-      - /app/node_modules # anonymous vol: keep the image's node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       # The port Traefik's label below calls, which the check asks too.

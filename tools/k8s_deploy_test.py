@@ -162,6 +162,32 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("K14", run.stderr)
         self.assertNotIn("== build", run.stdout)
 
+    # OPS-1-o-v: a bind keeps the host file's mode and the prod images run as `node`;
+    # the directory stays root's, so the host's other users still read nothing.
+    def test_prod_compose_opens_the_bound_secrets_to_the_image_user(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "scripts").mkdir()
+            for name in ("prod.compose.sh", "moved-guard.sh"):
+                shutil.copy(REPO / "scripts" / name, root / "scripts" / name)
+            (root / "dev-docker/compose").mkdir(parents=True)
+            (root / "dev-docker/compose/a.yml").write_text(
+                "    volumes:\n      - ./secrets/vault-kek:/run/secrets/vault-kek:ro\n")
+            secrets = root / "dev-docker/secrets"
+            secrets.mkdir()
+            for name in ("vault-kek", "backup-bundle-passphrase"):
+                (secrets / name).write_text("x")
+                (secrets / name).chmod(0o600)
+            fake = root / "bin/docker"
+            fake.parent.mkdir()
+            fake.write_text("#!/bin/sh\nexit 0\n")
+            fake.chmod(0o755)
+            run = subprocess.run([str(root / "scripts/prod.compose.sh"), "ps"], capture_output=True, text=True,
+                                 env={**os.environ, "PATH": f"{fake.parent}:{os.environ['PATH']}"})
+            self.assertEqual(run.returncode, 0, run.stderr)
+            modes = {p.name: p.stat().st_mode & 0o777 for p in (secrets, *secrets.iterdir())}
+            self.assertEqual(modes, {"secrets": 0o700, "vault-kek": 0o644, "backup-bundle-passphrase": 0o600})
+
     @unittest.skipUnless(shutil.which("shellcheck"), "shellcheck not installed")
     def test_prod_k8s_is_clean(self):
         subprocess.run(["shellcheck", str(REPO / "scripts/prod.k8s.sh")], check=True)

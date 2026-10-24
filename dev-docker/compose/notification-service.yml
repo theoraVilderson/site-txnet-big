@@ -23,8 +23,6 @@ services:
     expose: ["3000"]
     restart: unless-stopped
     volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
       # The vault KEK, read-only, as auth-service mounts it (ADR-0026): the

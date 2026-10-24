@@ -60,20 +60,6 @@ VOLUME_SIZES = {
 }
 DEFAULT_VOLUME_SIZE = "1Gi"
 
-# K7: bound directories that exist for dev only. A source tree is in the
-# `prod` image already; mounting it would run dev code in production.
-DEV_ONLY_BINDS = {
-    "txnet-backend",
-    "coinsite",
-    "site-pwa",
-    "site-pwa/node_modules",
-    "site-pwa/.next",
-    "auth-handler",
-    "i18n-platform/clients/go",
-    "network-service",
-    "sub-service",
-}
-
 # K7, K11: Docker's own state, bound by the containers that read it (Traefik's
 # Docker provider, Promtail). A k3s node runs containerd: mounted, it is empty.
 DOCKER_HOST_BINDS = {"/var/run/docker.sock", "/var/lib/docker/containers"}

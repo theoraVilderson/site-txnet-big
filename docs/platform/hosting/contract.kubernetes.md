@@ -105,9 +105,9 @@ the pod out of its Service.
 - A bound file under `dev-docker/secrets/` is a Secret `secret-<file>` mounted
   read-only at the same path with `subPath`; any other bound file is a
   ConfigMap `cfg-<file>` the same way; both names hashed as in K5.
-- A bound directory is either in a dropped table — dev-only (source trees,
-  `node_modules`, `.next`) or Docker's own state (`/var/run/docker.sock`,
-  `/var/lib/docker/containers`) — or baked into the image (K8); else the render fails.
+- A bound directory is Docker's own state (`/var/run/docker.sock`,
+  `/var/lib/docker/containers`), dropped, or baked into the image (K8); else the render
+  fails, as an anonymous volume does: source trees are `docker-compose.dev.yml`'s (OPS-1-o-v).
 - `tmpfs` and `shm_size` are `emptyDir` with `medium: Memory`.
 
 **K8 — Images.** Every compose service with `build:` is built with its compose

@@ -29,8 +29,6 @@ services:
     # rebuild. A pinned `node dist/.../main.js` ran whatever bundle was last
     # built and ignored every edit.
     volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
       # The same vault KEK auth-service mounts, read-only: this service decrypts

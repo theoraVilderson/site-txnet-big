@@ -8,10 +8,9 @@
 # the host checkout: no image is built and no `npm ci` runs in a container.
 #
 #   - `node_modules` is the host's own (`txnet-backend/node_modules`, bind
-#     mounted with the rest of the tree). main.yml's anonymous `/app/node_modules`
-#     volume is dropped here on purpose — it would hide the host's copy behind an
-#     empty one. To add or upgrade a package, run npm on the host; the container
-#     sees it on its next restart.
+#     mounted with the rest of the tree). main.yml mounts no source at all: there
+#     it would hide the prod image's own code (OPS-1-o-v). To add or upgrade a
+#     package, run npm on the host; the container sees it on its next restart.
 #   - The image is stock Node 24 on Debian (glibc) because that is what the host
 #     is: the host's native modules — the Prisma engine
 #     (`debian-openssl-3.0.x`), `@swc/core-linux-x64-gnu`, `@nx/nx-linux-x64-gnu`
@@ -159,7 +158,9 @@ services:
       - object_storage:/data/objects
 
   # ---- Memory ceilings for the services not run from the host checkout ----
-  # Sized at ~2-3x what each uses at rest (docker stats, 2026-10-06).
+  # Sized at ~2-3x what each uses at rest (docker stats, 2026-10-06). The
+  # source trees the Next apps and the Go services (air) run from are mounted
+  # here, never in main.yml: there they would hide the prod image's own code (OPS-1-o-v).
   site-pwa:
     mem_limit: ${DEV_SITE_PWA_MEM_LIMIT:-3g} # `next dev --turbopack` grows with every edit
     # No swap: at the limit the container is killed and restarts in ~30 s.
@@ -170,8 +171,15 @@ services:
       # Caps the JS heap below the container, so V8 collects harder and exits
       # cleanly when it cannot; Turbopack's native memory is outside it.
       - NODE_OPTIONS=--max-old-space-size=1536
+    volumes:
+      - ../site-pwa:/app:delegated
+      - ../site-pwa/node_modules:/app/node_modules
+      - ../site-pwa/.next:/app/.next
   coinsite:
     mem_limit: ${DEV_COINSITE_MEM_LIMIT:-1536m}
+    volumes:
+      - ../coinsite:/app:delegated
+      - /app/node_modules # anonymous vol: keep the image's node_modules
   main-db:
     mem_limit: 2g
   memory-data:
@@ -190,10 +198,17 @@ services:
     mem_limit: 512m
   authorization-handler:
     mem_limit: 512m
+    volumes:
+      - ../auth-handler:/src/auth-handler
+      - ../i18n-platform/clients/go:/src/i18n-platform/clients/go:ro
   network-service:
     mem_limit: 512m
+    volumes:
+      - ../network-service:/src
   sub-service:
     mem_limit: 512m
+    volumes:
+      - ../sub-service:/src
   guide-media:
     mem_limit: 256m
   object-backup:

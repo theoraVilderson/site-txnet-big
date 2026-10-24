@@ -34,8 +34,6 @@ services:
     expose: ["${NETWORK_SERVICE_PORT:-8090}"]
     restart: unless-stopped
     working_dir: /src
-    volumes:
-      - ../network-service:/src
     environment:
       - NETWORK_SERVICE_PORT=${NETWORK_SERVICE_PORT:-8090}
       # The only connection this service has. There is no owner URL and no

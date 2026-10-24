@@ -5,8 +5,8 @@ from pathlib import Path, PurePosixPath
 from .monitoring import rewrite
 from .objects import RenderError, dns_name, hashed
 from .sealed import read_secret
-from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DEV_ONLY_BINDS, DOCKER_HOST_BINDS,
-                     POD_LOCAL_VOLUMES, SECRET_DIR, VOLUME_SIZES)
+from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DOCKER_HOST_BINDS, POD_LOCAL_VOLUMES,
+                     SECRET_DIR, VOLUME_SIZES)
 
 # Where compose mounts a `secrets:` entry that names no absolute target.
 _SECRETS_ROOT = "/run/secrets"
@@ -26,9 +26,9 @@ class Mounts:
 
     def for_service(self, name: str, service: dict) -> list[dict]:
         """The container's volumeMounts; the pod's volumes accumulate on self."""
-        mounts, dropped = [], []
+        mounts = []
         for entry in service.get("volumes") or []:
-            mount = self._mount(name, entry, dropped)
+            mount = self._mount(name, entry)
             if mount:
                 mounts.append(mount)
         for kind in ("configs", "secrets"):
@@ -39,19 +39,16 @@ class Mounts:
             mounts.append(self._memory("dshm", "/dev/shm", str(service["shm_size"])))
         return mounts
 
-    def _mount(self, service: str, entry: dict, dropped: list[str]) -> dict | None:
+    def _mount(self, service: str, entry: dict) -> dict | None:
         target, kind = entry["target"], entry["type"]
         if kind == "volume" and not entry.get("source"):
-            # An anonymous volume shadows part of a dropped source tree
-            # (`/app/node_modules` under `/app`); without the tree it would
-            # hide the image's own copy.
-            if any(target.startswith(d.rstrip("/") + "/") for d in dropped):
-                return None
-            raise RenderError(f"{service}: anonymous volume at {target} with no dropped bind above it")
+            # Dev's `/app/node_modules` under its source tree (docker-compose.dev.yml):
+            # in a prod pod it would hide the image's own copy (OPS-1-o-v).
+            raise RenderError(f"{service}: anonymous volume at {target} hides the image's own files (K7)")
         if kind == "volume":
             return self._named(entry["source"], target, entry)
         if kind == "bind":
-            return self._bind(service, entry, dropped)
+            return self._bind(service, entry)
         if kind == "tmpfs":
             return self._memory(f"tmp-{dns_name(target)}", target, None)
         raise RenderError(f"{service}: volume type {kind!r} at {target}")
@@ -65,11 +62,10 @@ class Mounts:
             self.objects[f"pvc/{name}"] = claim(source)
         return _mount(name, target, entry)
 
-    def _bind(self, service: str, entry: dict, dropped: list[str]) -> dict | None:
+    def _bind(self, service: str, entry: dict) -> dict | None:
         source = Path(entry["source"])
         rel = _repo_relative(source, self.repo)
-        if rel in DEV_ONLY_BINDS or str(source) in DOCKER_HOST_BINDS or rel in BAKED_BINDS:
-            dropped.append(entry["target"])
+        if str(source) in DOCKER_HOST_BINDS or rel in BAKED_BINDS:
             return None
         if rel in BIND_CLAIMS:
             return self._named(BIND_CLAIMS[rel], entry["target"], entry)
@@ -79,7 +75,9 @@ class Mounts:
             return _mount(name, entry["target"], entry)
         # A secret file is a file even where only its sealed copy exists (the node, K5).
         if not (source.is_file() or (self.sealed_root and rel.startswith(SECRET_DIR + "/"))):
-            raise RenderError(f"{service}: bound directory {rel} is neither dev-only nor baked (K7)")
+            # A source tree is dev's alone (docker-compose.dev.yml): here it would
+            # run the checkout instead of the image (OPS-1-o-v).
+            raise RenderError(f"{service}: bound directory {rel} at {entry['target']} is not baked (K7)")
         return self._file(rel, source, entry)
 
     def _file(self, rel: str, source: Path, entry: dict) -> dict:

@@ -24,8 +24,6 @@ services:
     expose: ["${AUTH_PORT}"]
     restart: unless-stopped
     volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
       # The Credential Vault's KEK (ADR-0026). Mounted as a file, read-only,

@@ -33,8 +33,6 @@ services:
     mem_limit: ${AI_SERVICE_MEM_LIMIT:-512m}
     memswap_limit: ${AI_SERVICE_MEM_LIMIT:-512m}
     volumes:
-      - ../txnet-backend:/app:delegated
-      - /app/node_modules
       # Translations saved for a boot while locale-service is down (hosting H17).
       - locale_cache:/var/cache/txnet-locale
     environment:

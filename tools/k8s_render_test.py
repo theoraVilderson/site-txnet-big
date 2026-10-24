@@ -70,8 +70,6 @@ def model(repo: Path) -> dict:
                 "healthcheck": {"test": ["CMD", "node", "-e", "1"], "interval": "10s", "timeout": "3s",
                                 "retries": 3, "start_period": "60s"},
                 "volumes": [
-                    {"type": "bind", "source": str(repo / "txnet-backend"), "target": "/app"},
-                    {"type": "volume", "target": "/app/node_modules"},
                     {"type": "volume", "source": "locale_cache", "target": "/var/cache/txnet-locale"},
                 ],
                 "depends_on": {"main-db": {"condition": "service_healthy"}},
@@ -194,8 +192,7 @@ class RenderTest(unittest.TestCase):
         self.assertNotIn("startupProbe", c)
         self.assertEqual([c[p]["initialDelaySeconds"] for p in ("readinessProbe", "livenessProbe")], [10, 10])
 
-    # K7: named volume -> claim, host dir -> hostPath, secret file -> Secret,
-    # source tree and the node_modules shadow under it -> dropped.
+    # K7: named volume -> claim, host dir -> hostPath, secret file -> Secret.
     def test_volumes(self):
         _, objs = self.run_render()
         pod = by_kind(objs, "StatefulSet", "main-db")["spec"]["template"]["spec"]
@@ -212,6 +209,16 @@ class RenderTest(unittest.TestCase):
                          ["/var/cache/txnet-locale"])
         claims = {o["metadata"]["name"] for o in objs if o["kind"] == "PersistentVolumeClaim"}
         self.assertEqual(claims, {"postgres-data", "locale-cache"})
+
+    # K7 (OPS-1-o-v): a source tree is dev's (docker-compose.dev.yml). In the
+    # production model it would hide the image's own code, so it fails the render.
+    def test_a_source_tree_fails_the_render(self):
+        for volume in ({"type": "bind", "source": str(self.repo / "txnet-backend"), "target": "/app"},
+                       {"type": "volume", "target": "/app/node_modules"}):
+            broken = copy.deepcopy(self.model)
+            broken["services"]["billing-service"]["volumes"].append(volume)
+            with self.assertRaisesRegex(RenderError, "billing-service.*/app"):
+                self.run_render(broken)
 
     def test_unknown_bind_directory_fails(self):
         broken = copy.deepcopy(self.model)
