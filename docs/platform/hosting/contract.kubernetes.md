@@ -3,12 +3,12 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-14
+updated: 2026-10-24
 ---
 
 # Contract — hosting: Kubernetes
 
-The build spec for ADR-0147 (OPS-1-o-a … -g). Every value here is decided; a
+The build spec for ADR-0147 and ADR-0163 (OPS-1-o-a … -n). Every value here is decided; a
 building session does not reopen one. H15's healthchecks and H3's shared socket
 are inputs; nothing here changes what a service does once it is up.
 
@@ -24,8 +24,9 @@ before stopping the old one.
 **K1 — Distribution.** k3s, version pinned once in `k8s/versions.env`
 (`K3S_IMAGE`, `TRAEFIK_CRD_VERSION`). Server flags: `--disable=traefik` (we run
 ours, K9). `servicelb` and `local-path` stay on. Namespace `txnet` for the
-platform, `txnet-monitoring` for K11. An agent never installs k3s on the dev
-host (ADR-0147 point 6); the production install is OPS-1-p, with the user.
+platform, `txnet-monitoring` for K11. The node is the test server (ADR-0163).
+An agent never installs k3s on the dev host (ADR-0147 point 6); the test
+server's install is OPS-1-o-f's, with the user, after K13.
 
 **K2 — The renderer.** `tools/k8s_render.py <out-dir>` reads
 `docker compose -p txnet --env-file .env --env-file .env.prod
@@ -133,13 +134,22 @@ way into `txnet-monitoring`. Promtail runs as a DaemonSet reading
 
 ## The rehearsal
 
-**K12 — A throwaway cluster on the dev host.** `scripts/k8s-rehearse.sh
-up|deploy|check|down`: k3d cluster `txnet-rehearsal` from `K3S_IMAGE` through
-`${DOCKER_REGISTRY}`, load balancer on `127.0.0.1:18080` and `127.0.0.1:18443`
-only (never 80/443: the live site holds them), images by `k3d image import`
-instead of a push, overlay `rehearsal` (dev's env files, no ACME, the two
-translators at zero replicas: 7 GB free is not enough for them beside the rest).
-`check` proves the row: every workload ready, a rolling update of
-`billing-service` under a request loop with zero failed requests, a
-`main-db` pod deleted and back with its data. `down` deletes the cluster; it
-never outlives the session that made it.
+**K12 — The rehearsal on the test server** (ADR-0163, amending ADR-0147
+point 6). `scripts/k8s-rehearse.sh up|deploy|check|down`: k3s from `K3S_IMAGE`
+on the host itself, beside Docker, the compose stack stopped for it, overlay
+`rehearsal` (the test server's env files, no ACME), images pulled as K14 says,
+replicas as OPS-1-o-n measured. `check` proves the row: every workload ready, a
+rolling update of `billing-service` under a request loop with zero failed
+requests, a `main-db` pod deleted and back with its data, a bundle restored
+(OPS-1-o-k). The cluster that passes is the one OPS-1-p cuts over to; `down`
+removes k3s and brings compose back, only when the rehearsal is abandoned.
+
+**K13 — k3s's own ports.** The API server (6443), the kubelet (10250) and
+flannel (8472/udp) answer from localhost and the node only, never the public
+address; only 80/443 are reached from outside, through O7 (K9). In place
+before k3s is installed (OPS-1-o-l).
+
+**K14 — The node pulls; it does not build.** `/etc/rancher/k3s/registries.yaml`
+names `${LOCAL_DOCKER_REGISTRY}` with a pull-only login, kept where OPS-1-o-j
+puts secrets. K8's images are built off the node and `prod.k8s.sh push`ed
+(OPS-1-o-m): a build on the node starves the running services.

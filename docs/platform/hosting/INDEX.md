@@ -7,7 +7,7 @@ keywords: [hosting, backup bundle, backup now, full backup, one backup file, bac
 source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**, tools/k8s_render.py, tools/k8s_render_test.py, tools/k8srender/**, scripts/move/**, scripts/bundle/**, scripts/moved-guard.sh, scripts/dev.compose.sh, scripts/prod.compose.sh]
 owns_tables: []
 depends_on: [automation, i18n]
-updated: 2026-10-23
+updated: 2026-10-24
 ---
 
 # hosting
@@ -26,7 +26,7 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose (OPS-1-o-a … -g) — rules K1…K12 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped write-only to S3, restored here or elsewhere (OPS-1-ad) — rules B1…B9 |
-| [open-questions.md](open-questions.md) | the production server (OPS-1-p) and the standby server (OPS-1-y) |
+| [open-questions.md](open-questions.md) | production's starting data (OPS-1-p) and the standby server (OPS-1-y) |
 
 ## Status
 

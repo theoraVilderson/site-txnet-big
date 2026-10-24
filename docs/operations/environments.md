@@ -1,7 +1,7 @@
 ---
 id: ops-environments
 status: active
-updated: 2026-10-14
+updated: 2026-10-24
 ---
 
 # Environments
@@ -51,7 +51,7 @@ supplies `externals`/`cache`/`devtool` tuning; not tracked as any unit's
 | monitoring | `dev-docker/monitoring/docker-compose.sys-monitor.yml` | `txnet-monitor` | Prometheus, Grafana, Loki, Promtail, node-exporter, cAdvisor, Alertmanager |
 | bug-tracker | `dev-docker/bug-tracker/docker-compose.bug-tracker.yml` | `txnet-bugtracker` | Glitchtip (+ own Postgres/Redis/worker) |
 | registry | `dev-docker/registry/docker-compose.registry.yml` | `txnet-registry` | private Docker registry |
-| prod (k3s) | rendered from the compose files by `tools/k8s_render.py` (ADR-0147) | namespace `txnet` | not built yet: OPS-1-o-a…g; `scripts/prod.compose.sh` until OPS-1-p |
+| prod (k3s) | rendered from the compose files by `tools/k8s_render.py` (ADR-0147) | namespace `txnet` | on the test server (ADR-0163); not built yet: OPS-1-o-a…n; `scripts/prod.compose.sh` until OPS-1-p |
 
 Networks: `public_gateway_network`, `private_backend_network` (shared/external so
 Traefik in the main stack can route to the other stacks).
