@@ -290,6 +290,8 @@ class RenderTest(unittest.TestCase):
 
 
 REPO = Path(__file__).resolve().parent.parent
+# K10: what a rollout waits; main-db recovering inside it is not killed for it.
+MAIN_DB_RECOVERY_S = 300
 
 
 def render_cli(*args: str) -> subprocess.CompletedProcess:
@@ -358,6 +360,14 @@ class RepoModelTest(unittest.TestCase):
                     for c in o["spec"]["template"]["spec"]["containers"] if "livenessProbe" not in c]
         self.assertTrue(self.objects)
         self.assertEqual(unprobed, [])
+
+    # K6 (OPS-1-o-f): a probe that fails kills, where Docker's only marks. On the
+    # test server main-db's crash recovery fsyncs its data directory for over a
+    # minute, and the 60s startup budget killed each recovery mid-way, in a loop.
+    def test_main_db_recovers_before_its_startup_probe_kills_it(self):
+        db = next(o for o in self.objects if o["kind"] == "StatefulSet" and o["metadata"]["name"] == "main-db")
+        startup = db["spec"]["template"]["spec"]["containers"][0]["startupProbe"]
+        self.assertGreaterEqual(startup["periodSeconds"] * startup["failureThreshold"], MAIN_DB_RECOVERY_S)
 
     # K5 (OPS-1-o-i): a value that is a Secret in one pod is written in no pod
     # spec — memory-data's password reached its args and probe from compose.

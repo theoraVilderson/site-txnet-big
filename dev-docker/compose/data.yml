@@ -124,7 +124,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      # A crash recovery fsyncs the data directory first: over a minute on the
+      # test server's disk. Compose only forgives misses here, but on k3s this is
+      # the startup probe's budget, and a probe that fails kills (OPS-1-o-f, K6).
+      start_period: 250s
 
   # ===========================================================================
   # Mailpit — dev SMTP sink (D-39). Catches every mail auth-service sends; the
