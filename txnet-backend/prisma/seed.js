@@ -240,12 +240,6 @@ async function main() {
   } else {
     console.log('[seed]   owner password: the sealed PLATFORM_OWNER_PASSWORD_FILE');
   }
-  // bot-service has no host to resolve a tenant from and there is no fallback
-  // (ADR-0025), so it states this id as X-Tenant-Id. Printed here because it
-  // is generated here and needed in .env — F-066-h/F-066-i replace it with a
-  // per-BotIntegration lookup.
-  console.log(`[seed]   BOT_TENANT_ID=${tenant.id}`);
-  console.log('[seed]   (put that in .env, or every bot flow answers 404)');
 }
 
 main()

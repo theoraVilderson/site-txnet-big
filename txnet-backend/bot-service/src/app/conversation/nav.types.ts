@@ -147,8 +147,8 @@ export interface FlowResult {
  * The `auth-api` call context an update implies.
  *
  * One helper rather than the same object literal at thirty call sites: the
- * tenant is on it now (F-320), and a literal that a flow forgot to update
- * would silently fall back to `BOT_TENANT_ID` and serve the wrong reseller.
+ * tenant is on it (F-320), and `tenantId` is required on `CallContext`, so a
+ * call that builds its own and leaves the tenant out does not compile (F-066-y).
  */
 export function callContextOf(ctx: ChatContext): {
   chatId: string;

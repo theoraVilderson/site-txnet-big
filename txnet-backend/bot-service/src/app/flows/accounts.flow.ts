@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import { callContextOf, ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { AccountSwitcher } from '../session/account-switcher';
 import { BotSessionStore } from '../session/bot-session.store';
 import { ChatAccess } from '../session/chat-access';
@@ -47,28 +47,12 @@ export class AccountsFlow {
     private readonly switcher: AccountSwitcher,
   ) {}
 
-  /**
-   * Every `auth-api` call from this flow, in one shape.
-   *
-   * `platform` is the part that matters and the part easiest to forget: without
-   * it `auth-api` cannot name this chat's scope and refuses the call outright
-   * (ADR-0015), so it is built here rather than at each call site.
-   */
-  private ctxFor(ctx: ChatContext, accessToken: string) {
-    return {
-      chatId: ctx.chatId,
-      lang: ctx.lang,
-      platform: ctx.platform,
-      accessToken,
-    };
-  }
-
   /** The group, as one screen. */
   async start(ctx: ChatContext): Promise<FlowResult> {
     const accessToken = await this.access.token(ctx);
     if (!accessToken) return this.signedOut();
 
-    const group = await this.api.listAccounts(this.ctxFor(ctx, accessToken));
+    const group = await this.api.listAccounts({ ...callContextOf(ctx), accessToken });
     if (!group.ok || !group.data) {
       return { view: say('accounts.failed', { raw: group.msg }), nextState: null };
     }
@@ -152,7 +136,7 @@ export class AccountsFlow {
     // Re-read rather than reusing what `start` rendered: the screen may be
     // minutes old, and removing from a stale list is how someone removes the
     // account that happens to have taken the row they remember tapping.
-    const group = await this.api.listAccounts(this.ctxFor(ctx, accessToken));
+    const group = await this.api.listAccounts({ ...callContextOf(ctx), accessToken });
     if (!group.ok || !group.data) {
       return { view: say('accounts.failed', { raw: group.msg }), nextState: state };
     }
@@ -171,7 +155,7 @@ export class AccountsFlow {
     const accessToken = await this.access.token(ctx);
     if (!accessToken) return this.signedOut();
 
-    const group = await this.api.listAccounts(this.ctxFor(ctx, accessToken));
+    const group = await this.api.listAccounts({ ...callContextOf(ctx), accessToken });
     if (!group.ok || !group.data) {
       return { view: say('accounts.failed', { raw: group.msg }), nextState: null };
     }
@@ -214,12 +198,12 @@ export class AccountsFlow {
     const accessToken = await this.access.token(ctx);
     if (!accessToken) return this.signedOut();
 
-    const before = await this.api.listAccounts(this.ctxFor(ctx, accessToken));
+    const before = await this.api.listAccounts({ ...callContextOf(ctx), accessToken });
     const isSelf = before.ok && before.data?.current.userId === userId;
 
     const result = await this.api.removeAccount(
       { userId },
-      this.ctxFor(ctx, accessToken),
+      { ...callContextOf(ctx), accessToken },
     );
     if (!result.ok) {
       return {

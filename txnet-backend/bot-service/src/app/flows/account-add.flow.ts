@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext, FlowResult, NavState } from '../conversation/nav.types';
+import { callContextOf, ChatContext, FlowResult, NavState } from '../conversation/nav.types';
 import { AccountSwitcher } from '../session/account-switcher';
 import { ChatAccess } from '../session/chat-access';
 import { OtpStep } from './otp.step';
@@ -181,7 +181,7 @@ export class AccountAddFlow {
       (c) =>
         this.api.requestAddOtp(
           { phoneNumber: state.data.phoneNumber, channel: c },
-          { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform, accessToken },
+          { ...callContextOf(ctx), accessToken },
         ),
       // The code is going to somebody else's phone — see the class comment.
       { inPlace: false },
@@ -194,7 +194,7 @@ export class AccountAddFlow {
 
     const result = await this.api.addAccountByOtp(
       { phoneNumber: state.data.phoneNumber, otpCode: (ctx.text ?? '').trim() },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform, accessToken },
+      { ...callContextOf(ctx), accessToken },
     );
     if (!result.ok) {
       // A mistyped code is one character, not a conversation: stay on the step
@@ -217,7 +217,7 @@ export class AccountAddFlow {
 
     const result = await this.api.addAccountByPassword(
       { identifier: state.data.identifier, password: (ctx.text ?? '').trim() },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform, accessToken },
+      { ...callContextOf(ctx), accessToken },
     );
     if (!result.ok) {
       const throttled = throttleOf(result, ctx);

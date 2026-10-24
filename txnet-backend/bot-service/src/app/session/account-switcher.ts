@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuthApiClient } from '../auth-api/auth-api.client';
-import { ChatContext } from '../conversation/nav.types';
+import { callContextOf, ChatContext } from '../conversation/nav.types';
 import { BotSessionStore } from './bot-session.store';
 
 /**
@@ -56,7 +56,7 @@ export class AccountSwitcher {
   ): Promise<SwitchOutcome> {
     const result = await this.api.switchAccount(
       { userId },
-      { chatId: ctx.chatId, lang: ctx.lang, platform: ctx.platform, accessToken },
+      { ...callContextOf(ctx), accessToken },
     );
     if (!result.ok || !result.data?.refreshToken) {
       return { ok: false, msg: result.msg };

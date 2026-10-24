@@ -26,7 +26,6 @@ const TENANT_ID = '3f1c0b6e-6d1e-4f6a-9b2f-2f9a5d0c7e11';
 const env: Record<string, unknown> = {
   AUTH_API_BASE_URL: 'http://auth:3000/',
   SERVICE_AUTH_TOKEN: 'svc-token',
-  BOT_TENANT_ID: TENANT_ID,
   AUTH_API_TIMEOUT_MS: 500,
 };
 
@@ -38,7 +37,7 @@ const configFor = (overrides: Record<string, unknown> = {}) =>
 
 const config = configFor();
 
-const ctx: CallContext = { chatId: '5501', lang: 'fa', platform: 'telegram' };
+const ctx: CallContext = { chatId: '5501', lang: 'fa', platform: 'telegram', tenantId: TENANT_ID };
 
 /** The sentence `bot.common.tryAgain` resolves to in `fa`. */
 const TRY_AGAIN = 'یه مشکلی از سمت ما پیش اومد. لطفاً دوباره تلاش کنید.';
@@ -124,7 +123,7 @@ describe('AuthApiClient transport', () => {
    * `x-tenant-id` here and `X-Tenant-Id` by the gateway. They are one
    * case-insensitive name, and F-074 collapsed them onto one declaration.
    */
-  it('names the tenant it serves on every call', async () => {
+  it('names the tenant its call context carries', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
 
     await client().refresh({ refreshToken: 'r-1' }, ctx);
@@ -133,16 +132,19 @@ describe('AuthApiClient transport', () => {
     expect(headers[IdentityHeaders.tenantId]).toBe(TENANT_ID);
   });
 
-  it('sends no tenant header at all when BOT_TENANT_ID is unset', async () => {
+  // F-066-y: a configured fallback named whichever database it was copied
+  // from (the test server's pointed at one that no longer existed), and a call
+  // that forgot its tenant served the platform's instead of the reseller's.
+  it('reads no configured tenant: the call names its own', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
 
-    await new AuthApiClient(configFor({ BOT_TENANT_ID: '' }), copy).refresh(
+    await new AuthApiClient(configFor({ BOT_TENANT_ID: 'another-tenant' }), copy).refresh(
       { refreshToken: 'r-1' },
       ctx,
     );
 
     const headers = lastRequest().init.headers as Record<string, string>;
-    expect(headers[IdentityHeaders.tenantId]).toBeUndefined();
+    expect(headers[IdentityHeaders.tenantId]).toBe(TENANT_ID);
   });
 
   it('sends the user’s access token only when one was supplied', async () => {
@@ -159,7 +161,7 @@ describe('AuthApiClient transport', () => {
     // (ADR-0015); an empty string would be a value, and a wrong one.
     fetchMock.mockResolvedValue(jsonResponse({ ok: true, msg: 'ok' }));
 
-    await client().refresh({ refreshToken: 'r-1' }, { chatId: '1', lang: 'fa' });
+    await client().refresh({ refreshToken: 'r-1' }, { chatId: '1', lang: 'fa', tenantId: TENANT_ID });
 
     const headers = lastRequest().init.headers as Record<string, string>;
     expect('x-bot-platform' in headers).toBe(false);

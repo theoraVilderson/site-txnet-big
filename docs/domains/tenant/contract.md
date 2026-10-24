@@ -145,18 +145,17 @@ harness still write rows directly. F-018-i's domain proof is the second (`contra
 **A request from another service has no host worth resolving, so it names its
 tenant instead.** `bot-service` calls this API at `http://auth-service:3001` —
 a container name no `tenant_domain` row names, and a bot chat has no host of
-its own — so it sends `BOT_TENANT_ID` as `X-Tenant-Id` alongside its service
-token, and the `bot` row of the claim table above answers. That is the seam
-F-066-c built, used for the case it was built for; F-066-i replaces the env
-var with a per-`BotIntegration` lookup and the header stays where it is.
+its own — so it sends its update's `BotIntegration` tenant as `X-Tenant-Id`
+with its service token, and the claim table's `bot` row answers: F-066-c's seam.
+None is configured; `CallContext.tenantId` is required (F-066-y).
 
 Seeding the internal host as a `tenant_domain` row would have looked like the
 same fix and is not one: it would give those calls a *surface*, and once
 F-066-i has the bot claiming a real tenant, a claim that disagrees with that
 surface is a `403` rather than a resolution.
 
-**A caller that names no tenant is refused, deliberately.** An install with
-`BOT_TENANT_ID` unset sends no header, resolves to nothing, and gets the
+**A caller that names no tenant is refused, deliberately.** A request that
+sends no header resolves to nothing and gets the
 neutral 404 — the same answer a stranger's host gets. There is no
 service-caller exemption: a verified service token says *who* is calling, never
 *for whom*.

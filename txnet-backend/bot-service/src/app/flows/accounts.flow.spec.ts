@@ -56,8 +56,10 @@ describe('AccountsFlow', () => {
     const result = await flow.start(ctx);
 
     expect(result.view.id).toBe('accounts.list');
+    // F-066-y: the bot's own tenant, not a configured one: on a reseller's bot
+    // this call went out under the platform's.
     expect(api.listAccounts).toHaveBeenCalledWith(
-      expect.objectContaining({ accessToken: 'access-1' }),
+      expect.objectContaining({ accessToken: 'access-1', tenantId: ctx.integration.tenantId }),
     );
     // One choice per member, plus the cancel row. The current account is in
     // the body, not on a button that would do nothing.
@@ -80,7 +82,10 @@ describe('AccountsFlow', () => {
 
     const result = await flow.handle(ctx, state, 'account:u-2');
 
-    expect(api.switchAccount).toHaveBeenCalledWith({ userId: 'u-2' }, expect.anything());
+    expect(api.switchAccount).toHaveBeenCalledWith(
+      { userId: 'u-2' },
+      expect.objectContaining({ tenantId: ctx.integration.tenantId }),
+    );
     expect(sessions.save).toHaveBeenLastCalledWith(ctx.integration, '5501', 'r-sara');
     expect(result.view.id).toBe('accounts.switched');
     expect(result.nextState).toBeNull();

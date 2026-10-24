@@ -35,7 +35,6 @@ export class AuthApiClient {
   private readonly logger = new Logger(AuthApiClient.name);
   private readonly baseUrl: string;
   private readonly serviceToken: string;
-  private readonly tenantId: string;
   private readonly timeoutMs: number;
 
   constructor(
@@ -46,7 +45,6 @@ export class AuthApiClient {
       .get<string>('AUTH_API_BASE_URL', '')
       .replace(/\/+$/, '');
     this.serviceToken = config.get<string>('SERVICE_AUTH_TOKEN', '');
-    this.tenantId = config.get<string>('BOT_TENANT_ID', '');
     this.timeoutMs = config.get<number>('AUTH_API_TIMEOUT_MS', 8000);
   }
 
@@ -372,11 +370,10 @@ export class AuthApiClient {
           // auth-api has no fallback tenant (ADR-0025), so a call that names
           // no tenant is answered a neutral 404. Sent next to the service
           // token deliberately: auth-api honours it only because that token
-          // verified. `BOT_TENANT_ID` remains as the fallback for the calls
-          // that are not answering an update.
-          ...(ctx.tenantId || this.tenantId
-            ? { [IdentityHeaders.tenantId]: ctx.tenantId || this.tenantId }
-            : {}),
+          // verified. Every call names one: a configured fallback named the
+          // database it was copied from, and served the platform where a
+          // flow forgot its own (F-066-y).
+          [IdentityHeaders.tenantId]: ctx.tenantId,
           [RequestHeaders.botChatId]: ctx.chatId,
           // The other half of the chat's identity (ADR-0015). Sent on every
           // call rather than only the account ones: it costs a header, and a
@@ -472,9 +469,8 @@ export interface CallContext {
    * else: a bot request has no host for `auth-api` to resolve, and reading a
    * tenant out of the message body would let the sender choose one.
    *
-   * Falls back to `BOT_TENANT_ID` only where no update is in hand.
    */
-  tenantId?: string;
+  tenantId: string;
   /** Set only for a route behind `AuthGuard` — see `listAccounts`. */
   accessToken?: string;
 }

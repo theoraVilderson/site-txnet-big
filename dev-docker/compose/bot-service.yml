@@ -70,12 +70,6 @@ services:
       # in-network port for the pictures and video sent into the chat (ADR-0118).
       - TENANT_INTERNAL_BASE_URL=http://tenant-service:3000
       - GUIDE_MEDIA_INTERNAL_URL=http://guide-media:8081
-      # A bot chat has no host to resolve a tenant from, and there is no
-      # fallback tenant (ADR-0025). Since F-066-i an update names its own
-      # tenant — the one its webhook path resolved to — so this is only the
-      # fallback for calls that are not answering an update. `prisma/seed.js`
-      # prints the id it created.
-      - BOT_TENANT_ID=${BOT_TENANT_ID:-}
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       # The webhook verifies and enqueues; worker-service runs the flow and
       # calls back in (F-067-b). Required here, unlike in auth-service: this
