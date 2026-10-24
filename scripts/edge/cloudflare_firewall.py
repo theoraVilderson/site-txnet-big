@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""The swarm host admits 80/443 from Cloudflare's published ranges only.
+"""The production host admits 80/443 from Cloudflare's published ranges only.
 
-ADR-0129 amendment 1, EDGE-1-h. This sits on top of EDGE-1-g: the gateway
+ADR-0129 amendment 1, EDGE-1-h; a k3s host since OPS-1-o-g (hosting K9). This sits on top of EDGE-1-g: the gateway
 already refuses any TLS handshake without our origin-pull certificate, and this
 keeps everyone else from reaching the gateway at all. Dev keeps its open ports.
 
@@ -72,13 +72,38 @@ def restore_payload(cidrs, iface):
 
 def jump_rules(iface):
     """Where traffic for 80/443 enters the chain. INPUT covers a gateway on
-    the host's own sockets; DOCKER-USER covers a published port, which is
-    DNATed before FORWARD, so it matches the original destination port."""
+    the host's own sockets. A published port is DNATed before it is forwarded,
+    so the forwarded rules match the original destination port: FORWARD for
+    k3s's load balancer (servicelb's hostPort, K9), DOCKER-USER for Docker's,
+    which Docker keeps ahead of its own FORWARD rules across restarts."""
     rules = [("INPUT", ["-i", iface, "-p", "tcp", "-m", "multiport", "--dports", "80,443", "-j", CHAIN])]
-    for port in ("80", "443"):
-        rules.append(("DOCKER-USER", ["-i", iface, "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
-                                      "--ctdir", "ORIGINAL", "-j", CHAIN]))
+    for chain in ("FORWARD", "DOCKER-USER"):
+        for port in ("80", "443"):
+            rules.append((chain, ["-i", iface, "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
+                                  "--ctdir", "ORIGINAL", "-j", CHAIN]))
     return rules
+
+
+def our_positions(listing):
+    """The 1-based numbers of the rules in `iptables -S <chain>` that jump to CHAIN."""
+    rules = [line.split() for line in listing.splitlines() if line.startswith("-A ")]
+    return [n for n, rule in enumerate(rules, 1) if rule[-2:] == ["-j", CHAIN]]
+
+
+def hook(tool, chain, jumps):
+    """Put `jumps` ahead of every other rule in `chain`. A rule above ours
+    decides first, and Docker and k3s both insert theirs at the top. Fresh
+    copies go on top before the stale ones are deleted, by number, so the
+    chain is never unhooked in between; re-running adds no second jump."""
+    def positions():
+        return our_positions(run(tool, "-S", chain).stdout)
+    on_top = positions() == list(range(1, len(jumps) + 1))
+    if on_top and all(run(tool, "-C", chain, *args, check=False).returncode == 0 for args in jumps):
+        return
+    for args in reversed(jumps):
+        run(tool, "-I", chain, "1", *args)
+    for number in reversed(positions()[len(jumps):]):
+        run(tool, "-D", chain, str(number))
 
 
 def public_iface():
@@ -113,15 +138,13 @@ def run(*args, check=True, stdin=None):
 def apply(ranges, iface):
     for family, tool in TOOL.items():
         run(f"{tool}-restore", "--noflush", stdin=restore_payload(ranges[family], iface))
-        # Docker creates DOCKER-USER; on a host where it has not started yet,
-        # the rule waits for the next run (boot entry, then daily).
-        if run(tool, "-n", "-L", "DOCKER-USER", check=False).returncode != 0:
-            print(f"{tool}: no DOCKER-USER chain yet", file=sys.stderr)
-        for chain, args in jump_rules(iface):
-            if chain == "DOCKER-USER" and run(tool, "-n", "-L", chain, check=False).returncode != 0:
+        # Docker creates DOCKER-USER; a k3s host has none, and on a Docker host
+        # where it has not started yet the rule waits for the next run.
+        for chain in dict.fromkeys(c for c, _ in jump_rules(iface)):
+            if run(tool, "-n", "-L", chain, check=False).returncode != 0:
+                print(f"{tool}: no {chain} chain", file=sys.stderr)
                 continue
-            if run(tool, "-C", chain, *args, check=False).returncode != 0:
-                run(tool, "-I", chain, "1", *args)
+            hook(tool, chain, [args for c, args in jump_rules(iface) if c == chain])
         print(f"{tool}: {len(ranges[family])} Cloudflare ranges admitted on {iface}:80,443")
 
 

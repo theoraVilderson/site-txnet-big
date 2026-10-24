@@ -135,11 +135,15 @@ marked, `/realtime` still `101`. Tests: `privatecache_test.go`.
 apply` reads `https://api.cloudflare.com/client/v4/ips` and writes chain
 `TXNET-EDGE` in one `iptables-restore --noflush` / `ip6tables-restore` commit:
 `RETURN` per range, then `DROP`. The chain is reached from `INPUT`
-(`--dports 80,443`) and `DOCKER-USER` (`--ctorigdstport 80|443`: a published
-port is DNATed before `FORWARD`). Both match only the public interface
+(`--dports 80,443`), and from `FORWARD` and `DOCKER-USER`
+(`--ctorigdstport 80|443`: a published port is DNATed before it is forwarded —
+k3s's servicelb through `FORWARD`, Docker's through `DOCKER-USER`; a chain the
+host lacks is skipped). All match only the public interface
 (`EDGE_PUBLIC_IFACE`, default the default route's), so bridges and the tailnet
-are never filtered. Re-running adds no second jump. `remove` undoes it, and
-`print` shows the rules without changing anything.
+are never filtered. Every run puts the jumps ahead of the chain's other rules —
+a rule above ours (k3s's, Docker's) decides first — copying before deleting, so
+the chain is never unhooked; re-running adds no second jump. `remove` undoes it,
+and `print` shows the rules without changing anything.
 
 **O8 — Kept in step, never emptied.** A list with fewer than 10 IPv4 or 5 IPv6
 ranges, a malformed or wrong-family range, a range wider than /8 (v4) or /16
@@ -149,4 +153,8 @@ fails and changes nothing. `install` writes `/etc/cron.d/txnet-cloudflare-firewa
 at boot (after Docker) and daily at 04:23. Dev does not run it.
 Proven 2026-10-07 in an empty network namespace: the cached list was used,
 re-applying kept one jump, a non-Cloudflare caller on 443 was dropped, and
-`remove` restored it. Tests: `scripts/edge/test_cloudflare_firewall.py`.
+`remove` restored it. The k3s path (OPS-1-o-g), proven 2026-10-24 the same way
+with 443 DNATed to a stand-in pod: a non-Cloudflare caller dropped, a Cloudflare
+one served, an `ACCEPT` for the pod range inserted above ours let the caller in
+until the next `apply` put the jumps back on top. Tests:
+`scripts/edge/test_cloudflare_firewall.py`.
