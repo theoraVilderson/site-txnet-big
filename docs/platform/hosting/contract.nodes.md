@@ -23,6 +23,14 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   public address. One setup for both: a node that changes provider changes an
   address, never the backend. A server switched to WireGuard after its install
   restarts k3s and drops `flannel.1`.
+- **TCP through the tunnel is clamped** (2026-10-25). The path between the test
+  server and the dev host carries 1400-byte packets, not 1500, and flannel-wg's
+  1420 MTU let pods agree 1380-byte segments that were dropped with no ICMP
+  back: a query's result stalled mid-way and auth-service never started there.
+  `k3s_ports.py apply` (boot and every 5 minutes, K13) sets the MSS of each SYN
+  leaving `flannel-wg` to `WG_MSS` (1280; 1358 bytes crossed), in FORWARD and
+  OUTPUT; `remove` takes it out. A change to the script reaches an agent only by
+  copying it to `/usr/local/lib/txnet/edge/` there, as `join` did.
 - **One command, from the server.** `k8s-add-node.sh join <host> [port]` runs
   as root on the k3s server node from the checkout and reaches the other server
   over SSH as root; nothing is installed there but k3s and K13's two scripts.

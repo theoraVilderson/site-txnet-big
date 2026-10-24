@@ -3,6 +3,7 @@
 Run: python3 -m unittest scripts/edge/test_k3s_ports.py
 """
 import os
+import subprocess
 import sys
 import unittest
 
@@ -80,6 +81,49 @@ class Peers(unittest.TestCase):
         d = tempfile.mkdtemp()
         self.addCleanup(__import__("shutil").rmtree, d)
         return d
+
+
+class TunnelMss(unittest.TestCase):
+    """K17 (2026-10-25): the path between the two nodes carries 1400-byte packets;
+    flannel-wg's 1420 MTU let pods agree 1380-byte segments that were dropped,
+    and a query's result stalled mid-way (auth-service never started)."""
+
+    def run_with(self, present, action):
+        """The commands `action` sends, with the clamp rule `present` or not."""
+        sent, there = [], {"FORWARD", "OUTPUT"} if present else set()
+
+        def run(*args, check=True, stdin=None):
+            sent.append(" ".join(args))
+            chain = args[4] if len(args) > 4 else ""
+            if "-D" in args:
+                there.discard(chain)
+            elif "-A" in args:
+                there.add(chain)
+            return subprocess.CompletedProcess(args, (0 if chain in there else 1) if "-C" in args else 0)
+        original, kp.run = kp.run, run
+        try:
+            action("iptables")
+        finally:
+            kp.run = original
+        return sent
+
+    def test_segments_through_the_tunnel_fit_the_path(self):
+        # 1358 bytes crossed the tunnel on 2026-10-25; a segment adds 40 (IPv4) or 60 (IPv6).
+        self.assertLessEqual(kp.WG_MSS + 60, 1358)
+        for chain, args in kp.mss_rules():
+            self.assertIn(chain, ("FORWARD", "OUTPUT"))
+            self.assertEqual(args[:2], ["-o", kp.WG_IFACE])
+            self.assertEqual(args[-4:], ["-j", "TCPMSS", "--set-mss", str(kp.WG_MSS)])
+
+    def test_the_clamp_is_added_once(self):
+        added = [c for c in self.run_with(False, kp.clamp) if " -A " in c]
+        self.assertEqual(len(added), 2)
+        self.assertTrue(all(c.startswith("iptables -t mangle -A") for c in added))
+        self.assertFalse([c for c in self.run_with(True, kp.clamp) if " -A " in c])
+
+    def test_remove_takes_the_clamp_out(self):
+        deleted = [c for c in self.run_with(True, kp.unclamp) if " -D " in c]
+        self.assertEqual(len(deleted), 2)
 
 
 class SharedTop(unittest.TestCase):

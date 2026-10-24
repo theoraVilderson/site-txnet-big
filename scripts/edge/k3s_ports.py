@@ -33,6 +33,12 @@ NODE_UDP_PORTS = "8472,51820,51821"
 PEERS_FILE = os.environ.get("K3S_PEERS_FILE", "/etc/txnet/k3s-peers")
 # k3s's default --service-node-port-range.
 NODE_PORT_RANGE = "30000:32767"
+# K17 (2026-10-25): the path between the two nodes carries 1400-byte packets, not
+# 1500. flannel-wg's 1420 MTU let pods agree 1380-byte segments that were dropped
+# with no ICMP back, so a query's result stalled mid-way. 1358 bytes crossed the
+# tunnel; a segment of WG_MSS plus its IPv6 and TCP headers stays under that.
+WG_IFACE = "flannel-wg"
+WG_MSS = 1280
 UNIT_DIR = "/etc/systemd/system"
 UNIT = "txnet-k3s-ports"
 # k3s and kube-router insert their INPUT rules at the top; this puts ours back.
@@ -102,17 +108,41 @@ def jump_rules(iface):
     return rules
 
 
+def mss_rules():
+    """Each SYN and SYN-ACK leaving through the tunnel, its MSS set to WG_MSS:
+    pod traffic is forwarded, the node's own leaves by OUTPUT."""
+    clamp_args = ["-o", WG_IFACE, "-p", "tcp", "--tcp-flags", "SYN,RST", "SYN",
+                  "-m", "comment", "--comment", "txnet-wg-mss", "-j", "TCPMSS", "--set-mss", str(WG_MSS)]
+    return [(chain, clamp_args) for chain in ("FORWARD", "OUTPUT")]
+
+
+def clamp(tool):
+    """mss_rules() in the mangle table, each once."""
+    for chain, args in mss_rules():
+        if run(tool, "-t", "mangle", "-C", chain, *args, check=False).returncode != 0:
+            run(tool, "-t", "mangle", "-A", chain, *args)
+
+
+def unclamp(tool):
+    for chain, args in mss_rules():
+        while run(tool, "-t", "mangle", "-C", chain, *args, check=False).returncode == 0:
+            run(tool, "-t", "mangle", "-D", chain, *args)
+
+
 def apply(iface):
     peers = read_peers()
     for family, tool in TOOL.items():
         run(f"{tool}-restore", "--noflush", stdin=restore_payload(peers[family]))
         hook_all(tool, jump_rules(iface), CHAIN)
-        print(f"{tool}: k3s's ports closed on {iface}, open to {peers[family] or 'no peer'}")
+        clamp(tool)
+        print(f"{tool}: k3s's ports closed on {iface}, open to {peers[family] or 'no peer'}; "
+              f"{WG_IFACE} clamped to MSS {WG_MSS}")
 
 
 def remove(iface):
     for tool in TOOL.values():
         unhook(tool, jump_rules(iface), CHAIN)
+        unclamp(tool)
 
 
 def install():
@@ -137,7 +167,7 @@ def main(argv):
         return apply(iface)
     if cmd == "print":
         print(restore_payload(read_peers()[4]))
-        for chain, args in jump_rules(iface):
+        for chain, args in [*jump_rules(iface), *(("mangle " + c, a) for c, a in mss_rules())]:
             print(chain, " ".join(args))
         return None
     print(__doc__)
