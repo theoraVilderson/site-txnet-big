@@ -9,6 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 import cloudflare_firewall as fw  # noqa: E402
+import edge_chain as ec  # noqa: E402
 
 V4 = ["173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22", "103.31.4.0/22",
       "141.101.64.0/18", "108.162.192.0/18", "190.93.240.0/20", "188.114.96.0/20",
@@ -87,14 +88,14 @@ class FakeChain:
         spec = " ".join(rest)
         if op == "-S":
             out = "\n".join([f"-P {chain} ACCEPT", *(f"-A {chain} {r}" for r in self.rules)])
-            return fw.subprocess.CompletedProcess([], 0, out + "\n", "")
+            return ec.subprocess.CompletedProcess([], 0, out + "\n", "")
         if op == "-C":
-            return fw.subprocess.CompletedProcess([], 0 if spec in self.rules else 1, "", "")
+            return ec.subprocess.CompletedProcess([], 0 if spec in self.rules else 1, "", "")
         if op == "-I":
             self.rules.insert(int(rest[0]) - 1, " ".join(rest[1:]))
         elif op == "-D":
             del self.rules[int(rest[0]) - 1]
-        return fw.subprocess.CompletedProcess([], 0, "", "")
+        return ec.subprocess.CompletedProcess([], 0, "", "")
 
 
 class Hook(unittest.TestCase):
@@ -103,11 +104,11 @@ class Hook(unittest.TestCase):
 
     def hook(self, rules):
         chain = FakeChain("FORWARD", rules)
-        original, fw.run = fw.run, chain.run
+        original, ec.run = ec.run, chain.run
         try:
-            fw.hook("iptables", "FORWARD", self.JUMPS)
+            ec.hook("iptables", "FORWARD", self.JUMPS, fw.CHAIN)
         finally:
-            fw.run = original
+            ec.run = original
         return chain.rules
 
     def test_the_jumps_go_ahead_of_every_rule_already_there(self):

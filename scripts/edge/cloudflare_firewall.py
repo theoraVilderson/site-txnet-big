@@ -20,9 +20,11 @@ filtered. Contract: docs/platform/hosting/contract.origin.md.
 import ipaddress
 import json
 import os
-import subprocess
 import sys
 import urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from edge_chain import TOOL, hook_all, public_iface, run, unhook  # noqa: E402
 
 CHAIN = "TXNET-EDGE"
 SOURCE = "https://api.cloudflare.com/client/v4/ips"
@@ -32,7 +34,6 @@ STATE = os.environ.get("EDGE_FIREWALL_STATE", "/var/lib/txnet/cloudflare-ips.jso
 MINIMUM = {4: 10, 6: 5}
 # Nothing Cloudflare publishes is wider than this; a wider one admits the world.
 WIDEST = {4: 8, 6: 16}
-TOOL = {4: "iptables", 6: "ip6tables"}
 CRON = "/etc/cron.d/txnet-cloudflare-firewall"
 
 
@@ -84,36 +85,6 @@ def jump_rules(iface):
     return rules
 
 
-def our_positions(listing):
-    """The 1-based numbers of the rules in `iptables -S <chain>` that jump to CHAIN."""
-    rules = [line.split() for line in listing.splitlines() if line.startswith("-A ")]
-    return [n for n, rule in enumerate(rules, 1) if rule[-2:] == ["-j", CHAIN]]
-
-
-def hook(tool, chain, jumps):
-    """Put `jumps` ahead of every other rule in `chain`. A rule above ours
-    decides first, and Docker and k3s both insert theirs at the top. Fresh
-    copies go on top before the stale ones are deleted, by number, so the
-    chain is never unhooked in between; re-running adds no second jump."""
-    def positions():
-        return our_positions(run(tool, "-S", chain).stdout)
-    on_top = positions() == list(range(1, len(jumps) + 1))
-    if on_top and all(run(tool, "-C", chain, *args, check=False).returncode == 0 for args in jumps):
-        return
-    for args in reversed(jumps):
-        run(tool, "-I", chain, "1", *args)
-    for number in reversed(positions()[len(jumps):]):
-        run(tool, "-D", chain, str(number))
-
-
-def public_iface():
-    if os.environ.get("EDGE_PUBLIC_IFACE"):
-        return os.environ["EDGE_PUBLIC_IFACE"]
-    out = subprocess.run(["ip", "route", "get", "1.1.1.1"], capture_output=True, text=True, check=True).stdout
-    words = out.split()
-    return words[words.index("dev") + 1]
-
-
 def current_ranges():
     """Fresh from Cloudflare, else the last good list, else refuse."""
     try:
@@ -131,30 +102,16 @@ def current_ranges():
             return parse_ranges(f.read())
 
 
-def run(*args, check=True, stdin=None):
-    return subprocess.run(args, input=stdin, text=True, capture_output=True, check=check)
-
-
 def apply(ranges, iface):
     for family, tool in TOOL.items():
         run(f"{tool}-restore", "--noflush", stdin=restore_payload(ranges[family], iface))
-        # Docker creates DOCKER-USER; a k3s host has none, and on a Docker host
-        # where it has not started yet the rule waits for the next run.
-        for chain in dict.fromkeys(c for c, _ in jump_rules(iface)):
-            if run(tool, "-n", "-L", chain, check=False).returncode != 0:
-                print(f"{tool}: no {chain} chain", file=sys.stderr)
-                continue
-            hook(tool, chain, [args for c, args in jump_rules(iface) if c == chain])
+        hook_all(tool, jump_rules(iface), CHAIN)
         print(f"{tool}: {len(ranges[family])} Cloudflare ranges admitted on {iface}:80,443")
 
 
 def remove(iface):
     for tool in TOOL.values():
-        for chain, args in jump_rules(iface):
-            while run(tool, "-D", chain, *args, check=False).returncode == 0:
-                pass
-        run(tool, "-F", CHAIN, check=False)
-        run(tool, "-X", CHAIN, check=False)
+        unhook(tool, jump_rules(iface), CHAIN)
 
 
 def install():

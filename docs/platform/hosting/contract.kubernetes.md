@@ -187,10 +187,19 @@ and queued messages and `pg-backup.sh drill` passing in `main-db`'s, a bundle re
 (OPS-1-o-k). The cluster that passes is the one OPS-1-p cuts over to; `down`
 removes k3s and brings compose back, only when the rehearsal is abandoned.
 
-**K13 — k3s's own ports.** The API server (6443), the kubelet (10250) and
-flannel (8472/udp) answer from localhost and the node only, never the public
-address; only 80/443 are reached from outside, through O7 (K9). In place
-before k3s is installed (OPS-1-o-l).
+**K13 — k3s's own ports.** The API server (6443), the kubelet (10250),
+kube-proxy's health (10256), flannel (8472/udp) and every NodePort
+(30000–32767, which a LoadBalancer Service also gets) answer from localhost and
+the node only, never the public address; only 80/443 are reached from outside,
+through O7 (K9). `scripts/edge/k3s_ports.py apply` drops them on the public
+interface in chain `TXNET-K3S` (INPUT; FORWARD by `--ctorigdstport` for a
+NodePort), jumps kept on top as O7's are — another `TXNET-*` chain's jumps are
+not fought over. `install` runs it before `k3s.service` at boot and every 5
+minutes; in place before k3s is installed (OPS-1-o-l). Proven 2026-10-24 in empty
+network namespaces: from outside each port timed out and a NodePort DNATed to a
+stand-in pod too, while 9090 DNATed and 9999 still answered; the node reached
+6443/8472 on localhost and its public address; an `ACCEPT` above ours held
+until the next `apply`; `remove` reopened them. Tests: `test_k3s_ports.py`.
 
 **K14 — The node pulls; it does not build.** `/etc/rancher/k3s/registries.yaml`
 names `${LOCAL_DOCKER_REGISTRY}` with a pull-only login, kept where OPS-1-o-j

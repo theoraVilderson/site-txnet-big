@@ -140,7 +140,8 @@ apply` reads `https://api.cloudflare.com/client/v4/ips` and writes chain
 k3s's servicelb through `FORWARD`, Docker's through `DOCKER-USER`; a chain the
 host lacks is skipped). All match only the public interface
 (`EDGE_PUBLIC_IFACE`, default the default route's), so bridges and the tailnet
-are never filtered. Every run puts the jumps ahead of the chain's other rules —
+are never filtered. Every run puts the jumps ahead of the chain's other rules
+(K13's `TXNET-K3S` jumps aside: disjoint ports, `scripts/edge/edge_chain.py`) —
 a rule above ours (k3s's, Docker's) decides first — copying before deleting, so
 the chain is never unhooked; re-running adds no second jump. `remove` undoes it,
 and `print` shows the rules without changing anything.
