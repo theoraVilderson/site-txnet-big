@@ -92,6 +92,12 @@ in_registry() {
   docker manifest inspect "$1" >/dev/null 2>&1
 }
 
+# The same holds for a tag this host already has: an interrupted build, run
+# again, builds only what it had not reached.
+built_here() {
+  docker image inspect "$1" >/dev/null 2>&1
+}
+
 # A tag fingerprints HEAD's source: built from uncommitted files, an image would
 # carry a tag that names something else.
 require_clean() {
@@ -105,8 +111,8 @@ build() {
   require_build_host
   require_clean
   while IFS=$'\t' read -r service local_image remote; do
-    if in_registry "$remote" </dev/null; then
-      echo "== in registry $service ($remote)"
+    if in_registry "$remote" </dev/null || built_here "$remote" </dev/null; then
+      echo "== built already: $service ($remote)"
       continue
     fi
     echo "== build $service -> $remote"

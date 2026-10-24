@@ -326,7 +326,7 @@ class ScriptTest(unittest.TestCase):
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
                       f"k3s() {{ printf '%s' '{taints}'; }}\n"
-                      "require_clean() { :; }\ncompose() { :; }\ndocker() { [ \"$1\" != manifest ]; }\nbuild")
+                      "require_clean() { :; }\ncompose() { :; }\ndocker() { [ \"$1\" != manifest ] && [ \"$1\" != image ]; }\nbuild")
             return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                   env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
 
@@ -355,13 +355,26 @@ class ScriptTest(unittest.TestCase):
                   "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:old\\n'; }\n"
                   "require_registry() { :; }\ncompose() { echo \"compose $*\"; }\n"
                   'docker() { case "$1 $2 ${3:-}" in "manifest inspect reg.example/txnet/web:old") return 0 ;;'
-                  ' "manifest inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
+                  ' "manifest inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
         run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("compose build api", run.stdout)
         self.assertIn("docker push reg.example/txnet/api:new", run.stdout)
         self.assertNotIn("compose build web", run.stdout)
         self.assertNotIn("docker push reg.example/txnet/web:old", run.stdout)
+
+    # A tag already built here is that source too: an interrupted build, run
+    # again, builds only what it had not reached.
+    def test_an_image_built_here_is_not_built_again(self):
+        script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
+                  "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:here\\n'; }\n"
+                  "compose() { echo \"compose $*\"; }\n"
+                  'docker() { case "$1 $2 ${3:-}" in "image inspect reg.example/txnet/web:here") return 0 ;;'
+                  ' "manifest inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild')
+        run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("compose build api", run.stdout)
+        self.assertNotIn("compose build web", run.stdout)
 
     def run_with_registry(self, command, status):
         """`command` with the registry's /v2/ answering `status` and docker recorded, not run."""

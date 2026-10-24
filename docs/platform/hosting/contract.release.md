@@ -61,8 +61,8 @@ for any other image what its Dockerfile `COPY`/`ADD`s, or the whole context
 for `.`, a variable or a glob. Plus the Dockerfile, extra contexts and the
 stage. Build args are left out: they name a mirror or a proxy and differ
 between hosts. So a seed change rebuilds db-migrate alone, a billing change
-billing alone, a `shared-core` or lockfile change every app. `build` and `push`
-skip a tag `docker manifest inspect` finds in the registry, and `build` refuses
+billing alone, a `shared-core` or lockfile change every app. `build` skips a tag
+the registry or this host holds, `push` one the registry holds, and `build` refuses
 a checkout `git status` shows changed. The release is still the commit (R5): a
 rollback renders an older commit with its own renderer, so a release made
 before R12 comes back on its commit tags.
