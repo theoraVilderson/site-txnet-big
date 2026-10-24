@@ -220,11 +220,8 @@ and pushed; it pulls with a sealed pull-only login. Rules R1–R4 in `contract.r
 
 ## Surviving and growing (ADR-0164)
 
-**K15 — Backups off the node.** pgBackRest gains `repo2` on S3 beside the host
-path: WAL is archived to both, a full and diffs to both (H3's schedule). The
-bucket has object lock in compliance mode for 30 days (user, 2026-10-24), so a key
-that can list and expire still cannot destroy what is locked (OPS-1-o-o). The
-bundle (B6, B7) is unchanged and remains the restore of everything else.
+**K15 — Backups off the node.** pgBackRest's `repo2` on S3 under a 30-day object
+lock, beside the host path. Rules in `contract.backup.md` (OPS-1-o-o).
 
 **K16 — A release is one unit.** Smoke-checked after `deploy`, and set back
 whole, never `db-migrate`. Rules R5–R9 in `contract.release.md` (OPS-1-o-p).

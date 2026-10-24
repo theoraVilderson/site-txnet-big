@@ -27,8 +27,7 @@ Kubernetes rollout starts the new pod before stopping the old (ADR-0147).
 `archive_timeout=60`, `wal_level=replica`. The data volume is unchanged.
 
 **H2 — pgBackRest config.** Stanza `txnet`; `pg1-path=/var/lib/postgresql/18/docker`;
-`pg1-socket-path=/var/run/postgresql`; `repo1-retention-full=2`;
-`compress-type=zst`; `process-max=2`; `start-fast=y`;
+`pg1-socket-path=/var/run/postgresql`; `repo1-retention-full=2`; `compress-type=zst`; `process-max=2`; `start-fast=y`;
 `repo1-cipher-type=aes-256-cbc` with the passphrase from secret file
 `dev-docker/secrets/pg-backup-passphrase` (listed in `secrets/README.md`).
 Repository by env, read by the entrypoint: `PG_BACKUP_REPO_TYPE` = `posix`
@@ -36,7 +35,8 @@ Repository by env, read by the entrypoint: `PG_BACKUP_REPO_TYPE` = `posix`
 (default `/var/backups/txnet/pg`, a host bind like ADR-0120); `s3` uses
 `PG_BACKUP_S3_ENDPOINT/BUCKET/REGION/KEY/SECRET`; `sftp` uses
 `PG_BACKUP_SFTP_HOST/USER/PATH` + key file secret. `pg_hba`/roles unchanged:
-pgBackRest connects over the local socket as `${MAIN_DB_USERNAME}`.
+pgBackRest connects over the local socket as `${MAIN_DB_USERNAME}`. A second
+repository on S3 beside any of these: K15 (`contract.backup.md`, OPS-1-o-o).
 
 **H3 — `pg-backup` container.** Same image as H1, `entrypoint` a shell loop
 (`dev-docker/postgres/pg-backup.sh`, the shape of `object-backup.sh`). Mounts:

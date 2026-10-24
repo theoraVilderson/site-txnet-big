@@ -1,15 +1,17 @@
 ---
 id: runbook-restore-database
 status: active
-updated: 2026-10-14
+updated: 2026-10-24
 ---
 
 # Runbook — restore the database
 
 Postgres (`main-db`) archives every WAL segment with pgBackRest into one
 repository (hosting `contract.md` H1–H4, ADR-0126): a full backup every Sunday,
-a differential every other night, two fulls kept. This restores it whole, to a
-moment in time, or onto a new server.
+a differential every other night, two fulls kept. In production a second
+repository, `repo2` on S3 under a 30-day object lock, gets the same
+(`contract.backup.md` K15). This restores it whole, to a moment in time, onto a
+new server, or from S3 when this server's disk is gone.
 
 **Rehearse on dev first.** Every command below works unchanged with
 `COMPOSE=scripts/dev.compose.sh`; a restore you have not run once is not one
@@ -123,6 +125,50 @@ Paused, it answers read-only queries: look at the rows that matter. Then:
    not needed, the new volume is empty. In step 4, `$COMPOSE up -d` in place
    of `start`: nothing exists yet to start.
 
+### 3d. From S3 (repo2) — this server's repository is gone or damaged
+
+pgBackRest restores from the first repository that holds a backup; name repo2
+to take it from S3. Every step of 3a/3b/3c is the same, with `--repo=2`:
+
+```bash
+$COMPOSE run --rm --no-deps --entrypoint sh main-db -c \
+  'sh /usr/local/bin/pgbackrest-repo.sh && gosu postgres pgbackrest --stanza=txnet --repo=2 info'
+$COMPOSE run --rm --no-deps --entrypoint sh main-db -c \
+  'sh /usr/local/bin/pgbackrest-repo.sh && install -d -o postgres -g postgres -m 700 /var/lib/postgresql/18/docker \
+   && gosu postgres pgbackrest --stanza=txnet --repo=2 restore'
+```
+
+The restore writes `--repo=2` into `restore_command`, so the WAL replays from S3
+too. To prove the S3 copy reads without touching anything:
+`$COMPOSE exec pg-backup sh /usr/local/bin/pg-backup.sh drill 2`.
+
+**`info` shows fewer backups than it should** — someone, or an expire, deleted
+them inside the lock: each object is hidden behind a delete marker, not gone.
+List the markers and remove them (S3's CLI, the bucket's own key):
+
+```bash
+aws s3api list-object-versions --bucket <bucket> --prefix txnet/ \
+  --query 'DeleteMarkers[].[Key,VersionId]' --output text   # add --endpoint-url for a non-AWS store
+aws s3api delete-object --bucket <bucket> --key <Key> --version-id <VersionId>   # per marker
+```
+
+A locked version itself cannot be deleted by anyone until its lock lapses.
+
+**Setting up the bucket** (once, OPS-1-p names it): create it with object lock
+(which turns versioning on), set the default retention, and a lifecycle rule
+so what expire deletes is removed a day later instead of kept forever:
+
+```bash
+aws s3api create-bucket --bucket <bucket> --object-lock-enabled-for-bucket
+aws s3api put-object-lock-configuration --bucket <bucket> --object-lock-configuration \
+  '{"ObjectLockEnabled":"Enabled","Rule":{"DefaultRetention":{"Mode":"COMPLIANCE","Days":30}}}'
+aws s3api put-bucket-lifecycle-configuration --bucket <bucket> --lifecycle-configuration \
+  '{"Rules":[{"ID":"expired","Status":"Enabled","Filter":{},"NoncurrentVersionExpiration":{"NoncurrentDays":1},"Expiration":{"ExpiredObjectDeleteMarker":true}}]}'
+```
+
+Then the five `PG_BACKUP_REPO2_S3_*` in `.env.prod` (sealed, S1) and a restart
+of `main-db` and `pg-backup`: the loop's start makes repo2's first full.
+
 ### 4. Bring everything back and back it up
 
 ```bash
@@ -146,6 +192,9 @@ $COMPOSE exec main-db sh -c 'rm -rf /var/lib/postgresql/18/docker.before-restore
 - A restore reaches back to the oldest of the two fulls kept, at most ~2 weeks.
 - `PgArchiveFailing` while data was lost means the restore ends at the last
   archived segment, not at the moment of the loss.
+- With repo2, an S3 outage longer than 8 GiB of WAL drops segments rather than
+  fill the disk (K15): a point-in-time restore cannot land inside that gap; one
+  after the next backup can.
 - The weekly drill (`pg-backup.sh drill`, H4) restores the newest backup into a
   scratch directory; it proves the backups read, not this runbook's steps.
 
@@ -154,4 +203,8 @@ $COMPOSE exec main-db sh -c 'rm -rf /var/lib/postgresql/18/docker.before-restore
 `hosting` (`docs/platform/hosting/`). Rehearsed on dev 2026-10-14: steps 1, 2,
 3a and 4 on dev's own `main-db` (row counts and newest rows identical after);
 3b to `2026-10-14 12:58:34+00` and 3c from a copy of the repository into fresh
-volumes, the target checked against marker rows before and after it.
+volumes, the target checked against marker rows before and after it. 3d's
+pgBackRest commands ran against a throwaway MinIO with a 30-day compliance lock,
+2026-10-24, inside a scratch Postgres rather than through `$COMPOSE`, and its
+markers were removed with MinIO's `mc`; the `aws s3api` lines are not yet run
+anywhere — OPS-1-p runs them on the chosen store.

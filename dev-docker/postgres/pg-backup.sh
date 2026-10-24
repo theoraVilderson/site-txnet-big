@@ -10,9 +10,12 @@
 # only, and reaches main-db over the shared socket volume. The loop stays root
 # only to write the textfile directory it shares with object-backup.
 #
-# First start: stanza-create if missing, then a full at once when the
-# repository holds no backup. A manual run:
-#   docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh full|diff|drill
+# Every run backs up each repository: repo1, and repo2 on S3 when its bucket is
+# set (K15, OPS-1-o-o); the run's metric is 1 only when every one succeeded.
+#
+# First start: stanza-create if missing, then a full at once in each repository
+# that holds no backup. A manual run:
+#   docker exec txnet-pg-backup sh /usr/local/bin/pg-backup.sh full|diff|drill [repo]
 #
 # The restore drill (OPS-1-c, H4), Sunday at PG_RESTORE_DRILL_AT (06:00 UTC):
 # restore the latest backup to /drill, start a throwaway Postgres on it, read
@@ -45,6 +48,9 @@ log() { echo "$(date -u +%FT%TZ) pg-backup: $*"; }
 
 pgbr() { gosu postgres pgbackrest --stanza=txnet "$@"; }
 
+# pgbackrest-repo.sh writes repo2 exactly when this is set.
+repos() { echo 1; [ -z "${PG_BACKUP_REPO2_S3_BUCKET:-}" ] || echo 2; }
+
 # The container check (compose/health.yml loop-health, hosting H24): every pass
 # of the loop beats, and a run marks itself busy, so a long run is not a hung loop.
 beat() { touch /tmp/healthy; }
@@ -73,29 +79,39 @@ record() {
   } > "$tmp" && mv "$tmp" "$METRICS" || log "could not write $METRICS"
 }
 
-run() {
-  type=$1
-  log "starting $type"
-  if pgbr --type="$type" backup; then
-    record 1 "$type"
-    log "$type done"
+backup_in() {
+  log "starting $2 in repo$1"
+  if pgbr --repo="$1" --type="$2" backup; then
+    log "$2 in repo$1 done"
   else
-    record 0 "$type"
-    log "$type FAILED"
+    log "$2 in repo$1 FAILED"
     return 1
   fi
+}
+
+# type [repo...]: each named repository, or every one; one metric for the run,
+# so an S3 that refuses the backup is a failed run the alert sees (H5).
+run() {
+  type=$1
+  shift
+  ok=1
+  for repo in ${*:-$(repos)}; do
+    backup_in "$repo" "$type" || ok=0
+  done
+  record "$ok" "$type"
+  [ "$ok" = 1 ]
 }
 
 todays_type() {
   if [ "$(date -u +%u)" = "$FULL_WEEKDAY" ]; then echo full; else echo diff; fi
 }
 
-has_backup() { pgbr info --output=json 2>/dev/null | grep -q '"label"'; }
+has_backup() { pgbr --repo="$1" info --output=json 2>/dev/null | grep -q '"label"'; }
 
 # Backups are listed oldest first; lsn's "stop" is a quoted string, so only
 # the timestamp's number matches.
 latest_backup_stop() {
-  pgbr info --output=json | grep -o '"stop":[0-9]*' | tail -1 | cut -d: -f2
+  pgbr --repo="$DRILL_REPO" info --output=json | grep -o '"stop":[0-9]*' | tail -1 | cut -d: -f2
 }
 
 record_drill() {
@@ -154,7 +170,7 @@ drill_check() {
   stop=$(latest_backup_stop)
   [ -n "$stop" ] || { log "drill: no backup to restore"; return 1; }
   mkdir -p "$DRILL_DIR" "$DRILL_SOCKET" && chown postgres:postgres "$DRILL_DIR" "$DRILL_SOCKET" && chmod 700 "$DRILL_DIR" || return 1
-  pgbr --pg1-path="$DRILL_DIR" restore || return 1
+  pgbr --repo="$DRILL_REPO" --pg1-path="$DRILL_DIR" restore || return 1
   gosu postgres pg_ctl -D "$DRILL_DIR" -l "$DRILL_DIR/drill.log" -t "$DRILL_READY_TIMEOUT_S" -w start \
     -o "-p $DRILL_PORT -k $DRILL_SOCKET -c listen_addresses='' -c archive_mode=off" || { tail -20 "$DRILL_DIR/drill.log"; return 1; }
   # The restore must hold every ledger row live main-db had when the backup
@@ -169,7 +185,7 @@ drill_check() {
 }
 
 drill() {
-  log "starting drill"
+  log "starting drill from repo$DRILL_REPO"
   drill_cleanup
   if drill_check; then
     record_drill 1
@@ -191,12 +207,14 @@ case "${1:-}" in
     exit $?
     ;;
   drill)
+    # repo1 on schedule; `drill 2` proves the S3 copy restores too (runbook)
+    DRILL_REPO="${2:-1}"
     drill
     exit $?
     ;;
   "") ;;
   *)
-    echo "usage: pg-backup.sh [full|diff|drill]" >&2
+    echo "usage: pg-backup.sh [full|diff|drill [repo]]" >&2
     exit 2
     ;;
 esac
@@ -210,7 +228,9 @@ until pgbr stanza-create; do
   sleep 60
   beat
 done
-has_backup || busy run full
+# a repository added later (repo2, OPS-1-o-o) gets its first full now, not on Sunday
+empty=$(for repo in $(repos); do has_backup "$repo" || echo "$repo"; done)
+[ -z "$empty" ] || busy run full $empty
 
 last_day=""
 last_drill_day=""
@@ -224,6 +244,7 @@ while true; do
   if [ "$(date -u +%u)" = "$FULL_WEEKDAY" ] && [ "$(date -u +%H:%M)" = "$DRILL_AT" ] \
     && [ "$(date -u +%F)" != "$last_drill_day" ]; then
     last_drill_day=$(date -u +%F)
+    DRILL_REPO=1
     busy drill
   fi
   sleep 30

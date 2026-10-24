@@ -35,6 +35,14 @@ services:
       - PG_BACKUP_SFTP_HOST=${PG_BACKUP_SFTP_HOST:-}
       - PG_BACKUP_SFTP_USER=${PG_BACKUP_SFTP_USER:-}
       - PG_BACKUP_SFTP_PATH=${PG_BACKUP_SFTP_PATH:-}
+      # repo2 on S3 beside repo1 when the bucket is set (hosting K15, OPS-1-o-o)
+      - PG_BACKUP_REPO2_S3_ENDPOINT=${PG_BACKUP_REPO2_S3_ENDPOINT:-}
+      - PG_BACKUP_REPO2_S3_BUCKET=${PG_BACKUP_REPO2_S3_BUCKET:-}
+      - PG_BACKUP_REPO2_S3_REGION=${PG_BACKUP_REPO2_S3_REGION:-}
+      - PG_BACKUP_REPO2_S3_KEY=${PG_BACKUP_REPO2_S3_KEY:-}
+      - PG_BACKUP_REPO2_S3_SECRET=${PG_BACKUP_REPO2_S3_SECRET:-}
+      - PG_BACKUP_REPO2_S3_URI_STYLE=${PG_BACKUP_REPO2_S3_URI_STYLE:-host}
+      - PG_BACKUP_REPO2_LOCK_DAYS=${PG_BACKUP_REPO2_LOCK_DAYS:-30}
     volumes:
       - postgres_data:/var/lib/postgresql:ro
       - pg_socket:/var/run/postgresql
