@@ -379,6 +379,20 @@ class RepoModelTest(unittest.TestCase):
         startup = db["spec"]["template"]["spec"]["containers"][0]["startupProbe"]
         self.assertGreaterEqual(startup["periodSeconds"] * startup["failureThreshold"], MAIN_DB_RECOVERY_S)
 
+    # K6 (OPS-1-o-f): a pod Traefik routes to keeps serving until Traefik has
+    # dropped it. Without the pause, rolling billing-service under load answered
+    # 4 of 10060 requests 502 on the test server: SIGTERM beat the endpoint update.
+    def test_a_routed_pod_drains_before_it_stops(self):
+        routed = {s["name"] for o in self.objects if o["kind"] == "IngressRoute"
+                  for r in o["spec"]["routes"] for s in r.get("services", [])}
+        pods = {o["metadata"]["name"]: o["spec"]["template"]["spec"] for o in self.objects
+                if o["kind"] == "Deployment" and o["metadata"]["name"] in routed}
+        self.assertIn("billing-service", pods)
+        for name, pod in pods.items():
+            drain = pod["containers"][0].get("lifecycle", {}).get("preStop", {}).get("sleep", {}).get("seconds", 0)
+            self.assertGreater(drain, 0, name)
+            self.assertGreater(pod["terminationGracePeriodSeconds"], drain, name)
+
     # K5 (OPS-1-o-i): a value that is a Secret in one pod is written in no pod
     # spec — memory-data's password reached its args and probe from compose.
     def test_no_secret_value_in_a_pod_spec(self):

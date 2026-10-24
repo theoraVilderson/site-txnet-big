@@ -20,6 +20,9 @@ __all__ = ["RenderError", "exposed_ports", "render"]
 PART_OF = {"app.kubernetes.io/part-of": "txnet"}
 # K3: compose's stop grace when a service names none.
 _DEFAULT_GRACE_S = 10
+# K6: how long a routed pod keeps serving after it is told to stop, so Traefik
+# drops its endpoint first; at 0 a roll under load answered 502s (OPS-1-o-f).
+_ROUTED_DRAIN_S = 5
 # K8: a Job is applied on its own, before the base (K10), so it is written beside it.
 JOBS_DIR = "jobs"
 # K8: a run-once Job's limits. A failed migration is read, not retried (C-39);
@@ -107,6 +110,11 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
         grace = max(grace, seconds(service.get("stop_grace_period"), _DEFAULT_GRACE_S))
     service = services[name]
     labels = {"app.kubernetes.io/name": name, **_pod_labels(members, services)}
+    routing = edge_objects(name, stack.traefik[name], stack.backends)
+    if routing and not _runs_once(service):
+        # The pause counts against the grace period, so the app keeps its own.
+        containers[0]["lifecycle"] = {"preStop": {"sleep": {"seconds": _ROUTED_DRAIN_S}}}
+        grace += _ROUTED_DRAIN_S
     pod = {"terminationGracePeriodSeconds": grace, "containers": containers}
     if mounts.volumes:
         pod["volumes"] = sorted(mounts.volumes.values(), key=lambda v: v["name"])
@@ -123,7 +131,6 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
     if name not in DAEMONSETS and (name == TRAEFIK or holds_node_state(mounts.volumes.values())):
         pod["nodeSelector"] = dict([DATA_NODE_LABEL])
     template = {"metadata": {"labels": labels}, "spec": pod}
-    routing = edge_objects(name, stack.traefik[name], stack.backends)
     workload = _job(name, template) if _runs_once(service) else _workload(name, template)
     services = _services(name, service, stack.traefik[name], stack.options.get("publish", True))
     return [workload, *services, *routing, *secrets], mounts.objects

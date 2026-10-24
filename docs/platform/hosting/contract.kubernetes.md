@@ -92,7 +92,8 @@ With no start period both wait `initialDelaySeconds = interval`, as Docker's
 first check does: a probe at t=0 wrote RabbitMQ's Erlang cookie into its empty
 claim as root before the server could (OPS-1-o-i). Every container has one (H15, H24). A sidecar (`pg-backup`) gets
 liveness and startup probes but no readiness probe, so its failure never takes
-the pod out of its Service.
+the pod out of its Service. A pod an IngressRoute reaches sleeps 5s in `preStop`
+(grace +5s), so Traefik drops it before SIGTERM: without, a roll answered 502s (OPS-1-o-f).
 
 **K7 — Volumes.**
 - A named volume is one PersistentVolumeClaim of the same name
