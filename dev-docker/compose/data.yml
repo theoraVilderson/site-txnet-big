@@ -123,6 +123,13 @@ services:
     # The port other services call; Kubernetes makes its Service from it (hosting K4).
     expose: ["${SMTP_PORT:-1025}"]
     restart: unless-stopped
+    # mailpit's own readiness command (hosting H24).
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     networks:
       - private_backend_network
     labels:

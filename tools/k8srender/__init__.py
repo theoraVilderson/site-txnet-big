@@ -72,7 +72,8 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
         secret = environment_secret(member, service)
         secrets += [secret] if secret else []
         image = image_for(member, service, stack.builders, stack.options)
-        containers.append(container(member, service, image, secret, mounts.for_service(member, service)))
+        containers.append(container(member, service, image, secret, mounts.for_service(member, service),
+                                    sidecar=member != name))
         grace = max(grace, seconds(service.get("stop_grace_period"), _DEFAULT_GRACE_S))
     service = services[name]
     labels = {"app.kubernetes.io/name": name, **_pod_labels(members, services)}

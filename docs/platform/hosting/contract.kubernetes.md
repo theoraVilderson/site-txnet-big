@@ -83,8 +83,9 @@ beside the bundle's passphrase; k3s stores Secrets encrypted
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`
 with compose's interval, timeout and retries; a `startupProbe` with
 `failureThreshold = ceil(start_period / interval)` holds both off for the start
-period. A service with no healthcheck (OPS-1-aa's list) gets none, and its
-rollout is not gated on health until that row lands.
+period. Every container has one (H15, H24). A sidecar (`pg-backup`) gets
+liveness and startup probes but no readiness probe, so its failure never takes
+the pod out of its Service.
 
 **K7 — Volumes.**
 - A named volume is one PersistentVolumeClaim of the same name

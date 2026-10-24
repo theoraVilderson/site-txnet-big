@@ -25,23 +25,23 @@ business unit (`billing.rules.yml`, …), what a service does once it is up.
 | [contract.md](contract.md) | building any OPS-1 row — rules H1…H23 are the spec |
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose (OPS-1-o-a … -g) — rules K1…K12 |
+| [contract.health.md](contract.health.md) | a healthcheck on a container that is not a Nest app: auth-handler, Traefik, the Next apps, guide-media, mailpit, the backup loops (OPS-1-aa) — rule H24 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped write-only to S3, restored here or elsewhere (OPS-1-ad) — rules B1…B9 |
 | [open-questions.md](open-questions.md) | production's starting data (OPS-1-p) and the standby server (OPS-1-y) |
 
 ## Status
 
-`active` since 2026-10-14 (OPS-1-ab). Opened 2026-10-06 by ADR-0126 (D-62). Built: EDGE-1-g, -h, -j, -k,
--m (`contract.origin.md`); OPS-1-k, -l, -z (H12/H13, `shared-core/src/lib/logging`
-in every Nest service, the gate, the queue); OPS-1-a (H1/H2, WAL archived,
-`pgbackrest-repo.sh` → `conf.d/repo.conf`); -b (H3, `compose/pg-backup.yml`,
-shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f
-(H10, `main-db` `command:`, sizing in `operations/environments.md`); -d (H5,
-`database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed);
--g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs);
--i (H8, every pooled URL on `db-pool`, 5 `LISTEN`s direct; 15 of 100 on dev);
--j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days, loopback);
--v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a server move, `runbook-move-server.md`). -ad (B1–B9, `scripts/bundle/`, two systemd timers).
--o-a (K2-K7, `tools/k8srender/`: 80 objects, kubeconform-strict clean). `k8s/**` and `scripts/{prod.k8s,k8s-rehearse}.sh` join `source:` as their rows land.
+`active` since 2026-10-14 (OPS-1-ab). Opened 2026-10-06 by ADR-0126 (D-62). Built: EDGE-1-g, -h, -j, -k, -m
+(`contract.origin.md`); OPS-1-k, -l, -z (H12/H13, `shared-core/src/lib/logging` in every Nest service, the gate, the
+queue); OPS-1-a (H1/H2, WAL archived, `pgbackrest-repo.sh` → `conf.d/repo.conf`); -b (H3, `compose/pg-backup.yml`,
+shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f (H10, `main-db` `command:`, sizing in
+`operations/environments.md`); -d (H5, `database.rules.yml` + `promtool` tests); -e (H6, restore runbook, rehearsed);
+-g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5
+`LISTEN`s direct; 15 of 100 on dev); -j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days,
+loopback); -v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a
+server move, `runbook-move-server.md`). -ad (B1–B9, `scripts/bundle/`, two systemd timers). -o-a (K2-K7,
+`tools/k8srender/`: 80 objects, kubeconform-strict clean). -aa (H24, `contract.health.md`). `k8s/**` and
+`scripts/{prod.k8s,k8s-rehearse}.sh` join `source:` as their rows land.
 
 ## Changelog
 | Date | Change |

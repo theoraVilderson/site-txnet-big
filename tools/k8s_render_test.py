@@ -15,6 +15,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, render  # noqa: E402
 
@@ -45,6 +47,8 @@ def model(repo: Path) -> dict:
             "pg-backup": {
                 "image": "txnet/postgres:18",
                 "environment": {"PGBACKREST_STANZA": "txnet"},
+                "healthcheck": {"test": ["CMD-SHELL", "test -f /tmp/healthy"], "interval": "30s",
+                                "timeout": "3s", "retries": 3, "start_period": "60s"},
                 "volumes": [
                     {"type": "volume", "source": "pg_socket", "target": "/var/run/postgresql"},
                     {"type": "bind", "source": str(repo / "dev-docker/secrets/pg-backup-passphrase"),
@@ -125,6 +129,15 @@ class RenderTest(unittest.TestCase):
         broken["services"]["billing-service"]["environment"]["DATABASE_URL"] = "postgresql://main-db:6000/db"
         with self.assertRaisesRegex(RenderError, "billing-service.*main-db:6000"):
             self.run_render(broken)
+
+    # K6: a sidecar's failing check restarts it; it never takes the pod out of its Service.
+    def test_a_sidecar_is_restarted_never_taken_out_of_service(self):
+        _, objs = self.run_render()
+        db, backup = by_kind(objs, "StatefulSet", "main-db")["spec"]["template"]["spec"]["containers"]
+        self.assertIn("readinessProbe", db)
+        self.assertNotIn("readinessProbe", backup)
+        self.assertEqual(backup["livenessProbe"]["exec"]["command"], ["sh", "-c", "test -f /tmp/healthy"])
+        self.assertEqual(backup["startupProbe"]["failureThreshold"], 2)
 
     # K5: the environment is one Secret per service; command `$(` is escaped.
     def test_environment_secret_and_escaping(self):
@@ -223,12 +236,24 @@ REPO = Path(__file__).resolve().parent.parent
 @unittest.skipUnless(shutil.which("docker") and (REPO / ".env").exists() and (REPO / ".env.prod").exists(),
                      "needs docker compose and the repo's .env / .env.prod")
 class RepoModelTest(unittest.TestCase):
-    def test_the_production_model_renders(self):
+    @classmethod
+    def setUpClass(cls):
         with tempfile.TemporaryDirectory() as out:
-            result = subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), f"{out}/base",
-                                     "--host-gateway", "10.0.0.5", "--tag", "t1"],
-                                    capture_output=True, text=True)
-        self.assertEqual(result.returncode, 0, result.stderr)
+            cls.result = subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), f"{out}/base",
+                                         "--host-gateway", "10.0.0.5", "--tag", "t1"],
+                                        capture_output=True, text=True)
+            cls.objects = [o for f in Path(out, "base").glob("*.yaml") for o in yaml.safe_load_all(f.read_text())
+                           if o] if cls.result.returncode == 0 else []
+
+    def test_the_production_model_renders(self):
+        self.assertEqual(self.result.returncode, 0, self.result.stderr)
+
+    # H15, H24 (OPS-1-aa): every container is checked, so every rollout waits on health (K6).
+    def test_every_container_is_probed(self):
+        unprobed = [c["name"] for o in self.objects if o["kind"] in ("Deployment", "StatefulSet")
+                    for c in o["spec"]["template"]["spec"]["containers"] if "livenessProbe" not in c]
+        self.assertTrue(self.objects)
+        self.assertEqual(unprobed, [])
 
 
 if __name__ == "__main__":

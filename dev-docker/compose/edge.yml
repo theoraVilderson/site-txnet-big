@@ -44,6 +44,15 @@ services:
       # bots, see traefik/dynamic/barghgo-bots.yml).
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
+      # /ping on the internal `traefik` entrypoint (:8080, never published),
+      # which no router joins by default; the check below asks it (hosting H24).
+      - "--ping=true"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
     environment:
       # off | optional | required — read by traefik/dynamic/origin-pull.yml.
       - EDGE_ORIGIN_PULL=${EDGE_ORIGIN_PULL:-off}
@@ -100,6 +109,14 @@ services:
     container_name: ${STACK_NAME:-txnet}-auth-handler
     restart: unless-stopped
     working_dir: /src/auth-handler
+    # /health answers once the server listens, which is after the boot's wait
+    # for translations (LOCALE_BOOT_TIMEOUT, 60s) — hence the start period.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:${GATEWAY_PORT}/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 90s
     volumes:
       - ../auth-handler:/src/auth-handler
       - ../i18n-platform/clients/go:/src/i18n-platform/clients/go:ro

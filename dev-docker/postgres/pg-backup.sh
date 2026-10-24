@@ -45,6 +45,11 @@ log() { echo "$(date -u +%FT%TZ) pg-backup: $*"; }
 
 pgbr() { gosu postgres pgbackrest --stanza=txnet "$@"; }
 
+# The container check (compose/health.yml loop-health, hosting H24): every pass
+# of the loop beats, and a run marks itself busy, so a long run is not a hung loop.
+beat() { touch /tmp/healthy; }
+busy() { touch /tmp/busy; "$@"; rc=$?; rm -f /tmp/busy; beat; return $rc; }
+
 record() {
   ok=$1
   type=$2
@@ -198,25 +203,28 @@ esac
 
 # stanza-create is a no-op on a valid stanza; until it works there is nothing
 # to back up into, and that is a failed run the alert should see.
+beat
 until pgbr stanza-create; do
   record 0 full
   log "stanza-create FAILED, retrying in 60s"
   sleep 60
+  beat
 done
-has_backup || run full
+has_backup || busy run full
 
 last_day=""
 last_drill_day=""
 while true; do
+  beat
   record_data_fs
   if [ "$(date -u +%H:%M)" = "$AT" ] && [ "$(date -u +%F)" != "$last_day" ]; then
     last_day=$(date -u +%F)
-    run "$(todays_type)"
+    busy run "$(todays_type)"
   fi
   if [ "$(date -u +%u)" = "$FULL_WEEKDAY" ] && [ "$(date -u +%H:%M)" = "$DRILL_AT" ] \
     && [ "$(date -u +%F)" != "$last_drill_day" ]; then
     last_drill_day=$(date -u +%F)
-    drill
+    busy drill
   fi
   sleep 30
 done

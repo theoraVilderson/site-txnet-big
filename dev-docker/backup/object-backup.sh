@@ -27,6 +27,11 @@ LAST_OK=$(sed -n 's/^txnet_object_backup_last_success_timestamp_seconds //p' "$M
 
 log() { echo "$(date -u +%FT%TZ) object-backup: $*"; }
 
+# The container check (compose/health.yml loop-health, hosting H24): every pass
+# of the loop beats, and a run marks itself busy, so a long run is not a hung loop.
+beat() { touch /tmp/healthy; }
+busy() { touch /tmp/busy; "$@"; rc=$?; rm -f /tmp/busy; beat; return $rc; }
+
 record() {
   ok=$1
   [ "$ok" = 1 ] && LAST_OK=$(date +%s)
@@ -70,12 +75,14 @@ if [ "${1:-}" = "--now" ]; then
   exit $?
 fi
 
-[ -z "$LAST_OK" ] && run
+beat
+[ -z "$LAST_OK" ] && busy run
 last_day=""
 while true; do
+  beat
   if [ "$(date -u +%H:%M)" = "$AT" ] && [ "$(date -u +%F)" != "$last_day" ]; then
     last_day=$(date -u +%F)
-    run
+    busy run
   fi
   sleep 30
 done

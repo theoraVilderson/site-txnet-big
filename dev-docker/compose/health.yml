@@ -26,3 +26,16 @@ services:
       timeout: 3s
       retries: 3
       start_period: 60s
+
+  # pg-backup and object-backup (hosting H24): the loop touches /tmp/healthy
+  # every 30s pass, and /tmp/busy while a backup or drill runs. A run is not a
+  # hung loop until it is 12h old — half the daily schedule, so a run that
+  # would collide with the next one is the first to fail the check.
+  loop-health:
+    extends: { file: logging.yml, service: rotated-logs }
+    healthcheck:
+      test: ["CMD-SHELL", "age() { echo $$(( $$(date +%s) - $$(stat -c %Y $$1) )); }; { test -f /tmp/healthy && test $$(age /tmp/healthy) -lt 120; } || { test -f /tmp/busy && test $$(age /tmp/busy) -lt 43200; }"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

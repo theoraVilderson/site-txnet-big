@@ -26,7 +26,8 @@ def environment_secret(name: str, service: dict) -> dict | None:
     return hashed("Secret", f"{dns_name(name)}-env", env) if env else None
 
 
-def container(name: str, service: dict, image: str, env_secret: dict | None, mounts: list) -> dict:
+def container(name: str, service: dict, image: str, env_secret: dict | None, mounts: list, *,
+              sidecar: bool = False) -> dict:
     spec = {"name": dns_name(name), "image": image, "imagePullPolicy": "IfNotPresent"}
     if service.get("entrypoint"):
         spec["command"] = [escape_expansion(a) for a in _argv(service["entrypoint"])]
@@ -39,15 +40,17 @@ def container(name: str, service: dict, image: str, env_secret: dict | None, mou
     limits = _limits(service)
     if limits:
         spec["resources"] = {"limits": limits}
-    spec.update(probes(name, service.get("healthcheck")))
+    spec.update(probes(name, service.get("healthcheck"), sidecar=sidecar))
     if mounts:
         spec["volumeMounts"] = mounts
     return spec
 
 
-def probes(name: str, healthcheck: dict | None) -> dict:
+def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dict:
     """K6: the compose healthcheck as readiness and liveness, with a startup probe
-    holding both off for the start period."""
+    holding both off for the start period. A sidecar gets no readiness: a pod is
+    ready only when every container is, and pg-backup failing must restart the
+    backup, never take main-db out of its Service."""
     if not healthcheck or healthcheck.get("disable"):
         return {}
     test = healthcheck.get("test") or []
@@ -63,7 +66,7 @@ def probes(name: str, healthcheck: dict | None) -> dict:
     base = {"exec": {"command": command}, "periodSeconds": period,
             "timeoutSeconds": seconds(healthcheck.get("timeout"), _HC_TIMEOUT_S),
             "failureThreshold": int(healthcheck.get("retries") or _HC_RETRIES)}
-    out = {"readinessProbe": dict(base), "livenessProbe": dict(base)}
+    out = {"livenessProbe": dict(base)} if sidecar else {"readinessProbe": dict(base), "livenessProbe": dict(base)}
     start = seconds(healthcheck.get("start_period"), 0) if healthcheck.get("start_period") else 0
     if start:
         out["startupProbe"] = {**base, "failureThreshold": math.ceil(start / period)}

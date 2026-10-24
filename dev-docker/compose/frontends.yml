@@ -7,7 +7,8 @@ services:
   # Next.js PWA — Main Frontend Application
   # ===========================================================================
   site-pwa:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    # GET /api/health on PORT, a page built once (hosting H24).
+    extends: { file: compose/health.yml, service: http-health }
     image: ${ENVIRONMENT}_site-pwa_${WEB_APP_VERSION:-latest}
     build:
       target: ${ENVIRONMENT}
@@ -33,6 +34,7 @@ services:
       - DEV_ALLOWED_ORIGINS=${DEV_ALLOWED_ORIGINS:-}
       - ENVIRONMENT=${ENVIRONMENT}
       - PORT=8181
+      - HEALTH_PATH=/api/health
       - HOSTNAME=${DOMAIN_NAME}
       - JWT_SECRET=${JWT_SECRET}
       - REDIS_PORT=${REDIS_PORT:-6379}
@@ -126,7 +128,8 @@ services:
   # Coinsite — Secondary Next.js Frontend
   # ===========================================================================
   coinsite:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    # GET /api/health on PORT, a page built once (hosting H24).
+    extends: { file: compose/health.yml, service: http-health }
     image: ${ENVIRONMENT}_coinsite_${WEB_APP_VERSION:-latest}
     build:
       target: ${ENVIRONMENT}
@@ -143,6 +146,9 @@ services:
       - /app/node_modules # anonymous vol: keep the image's node_modules
     environment:
       - NODE_ENV=${NODE_ENV:-development}
+      # The port Traefik's label below calls, which the check asks too.
+      - PORT=8080
+      - HEALTH_PATH=/api/health
       # The apex domain greets visitors in the deployment's language. coinsite
       # has no locale-service client, so this is the whole of its i18n: `lang`
       # and `dir` on <html> (src/env.ts).

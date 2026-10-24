@@ -11,7 +11,7 @@
 
 services:
   object-backup:
-    extends: { file: compose/logging.yml, service: rotated-logs }
+    extends: { file: compose/health.yml, service: loop-health }
     build:
       context: ./backup
       args:
