@@ -44,8 +44,7 @@ FIXTURE = ROOT / "contracts" / "http" / "wire.json"
 # than named one by one so that renaming a compose file cannot silently
 # disable the gate — if none of them carries the labels at all, that is an
 # error, not a pass.
-SEARCH = ["dev-docker/**/*.yml", "dev-docker/**/*.yaml",
-          "swarm/**/*.yml", "swarm/**/*.yaml"]
+SEARCH = ["dev-docker/**/*.yml", "dev-docker/**/*.yaml"]
 
 PERMISSIONS = ROOT / "auth-handler" / "configs" / "permissions.yaml"
 SEED = ROOT / "txnet-backend" / "prisma" / "seed.js"

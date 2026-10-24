@@ -203,6 +203,8 @@ requests, the three data stores' pods deleted and back with their rows, keys
 and queued messages and `pg-backup.sh drill` passing in `main-db`'s, a bundle restored
 (OPS-1-o-k). The cluster that passes is the one OPS-1-p cuts over to; `down`
 removes k3s and brings compose back, only when the rehearsal is abandoned.
+Passed 2026-10-24 on the test server, all five steps (commit c98bf9e2): roll 0 of
+9537 failed; the drill took 316s for 45 MB, the disk's fsync (open-questions).
 
 **K13 — k3s's own ports.** The API server (6443), the kubelet (10250),
 kube-proxy's health (10256), flannel (8472, 51820–51821/udp) and every NodePort

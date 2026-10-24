@@ -274,9 +274,9 @@ The repo is a polyglot monorepo:
   translation) + one shared Go client and one shared Node client.
 - `locales/` — the translation content `locale-service` serves.
 - `site-pwa/` — Next.js user panel. `coinsite/` — Next.js landing site (skeleton).
-- `dev-docker/`, `swarm/`, `scripts/` — Traefik + Postgres + PgBouncer + Redis +
-  RabbitMQ + monitoring; `docker compose` today, Kubernetes (k3s) rendered from
-  the compose files once OPS-1-o lands (ADR-0147; `swarm/` is deleted then).
+- `dev-docker/`, `k8s/`, `scripts/` — Traefik + Postgres + PgBouncer + Redis +
+  RabbitMQ + monitoring; `docker compose` for dev, Kubernetes (k3s) rendered from
+  the compose files for production (ADR-0147, rehearsed on the test server).
 
 `docs/architecture/overview.md` is the runtime picture. A unit's `status` is
 `MASTER_INDEX.md`'s column, and `docs-check.py` holds it to the INDEX and to
