@@ -43,6 +43,8 @@ PRUNE_KINDS=(core/v1/ConfigMap core/v1/Secret core/v1/Service apps/v1/Deployment
   apps/v1/DaemonSet traefik.io/v1alpha1/IngressRoute traefik.io/v1alpha1/Middleware)
 TRAEFIK_CRDS=(crd/ingressroutes.traefik.io crd/middlewares.traefik.io)
 RELEASE_RECORD=txnet-release # K16: ConfigMap {history, overlay}
+# K17: the node every pod holding a claim or a host path is pinned to (the render's DATA_NODE_LABEL).
+DATA_LABEL=txnet.io/data=true
 ROLLOUT_FAILED=()
 TOOLS_DIR="${TOOLS_DIR:-/usr/local/bin}"
 K3S_ETC="${K3S_ETC:-/etc/rancher/k3s}"
@@ -270,6 +272,13 @@ record_release() { # deploy|rollback <tag> <overlay>
 
 # K16: a release is a commit. The tag names it, and a rollback renders that
 # commit again, so what is deployed must be exactly what was committed.
+# K17: unlabelled, every store waits Pending; mislabelled, a first claim binds
+# on a node it can never leave. So no node with the label, nothing applied.
+require_data_node() {
+  [ -n "$("$KUBECTL" get nodes -l "$DATA_LABEL" -o name)" ] ||
+    die "no node is labelled $DATA_LABEL: label the server node first (K17)"
+}
+
 require_commit() {
   [ "$IMAGE_TAG" = "$(git -C "$ROOT_DIR" rev-parse --short=12 HEAD)" ] ||
     die "IMAGE_TAG $IMAGE_TAG is not HEAD: a release is the commit checked out (K16)"
@@ -297,6 +306,7 @@ go_back() {
 deploy() {
   local overlay="${1:-prod}" from reason
   require_commit
+  require_data_node
   # shellcheck disable=SC2046
   from="$(python3 "$ROOT_DIR/tools/k8s_release.py" current $(release_field history))"
   open_sealed
@@ -329,6 +339,7 @@ rollback() {
   # shellcheck disable=SC2046
   [ -n "$tag" ] || tag="$(python3 "$ROOT_DIR/tools/k8s_release.py" previous $(release_field history))"
   [ -n "$tag" ] || die "no earlier release is recorded in configmap/$RELEASE_RECORD (K16)"
+  require_data_node
   open_sealed
   go_back "$tag" "$(release_field overlay)"
   echo "rolled back to $tag"

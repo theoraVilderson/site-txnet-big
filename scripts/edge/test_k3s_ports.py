@@ -27,9 +27,10 @@ class Rules(unittest.TestCase):
         self.assertIn(("INPUT", ["-i", "ens192", "-p", "tcp", "-m", "multiport", "--dports", "6443,10250,10256",
                                  "-j", kp.CHAIN]), self.jumps)
 
-    def test_flannels_vxlan_is_sent_to_it(self):
-        self.assertIn(("INPUT", ["-i", "ens192", "-p", "udp", "-m", "udp", "--dport", "8472", "-j", kp.CHAIN]),
-                      self.jumps)
+    def test_flannels_vxlan_and_wireguard_are_sent_to_it(self):
+        # K17: wireguard-native listens on 51820 (IPv4) and 51821 (IPv6).
+        self.assertIn(("INPUT", ["-i", "ens192", "-p", "udp", "-m", "multiport", "--dports", "8472,51820,51821",
+                                 "-j", kp.CHAIN]), self.jumps)
 
     def test_a_node_port_is_sent_to_it_from_forward(self):
         # A LoadBalancer Service also gets a NodePort, DNATed to the pod, so it is
@@ -45,6 +46,40 @@ class Rules(unittest.TestCase):
     def test_web_ports_are_left_to_the_cloudflare_chain(self):
         ports = " ".join(" ".join(args) for _, args in self.jumps)
         self.assertNotIn("443", ports.replace("6443", ""))
+
+
+class Peers(unittest.TestCase):
+    """K17: the other nodes' addresses are let through ahead of the DROP, each
+    by its own family's tool; nobody else reaches k3s's ports."""
+
+    def test_a_peer_is_accepted_before_the_drop(self):
+        rules = [l for l in kp.restore_payload(["10.0.0.7"]).splitlines() if l.startswith("-A ")]
+        self.assertEqual(rules, [f"-A {kp.CHAIN} -s 10.0.0.7 -j ACCEPT", f"-A {kp.CHAIN} -j DROP"])
+
+    def test_with_no_peer_the_chain_only_drops(self):
+        self.assertEqual(kp.restore_payload([]), kp.restore_payload())
+
+    def test_the_peers_file_is_split_by_family(self):
+        path = os.path.join(self.tmp(), "peers")
+        with open(path, "w") as f:
+            f.write("# node 2\n193.151.131.201\n\n2001:db8::5  # v6\n")
+        self.assertEqual(kp.read_peers(path), {4: ["193.151.131.201"], 6: ["2001:db8::5"]})
+
+    def test_a_missing_peers_file_means_no_peer(self):
+        self.assertEqual(kp.read_peers(os.path.join(self.tmp(), "absent")), {4: [], 6: []})
+
+    def test_a_line_that_is_not_an_address_is_refused(self):
+        path = os.path.join(self.tmp(), "peers")
+        with open(path, "w") as f:
+            f.write("node-two.example\n")
+        with self.assertRaises(ValueError):
+            kp.read_peers(path)
+
+    def tmp(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d)
+        return d
 
 
 class SharedTop(unittest.TestCase):

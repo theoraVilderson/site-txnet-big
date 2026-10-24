@@ -202,7 +202,7 @@ snapshot it writes `<scope>.<lang>.json` atomically (temp file + rename). If
 `boot()` reaches its deadline, it loads every cached file for its scope; if at
 least one loads it logs `WARN locale-service unreachable, booted from cache
 (<age>)`, starts Watch (which refetches on connect) and resolves; with none it
-throws as today. Named volume `locale_cache` mounted by every Node service.
+throws as today. `locale_cache` on every Node service (each pod's own on k3s, K7).
 The Go client (`i18n-platform/clients/go`) does the same with `Config.CacheDir`
 (same env, same file names): `New` returns a client when the cache loaded, and
 `auth-handler` mounts the volume.

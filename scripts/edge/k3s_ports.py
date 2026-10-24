@@ -7,13 +7,16 @@
     k3s_ports.py install    systemd units: once before k3s starts, then every 5 minutes
 
 k3s listens on every address: the API server (6443), the kubelet (10250),
-kube-proxy's health (10256), flannel's VXLAN (8472/udp), and a NodePort for
-every LoadBalancer Service, which bypasses O7's 80/443 rules. All of it is
-dropped on EDGE_PUBLIC_IFACE (default: the default route's interface); lo,
-cni0 and flannel.1 are never filtered, so the node reaches its own ports on
-any of its addresses. 80/443 stay with cloudflare_firewall.py (O7). Run
-`install` before k3s is installed (ADR-0163 point 3).
+kube-proxy's health (10256), flannel (8472/udp VXLAN, 51820-51821/udp
+WireGuard), and a NodePort for every LoadBalancer Service, which bypasses O7's
+80/443 rules. All of it is dropped on EDGE_PUBLIC_IFACE (default: the default
+route's interface), except from the other nodes listed in K3S_PEERS_FILE (one
+address per line, K17); lo, cni0 and flannel's interfaces are never filtered,
+so the node reaches its own ports on any of its addresses. 80/443 stay with
+cloudflare_firewall.py (O7). Run `install` before k3s is installed (ADR-0163
+point 3).
 """
+import ipaddress
 import os
 import subprocess
 import sys
@@ -24,9 +27,10 @@ from edge_chain import TOOL, hook_all, public_iface, run, unhook  # noqa: E402
 CHAIN = "TXNET-K3S"
 # K13: the API server, the kubelet, kube-proxy's healthz (0.0.0.0 by default).
 NODE_TCP_PORTS = "6443,10250,10256"
-# K13: flannel's VXLAN backend. K17's WireGuard (51820/udp) joins this list
-# with the second node, which also adds its address ahead of the DROP.
-NODE_UDP_PORT = "8472"
+# K13: flannel's VXLAN; K17: wireguard-native's IPv4 and IPv6 listeners.
+NODE_UDP_PORTS = "8472,51820,51821"
+# K17: the other nodes, the only sources let through to the ports above.
+PEERS_FILE = os.environ.get("K3S_PEERS_FILE", "/etc/txnet/k3s-peers")
 # k3s's default --service-node-port-range.
 NODE_PORT_RANGE = "30000:32767"
 UNIT_DIR = "/etc/systemd/system"
@@ -60,10 +64,28 @@ WantedBy=timers.target
 """
 
 
-def restore_payload():
+def read_peers(path=PEERS_FILE):
+    """The other nodes' addresses by IP family; `#` starts a comment. A missing
+    file is a single-node cluster. A name is refused: iptables would resolve it
+    once, and a later change of address would lock the node out silently."""
+    peers = {4: [], 6: []}
+    if not os.path.exists(path):
+        return peers
+    with open(path) as f:
+        for line in f:
+            word = line.split("#", 1)[0].strip()
+            if word:
+                address = ipaddress.ip_address(word)
+                peers[address.version].append(str(address))
+    return peers
+
+
+def restore_payload(peers=()):
     """One atomic `iptables-restore --noflush` write that (re)declares the chain.
-    Whatever reaches it is dropped; the jumps choose what reaches it."""
-    return "\n".join(["*filter", f":{CHAIN} - [0:0]", f"-A {CHAIN} -j DROP", "COMMIT"]) + "\n"
+    The peers are let through, whatever else reaches it is dropped; the jumps
+    choose what reaches it."""
+    accept = [f"-A {CHAIN} -s {peer} -j ACCEPT" for peer in peers]
+    return "\n".join(["*filter", f":{CHAIN} - [0:0]", *accept, f"-A {CHAIN} -j DROP", "COMMIT"]) + "\n"
 
 
 def jump_rules(iface):
@@ -72,7 +94,7 @@ def jump_rules(iface):
     pod first, so it is forwarded and matched on its original port."""
     rules = [
         ("INPUT", ["-i", iface, "-p", "tcp", "-m", "multiport", "--dports", NODE_TCP_PORTS, "-j", CHAIN]),
-        ("INPUT", ["-i", iface, "-p", "udp", "-m", "udp", "--dport", NODE_UDP_PORT, "-j", CHAIN]),
+        ("INPUT", ["-i", iface, "-p", "udp", "-m", "multiport", "--dports", NODE_UDP_PORTS, "-j", CHAIN]),
     ]
     for proto in ("tcp", "udp"):
         rules.append(("FORWARD", ["-i", iface, "-p", proto, "-m", "conntrack", "--ctorigdstport", NODE_PORT_RANGE,
@@ -81,10 +103,11 @@ def jump_rules(iface):
 
 
 def apply(iface):
-    for tool in TOOL.values():
-        run(f"{tool}-restore", "--noflush", stdin=restore_payload())
+    peers = read_peers()
+    for family, tool in TOOL.items():
+        run(f"{tool}-restore", "--noflush", stdin=restore_payload(peers[family]))
         hook_all(tool, jump_rules(iface), CHAIN)
-        print(f"{tool}: k3s's ports closed on {iface}")
+        print(f"{tool}: k3s's ports closed on {iface}, open to {peers[family] or 'no peer'}")
 
 
 def remove(iface):
@@ -113,7 +136,7 @@ def main(argv):
     if cmd == "apply":
         return apply(iface)
     if cmd == "print":
-        print(restore_payload())
+        print(restore_payload(read_peers()[4]))
         for chain, args in jump_rules(iface):
             print(chain, " ".join(args))
         return None

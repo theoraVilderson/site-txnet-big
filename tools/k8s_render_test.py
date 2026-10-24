@@ -20,6 +20,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, render  # noqa: E402
+from k8srender.tables import DATA_NODE_LABEL  # noqa: E402
 
 OPTIONS = {"registry": "registry.example", "tag": "t1"}
 
@@ -208,7 +209,37 @@ class RenderTest(unittest.TestCase):
         self.assertEqual([m["mountPath"] for m in api["containers"][0]["volumeMounts"]],
                          ["/var/cache/txnet-locale"])
         claims = {o["metadata"]["name"] for o in objs if o["kind"] == "PersistentVolumeClaim"}
-        self.assertEqual(claims, {"postgres-data", "locale-cache"})
+        self.assertEqual(claims, {"postgres-data"})
+        # H17's cache is each pod's own (K7): nothing to share between nodes.
+        self.assertEqual({v["name"]: v for v in api["volumes"]}["locale-cache"]["emptyDir"], {})
+
+    # K17 (OPS-1-o-q): a pod holding a claim or a host path stays on the data node,
+    # since a local-path volume binds where its first pod runs and never follows it.
+    def test_state_is_pinned_to_the_data_node(self):
+        m = copy.deepcopy(self.model)
+        m["services"]["guide-media"] = {
+            "image": "nginx:1.27", "healthcheck": {"test": ["CMD", "true"], "interval": "10s"},
+            "volumes": [{"type": "volume", "source": "object_storage", "target": "/data/objects", "read_only": True}]}
+        m["services"]["promtail"] = {
+            "image": "grafana/promtail:3.1.0", "healthcheck": {"test": ["CMD", "true"], "interval": "10s"},
+            "volumes": [{"type": "bind", "source": "/var/log/pods", "target": "/var/log/pods", "read_only": True}]}
+        m["volumes"]["object_storage"] = {}
+        _, objs = self.run_render(m)
+        selector = {"txnet.io/data": "true"}
+        spec = lambda kind, name: by_kind(objs, kind, name)["spec"]["template"]["spec"]
+        self.assertEqual(spec("StatefulSet", "main-db")["nodeSelector"], selector)
+        self.assertEqual(spec("Deployment", "guide-media")["nodeSelector"], selector)
+        self.assertNotIn("nodeSelector", spec("Deployment", "billing-service"))
+        self.assertNotIn("nodeSelector", spec("DaemonSet", "promtail"))
+
+    # K17: one label, written where the server registers, where join sets it and
+    # where deploy asks for it — the render's table is held equal to all three.
+    def test_one_data_label_everywhere(self):
+        label = "=".join(DATA_NODE_LABEL)
+        config = yaml.safe_load((REPO / "k8s/k3s/config.yaml").read_text())
+        self.assertEqual(config["node-label"], [label])
+        for script in ("scripts/k8s-add-node.sh", "scripts/prod.k8s.sh"):
+            self.assertIn(f"\nDATA_LABEL={label}\n", (REPO / script).read_text(), script)
 
     # K7 (OPS-1-o-v): a source tree is dev's (docker-compose.dev.yml). In the
     # production model it would hide the image's own code, so it fails the render.

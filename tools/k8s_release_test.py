@@ -137,7 +137,9 @@ if argv[:1] == ["-n"]:
     argv = argv[2:]
 def read(name):
     return open(f"{state}/{name}").read() if os.path.exists(f"{state}/{name}") else ""
-if argv[:2] == ["get", "configmap"]:
+if argv[:2] == ["get", "nodes"]:
+    print("" if os.environ.get("FAKE_NO_DATA_NODE") else "node/server")
+elif argv[:2] == ["get", "configmap"]:
     record = json.loads(read("record") or "{}")
     sys.exit(print(record.get(re.search(r"\.data\.(\w+)", argv[-1]).group(1), ""), end="") if record else 1)
 elif argv[:2] == ["create", "configmap"]:
@@ -236,6 +238,15 @@ class ScriptTest(unittest.TestCase):
         self.assertNotEqual(run.returncode, 0)
         self.assertIn("no earlier release", run.stderr)
         self.assertTrue(any(c.startswith("-n txnet rollout undo") for c in calls))
+
+    # K17 (OPS-1-o-q): with no node labelled for the stores, a first claim could
+    # bind on any node and stay there, so nothing is applied at all.
+    def test_no_data_node_applies_nothing(self):
+        for command in ("deploy prod", "rollback"):
+            run, calls, _ = self.run_script(command, [self.OLDER, self.OLD], FAKE_NO_DATA_NODE="1")
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn("txnet.io/data=true", run.stderr)
+            self.assertFalse([c for c in calls if c.startswith(("apply", "-n txnet apply"))], calls)
 
     # By hand, with no tag: the release before the one running, and the record forgets the undone one.
     def test_rollback_by_hand(self):

@@ -46,8 +46,16 @@ STATEFUL = {"main-db", "memory-data", "rabbitmq", "prometheus", "loki", "grafana
 # pg-backup reaches Postgres over the shared socket only (H3).
 SIDECARS = {"pg-backup": "main-db"}
 
-# K3: a named volume private to one pod — pg-backup's socket (H3).
-POD_LOCAL_VOLUMES = {"pg_socket"}
+# K3, K7: a named volume private to one pod — pg-backup's socket (H3), and
+# H17's translation cache: each service writes its own `<scope>.<lang>.json`,
+# so a shared claim would only tie every Node service to one node (K17).
+POD_LOCAL_VOLUMES = {"pg_socket", "locale_cache"}
+
+# K17: the node a pod holding a claim or a host path runs on. A local-path
+# volume binds on the node of its first pod and cannot follow it; Traefik also
+# stays there, the one address Cloudflare reaches. Written by k8s/k3s/config.yaml
+# and k8s-add-node.sh `join`, asked for by prod.k8s.sh (the render test holds them equal).
+DATA_NODE_LABEL = ("txnet.io/data", "true")
 
 # K7: requested sizes; local-path does not enforce them, a later class may.
 VOLUME_SIZES = {

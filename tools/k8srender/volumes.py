@@ -123,6 +123,11 @@ class Mounts:
         return {"name": name, "mountPath": path}
 
 
+def holds_node_state(volumes) -> bool:
+    """K17: a claim or a host path keeps what it holds on one node."""
+    return any("persistentVolumeClaim" in v or "hostPath" in v for v in volumes)
+
+
 def claim(volume: str) -> dict:
     """K7: one ReadWriteOnce claim per named volume, shared by every pod that mounts it."""
     return {

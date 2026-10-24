@@ -10,10 +10,10 @@ from pathlib import Path
 from .container import container, environment_secret, image_for
 from .monitoring import as_log_shipper, peer_services, scrape_calls
 from .objects import RenderError, dns_name, port_number, seconds, undo_compose_escaping
-from .tables import (ALWAYS_RESTART, DAEMONSETS, DROPPED_KEYS, LOG_SHIPPER, NAMESPACE, PROVIDED_BY_KUBERNETES,
-                     SERVICE_ACCOUNTS, SIDECARS, STATEFUL, TRAEFIK)
+from .tables import (ALWAYS_RESTART, DAEMONSETS, DATA_NODE_LABEL, DROPPED_KEYS, LOG_SHIPPER, NAMESPACE,
+                     PROVIDED_BY_KUBERNETES, SERVICE_ACCOUNTS, SIDECARS, STATEFUL, TRAEFIK)
 from .traefik import Labels, as_edge, backend_index, edge_objects, labels_of
-from .volumes import Mounts
+from .volumes import Mounts, holds_node_state
 
 __all__ = ["RenderError", "exposed_ports", "render"]
 
@@ -119,6 +119,9 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
         as_log_shipper(pod)
     if name in SERVICE_ACCOUNTS:
         pod["serviceAccountName"] = SERVICE_ACCOUNTS[name]
+    # K17: a DaemonSet's host paths are each node's own (Promtail's pod logs).
+    if name not in DAEMONSETS and (name == TRAEFIK or holds_node_state(mounts.volumes.values())):
+        pod["nodeSelector"] = dict([DATA_NODE_LABEL])
     template = {"metadata": {"labels": labels}, "spec": pod}
     routing = edge_objects(name, stack.traefik[name], stack.backends)
     workload = _job(name, template) if _runs_once(service) else _workload(name, template)

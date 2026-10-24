@@ -24,6 +24,7 @@ BIN_DIR=/usr/local/bin
 SYSCTL_FILE=/etc/sysctl.d/90-txnet-k3s.conf
 INOTIFY_INSTANCES=512
 NODE_READY_TIMEOUT=300s
+NODE_REGISTER_TIMEOUT_S=120
 TEMPS=()
 trap 'rm -rf "${TEMPS[@]}"' EXIT
 
@@ -79,6 +80,9 @@ install_k3s() {
   # No proxy reaches k3s: registries.yaml's mirror and our registry are reached directly (K14).
   env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY \
     INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION="$K3S_VERSION" sh "$work/install.sh"
+  # `wait` finds nothing until the node has registered, and fails at once then.
+  timeout "$NODE_REGISTER_TIMEOUT_S" sh -c 'until kubectl get node -o name 2>/dev/null | grep -q .; do sleep 2; done' ||
+    die "the node did not register in ${NODE_REGISTER_TIMEOUT_S}s"
   kubectl wait --for=condition=Ready node --all --timeout="$NODE_READY_TIMEOUT"
   k3s secrets-encrypt status | grep -q 'Encryption Status: Enabled' ||
     die "k3s runs without secrets-encryption (S6)"

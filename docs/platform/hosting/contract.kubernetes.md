@@ -98,8 +98,8 @@ the pod out of its Service.
 - A named volume is one PersistentVolumeClaim of the same name
   (`local-path`, `ReadWriteOnce`, size from the renderer's table, `1Gi` when
   unlisted); services that share it mount the same claim, which one node
-  allows. A second node needs `ReadWriteMany` for `object_storage` and
-  `locale_cache` — OPS-1-y's question, not this one.
+  allows; with a second node they all run where it is (K17). `locale_cache`
+  and `pg_socket` are each pod's own `emptyDir` instead (`POD_LOCAL_VOLUMES`).
 - A host path (`PG_BACKUP_LOCAL_DIR`, `OBJECT_BACKUP_LOCAL_DIR`,
   `NODE_TEXTFILE_DIR`) is a `hostPath` of type `DirectoryOrCreate`.
 - A bound file under `dev-docker/secrets/` is a Secret `secret-<file>` mounted
@@ -202,9 +202,9 @@ and queued messages and `pg-backup.sh drill` passing in `main-db`'s, a bundle re
 removes k3s and brings compose back, only when the rehearsal is abandoned.
 
 **K13 — k3s's own ports.** The API server (6443), the kubelet (10250),
-kube-proxy's health (10256), flannel (8472/udp) and every NodePort
-(30000–32767, which a LoadBalancer Service also gets) answer from localhost and
-the node only, never the public address; only 80/443 are reached from outside,
+kube-proxy's health (10256), flannel (8472, 51820–51821/udp) and every NodePort
+(30000–32767, which a LoadBalancer Service also gets) answer from localhost, the
+node and K17's peers only, never the public address; only 80/443 are reached from outside,
 through O7 (K9). `scripts/edge/k3s_ports.py apply` drops them on the public
 interface in chain `TXNET-K3S` (INPUT; FORWARD by `--ctorigdstport` for a
 NodePort), jumps kept on top as O7's are — another `TXNET-*` chain's jumps are
@@ -226,12 +226,9 @@ lock, beside the host path. Rules in `contract.backup.md` (OPS-1-o-o).
 **K16 — A release is one unit.** Smoke-checked after `deploy`, and set back
 whole, never `db-migrate`. Rules R5–R9 in `contract.release.md` (OPS-1-o-p).
 
-**K17 — A second node.** `k3s agent --server https://<node1>:6443` with the
-token from a Secret; flannel `--flannel-backend=wireguard-native`, since node
-traffic crosses the public network; K13 opens 6443, 10250 and 51820/udp to the
-node addresses only. `main-db`, `memory-data`, `rabbitmq` are pinned by the node
-label `txnet.io/data=true` (their `local-path` volume cannot follow them); the
-LoadBalancer answers on both nodes, and Cloudflare reaches both (OPS-1-o-q).
+**K17 — A second node.** Joined by `scripts/k8s-add-node.sh join`, run on the
+server node; flannel on WireGuard on every path, K13 opened to the peers only, every
+pod holding state and the one Cloudflare entry kept on the server. Rules in `contract.nodes.md` (OPS-1-o-q).
 
 **K18 — A move between servers.** With a second node: join it (K17), promote
 Postgres's standby there (H22), stop and copy Redis and RabbitMQ, move the data

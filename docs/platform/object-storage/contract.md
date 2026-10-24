@@ -60,6 +60,8 @@ does not own, which is a bug to surface.
 5. **The `local` driver needs one node or a shared volume.** Replicas on
    separate disks each hold a different subset of the files. Writes are a
    temporary file renamed into place, so a reader never sees half a file.
+   On k3s that is one node: every pod mounting the volume is pinned to the
+   data node (hosting K17), until the S3 driver (F-018-m2) needs none.
 6. **A policy declares `visibility`** — never defaulted. A `private` file is
    never served by the public route; only `private-files` serves it, to an
    unexpired URL signed over key, expiry and file name. The owner's service

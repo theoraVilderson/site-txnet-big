@@ -6,3 +6,10 @@ disable:
 # Secrets are stored encrypted in k3s's datastore (ADR-0164 point 6), so a copy
 # of /var/lib/rancher holds no Secret in the clear.
 secrets-encryption: true
+# Node-to-node traffic crosses the public network (or a provider's private one),
+# so flannel encrypts it on every path (K17). Agents follow the server's choice.
+flannel-backend: wireguard-native
+# The stores' local-path volumes, Traefik and every other pod holding a claim
+# or a host path stay on this node (K17); a server registers with the label.
+node-label:
+  - txnet.io/data=true
