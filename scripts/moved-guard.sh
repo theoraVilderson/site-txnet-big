@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by dev.compose.sh and prod.compose.sh (OPS-1-ac, hosting H23).
 # After a server move this host's volumes are a stale copy, and a second
 # Postgres archiving into the same pgBackRest repository forks it: a command

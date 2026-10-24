@@ -19,6 +19,7 @@ KEYS="${ORIGIN_PULL_KEYS:-$ROOT_DIR/dev-docker/secrets/origin-pull}"
 API="https://api.cloudflare.com/client/v4"
 
 load_env() {
+  # shellcheck source=/dev/null # ENV_FILE is the caller's choice (.env.prod, ...)
   if [[ -n "${ENV_FILE:-}" ]]; then set -a; . "$ROOT_DIR/$ENV_FILE"; set +a; fi
   : "${CLOUDFLARE_API_TOKEN:?set CLOUDFLARE_API_TOKEN (or ENV_FILE)}"
   : "${CLOUDFLARE_ZONE_ID:?set CLOUDFLARE_ZONE_ID (or ENV_FILE)}"

@@ -1,0 +1,4 @@
+# A `# shellcheck source=../x` directive names a path from the script's own
+# directory, and is followed without -x (scripts/*.sh source k8s/versions.env).
+source-path=SCRIPTDIR
+external-sources=true

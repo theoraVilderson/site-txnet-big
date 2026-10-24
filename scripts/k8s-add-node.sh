@@ -94,7 +94,7 @@ addresses() {
   SERVER_ADDR="${SERVER_PRIVATE_IP:-$(route_src)}"
   NODE_ADDR="${NODE_PRIVATE_IP:-$(route_src remote)}"
   NODE_NAME="$(remote hostname)"
-  [ -n "$SERVER_ADDR" ] && [ -n "$NODE_ADDR" ] || die "could not tell the two addresses apart"
+  if [ -z "$SERVER_ADDR" ] || [ -z "$NODE_ADDR" ]; then die "could not tell the two addresses apart"; fi
   [ -z "${NODE_PRIVATE_IP:-}" ] || [ -n "${SERVER_PRIVATE_IP:-}" ] ||
     die "NODE_PRIVATE_IP needs SERVER_PRIVATE_IP: both ends of the private network"
 }

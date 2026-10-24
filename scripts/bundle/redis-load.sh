@@ -1,3 +1,4 @@
+# shellcheck shell=sh
 # Loads /bundle/dump.rdb into /data as the AOF memory-data starts from, and
 # prints the keyspace it holds (OPS-1-ad). Run in a throwaway container of
 # memory-data's own image: by a bundle on scratch storage, which proves every
