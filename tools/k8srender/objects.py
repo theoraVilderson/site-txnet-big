@@ -30,6 +30,16 @@ def seconds(duration, default: int) -> int:
     return max(1, math.ceil(h * 3600 + m * 60 + s + ms / 1000))
 
 
+def undo_compose_escaping(value):
+    """`docker compose config` prints every literal `$` as `$$`, so its output reads
+    back as compose input; a pod needs the value itself (K2, K5)."""
+    if isinstance(value, dict):
+        return {k: undo_compose_escaping(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [undo_compose_escaping(v) for v in value]
+    return value.replace("$$", "$") if isinstance(value, str) else value
+
+
 def escape_expansion(text: str) -> str:
     """Kubernetes expands `$(X)` and folds `$$` in command and args (K5); keep the literal."""
     return re.sub(r"\$(?=[$(])", "$$", text)

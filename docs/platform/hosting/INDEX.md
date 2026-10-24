@@ -4,7 +4,7 @@ layer: platform
 status: active
 version: 1
 keywords: [hosting, backup bundle, backup now, full backup, one backup file, backup to s3, ship backups, s3 upload, restore bundle, write-only key, بک آپ همون لحظه, بک آپ کامل, فایل بک آپ, بک آپ فشرده, فرستادن بک آپ به s3, بک آپ داخل s3, بالا آوردن بک آپ, سرور خراب شد, server move, move server, migrate server, new datacenter, datacenter move, cutover, presync, rabbitmq node name, انتقال سرور, جابه‌جایی سرور, جا به جایی سرور, دیتاسنتر, بردن به دیتاسنتر دیگر, از یه دیتاسنتر برم یه دیتاسنتر, بک آپ دوباره برگردونم, انتقال ردیس, origin pull, authenticated origin pulls, origin certificate, cloudflare firewall, cloudflare ranges, CF-Connecting-IP, client ip, real ip, visitor address, deploy, deployment, kubernetes, k8s, k3s, k3d, kustomize, rolling deploy, zero downtime, healthcheck, backup, database backup, postgres backup, pgbackrest, restore, point in time recovery, wal archive, pgbouncer, connection pool, too many clients, max_connections, log rotation, loki retention, json logs, request id, disk full, housekeeping, execution log growth, restart, server restart, service down, پشتیبان‌گیری, بکاپ دیتابیس, بازگردانی, ری‌استارت, سرویس دان شد, لاگ, پر شدن دیسک, استقرار, اتصال دیتابیس]
-source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**, tools/k8s_render.py, tools/k8s_render_test.py, tools/k8srender/**, scripts/move/**, scripts/bundle/**, scripts/moved-guard.sh, scripts/dev.compose.sh, scripts/prod.compose.sh]
+source: [txnet-backend/shared-core/src/lib/logging/**, dev-docker/postgres/**, dev-docker/compose/pg-backup.yml, dev-docker/pgbouncer/**, dev-docker/compose/db-pool.yml, dev-docker/compose/logging.yml, dev-docker/compose/health.yml, txnet-backend/shared-core/src/lib/health/**, dev-docker/monitoring/config-dev/loki.yaml, dev-docker/monitoring/config-dev/database.rules*.yml, dev-docker/traefik/dynamic/origin-pull.yml, dev-docker/traefik/plugins-local/**, dev-docker/traefik/origin-pull/**, scripts/edge/**, tools/k8s_render.py, tools/k8s_render_test.py, tools/k8s_render_traefik_test.py, tools/k8srender/**, k8s/**, dev-docker/traefik/Dockerfile, dev-docker/traefik/.dockerignore, scripts/move/**, scripts/bundle/**, scripts/moved-guard.sh, scripts/dev.compose.sh, scripts/prod.compose.sh]
 owns_tables: []
 depends_on: [automation, i18n]
 updated: 2026-10-24
@@ -39,9 +39,9 @@ shared socket); -c (H4, `pg-backup.sh drill`, `pg_restore_drill.prom`); -f (H10,
 -g (H9, C-41's check); -h (H7, `db-pool`: PgBouncer 1.25.2, own user, tmpfs); -i (H8, every pooled URL on `db-pool`, 5
 `LISTEN`s direct; 15 of 100 on dev); -j (H11, `compose/logging.yml` on all 28 services, `loki.yaml` 30 days,
 loopback); -v (H21, `hosting.broker-redis` in `database.rules.yml`, `redis-exporter`). -ac (H23, `scripts/move/`: a
-server move, `runbook-move-server.md`). -ad (B1–B9, `scripts/bundle/`, two systemd timers). -o-a (K2-K7,
-`tools/k8srender/`: 80 objects, kubeconform-strict clean). -aa (H24, `contract.health.md`). `k8s/**` and
-`scripts/{prod.k8s,k8s-rehearse}.sh` join `source:` as their rows land.
+server move, `runbook-move-server.md`). -ad (B1–B9, `scripts/bundle/`, two systemd timers). -o-a, -o-b (K2-K9,
+`tools/k8srender/`, `k8s/traefik/`: 154 objects with 56 IngressRoutes, kubeconform-strict clean). -aa (H24,
+`contract.health.md`). `scripts/{prod.k8s,k8s-rehearse}.sh` join `source:` as their rows land.
 
 ## Changelog
 | Date | Change |

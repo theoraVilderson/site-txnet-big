@@ -109,18 +109,26 @@ build section and `ENVIRONMENT=prod`, and tagged
 its compose `image:`. Two directories are baked in instead of mounted:
 `locales/` into `locale-service` (36 MB, past a ConfigMap's 1 MiB), and
 Traefik's `dynamic/`, `plugins-local/` and `origin-pull/` into
-`dev-docker/traefik/Dockerfile`'s `txnet/edge` image. Migrations run as Job
+`dev-docker/traefik/Dockerfile`'s image (`gateway-handler`'s `build:`, so pushed as
+`txnet/gateway-handler` by the rule above; dev still mounts the three over it). Migrations run as Job
 `db-migrate` (`prisma migrate deploy --schema prisma/domains`) from the
 backend Dockerfile's `dependencies` stage, before any Deployment is applied.
 
-**K9 — Traefik.** Our Traefik (`txnet/edge`, K8) runs as a Deployment behind a
+**K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8) runs as a Deployment behind a
 `LoadBalancer` Service on 80/443 (k3s `servicelb`). `--providers.docker*`
-becomes `--providers.kubernetescrd` with `--providers.file` kept for the
+becomes `--providers.kubernetescrd` (namespace `txnet`, as service account
+`traefik-ingress-controller`) with `--providers.file` kept for the
 baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
 `IngressRoute` `<r>` (`match` = rule, `priority`, `entryPoints`,
 `middlewares`, `tls.certResolver`, the service port from the
 `loadbalancer.server.port` label); each `traefik.http.middlewares.<m>.*` set is
-one `Middleware` `<m>`; `@file` references stay as they are. Traefik's CRDs and
+one `Middleware` `<m>`; `@file` references stay as they are. Only containers with
+`traefik.enable=true` count, as with `exposedbydefault=false`. A router naming no
+service takes its container's one; the backend's ClusterIP Service gains that
+port (K4), and a ForwardAuth address is checked like any K4 call. Basic-auth users
+go to a hashed Secret, the only form the CRD takes. A label the renderer has no
+mapping for fails the render (K2). Compose prints a literal `$` as `$$`; the
+renderer undoes that once, for every value, before K5's own escaping. Traefik's CRDs and
 RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
 is claim `letsencrypt`. The Service is `externalTrafficPolicy: Local`, so
 Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chain is reached from `FORWARD`

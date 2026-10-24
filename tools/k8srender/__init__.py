@@ -8,13 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .container import container, environment_secret, image_for
-from .objects import RenderError, dns_name, seconds
-from .tables import ALWAYS_RESTART, DROPPED_KEYS, SIDECARS, STATEFUL
+from .objects import RenderError, dns_name, seconds, undo_compose_escaping
+from .tables import ALWAYS_RESTART, DROPPED_KEYS, NAMESPACE, SIDECARS, STATEFUL, TRAEFIK
+from .traefik import Labels, as_edge, backend_index, edge_objects, labels_of
 from .volumes import Mounts
 
 __all__ = ["RenderError", "render"]
 
-NAMESPACE = "txnet"
 PART_OF = {"app.kubernetes.io/part-of": "txnet"}
 # K3: compose's stop grace when a service names none.
 _DEFAULT_GRACE_S = 10
@@ -34,15 +34,18 @@ class _Stack:
     builders: dict
     options: dict
     repo: Path
+    traefik: dict  # compose service -> its Traefik labels (K9)
+    backends: dict  # Traefik service name -> (compose service, port)
 
 
 def render(model: dict, repo: Path, options: dict) -> dict:
-    services = model["services"]
+    services = undo_compose_escaping(model)["services"]
     for name, service in services.items():
         _check_keys(name, service)
-    _check_calls(services)
+    traefik = {name: labels_of(name, service) for name, service in services.items()}
+    _check_calls(services, traefik)
     builders = {s["image"]: n for n, s in services.items() if s.get("build") and s.get("image")}
-    stack = _Stack(services, builders, options, repo)
+    stack = _Stack(services, builders, options, repo, traefik, backend_index(traefik))
     files, shared = {}, {}
     for name in sorted(services):
         if name in SIDECARS:
@@ -83,8 +86,12 @@ def _pod(stack: _Stack, name: str) -> tuple[list, dict]:
     aliases = _host_aliases(name, service.get("extra_hosts"), stack.options.get("host_gateway"))
     if aliases:
         pod["hostAliases"] = aliases
+    if name == TRAEFIK:
+        as_edge(pod)
     template = {"metadata": {"labels": labels}, "spec": pod}
-    return [_workload(name, template), *_services(name, service), *secrets], mounts.objects
+    routing = edge_objects(name, stack.traefik[name], stack.backends)
+    return [_workload(name, template), *_services(name, service, stack.traefik[name]), *routing, *secrets], \
+        mounts.objects
 
 
 def _workload(name: str, template: dict) -> dict:
@@ -98,17 +105,22 @@ def _workload(name: str, template: dict) -> dict:
     return {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": dns_name(name)}, "spec": spec}
 
 
-def _services(name: str, service: dict) -> list:
-    """K4: a ClusterIP Service from `expose:`; K9: published ports as a LoadBalancer."""
+def _services(name: str, service: dict, traefik: Labels) -> list:
+    """K4: a ClusterIP Service from `expose:` and the ports Traefik calls (K9);
+    published ports as a LoadBalancer that keeps the client's address."""
     out, selector = [], {"app.kubernetes.io/name": name}
-    exposed = [_port(p) for p in service.get("expose") or []]
+    exposed = sorted({_port(p) for p in service.get("expose") or []} | set(traefik.backends.values()))
     if exposed:
         ports = [{"name": f"p{p}", "port": p, "targetPort": p} for p in exposed]
         out.append(_service(dns_name(name), "ClusterIP", ports, selector))
     published = [{"name": f"p{p['published']}", "port": int(p["published"]), "targetPort": int(p["target"])}
                  for p in service.get("ports") or []]
     if published:
-        out.append(_service(f"{dns_name(name)}-public", "LoadBalancer", published, selector))
+        public = _service(f"{dns_name(name)}-public", "LoadBalancer", published, selector)
+        # Local: a request reaches the pod on its own node with its source
+        # address intact, which Traefik's client-address rules read (O5, O7).
+        public["spec"]["externalTrafficPolicy"] = "Local"
+        out.append(public)
     return out
 
 
@@ -123,7 +135,7 @@ def _pod_labels(members: list, services: dict) -> dict:
         for key, value in (services[member].get("labels") or {}).items():
             if key == _LOGGING_LABEL:
                 labels[_POD_LOGGING_LABEL] = str(value)
-            elif not key.startswith("traefik."):  # TODO(OPS-1-o-b): routers become IngressRoutes
+            elif not key.startswith("traefik."):  # K9: Traefik's labels become IngressRoutes
                 raise RenderError(f"{member}: label {key} has no Kubernetes meaning yet")
     return labels
 
@@ -151,16 +163,19 @@ def _check_keys(name: str, service: dict) -> None:
         raise RenderError(f"{name}: restart {service['restart']!r} — a pod always restarts (K3)")
 
 
-def _check_calls(services: dict) -> None:
-    """K4: every service named in an environment value answers on that port."""
+def _check_calls(services: dict, traefik: dict) -> None:
+    """K4: every service named in an environment value answers on that port, and so
+    does every ForwardAuth address, which Traefik calls (K9)."""
     exposed = {n: {_port(p) for p in s.get("expose") or []} for n, s in services.items()}
-    for name, service in services.items():
-        for value in (service.get("environment") or {}).values():
-            for host, port in _HOST_REF.findall(str(value or "")):
-                if host not in services or host == name:
-                    continue
-                if not exposed[host] or (port and int(port) not in exposed[host]):
-                    raise RenderError(f"{name}: calls {host}:{port or '?'}, which {host} does not expose (K4)")
+    calls = [(name, value) for name, service in services.items()
+             for value in (service.get("environment") or {}).values()]
+    calls += [(TRAEFIK, address) for labels in traefik.values() for address in labels.forward_auth_addresses()]
+    for caller, value in calls:
+        for host, port in _HOST_REF.findall(str(value or "")):
+            if host not in services or host == caller:
+                continue
+            if not exposed[host] or (port and int(port) not in exposed[host]):
+                raise RenderError(f"{caller}: calls {host}:{port or '?'}, which {host} does not expose (K4)")
 
 
 def _port(value) -> int:

@@ -4,6 +4,9 @@ This is their one home. Everything else comes from the compose model; a fact
 that could live in compose belongs there instead (K4's `expose:` is one).
 """
 
+# K1: the namespace every platform object lives in.
+NAMESPACE = "txnet"
+
 # K3: one pod, its claim, a stop before the start — two writers corrupt a volume.
 STATEFUL = {"main-db", "memory-data", "rabbitmq"}
 
@@ -40,15 +43,30 @@ DEV_ONLY_BINDS = {
     "/var/run/docker.sock",
 }
 
-# K8/K9: bound directories another row turns into an image layer or a claim.
+# K8: bound directories another row turns into an image layer.
 # The value is the row that does; until it lands the mount is left out.
 LATER_BINDS = {
     "locales": "OPS-1-o-c",
-    "dev-docker/traefik/dynamic": "OPS-1-o-b",
-    "dev-docker/traefik/plugins-local": "OPS-1-o-b",
-    "dev-docker/traefik/origin-pull": "OPS-1-o-b",
-    "dev_letsencrypt": "OPS-1-o-b",
 }
+
+# K8/K9: Traefik's file config, local plugins and origin-pull CA, copied into
+# its image by dev-docker/traefik/Dockerfile instead of mounted.
+BAKED_BINDS = {
+    "dev-docker/traefik/dynamic",
+    "dev-docker/traefik/plugins-local",
+    "dev-docker/traefik/origin-pull",
+}
+
+# K7/K9: a bound directory that holds state, and the claim that holds it instead.
+BIND_CLAIMS = {"dev_letsencrypt": "letsencrypt"}
+
+# K9: the compose service that is Traefik, and what changes in its pod: the
+# Docker provider's flags give way to the CRD provider's, read as the
+# service account k8s/traefik/ binds to Traefik's ClusterRole.
+TRAEFIK = "gateway-handler"
+TRAEFIK_SERVICE_ACCOUNT = "traefik-ingress-controller"
+TRAEFIK_DROPPED_ARG = "--providers.docker"
+TRAEFIK_PROVIDER_ARGS = ["--providers.kubernetescrd=true"]
 
 # K7: a bound file under this directory is a Secret, any other a ConfigMap.
 SECRET_DIR = "dev-docker/secrets"

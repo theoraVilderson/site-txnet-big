@@ -37,6 +37,11 @@ def compose(args: list[str], env_files: list[str], overrides: dict) -> str:
                           env={**os.environ, **overrides}).stdout
 
 
+def load_model(env_files: list[str], overrides: dict) -> dict:
+    """The production compose model, interpolated by compose itself (K2)."""
+    return json.loads(compose(["--format", "json"], env_files, overrides))
+
+
 def git_tag() -> str:
     """The default image tag: the commit being deployed (K8)."""
     return subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short=12", "HEAD"],
@@ -66,7 +71,7 @@ def main() -> int:
                      compose(["--environment"], env_files, overrides).splitlines() if "=" in line)
     options = {"registry": variables["LOCAL_DOCKER_REGISTRY"], "tag": args.tag or git_tag(),
                "host_gateway": args.host_gateway}
-    model = json.loads(compose(["--format", "json"], env_files, overrides))
+    model = load_model(env_files, overrides)
     try:
         files = render(model, REPO, options)
     except RenderError as error:
