@@ -48,6 +48,14 @@ name `docker.io`, which the node reaches only through the mirror every compose
 exists. A release is `build` and `push` off the node, at the commit `deploy`
 then runs on it: both take `IMAGE_TAG` from the commit (K16).
 
+**R10 — The registry answers before anything is sent** (OPS-1-o-t). `push`
+asks `https://<registry>/v2/` once (15s, `--noproxy`) before its first image, and
+`registries` asks again from the node once the file is written. 200, or 401 asking
+for the login, passes; anything else fails, naming the registry and the status: on
+2026-10-24 the test server met 503/504 where the dev host met 401. A custom
+domain answers only once it is in the CaaS ingress's `hosts` and in the CDN of the
+same Arvan account; until then Arvan's edge finishes TLS and never answers.
+
 ## A release and its way back
 
 **R5 — A release is a commit.** `IMAGE_TAG` is HEAD's 12-character hash, and
@@ -102,7 +110,10 @@ from it pulled through `registries.yaml` and ran; coredns and local-path came
 from `docker.io` through the mirror. The tag was deleted after. Tests:
 `tools/k8s_deploy_test.py` `RegistriesTest`, `test_build_refuses_on_a_k3s_node`.
 
-R11, 2026-10-24: `k8s_release_test.py` `LoginRolesTest` (a quote and a backslash through stdin) and the
+R10 live, 2026-10-24: `/v2/` 401 on `registry.mytxnet.ir` from the dev host and the test server;
+a 300 MB layer pushed in 22s and pulled back from the dev host, an anonymous manifest read 401.
+R10, R11, 2026-10-24: `k8s_deploy_test.py` `test_push_names_an_unreachable_registry_first`;
+`k8s_release_test.py` `LoginRolesTest` (a quote and a backslash through stdin) and the
 order in `ScriptTest`; the dev path re-run on dev's Postgres, its logins unchanged.
 
 R5–R9, 2026-10-24: `tools/k8s_release_test.py` — the probe and route plans,

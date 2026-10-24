@@ -162,6 +162,31 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("K14", run.stderr)
         self.assertNotIn("== build", run.stdout)
 
+    def run_with_registry(self, command, status):
+        """`command` with the registry's /v2/ answering `status` and docker recorded, not run."""
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = Path(tmp, "calls")
+            script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
+                      "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
+                      f'curl() {{ echo "curl $*" >>"{calls}"; printf {status}; }}\n'
+                      f'docker() {{ echo "docker $*" >>"{calls}"; }}\n{command}')
+            run = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                                 env={**os.environ, "IMAGE_TAG": "t1"})
+            return run, calls.read_text() if calls.exists() else ""
+
+    # K14 (OPS-1-o-t): an unreachable registry is named before the first image,
+    # not after a release's worth of failed layer uploads. 401 is an answer: it asks for the login.
+    def test_push_names_an_unreachable_registry_first(self):
+        for status in ("503", "000"):
+            run, calls = self.run_with_registry("push", status)
+            self.assertNotEqual(run.returncode, 0)
+            self.assertIn(f"reg.example does not answer (HTTP {status}", run.stderr)
+            self.assertIn("curl", calls)
+            self.assertNotIn("docker push", calls)
+        run, calls = self.run_with_registry("push", "401")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        self.assertIn("docker push reg.example/txnet/billing-service:t1", calls)
+
     # OPS-1-o-v: a bind keeps the host file's mode and the prod images run as `node`;
     # the directory stays root's, so the host's other users still read nothing.
     def test_prod_compose_opens_the_bound_secrets_to_the_image_user(self):

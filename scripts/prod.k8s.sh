@@ -2,7 +2,8 @@
 # Production on Kubernetes (hosting K8, K10, K16, ADR-0147, ADR-0164).
 #
 #   scripts/prod.k8s.sh build              build every image compose builds, tagged for the registry
-#   scripts/prod.k8s.sh push               push them: the node pulls, it never builds (K14)
+#   scripts/prod.k8s.sh push               push them: the node pulls, it never builds (K14); a registry
+#                                          that does not answer is named before the first image
 #   scripts/prod.k8s.sh registries         on the node: write /etc/rancher/k3s/registries.yaml, the
 #                                          registry's pull-only login from the sealed .env.prod (K14)
 #   scripts/prod.k8s.sh render             the Kustomize bases into k8s/base/ and k8s/monitoring/base/,
@@ -35,6 +36,7 @@ KUBECTL="${KUBECTL:-kubectl}"
 NAMESPACE=txnet
 ROLLOUT_TIMEOUT=300s # K10
 JOB_POLL_S=5
+REGISTRY_TIMEOUT_S=15 # K14: one /v2/ request, before a push or after writing registries.yaml
 # K10: what a release replaces, so what the last apply may prune. Never a
 # PersistentVolumeClaim (its data), a Namespace, a CRD, or a Job (its log).
 PRUNE_KINDS=(core/v1/ConfigMap core/v1/Secret core/v1/Service apps/v1/Deployment apps/v1/StatefulSet
@@ -77,12 +79,29 @@ build() {
   done < <(images)
 }
 
+# K14 (OPS-1-o-t): the registry's /v2/ answers 200, or 401 asking for the login.
+# Anything else — 503/504 from a proxy in front of it, or no answer — fails here,
+# naming the registry, before a release's worth of layers is sent into it.
+require_registry() {
+  local status
+  status="$(curl --noproxy '*' -s -o /dev/null -m "$REGISTRY_TIMEOUT_S" -w '%{http_code}' "https://$1/v2/")" ||
+    true
+  case "$status" in
+    200 | 401) ;;
+    *) die "registry $1 does not answer (HTTP ${status:-000} on /v2/): $2 (K14)" ;;
+  esac
+}
+
 push() {
-  local service local_image remote
+  local service local_image remote listed first
+  listed="$(images)"
+  first="${listed%%$'\n'*}"
+  first="${first##*$'\t'}"
+  require_registry "${first%%/*}" "nothing was pushed"
   while IFS=$'\t' read -r service local_image remote; do
     echo "== push $service"
     docker push "$remote" </dev/null
-  done < <(images)
+  done <<<"$listed"
 }
 
 # K5: the sealed secrets, opened into memory at $OPENED, which the caller
@@ -120,6 +139,9 @@ registries() {
   rm -rf "$OPENED"
   mv "$written" "$K3S_ETC/registries.yaml"
   echo "wrote $K3S_ETC/registries.yaml; if k3s is running, 'systemctl restart k3s' reads it"
+  # From the node itself: on 2026-10-24 the test server met 503/504 where the dev host met 401 (OPS-1-o-t).
+  require_registry "$(python3 -c 'import sys, yaml; print(next(iter(yaml.safe_load(open(sys.argv[1]))["configs"])))' \
+    "$K3S_ETC/registries.yaml")" "the file is written, but no pod of ours will pull"
 }
 
 # sops and age-keygen at their pins, each checked against its sha256 (K5).
