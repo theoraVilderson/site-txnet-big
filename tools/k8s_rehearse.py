@@ -22,6 +22,7 @@ import os
 import re
 import secrets
 import shlex
+import signal
 import subprocess
 import sys
 import threading
@@ -230,12 +231,16 @@ def restarts(pod, container):
 
 def kill_postgres():
     """SIGKILL on the node, no shutdown at all: the container restarts in its pod
-    and Postgres replays its WAL (crictl stop --timeout 0)."""
+    and Postgres replays its WAL. Sent to the container's own pid: `crictl stop
+    --timeout 0` also zeroes crictl 1.34's call deadline and failed half the time."""
     pod = workload("main-db")[0].split("/", 1)[1] + "-0"
     before = restarts(pod, "main-db")
     ids = subprocess.run(["k3s", "crictl", "ps", "-q", "--name", "^main-db$", "--label",
                           f"io.kubernetes.pod.name={pod}"], check=True, capture_output=True, text=True).stdout.split()
-    subprocess.run(["k3s", "crictl", "stop", "--timeout", "0", *ids], check=True, capture_output=True)
+    for container in ids:
+        pid = subprocess.run(["k3s", "crictl", "inspect", "-o", "go-template", "--template", "{{.info.pid}}",
+                              container], check=True, capture_output=True, text=True).stdout.strip()
+        os.kill(int(pid), signal.SIGKILL)
     deadline = time.monotonic() + RESTART_WAIT_S
     while restarts(pod, "main-db") == before:
         if time.monotonic() > deadline:

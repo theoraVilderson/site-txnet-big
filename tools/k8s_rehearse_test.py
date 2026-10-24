@@ -32,6 +32,30 @@ def route(name, backend, match):
             "spec": {"entryPoints": ["websecure"], "routes": [{"match": match, "services": [{"name": backend}]}]}}
 
 
+# K12 (OPS-1-o-f): main-db is SIGKILLed, no shutdown at all. `crictl stop
+# --timeout 0` made crictl 1.34's own call deadline zero: on the test server it
+# failed "context deadline exceeded", and left a container running once.
+class KillTest(unittest.TestCase):
+    def test_main_db_gets_sigkill_from_its_pid(self):
+        calls, killed = [], []
+        counts = iter([0, 1])
+
+        def run(argv, **_):
+            calls.append(argv)
+            out = "c0ffee\n" if "ps" in argv else "4242\n" if "inspect" in argv else ""
+            return subprocess.CompletedProcess(argv, 0, stdout=out)
+        saved = (kr.subprocess.run, kr.os.kill, kr.restarts, kr.kube, kr.workload, kr.say)
+        kr.subprocess.run, kr.os.kill = run, lambda pid, sig: killed.append((pid, sig))
+        kr.restarts, kr.kube = lambda *_: next(counts), lambda *_: ""
+        kr.workload, kr.say = lambda _: ["statefulset/main-db"], lambda _: None
+        try:
+            kr.kill_postgres()
+        finally:
+            (kr.subprocess.run, kr.os.kill, kr.restarts, kr.kube, kr.workload, kr.say) = saved
+        self.assertEqual(killed, [(4242, kr.signal.SIGKILL)])
+        self.assertFalse([a for a in calls if "stop" in a])
+
+
 class ReadyTest(unittest.TestCase):
     def test_short_workloads_are_named(self):
         listing = {"items": [workload("Deployment", "billing-service", 1, 1),
