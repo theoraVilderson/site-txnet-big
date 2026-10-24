@@ -154,17 +154,17 @@ Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's
 
 ## Deploying
 
-**K10 — `scripts/prod.k8s.sh build|push|render|deploy`.** `build` builds one
+**K10 — `scripts/prod.k8s.sh build|push|render|deploy|smoke|rollback`.** `build` builds one
 service at a time (`k8s_render.py --images` lists them) and tags each for the
 registry. `deploy` renders into `k8s/base/` and `k8s/monitoring/base/` (git-ignored,
 K11), applies `k8s/traefik` and waits for its CRDs, applies all but the Deployments
 and DaemonSets (`tools/k8s_manifest.py stores`), waits on the StatefulSets, runs
 `db-migrate` to completion, applies the overlay
 (`kubectl kustomize k8s/overlays/<env>`), then waits on
-`kubectl rollout status --timeout=300s` for every workload; a
-workload that does not become ready is `kubectl rollout undo`ne and the script
-fails — Swarm's `failure_action: rollback`. Only after every rollout is ready
-does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so an undone pod
+`kubectl rollout status --timeout=300s` for every workload; one not ready
+sets the release back (K16; on the first release, the failed ones are
+`rollout undo`ne). Only after every rollout is ready and the smoke check passed
+does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so a pod set back
 still finds the hashed Secrets it names; `--prune-allowlist` never names a
 claim, a Namespace, a CRD or a Job. Overlays: `prod` (both bases, `k8s/traefik`,
 `k8s/monitoring`); `rehearsal` lands with K12 (OPS-1-o-f).
@@ -216,7 +216,7 @@ stand-in pod too, while 9090 DNATed and 9999 still answered; the node reached
 until the next `apply`; `remove` reopened them. Tests: `test_k3s_ports.py`.
 
 **K14 — The node pulls; it does not build.** K8's images are built off the node
-and pushed; it pulls with a sealed pull-only login. Rules R1–R4 in `contract.registry.md` (OPS-1-o-m).
+and pushed; it pulls with a sealed pull-only login. Rules R1–R4 in `contract.release.md` (OPS-1-o-m).
 
 ## Surviving and growing (ADR-0164)
 
@@ -226,13 +226,8 @@ bucket has object lock in compliance mode for 30 days (user, 2026-10-24), so a k
 that can list and expire still cannot destroy what is locked (OPS-1-o-o). The
 bundle (B6, B7) is unchanged and remains the restore of everything else.
 
-**K16 — A release is one unit.** `IMAGE_TAG` is the commit; `deploy` records
-the previous tag. After every rollout is ready, `prod.k8s.sh smoke` asks each
-service's health and one request per IngressRoute; a failure, or a rollout
-not ready in K10's 300s, sets **every** workload of the release back to the
-previous tag. `prod.k8s.sh rollback [tag]` does the same by hand. `db-migrate`
-is never undone: C-39 keeps the previous release correct on the new schema
-(OPS-1-o-p).
+**K16 — A release is one unit.** Smoke-checked after `deploy`, and set back
+whole, never `db-migrate`. Rules R5–R9 in `contract.release.md` (OPS-1-o-p).
 
 **K17 — A second node.** `k3s agent --server https://<node1>:6443` with the
 token from a Secret; flannel `--flannel-backend=wireguard-native`, since node

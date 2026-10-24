@@ -10,7 +10,8 @@ contract.secrets.md).
     python3 tools/k8s_secrets.py edit <path>     `sops edit` its sealed copy; then `prod.k8s.sh deploy`
 
 What is sealed is derived: each stack's env files, and each secret file a
-service mounts (k8srender/sealed.py). SOPS_AGE_KEY_FILE overrides the key's
+service mounts (k8srender/sealed.py), plus the origin-pull client pair the
+smoke check presents (K16). SOPS_AGE_KEY_FILE overrides the key's
 place; sops and age-keygen come from `prod.k8s.sh install-tools`.
 """
 import os
@@ -123,21 +124,21 @@ def secret_paths(env_dir: Path | None = None) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    from k8srender.sealed import sealed_path
+    from k8srender.sealed import sealed_path, smoke_files
     cmd, args = (argv[1], argv[2:]) if len(argv) > 1 else ("", [])
     if cmd == "init":
         recipient = init(REPO, Path(key_env()["SOPS_AGE_KEY_FILE"]))
         print(f"age recipient {recipient}; copy {key_env()['SOPS_AGE_KEY_FILE']} off the server now (K5)")
     elif cmd == "list":
-        for rel in env_files() + secret_paths():
+        for rel in env_files() + secret_paths() + smoke_files():
             print(f"{'sealed ' if (REPO / sealed_path(rel)).is_file() else 'MISSING'}  {rel}")
     elif cmd == "seal":
-        written = seal(REPO, args or env_files() + secret_paths(), replace=bool(args))
+        written = seal(REPO, args or env_files() + secret_paths() + smoke_files(), replace=bool(args))
         print(f"sealed {len(written)}: {', '.join(written) or 'nothing changed'}")
     elif cmd == "open" and len(args) == 1:
         out = Path(args[0])
         open_files(REPO, env_files(), out)
-        open_files(REPO, secret_paths(out), out)
+        open_files(REPO, secret_paths(out) + smoke_files(), out)
     elif cmd == "edit" and len(args) == 1:
         os.execvpe("sops", ["sops", "edit", str(REPO / sealed_path(args[0]))], key_env())
     else:

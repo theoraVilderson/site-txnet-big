@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Production on Kubernetes (hosting K8, K10, ADR-0147).
+# Production on Kubernetes (hosting K8, K10, K16, ADR-0147, ADR-0164).
 #
 #   scripts/prod.k8s.sh build              build every image compose builds, tagged for the registry
 #   scripts/prod.k8s.sh push               push them: the node pulls, it never builds (K14)
@@ -7,13 +7,17 @@
 #                                          registry's pull-only login from the sealed .env.prod (K14)
 #   scripts/prod.k8s.sh render             the Kustomize bases into k8s/base/ and k8s/monitoring/base/,
 #                                          from the sealed secrets opened in /dev/shm (K5); never committed
-#   scripts/prod.k8s.sh deploy [overlay]   render, migrate, apply, wait on every rollout; a workload
-#                                          that is not ready in 300s is rolled back and the deploy fails
+#   scripts/prod.k8s.sh deploy [overlay]   render, migrate, apply, wait on every rollout, smoke check; a
+#                                          workload not ready in 300s or a failed check sets every workload
+#                                          back to the release before, and the deploy fails (K16)
+#   scripts/prod.k8s.sh rollback [tag]     by hand: every workload back to `tag` (default: the release
+#                                          before the one running), rendered from that commit
+#   scripts/prod.k8s.sh smoke [overlay]    the smoke check alone: each container's probe, each IngressRoute
 #   scripts/prod.k8s.sh secrets init|list|seal [path...]|edit <path>
 #                                          the sealed secrets (tools/k8s_secrets.py, contract.secrets.md)
 #   scripts/prod.k8s.sh install-tools      sops and age-keygen at k8s/versions.env's pins, into /usr/local/bin
 #
-#   IMAGE_TAG     the release (default: the current commit)
+#   IMAGE_TAG     the release: the current commit, which deploy requires it to be (K16)
 #   HOST_GATEWAY  the node's address, which compose's `host-gateway` means (K3); render and deploy
 #   KUBECTL       the kubectl to run (default: kubectl)
 #   TOOLS_DIR     where install-tools puts sops and age-keygen (default: /usr/local/bin)
@@ -28,8 +32,6 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 IMAGE_TAG="${IMAGE_TAG:-$(git -C "$ROOT_DIR" rev-parse --short=12 HEAD)}"
 KUBECTL="${KUBECTL:-kubectl}"
-BASE="$ROOT_DIR/k8s/base"
-MONITORING_BASE="$ROOT_DIR/k8s/monitoring/base"
 NAMESPACE=txnet
 ROLLOUT_TIMEOUT=300s # K10
 JOB_POLL_S=5
@@ -38,11 +40,14 @@ JOB_POLL_S=5
 PRUNE_KINDS=(core/v1/ConfigMap core/v1/Secret core/v1/Service apps/v1/Deployment apps/v1/StatefulSet
   apps/v1/DaemonSet traefik.io/v1alpha1/IngressRoute traefik.io/v1alpha1/Middleware)
 TRAEFIK_CRDS=(crd/ingressroutes.traefik.io crd/middlewares.traefik.io)
+RELEASE_RECORD=txnet-release # K16: ConfigMap {history, overlay}
+ROLLOUT_FAILED=()
 TOOLS_DIR="${TOOLS_DIR:-/usr/local/bin}"
 K3S_ETC="${K3S_ETC:-/etc/rancher/k3s}"
 # Every temporary path here holds secrets: removed however the script exits.
 TEMPS=()
-trap 'rm -rf "${TEMPS[@]}"' EXIT
+# A rollback's worktree is one of them; `worktree prune` then forgets it.
+trap 'rm -rf "${TEMPS[@]}"; git -C "$ROOT_DIR" worktree prune' EXIT
 
 die() {
   echo "prod.k8s.sh: $*" >&2
@@ -89,13 +94,18 @@ open_sealed() {
   python3 "$ROOT_DIR/tools/k8s_secrets.py" open "$OPENED"
 }
 
-render() {
+# `tree`'s two stacks rendered into its own k8s/base and k8s/monitoring/base,
+# from the sealed secrets opened at $OPENED (K5). `tree` is the checkout, or a
+# rollback's worktree of an earlier commit (K16).
+render_tree() {
   [ -n "${HOST_GATEWAY:-}" ] || die "HOST_GATEWAY=<node ip> is required (K3)"
+  python3 "$1/tools/k8s_render.py" "$1/k8s/base" --tag "$2" --host-gateway "$HOST_GATEWAY" --sealed "$OPENED"
+  python3 "$1/tools/k8s_render.py" "$1/k8s/monitoring/base" --stack monitoring --tag "$2" --sealed "$OPENED"
+}
+
+render() {
   open_sealed
-  python3 "$ROOT_DIR/tools/k8s_render.py" "$BASE" --tag "$IMAGE_TAG" --host-gateway "$HOST_GATEWAY" \
-    --sealed "$OPENED"
-  python3 "$ROOT_DIR/tools/k8s_render.py" "$MONITORING_BASE" --stack monitoring --tag "$IMAGE_TAG" \
-    --sealed "$OPENED"
+  render_tree "$ROOT_DIR" "$IMAGE_TAG"
   rm -rf "$OPENED"
 }
 
@@ -130,19 +140,25 @@ install_tools() {
   echo "installed $("$TOOLS_DIR/sops" --version | head -1), age-keygen $("$TOOLS_DIR/age-keygen" --version)"
 }
 
-# Wait on each `namespace:kind/name`; undo every one that is not ready, then fail (K10).
+# Wait on each `namespace:kind/name`; the ones not ready in time go to
+# ROLLOUT_FAILED. Never fails itself: called inside `||` or `if`, a function
+# runs with `set -e` off, so the caller reads the array instead.
 roll_out() {
-  local workload failed=()
+  local workload
   for workload in "$@"; do
     "$KUBECTL" -n "${workload%%:*}" rollout status "${workload#*:}" --timeout="$ROLLOUT_TIMEOUT" ||
-      failed+=("$workload")
+      ROLLOUT_FAILED+=("$workload")
   done
-  [ ${#failed[@]} -eq 0 ] && return 0
-  for workload in "${failed[@]}"; do
+}
+
+# K10, for the first release only: with no earlier one to go back to, each
+# workload that failed is undone on its own.
+undo_each() {
+  local workload
+  for workload in "$@"; do
     echo "== rollback $workload" >&2
     "$KUBECTL" -n "${workload%%:*}" rollout undo "${workload#*:}" || true
   done
-  die "not ready in $ROLLOUT_TIMEOUT, rolled back: ${failed[*]}"
 }
 
 # db-migrate runs to completion before any Deployment is applied (K8). A Job's
@@ -150,7 +166,7 @@ roll_out() {
 migrate() {
   local state
   "$KUBECTL" -n "$NAMESPACE" delete job db-migrate --ignore-not-found --wait=true
-  "$KUBECTL" apply -k "$BASE/jobs"
+  "$KUBECTL" apply -k "$1/k8s/base/jobs"
   while :; do
     state="$("$KUBECTL" -n "$NAMESPACE" get job db-migrate \
       -o jsonpath='{.status.conditions[?(@.status=="True")].type}')"
@@ -165,29 +181,138 @@ migrate() {
   done
 }
 
-deploy() {
-  local overlay="$ROOT_DIR/k8s/overlays/${1:-prod}" manifest workloads kind allow=()
+# `tree`'s rendered bases through `overlay`, into MANIFEST (0600: it holds Secrets).
+build_manifest() {
+  local overlay="$1/k8s/overlays/$2"
   [ -d "$overlay" ] || die "no overlay $overlay"
-  render
-  manifest="$(mktemp)" # holds Secrets: mktemp is 0600, and it is removed on exit
-  TEMPS+=("$manifest")
+  MANIFEST="$(mktemp)"
+  TEMPS+=("$MANIFEST")
+  "$KUBECTL" kustomize "$overlay" >"$MANIFEST"
+}
+
+# K10's order for `tree`: Traefik's CRDs, the stores, db-migrate unless $2 is
+# `no` (K16: a rollback never undoes it), then the workloads. Stops at the
+# first set with a workload in ROLLOUT_FAILED.
+apply_release() {
+  local workloads
+  ROLLOUT_FAILED=()
   # An IngressRoute cannot be applied before its kind exists.
-  "$KUBECTL" apply -k "$ROOT_DIR/k8s/traefik"
+  "$KUBECTL" apply -k "$1/k8s/traefik"
   "$KUBECTL" wait --for condition=established --timeout=60s "${TRAEFIK_CRDS[@]}"
-  "$KUBECTL" kustomize "$overlay" >"$manifest"
-  workloads="$(python3 "$ROOT_DIR/tools/k8s_manifest.py" workloads "$manifest")"
-  python3 "$ROOT_DIR/tools/k8s_manifest.py" stores "$manifest" | "$KUBECTL" apply -f -
+  workloads="$(python3 "$ROOT_DIR/tools/k8s_manifest.py" workloads "$MANIFEST")"
+  python3 "$ROOT_DIR/tools/k8s_manifest.py" stores "$MANIFEST" | "$KUBECTL" apply -f -
   # shellcheck disable=SC2046 # one workload per line, no spaces
   roll_out $(grep ':statefulset/' <<<"$workloads" || true)
-  migrate
-  "$KUBECTL" apply -f "$manifest"
+  [ ${#ROLLOUT_FAILED[@]} -eq 0 ] || return 0
+  [ "$2" = no ] || migrate "$1"
+  "$KUBECTL" apply -f "$MANIFEST"
   # shellcheck disable=SC2046
   roll_out $(grep -E ':(deployment|daemonset)/' <<<"$workloads" || true)
-  # Pruned only now: a rollback above still finds the Secrets the old pods name.
-  for kind in "${PRUNE_KINDS[@]}"; do allow+=("--prune-allowlist=$kind"); done
-  "$KUBECTL" apply -f "$manifest" --prune -l app.kubernetes.io/part-of=txnet "${allow[@]}"
-  echo "deployed $IMAGE_TAG"
 }
+
+# K16: every container's probe and one request per IngressRoute, through Traefik
+# with the origin-pull client pair (tools/k8s_release.py).
+smoke_check() {
+  python3 "$ROOT_DIR/tools/k8s_release.py" smoke "$MANIFEST" --sealed "$OPENED" --kubectl "$KUBECTL"
+}
+
+# Only after the release is ready and passed its smoke check: until then the
+# Secrets the previous release's pods name must still exist (K10).
+prune() {
+  local kind allow=()
+  for kind in "${PRUNE_KINDS[@]}"; do allow+=("--prune-allowlist=$kind"); done
+  "$KUBECTL" apply -f "$MANIFEST" --prune -l app.kubernetes.io/part-of=txnet "${allow[@]}"
+}
+
+# K16: the record is one ConfigMap, outside the release's label, so no prune removes it.
+release_field() {
+  "$KUBECTL" -n "$NAMESPACE" get configmap "$RELEASE_RECORD" -o jsonpath="{.data.$1}" 2>/dev/null || true
+}
+
+record_release() { # deploy|rollback <tag> <overlay>
+  local history
+  # shellcheck disable=SC2046 # the history is space-separated commits
+  history="$(python3 "$ROOT_DIR/tools/k8s_release.py" history "$1" "$2" $(release_field history))"
+  "$KUBECTL" -n "$NAMESPACE" create configmap "$RELEASE_RECORD" --from-literal=history="$history" \
+    --from-literal=overlay="$3" --dry-run=client -o yaml | "$KUBECTL" apply -f -
+}
+
+# K16: a release is a commit. The tag names it, and a rollback renders that
+# commit again, so what is deployed must be exactly what was committed.
+require_commit() {
+  [ "$IMAGE_TAG" = "$(git -C "$ROOT_DIR" rev-parse --short=12 HEAD)" ] ||
+    die "IMAGE_TAG $IMAGE_TAG is not HEAD: a release is the commit checked out (K16)"
+  [ -z "$(git -C "$ROOT_DIR" status --porcelain)" ] ||
+    die "the checkout has uncommitted changes: a rollback to $IMAGE_TAG could not render them (K16)"
+}
+
+# K16: every workload back to `tag`, rendered from that commit in a worktree,
+# with today's sealed secrets (a rotated password stays rotated) and no db-migrate.
+go_back() {
+  local tag="$1" tree
+  git -C "$ROOT_DIR" rev-parse --verify --quiet "$tag^{commit}" >/dev/null || die "$tag is not a commit here (K16)"
+  tree="$(mktemp -d)"
+  TEMPS+=("$tree")
+  git -C "$ROOT_DIR" worktree add --quiet --detach "$tree" "$tag"
+  render_tree "$tree" "$tag"
+  build_manifest "$tree" "$2"
+  apply_release "$tree" no
+  [ ${#ROLLOUT_FAILED[@]} -eq 0 ] || die "the rollback to $tag is not ready either: ${ROLLOUT_FAILED[*]}"
+  smoke_check || die "the rollback to $tag fails its smoke check too"
+  prune
+  record_release rollback "$tag" "$2"
+}
+
+deploy() {
+  local overlay="${1:-prod}" from reason
+  require_commit
+  # shellcheck disable=SC2046
+  from="$(python3 "$ROOT_DIR/tools/k8s_release.py" current $(release_field history))"
+  open_sealed
+  render_tree "$ROOT_DIR" "$IMAGE_TAG"
+  build_manifest "$ROOT_DIR" "$overlay"
+  apply_release "$ROOT_DIR" yes
+  if [ ${#ROLLOUT_FAILED[@]} -eq 0 ]; then
+    if smoke_check; then
+      prune
+      record_release deploy "$IMAGE_TAG" "$overlay"
+      echo "deployed $IMAGE_TAG"
+      return 0
+    fi
+    reason="failed its smoke check"
+  else
+    reason="was not ready in $ROLLOUT_TIMEOUT: ${ROLLOUT_FAILED[*]}"
+  fi
+  if [ -z "$from" ]; then
+    undo_each "${ROLLOUT_FAILED[@]}"
+    die "$IMAGE_TAG $reason; no earlier release to go back to (K10)"
+  fi
+  echo "== $IMAGE_TAG $reason: every workload back to $from (K16)" >&2
+  go_back "$from" "$overlay"
+  die "$IMAGE_TAG $reason; rolled back to $from"
+}
+
+# By hand (K16): back to `tag`, or to the release before the one running.
+rollback() {
+  local tag="${1:-}"
+  # shellcheck disable=SC2046
+  [ -n "$tag" ] || tag="$(python3 "$ROOT_DIR/tools/k8s_release.py" previous $(release_field history))"
+  [ -n "$tag" ] || die "no earlier release is recorded in configmap/$RELEASE_RECORD (K16)"
+  open_sealed
+  go_back "$tag" "$(release_field overlay)"
+  echo "rolled back to $tag"
+}
+
+# By hand: the smoke check against what HEAD renders (K16).
+smoke() {
+  open_sealed
+  render_tree "$ROOT_DIR" "$IMAGE_TAG"
+  build_manifest "$ROOT_DIR" "${1:-prod}"
+  smoke_check
+}
+
+# Sourced by tools/k8s_release_test.py, which drives deploy and rollback with a fake kubectl.
+[ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
 case "${1:-}" in
   build) build ;;
@@ -195,7 +320,9 @@ case "${1:-}" in
   registries) registries ;;
   render) render ;;
   deploy) deploy "${2:-}" ;;
+  smoke) smoke "${2:-}" ;;
+  rollback) rollback "${2:-}" ;;
   secrets) shift && exec python3 "$ROOT_DIR/tools/k8s_secrets.py" "$@" ;;
   install-tools) install_tools ;;
-  *) sed -n '2,20p' "$0" >&2 && exit 2 ;;
+  *) sed -n '2,24p' "$0" >&2 && exit 2 ;;
 esac

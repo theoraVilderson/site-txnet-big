@@ -25,7 +25,9 @@ renders from there; the checkout's plaintext is never read. Rotation is
 (`tables.py` STACKS: `.env`, `.env.prod`, `dev-docker/monitoring/.env.prod`),
 each file under `dev-docker/secrets/` a compose service binds (K7), and each
 compose `secrets:` file a service mounts (K11) — `k8srender/sealed.py`
-`secret_files`. A key file bound tomorrow is sealed with no edit here.
+`secret_files`. A key file bound tomorrow is sealed with no edit here. One pair
+no service mounts is named instead (`smoke_files`): the origin-pull
+`client.pem`/`client.key`, which the smoke check presents (R6); never `ca.key`.
 `dev-docker/secrets/backup-bundle-passphrase` is never sealed, and a service
 mounting it fails the render: the age key rides in the bundle (S3), so the
 passphrase in the repo would let a bundle open itself (B5).

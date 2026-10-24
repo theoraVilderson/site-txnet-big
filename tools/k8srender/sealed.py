@@ -11,6 +11,15 @@ SEALED_SUFFIX = ".sops"
 # B5: the age key rides in the bundle, so a bundle's passphrase sealed in the
 # repo would let a bundle open itself. It stays off the server, never here.
 NEVER_SEALED = {"dev-docker/secrets/backup-bundle-passphrase"}
+# K16: the pair Cloudflare presents on every pull (O3), which the smoke check
+# presents too: no service mounts it, so it is named here. Never the CA's key.
+ORIGIN_PULL_CLIENT_DIR = f"{SECRET_DIR}/origin-pull"
+ORIGIN_PULL_CLIENT_PAIR = ("client.pem", "client.key")
+
+
+def smoke_files() -> list[str]:
+    """The files the smoke check reads as secret, sealed beside the render's (S1)."""
+    return [f"{ORIGIN_PULL_CLIENT_DIR}/{name}" for name in ORIGIN_PULL_CLIENT_PAIR]
 
 
 def sealed_path(rel: str) -> str:
