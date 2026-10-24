@@ -97,3 +97,6 @@ txnetsite-perv.zip
 # The rendered Kustomize bases: every service's Secrets (hosting K2, K11, scripts/prod.k8s.sh render).
 k8s/base/
 k8s/monitoring/base/
+# Python bytecode, wherever a tool or script runs from.
+__pycache__/
+*.pyc
