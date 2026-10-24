@@ -245,6 +245,9 @@ build_manifest() {
 apply_release() {
   local workloads
   ROLLOUT_FAILED=()
+  # On an empty cluster Traefik's ServiceAccount and the stores' claims name
+  # these namespaces before the manifest that also holds them is applied.
+  "$KUBECTL" apply -f "$1/k8s/base/namespace.yaml" -f "$1/k8s/monitoring/base/namespace.yaml"
   # An IngressRoute cannot be applied before its kind exists.
   "$KUBECTL" apply -k "$1/k8s/traefik"
   "$KUBECTL" wait --for condition=established --timeout=60s "${TRAEFIK_CRDS[@]}"

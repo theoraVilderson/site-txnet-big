@@ -148,7 +148,7 @@ elif argv[:3] == ["apply", "-f", "-"]:
     text = sys.stdin.read()
     if text.startswith("{"):
         open(f"{state}/record", "w").write(text)
-elif argv[:2] == ["apply", "-f"]:
+elif argv[:2] == ["apply", "-f"] and not argv[2].endswith("namespace.yaml"):
     open(f"{state}/applied", "w").write(re.search(r"release: (\S+)", open(argv[2]).read()).group(1))
 elif argv[:1] == ["exec"]:
     open(f"{state}/exec-stdin", "w").write(sys.stdin.read())
@@ -210,8 +210,12 @@ class ScriptTest(unittest.TestCase):
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(record["history"], f"{self.OLD} {self.NEW}")
         self.assertLess(calls.index("smoke"), next(i for i, c in enumerate(calls) if "--prune" in c))
+        # OPS-1-o-f: on an empty cluster Traefik's ServiceAccount needs `txnet` to exist already.
+        namespaces = next(i for i, c in enumerate(calls) if c.endswith("monitoring/base/namespace.yaml"))
+        self.assertIn("k8s/base/namespace.yaml", calls[namespaces])
+        self.assertLess(namespaces, next(i for i, c in enumerate(calls) if c.endswith("k8s/traefik")))
         # OPS-1-o-w: the migration makes the group roles the logins join; the services then log in.
-        release = next(i for i, c in enumerate(calls) if c.startswith("apply -f /"))
+        release = next(i for i, c in enumerate(calls) if c.startswith("apply -f /") and "namespace.yaml" not in c)
         self.assertLess(calls.index("migrate"), calls.index("login-roles"))
         self.assertLess(calls.index("login-roles"), release)
 
