@@ -10,7 +10,8 @@ One encrypted file holds the whole platform: every database, Redis (so nobody
 is signed out), the queued messages, uploaded files, runtime-written text, the
 keys and env files. Made nightly and on demand without stopping anything; sent
 to S3 by a separate script with a key that cannot delete. Hosting
-`contract.bundle.md` B1…B9; code `scripts/bundle/`.
+`contract.bundle.md` B1…B10; code `scripts/bundle/`. On Kubernetes every
+command below takes `--stack k8s` (B10).
 
 ```bash
 BACKUP="python3 scripts/bundle/backup.py --stack dev"     # prod: --stack prod
@@ -107,6 +108,24 @@ downloaded from S3, too.
    `ENV_FILE=.env.prod python3 scripts/edge/edge_zone.py repoint <old> <new>`.
    Allowlists that named the old address: `runbook-move-server.md`, root-cause notes.
 
+### Bring it up in the cluster (the cutover, or the cluster's own recovery)
+
+The same file, compose's or the cluster's, restored into namespace `txnet` (B10):
+
+1. The cluster deployed at the bundle's commit: `git checkout <commit>`, then
+   `HOST_GATEWAY=<ip> scripts/prod.k8s.sh deploy` (a release is the commit
+   checked out, K16; it pulls the release's images, the node never builds, K14). Its `MAIN_DB_NAME` must be the bundle's (`inspect` names it):
+   a bundle from another stack is refused before anything stops.
+2. ```bash
+   python3 scripts/bundle/backup.py restore <file> --stack k8s [--passphrase-file <p>]
+   ```
+   A freshly deployed cluster has no users, so no `--replace`; one in use needs
+   it and gets a safety bundle first. Every workload goes to zero and comes back
+   at the replicas it had; if a run stops half-way, run it again — it reads them
+   from `txnet.io/replicas-before-restore` on each workload.
+3. The nightly bundle and the ship from the node:
+   `python3 scripts/bundle/backup.py install-timers --stack k8s`.
+
 ### Bring it up on this server (replacing what is here)
 
 ```bash
@@ -127,6 +146,9 @@ in its `keys.tar` if you want them.
   the newer migrations before the services read the schema.
 - Queued messages come back with their delay restarted (at most an hour late).
 - Not in a bundle: the monitoring history; images (built from the commit).
+- On a node past 85% disk, kubelet removes the images of workloads a restore
+  has stopped; they start again once pulled from the registry (K14), slower.
+  The throwaway proof cluster had no registry and had to be handed them again.
 
 ## Owner
 
@@ -139,4 +161,6 @@ the whole stack healthy; it found and fixed RabbitMQ's definitions missing from
 the bundle, a first boot starved by the compiling services, the data check
 reading a full Postgres 18 volume as empty, and images pulled outside the
 mirrors (OPS-1-ae, OPS-1-af). A restore with no `--replace` onto a server with
-data was refused and stopped nothing.
+data was refused and stopped nothing. **Into a cluster, 2026-10-24** (OPS-1-o-k): dev's
+bundle restored into a throwaway k3s, a re-run after a failed one, `--replace`
+with its safety bundle, `verify` and `ship` from pods — B10's proof.

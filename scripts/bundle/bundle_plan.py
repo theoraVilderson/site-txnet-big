@@ -178,3 +178,23 @@ def holds_data(volume_dir):
     root file read a full server as empty (restore test, 2026-10-23) — a restore
     would then have replaced it with no --replace and no safety bundle."""
     return os.path.isdir(volume_dir) and bool(os.listdir(volume_dir))
+
+
+def holds_users(figures):
+    """True when the main database has users. On Kubernetes a restore follows a
+    deploy, whose db-migrate seeds permissions and meters into every cluster:
+    rows alone do not say a platform is in use, users do."""
+    return figures.get("pg:identity.user", 0) > 0
+
+
+def main_database_mismatch(manifest, config):
+    """Why the bundle's main database is not this server's, or None. Each
+    database restores under its own name, so a bundle from another stack (dev's
+    `devtxnet` into a cluster rendered from .env.prod, OPS-1-o-k) would pass its
+    own counts and leave the services reading an empty one."""
+    here = mp.service_environment(config, "main-db").get("POSTGRES_DB")
+    there = manifest["postgres"]["main"]
+    if there == here:
+        return None
+    return ("the bundle's main database is %r and this server's services read %r (MAIN_DB_NAME): "
+            "restore it where MAIN_DB_NAME is %r" % (there, here, there))

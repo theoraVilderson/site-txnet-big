@@ -97,12 +97,17 @@ def present_carried(root):
     return [path for path in CARRIED_FILES if os.path.exists(os.path.join(root, path))]
 
 
-def rabbitmq_node(config):
-    """The node name compose gives rabbitmq; its queues live in a directory of that name."""
-    environment = config["services"]["rabbitmq"].get("environment") or {}
+def service_environment(config, service):
+    """A service's resolved environment as a dict, whichever form compose printed it in."""
+    environment = config["services"][service].get("environment") or {}
     if isinstance(environment, list):
         environment = dict(item.split("=", 1) for item in environment)
-    return environment.get("RABBITMQ_NODENAME", "")
+    return environment
+
+
+def rabbitmq_node(config):
+    """The node name compose gives rabbitmq; its queues live in a directory of that name."""
+    return service_environment(config, "rabbitmq").get("RABBITMQ_NODENAME", "")
 
 
 def quick_rsync(src, dest):

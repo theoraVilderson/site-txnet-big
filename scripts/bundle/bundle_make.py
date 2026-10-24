@@ -49,9 +49,10 @@ def make(host, root, when):
                     "commit": host.run(["git", "-C", root, "rev-parse", "HEAD"]).strip()}
         dump_postgres(host, staging, manifest)
         dump_redis(host, config, staging, manifest)
-        messages = mq.save(mq.Broker(host))
+        with host.management_url(mq.MANAGEMENT_PORT) as url:
+            messages = mq.save(mq.Broker(host, url))
         write_json(os.path.join(staging, "rabbitmq", "messages.json"), messages)
-        write_json(os.path.join(staging, "rabbitmq", "definitions.json"), json.loads(host.compose(*mq.EXPORT_DEFINITIONS)))
+        write_json(os.path.join(staging, "rabbitmq", "definitions.json"), mq.export_definitions(host))
         manifest["figures"]["mq:messages"] = len(messages)
         manifest["volumes"] = pack_volumes(host, config, staging)
         manifest["keys"] = pack_keys(root, staging)
@@ -69,19 +70,19 @@ def write_json(path, value):
 
 
 def main_db(host, *args):
-    """argv running args inside main-db, through the stack's wrapper."""
-    return [host.wrapper(), "exec", "-T", "main-db", *args]
+    """argv running args inside main-db: its container, or its pod's (bundle_stack)."""
+    return host.exec_argv("main-db", *args)
 
 
 def dump_postgres(host, staging, manifest):
     """roles.sql, then <db>.dump for every database; the main one with its row counts."""
     folder = os.path.join(staging, "postgres")
     os.makedirs(folder)
-    env = {k: host.compose("exec", "-T", "main-db", "printenv", k).strip() for k in ("POSTGRES_USER", "POSTGRES_DB")}
+    env = {k: host.run(main_db(host, "printenv", k)).strip() for k in ("POSTGRES_USER", "POSTGRES_DB")}
     host.run_to_file(main_db(host, "sh", "-c", 'pg_dumpall -U "$POSTGRES_USER" --roles-only'),
                      os.path.join(folder, "roles.sql"))
-    databases = host.compose("exec", "-T", "main-db", "sh", "-c", PSQL_SESSION, "_", env["POSTGRES_DB"],
-                             stdin=DATABASES_SQL + ";\n").split()
+    databases = host.run(main_db(host, "sh", "-c", PSQL_SESSION, "_", env["POSTGRES_DB"]),
+                         stdin=DATABASES_SQL + ";\n").split()
     for database in databases:
         path = os.path.join(folder, database + ".dump")
         if database == env["POSTGRES_DB"]:
@@ -122,18 +123,17 @@ def dump_redis(host, config, staging, manifest):
     """An RDB of the live keyspace, loaded once in a throwaway Redis: a bundle whose Redis does not load fails here."""
     folder = os.path.join(staging, "redis")
     os.makedirs(folder)
-    host.run_to_file([host.wrapper(), "exec", "-T", "memory-data", "sh", "-c", REDIS_RDB],
+    host.run_to_file(host.exec_argv("memory-data", "sh", "-c", REDIS_RDB),
                      os.path.join(folder, "dump.rdb"), stdin=(mh.redis_password(config) + "\n").encode())
-    manifest["figures"].update(mf.parse_keyspace(load_redis(host, config, folder)))
+    manifest["figures"].update(mf.parse_keyspace(load_redis(host, folder)))
 
 
-def load_redis(host, config, rdb_folder, volume=None):
-    """redis-load.sh in memory-data's image: into `volume`, or scratch storage when None."""
-    mounts = ["-v", "%s:/bundle:ro" % rdb_folder, "-v", "%s:/load.sh:ro" % REDIS_LOAD_SCRIPT]
-    if volume:
-        mounts += ["-v", "%s:/data" % volume]
-    image = config["services"]["memory-data"]["image"]
-    return host.run(["docker", "run", "--rm", "--network", "none", *mounts, "--entrypoint", "sh", image, "/load.sh"])
+def load_redis(host, rdb_folder, volume=None):
+    """redis-load.sh in memory-data's image: into the compose volume `volume`, or scratch storage when None."""
+    with host.scratch(host.image("memory-data"), volume=volume) as box:
+        box.put(os.path.join(rdb_folder, "dump.rdb"), "/bundle/dump.rdb")
+        box.put(REDIS_LOAD_SCRIPT, "/load.sh")
+        return host.run(box.exec_argv("sh", "/load.sh"))
 
 
 def pack_volumes(host, config, staging):
@@ -141,8 +141,8 @@ def pack_volumes(host, config, staging):
     folder = os.path.join(staging, "volumes")
     os.makedirs(folder)
     volumes = bp.file_volumes(config)
-    for key, name in sorted(volumes.items()):
-        host.run(["tar", "-C", host.volume_dir(name), "--numeric-owner", "-cf", os.path.join(folder, key + ".tar"), "."])
+    for key in sorted(volumes):
+        host.pack_volume(key, os.path.join(folder, key + ".tar"))
     return sorted(volumes)
 
 

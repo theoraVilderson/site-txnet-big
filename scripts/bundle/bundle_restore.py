@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 
 import bundle_io as bio
 import bundle_make as bm
@@ -20,18 +21,17 @@ import move_plan as mp
 
 UNSEAL = 'gpg --batch --quiet --pinentry-mode loopback --passphrase-file "$2" -d "$1" | zstd -dq | tar -C "$3" -xf -'
 READY_TRIES = 60
-WAIT_TIMEOUT_S = "600"
-# One image at a time, each attempt bounded: built together on the 2026-10-23
-# fresh server, three `apk add`s hung on stalled connections (apk has no timeout).
-BUILD_TIMEOUT_S = "600"
-BUILD_ATTEMPTS = 3
-DRILL_CONTAINER = "txnet-bundle-drill"
+# The base image's entrypoint: ours (H1) wants the pgBackRest passphrase, which a
+# drill has no use for. No address to listen on: trust, so the socket only.
+DRILL_POSTGRES = ["docker-entrypoint.sh", "postgres", "-c", "listen_addresses="]
 PSQL = 'psql -U "$POSTGRES_USER" -d "$1" -Atq'
-PG_RESTORE = 'pg_restore -U "$POSTGRES_USER" --create --exit-on-error -d postgres'
+PG_RESTORE = 'pg_restore -U "$POSTGRES_USER" --create --exit-on-error -d postgres "$1" && rm "$1"'
 DROP_DATABASE = 'psql -U "$POSTGRES_USER" -d postgres -q -c "DROP DATABASE IF EXISTS \\"$1\\" WITH (FORCE)"'
 # Each statement on its own: a role this server already has fails its CREATE
 # and still takes the bundle's ALTER (password, attributes).
-ROLES = 'psql -U "$POSTGRES_USER" -d postgres -q -v ON_ERROR_STOP=0'
+ROLES = 'psql -U "$POSTGRES_USER" -d postgres -q -v ON_ERROR_STOP=0 -f "$1" && rm "$1"'
+# Where a dump is put before it runs: whole and counted (bundle_stack.Box.put).
+RESTORE_DIR = "/tmp/txnet-restore"
 
 
 class Abort(Exception):
@@ -85,25 +85,15 @@ def gate(manifest, found, prefixes, what):
 
 def drill(host, work, manifest):
     """Restores the bundle into throwaway containers and compares; returns lines to print."""
-    config = host.config()
-    image = config["services"]["main-db"]["image"]
     su = manifest["postgres"]["superuser"]
-    # the base image's entrypoint: ours (H1) wants the pgBackRest passphrase, which a drill has no use for
-    host.run(["docker", "run", "-d", "--rm", "--network", "none", "--name", DRILL_CONTAINER, "-e", "POSTGRES_USER=" + su,
-              "-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_DB=postgres",
-              "--entrypoint", "docker-entrypoint.sh", image, "postgres"])
-    try:
-        in_drill = ["docker", "exec", "-i", DRILL_CONTAINER, "sh", "-c"]
-        # ready means after initdb's own temporary server has stopped, not while it answers
-        host.sh('for i in $(seq %d); do docker logs "$1" 2>&1 | grep -q "init process complete" '
-                '&& docker exec "$1" pg_isready -q -U "$2" 2>/dev/null && exit 0; sleep 1; done; '
-                'docker logs --tail 5 "$1"; exit 1' % READY_TRIES, DRILL_CONTAINER, su)
-        restore_databases(host, in_drill, work, manifest)
+    env = {"POSTGRES_USER": su, "POSTGRES_HOST_AUTH_METHOD": "trust", "POSTGRES_DB": "postgres"}
+    with host.scratch(host.image("main-db"), command=DRILL_POSTGRES, env=env) as box:
+        wait_ready(host, box, su)
+        in_drill = box.exec_argv("sh", "-c")
+        restore_databases(host, box, work, manifest)
         run_psql = lambda db, sql: host.run(in_drill + [PSQL, "_", db], stdin=sql)  # noqa: E731
         tables = gate(manifest, pg_counts(run_psql, manifest["postgres"]["main"]), ("pg:",), "row counts")
-    finally:
-        subprocess.run(["docker", "rm", "-f", DRILL_CONTAINER], capture_output=True)
-    keyspace = bm.load_redis(host, config, os.path.join(work, "redis"))
+    keyspace = bm.load_redis(host, os.path.join(work, "redis"))
     keys = gate(manifest, mf.parse_keyspace(keyspace), ("redis:",), "Redis keys")
     archives = [os.path.join(work, "volumes", v + ".tar") for v in manifest["volumes"]] + [os.path.join(work, "keys.tar")]
     for archive in archives:
@@ -112,13 +102,30 @@ def drill(host, work, manifest):
             "%d file volumes and the keys read back" % len(manifest["volumes"])]
 
 
-def restore_databases(host, in_container, work, manifest):
-    """roles, then each database dropped and restored from its dump, through in_container (`sh -c` argv)."""
-    host.run_from_file(in_container + [ROLES], os.path.join(work, "postgres", "roles.sql"))
+def wait_ready(host, box, superuser):
+    """Ready means after initdb's own temporary server has stopped, not while it answers."""
+    for _ in range(READY_TRIES):
+        if "init process complete" in box.logs():
+            try:
+                host.run(box.exec_argv("pg_isready", "-q", "-U", superuser))
+                return
+            except RuntimeError:
+                pass  # the final server is still starting
+        time.sleep(1)
+    raise Abort("the drill's Postgres did not start: %s" % box.logs()[-500:])
+
+
+def restore_databases(host, box, work, manifest):
+    """roles, then each database dropped and restored from its dump, each file put into box first."""
+    def run_file(script, name, *args):
+        inside = "%s/%s" % (RESTORE_DIR, name)
+        box.put(os.path.join(work, "postgres", name), inside)
+        host.run(box.exec_argv("sh", "-c", script, "_", inside, *args))
+    run_file(ROLES, "roles.sql")
     for database in manifest["postgres"]["databases"]:
-        host.run(in_container + [DROP_DATABASE, "_", database])
-        host.run_from_file(in_container + [PG_RESTORE], os.path.join(work, "postgres", database + ".dump"))
-    host.run(in_container + ['vacuumdb -U "$POSTGRES_USER" --all --analyze-only -q'])
+        host.run(box.exec_argv("sh", "-c", DROP_DATABASE, "_", database))
+        run_file(PG_RESTORE, database + ".dump")
+    host.run(box.exec_argv("sh", "-c", 'vacuumdb -U "$POSTGRES_USER" --all --analyze-only -q'))
 
 
 def git_relation(host, root, commit):
@@ -130,9 +137,10 @@ def git_relation(host, root, commit):
     return bp.code_relation(commit, head, is_ancestor)
 
 
-def restore_keys(root, work, manifest, passphrase):
-    """Writes the keys and env files this checkout lacks; returns (written, kept because different)."""
-    here = {p: bio.path_digest(os.path.join(root, p)) for p in manifest["keys"]}
+def restore_keys(host, root, work, manifest, passphrase):
+    """Writes the keys and env files this server lacks; returns (written, kept because different).
+    What this server has is the stack's answer: on a node with sealed secrets, the sealed copy (S4)."""
+    here = {p: host.key_digest(p) for p in manifest["keys"]}
     write, differ = bp.keys_to_restore(manifest["keys"], here)
     # Two extractions: a checkout path lands under root, the age key at its own
     # absolute place (bp.key_tar_args stored it from /).
@@ -153,82 +161,67 @@ def restore(host, root, work, manifest, passphrase, options, say):
     if relation in (bp.CODE_OLDER, bp.CODE_UNRELATED) or (relation == bp.CODE_NEWER and not options.allow_newer_code):
         raise Abort("the bundle was made at commit %s and this checkout is %s of it: "
                     "`git checkout %s` first (or --allow-newer-code when newer)" % (manifest["commit"], relation, manifest["commit"]))
-    written, differ = restore_keys(root, work, manifest, passphrase)
+    written, differ = restore_keys(host, root, work, manifest, passphrase)
     say("keys and env restored: %s", ", ".join(written) or "none missing")
     for path in differ:
         say("KEPT this server's %s: it differs from the bundle's (keys.tar in the bundle has the old one)", path)
-    config = host.config()
-    volumes = mp.state_volumes(config)
-    had_data = bp.holds_data(host.volume_dir(volumes["postgres_data"]))
+    # after the keys: a new server's env files are the bundle's, written just now
+    mismatch = bp.main_database_mismatch(manifest, host.config())
+    if mismatch:
+        raise Abort(mismatch + "; nothing was stopped")
+    had_data = host.holds_data()
     if had_data:
         if not options.replace_here:
             raise Abort("this server holds data; --replace replaces it (a safety bundle of it is made first)")
         say("this server holds data: a safety bundle of it first")
         say("safety bundle: %s", bm.make(host, root, bm.now())[0])
-    build_images(host, config, say)
+    host.prepare(say)
     say("stopping the stack; the platform is down from here")
-    host.compose("up", "--no-start")
-    host.compose("stop")
-    restore_volumes(host, work, manifest, volumes)
-    keyspace = bm.load_redis(host, config, os.path.join(work, "redis"), volume=volumes["redis_vol_internal"])
+    host.stop_all()
+    restore_stores(host, work, manifest, say)
+    start(host, work, relation, say)
+    if had_data and host.has_service("pg-backup"):
+        # a new server's pg-backup makes its own first full on its first start (H3); a second would hit its lock
+        host.start_full_backup()
+        say("a full pgBackRest backup has started: the baseline after this restore")
+
+
+def restore_stores(host, work, manifest, say):
+    """The volumes and Redis written while everything is stopped, then the three stores up and filled."""
+    for key in manifest["volumes"]:
+        host.unpack_volume(key, os.path.join(work, "volumes", key + ".tar"))
+    host.empty_volume("rabbitmq_data")  # its messages come back by publish
+    keyspace = bm.load_redis(host, os.path.join(work, "redis"), volume="redis_vol_internal")
     say("Redis: %d figures match", gate(manifest, mf.parse_keyspace(keyspace), ("redis:",), "Redis keys"))
     # the stores first and alone: a broker booting beside eleven compiling services
     # timed out its first boot on the 2026-10-23 test, and every consumer that
     # found no broker exited (dev-serve then waits for a file change)
-    host.compose("up", "-d", "--wait", "--wait-timeout", WAIT_TIMEOUT_S, *mp.DATA_SERVICES)
+    host.start_data()
     definitions = os.path.join(work, "rabbitmq", "definitions.json")
     mq.restore_definitions(host, definitions if os.path.exists(definitions) else None)
     say("RabbitMQ: %s, and the env's user set from this server's env",
         "users, vhosts, permissions and queues imported" if os.path.exists(definitions) else "no definitions in this bundle")
-    in_main = [host.wrapper(), "exec", "-T", "main-db", "sh", "-c"]
-    restore_databases(host, in_main, work, manifest)
+    in_main = host.exec_argv("main-db", "sh", "-c")
+    restore_databases(host, host.service_box("main-db"), work, manifest)
     # the bundle's roles carry the bundle's passwords; the services log in with this server's env
-    host.run(["env", "ENV_FILE=.env." + host.stack, os.path.join(root, "scripts", "db-login-roles.sh")])
+    host.login_roles()
     run_psql = lambda db, sql: host.run(in_main + [PSQL, "_", db], stdin=sql)  # noqa: E731
     say("Postgres: %d tables match", gate(manifest, pg_counts(run_psql, manifest["postgres"]["main"]), ("pg:",), "row counts"))
-    start(host, work, relation, say)
-    if had_data and "pg-backup" in config["services"]:
-        # a new server's pg-backup makes its own first full on its first start (H3); a second would hit its lock
-        host.compose("exec", "-d", "pg-backup", "sh", "/usr/local/bin/pg-backup.sh", "full")
-        say("a full pgBackRest backup has started: the baseline after this restore")
-
-
-def build_images(host, config, say):
-    """Every image the stack builds, one at a time, while this server still serves."""
-    for service in sorted(name for name, spec in config["services"].items() if spec.get("build")):
-        for attempt in range(1, BUILD_ATTEMPTS + 1):
-            try:
-                host.run(["timeout", BUILD_TIMEOUT_S, host.wrapper(), "build", "-q", service])
-                break
-            except RuntimeError:
-                if attempt == BUILD_ATTEMPTS:
-                    raise Abort("%s did not build in %d attempts; nothing was stopped" % (service, BUILD_ATTEMPTS))
-                say("%s: build attempt %d failed or stalled; again", service, attempt)
-    say("every image built")
-
-
-def restore_volumes(host, work, manifest, volumes):
-    """Each file volume emptied and unpacked; RabbitMQ's emptied (its messages come back by publish)."""
-    for key in manifest["volumes"]:
-        target = host.volume_dir(volumes[key])
-        host.run(["find", target, "-mindepth", "1", "-delete"])
-        host.run(["tar", "-C", target, "--numeric-owner", "-xpf", os.path.join(work, "volumes", key + ".tar")])
-    host.run(["find", host.volume_dir(volumes["rabbitmq_data"]), "-mindepth", "1", "-delete"])
 
 
 def start(host, work, relation, say):
     """Everything up, and the queued messages published back."""
     if relation == bp.CODE_NEWER:
-        say("the code is newer than the bundle: apply its migrations before the services read the schema "
-            "(CLAUDE.md 'Dev database migrations'), then continue")
+        say("the code is newer than the bundle: %s before the services read the schema, then continue", host.MIGRATE_HINT)
     try:
-        host.compose("up", "-d", "--wait", "--wait-timeout", WAIT_TIMEOUT_S)
+        host.start_all()
     except RuntimeError as err:
-        say("WARNING: not every service became healthy (%s); the data is restored, look at `ps`", err)
+        say("WARNING: not every service became healthy (%s); the data is restored, look at its pods or `ps`", err)
     with open(os.path.join(work, "rabbitmq", "messages.json")) as f:
         messages = json.load(f)
     try:
-        lost = mq.load(mq.Broker(host), messages)
+        with host.management_url(mq.MANAGEMENT_PORT) as url:
+            lost = mq.load(mq.Broker(host, url), messages)
     except (OSError, RuntimeError) as err:  # urllib's HTTPError and URLError are OSErrors
         say("WARNING: the %d queued messages were not published back (%s); they are in the bundle's "
             "rabbitmq/messages.json", len(messages), err)

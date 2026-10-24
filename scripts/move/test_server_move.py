@@ -214,7 +214,8 @@ CONFIG = {
     "volumes": {"postgres_data": {"name": "devtxnet_postgres_data"}},
     "services": {
         "rabbitmq": {"environment": {"RABBITMQ_NODENAME": "rabbit@localhost"}},
-        "memory-data": {"command": ["redis-server", "--requirepass", "pw"]},
+        "memory-data": {"command": ["sh", "-c", 'redis-server --requirepass "$REDIS_PASSWORD"'],
+                        "environment": {"REDIS_PASSWORD": "pw"}},
     },
 }
 RUNNING = ["main-db", "memory-data", "rabbitmq", "auth-service", "gateway-handler"]

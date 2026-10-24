@@ -18,7 +18,7 @@ QUEUE_WAIT_S = 180
 # A fresh node gets only the env's user, and only if its first boot completes:
 # on the 2026-10-23 restore test a first boot starved by eleven compiling
 # services timed out creating it, and the second boot left it with no permissions.
-EXPORT_DEFINITIONS = ("exec", "-T", "rabbitmq", "rabbitmqctl", "export_definitions", "-", "--format", "json", "-q")
+EXPORT_DEFINITIONS = ("rabbitmqctl", "export_definitions", "-", "--format", "json", "-q")
 DEFINITIONS_IN_CONTAINER = "/tmp/txnet-definitions.json"
 # The env's user as this server's env says: its password and its rights on `/`.
 # The password is expanded inside the container, from the variable it already holds.
@@ -31,26 +31,27 @@ ENV_USER = (
 )
 
 
+def export_definitions(host):
+    return json.loads(host.run(host.exec_argv("rabbitmq", *EXPORT_DEFINITIONS)))
+
+
 def restore_definitions(host, definitions_path):
     """Imports a bundle's definitions (when it has them), then sets the env's user from this server's env."""
     if definitions_path:
-        host.compose("cp", definitions_path, "rabbitmq:" + DEFINITIONS_IN_CONTAINER)
-        host.compose("exec", "-T", "rabbitmq", "rabbitmqctl", "import_definitions", DEFINITIONS_IN_CONTAINER, "-q")
-    host.compose("exec", "-T", "rabbitmq", "sh", "-c", ENV_USER)
+        host.service_box("rabbitmq").put(definitions_path, DEFINITIONS_IN_CONTAINER)
+        host.run(host.exec_argv("rabbitmq", "rabbitmqctl", "import_definitions", DEFINITIONS_IN_CONTAINER, "-q"))
+    host.run(host.exec_argv("rabbitmq", "sh", "-c", ENV_USER))
 
 
 class Broker:
-    """The management API of the stack's rabbitmq, reached on its container address."""
+    """The management API of the stack's rabbitmq at `base` (the stack's management_url)."""
 
-    def __init__(self, host):
-        container = host.compose("ps", "-q", "rabbitmq").strip()
-        address = host.run(["docker", "inspect", "-f",
-                            "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}", container]).split()[0]
-        user, password = (host.compose("exec", "-T", "rabbitmq", "printenv", name).strip()
+    def __init__(self, host, base):
+        user, password = (host.run(host.exec_argv("rabbitmq", "printenv", name)).strip()
                           for name in ("RABBITMQ_DEFAULT_USER", "RABBITMQ_DEFAULT_PASS"))
-        self.base = "http://%s:%d/api/" % (address, MANAGEMENT_PORT)
+        self.base = base
         self.auth = "Basic " + base64.b64encode(("%s:%s" % (user, password)).encode()).decode()
-        # the host's proxy (if any) cannot reach a bridge address
+        # the host's proxy (if any) cannot reach a bridge address or a port-forward
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
     def call(self, path, body=None):

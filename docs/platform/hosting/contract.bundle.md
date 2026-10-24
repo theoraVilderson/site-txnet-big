@@ -11,7 +11,7 @@ updated: 2026-10-24
 OPS-1-ad (user, 2026-10-23). pgBackRest (H1–H4) and restic (ADR-0120) stay as
 they are: continuous, point-in-time, on this server. The bundle is the other
 thing: one encrypted file with everything a new server needs, made without
-stopping the platform, sent to S3 by a separate script. Rules B1…B9. Code:
+stopping the platform, sent to S3 by a separate script. Rules B1…B10. Code:
 `scripts/bundle/`; runbook `operations/runbook-backup-bundle.md`.
 
 ## What a bundle is
@@ -85,3 +85,58 @@ env; each database dropped and restored, `db-login-roles.sh` (this server's
 passwords); rows exact and Redis's TTL-less keys exact (expiring ones may be
 fewer); the stack up, the messages published back (a failure there is
 reported, not fatal), a pgBackRest full when data was replaced.
+
+## On Kubernetes
+
+**B10 — The same bundle, through kubectl and claims** (OPS-1-o-k; user,
+2026-10-23: the cutover is a compose server's bundle restored into the
+cluster, and the same tool is the cluster's disaster recovery). `--stack k8s`
+on `backup.py`, `ship.py` and `install-timers` works in namespace `txnet` with
+`KUBECTL` (default `kubectl`); B1–B9 hold unchanged, and a bundle made on
+either side restores on the other. `bundle_stack.py` is the one interface both
+sides answer; `bundle_k8s.py` the cluster's answers:
+
+- **Where things run.** A command in a service runs in its workload's container
+  (`kubectl exec`; `pg-backup` in `main-db`'s pod, K3). A throwaway container is
+  a pod labelled `app.kubernetes.io/name=txnet-bundle` — never `part-of`, so no
+  prune or stop selects it — with no API token, deleted at the end. A file
+  volume is its claim mounted at `/data` in one (K7); ship's rclone pod mounts
+  the bundle directory read-only from the node the script runs on, its S3
+  settings on stdin (never in a pod spec). The drill's Postgres listens on no
+  address. The model is the renderer's (K2), from the sealed secrets opened in
+  `/dev/shm` when the checkout has them (S4), removed on exit.
+- **Files go in whole and counted.** Into a pod a file is written, counted
+  (`wc -c`) and compared, then run from there (`pg_restore`, `psql -f`, `tar
+  -xpf`); never streamed into a command's stdin. On k3s 1.34 `kubectl exec -i`
+  into a command that ends at its input's end lost the tail of 5 MB in most runs,
+  over WebSockets and SPDY alike; with the count printed after, all 11 of 5 and
+  60 MB arrived. A pod's output to this host arrived whole (5 of 60 MB).
+- **Restore.** The cluster is deployed first (`prod.k8s.sh deploy` at the
+  bundle's commit): the node pulls, it never builds (K14). "Holds data" is users
+  in the main database, since db-migrate seeds rows into every cluster. The stop
+  scales every Deployment and StatefulSet to zero and waits for their pods; each
+  keeps its replicas in `txnet.io/replicas-before-restore`, so a restore run
+  again after one that failed still brings back what ran — and finds the stores
+  down, so it brings them up to ask them. The stores come up alone first, then
+  the rest; the login roles are made as `deploy` makes them (R11); RabbitMQ's
+  API is reached through `kubectl port-forward`.
+- **Keys.** A file with a sealed copy is that copy, opened: compared with the
+  bundle's and reported when it differs, never overwritten (S4 reads only it).
+  A file with none is B9's rule. The age key rides in the bundle as before (B5).
+- **The main database is this server's.** Each database restores under its own
+  name, so a bundle whose main database is not the one this server's
+  `MAIN_DB_NAME` names is refused before anything stops: dev's `devtxnet`
+  restored into a cluster rendered from `.env.prod` passed its own counts and
+  left the services reading an empty `prodtxnet`.
+
+Proven 2026-10-24 in a throwaway k3s (the three stores rendered from the
+production model, a stand-in Deployment) and MinIO: dev's compose bundle
+restored into the cluster — 242 tables, Redis, 2 of 2 queued messages, both file
+volumes identical by content, 1426 users, `txnet_app_user` signing in with
+`.env.prod`'s password — including a run after one that had failed half-way;
+a restore without `--replace` refused on the cluster holding that data, and with
+it made a safety bundle from the cluster, restored and started the pgBackRest
+full (174s); `verify --stack k8s` of the cluster's bundle passed in 58s; `ship`
+sent both from a pod with a put-only key, byte-identical in the bucket. Tests:
+`scripts/bundle/test_bundle_k8s.py`.
+

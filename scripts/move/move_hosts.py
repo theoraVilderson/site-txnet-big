@@ -6,6 +6,7 @@ import shlex
 import subprocess
 
 import move_figures as mf
+import move_plan as mp
 
 SSH = ["ssh", "-o", "BatchMode=yes"]
 VOLUME_LABEL_PROJECT = "com.docker.compose.project"
@@ -118,7 +119,6 @@ def live_figures(host, redis_password):
 
 
 def redis_password(config):
-    """--requirepass from memory-data's resolved command."""
-    command = config["services"]["memory-data"]["command"]
-    words = command if isinstance(command, list) else shlex.split(command)
-    return words[words.index("--requirepass") + 1]
+    """memory-data's REDIS_PASSWORD. Its command names only "$REDIS_PASSWORD"
+    since OPS-1-o-i (K5: a value a command needs is env its shell reads)."""
+    return mp.service_environment(config, "memory-data")["REDIS_PASSWORD"]
