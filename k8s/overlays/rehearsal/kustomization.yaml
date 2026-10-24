@@ -1,0 +1,32 @@
+# The rehearsal on the test server (hosting K12, ADR-0163): production's overlay
+# with no ACME. The test server answers for no domain DNS sends it, so every
+# HTTP challenge would fail against Let's Encrypt's limits; routes keep their
+# certResolver and Traefik serves its default certificate (the smoke check
+# reads with -k). Each `test` pins the argument it guards: a compose change
+# that moves one fails the render instead of removing the wrong argument.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../prod
+patches:
+  - target:
+      kind: Deployment
+      name: gateway-handler
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/0/args/10
+        value: --certificatesresolvers.myresolver.acme.httpchallenge=true
+      - op: test
+        path: /spec/template/spec/containers/0/args/11
+        value: --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
+      - op: test
+        path: /spec/template/spec/containers/0/args/13
+        value: --certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json
+      - op: remove
+        path: /spec/template/spec/containers/0/args/10
+      - op: remove
+        path: /spec/template/spec/containers/0/args/10
+      - op: remove
+        path: /spec/template/spec/containers/0/args/10
+      - op: remove
+        path: /spec/template/spec/containers/0/args/10

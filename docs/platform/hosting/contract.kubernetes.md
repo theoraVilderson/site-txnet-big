@@ -22,7 +22,7 @@ before stopping the old one.
 ## The cluster
 
 **K1 — Distribution.** k3s, version pinned once in `k8s/versions.env`
-(`K3S_IMAGE`, `TRAEFIK_CRD_VERSION`). Server flags in `k8s/k3s/config.yaml`:
+(`K3S_VERSION` with its binary's and `install.sh`'s sha256, `TRAEFIK_CRD_VERSION`). Server flags in `k8s/k3s/config.yaml`:
 `disable: [traefik]` (ours, K9), `secrets-encryption` (S6); `servicelb`, `local-path` on. Namespace `txnet` for the
 platform, `txnet-monitoring` for K11. The node is the test server (ADR-0163).
 An agent never installs k3s on the dev host (ADR-0147 point 6); the test
@@ -191,7 +191,7 @@ with `level`, none of the unlabelled one's.
 ## The rehearsal
 
 **K12 — The rehearsal on the test server** (ADR-0163, amending ADR-0147
-point 6). `scripts/k8s-rehearse.sh up|deploy|check|down`: k3s from `K3S_IMAGE`
+point 6). `scripts/k8s-rehearse.sh up|deploy|check|down`: k3s at `K3S_VERSION`
 on the host itself, beside Docker, the compose stack stopped for it, overlay
 `rehearsal` (the test server's env files, no ACME), images pulled as K14 says,
 one replica each (K19). `check` proves the row: every workload ready, a
