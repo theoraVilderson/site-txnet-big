@@ -11,7 +11,8 @@ import { clearOwnedResellersCache, resellerDomainOf, selfResellerOf } from "./_l
 import { stepHref } from "./_lib/onboarding";
 import { SelfWorkspace } from "../reseller/_components/SelfWorkspace";
 import { PlatformOnlyWorkspace } from "./_components/PlatformOnlyWorkspace";
-import { PANEL_MENU, isMenuGroup, menuTrail, visibleMenu } from "../_lib/panel-menu";
+import { PANEL_MENU, isMenuGroup, visibleMenu } from "../_lib/panel-menu";
+import { menuTrail } from "../_lib/panel-menu-trail";
 
 /**
  * A reseller's workspace on its own domain (F-061-n), at the id-less

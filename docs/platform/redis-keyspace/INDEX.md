@@ -25,7 +25,7 @@ updated: 2026-10-07
 
 # redis-keyspace
 **Responsibility:** the shared Redis key convention — the `<namespace>:<version>:` prefix both auth services must agree on, plus the catalogue of keys (sessions, OTP, rate limits) and their TTLs. **Not:** the auth logic that uses the keys (`identity` / `forward-auth`).
-See [contract.md](contract.md) (adding a key / TTL / keyspace version), [contract.shared-address.md](contract.shared-address.md) (a per-IP limit behind a reseller's CDN: the claimed visitor, EDGE-1-l) and [open-questions.md](open-questions.md).
+See [contract.md](contract.md) (adding a key / TTL / keyspace version), [contract.catalogue.md](contract.catalogue.md) (every key name: type, lifetime, writer, readers), [contract.shared-address.md](contract.shared-address.md) (a per-IP limit behind a reseller's CDN: the claimed visitor, EDGE-1-l) and [open-questions.md](open-questions.md).
 ## Changelog
 | Date | Change |
 |---|---|

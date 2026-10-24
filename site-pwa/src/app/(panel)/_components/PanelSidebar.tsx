@@ -21,7 +21,6 @@ import { useLocale } from "@/context/LocaleContext";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { DURATION, EASE } from "@/lib/motion";
 import {
-  activeHref,
   badgeLabel,
   isMenuGroup,
   menuFooter,
@@ -31,6 +30,7 @@ import {
   type VisibleMenuGroup,
   type VisibleMenuLink,
 } from "../_lib/panel-menu";
+import { activeHref } from "../_lib/panel-menu-trail";
 import { MAX_PINS, pinnedLinks, reorderPins, stepPin, togglePin } from "../_lib/pins";
 import { recordRecentPage } from "../_lib/recent-pages";
 import { useMenuBadges, type BadgedEntry } from "../_hooks/useMenuBadges";

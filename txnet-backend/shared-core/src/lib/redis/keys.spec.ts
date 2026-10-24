@@ -66,6 +66,7 @@ describe('the key catalogue', () => {
       tenantById: UnscopedRedisKeys.tenantById('tenant-1'),
       tenantStatus: UnscopedRedisKeys.tenantStatus('tenant-1'),
       tenantStatusChanged: UnscopedRedisKeys.tenantStatusChanged(),
+      releaseFlag: UnscopedRedisKeys.releaseFlag('new_checkout'),
       guideGeneration: UnscopedRedisKeys.guideGeneration('platform'),
       guideResolved: UnscopedRedisKeys.guideResolved('tenant-1', 'etag-1'),
       guideViewSeen: UnscopedRedisKeys.guideViewSeen('tenant-1', 'guide-1', '2026-10-04', 'panel', 'viewer-1'),

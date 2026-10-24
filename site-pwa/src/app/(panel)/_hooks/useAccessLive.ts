@@ -5,7 +5,7 @@ import { authApi, type Me } from "@/lib/auth-api";
 import { RealtimeEvents } from "@/generated/wire";
 import { userChannel } from "@/lib/realtime";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { activeHref } from "../_lib/panel-menu";
+import { activeHref } from "../_lib/panel-menu-trail";
 import { usePanelSession } from "../_context/PanelSessionContext";
 
 /**

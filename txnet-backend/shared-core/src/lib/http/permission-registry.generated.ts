@@ -27,6 +27,7 @@ export const PERMISSION_REGISTRY = [
   { permission: "platform.impersonate", area: "platform", platformOnly: true },
   { permission: "platform.node.manage", area: "platform", platformOnly: true },
   { permission: "platform.plan.assign", area: "platform", platformOnly: true },
+  { permission: "platform.release.manage", area: "platform", platformOnly: true },
   { permission: "platform.report.read", area: "platform", platformOnly: true },
   { permission: "platform.support", area: "platform", platformOnly: true },
   { permission: "platform.tenant.create", area: "platform", platformOnly: true },

@@ -227,6 +227,7 @@ model Tenant {
   storedObjects       StoredObject[]
   dataExports         TenantDataExport[]
   onboardingSkips     TenantOnboardingSkip[]
+  releaseFlagExceptions ReleaseFlagException[]
 
   @@map("tenant")
   @@schema("tenant")
@@ -1147,5 +1148,45 @@ model TenantOnboardingSkip {
 
   @@id([tenantId, step])
   @@map("tenant_onboarding_skip")
+  @@schema("tenant")
+}
+
+/// OPS-1-ag (ADR-0164 point 4): how far a release flag has rolled out. A flag
+/// with no row is `off`. `platform` is on for the platform owner's own tenant only.
+enum ReleaseFlagStage {
+  off
+  platform
+  everyone
+
+  @@schema("tenant")
+}
+
+/// OPS-1-ag: one release flag's stage, for every tenant without an exception.
+/// Keys are checked in code (`RELEASE_FLAGS`); here only their shape.
+model ReleaseFlag {
+  key             String           @id
+  stage           ReleaseFlagStage @default(off)
+  updatedByUserId String           @db.Uuid
+  updatedAt       DateTime         @updatedAt
+
+  @@map("release_flag")
+  @@schema("tenant")
+}
+
+/// OPS-1-ag: one reseller's own answer for one flag, over the stage — on for a
+/// volunteer before everyone, off for one that has trouble. Strict RLS.
+model ReleaseFlagException {
+  tenantId    String   @db.Uuid
+  key         String
+  isOn        Boolean
+  setByUserId String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, key])
+  @@index([key])
+  @@map("release_flag_exception")
   @@schema("tenant")
 }

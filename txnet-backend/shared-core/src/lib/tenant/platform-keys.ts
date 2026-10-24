@@ -21,6 +21,7 @@ export const PLATFORM_KEY_PREFIX = 'platform.';
  *     platform.report.read     figures across tenants
  *     platform.impersonate     sign in as a reseller's user, under consent (F-117-e)
  *     platform.support         a reseller's people under its consent, with the act's own key (ADR-0141)
+ *     platform.release.manage  switch a release flag, for every tenant or one (OPS-1-ag, ADR-0164)
  *
  * `platform.tenant.manage` is the sixth, beside the catalog's five: the
  * general door into one reseller that `tenant.manage` was (user, 2026-10-09).
@@ -33,6 +34,7 @@ export const PLATFORM_KEYS = [
   'platform.report.read',
   'platform.impersonate',
   'platform.support',
+  'platform.release.manage',
 ] as const satisfies readonly RegisteredPermission[];
 
 /** A key of the platform's set. */

@@ -237,6 +237,10 @@ enum AdminAction {
   tenant_data_export_delivery
   // F-410-a. A tenant's self-move setting, or one product's override of it.
   config_self_move_settings_set
+  // OPS-1-ag (ADR-0164 point 4). A release flag's stage, or one reseller's exception to it.
+  release_flag_stage_set
+  release_flag_exception_set
+  release_flag_exception_clear
 
   @@schema("audit")
 }

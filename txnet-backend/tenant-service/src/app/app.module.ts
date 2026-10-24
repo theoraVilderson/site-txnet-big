@@ -25,6 +25,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { PrismaService } from './prisma/prisma.service';
 import { PurchaseModule } from './purchase/purchase.module';
 import { RedisModule } from './redis/redis.module';
+import { ReleaseFlagsModule } from './release-flags/release-flags.module';
 import { ResellersModule } from './resellers/resellers.module';
 import { StaffModule } from './staff/staff.module';
 import { StatusModule } from './status/status.module';
@@ -66,6 +67,7 @@ const LEGACY_PUBLIC_ROUTES = [`${LEGACY_FILES_PATH}/*path`, LEGACY_BRANDING_PATH
     LocaleModule,
     PackagesModule,
     LimitsModule,
+    ReleaseFlagsModule,
     SubscriptionModule,
     StatusModule,
     ResellersModule,

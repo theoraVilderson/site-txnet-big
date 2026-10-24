@@ -253,6 +253,9 @@ export const EXPORT_TABLES: Readonly<Record<Prisma.ModelName, ExportRule>> = {
   PackageProduct: none('platform'),
   PackageQuotaOverage: none('platform'),
   QuotaOverageSetting: none('platform'),
+  // OPS-1-ag: the platform's release switches; an exception names a reseller but is the platform's decision.
+  ReleaseFlag: none('platform'),
+  ReleaseFlagException: none('platform'),
   ResellerLimit: OWN,
   ResellerLimitSetting: none('platform'),
   ResellerOverageCap: OWN,

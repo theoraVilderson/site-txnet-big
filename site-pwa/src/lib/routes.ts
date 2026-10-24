@@ -256,6 +256,8 @@ export const panelSectionPath = (section: string, group?: string) =>
 export const PANEL_MANUAL_PAYMENTS = "/payments/manual";
 /** The platform owner's panels: registration, health, drift and the holds queue (F-027-ad). */
 export const PANEL_SYSTEMS = "/systems";
+/** The platform's release flags: a risky feature switched per tenant, without a deploy (OPS-1-ag). */
+export const PANEL_RELEASE_FLAGS = "/release-flags";
 /**
  * The session's own groups (F-114-m, GR-1-f): members, their end, and the
  * keys each group gives. One route for every audience: auth-service answers

@@ -55,6 +55,7 @@ exports[`RedisKeys — key catalogue > exposes a builder for every key family, a
   "rateLimitPlatform",
   "realtimeFanout",
   "registerPending",
+  "releaseFlag",
   "rolePermissions",
   "session",
   "subUsage",

@@ -25,6 +25,7 @@
       "resellers": "Resellers",
       "buyReseller": "Become a reseller",
       "systems": "Systems",
+      "releaseFlags": "Release flags",
       "groups": "Groups",
       "users": "Users",
       "ai": "AI",
@@ -4428,6 +4429,31 @@
         "orphans": "Choose what happens to a user left with no config."
       }
     }
+  },
+  "releaseFlags": {
+    "title": "Release flags",
+    "subtitle": "A new feature ships switched off. Turn it on for the platform's own site first, then for resellers — and off again at once if it misbehaves. No deploy.",
+    "reload": "Reload",
+    "notAllowed": "Only the platform's staff with the release key can switch features.",
+    "emptyTitle": "No flag yet",
+    "emptyBody": "A feature that needs one brings its flag with it. Its switches appear here.",
+    "whoHasIt": "Who has it",
+    "stage": {
+      "off": "Off for everyone",
+      "platform": "On for the platform's site",
+      "everyone": "On for everyone"
+    },
+    "exceptionsTitle": "Resellers with their own answer",
+    "exceptionsHint": "Wins over the choice above: on for a reseller who tries it first, off for one that has trouble.",
+    "noExceptions": "None — the choice above applies to every reseller.",
+    "on": "On",
+    "off": "Off",
+    "remove": "Remove",
+    "chooseReseller": "Choose a reseller",
+    "addOn": "Turn on for them",
+    "addOff": "Turn off for them",
+    "unknownReseller": "A reseller no longer listed",
+    "saved": "Saved — every service sees it on its next request."
   },
   "shop": {
     "title": "Shop",

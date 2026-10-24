@@ -5,12 +5,11 @@ import { Home, Wallet } from "lucide-react";
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import {
   PANEL_MENU,
-  activeHref,
-  menuTrail,
   ownTenantOf,
   visibleMenu,
   type PanelMenuEntry,
 } from "./panel-menu";
+import { activeHref, menuTrail } from "./panel-menu-trail";
 
 /**
  * The sidebar's menu (F-093-a). Both things asserted here fail with nothing

@@ -42,6 +42,8 @@ describe('platform keys (AC-1-c)', () => {
         'platform.tenant.manage',
         // ADR-0141: a reseller's people under its consent, with the act's own key.
         'platform.support',
+        // OPS-1-ag (ADR-0164 point 4): switch a release flag.
+        'platform.release.manage',
       ].sort(),
     );
     const registry = new Map<string, { platformOnly: boolean }>(PERMISSION_REGISTRY.map((row) => [row.permission, row]));

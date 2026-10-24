@@ -87,7 +87,7 @@ describe("the menu's sections (N1)", () => {
     ["sales", ["analytics", "catalog", "coupons", "ai", "wheel-settings", "lottery-settings"]],
     ["finance", ["gateways", "manual-payments", "tenant-billing"]],
     ["people", ["users", "groups", "resellers"]],
-    ["infra", ["systems"]],
+    ["infra", ["systems", "release-flags"]],
     ["support", ["support-inbox", "support-settings", "guides"]],
   ])("puts in %s exactly what N1 names, in order", (section, ids) => {
     const all = visibleMenu(PANEL_MENU, ["*"], "platform_owner", false, false, "t-1").concat(

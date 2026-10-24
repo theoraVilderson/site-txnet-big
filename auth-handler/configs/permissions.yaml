@@ -163,6 +163,8 @@ roles:
       - platform.impersonate
       # ADR-0141: a reseller's people under its consent, by the act's own key.
       - platform.support
+      # OPS-1-ag (ADR-0164 point 4): switch a release flag, for every tenant or one.
+      - platform.release.manage
   user:
     permissions:
       - self.read

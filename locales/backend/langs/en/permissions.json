@@ -258,6 +258,12 @@
       "support": {
         "label": "Support resellers",
         "description": "See the reseller list, ask a reseller for access, and work on its users only under its consent and with that act's own key. Platform staff only."
+      },
+      "release": {
+        "manage": {
+          "label": "Switch release flags",
+          "description": "Turn a new feature on for the platform's own site, for resellers, or off again, without a deploy. Platform staff only."
+        }
       }
     },
     "realtime": {
