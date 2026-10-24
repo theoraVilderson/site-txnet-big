@@ -70,7 +70,10 @@ dies at render time instead.
 `<service>-env`, mounted with `envFrom` — exactly the variables its compose
 service lists, as today, and no value in a pod spec. Kubernetes expands `$(X)`
 in `env`, `command` and `args`; the renderer writes every literal `$(` as `$$(`
-so a shell `$(date)` survives. The Secret's name carries a hash of its data,
+so a shell `$(date)` survives. A value a command needs (Redis's
+`--requirepass`) is an environment variable its shell reads, never compose
+interpolation into `command` or a healthcheck, which would print it in the pod
+spec (OPS-1-o-i). The Secret's name carries a hash of its data,
 as Kustomize's generators do, so a changed value rolls the pod.
 The values come from SOPS files encrypted to an age key (user, 2026-10-24,
 ADR-0164): `.env.prod` and `dev-docker/secrets/*` committed encrypted, decrypted
@@ -85,7 +88,9 @@ with compose's interval, timeout and retries; a `startupProbe` with
 `failureThreshold = ceil(start_period / interval) + retries` holds both off for
 the start period and the misses compose still allows after it — the start period
 alone gave `main-db` one probe, and a first `initdb` was killed (OPS-1-o-d).
-Every container has one (H15, H24). A sidecar (`pg-backup`) gets
+With no start period both wait `initialDelaySeconds = interval`, as Docker's
+first check does: a probe at t=0 wrote RabbitMQ's Erlang cookie into its empty
+claim as root before the server could (OPS-1-o-i). Every container has one (H15, H24). A sidecar (`pg-backup`) gets
 liveness and startup probes but no readiness probe, so its failure never takes
 the pod out of its Service.
 
@@ -177,7 +182,8 @@ on the host itself, beside Docker, the compose stack stopped for it, overlay
 `rehearsal` (the test server's env files, no ACME), images pulled as K14 says,
 replicas as OPS-1-o-n measured. `check` proves the row: every workload ready, a
 rolling update of `billing-service` under a request loop with zero failed
-requests, a `main-db` pod deleted and back with its data, a bundle restored
+requests, the three data stores' pods deleted and back with their rows, keys
+and queued messages and `pg-backup.sh drill` passing in `main-db`'s, a bundle restored
 (OPS-1-o-k). The cluster that passes is the one OPS-1-p cuts over to; `down`
 removes k3s and brings compose back, only when the rehearsal is abandoned.
 

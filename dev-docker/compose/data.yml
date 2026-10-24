@@ -17,28 +17,30 @@ services:
     # until the host kills it. noeviction because sessions, locks and rate
     # buckets live here — evicting one is a silent sign-out or a lost lock, a
     # refused write at least fails loudly. RedisMemoryHigh warns at 80%.
-    command: >
-      redis-server
-      --save ""
-      --requirepass ${REDIS_PASSWORD}
-      --appendonly yes
-      --appendfsync everysec
-      --maxmemory ${REDIS_MAXMEMORY:-768mb}
-      --maxmemory-policy noeviction
+    # The password arrives as env, not as an argument, so Kubernetes keeps it
+    # in the Secret and out of the pod spec (hosting K5, OPS-1-o-i); the shell
+    # hands back to the image's entrypoint, which still drops to the redis user.
+    command:
+      - sh
+      - -c
+      - >-
+        exec docker-entrypoint.sh redis-server
+        --save ""
+        --requirepass "$$REDIS_PASSWORD"
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory ${REDIS_MAXMEMORY:-768mb}
+        --maxmemory-policy noeviction
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      # redis-cli reads its password from here, so the probe names none.
+      - REDISCLI_AUTH=${REDIS_PASSWORD}
     volumes:
       - redis_vol_internal:/data
     networks:
       - private_backend_network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "redis-cli",
-          "--no-auth-warning",
-          "-a",
-          "${REDIS_PASSWORD}",
-          "ping",
-        ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

@@ -8,6 +8,7 @@ Each test feeds a small compose model — the shape `docker compose config
 """
 import base64
 import copy
+import re
 import shutil
 import subprocess
 import sys
@@ -181,6 +182,17 @@ class RenderTest(unittest.TestCase):
         startup = db["startupProbe"]
         self.assertEqual(startup["periodSeconds"] * startup["failureThreshold"], 10 + 5 * 10)
 
+    # K6 (OPS-1-o-i): with no start period, Docker runs the first check after one
+    # interval, and so do the probes. At t=0 rabbitmq's probe, as root, wrote the
+    # Erlang cookie into the empty claim before the server could, and it crashed.
+    def test_first_check_waits_one_interval(self):
+        m = copy.deepcopy(self.model)
+        del m["services"]["billing-service"]["healthcheck"]["start_period"]
+        _, objs = self.run_render(m)
+        c = by_kind(objs, "Deployment", "billing-service")["spec"]["template"]["spec"]["containers"][0]
+        self.assertNotIn("startupProbe", c)
+        self.assertEqual([c[p]["initialDelaySeconds"] for p in ("readinessProbe", "livenessProbe")], [10, 10])
+
     # K7: named volume -> claim, host dir -> hostPath, secret file -> Secret,
     # source tree and the node_modules shadow under it -> dropped.
     def test_volumes(self):
@@ -263,6 +275,18 @@ class RepoModelTest(unittest.TestCase):
                     for c in o["spec"]["template"]["spec"]["containers"] if "livenessProbe" not in c]
         self.assertTrue(self.objects)
         self.assertEqual(unprobed, [])
+
+    # K5 (OPS-1-o-i): a value that is a Secret in one pod is written in no pod
+    # spec — memory-data's password reached its args and probe from compose.
+    def test_no_secret_value_in_a_pod_spec(self):
+        secret = re.compile(r"^(?!.*_FILE$).*(PASS|SECRET|TOKEN|_KEY$)")  # a *_FILE names a path
+        values = {base64.b64decode(v).decode() for o in self.objects if o["kind"] == "Secret"
+                  for k, v in (o.get("data") or {}).items() if secret.search(k)}
+        values = {v for v in values if len(v) >= 8}
+        leaks = sorted({o["metadata"]["name"] for o in self.objects if o["kind"] in ("Deployment", "StatefulSet")
+                        for v in values if v in yaml.safe_dump(o["spec"]["template"]["spec"])})
+        self.assertTrue(values)
+        self.assertEqual(leaks, [])
 
 
 if __name__ == "__main__":

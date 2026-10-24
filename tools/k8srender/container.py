@@ -79,6 +79,11 @@ def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dic
         # Compose ignores misses inside the start period and then still waits for
         # `retries` of them; the start period alone gave main-db one probe (OPS-1-o-d).
         out["startupProbe"] = {**base, "failureThreshold": math.ceil(start / period) + base["failureThreshold"]}
+    else:
+        # Docker's first check comes one interval after the start, not at it. A
+        # probe at t=0 raced rabbitmq's own first write to an empty claim (OPS-1-o-i).
+        for probe in out.values():
+            probe["initialDelaySeconds"] = period
     return out
 
 
