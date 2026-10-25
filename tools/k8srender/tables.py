@@ -104,6 +104,10 @@ BIND_CLAIMS = {"dev_letsencrypt": "letsencrypt"}
 # Docker provider's flags give way to the CRD provider's, read as the
 # service account k8s/traefik/ binds to Traefik's ClusterRole.
 TRAEFIK = "gateway-handler"
+# NIN-1-b2 (ADR-0165 amendment 1): the domestic door's Traefik, a second edge pod
+# on the same image and routes, with no ACME state of its own.
+DOMESTIC_TRAEFIK = "gateway-domestic"
+EDGE_GATEWAYS = {TRAEFIK, DOMESTIC_TRAEFIK}
 TRAEFIK_SERVICE_ACCOUNT = "traefik-ingress-controller"
 TRAEFIK_DROPPED_ARG = "--providers.docker"
 TRAEFIK_PROVIDER_ARGS = ["--providers.kubernetescrd=true"]

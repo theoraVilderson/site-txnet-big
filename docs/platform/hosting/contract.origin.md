@@ -12,7 +12,7 @@ ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
 Cloudflare can complete a handshake, and on the production host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
 (firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
-responses, decision 8). Rules O1…O11.
+responses, decision 8), the domestic door (NIN-1-b2, O12). Rules O1…O12.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -42,7 +42,8 @@ restarting the gateway. Until the restart, the gateway still trusts the old CA.
 | `required` (any other value) | `RequireAndVerifyClientCert` | dev since 2026-10-07 (user), and prod at go-live. A typo fails closed. |
 
 Options `default` hold for every router and for an unknown SNI. No router may
-name other TLS options: they would bypass this.
+name other TLS options: they would bypass this. All of this is gateway-handler's,
+the 443 door; the domestic door's Traefik is `off` (O12).
 
 **O4 — An unknown SNI gets no real certificate.** No `defaultCertificate` and
 no `sniStrict`. With no SNI or a name we hold no certificate for, Traefik
@@ -131,12 +132,13 @@ marked, `/realtime` still `101`. Tests: `privatecache_test.go`.
 
 ## The firewall (EDGE-1-h)
 
-**O7 — Cloudflare's ranges only, production host.** `scripts/edge/cloudflare_firewall.py
-apply` reads `https://api.cloudflare.com/client/v4/ips` and writes chain
-`TXNET-EDGE` in one `iptables-restore --noflush` / `ip6tables-restore` commit:
-`RETURN` per range, then `DROP`. The chain is reached from `INPUT`
-(`--dports 80,443`), and from `FORWARD` and `DOCKER-USER`
-(`--ctorigdstport 80|443`: a published port is DNATed before it is forwarded —
+**O7 — Each door admits its own edges, production host.** `scripts/edge/edge_firewall.py
+apply` re-reads each door's edges (O8) and writes one chain a door — `TXNET-EDGE`
+for 80/443 (door `origin-pull`: Cloudflare), `TXNET-DOMESTIC` for 8443 (door
+`domestic`, O12) — each in one `iptables-restore --noflush` / `ip6tables-restore`
+commit: `RETURN` per range, then `DROP`. A chain is reached from `INPUT`
+(`--dports` its ports), and from `FORWARD` and `DOCKER-USER`
+(`--ctorigdstport <port>`: a published port is DNATed before it is forwarded —
 k3s's servicelb through `FORWARD`, Docker's through `DOCKER-USER`; a chain the
 host lacks is skipped). All match only the public interface
 (`EDGE_PUBLIC_IFACE`, default the default route's), so bridges and the tailnet
@@ -151,15 +153,15 @@ and `print` shows the rules without changing anything.
 are read and in which format (`cloudflare-api`, `lines`), the header it names
 the visitor in, and the fewest IPv4/IPv6 ranges a real answer has (Cloudflare
 10/5, Arvan 10/0). `edge_ranges.py` is the only fetcher: `ranges(name)` re-reads
-one edge, and `cloudflare_firewall.py apply` admits what it returns. A list under
+one edge, and `edge_firewall.py apply` admits each door's. A list under
 its edge's floor, a malformed or wrong-family range, a range wider than /8 (v4)
 or /16 (v6), or a failed answer is refused. That edge's last good copy
 (`/var/lib/txnet/edge-ranges/<name>.json`, with when it was taken, held to
-today's floors) is used instead, and with none the run fails and changes
-nothing. Each copy's time is exported (`edge_ranges.prom`,
+today's floors) is used instead; with none, that edge's door is left as it was. Each copy's time is exported (`edge_ranges.prom`,
 `txnet_edge_ranges_last_refresh_timestamp_seconds{edge}`), and `EdgeRangesStale`
-(`database.rules.yml`) warns after 3 days. `cloudflare_firewall.py install`
-writes `/etc/cron.d/txnet-cloudflare-firewall` (boot after Docker, daily 04:23),
+(`database.rules.yml`) warns after 3 days. `edge_firewall.py install`
+writes `/etc/cron.d/txnet-edge-firewall` (boot after Docker, daily 04:23; it
+deletes the entry of its former name, `cloudflare_firewall.py`),
 and `edge_ranges.py install` writes `txnet-edge-ranges`, which re-reads every
 edge (boot, daily 04:13). `join` copies the list and the server's copies. Dev
 does not run it. A new edge is a row of the list; a new answer format, a parser
@@ -170,7 +172,33 @@ re-applying kept one jump, a non-Cloudflare caller on 443 was dropped, and
 with 443 DNATed to a stand-in pod: a non-Cloudflare caller dropped, a Cloudflare
 one served, an `ACCEPT` for the pod range inserted above ours let the caller in
 until the next `apply` put the jumps back on top. Tests:
-`scripts/edge/test_cloudflare_firewall.py`, `test_edge_ranges.py`.
+`scripts/edge/test_edge_firewall.py`, `test_edge_ranges.py`.
+
+## The domestic door (NIN-1-b2, ADR-0165 amendment 1)
+
+**O12 — A second Traefik answers 8443, asking no certificate.** `gateway-domestic`
+(`dev-docker/compose/edge.yml`) runs gateway-handler's image and baked files
+with O3 fixed `off`. Arvan sends no certificate (NIN-1-a), and Traefik takes the
+handshake rule for a host no route names — any reseller's domain — from its one
+`default` TLS options, so the doors cannot share a process: per-entrypoint
+options reach `Host()` routes only (Traefik v3.7, tried 2026-10-25). Its
+entrypoint is named `websecure`, so every route of the 443 door is on it, behind
+the same middlewares (O5, O10, O11): a client's `CF-Connecting-IP` and
+`X-Forwarded-*` are dropped and `X-Real-Ip` is the socket's, the edge's own
+address until NIN-1-b3. No ACME (one `acme.json`, K17), no dashboard, no port
+80: routes naming those are skipped, with an `ERR` line at each reload, which
+is expected. Until NIN-1-c1 it presents Traefik's default certificate, which
+Arvan accepts. Only the `domestic` door's edges reach 8443 (O7); never
+Cloudflare, which proxies 8443 for any zone while nothing here checks a
+certificate. `join` puts the chain on a new node and refuses one where 8443 is held.
+
+Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:
+an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on
+443 and dropped on 8443, any other dropped on both; re-applying kept one jump a
+door, `remove` reopened 8443. The real dynamic files on Traefik v3.7, `off` on
+one port and `required` on another: a reseller's host served on the first with
+forged headers dropped, the second refused without a certificate. Tests:
+`test_edge_firewall.py`, `tools/k8s_render_traefik_test.py`.
 
 ## ArvanCloud as the domestic edge — what it does (NIN-1-a, ADR-0165)
 

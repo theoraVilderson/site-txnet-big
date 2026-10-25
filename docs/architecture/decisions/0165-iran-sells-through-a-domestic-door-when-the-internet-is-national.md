@@ -116,3 +116,20 @@ Iran reaches only Iranian addresses. Checked against the stack on 2026-10-25:
   market, and foreign visitors pay an Iranian CDN's path.
 - **A foreign node in this cluster**: split by every cut, and K17's 10 ms bound
   makes it a standby at best.
+
+## Amendment 1, 2026-10-25 — each door is its own Traefik (NIN-1-b2)
+
+Point 3 assumed the domestic door is another entrypoint of the one Traefik. It
+cannot be: Traefik picks the handshake rule for a host no route names from its
+single `default` TLS options, and per-entrypoint options reach `Host()` routes
+only (v3.7, tried 2026-10-25: `panel.example.ir` served on 8443 without a
+certificate, `shop.reseller.ir` refused). Every reseller's domain is such a
+host, so one process would hold the domestic door to Cloudflare's certificate,
+or loosen 443. The user chose (2026-10-25) a second Traefik for the domestic
+door, on the same image and routes, with its own `default` (no certificate),
+and later its own visitor header (NIN-1-b3) and certificate (NIN-1-c1); a
+change on one door cannot open the other. Cost: one more pod. The cheaper
+choice — a second copy of each route with its own TLS options — served only
+the platform's own hosts and would have been rebuilt at NIN-1-e. Cloudflare's
+ranges never reach 8443: nothing there checks a certificate, and Cloudflare
+proxies 8443 for any zone. Rules: hosting `contract.origin.md` O7, O12.

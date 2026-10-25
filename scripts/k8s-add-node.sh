@@ -6,7 +6,7 @@
 #   scripts/k8s-add-node.sh check  <host> [ssh-port]   what join would refuse, changing nothing
 #   scripts/k8s-add-node.sh join   <host> [ssh-port]   check, then: its address in K13's peers here, K13's
 #                                                      chain there with this node as its only peer, O7's
-#                                                      Cloudflare-only 80/443 there, k3s agent at
+#                                                      door chains there (80/443, 8443), k3s agent at
 #                                                      k8s/versions.env's pin with this node's
 #                                                      registries.yaml (K14), then Ready and on WireGuard
 #   scripts/k8s-add-node.sh remove <host> [ssh-port]   drain and delete the node, uninstall k3s there,
@@ -31,7 +31,7 @@ DATA_LABEL=txnet.io/data=true
 # node starts from the server's, so a join never waits on an edge's list.
 EDGE_RANGES=/var/lib/txnet/edge-ranges
 EDGE_RANGES_CRON=/etc/cron.d/txnet-edge-ranges
-CF_CRON=/etc/cron.d/txnet-cloudflare-firewall
+EDGE_FIREWALL_CRON=/etc/cron.d/txnet-edge-firewall
 # A worker must hold k3s, the OS and the largest single request (translator-llm,
 # 2560 MiB in K19's report) with room to spare.
 MIN_NODE_MEM_MIB="${MIN_NODE_MEM_MIB:-4096}"
@@ -41,8 +41,9 @@ MIN_NODE_DISK_GIB="${MIN_NODE_DISK_GIB:-30}"
 # Beyond this round trip a pod on one node querying a store on the other pays
 # it per query (K17); the node is then a standby, not a worker.
 MAX_WORKER_RTT_MS=10
-# svclb binds these on every node for the LoadBalancer (K17).
-LB_PORTS="80 443"
+# svclb binds these on every node for the LoadBalancers (K17): Traefik's, and
+# the domestic door's 8443 (NIN-1-b2).
+LB_PORTS="80 443 8443"
 INOTIFY_INSTANCES=512 # as k8s-rehearse.sh's (K11)
 NODE_REGISTER_TIMEOUT_S=120
 NODE_READY_TIMEOUT=300s
@@ -172,7 +173,7 @@ stage() {
   install -m 0600 "$NODE_TOKEN" "$work/token"
   install -m 0600 "$K3S_ETC/registries.yaml" "$work/registries.yaml"
   cp "$ROOT_DIR/scripts/edge/k3s_ports.py" "$ROOT_DIR/scripts/edge/edge_chain.py" \
-    "$ROOT_DIR/scripts/edge/cloudflare_firewall.py" "$ROOT_DIR/scripts/edge/edge_ranges.py" \
+    "$ROOT_DIR/scripts/edge/edge_firewall.py" "$ROOT_DIR/scripts/edge/edge_ranges.py" \
     "$ROOT_DIR/scripts/edge/edges.json" "$work/"
   [ ! -d "$EDGE_RANGES" ] || cp -r "$EDGE_RANGES" "$work/edge-ranges"
   echo "$SERVER_ADDR" >"$work/k3s-peers"
@@ -192,20 +193,20 @@ stage() {
 }
 
 # On the other server: K13's chain and O7's before k3s opens a port, then the
-# agent. svclb binds 80/443 on every node; Cloudflare reaches only the data node
-# (K17), and O7 keeps anyone else off these. No proxy reaches k3s (K14), so
+# agent. svclb binds 80/443 and 8443 on every node; the edges reach only the data
+# node (K17), and O7's door chains keep anyone else off these. No proxy reaches k3s (K14), so
 # install.sh writes none into the unit's env file.
 install_agent() {
   remote "bash -s" <<EOF
 set -euo pipefail
 cd $STAGE
 install -d -m 0755 $EDGE_DIR /etc/txnet
-install -m 0644 k3s_ports.py edge_chain.py cloudflare_firewall.py edge_ranges.py edges.json $EDGE_DIR/
+install -m 0644 k3s_ports.py edge_chain.py edge_firewall.py edge_ranges.py edges.json $EDGE_DIR/
 install -m 0644 k3s-peers $PEERS_FILE
 python3 $EDGE_DIR/k3s_ports.py install
 [ ! -d edge-ranges ] || { install -d -m 0755 $EDGE_RANGES && install -m 0644 edge-ranges/*.json $EDGE_RANGES/; }
-python3 $EDGE_DIR/cloudflare_firewall.py apply
-python3 $EDGE_DIR/cloudflare_firewall.py install
+python3 $EDGE_DIR/edge_firewall.py apply
+python3 $EDGE_DIR/edge_firewall.py install
 python3 $EDGE_DIR/edge_ranges.py install
 echo "fs.inotify.max_user_instances=$INOTIFY_INSTANCES" >/etc/sysctl.d/90-txnet-k3s.conf
 sysctl -q -p /etc/sysctl.d/90-txnet-k3s.conf
@@ -257,8 +258,11 @@ systemctl disable --now txnet-k3s-ports.timer txnet-k3s-ports.service 2>/dev/nul
 rm -f /etc/systemd/system/txnet-k3s-ports.service /etc/systemd/system/txnet-k3s-ports.timer
 systemctl daemon-reload
 [ ! -e $EDGE_DIR/k3s_ports.py ] || python3 $EDGE_DIR/k3s_ports.py remove
+[ ! -e $EDGE_DIR/edge_firewall.py ] || python3 $EDGE_DIR/edge_firewall.py remove
+# A node joined before NIN-1-b2 runs the script under its former name.
 [ ! -e $EDGE_DIR/cloudflare_firewall.py ] || python3 $EDGE_DIR/cloudflare_firewall.py remove
-rm -rf $EDGE_DIR $PEERS_FILE $EDGE_RANGES $EDGE_RANGES_CRON $CF_CRON /etc/sysctl.d/90-txnet-k3s.conf
+rm -rf $EDGE_DIR $PEERS_FILE $EDGE_RANGES $EDGE_RANGES_CRON $EDGE_FIREWALL_CRON /etc/cron.d/txnet-cloudflare-firewall \
+  /var/lib/txnet/cloudflare-ips.json /etc/sysctl.d/90-txnet-k3s.conf
 EOF
   peer_remove "$NODE_ADDR"
   echo "$NODE_NAME has left the cluster"

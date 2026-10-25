@@ -10,7 +10,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(__file__))
 import edge_chain as ec  # noqa: E402
 import k3s_ports as kp  # noqa: E402
-from test_cloudflare_firewall import FakeChain  # noqa: E402
+from test_edge_firewall import FakeChain  # noqa: E402
 
 
 class Rules(unittest.TestCase):

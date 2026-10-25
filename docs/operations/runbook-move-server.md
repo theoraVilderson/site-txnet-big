@@ -37,7 +37,7 @@ at the WAL flush: fix that first.
 ## First 3 checks
 
 1. **The new server.** Docker and rsync installed; on prod, its origin firewall
-   (`python3 scripts/edge/cloudflare_firewall.py apply` then `install`, run
+   (`python3 scripts/edge/edge_firewall.py apply` then `install`, run
    there; EDGE-1-h); this server's root can
    `ssh root@<new>` with a key (BatchMode, no password); the repo checked out
    **at the same path and the same commit**; NTP on (the tool refuses a clock

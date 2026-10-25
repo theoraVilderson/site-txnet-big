@@ -103,7 +103,7 @@ downloaded from S3, too.
    creates the stack, loads every volume, Redis and database, checks the counts,
    starts everything, publishes the queued messages back, and starts a
    pgBackRest full. The passphrase is copied into place so nightly bundles go on.
-3. On prod, the origin firewall (`scripts/edge/cloudflare_firewall.py apply`,
+3. On prod, the origin firewall (`scripts/edge/edge_firewall.py apply`,
    `install`), then point Cloudflare at the new address:
    `ENV_FILE=.env.prod python3 scripts/edge/edge_zone.py repoint <old> <new>`.
    Allowlists that named the old address: `runbook-move-server.md`, root-cause notes.

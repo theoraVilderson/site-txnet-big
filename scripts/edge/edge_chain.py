@@ -1,8 +1,8 @@
 """What every edge chain on the production host shares: running iptables, the
 public interface, and keeping a chain's jumps on top (hosting O7, K13).
 
-`cloudflare_firewall.py` (80/443 from Cloudflare only) and `k3s_ports.py`
-(k3s's own ports closed) each own one chain named `TXNET-*`.
+`edge_firewall.py` (each door's ports from its own edges only, one chain a
+door) and `k3s_ports.py` (k3s's own ports closed) own the chains named `TXNET-*`.
 """
 import os
 import subprocess

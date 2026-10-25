@@ -2,6 +2,7 @@
   "edges": [
     {
       "name": "cloudflare",
+      "door": "origin-pull",
       "source": "https://api.cloudflare.com/client/v4/ips",
       "format": "cloudflare-api",
       "visitor_header": "CF-Connecting-IP",
@@ -9,6 +10,7 @@
     },
     {
       "name": "arvan",
+      "door": "domestic",
       "source": "https://www.arvancloud.ir/en/ips.txt",
       "format": "lines",
       "visitor_header": "X-Real-IP",

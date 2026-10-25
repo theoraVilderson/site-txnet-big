@@ -13,6 +13,8 @@ services:
       context: ./traefik
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    # Also gateway-domestic's image, built once (k8srender builders).
+    image: txnet/gateway:3.7
     container_name: ${STACK_NAME:-txnet}-gateway
     mem_reservation: 96m # the k8s request: measured peak + headroom (K19)
     mem_limit: 256m
@@ -97,6 +99,58 @@ services:
       - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
       - "traefik.http.routers.dashboard-https.priority=1000"
       - "traefik.http.middlewares.auth-dashboard.basicauth.users=${TRAEFIK_PANEL_USERNAME}:${TRAEFIK_PANEL_PASSWORD}"
+      - "txnet.logging=true"
+
+  # ===========================================================================
+  # The domestic door — a second Traefik on 8443 (NIN-1-b2, ADR-0165 amendment 1)
+  # ===========================================================================
+  # Arvan sends no client certificate, and Traefik takes the handshake rule for
+  # a host no route names (any reseller's domain) from its one `default` TLS
+  # options, so the doors cannot share a process: here they are O3 `off`, on
+  # 443 `required`. Its entrypoint is named `websecure`, so every route of the
+  # 443 door is served here too, behind the same middlewares. It has no ACME
+  # (one acme.json, K17), no dashboard and no port 80; routes naming those log
+  # an error at each reload and are skipped here, which is expected. Only the
+  # domestic edges' ranges reach 8443 (scripts/edge/edge_firewall.py).
+  gateway-domestic:
+    extends: { file: compose/logging.yml, service: rotated-logs }
+    image: txnet/gateway:3.7
+    container_name: ${STACK_NAME:-txnet}-gateway-domestic
+    mem_reservation: 96m # as gateway-handler's until measured (K19)
+    mem_limit: 256m
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=${PRIVATE_NET_NAME:-private_backend_network}"
+      - "--entrypoints.websecure.address=:8443"
+      - "--entrypoints.websecure.http.middlewares=edge-client-ip@file,private-cache@file"
+      - "--entrypoints.websecure.forwardedHeaders.insecure=true"
+      - "--experimental.localPlugins.edgeclientip.moduleName=github.com/txnet/edgeclientip"
+      - "--experimental.localPlugins.privatecache.moduleName=github.com/txnet/privatecache"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--ping=true"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+    environment:
+      # Fixed, not from .env: this door never asks for a certificate (O3).
+      - EDGE_ORIGIN_PULL=off
+    ports:
+      - "${DOMESTIC_ENTRANCE_PORT:-8443}:8443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/plugins-local:/plugins-local:ro
+      - ./traefik/origin-pull:/etc/traefik/origin-pull:ro
+    networks:
+      public_gateway_network:
+      private_backend_network:
+    labels:
       - "txnet.logging=true"
 
   # ===========================================================================

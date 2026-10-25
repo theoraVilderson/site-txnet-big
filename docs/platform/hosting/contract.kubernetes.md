@@ -133,8 +133,8 @@ argon2's native build kept); `APP_NAME` is declared after the shared stages, so
 the eleven apps share one install. A Go image's `WORKDIR` is its compose
 `working_dir`, where dev mounts the source.
 
-**K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8) runs as a Deployment behind a
-`LoadBalancer` Service on 80/443 (k3s `servicelb`). `--providers.docker*`
+**K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8), and on it the domestic door's
+(`gateway-domestic`, O12), run as Deployments behind `LoadBalancer`s on 80/443 and 8443. `--providers.docker*`
 becomes `--providers.kubernetescrd` (namespaces `txnet`, `txnet-monitoring`, as service account
 `traefik-ingress-controller`) with `--providers.file` kept for the
 baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
@@ -150,9 +150,9 @@ mapping for fails the render (K2). Compose prints a literal `$` as `$$`; the
 renderer undoes that once, for every value, before K5's own escaping. Traefik's CRDs and
 RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
 is claim `letsencrypt`. The Service is `externalTrafficPolicy: Local`, so
-Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chain is reached from `FORWARD`
-(`--ctorigdstport 80|443`) where Docker's host used `DOCKER-USER` (OPS-1-o-g); `k8s-rehearse.sh up`
-installs it with K13's chain, before k3s binds 80/443, and `down` keeps it.
+Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chains are reached from `FORWARD`
+(`--ctorigdstport` per door port) where Docker's host used `DOCKER-USER` (OPS-1-o-g); `k8s-rehearse.sh up`
+installs them with K13's chain, before k3s binds the doors' ports, and `down` keeps them.
 
 ## Deploying
 
@@ -209,7 +209,7 @@ Passed 2026-10-24 on the test server, all five steps (commit c98bf9e2): roll 0 o
 **K13 — k3s's own ports.** The API server (6443), the kubelet (10250),
 kube-proxy's health (10256), flannel (8472, 51820–51821/udp) and every NodePort
 (30000–32767, which a LoadBalancer Service also gets) answer from localhost, the
-node and K17's peers only, never the public address; only 80/443 are reached from outside,
+node and K17's peers only, never the public address; only 80/443 and 8443 are reached from outside,
 through O7 (K9). `scripts/edge/k3s_ports.py apply` drops them on the public
 interface in chain `TXNET-K3S` (INPUT; FORWARD by `--ctorigdstport` for a
 NodePort), jumps kept on top as O7's are — another `TXNET-*` chain's jumps are

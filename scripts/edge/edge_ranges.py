@@ -2,8 +2,8 @@
 """The approved edges' published ranges, re-read and their last good copy kept.
 
 NIN-1-b1, ADR-0165 points 3 and 7; O8's rules for every edge. `edges.json`,
-beside this file, is the list: one row per edge with where its ranges are read,
-the format of that answer, the header it names the visitor in, and the fewest
+beside this file, is the list: one row per edge with the door it comes in by
+(edge_firewall.py), where its ranges are read, the format of that answer, the header it names the visitor in, and the fewest
 ranges per family a real answer has. A firewall asks `ranges(name)` for the
 ranges it admits; nothing else fetches them.
 
@@ -32,7 +32,7 @@ TEXTFILE_DIR = os.environ.get("NODE_TEXTFILE_DIR", "/var/lib/txnet/node-textfile
 METRIC = "txnet_edge_ranges_last_refresh_timestamp_seconds"
 CRON = "/etc/cron.d/txnet-edge-ranges"
 FAMILIES = (4, 6)
-FIELDS = ("name", "source", "format", "visitor_header", "minimum")
+FIELDS = ("name", "door", "source", "format", "visitor_header", "minimum")
 # No edge publishes anything wider than this; a wider one admits the world.
 WIDEST = {4: 8, 6: 16}
 FETCH_TIMEOUT_S = 30

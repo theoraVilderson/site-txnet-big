@@ -20,7 +20,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, render  # noqa: E402
-from k8srender.tables import BAKED_BINDS, TRAEFIK  # noqa: E402
+from k8srender.tables import BAKED_BINDS, DATA_NODE_LABEL, DOMESTIC_TRAEFIK, TRAEFIK  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 OPTIONS = {"registry": "registry.example", "tag": "t1", "host_gateway": "10.0.0.5"}
@@ -101,6 +101,35 @@ def model(repo: Path) -> dict:
             "labels": {"traefik.http.routers.ignored.rule": "Host(`x`)"},
         },
     }}
+
+
+class DomesticGatewayAtHead(unittest.TestCase):
+    """NIN-1-b2 at HEAD: what makes the second Traefik the domestic door."""
+
+    def setUp(self):
+        services = yaml.safe_load((REPO / "dev-docker/compose/edge.yml").read_text())["services"]
+        self.main, self.domestic = services[TRAEFIK], services[DOMESTIC_TRAEFIK]
+
+    # Its own `default` TLS options: O3's switch is off here whatever the env
+    # says, since Arvan sends no certificate (contract.origin.md, NIN-1-a).
+    def test_it_asks_no_client_certificate(self):
+        self.assertIn("EDGE_ORIGIN_PULL=off", self.domestic["environment"])
+
+    # Named `websecure`, every route already on the 443 door is on this one too,
+    # behind the same middlewares (O5, O10, O11).
+    def test_it_serves_every_route_of_the_443_door_on_8443(self):
+        args, main = self.domestic["command"], self.main["command"]
+        self.assertIn("--entrypoints.websecure.address=:8443", args)
+        self.assertEqual(self.domestic["ports"], ["${DOMESTIC_ENTRANCE_PORT:-8443}:8443"])
+        for flag in ("--entrypoints.websecure.http.middlewares=", "--entrypoints.websecure.forwardedHeaders"):
+            self.assertEqual([a for a in args if a.startswith(flag)], [a for a in main if a.startswith(flag)])
+
+    # No ACME (one acme.json, K17), no dashboard, no plain-HTTP door.
+    def test_it_holds_no_certificates_dashboard_or_port_80(self):
+        self.assertEqual(self.domestic["image"], self.main["image"])
+        self.assertNotIn("build", self.domestic)
+        self.assertFalse([a for a in self.domestic["command"]
+                          if a.startswith(("--certificatesresolvers", "--api", "--entrypoints.web."))])
 
 
 def objects(files: dict) -> list:
@@ -207,6 +236,34 @@ class TraefikTest(unittest.TestCase):
                          ["ReadWriteOnce"])
         public = named(objs, "Service", f"{TRAEFIK}-public")["spec"]
         self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
+
+    # NIN-1-b2 (ADR-0165 amendment 1): the domestic door is a second Traefik over
+    # the same routes, on the same image — the CRD provider, the data node, a
+    # LoadBalancer for 8443 that keeps the client address — holding no ACME state.
+    def test_the_domestic_gateway_is_a_second_edge(self):
+        m = copy.deepcopy(self.model)
+        m["services"][TRAEFIK]["image"] = "txnet/gateway:test"
+        m["services"][DOMESTIC_TRAEFIK] = {
+            "image": "txnet/gateway:test",
+            "command": ["--providers.docker=true", "--entrypoints.websecure.address=:8443",
+                        "--providers.file.directory=/etc/traefik/dynamic"],
+            "ports": [{"target": 8443, "published": "8443"}],
+            "volumes": [{"type": "bind", "source": str(self.repo / d), "target": f"/baked/{i}", "read_only": True}
+                        for i, d in enumerate(sorted(BAKED_BINDS))],
+        }
+        objs = self.render(m)
+        main = named(objs, "Deployment", TRAEFIK)["spec"]["template"]["spec"]
+        pod = named(objs, "Deployment", DOMESTIC_TRAEFIK)["spec"]["template"]["spec"]
+        args = pod["containers"][0]["args"]
+        self.assertFalse([a for a in args if a.startswith("--providers.docker")])
+        self.assertIn("--providers.kubernetescrd=true", args)
+        self.assertEqual(pod["serviceAccountName"], "traefik-ingress-controller")
+        self.assertEqual(pod["nodeSelector"], dict([DATA_NODE_LABEL]))
+        self.assertEqual(pod["containers"][0]["image"], main["containers"][0]["image"])
+        self.assertNotIn("volumeMounts", pod["containers"][0])
+        public = named(objs, "Service", f"{DOMESTIC_TRAEFIK}-public")["spec"]
+        self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
+        self.assertEqual([p["port"] for p in public["ports"]], [8443])
 
     # K2: an unknown label is an error, never a dropped route.
     def test_unknown_labels_fail(self):
