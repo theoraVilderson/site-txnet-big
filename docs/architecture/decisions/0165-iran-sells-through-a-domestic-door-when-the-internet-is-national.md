@@ -50,8 +50,8 @@ Iran reaches only Iranian addresses. Checked against the stack on 2026-10-25:
    webhook — is built on it, since it is reachable from both sides of a cut.
    Telegram's webhook stays on the Cloudflare door.
 3. **The origin admits each edge by its own proof.** O7's firewall admits
-   Cloudflare's and Arvan's published ranges, each kept from its last good
-   copy; each edge is verified by its own method and only a verified edge's
+   Cloudflare's ranges, and on the domestic door's port those of every
+   approved edge (point 7; Arvan first), each kept from its last good copy; each edge is verified by its own method and only a verified edge's
    visitor header becomes the client address (O5). Below Arvan's Enterprise
    plan the only proof is its ranges: any Arvan customer can then reach the
    origin, still only for hosts we route and with Arvan's own `X-Real-IP` —
@@ -68,10 +68,25 @@ Iran reaches only Iranian addresses. Checked against the stack on 2026-10-25:
    checkout alone (k3s binary, `install.sh` at K1's pin, images from the
    mirror); images build from a domestic package cache warmed by every build;
    nodes keep time from a domestic source; alerts also go to Bale.
-7. **A reseller's domain can survive the cut.** Its own Iranian CDN points at a
-   domestic origin hostname of ours, not at `<slug>.edge.txnet.cyou`, which
-   crosses Cloudflare. A Custom Hostname on Cloudflare alone closes with the cut;
-   the domains page says so.
+7. **A reseller's domain can survive the cut, through its own Arvan account.**
+   No reseller's domain is ever added to our ArvanCloud account (user,
+   2026-10-25: managing other people's domains in ours is not right), which
+   rules out registering it there by NS delegation, and Arvan's CNAME Setup
+   (Enterprise-only, and also in our account). The reseller's own Arvan points
+   at a domestic origin name of ours — DNS-only, so it never chains through our
+   CDN — not at `<slug>.edge.txnet.cyou`, which crosses Cloudflare. Ownership
+   is the TXT proof already built (EDGE-1-n); the domain check then names what
+   is wrong in its Arvan settings. Such a domain is not a Custom Hostname. One
+   on Cloudflare alone closes with the cut; the domains page says so.
+   **Other CDNs come from a list of approved edges** (user, 2026-10-25): each
+   row is a name and where its published ranges are read, so adding one is
+   data, not code (C-18). Arvan is the first row. A CDN not on the list still
+   works through today's Cloudflare path, and is told it closes with the cut.
+   **A reseller wanting no CDN keeps today's path** (one record, our
+   Cloudflare): a domain pointed straight at our address is refused, since one
+   filtered domain would take the shared address and every tenant with it
+   (ADR-0063's reason), expose the origin, and leave its certificate needing
+   the foreign internet.
 8. **It is proven by a drill, not by reading.** `nin-drill` closes egress to
    every non-Iranian address on all nodes for a bounded time, runs the release
    smoke check through the domestic door (sign-in, purchase, subscription,
