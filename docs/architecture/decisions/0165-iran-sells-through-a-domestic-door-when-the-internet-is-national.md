@@ -104,9 +104,10 @@ Iran reaches only Iranian addresses. Checked against the stack on 2026-10-25:
   proofs to keep; ArvanCloud bills traffic (ADR-0156 records it as a cost).
 - Negative / accepted cost: the package cache is a service to run, and a
   dependency never fetched before a cut cannot be added during it.
-- Off-node backups on a foreign S3 stop during a cut (K15 keeps Postgres
-  running). Where the bucket is — domestic, foreign, both — is open
-  (`hosting/open-questions.md`, NIN-1-i).
+- Off-node backups go to a domestic bucket (user, 2026-10-25: Iran first, no
+  money abroad yet; NIN-1-i). A copy abroad, against losing the datacenter
+  itself, waits for a foreign bucket (NIN-1-k); until then one country holds
+  every copy.
 
 ## Alternatives rejected
 
