@@ -66,7 +66,7 @@ services:
       - "traefik.http.routers.currency-service.rule=PathPrefix(`/api/currency`)"
       - "traefik.http.routers.currency-service.priority=120"
       - "traefik.http.routers.currency-service.entrypoints=websecure"
-      - "traefik.http.routers.currency-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.currency-service.tls=true"
       - "traefik.http.routers.currency-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.currency-service.service=currency-service"
 
@@ -80,7 +80,7 @@ services:
       - "traefik.http.routers.currency-preflight.rule=PathPrefix(`/api/currency`) && Method(`OPTIONS`)"
       - "traefik.http.routers.currency-preflight.entrypoints=websecure"
       - "traefik.http.routers.currency-preflight.priority=150"
-      - "traefik.http.routers.currency-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.currency-preflight.tls=true"
       - "traefik.http.routers.currency-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.currency-preflight.service=currency-service"
       - "txnet.logging=true"

@@ -50,7 +50,7 @@ services:
       - "traefik.http.routers.guide-media.rule=PathPrefix(`/api/public/media/`)"
       - "traefik.http.routers.guide-media.entrypoints=websecure"
       - "traefik.http.routers.guide-media.priority=130"
-      - "traefik.http.routers.guide-media.tls.certresolver=myresolver"
+      - "traefik.http.routers.guide-media.tls=true"
       - "traefik.http.routers.guide-media.middlewares=strip-fake-headers,guide-media-strip"
       - "traefik.http.routers.guide-media.service=guide-media"
       - "txnet.logging=true"

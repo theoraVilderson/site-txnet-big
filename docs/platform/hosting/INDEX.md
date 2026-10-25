@@ -23,7 +23,7 @@ connection pool, the log pipeline's bounds and format, healthchecks, and houseke
 |---|---|
 | [contract.md](contract.md) | building any OPS-1 row — rules H1…H23 are the spec |
 | [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11; what ArvanCloud does as the domestic edge (NIN-1-a); the approved-edge list and its ranges (NIN-1-b1, O8); the domestic door, a second Traefik on 8443, and its visitor address (NIN-1-b2, -b3, O12) |
-| [contract.origin-cert.md](contract.origin-cert.md) | each door's origin certificate, never renewed online: issued, sealed, served, its expiry alerted 30 days ahead (NIN-1-c) — rule O13 |
+| [contract.origin-cert.md](contract.origin-cert.md) | each door's origin certificate, never renewed online: Cloudflare's Origin CA on 443, ours on 8443, no Let's Encrypt; issued, sealed, served, its expiry alerted 30 days ahead (NIN-1-c) — rule O13 |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose, its monitoring, ports and memory (OPS-1-o-a … -r) — rules K1…K19 |
 | [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j, -u, -w) — rules S1…S8 |
 | [contract.release.md](contract.release.md) | a release: built and pushed off the k3s node, pulled with a sealed pull-only login, each image tagged by its source, a fresh database seeded, smoke-checked, set back whole on a failure or by `rollback [tag]` (OPS-1-o-m, -p, -x, -y) — rules R1…R13 |

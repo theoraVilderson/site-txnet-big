@@ -73,7 +73,7 @@ services:
       - "traefik.http.routers.sub.rule=PathPrefix(`/sub/`)"
       - "traefik.http.routers.sub.entrypoints=websecure"
       - "traefik.http.routers.sub.priority=200"
-      - "traefik.http.routers.sub.tls.certresolver=myresolver"
+      - "traefik.http.routers.sub.tls=true"
       # No Host() rule names the platform's own `sub.` door (seed.js), so ACME
       # would never issue for it; a reseller's custom host is a separate cert.
       - "traefik.http.routers.sub.tls.domains[0].main=sub.${DOMAIN_NAME}"

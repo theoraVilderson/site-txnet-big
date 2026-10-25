@@ -17,8 +17,7 @@ http:
       entryPoints: [websecure]
       service: barghgo-tel-bot
       priority: 500
-      tls:
-        certResolver: myresolver
+      tls: {}
     barghgo-dev-tel-bot-http:
       rule: Host(`dev-tel-bot.txnet.cyou`)
       entryPoints: [web]
@@ -29,8 +28,7 @@ http:
       entryPoints: [websecure]
       service: barghgo-dev-tel-bot
       priority: 500
-      tls:
-        certResolver: myresolver
+      tls: {}
   services:
     barghgo-tel-bot:
       loadBalancer:

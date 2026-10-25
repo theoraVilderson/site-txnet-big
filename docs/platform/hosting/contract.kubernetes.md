@@ -148,8 +148,9 @@ port (K4), and a ForwardAuth address is checked like any K4 call. Basic-auth use
 go to a hashed Secret, the only form the CRD takes. A label the renderer has no
 mapping for fails the render (K2). Compose prints a literal `$` as `$$`; the
 renderer undoes that once, for every value, before K5's own escaping. Traefik's CRDs and
-RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. ACME storage
-is claim `letsencrypt`. The Service is `externalTrafficPolicy: Local`, so
+RBAC are vendored at `TRAEFIK_CRD_VERSION` under `k8s/traefik/`. Traefik holds
+no state: no certificate is fetched online, and a route naming a
+`tls.certresolver` fails the render (O13). The Service is `externalTrafficPolicy: Local`, so
 Traefik sees the connecting address, not the node's (O5, O7). On a k3s host O7's chains are reached from `FORWARD`
 (`--ctorigdstport` per door port) where Docker's host used `DOCKER-USER` (OPS-1-o-g); `k8s-rehearse.sh up`
 installs them with K13's chain, before k3s binds the doors' ports, and `down` keeps them.
@@ -170,7 +171,7 @@ sets the release back (K16; on the first release, the failed ones are
 does a last apply `--prune -l app.kubernetes.io/part-of=txnet`, so a pod set back
 still finds the hashed Secrets it names; `--prune-allowlist` never names a
 claim, a Namespace, a CRD or a Job. Overlays: `prod` (both bases, `k8s/traefik`,
-`k8s/monitoring`); `rehearsal` lands with K12 (OPS-1-o-f).
+`k8s/monitoring`), the test server's too (K12).
 
 **K11 — Monitoring.** `docker-compose.sys-monitor.yml` is rendered the same
 way (`k8s_render.py --stack monitoring`, `tables.py` STACKS; env files `.env`,
@@ -196,7 +197,7 @@ with `level`, none of the unlabelled one's.
 **K12 — The rehearsal on the test server** (ADR-0163, amending ADR-0147
 point 6). `scripts/k8s-rehearse.sh up|deploy|check|down`: k3s at `K3S_VERSION`
 on the host itself, beside Docker, the compose stack stopped for it, overlay
-`rehearsal` (the test server's env files, no ACME), images pulled as K14 says,
+`prod` (`rehearsal` only removed ACME, gone in NIN-1-c2), images pulled as K14 says,
 one replica each (K19). `check` proves the row: every workload ready, a
 rolling update of `billing-service` under a request loop with zero failed
 requests, the three data stores' pods deleted and back with their rows, keys

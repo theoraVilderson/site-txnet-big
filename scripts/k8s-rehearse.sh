@@ -6,7 +6,7 @@
 #   scripts/k8s-rehearse.sh up       K13's chain installed, the compose stack stopped, the node's
 #                                    sysctl, k3s's config and registries.yaml, then k3s itself at
 #                                    k8s/versions.env's pin (K1), each download checked
-#   scripts/k8s-rehearse.sh deploy   prod.k8s.sh deploy with overlay `rehearsal` (no ACME)
+#   scripts/k8s-rehearse.sh deploy   prod.k8s.sh deploy, overlay `prod`: no door fetches a certificate (O13)
 #   scripts/k8s-rehearse.sh check    tools/k8s_rehearse.py check: every workload ready, a roll under
 #                                    load with no failed request, the stores killed and back, the
 #                                    drill, a bundle restored
@@ -108,7 +108,7 @@ up() {
 
 deploy() {
   require_node
-  "$ROOT_DIR/scripts/prod.k8s.sh" deploy rehearsal
+  "$ROOT_DIR/scripts/prod.k8s.sh" deploy
 }
 
 check() {

@@ -155,7 +155,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.mailpit.rule=Host(`mail.${DOMAIN_NAME}`)"
       - "traefik.http.routers.mailpit.entrypoints=websecure"
-      - "traefik.http.routers.mailpit.tls.certresolver=myresolver"
+      - "traefik.http.routers.mailpit.tls=true"
       - "traefik.http.services.mailpit.loadbalancer.server.port=8025"
 
   # ===========================================================================
@@ -191,5 +191,5 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.mq-admin.rule=Host(`mq.${DOMAIN_NAME}`)"
       - "traefik.http.routers.mq-admin.entrypoints=websecure"
-      - "traefik.http.routers.mq-admin.tls.certresolver=myresolver"
+      - "traefik.http.routers.mq-admin.tls=true"
       - "traefik.http.services.mq-admin.loadbalancer.server.port=15672"

@@ -42,11 +42,6 @@ services:
       - "--entrypoints.websecure.forwardedHeaders.insecure=true"
       - "--experimental.localPlugins.edgeclientip.moduleName=github.com/txnet/edgeclientip"
       - "--experimental.localPlugins.privatecache.moduleName=github.com/txnet/privatecache"
-      # Let's Encrypt — HTTP challenge (production)
-      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
-      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
-      - "--certificatesresolvers.myresolver.acme.email=${EMAIL_SSL}"
-      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
       # Routes to things outside this stack that share the host's 80/443 —
       # Cloudflare reaches the origin on those ports only (barghgo's Telegram
       # bots, see traefik/dynamic/barghgo-bots.yml).
@@ -55,15 +50,30 @@ services:
       # /ping on the internal `traefik` entrypoint (:8080, never published),
       # which no router joins by default; the check below asks it (hosting H24).
       - "--ping=true"
+      # traefik_tls_certs_not_after for OriginCertExpiring (O13), beside /ping;
+      # no per-entrypoint or per-service request series.
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=false"
+      - "--metrics.prometheus.addServicesLabels=false"
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 20s
+    # Prometheus reads the certificate's expiry here; never published.
+    expose:
+      - "8080"
     environment:
       # off | optional | required — read by traefik/dynamic/origin-pull.yml.
       - EDGE_ORIGIN_PULL=${EDGE_ORIGIN_PULL:-off}
+      # Cloudflare's Origin CA certificate, 15 years, never renewed online
+      # (NIN-1-c2, scripts/edge/origin-cert.sh), loaded by
+      # traefik/dynamic/origin-cert.yml as the default for every host: a Custom
+      # Hostname's pull names the reseller's domain, and Full (strict) checks
+      # the certificate against the fallback origin, which it covers.
+      - EDGE_ORIGIN_CERT=cloudflare
+      - EDGE_ORIGIN_CERT_DEFAULT=true
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
@@ -71,10 +81,11 @@ services:
       - "${HTTPS_ENTRANCE_PORT:-443}:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ../dev_letsencrypt:/letsencrypt
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./traefik/plugins-local:/plugins-local:ro
       - ./traefik/origin-pull:/etc/traefik/origin-pull:ro
+      - ./secrets/origin-cert/cloudflare.pem:/etc/traefik/origin-cert/cloudflare.pem:ro
+      - ./secrets/origin-cert/cloudflare.key:/etc/traefik/origin-cert/cloudflare.key:ro
     networks:
       public_gateway_network:
       private_backend_network:
@@ -94,7 +105,7 @@ services:
       - "traefik.http.routers.dashboard-http.priority=1000"
       - "traefik.http.routers.dashboard-https.rule=Host(`monitor.${DOMAIN_NAME}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
       - "traefik.http.routers.dashboard-https.entrypoints=websecure"
-      - "traefik.http.routers.dashboard-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.dashboard-https.tls=true"
       - "traefik.http.routers.dashboard-https.service=api@internal"
       - "traefik.http.routers.dashboard-https.middlewares=auth-dashboard"
       - "traefik.http.routers.dashboard-https.priority=1000"
@@ -108,9 +119,9 @@ services:
   # a host no route names (any reseller's domain) from its one `default` TLS
   # options, so the doors cannot share a process: here they are O3 `off`, on
   # 443 `required`. Its entrypoint is named `websecure`, so every route of the
-  # 443 door is served here too, behind the same middlewares. It has no ACME
-  # (one acme.json, K17), no dashboard and no port 80; routes naming those log
-  # an error at each reload and are skipped here, which is expected. Only the
+  # 443 door is served here too, behind the same middlewares. It has no
+  # dashboard and no port 80; routes naming those log an error at each reload
+  # and are skipped here, which is expected. Only the
   # domestic edges' ranges reach 8443 (scripts/edge/edge_firewall.py).
   gateway-domestic:
     extends: { file: compose/logging.yml, service: rotated-logs }

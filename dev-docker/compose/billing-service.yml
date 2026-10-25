@@ -157,7 +157,7 @@ services:
       - "traefik.http.routers.billing-service.rule=PathPrefix(`/api/billing`)"
       - "traefik.http.routers.billing-service.priority=120"
       - "traefik.http.routers.billing-service.entrypoints=websecure"
-      - "traefik.http.routers.billing-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-service.tls=true"
       - "traefik.http.routers.billing-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.billing-service.service=billing-service"
 
@@ -189,7 +189,7 @@ services:
       - "traefik.http.routers.billing-preflight.rule=PathPrefix(`/api/billing`) && Method(`OPTIONS`)"
       - "traefik.http.routers.billing-preflight.entrypoints=websecure"
       - "traefik.http.routers.billing-preflight.priority=150"
-      - "traefik.http.routers.billing-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-preflight.tls=true"
       - "traefik.http.routers.billing-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-preflight.service=billing-service"
 
@@ -206,7 +206,7 @@ services:
       - "traefik.http.routers.catalog.rule=PathPrefix(`/api/catalog`)"
       - "traefik.http.routers.catalog.priority=120"
       - "traefik.http.routers.catalog.entrypoints=websecure"
-      - "traefik.http.routers.catalog.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog.tls=true"
       - "traefik.http.routers.catalog.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.catalog.service=billing-service"
 
@@ -219,7 +219,7 @@ services:
       - "traefik.http.routers.catalog-preflight.rule=PathPrefix(`/api/catalog`) && Method(`OPTIONS`)"
       - "traefik.http.routers.catalog-preflight.entrypoints=websecure"
       - "traefik.http.routers.catalog-preflight.priority=150"
-      - "traefik.http.routers.catalog-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.catalog-preflight.tls=true"
       - "traefik.http.routers.catalog-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.catalog-preflight.service=billing-service"
 
@@ -251,7 +251,7 @@ services:
       - "traefik.http.routers.billing-callback.rule=PathPrefix(`/api/billing/deposit/callback`)"
       - "traefik.http.routers.billing-callback.entrypoints=websecure"
       - "traefik.http.routers.billing-callback.priority=200"
-      - "traefik.http.routers.billing-callback.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-callback.tls=true"
       - "traefik.http.routers.billing-callback.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-callback.service=billing-service"
 
@@ -269,7 +269,7 @@ services:
       - "traefik.http.routers.billing-webhook.rule=PathPrefix(`/api/billing/deposit/webhook/`)"
       - "traefik.http.routers.billing-webhook.entrypoints=websecure"
       - "traefik.http.routers.billing-webhook.priority=200"
-      - "traefik.http.routers.billing-webhook.tls.certresolver=myresolver"
+      - "traefik.http.routers.billing-webhook.tls=true"
       - "traefik.http.routers.billing-webhook.middlewares=strip-fake-headers"
       - "traefik.http.routers.billing-webhook.service=billing-service"
       - "txnet.logging=true"

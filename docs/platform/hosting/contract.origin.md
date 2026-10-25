@@ -46,11 +46,14 @@ Options `default` hold for every router and for an unknown SNI. No router may
 name other TLS options: they would bypass this. All of this is gateway-handler's,
 the 443 door; the domestic door's Traefik is `off` (O12).
 
-**O4 — An unknown SNI gets no real certificate.** No `defaultCertificate` and
-no `sniStrict`. With no SNI or a name we hold no certificate for, Traefik
-serves its self-signed `TRAEFIK DEFAULT CERT`, so an address scan reads no host
-name. `sniStrict` is not used because Cloudflare's pull for a Custom Hostname
-carries that hostname as SNI, and we hold no certificate for it.
+**O4 — Each door chooses what an unknown SNI gets (O13); no `sniStrict`.** On
+8443, no `defaultCertificate`: with no SNI or a name we hold no certificate
+for, Traefik serves its self-signed `TRAEFIK DEFAULT CERT`, so an address scan
+reads no host name. On 443 the default is Cloudflare's Origin CA certificate
+(NIN-1-c2): a Custom Hostname's pull carries that hostname as SNI, and Full
+(strict) refuses Traefik's own; a scan there must come from Cloudflare (O7) and
+reads only `<domain>`, which DNS publishes anyway. `sniStrict` is not used for
+the same reason: we hold no certificate naming a Custom Hostname.
 
 **O5 — The client address.** The local plugin `edgeclientip`
 (`dev-docker/traefik/plugins-local/src/github.com/txnet/edgeclientip`, the
@@ -192,9 +195,9 @@ given to the plugin as `visitorHeader` from `EDGE_VISITOR_HEADER`; one header
 for the door, held equal to the list by the render test (NIN-1-b3).
 `CF-Connecting-IP`, the claim headers, a client's `X-Edge-Claimed-Ip` and
 `X-Forwarded-For` (Arvan keeps a client's) are dropped and no claim is made; a
-missing or malformed value leaves the socket's, the edge's. No ACME (one `acme.json`, K17), no dashboard, no port
-80: routes naming those are skipped, with an `ERR` line at each reload, which
-is expected. Its own certificate is O13's (`contract.origin-cert.md`). Only
+missing or malformed value leaves the socket's, the edge's. No dashboard, no
+port 80: routes naming those are skipped, with an `ERR` line at each reload,
+which is expected. Its own certificate is O13's (`contract.origin-cert.md`). Only
 the `domestic` door's edges reach 8443 (O7); never Cloudflare, which proxies 8443 for any zone while nothing here checks a
 certificate. `join` puts the chain on a new node and refuses one where 8443 is held.
 

@@ -91,7 +91,7 @@ services:
       - "traefik.http.routers.notification-service.rule=PathPrefix(`/api/notifications`)"
       - "traefik.http.routers.notification-service.priority=120"
       - "traefik.http.routers.notification-service.entrypoints=websecure"
-      - "traefik.http.routers.notification-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.notification-service.tls=true"
       - "traefik.http.routers.notification-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.notification-service.service=notification-service"
 
@@ -106,7 +106,7 @@ services:
       - "traefik.http.routers.notification-preflight.rule=PathPrefix(`/api/notifications`) && Method(`OPTIONS`)"
       - "traefik.http.routers.notification-preflight.entrypoints=websecure"
       - "traefik.http.routers.notification-preflight.priority=150"
-      - "traefik.http.routers.notification-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.notification-preflight.tls=true"
       - "traefik.http.routers.notification-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.notification-preflight.service=notification-service"
       - "txnet.logging=true"

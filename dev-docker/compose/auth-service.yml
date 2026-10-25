@@ -189,7 +189,7 @@ services:
       - "traefik.http.routers.auth-service-https.rule=PathPrefix(`/api/auth`)"
       - "traefik.http.routers.auth-service-https.priority=120"
       - "traefik.http.routers.auth-service-https.entrypoints=websecure"
-      - "traefik.http.routers.auth-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.auth-service-https.tls=true"
       - "traefik.http.routers.auth-service-https.middlewares=auth-rate-limit"
 
       - "traefik.http.routers.auth-service-https.service=auth-service"

@@ -40,7 +40,6 @@ def model(repo: Path) -> dict:
             "extra_hosts": ["host.docker.internal=host-gateway"],
             "volumes": [
                 {"type": "bind", "source": "/var/run/docker.sock", "target": "/var/run/docker.sock"},
-                {"type": "bind", "source": str(repo / "dev_letsencrypt"), "target": "/letsencrypt"},
                 *({"type": "bind", "source": str(repo / d), "target": f"/baked/{i}", "read_only": True}
                   for i, d in enumerate(sorted(BAKED_BINDS))),
             ],
@@ -51,7 +50,7 @@ def model(repo: Path) -> dict:
                 "traefik.http.routers.dashboard-https.service": "api@internal",
                 "traefik.http.routers.dashboard-https.middlewares": "auth-dashboard",
                 "traefik.http.routers.dashboard-https.priority": "1000",
-                "traefik.http.routers.dashboard-https.tls.certresolver": "myresolver",
+                "traefik.http.routers.dashboard-https.tls": "true",
                 "traefik.http.middlewares.auth-dashboard.basicauth.users": "admin:$$2y$$05$$abc",
             },
         },
@@ -89,7 +88,7 @@ def model(repo: Path) -> dict:
                 "traefik.http.routers.nextjs-any.rule": "HostRegexp(`.+`)",
                 "traefik.http.routers.nextjs-any.tls": "true",
                 "traefik.http.routers.nextjs.rule": "Host(`panel.example`)",
-                "traefik.http.routers.nextjs.tls.certresolver": "myresolver",
+                "traefik.http.routers.nextjs.tls": "true",
                 "traefik.http.routers.nextjs.tls.domains[0].main": "panel.example",
                 "traefik.http.middlewares.pwa-security.headers.stsSeconds": "31536000",
                 "traefik.http.middlewares.pwa-security.headers.forceSTSHeader": "true",
@@ -148,12 +147,48 @@ class DomesticGatewayAtHead(unittest.TestCase):
         self.assertIn(f"{DOMESTIC_TRAEFIK}:8080", targets)
         self.assertEqual(self.domestic["expose"], ["8080"])
 
-    # No ACME (one acme.json, K17), no dashboard, no plain-HTTP door.
+    # No dashboard and no plain-HTTP door; no ACME on either door (O13).
     def test_it_holds_no_certificates_dashboard_or_port_80(self):
         self.assertEqual(self.domestic["image"], self.main["image"])
         self.assertNotIn("build", self.domestic)
         self.assertFalse([a for a in self.domestic["command"]
                           if a.startswith(("--certificatesresolvers", "--api", "--entrypoints.web."))])
+
+
+class CloudflareDoorAtHead(unittest.TestCase):
+    """NIN-1-c2 at HEAD: the 443 door presents Cloudflare's Origin CA certificate
+    and no certificate anywhere is fetched online."""
+
+    def setUp(self):
+        self.main = yaml.safe_load((REPO / "dev-docker/compose/edge.yml").read_text())["services"][TRAEFIK]
+
+    # The default certificate, so a Custom Hostname's pull (SNI the reseller's
+    # domain, no route of ours names it) gets it too: Full (strict) checks it
+    # against the fallback origin, which `*.<domain>` covers (O13).
+    def test_it_serves_cloudflares_certificate_for_every_host(self):
+        env = self.main["environment"]
+        self.assertIn("EDGE_ORIGIN_CERT=cloudflare", env)
+        self.assertIn("EDGE_ORIGIN_CERT_DEFAULT=true", env)
+        bound = [v.split(":")[0] for v in self.main["volumes"] if "origin-cert" in v]
+        self.assertEqual(bound, ["./secrets/origin-cert/cloudflare.pem", "./secrets/origin-cert/cloudflare.key"])
+
+    def test_its_expiry_is_scraped(self):
+        self.assertIn("--metrics.prometheus=true", self.main["command"])
+        self.assertEqual(self.main["expose"], ["8080"])
+        scrape = yaml.safe_load((REPO / "dev-docker/monitoring/config-dev/prometheus.yml").read_text())
+        targets = {t for job in scrape["scrape_configs"] for s in job.get("static_configs", []) for t in s["targets"]}
+        self.assertIn(f"{TRAEFIK}:8080", targets)
+
+    # ADR-0165 point 4, C-21: Let's Encrypt is gone whole — the resolver, its
+    # storage, and every route or file route naming it.
+    def test_no_certificate_is_fetched_online(self):
+        self.assertFalse([a for a in self.main["command"] if a.startswith("--certificatesresolvers")])
+        self.assertFalse([v for v in self.main["volumes"] if "letsencrypt" in v])
+        tracked = subprocess.run(["git", "ls-files", "dev-docker", "k8s"], cwd=REPO, check=True,
+                                 capture_output=True, text=True).stdout.split()
+        naming = sorted(f for f in tracked if f.endswith((".yml", ".yaml")) and not f.endswith("crds.yaml")
+                        and "certresolver" in (REPO / f).read_text(errors="ignore").lower())
+        self.assertEqual(naming, [])
 
 
 def objects(files: dict) -> list:
@@ -197,7 +232,7 @@ class TraefikTest(unittest.TestCase):
         self.assertEqual(any_host["spec"]["routes"][0]["services"], [{"name": "site-pwa", "port": 8181}])
         self.assertEqual(any_host["spec"]["tls"], {})
         panel = named(objs, "IngressRoute", "nextjs")
-        self.assertEqual(panel["spec"]["tls"], {"certResolver": "myresolver", "domains": [{"main": "panel.example"}]})
+        self.assertEqual(panel["spec"]["tls"], {"domains": [{"main": "panel.example"}]})
 
     # K9: api@internal is Traefik's own service.
     def test_internal_service(self):
@@ -246,7 +281,7 @@ class TraefikTest(unittest.TestCase):
 
     # K9: Traefik reads the CRDs, not the Docker socket, as its service account;
     # its LoadBalancer keeps the client address; the baked directories and the
-    # socket are not mounted, ACME storage is claim `letsencrypt`.
+    # socket are not mounted, and it holds no state: no ACME, no claim (O13).
     def test_the_traefik_pod(self):
         objs = self.render()
         pod = named(objs, "Deployment", TRAEFIK)["spec"]["template"]["spec"]
@@ -255,9 +290,8 @@ class TraefikTest(unittest.TestCase):
         self.assertIn("--providers.kubernetescrd=true", args)
         self.assertIn("--providers.file.directory=/etc/traefik/dynamic", args)
         self.assertEqual(pod["serviceAccountName"], "traefik-ingress-controller")
-        self.assertEqual([m["mountPath"] for m in pod["containers"][0]["volumeMounts"]], ["/letsencrypt"])
-        self.assertEqual(named(objs, "PersistentVolumeClaim", "letsencrypt")["spec"]["accessModes"],
-                         ["ReadWriteOnce"])
+        self.assertNotIn("volumeMounts", pod["containers"][0])
+        self.assertFalse([o for o in objs if o["kind"] == "PersistentVolumeClaim"])
         public = named(objs, "Service", f"{TRAEFIK}-public")["spec"]
         self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
 
@@ -288,6 +322,13 @@ class TraefikTest(unittest.TestCase):
         public = named(objs, "Service", f"{DOMESTIC_TRAEFIK}-public")["spec"]
         self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
         self.assertEqual([p["port"] for p in public["ports"]], [8443])
+
+    # O13: a certificate resolver would fetch online again (ADR-0165 point 4).
+    def test_a_certificate_resolver_fails(self):
+        m = copy.deepcopy(self.model)
+        m["services"]["site-pwa"]["labels"]["traefik.http.routers.nextjs.tls.certresolver"] = "myresolver"
+        with self.assertRaises(RenderError):
+            self.render(m)
 
     # K2: an unknown label is an error, never a dropped route.
     def test_unknown_labels_fail(self):

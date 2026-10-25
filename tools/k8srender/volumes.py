@@ -5,7 +5,7 @@ from pathlib import Path, PurePosixPath
 from .monitoring import rewrite
 from .objects import RenderError, dns_name, hashed
 from .sealed import read_secret
-from .tables import (BAKED_BINDS, BIND_CLAIMS, DEFAULT_VOLUME_SIZE, DOCKER_HOST_BINDS, POD_LOCAL_VOLUMES,
+from .tables import (BAKED_BINDS, DEFAULT_VOLUME_SIZE, DOCKER_HOST_BINDS, POD_LOCAL_VOLUMES,
                      SECRET_DIR, VOLUME_SIZES)
 
 # Where compose mounts a `secrets:` entry that names no absolute target.
@@ -67,8 +67,6 @@ class Mounts:
         rel = _repo_relative(source, self.repo)
         if str(source) in DOCKER_HOST_BINDS or rel in BAKED_BINDS:
             return None
-        if rel in BIND_CLAIMS:
-            return self._named(BIND_CLAIMS[rel], entry["target"], entry)
         if rel is None:
             name = f"host-{dns_name(str(source)) or 'root'}"  # `/` itself: node-exporter's rootfs
             self.volumes[name] = {"name": name, "hostPath": {"path": str(source), "type": "DirectoryOrCreate"}}

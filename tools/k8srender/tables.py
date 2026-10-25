@@ -97,15 +97,12 @@ BAKED_BINDS = {
     "dev-docker/traefik/origin-pull": "dev-docker/traefik/Dockerfile",
 }
 
-# K7/K9: a bound directory that holds state, and the claim that holds it instead.
-BIND_CLAIMS = {"dev_letsencrypt": "letsencrypt"}
-
 # K9: the compose service that is Traefik, and what changes in its pod: the
 # Docker provider's flags give way to the CRD provider's, read as the
 # service account k8s/traefik/ binds to Traefik's ClusterRole.
 TRAEFIK = "gateway-handler"
 # NIN-1-b2 (ADR-0165 amendment 1): the domestic door's Traefik, a second edge pod
-# on the same image and routes, with no ACME state of its own.
+# on the same image and routes.
 DOMESTIC_TRAEFIK = "gateway-domestic"
 EDGE_GATEWAYS = {TRAEFIK, DOMESTIC_TRAEFIK}
 TRAEFIK_SERVICE_ACCOUNT = "traefik-ingress-controller"

@@ -122,7 +122,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana_dev.rule=Host(`${GRAFANA_ROUTER_HOST}.${DOMAIN_NAME}`)"
       - "traefik.http.routers.grafana_dev.entrypoints=websecure"
-      - "traefik.http.routers.grafana_dev.tls.certresolver=myresolver"
+      - "traefik.http.routers.grafana_dev.tls=true"
       - "traefik.http.services.grafana_dev.loadbalancer.server.port=3000"
 
   # ===========================================================================

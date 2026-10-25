@@ -86,7 +86,7 @@ services:
       - "traefik.http.routers.support-service.rule=PathPrefix(`/api/support`)"
       - "traefik.http.routers.support-service.priority=120"
       - "traefik.http.routers.support-service.entrypoints=websecure"
-      - "traefik.http.routers.support-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.support-service.tls=true"
       - "traefik.http.routers.support-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.support-service.service=support-service"
 
@@ -100,7 +100,7 @@ services:
       - "traefik.http.routers.support-preflight.rule=PathPrefix(`/api/support`) && Method(`OPTIONS`)"
       - "traefik.http.routers.support-preflight.entrypoints=websecure"
       - "traefik.http.routers.support-preflight.priority=150"
-      - "traefik.http.routers.support-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.support-preflight.tls=true"
       - "traefik.http.routers.support-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.support-preflight.service=support-service"
       - "txnet.logging=true"

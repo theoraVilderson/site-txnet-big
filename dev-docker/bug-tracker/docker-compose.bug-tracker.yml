@@ -95,7 +95,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.glitchtip_dev.rule=Host(`${GLITCHTIP_ROUTER_HOST}`)"
       - "traefik.http.routers.glitchtip_dev.entrypoints=websecure"
-      - "traefik.http.routers.glitchtip_dev.tls.certresolver=myresolver"
+      - "traefik.http.routers.glitchtip_dev.tls=true"
       - "traefik.http.services.glitchtip_dev.loadbalancer.server.port=8000"
       - "txnet.logging=true"
     networks:

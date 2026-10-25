@@ -60,7 +60,7 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   too, for a server installed before). The render gives that `nodeSelector` to
   every pod holding a claim or a host path, DaemonSets aside (`DATA_NODE_LABEL`,
   `holds_node_state`): a `local-path` volume binds on the node of its first pod
-  and cannot follow it. That is the stores, Traefik (`letsencrypt`),
+  and cannot follow it. That is the stores,
   `object_storage`'s five users, locale-service, the translators, and
   Prometheus, Loki, Grafana, node-exporter; on the main stack the other 15 are
   free. `deploy` and `rollback` refuse to apply anything while no node carries
@@ -74,8 +74,9 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   serves (`maxUnavailable: 0`).
 - **Cloudflare reaches the data node only (user, 2026-10-24).** While the
   stores live there, a second entry adds no availability, only a dead address
-  Cloudflare's free plan would keep sending visitors to; and Traefik's ACME
-  HTTP challenge keeps one `acme.json`, so one ACME Traefik (O12's has none); both on the data node. The zone's records name
+  Cloudflare's free plan would keep sending visitors to. Both doors' Traefiks
+  are pinned there too (`EDGE_GATEWAYS`), holding no state of their own since
+  their certificates are sealed files (O13). The zone's records name
   the data node; `join` puts O7 (`edge_firewall.py`, with O8's
   edge list and the server's last good copies) on the node before k3s, since svclb binds 80/443 and 8443 there too.
   Reaching both nodes is OPS-1-o-r's, with the standby, through

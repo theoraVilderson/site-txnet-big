@@ -98,7 +98,7 @@ services:
       - "traefik.http.routers.tenant-service.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`))"
       - "traefik.http.routers.tenant-service.priority=120"
       - "traefik.http.routers.tenant-service.entrypoints=websecure"
-      - "traefik.http.routers.tenant-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-service.tls=true"
       - "traefik.http.routers.tenant-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.tenant-service.service=tenant-service"
 
@@ -113,7 +113,7 @@ services:
       - "traefik.http.routers.tenant-preflight.rule=(PathPrefix(`/api/tenants`) || PathPrefix(`/api/tenant-packages`) || PathPrefix(`/api/guides`)) && Method(`OPTIONS`)"
       - "traefik.http.routers.tenant-preflight.entrypoints=websecure"
       - "traefik.http.routers.tenant-preflight.priority=150"
-      - "traefik.http.routers.tenant-preflight.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-preflight.tls=true"
       - "traefik.http.routers.tenant-preflight.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-preflight.service=tenant-service"
 
@@ -132,7 +132,7 @@ services:
       - "traefik.http.routers.tenant-public.rule=PathPrefix(`/api/public/tenant`)"
       - "traefik.http.routers.tenant-public.entrypoints=websecure"
       - "traefik.http.routers.tenant-public.priority=130"
-      - "traefik.http.routers.tenant-public.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-public.tls=true"
       - "traefik.http.routers.tenant-public.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-public.service=tenant-service"
 
@@ -152,7 +152,7 @@ services:
       - "traefik.http.routers.tenant-domain-probe.rule=PathPrefix(`/api/tenant-domain-probe`)"
       - "traefik.http.routers.tenant-domain-probe.entrypoints=websecure"
       - "traefik.http.routers.tenant-domain-probe.priority=130"
-      - "traefik.http.routers.tenant-domain-probe.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-domain-probe.tls=true"
       - "traefik.http.routers.tenant-domain-probe.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-domain-probe.service=tenant-service"
 
@@ -168,7 +168,7 @@ services:
       - "traefik.http.routers.tenant-files.rule=PathPrefix(`/api/files/`)"
       - "traefik.http.routers.tenant-files.entrypoints=websecure"
       - "traefik.http.routers.tenant-files.priority=130"
-      - "traefik.http.routers.tenant-files.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-files.tls=true"
       - "traefik.http.routers.tenant-files.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-files.service=tenant-service"
 
@@ -184,7 +184,7 @@ services:
       - "traefik.http.routers.tenant-branding.rule=Path(`/api/branding`)"
       - "traefik.http.routers.tenant-branding.entrypoints=websecure"
       - "traefik.http.routers.tenant-branding.priority=130"
-      - "traefik.http.routers.tenant-branding.tls.certresolver=myresolver"
+      - "traefik.http.routers.tenant-branding.tls=true"
       - "traefik.http.routers.tenant-branding.middlewares=strip-fake-headers"
       - "traefik.http.routers.tenant-branding.service=tenant-service"
       - "txnet.logging=true"

@@ -3,21 +3,16 @@
 
     python3 tools/k8s_rehearse_test.py
 """
-import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
-
-import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 import k8s_rehearse as kr  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
-REHEARSAL = REPO / "k8s/overlays/rehearsal/kustomization.yaml"
 
 
 def workload(kind, name, replicas, ready, namespace="txnet"):
@@ -137,39 +132,6 @@ class BundleTest(unittest.TestCase):
     def test_no_bundle_named_fails(self):
         with self.assertRaises(RuntimeError):
             kr.bundle_path("backup: nothing\n")
-
-
-def apply_patch(doc, operations):
-    """JSON Patch `test` and `remove` on list indices, as kustomize applies them."""
-    for op in operations:
-        *parents, last = [p for p in op["path"].split("/") if p]
-        node = doc
-        for key in parents:
-            node = node[int(key)] if isinstance(node, list) else node[key]
-        if op["op"] == "test":
-            if node[int(last)] != op["value"]:
-                raise AssertionError(f"test failed at {op['path']}: {node[int(last)]!r}")
-        else:
-            del node[int(last)]
-
-
-# K12 at HEAD: the overlay's pinned arguments are where the renderer puts them,
-# so the patch removes exactly ACME's four. A compose change that moves one fails here.
-@unittest.skipUnless(shutil.which("docker") and (REPO / ".env").exists() and (REPO / ".env.prod").exists(),
-                     "needs docker compose and the repo's .env / .env.prod")
-class RehearsalOverlayTest(unittest.TestCase):
-    def test_acme_is_removed_and_nothing_else(self):
-        with tempfile.TemporaryDirectory() as out:
-            subprocess.run([sys.executable, str(REPO / "tools/k8s_render.py"), out, "--tag", "t1",
-                            "--host-gateway", "10.0.0.5"], check=True, capture_output=True)
-            traefik = next(d for d in yaml.safe_load_all((Path(out) / "gateway-handler.yaml").read_text())
-                           if d and d["kind"] == "Deployment")
-        before = list(traefik["spec"]["template"]["spec"]["containers"][0]["args"])
-        patch = yaml.safe_load(yaml.safe_load(REHEARSAL.read_text())["patches"][0]["patch"])
-        apply_patch(traefik, patch)
-        after = traefik["spec"]["template"]["spec"]["containers"][0]["args"]
-        self.assertEqual(after, [a for a in before if not a.startswith("--certificatesresolvers.")])
-        self.assertEqual(len(before) - len(after), 4)
 
 
 if __name__ == "__main__":

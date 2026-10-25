@@ -121,7 +121,7 @@ services:
       - "traefik.http.routers.bot-service-http.service=bot-service"
       - "traefik.http.routers.bot-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
       - "traefik.http.routers.bot-service-https.entrypoints=websecure"
-      - "traefik.http.routers.bot-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.bot-service-https.tls=true"
       - "traefik.http.routers.bot-service-https.priority=100"
       - "traefik.http.routers.bot-service-https.service=bot-service"
       - "txnet.logging=true"

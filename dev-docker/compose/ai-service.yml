@@ -81,7 +81,7 @@ services:
       - "traefik.http.routers.ai-service.rule=PathPrefix(`/api/ai`)"
       - "traefik.http.routers.ai-service.priority=120"
       - "traefik.http.routers.ai-service.entrypoints=websecure"
-      - "traefik.http.routers.ai-service.tls.certresolver=myresolver"
+      - "traefik.http.routers.ai-service.tls=true"
       - "traefik.http.routers.ai-service.middlewares=strip-fake-headers,my-auth"
       - "traefik.http.routers.ai-service.service=ai-service"
       - "txnet.logging=true"

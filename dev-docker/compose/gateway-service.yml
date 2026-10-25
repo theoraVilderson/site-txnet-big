@@ -87,7 +87,7 @@ services:
       - "traefik.http.routers.gateway-service-https.rule=PathPrefix(`${REALTIME_PATH:-/realtime}`)"
       - "traefik.http.routers.gateway-service-https.priority=120"
       - "traefik.http.routers.gateway-service-https.entrypoints=websecure"
-      - "traefik.http.routers.gateway-service-https.tls.certresolver=myresolver"
+      - "traefik.http.routers.gateway-service-https.tls=true"
       - "traefik.http.routers.gateway-service-https.middlewares=strip-fake-headers,my-auth-optional"
       - "traefik.http.routers.gateway-service-https.service=gateway-service"
       - "txnet.logging=true"

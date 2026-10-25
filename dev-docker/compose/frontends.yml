@@ -90,7 +90,7 @@ services:
       # Panel subdomain
       - "traefik.http.routers.nextjs.rule=Host(`panel.${DOMAIN_NAME}`)"
       - "traefik.http.routers.nextjs.entrypoints=websecure"
-      - "traefik.http.routers.nextjs.tls.certresolver=myresolver"
+      - "traefik.http.routers.nextjs.tls=true"
       - "traefik.http.routers.nextjs.middlewares=nextjs-compress,pwa-security,sw-cache-control"
       # Compression
       - "traefik.http.middlewares.nextjs-compress.compress=true"
@@ -105,8 +105,8 @@ services:
       - "traefik.http.middlewares.sw-cache-control.headers.customResponseHeaders.Cache-Control=no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0"
       # Every other host (F-066-u, ADR-0060): a reseller's domain reaches the
       # panel here. The reseller's CDN holds its certificate and points a CNAME
-      # at this gateway (user, 2026-09-18), so no certresolver — TLS here is
-      # the CDN-to-origin hop. Priority 1: every named host above wins. Which
+      # at this gateway (user, 2026-09-18); TLS here is the CDN-to-origin hop,
+      # on the door's own certificate (hosting O13). Priority 1: every named host above wins. Which
       # hosts actually *work* is the tenant resolver's call — an unregistered
       # one gets the page, and a neutral 404 from every service it calls.
       - "traefik.http.routers.nextjs-any-http.rule=HostRegexp(`.+`)"
@@ -159,6 +159,6 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.coinsite.rule=Host(`${DOMAIN_NAME}`) || Host(`www.${DOMAIN_NAME}`)"
       - "traefik.http.routers.coinsite.entrypoints=websecure"
-      - "traefik.http.routers.coinsite.tls.certresolver=myresolver"
+      - "traefik.http.routers.coinsite.tls=true"
       - "traefik.http.services.coinsite.loadbalancer.server.port=8080"
       - "txnet.logging=true"

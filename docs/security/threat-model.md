@@ -54,7 +54,7 @@ leak. See ADR-0001 and `operations/migrations.md`.
 | Tenant gateway / bot / SMS credentials | DB columns marked "Encrypted" (cipher + key mechanism **undecided** — open question in `tenant`) | per tenant | that tenant's payment / bot takeover |
 | Panel API credentials | `network.panel.panelApiCredentials` (encrypted, planned) | per Panel | Panel takeover |
 | Traefik dashboard / registry htpasswd | `.env.*` | manual | ops-plane access |
-| ACME account / certs | `dev_letsencrypt/acme.json` | automatic (Let's Encrypt) | cert misissue |
+| Origin certificates (443: Cloudflare Origin CA, 15 y; 8443: our origin CA, 10 y) | `dev-docker/secrets/origin-cert/`, sealed; the CA key on the issuing host and in the bundle (hosting O13) | `origin-cert.sh` re-issue, alerted 30 days ahead | a stolen key lets an attacker on the path pose as the origin to Cloudflare or Arvan |
 
 ## Accepted risks
 

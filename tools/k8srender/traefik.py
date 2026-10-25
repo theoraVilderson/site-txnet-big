@@ -15,7 +15,9 @@ _API = "traefik.io/v1alpha1"
 _DOCKER_SUFFIX = "@docker"
 _INTERNAL_SUFFIX = "@internal"
 _BACKEND_PORT_KEY = "loadbalancer.server.port"
-_ROUTER_KEY = re.compile(r"(rule|entrypoints|middlewares|priority|service|tls|tls\.certresolver"
+# No `tls.certresolver`: a door's certificate is never fetched online (hosting
+# O13, ADR-0165 point 4), so a route naming a resolver fails the render (K2).
+_ROUTER_KEY = re.compile(r"(rule|entrypoints|middlewares|priority|service|tls"
                          r"|tls\.domains\[\d+\]\.(main|sans))$")
 _DOMAIN_KEY = re.compile(r"tls\.domains\[(\d+)\]\.(main|sans)$")
 
@@ -137,8 +139,6 @@ def _tls(keys: dict) -> dict | None:
     if not any(k == "tls" or k.startswith("tls.") for k in keys) or keys.get("tls", "").lower() == "false":
         return None
     tls, domains = {}, {}
-    if "tls.certresolver" in keys:
-        tls["certResolver"] = keys["tls.certresolver"]
     for key, value in keys.items():
         match = _DOMAIN_KEY.match(key)
         if match:
