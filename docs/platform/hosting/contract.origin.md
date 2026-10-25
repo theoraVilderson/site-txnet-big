@@ -12,7 +12,8 @@ ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
 Cloudflare can complete a handshake, and on the production host only Cloudflare's
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
 (firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
-responses, decision 8), the domestic door (NIN-1-b2, O12). Rules O1…O12.
+responses, decision 8), the domestic door (NIN-1-b2, O12), each door's certificate
+(NIN-1-c, O13 in `contract.origin-cert.md`). Rules O1…O12.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -193,9 +194,8 @@ for the door, held equal to the list by the render test (NIN-1-b3).
 `X-Forwarded-For` (Arvan keeps a client's) are dropped and no claim is made; a
 missing or malformed value leaves the socket's, the edge's. No ACME (one `acme.json`, K17), no dashboard, no port
 80: routes naming those are skipped, with an `ERR` line at each reload, which
-is expected. Until NIN-1-c1 it presents Traefik's default certificate, which
-Arvan accepts. Only the `domestic` door's edges reach 8443 (O7); never
-Cloudflare, which proxies 8443 for any zone while nothing here checks a
+is expected. Its own certificate is O13's (`contract.origin-cert.md`). Only
+the `domestic` door's edges reach 8443 (O7); never Cloudflare, which proxies 8443 for any zone while nothing here checks a
 certificate. `join` puts the chain on a new node and refuses one where 8443 is held.
 
 Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:

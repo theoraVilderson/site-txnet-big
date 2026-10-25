@@ -133,15 +133,26 @@ services:
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--ping=true"
+      # traefik_tls_certs_not_after for OriginCertExpiring (O13), on the internal
+      # :8080 beside /ping; no per-entrypoint or per-service request series.
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.addEntryPointsLabels=false"
+      - "--metrics.prometheus.addServicesLabels=false"
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 20s
+    # Prometheus reads the certificate's expiry here; never published.
+    expose:
+      - "8080"
     environment:
       # Fixed, not from .env: this door never asks for a certificate (O3).
       - EDGE_ORIGIN_PULL=off
+      # Its own 10-year certificate (NIN-1-c1, scripts/edge/origin-cert.sh),
+      # loaded by traefik/dynamic/origin-cert.yml.
+      - EDGE_ORIGIN_CERT=domestic
       # The domestic edges' visitor header (scripts/edge/edges.json; the render
       # test holds the two equal): the client address on this door (O12).
       - EDGE_VISITOR_HEADER=X-Real-IP
@@ -152,6 +163,8 @@ services:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - ./traefik/plugins-local:/plugins-local:ro
       - ./traefik/origin-pull:/etc/traefik/origin-pull:ro
+      - ./secrets/origin-cert/domestic.pem:/etc/traefik/origin-cert/domestic.pem:ro
+      - ./secrets/origin-cert/domestic.key:/etc/traefik/origin-cert/domestic.key:ro
     networks:
       public_gateway_network:
       private_backend_network:

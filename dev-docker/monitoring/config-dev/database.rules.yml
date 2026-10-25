@@ -237,3 +237,36 @@ groups:
             origin admits whatever reaches it. On the node, run
             `python3 scripts/edge/edge_firewall.py apply`, then `install`, and
             `python3 scripts/edge/edge_ranges.py install` (hosting O7, O8).
+
+  # A door's origin certificate (NIN-1-c1, hosting O13), read from the Traefik
+  # that serves it: no renewal runs, so its end is a date someone must act on.
+  - name: hosting.origin-cert
+    rules:
+      - alert: OriginCertExpiring
+        expr: min by (job, cn) (traefik_tls_certs_not_after) - time() < 30 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "{{ $labels.job }}'s certificate for {{ $labels.cn }} ends in under 30 days"
+          description: >-
+            {{ $value | humanizeDuration }} left. Re-issue it with
+            `FORCE=1 scripts/edge/origin-cert.sh` and the door's command, seal it
+            (`scripts/prod.k8s.sh secrets seal dev-docker/secrets/origin-cert/<door>.pem`
+            and its .key), commit, deploy.
+
+      - alert: OriginCertNotServed
+        expr: up{job="gateway-domestic"} == 1 unless on(job) traefik_tls_certs_not_after
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "{{ $labels.job }} serves none of our certificates"
+          description: >-
+            The door answers but loaded no origin certificate, so it presents
+            Traefik's default one and OriginCertExpiring watches nothing. Its
+            pair is missing or unreadable at /etc/traefik/origin-cert/ (its log
+            says which); `scripts/edge/origin-cert.sh show` on the host that
+            issued it.

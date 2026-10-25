@@ -1,0 +1,14 @@
+# The certificate a door presents to its edge (ADR-0165 point 4, hosting O13).
+# A Go template: Traefik's file provider renders it with the gateway's env.
+#
+# EDGE_ORIGIN_CERT names the door's pair, bound read-only from
+# dev-docker/secrets/origin-cert/ (scripts/edge/origin-cert.sh issues it).
+# Unset, nothing is loaded and the door serves Traefik's default certificate.
+# The pair is a certificate, never the default one: an unknown SNI still gets
+# Traefik's own, so an address scan reads no host name (O4).
+{{- with env "EDGE_ORIGIN_CERT" }}
+tls:
+  certificates:
+    - certFile: /etc/traefik/origin-cert/{{ . }}.pem
+      keyFile: /etc/traefik/origin-cert/{{ . }}.key
+{{- end }}

@@ -135,6 +135,19 @@ class DomesticGatewayAtHead(unittest.TestCase):
         self.assertIn(f"EDGE_VISITOR_HEADER={headers.pop()}", self.domestic["environment"])
         self.assertFalse([e for e in self.main["environment"] if e.startswith("EDGE_VISITOR_HEADER")])
 
+    # NIN-1-c1 (O13): its own certificate, bound from dev-docker/secrets/ so it
+    # is sealed with the rest (S1) — the pair only, never the CA's key — and
+    # its expiry served where Prometheus scrapes it.
+    def test_it_serves_its_own_certificate_and_exports_its_expiry(self):
+        self.assertIn("EDGE_ORIGIN_CERT=domestic", self.domestic["environment"])
+        bound = [v.split(":")[0] for v in self.domestic["volumes"] if "origin-cert" in v]
+        self.assertEqual(bound, ["./secrets/origin-cert/domestic.pem", "./secrets/origin-cert/domestic.key"])
+        self.assertIn("--metrics.prometheus=true", self.domestic["command"])
+        scrape = yaml.safe_load((REPO / "dev-docker/monitoring/config-dev/prometheus.yml").read_text())
+        targets = {t for job in scrape["scrape_configs"] for s in job.get("static_configs", []) for t in s["targets"]}
+        self.assertIn(f"{DOMESTIC_TRAEFIK}:8080", targets)
+        self.assertEqual(self.domestic["expose"], ["8080"])
+
     # No ACME (one acme.json, K17), no dashboard, no plain-HTTP door.
     def test_it_holds_no_certificates_dashboard_or_port_80(self):
         self.assertEqual(self.domestic["image"], self.main["image"])
