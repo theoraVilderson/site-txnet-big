@@ -303,13 +303,13 @@ export const envSchema = z.object({
   ),
 
   /**
-   * One callback origin for every tenant, instead of the tenant's own panel
-   * domain (F-092-i). Development and test only: no tenant owns a host a
-   * gateway's sandbox can reach, and `https://<domainValue>` would send the
-   * browser nowhere. Unset in production, where ADR-0020 wants a reseller's
-   * customer back on the brand they paid on.
+   * One callback origin for every tenant, instead of the tenant's own panel domain (F-092-i). Development and test
+   * only: no tenant owns a host a gateway's sandbox can reach, and `https://<domainValue>` would send the browser
+   * nowhere. Unset in production, where ADR-0020 wants a reseller's customer back on the brand they paid on.
    */
   PAYMENT_CALLBACK_ORIGIN: z.string().default(''),
+  // ADR-0165, NIN-1-d3: the platform's gateway return and `/sub` links go to this domain's doors first; empty: none.
+  DOMESTIC_DOMAIN_NAME: z.string().default(''),
 
   /**
    * The HMAC key the deposit callback signs its redirect with, shared with

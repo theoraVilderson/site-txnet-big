@@ -139,6 +139,8 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - MAIL_FROM=${MAIL_FROM:-TXNet <no-reply@${DOMAIN_NAME}>}
       - DOMAIN_NAME=${DOMAIN_NAME}
+      # Bale's webhook is built on the domestic domain (NIN-1-d3, ADR-0165).
+      - DOMESTIC_DOMAIN_NAME=${DOMESTIC_DOMAIN_NAME:-}
       - FRONTEND_ORIGIN=https://panel.${DOMAIN_NAME}
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - TRUST_PROXY=${TRUST_PROXY}

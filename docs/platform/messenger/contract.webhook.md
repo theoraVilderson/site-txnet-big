@@ -98,3 +98,12 @@ boot, and `auth-service` when it rotates. Built separately they would
 eventually be built differently, and the symptom is a bot that re-registers
 itself away from the running service on every restart. ADR-0011 is untouched by
 this: the URL a rotation registers still names `bot-service`'s own door.
+
+**Which domain, per platform** (NIN-1-d3, ADR-0165 point 2). With no base set,
+the URL is `https://api.<domain>`, where the domain is the one `WEBHOOK_DOOR`
+names for the platform: Bale's servers are in Iran, so `bale` is `domestic`
+(`DOMESTIC_DOMAIN_NAME`, which a cut of the international links leaves
+reachable); Telegram's are abroad, so `telegram` is `cloudflare` (`DOMAIN_NAME`).
+With no domestic domain both use `DOMAIN_NAME`. bot-service's Traefik route
+matches `api.` of both domains. A `<PLATFORM>_WEBHOOK_PUBLIC_BASE` still wins, so
+an environment that sets `BALE_WEBHOOK_PUBLIC_BASE` keeps it until it is removed.

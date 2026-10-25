@@ -23,7 +23,7 @@ import { BackendI18nKeys, RATE_LIMIT_KEY, RateLimitBucket, type RateLimitOptions
 import { EntitlementRefused } from '../../entitlement/grant';
 import { GiftController } from './gift.controller';
 import { GrantTokenController } from './grant-token.controller';
-import { SubscriptionLinkService, subscriptionHostOf } from './subscription-link.service';
+import { SubscriptionLinkService } from './subscription-link.service';
 
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const USER = '44444444-4444-4444-8444-444444444444';
@@ -32,7 +32,7 @@ const E = BackendI18nKeys.errors.billing.grant;
 
 type Row = { domainValue: string; domainType: 'subdomain' | 'custom_domain' };
 
-function build(rows: Row[], token: string | null = 'tok-0001') {
+function build(rows: Row[], token: string | null = 'tok-0001', domestic = '') {
   const calls: string[] = [];
   let where: unknown;
   const tx = {
@@ -61,35 +61,13 @@ function build(rows: Row[], token: string | null = 'tok-0001') {
       return 'tok-0002';
     }),
   };
-  const links = new SubscriptionLinkService(prisma as never, grants as never);
+  const config = { get: (key: string) => (key === 'DOMESTIC_DOMAIN_NAME' ? domestic : undefined) };
+  const links = new SubscriptionLinkService(prisma as never, grants as never, config as never);
   const inTenant = <R>(fn: () => Promise<R>) => runWithTenant({ id: TENANT }, fn);
   return { links, grants, calls, inTenant, where: () => where };
 }
 
 const refusal = (e: unknown) => (e as ConflictException).getResponse() as Record<string, unknown>;
-
-describe('subscriptionHostOf', () => {
-  it('prefers a proven custom domain, then a subdomain, each alphabetically', () => {
-    expect(
-      subscriptionHostOf([
-        { domainValue: 'b.sub.txnet.app', domainType: 'subdomain' },
-        { domainValue: 'z.example.com', domainType: 'custom_domain' },
-        { domainValue: 'a.example.com', domainType: 'custom_domain' },
-      ]),
-    ).toBe('a.example.com');
-    expect(
-      subscriptionHostOf([
-        { domainValue: 'b.sub.txnet.app', domainType: 'subdomain' },
-        { domainValue: 'a.sub.txnet.app', domainType: 'subdomain' },
-      ]),
-    ).toBe('a.sub.txnet.app');
-  });
-
-  it('never answers a CNAME target, and nothing for no rows', () => {
-    expect(subscriptionHostOf([{ domainValue: 'r1.edge.txnet.app', domainType: 'subdomain' }])).toBeNull();
-    expect(subscriptionHostOf([])).toBeNull();
-  });
-});
 
 describe('SubscriptionLinkService', () => {
   it('answers https://<subscription host>/sub/<token>, reading only routable subscription domains of this tenant', async () => {
@@ -101,6 +79,15 @@ describe('SubscriptionLinkService', () => {
       purpose: 'subscription',
       OR: [{ domainType: 'subdomain' }, { verificationStatus: 'verified' }],
     });
+  });
+
+  it("writes the platform's link on its domestic domain (NIN-1-d3), which a cut leaves reachable", async () => {
+    const rows: Row[] = [
+      { domainValue: 'sub.alpha.app', domainType: 'subdomain' },
+      { domainValue: 'sub.zeta.ir', domainType: 'subdomain' },
+    ];
+    const { links, inTenant } = build(rows, 'tok-0001', 'zeta.ir');
+    await expect(inTenant(() => links.linkFor(GRANT, USER))).resolves.toBe('https://sub.zeta.ir/sub/tok-0001');
   });
 
   it('answers the same link on every call', async () => {

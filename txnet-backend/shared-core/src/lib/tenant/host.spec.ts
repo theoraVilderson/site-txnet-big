@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { panelHostOf } from './host';
+import { bestHostOf, panelHostOf, platformDomainOf } from './host';
 
 /**
  * `panelHostOf` names the host a person is *sent* to — the handoff to a
@@ -29,5 +29,51 @@ describe('panelHostOf', () => {
 
   it('keeps a custom domain whose second label is `edge` — that name is the tenant\'s own', () => {
     expect(panelHostOf([custom('shop.edge.ir')], 'reseller')).toBe('shop.edge.ir');
+  });
+});
+
+/**
+ * The platform answers on two domains (ADR-0165): what a user keeps or a
+ * domestic system calls back is built on the domestic one, which a cut of the
+ * international links leaves reachable (NIN-1-d3).
+ */
+describe('bestHostOf', () => {
+  const sub = (domainValue: string) => ({ domainValue, domainType: 'subdomain' as const });
+  const custom = (domainValue: string) => ({ domainValue, domainType: 'custom_domain' as const });
+
+  it('prefers a proven custom domain, then a subdomain, each alphabetically, and never a CNAME target', () => {
+    expect(bestHostOf([sub('b.sub.txnet.app'), custom('z.example.com'), custom('a.example.com')])).toBe('a.example.com');
+    expect(bestHostOf([sub('b.sub.txnet.app'), sub('a.sub.txnet.app')])).toBe('a.sub.txnet.app');
+    expect(bestHostOf([sub('r1.edge.txnet.app')])).toBeNull();
+    expect(bestHostOf([])).toBeNull();
+  });
+
+  it('puts a host on the domestic domain before one on the Cloudflare domain, whatever the alphabet says', () => {
+    expect(bestHostOf([sub('sub.alpha.app'), sub('sub.zeta.ir')], 'zeta.ir')).toBe('sub.zeta.ir');
+    expect(bestHostOf([sub('sub.alpha.app'), sub('sub.zeta.ir')])).toBe('sub.alpha.app');
+    // A name that only ends like the domain is not on it.
+    expect(bestHostOf([sub('sub.alpha.app'), sub('sub.notzeta.ir')], 'zeta.ir')).toBe('sub.alpha.app');
+  });
+
+  it("keeps a tenant's own proven domain ahead of the platform's domestic one", () => {
+    expect(bestHostOf([sub('panel.zeta.ir'), custom('shop.reseller.com')], 'zeta.ir')).toBe('shop.reseller.com');
+  });
+
+  it("is what panelHostOf answers for the platform's own doors", () => {
+    expect(panelHostOf([sub('panel.alpha.app'), sub('panel.zeta.ir')], 'platform_owner', 'zeta.ir')).toBe('panel.zeta.ir');
+  });
+});
+
+describe('platformDomainOf', () => {
+  const domains = { domain: 'alpha.app', domestic: 'zeta.ir' };
+
+  it('answers the domestic domain for the domestic door, the Cloudflare one for its own', () => {
+    expect(platformDomainOf('domestic', domains)).toBe('zeta.ir');
+    expect(platformDomainOf('cloudflare', domains)).toBe('alpha.app');
+  });
+
+  it('falls back to DOMAIN_NAME when no domestic domain is set, and answers nothing with neither', () => {
+    expect(platformDomainOf('domestic', { domain: 'alpha.app', domestic: '' })).toBe('alpha.app');
+    expect(platformDomainOf('domestic', {})).toBeNull();
   });
 });

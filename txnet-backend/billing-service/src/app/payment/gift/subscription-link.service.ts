@@ -1,33 +1,14 @@
 import { ConflictException, HttpException, HttpStatus, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DomainVerificationStatus, Prisma, TenantDomainPurpose, TenantDomainType } from '@prisma/client';
-import { BackendI18nKeys, isCnameTarget, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
+import { BackendI18nKeys, bestHostOf, TenantContext, tenantTransaction } from '@txnet-backend/shared-core';
 
+import type { EnvConfig } from '../../config/env.validation';
 import { EntitlementRefused, GrantService } from '../../entitlement/grant';
 import { assertOwnerResetRoom, LinkResetLimited } from '../../entitlement/link-reset';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const E = BackendI18nKeys.errors.billing.grant;
-
-type DomainRow = { domainValue: string; domainType: 'subdomain' | 'custom_domain' };
-
-/**
- * The one host a Grant's `/sub` link is written on, of the tenant's routable
- * `subscription` domains: a proven custom domain first, then a platform
- * subdomain, each alphabetically, so two answers never name two links — and
- * never a CNAME target. The caller filters to rows that are subdomains or
- * verified, which is `sub-service`'s own rule (`servesSubscriptions`); a link
- * on any other host is one the user's app reads as a 404.
- *
- * Unlike `panelHostOf`, a reseller's platform subdomain is an answer: the door
- * rule of ADR-0063 is the panel's, and `/sub` serves on it.
- */
-export function subscriptionHostOf(rows: ReadonlyArray<DomainRow>): string | null {
-  const rank = (t: string) => (t === 'custom_domain' ? 0 : 1);
-  const best = rows
-    .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
-    .sort((a, b) => rank(a.domainType) - rank(b.domainType) || a.domainValue.localeCompare(b.domainValue))[0];
-  return best?.domainValue ?? null;
-}
 
 /**
  * A Grant's subscription link for its own user (F-114-e-b, D-43, ADR-0085):
@@ -48,6 +29,7 @@ export class SubscriptionLinkService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly grants: GrantService,
+    private readonly config: ConfigService<EnvConfig, true>,
   ) {}
 
   linkFor(grantId: string, userId: string): Promise<string> {
@@ -98,7 +80,11 @@ export class SubscriptionLinkService {
       },
       select: { domainValue: true, domainType: true },
     });
-    const host = subscriptionHostOf(rows);
+    // The routable rows are `sub-service`'s own rule (`servesSubscriptions`);
+    // a reseller's platform subdomain is an answer here, unlike a panel's
+    // (ADR-0063 is the panel's rule). The platform's domestic door comes first
+    // (NIN-1-d3): a link the user keeps must outlive a cut.
+    const host = bestHostOf(rows, this.config.get('DOMESTIC_DOMAIN_NAME', { infer: true }));
     if (!host) {
       throw new ConflictException({
         i18nKey: E.noSubscriptionDomain,

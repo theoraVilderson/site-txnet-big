@@ -99,6 +99,8 @@ services:
       # One gateway-callback origin for every tenant. Dev and test only — in
       # production the host is the tenant's own panel domain (ADR-0020).
       - PAYMENT_CALLBACK_ORIGIN=${PAYMENT_CALLBACK_ORIGIN:-}
+      # The platform's gateway return and /sub links go to its domestic door first (NIN-1-d3).
+      - DOMESTIC_DOMAIN_NAME=${DOMESTIC_DOMAIN_NAME:-}
       # The rate limiter's counters (F-092-r) — the keyspace every service writes.
       - REDIS_URL=${REDIS_URL}
       - REDIS_KEY_NAMESPACE=${REDIS_KEY_NAMESPACE:-txnet:auth}

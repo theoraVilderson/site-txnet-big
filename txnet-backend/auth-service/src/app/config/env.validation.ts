@@ -85,6 +85,9 @@ export const envSchema = z.object({
     .default(REDIS_KEYSPACE_VERSION_DEFAULT),
   FRONTEND_ORIGIN: optional(z.string().url()),
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
+  // The domestic door's domain (ADR-0165): Bale's webhook is built on it
+  // (messenger `WEBHOOK_DOOR`, NIN-1-d3); empty, everything stays on DOMAIN_NAME.
+  DOMESTIC_DOMAIN_NAME: z.string().default(''),
   COOKIE_SECURE: z.coerce.boolean().default(true),
 
   // The channels this environment may deliver an OTP through. A channel that

@@ -110,7 +110,7 @@ describe('SubscriptionLinkService.resetOwn', () => {
         return 'tok-0002';
       }),
     };
-    const links = new SubscriptionLinkService(prisma as never, grants as never);
+    const links = new SubscriptionLinkService(prisma as never, grants as never, { get: () => '' } as never);
     const inTenant = <R>(fn: () => Promise<R>) => runWithTenant({ id: TENANT }, fn);
     return { ...fake, links, grants, inTenant };
   }

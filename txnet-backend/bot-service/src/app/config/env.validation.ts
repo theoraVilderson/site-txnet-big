@@ -161,6 +161,9 @@ export const envSchema = z.object({
   BOT_WEBHOOK_AUTO_REGISTER: z.enum(['true', 'false']).default('true'),
   BOT_WEBHOOK_PUBLIC_BASE: optional(z.string().url()),
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
+  // The domestic door's domain (ADR-0165): Bale's webhook is built on it
+  // (messenger `WEBHOOK_DOOR`, NIN-1-d3); empty, everything stays on DOMAIN_NAME.
+  DOMESTIC_DOMAIN_NAME: z.string().default(''),
 
   TELEGRAM_API_BASE: z.string().url().default('https://api.telegram.org'),
   TELEGRAM_DEEP_LINK_BASE: z.string().url().default('https://t.me'),

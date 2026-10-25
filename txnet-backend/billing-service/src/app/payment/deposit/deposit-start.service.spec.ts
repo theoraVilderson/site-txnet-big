@@ -98,6 +98,8 @@ type Setup = {
   callbackOrigin?: string;
   /** `FRONTEND_ORIGIN`, comma-separated like CORS reads it. */
   frontendOrigin?: string;
+  /** `DOMESTIC_DOMAIN_NAME` (NIN-1-d3). */
+  domestic?: string;
   /** F-102-g: the groups the gateway is offered to; the payer is in none. */
   audience?: string[];
 };
@@ -116,6 +118,7 @@ function build(setup: Setup = {}) {
     tenantType = 'reseller',
     callbackOrigin = '',
     frontendOrigin = '',
+    domestic = '',
     audience = [],
   } = setup;
 
@@ -221,7 +224,7 @@ function build(setup: Setup = {}) {
   };
   const config = {
     get: (key: string) =>
-      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900, FRONTEND_ORIGIN: frontendOrigin, DEFAULT_LANGUAGE: 'xx' })[key],
+      ({ GLOBAL_PREFIX: 'api', PAYMENT_CALLBACK_ORIGIN: callbackOrigin, PAYMENT_PENDING_TTL_SEC: 900, FRONTEND_ORIGIN: frontendOrigin, DEFAULT_LANGUAGE: 'xx', DOMESTIC_DOMAIN_NAME: domestic })[key],
   };
 
   const service = new DepositStartService(
@@ -429,6 +432,21 @@ describe('DepositStartService.start', () => {
     const started = await start(service);
 
     expect(calls.requested[0].callbackUrl).toBe(`https://panel.txnet.app/api/billing/deposit/callback?p=${started.paymentId}`);
+  });
+
+  it("sends the bank back to the platform's domestic panel, which a cut leaves reachable (NIN-1-d3)", async () => {
+    const { service, calls } = build({
+      tenantType: 'platform_owner',
+      domestic: 'zeta.ir',
+      domains: [
+        { domainValue: 'panel.alpha.app', domainType: 'subdomain', verificationStatus: 'verified' },
+        { domainValue: 'panel.zeta.ir', domainType: 'subdomain', verificationStatus: 'verified' },
+      ],
+    });
+
+    const started = await start(service);
+
+    expect(calls.requested[0].callbackUrl).toBe(`https://panel.zeta.ir/api/billing/deposit/callback?p=${started.paymentId}`);
   });
 
   it('tells a webhook driver its gateway’s webhook door, on the callback’s origin, and a return driver nothing (F-104-h)', async () => {

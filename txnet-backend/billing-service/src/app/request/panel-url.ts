@@ -17,9 +17,16 @@ export const PANEL_MY_SERVICES_PATH = '/services';
  * proven custom domains first, then alphabetically (`panelHostOf`).
  *
  * One rule for every link billing hands out — a payment's return (F-018-aj)
- * and a delivered Grant's "open it" (F-601-h).
+ * and a delivered Grant's "open it" (F-601-h). `domesticDomain` puts the
+ * platform's domestic panel first (NIN-1-d3); only the gateway return passes
+ * it so far.
  */
-export async function panelUrlOf(tx: Prisma.TransactionClient, tenantId: string, path: string): Promise<string | null> {
+export async function panelUrlOf(
+  tx: Prisma.TransactionClient,
+  tenantId: string,
+  path: string,
+  domesticDomain?: string,
+): Promise<string | null> {
   const rows = await tx.tenantDomain.findMany({
     where: {
       tenantId,
@@ -31,6 +38,6 @@ export async function panelUrlOf(tx: Prisma.TransactionClient, tenantId: string,
   });
   const owner = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
   if (!owner) return null;
-  const host = panelHostOf(rows, owner.tenantType);
+  const host = panelHostOf(rows, owner.tenantType, domesticDomain);
   return host ? `https://${host}${path}` : null;
 }

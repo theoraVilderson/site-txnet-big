@@ -70,28 +70,60 @@ export function isCnameTarget(domainValue: string, domainType: 'subdomain' | 'cu
   return domainType === 'subdomain' && domainValue.split('.')[1] === CNAME_TARGET_ZONE;
 }
 
+/** A tenant's domain row, as the host choosers read it. */
+type HostRow = { domainValue: string; domainType: 'subdomain' | 'custom_domain' };
+
 /**
- * The one panel host a person is sent to for a tenant, of the rows it has:
- * a proven custom domain first, then a platform subdomain, each alphabetically
- * so two callers never disagree — and never a CNAME target. Billing's return
- * address (F-104), the handoff to a reseller's panel (F-061-f) and a branding
- * URL (F-018-h) all ask it. The caller filters to rows that are subdomains or
- * verified.
+ * Which of the platform's two domains something is built on (ADR-0165 points
+ * 1-2): `domestic` (DOMESTIC_DOMAIN_NAME, on ArvanCloud, reachable from both
+ * sides of a cut of the international links) or `cloudflare` (DOMAIN_NAME).
+ */
+export type PlatformDoor = 'domestic' | 'cloudflare';
+
+/**
+ * The platform's domain for `door`, from the caller's validated env (C-26):
+ * the domestic one falls back to DOMAIN_NAME while none is set, so a stack with
+ * one domain builds everything on it, as before NIN-1-d2.
+ */
+export function platformDomainOf(door: PlatformDoor, domains: { domain?: string; domestic?: string }): string | null {
+  const domestic = door === 'domestic' ? domains.domestic?.trim().toLowerCase() : '';
+  return domestic || domains.domain?.trim().toLowerCase() || null;
+}
+
+/**
+ * The one host a person or a system is sent to, of `rows`: a proven custom
+ * domain first (the brand the tenant chose), then a host on the platform's
+ * domestic domain when one is set (NIN-1-d3: every link a user keeps or a
+ * domestic system calls back), each alphabetically so two callers never
+ * disagree — and never a CNAME target. The caller filters to rows that are
+ * subdomains or verified. A Grant's `/sub` link asks it directly; a panel
+ * link through `panelHostOf`.
+ */
+export function bestHostOf(rows: ReadonlyArray<HostRow>, domesticDomain?: string | null): string | null {
+  const domestic = domesticDomain?.trim().toLowerCase();
+  const rank = (r: HostRow) =>
+    r.domainType === 'custom_domain' ? 0 : domestic && r.domainValue.endsWith(`.${domestic}`) ? 1 : 2;
+  const best = rows
+    .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
+    .sort((a, b) => rank(a) - rank(b) || a.domainValue.localeCompare(b.domainValue))[0];
+  return best?.domainValue ?? null;
+}
+
+/**
+ * The one panel host a person is sent to for a tenant, of the rows it has
+ * (`bestHostOf`'s order). Billing's return address (F-104), the handoff to a
+ * reseller's panel (F-061-f) and a branding URL (F-018-h) all ask it.
  *
  * `ownerType` is the tenant the rows belong to (F-018-aj). A **reseller's**
  * platform subdomain serves nothing (ADR-0063, auth-service `doorClosed`), so
  * for a reseller only its own custom domain is an answer, and `null` — which
  * every caller turns into a refusal or a fallback — beats sending a person to
- * a 404. The platform owner's own subdomains (`panel.<domain>`) are its doors.
+ * a 404. The platform owner's own subdomains (`panel.<domain>`) are its doors;
+ * `domesticDomain` puts the domestic one first (NIN-1-d3).
  */
-export function panelHostOf(
-  rows: ReadonlyArray<{ domainValue: string; domainType: 'subdomain' | 'custom_domain' }>,
-  ownerType: TenantType,
-): string | null {
-  const rank = (t: string) => (t === 'custom_domain' ? 0 : 1);
-  const best = rows
-    .filter((r) => !isCnameTarget(r.domainValue, r.domainType))
-    .filter((r) => isPlatformTenant(ownerType) || r.domainType === 'custom_domain')
-    .sort((a, b) => rank(a.domainType) - rank(b.domainType) || a.domainValue.localeCompare(b.domainValue))[0];
-  return best?.domainValue ?? null;
+export function panelHostOf(rows: ReadonlyArray<HostRow>, ownerType: TenantType, domesticDomain?: string | null): string | null {
+  return bestHostOf(
+    rows.filter((r) => isPlatformTenant(ownerType) || r.domainType === 'custom_domain'),
+    domesticDomain,
+  );
 }

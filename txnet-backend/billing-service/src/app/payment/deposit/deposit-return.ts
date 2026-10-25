@@ -93,5 +93,7 @@ export async function callbackUrlOf(tx: Prisma.TransactionClient, config: Config
   const override = config.get('PAYMENT_CALLBACK_ORIGIN', { infer: true });
   if (override) return `${override.replace(/\/+$/, '')}${path}`;
 
-  return panelUrlOf(tx, tenantId, path);
+  // A bank in Iran sends the payer back through the domestic door, which a
+  // cut of the international links leaves open (ADR-0165 point 2, NIN-1-d3).
+  return panelUrlOf(tx, tenantId, path, config.get('DOMESTIC_DOMAIN_NAME', { infer: true }));
 }

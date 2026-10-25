@@ -105,7 +105,7 @@ Traefik in the main stack can route to the other stacks).
 | `BOT_SESSION_TTL_SEC` / `BOT_NAV_TTL_SEC` | how long a chat stays signed in (30d idle) and how long a half-finished conversation is remembered (30m) |
 | `BOT_LINK_TOKEN_TTL_SEC` | how long a deep link stays usable (900s default) |
 | `TELEGRAM_API_BASE` / `BALE_API_BASE` | **outgoing**: where both services call the Bot API (auth-service to deliver an OTP, bot-service to answer a chat). Per environment — dev and prod may need different proxies |
-| `TELEGRAM_WEBHOOK_PUBLIC_BASE` / `BALE_WEBHOOK_PUBLIC_BASE` | **incoming**: the base that platform calls back on. Empty falls back to `BOT_WEBHOOK_PUBLIC_BASE`, then `https://api.<DOMAIN_NAME>` |
+| `TELEGRAM_WEBHOOK_PUBLIC_BASE` / `BALE_WEBHOOK_PUBLIC_BASE` | **incoming**: the base that platform calls back on. Empty falls back to `BOT_WEBHOOK_PUBLIC_BASE`, then `https://api.<domain>`: `DOMESTIC_DOMAIN_NAME` for Bale when set, else `DOMAIN_NAME` (messenger `WEBHOOK_DOOR`, NIN-1-d3) |
 | `BOT_WEBHOOK_AUTO_REGISTER` | `false` stops **bot-service** registering webhooks on boot (leave it `true` unless something else owns them) |
 
 A messenger channel is now available **per tenant**: the operator switches the
@@ -127,7 +127,7 @@ different bots. That is now a data problem rather than a `.env.dev` /
 The webhook URL itself is not configuration — it is derived:
 `<public base>/api/bots/<platform>/<that bot's webhookPath>`, where the public
 base is `<PLATFORM>_WEBHOOK_PUBLIC_BASE`, else `BOT_WEBHOOK_PUBLIC_BASE`, else
-`https://api.<DOMAIN_NAME>`.
+`https://api.<domain>` (Bale's on `DOMESTIC_DOMAIN_NAME` when set).
 
 **bot-service** registers that URL for every registrable integration on boot
 (`BotWebhookRegistrar`, off with `BOT_WEBHOOK_AUTO_REGISTER=false`); it reads

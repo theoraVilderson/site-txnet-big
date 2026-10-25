@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { platformDomainOf, type PlatformDoor } from '@txnet-backend/shared-core';
 import { BotIntegration } from './bot-integration';
 import { BotPlatform } from './bot-platform';
 
@@ -66,8 +67,8 @@ export function redactedWebhookUrl(
  *    while Bale calls the API directly.
  * 2. `BOT_WEBHOOK_PUBLIC_BASE` — every platform goes through the same front
  *    door: a dev tunnel, or another app fronting this API.
- * 3. `https://api.<DOMAIN_NAME>` — the convention the Traefik router already
- *    assumes.
+ * 3. `https://api.<domain>` — the convention the Traefik router already
+ *    assumes, on the platform's domain for this platform's `WEBHOOK_DOOR`.
  *
  * Per platform and not per tenant: this is where the *platform* is reachable,
  * which is the same address whoever the bot belongs to. A tenant's own domain
@@ -76,13 +77,27 @@ export function redactedWebhookUrl(
  * `get` is a plain lookup rather than a `ConfigService`, so the two processes
  * that answer this question can share the answer without sharing a module.
  */
+/**
+ * The platform's door each messenger calls back through (ADR-0165 point 2,
+ * NIN-1-d3). Bale's servers are in Iran and still reach the domestic domain
+ * when the international links are cut; Telegram's are abroad and reach only
+ * the Cloudflare door, so its webhook stays on DOMAIN_NAME.
+ */
+export const WEBHOOK_DOOR: Record<BotPlatform, PlatformDoor> = {
+  telegram: 'cloudflare',
+  bale: 'domestic',
+};
+
 export function resolveWebhookBase(
   get: (key: string) => string | undefined,
   platform: BotPlatform,
 ): string | null {
   const perPlatform = get(`${platform.toUpperCase()}_WEBHOOK_PUBLIC_BASE`);
   const shared = get('BOT_WEBHOOK_PUBLIC_BASE');
-  const domain = get('DOMAIN_NAME');
+  const domain = platformDomainOf(WEBHOOK_DOOR[platform], {
+    domain: get('DOMAIN_NAME'),
+    domestic: get('DOMESTIC_DOMAIN_NAME'),
+  });
   const base = perPlatform || shared || (domain ? `https://api.${domain}` : null);
   return base ? base.replace(/\/+$/, '') : null;
 }

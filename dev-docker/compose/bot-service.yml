@@ -93,6 +93,8 @@ services:
       - TELEGRAM_WEBHOOK_PUBLIC_BASE=${TELEGRAM_WEBHOOK_PUBLIC_BASE:-}
       - BALE_WEBHOOK_PUBLIC_BASE=${BALE_WEBHOOK_PUBLIC_BASE:-}
       - DOMAIN_NAME=${DOMAIN_NAME}
+      # Bale's webhook is built on the domestic domain (NIN-1-d3, ADR-0165).
+      - DOMESTIC_DOMAIN_NAME=${DOMESTIC_DOMAIN_NAME:-}
       - PANEL_BASE_URL=https://panel.${DOMAIN_NAME}
       - TRUST_PROXY=${TRUST_PROXY}
       # The bot answers in DEFAULT_LANGUAGE unless a chat picks otherwise; the
@@ -115,11 +117,13 @@ services:
       - "traefik.http.services.bot-service.loadbalancer.server.port=${BOT_PORT:-3000}"
       # Explicit priority: auth-service's https router also matches the bare
       # host, so without this the two rules are decided by rule length alone.
-      - "traefik.http.routers.bot-service-http.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      # Bale calls back on the domestic domain's api. (NIN-1-d3); unset, the
+      # second Host repeats the first.
+      - "traefik.http.routers.bot-service-http.rule=(Host(`api.${DOMAIN_NAME}`) || Host(`api.${DOMESTIC_DOMAIN_NAME:-${DOMAIN_NAME}}`)) && PathPrefix(`/api/bot`)"
       - "traefik.http.routers.bot-service-http.entrypoints=web"
       - "traefik.http.routers.bot-service-http.priority=100"
       - "traefik.http.routers.bot-service-http.service=bot-service"
-      - "traefik.http.routers.bot-service-https.rule=Host(`api.${DOMAIN_NAME}`) && PathPrefix(`/api/bot`)"
+      - "traefik.http.routers.bot-service-https.rule=(Host(`api.${DOMAIN_NAME}`) || Host(`api.${DOMESTIC_DOMAIN_NAME:-${DOMAIN_NAME}}`)) && PathPrefix(`/api/bot`)"
       - "traefik.http.routers.bot-service-https.entrypoints=websecure"
       - "traefik.http.routers.bot-service-https.tls=true"
       - "traefik.http.routers.bot-service-https.priority=100"
