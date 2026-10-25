@@ -27,6 +27,13 @@
 // is discarded and rewritten from the request itself, as Traefik does for an
 // untrusted sender. A client's `X-Forwarded-Host` would otherwise choose the
 // tenant (EDGE-1-m).
+//
+// The domestic door (NIN-1-b2) is a second Traefik with no certificate to
+// verify: only the approved domestic edges' ranges reach it (hosting O7, O12).
+// There `visitorHeader` names the header that edge overwrites with the visitor
+// (Arvan's X-Real-IP, NIN-1-a), and it alone is read: CF-Connecting-IP, the
+// claim headers and X-Forwarded-For, which Arvan keeps from the client, are
+// dropped and no claim is made (NIN-1-b3).
 package edgeclientip
 
 import (
@@ -56,18 +63,22 @@ var forwardedHeaders = []string{
 	"X-Forwarded-Tls-Client-Cert", "X-Forwarded-Tls-Client-Cert-Info",
 }
 
-// Config holds no trust decision: that is the TLS options'. ClaimHeaders is
-// the order a CDN's claim is looked for in; empty means the defaults.
+// Config holds no trust decision: that is the TLS options' on the 443 door and
+// the firewall's on the domestic one. ClaimHeaders is the order a CDN's claim
+// is looked for in; empty means the defaults. VisitorHeader is set on the
+// domestic door only, from its edges' row in scripts/edge/edges.json.
 type Config struct {
-	ClaimHeaders []string `json:"claimHeaders,omitempty"`
+	ClaimHeaders  []string `json:"claimHeaders,omitempty"`
+	VisitorHeader string   `json:"visitorHeader,omitempty"`
 }
 
 // CreateConfig is Traefik's plugin entry point for the configuration.
 func CreateConfig() *Config { return &Config{} }
 
 type edgeClientIP struct {
-	next         http.Handler
-	claimHeaders []string
+	next          http.Handler
+	claimHeaders  []string
+	visitorHeader string
 }
 
 // New is Traefik's plugin entry point for the middleware.
@@ -76,10 +87,18 @@ func New(_ context.Context, next http.Handler, cfg *Config, _ string) (http.Hand
 	if cfg != nil && len(cfg.ClaimHeaders) > 0 {
 		headers = cfg.ClaimHeaders
 	}
-	return &edgeClientIP{next: next, claimHeaders: headers}, nil
+	e := &edgeClientIP{next: next, claimHeaders: headers}
+	if cfg != nil {
+		e.visitorHeader = cfg.VisitorHeader
+	}
+	return e, nil
 }
 
 func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if e.visitorHeader != "" {
+		e.serveDomestic(rw, req)
+		return
+	}
 	cfVisitor := net.ParseIP(strings.TrimSpace(req.Header.Get(cfConnectingIP)))
 	chain := req.Header.Values(forwardedFor)
 	var cdnClaim net.IP
@@ -95,12 +114,7 @@ func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rewriteForwarded(req)
 
 	if cfVisitor != nil && verifiedPull(req) {
-		port := "0"
-		if _, p, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-			port = p
-		}
-		req.RemoteAddr = net.JoinHostPort(cfVisitor.String(), port)
-		req.Header.Set("X-Real-Ip", cfVisitor.String())
+		setVisitor(req, cfVisitor)
 		if cdnClaim == nil {
 			cdnClaim = appendedBefore(chain, cfVisitor)
 		}
@@ -109,6 +123,35 @@ func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 	e.next.ServeHTTP(rw, req)
+}
+
+// serveDomestic: the edge's own header, one IP, is the visitor; every other
+// name a client could have set is dropped first. A missing or malformed value
+// leaves the socket's address, which is that edge's.
+func (e *edgeClientIP) serveDomestic(rw http.ResponseWriter, req *http.Request) {
+	visitor := net.ParseIP(strings.TrimSpace(req.Header.Get(e.visitorHeader)))
+	for _, h := range e.claimHeaders {
+		req.Header.Del(h)
+	}
+	req.Header.Del(e.visitorHeader)
+	req.Header.Del(cfConnectingIP)
+	req.Header.Del(claimedIP)
+	rewriteForwarded(req)
+	if visitor != nil {
+		setVisitor(req, visitor)
+	}
+	e.next.ServeHTTP(rw, req)
+}
+
+// setVisitor makes ip the client address: RemoteAddr, from which Traefik's
+// proxy writes X-Forwarded-For, and X-Real-Ip. The socket's port is kept.
+func setVisitor(req *http.Request, ip net.IP) {
+	port := "0"
+	if _, p, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		port = p
+	}
+	req.RemoteAddr = net.JoinHostPort(ip.String(), port)
+	req.Header.Set("X-Real-Ip", ip.String())
 }
 
 // rewriteForwarded drops every forwarded header and writes the ones Traefik

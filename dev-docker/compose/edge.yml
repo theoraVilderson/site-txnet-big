@@ -140,6 +140,9 @@ services:
     environment:
       # Fixed, not from .env: this door never asks for a certificate (O3).
       - EDGE_ORIGIN_PULL=off
+      # The domestic edges' visitor header (scripts/edge/edges.json; the render
+      # test holds the two equal): the client address on this door (O12).
+      - EDGE_VISITOR_HEADER=X-Real-IP
     ports:
       - "${DOMESTIC_ENTRANCE_PORT:-8443}:8443"
     volumes:

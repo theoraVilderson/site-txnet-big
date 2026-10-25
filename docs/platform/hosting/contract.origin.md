@@ -60,7 +60,8 @@ becomes `RemoteAddr` (from which Traefik's proxy writes `X-Forwarded-For`) and
 `X-Real-Ip`, and any leftover `X-Forwarded-For` is dropped. In every case
 `CF-Connecting-IP` itself is removed, so no service can read it. Services keep
 `TRUST_PROXY=1` and change nothing. Per-caller rate limits (ADR-0070) then see
-the visitor, not a Cloudflare edge.
+the visitor, not a Cloudflare edge. On the domestic door the plugin runs with
+`visitorHeader` instead, and nothing else names the visitor there (O12).
 
 **O6 — Proof** (2026-10-07, throwaway Traefik v3.7, same files):
 
@@ -183,9 +184,13 @@ handshake rule for a host no route names — any reseller's domain — from its 
 `default` TLS options, so the doors cannot share a process: per-entrypoint
 options reach `Host()` routes only (Traefik v3.7, tried 2026-10-25). Its
 entrypoint is named `websecure`, so every route of the 443 door is on it, behind
-the same middlewares (O5, O10, O11): a client's `CF-Connecting-IP` and
-`X-Forwarded-*` are dropped and `X-Real-Ip` is the socket's, the edge's own
-address until NIN-1-b3. No ACME (one `acme.json`, K17), no dashboard, no port
+the same middlewares (O5, O10, O11). The client address is the visitor header
+its edges name in `edges.json` (Arvan's `X-Real-IP`, which Arvan overwrites),
+given to the plugin as `visitorHeader` from `EDGE_VISITOR_HEADER`; one header
+for the door, held equal to the list by the render test (NIN-1-b3).
+`CF-Connecting-IP`, the claim headers, a client's `X-Edge-Claimed-Ip` and
+`X-Forwarded-For` (Arvan keeps a client's) are dropped and no claim is made; a
+missing or malformed value leaves the socket's, the edge's. No ACME (one `acme.json`, K17), no dashboard, no port
 80: routes naming those are skipped, with an `ERR` line at each reload, which
 is expected. Until NIN-1-c1 it presents Traefik's default certificate, which
 Arvan accepts. Only the `domestic` door's edges reach 8443 (O7); never
@@ -197,8 +202,12 @@ an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on
 443 and dropped on 8443, any other dropped on both; re-applying kept one jump a
 door, `remove` reopened 8443. The real dynamic files on Traefik v3.7, `off` on
 one port and `required` on another: a reseller's host served on the first with
-forged headers dropped, the second refused without a certificate. Tests:
-`test_edge_firewall.py`, `tools/k8s_render_traefik_test.py`.
+forged headers dropped, the second refused without a certificate; with
+`EDGE_VISITOR_HEADER`, Arvan's `X-Real-IP` arrived as `X-Real-Ip` and
+`X-Forwarded-For`, a forged `X-Forwarded-For`, `CF-Connecting-IP`,
+`True-Client-IP` and claim did not, and on 443 (`optional`) the same forged
+`X-Real-IP` was ignored. Tests: `test_edge_firewall.py`,
+`tools/k8s_render_traefik_test.py`, `edgeclientip_test.go` (domestic door).
 
 ## ArvanCloud as the domestic edge — what it does (NIN-1-a, ADR-0165)
 

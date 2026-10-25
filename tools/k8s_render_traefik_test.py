@@ -9,6 +9,7 @@ keeps the client's address.
 """
 import base64
 import copy
+import json
 import shutil
 import subprocess
 import sys
@@ -123,6 +124,16 @@ class DomesticGatewayAtHead(unittest.TestCase):
         self.assertEqual(self.domestic["ports"], ["${DOMESTIC_ENTRANCE_PORT:-8443}:8443"])
         for flag in ("--entrypoints.websecure.http.middlewares=", "--entrypoints.websecure.forwardedHeaders"):
             self.assertEqual([a for a in args if a.startswith(flag)], [a for a in main if a.startswith(flag)])
+
+    # NIN-1-b3: the client address is the header its edges overwrite, named in
+    # their row of edges.json. One header for the door: telling two edges apart
+    # would need their ranges in the plugin.
+    def test_its_visitor_header_is_the_one_its_edges_name(self):
+        edges = json.loads((REPO / "scripts/edge/edges.json").read_text())["edges"]
+        headers = {e["visitor_header"] for e in edges if e["door"] == "domestic"}
+        self.assertEqual(len(headers), 1, headers)
+        self.assertIn(f"EDGE_VISITOR_HEADER={headers.pop()}", self.domestic["environment"])
+        self.assertFalse([e for e in self.main["environment"] if e.startswith("EDGE_VISITOR_HEADER")])
 
     # No ACME (one acme.json, K17), no dashboard, no plain-HTTP door.
     def test_it_holds_no_certificates_dashboard_or_port_80(self):

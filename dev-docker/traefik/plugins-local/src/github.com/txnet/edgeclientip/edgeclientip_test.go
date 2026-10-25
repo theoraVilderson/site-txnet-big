@@ -269,3 +269,63 @@ func TestAHostWithAPortAndAWebSocketKeepTraefiksSpelling(t *testing.T) {
 		t.Fatalf("got %v", h)
 	}
 }
+
+// NIN-1-b2/-b3: the domestic door's Traefik is reached only from the approved
+// edges' ranges (hosting O7, O12), and its edge names the visitor in a header
+// it overwrites — Arvan's X-Real-IP (NIN-1-a). No certificate exists there.
+func domestic() *Config { return &Config{VisitorHeader: "X-Real-IP"} }
+
+func fromArvan(headers map[string]string) *http.Request {
+	req := httptest.NewRequest(http.MethodGet, "https://shop.reseller.ir/", nil)
+	req.RemoteAddr = "94.101.182.2:41000"
+	req.TLS = &tls.ConnectionState{}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	return req
+}
+
+func TestOnTheDomesticDoorTheEdgesHeaderIsTheVisitor(t *testing.T) {
+	got := serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"}))
+	if got.remoteAddr != "5.6.7.8:41000" || got.realIP != "5.6.7.8" {
+		t.Fatalf("got %+v, want the visitor 5.6.7.8", got)
+	}
+	got = serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": "2001:db8::7"}))
+	if got.remoteAddr != "[2001:db8::7]:41000" {
+		t.Fatalf("IPv6 visitor: got %+v", got)
+	}
+}
+
+// Arvan keeps a client's X-Forwarded-For and appends to it, and passes any
+// header it does not set: none of those may name the visitor here.
+func TestOnTheDomesticDoorNothingAClientCanSetIsRead(t *testing.T) {
+	got := serveWith(t, domestic(), fromArvan(map[string]string{
+		"X-Real-IP":         "5.6.7.8",
+		"X-Forwarded-For":   "6.6.6.6, 5.6.7.8",
+		"CF-Connecting-IP":  "7.7.7.7",
+		"True-Client-IP":    "8.8.8.8",
+		"X-Edge-Claimed-Ip": "9.9.9.9",
+	}))
+	if got.remoteAddr != "5.6.7.8:41000" || got.forwardedFor != "" || got.cfConnectingIP != "" ||
+		got.claimed != "" || got.trueClientIP != "" {
+		t.Fatalf("got %+v, want only the edge's header read and every other one dropped", got)
+	}
+}
+
+// CF-Connecting-IP never counts here, even with a verified chain: this door's
+// proof is the ranges, and its own edge's header is the only name it trusts.
+func TestOnTheDomesticDoorCloudflaresHeaderNeverCounts(t *testing.T) {
+	req := verified(fromArvan(map[string]string{"CF-Connecting-IP": "7.7.7.7"}))
+	if got := serveWith(t, domestic(), req); got.remoteAddr != "94.101.182.2:41000" || got.realIP != "94.101.182.2" {
+		t.Fatalf("got %+v, want the socket address", got)
+	}
+}
+
+func TestOnTheDomesticDoorAMissingOrMalformedHeaderLeavesTheSocket(t *testing.T) {
+	for _, value := range []string{"", "not-an-ip", "5.6.7.8, 6.6.6.6", "5.6.7.8:443"} {
+		got := serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": value}))
+		if got.remoteAddr != "94.101.182.2:41000" || got.realIP != "94.101.182.2" {
+			t.Fatalf("%q: got %+v, want the edge's own address", value, got)
+		}
+	}
+}
