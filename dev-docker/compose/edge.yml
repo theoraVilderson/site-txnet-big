@@ -116,7 +116,9 @@ services:
     extends: { file: compose/logging.yml, service: rotated-logs }
     image: txnet/gateway:3.7
     container_name: ${STACK_NAME:-txnet}-gateway-domestic
-    mem_reservation: 96m # as gateway-handler's until measured (K19)
+    # K19: 50 MiB peak alone (2026-10-25, one route, 9600 requests over 64
+    # connections); its CRD cache is gateway-handler's, whose measured 96m it keeps.
+    mem_reservation: 96m
     mem_limit: 256m
     restart: unless-stopped
     command:

@@ -160,7 +160,8 @@ or /16 (v6), or a failed answer is refused. That edge's last good copy
 (`/var/lib/txnet/edge-ranges/<name>.json`, with when it was taken, held to
 today's floors) is used instead; with none, that edge's door is left as it was. Each copy's time is exported (`edge_ranges.prom`,
 `txnet_edge_ranges_last_refresh_timestamp_seconds{edge}`), and `EdgeRangesStale`
-(`database.rules.yml`) warns after 3 days. `edge_firewall.py install`
+(`database.rules.yml`) warns after 3 days; `EdgeRangesNeverRecorded`, on
+Kubernetes only (the kubelet's job), when none was ever written. `edge_firewall.py install`
 writes `/etc/cron.d/txnet-edge-firewall` (boot after Docker, daily 04:23; it
 deletes the entry of its former name, `cloudflare_firewall.py`),
 and `edge_ranges.py install` writes `txnet-edge-ranges`, which re-reads every

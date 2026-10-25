@@ -259,3 +259,30 @@ tests:
         exp_samples:
           - labels: 'ALERTS{alertname="EdgeRangesStale",alertstate="firing",edge="arvan",severity="warning",unit="hosting"}'
             value: 1
+
+  # On Kubernetes (the kubelet's job exists) an edge list never recorded fires:
+  # the cron or the firewall was never installed. Recorded, it does not; on dev
+  # (no kubelet job) it never does — the "never recorded" case above holds that.
+  - interval: 1m
+    input_series:
+      - series: up{job="kubelet-cadvisor"}
+        values: "1x120"
+    promql_expr_test:
+      - expr: ALERTS{alertname="EdgeRangesNeverRecorded",alertstate="firing"}
+        eval_time: 50m
+        exp_samples: []
+      - expr: ALERTS{alertname="EdgeRangesNeverRecorded",alertstate="firing"}
+        eval_time: 70m
+        exp_samples:
+          - labels: 'ALERTS{alertname="EdgeRangesNeverRecorded",alertstate="firing",severity="warning",unit="hosting"}'
+            value: 1
+  - interval: 1m
+    input_series:
+      - series: up{job="kubelet-cadvisor"}
+        values: "1x120"
+      - series: txnet_edge_ranges_last_refresh_timestamp_seconds{edge="arvan"}
+        values: "0+60x120"
+    promql_expr_test:
+      - expr: ALERTS{alertname="EdgeRangesNeverRecorded"}
+        eval_time: 90m
+        exp_samples: []

@@ -201,7 +201,8 @@ groups:
   # NIN-1-b1: every approved edge's ranges, re-read at boot and daily by
   # scripts/edge/edge_ranges.py into edge_ranges.prom. The last good copy keeps
   # the edge admitted, but an edge that moved is dropped at its new addresses
-  # until a re-read lands. No absent(): dev runs no edge firewall (O8).
+  # until a re-read lands. Never recorded is its own alert, on Kubernetes only:
+  # dev runs no edge firewall (O8), and only the k3s render scrapes the kubelet.
   - name: hosting.edge-ranges
     rules:
       - alert: EdgeRangesStale
@@ -219,3 +220,20 @@ groups:
             {{ $labels.instance }}: it prints why the answer was refused (short,
             malformed, too wide, unreachable). A source that moved is a change
             to its row in scripts/edge/edges.json.
+
+      - alert: EdgeRangesNeverRecorded
+        expr: |
+          absent(txnet_edge_ranges_last_refresh_timestamp_seconds)
+            and on() count(up{job="kubelet-cadvisor"}) > 0
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "No edge's ranges have ever been recorded on this cluster"
+          description: >-
+            edge_ranges.prom is missing from node-exporter's textfile directory:
+            the doors' firewall and its refresh were never installed, so the
+            origin admits whatever reaches it. On the node, run
+            `python3 scripts/edge/edge_firewall.py apply`, then `install`, and
+            `python3 scripts/edge/edge_ranges.py install` (hosting O7, O8).
