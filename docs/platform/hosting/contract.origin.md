@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-14
+updated: 2026-10-25
 ---
 
 # Contract — hosting: the origin answers only Cloudflare
@@ -146,19 +146,31 @@ a rule above ours (k3s's, Docker's) decides first — copying before deleting, s
 the chain is never unhooked; re-running adds no second jump. `remove` undoes it,
 and `print` shows the rules without changing anything.
 
-**O8 — Kept in step, never emptied.** A list with fewer than 10 IPv4 or 5 IPv6
-ranges, a malformed or wrong-family range, a range wider than /8 (v4) or /16
-(v6), or a failed answer is refused. The last good list
-(`/var/lib/txnet/cloudflare-ips.json`) is used instead, and with none the run
-fails and changes nothing. `install` writes `/etc/cron.d/txnet-cloudflare-firewall`:
-at boot (after Docker) and daily at 04:23. Dev does not run it.
+**O8 — Kept in step, never emptied; one list of edges (NIN-1-b1).**
+`scripts/edge/edges.json` lists every approved edge: its name, where its ranges
+are read and in which format (`cloudflare-api`, `lines`), the header it names
+the visitor in, and the fewest IPv4/IPv6 ranges a real answer has (Cloudflare
+10/5, Arvan 10/0). `edge_ranges.py` is the only fetcher: `ranges(name)` re-reads
+one edge, and `cloudflare_firewall.py apply` admits what it returns. A list under
+its edge's floor, a malformed or wrong-family range, a range wider than /8 (v4)
+or /16 (v6), or a failed answer is refused. That edge's last good copy
+(`/var/lib/txnet/edge-ranges/<name>.json`, with when it was taken, held to
+today's floors) is used instead, and with none the run fails and changes
+nothing. Each copy's time is exported (`edge_ranges.prom`,
+`txnet_edge_ranges_last_refresh_timestamp_seconds{edge}`), and `EdgeRangesStale`
+(`database.rules.yml`) warns after 3 days. `cloudflare_firewall.py install`
+writes `/etc/cron.d/txnet-cloudflare-firewall` (boot after Docker, daily 04:23),
+and `edge_ranges.py install` writes `txnet-edge-ranges`, which re-reads every
+edge (boot, daily 04:13). `join` copies the list and the server's copies. Dev
+does not run it. A new edge is a row of the list; a new answer format, a parser
+in `PARSERS`.
 Proven 2026-10-07 in an empty network namespace: the cached list was used,
 re-applying kept one jump, a non-Cloudflare caller on 443 was dropped, and
 `remove` restored it. The k3s path (OPS-1-o-g), proven 2026-10-24 the same way
 with 443 DNATed to a stand-in pod: a non-Cloudflare caller dropped, a Cloudflare
 one served, an `ACCEPT` for the pod range inserted above ours let the caller in
 until the next `apply` put the jumps back on top. Tests:
-`scripts/edge/test_cloudflare_firewall.py`.
+`scripts/edge/test_cloudflare_firewall.py`, `test_edge_ranges.py`.
 
 ## ArvanCloud as the domestic edge — what it does (NIN-1-a, ADR-0165)
 

@@ -27,9 +27,10 @@ EDGE_DIR=/usr/local/lib/txnet/edge
 STAGE=/root/.txnet-join
 # K17: the stores' local-path volumes stay on the node that carries it (the render's DATA_NODE_LABEL).
 DATA_LABEL=txnet.io/data=true
-# O7's last good copy of Cloudflare's ranges (cloudflare_firewall.py STATE): the node
-# starts from the server's, so a join never waits on api.cloudflare.com.
-CF_RANGES=/var/lib/txnet/cloudflare-ips.json
+# Every approved edge's last good ranges (edge_ranges.py STATE_DIR, NIN-1-b1): the
+# node starts from the server's, so a join never waits on an edge's list.
+EDGE_RANGES=/var/lib/txnet/edge-ranges
+EDGE_RANGES_CRON=/etc/cron.d/txnet-edge-ranges
 CF_CRON=/etc/cron.d/txnet-cloudflare-firewall
 # A worker must hold k3s, the OS and the largest single request (translator-llm,
 # 2560 MiB in K19's report) with room to spare.
@@ -171,8 +172,9 @@ stage() {
   install -m 0600 "$NODE_TOKEN" "$work/token"
   install -m 0600 "$K3S_ETC/registries.yaml" "$work/registries.yaml"
   cp "$ROOT_DIR/scripts/edge/k3s_ports.py" "$ROOT_DIR/scripts/edge/edge_chain.py" \
-    "$ROOT_DIR/scripts/edge/cloudflare_firewall.py" "$work/"
-  [ ! -r "$CF_RANGES" ] || install -m 0644 "$CF_RANGES" "$work/cloudflare-ips.json"
+    "$ROOT_DIR/scripts/edge/cloudflare_firewall.py" "$ROOT_DIR/scripts/edge/edge_ranges.py" \
+    "$ROOT_DIR/scripts/edge/edges.json" "$work/"
+  [ ! -d "$EDGE_RANGES" ] || cp -r "$EDGE_RANGES" "$work/edge-ranges"
   echo "$SERVER_ADDR" >"$work/k3s-peers"
   {
     echo "# Written by scripts/k8s-add-node.sh (hosting K17)."
@@ -198,12 +200,13 @@ install_agent() {
 set -euo pipefail
 cd $STAGE
 install -d -m 0755 $EDGE_DIR /etc/txnet
-install -m 0644 k3s_ports.py edge_chain.py cloudflare_firewall.py $EDGE_DIR/
+install -m 0644 k3s_ports.py edge_chain.py cloudflare_firewall.py edge_ranges.py edges.json $EDGE_DIR/
 install -m 0644 k3s-peers $PEERS_FILE
 python3 $EDGE_DIR/k3s_ports.py install
-[ ! -e cloudflare-ips.json ] || install -D -m 0644 cloudflare-ips.json $CF_RANGES
+[ ! -d edge-ranges ] || { install -d -m 0755 $EDGE_RANGES && install -m 0644 edge-ranges/*.json $EDGE_RANGES/; }
 python3 $EDGE_DIR/cloudflare_firewall.py apply
 python3 $EDGE_DIR/cloudflare_firewall.py install
+python3 $EDGE_DIR/edge_ranges.py install
 echo "fs.inotify.max_user_instances=$INOTIFY_INSTANCES" >/etc/sysctl.d/90-txnet-k3s.conf
 sysctl -q -p /etc/sysctl.d/90-txnet-k3s.conf
 install -d -m 0700 $K3S_ETC
@@ -255,7 +258,7 @@ rm -f /etc/systemd/system/txnet-k3s-ports.service /etc/systemd/system/txnet-k3s-
 systemctl daemon-reload
 [ ! -e $EDGE_DIR/k3s_ports.py ] || python3 $EDGE_DIR/k3s_ports.py remove
 [ ! -e $EDGE_DIR/cloudflare_firewall.py ] || python3 $EDGE_DIR/cloudflare_firewall.py remove
-rm -rf $EDGE_DIR $PEERS_FILE $CF_RANGES $CF_CRON /etc/sysctl.d/90-txnet-k3s.conf
+rm -rf $EDGE_DIR $PEERS_FILE $EDGE_RANGES $EDGE_RANGES_CRON $CF_CRON /etc/sysctl.d/90-txnet-k3s.conf
 EOF
   peer_remove "$NODE_ADDR"
   echo "$NODE_NAME has left the cluster"

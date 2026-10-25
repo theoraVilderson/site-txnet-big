@@ -1,0 +1,18 @@
+{
+  "edges": [
+    {
+      "name": "cloudflare",
+      "source": "https://api.cloudflare.com/client/v4/ips",
+      "format": "cloudflare-api",
+      "visitor_header": "CF-Connecting-IP",
+      "minimum": {"ipv4": 10, "ipv6": 5}
+    },
+    {
+      "name": "arvan",
+      "source": "https://www.arvancloud.ir/en/ips.txt",
+      "format": "lines",
+      "visitor_header": "X-Real-IP",
+      "minimum": {"ipv4": 10, "ipv6": 0}
+    }
+  ]
+}

@@ -197,3 +197,25 @@ groups:
             With noeviction, Redis refuses every write once it reaches
             maxmemory (REDIS_MAXMEMORY). Look for a key family that grows
             (`redis-cli --bigkeys`) before raising the limit.
+
+  # NIN-1-b1: every approved edge's ranges, re-read at boot and daily by
+  # scripts/edge/edge_ranges.py into edge_ranges.prom. The last good copy keeps
+  # the edge admitted, but an edge that moved is dropped at its new addresses
+  # until a re-read lands. No absent(): dev runs no edge firewall (O8).
+  - name: hosting.edge-ranges
+    rules:
+      - alert: EdgeRangesStale
+        expr: (time() - txnet_edge_ranges_last_refresh_timestamp_seconds) > 3 * 86400
+        for: 1h
+        labels:
+          severity: warning
+          unit: hosting
+        annotations:
+          summary: "{{ $labels.edge }}'s ranges have not been re-read in 3 days"
+          description: >-
+            The firewall still admits {{ $labels.edge }} from its last good list,
+            taken {{ $value | humanizeDuration }} ago. Run
+            `python3 /usr/local/lib/txnet/edge/edge_ranges.py refresh` on
+            {{ $labels.instance }}: it prints why the answer was refused (short,
+            malformed, too wide, unreachable). A source that moved is a change
+            to its row in scripts/edge/edges.json.

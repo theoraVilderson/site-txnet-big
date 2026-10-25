@@ -10,62 +10,30 @@ keeps everyone else from reaching the gateway at all. Dev keeps its open ports.
     cloudflare_firewall.py remove     unhook and delete the chain (ports open again)
     cloudflare_firewall.py install    /etc/cron.d entry: at boot and daily
 
-Cloudflare's list comes from https://api.cloudflare.com/client/v4/ips (no
-token). A list that is short, malformed or failed to arrive is refused and the
-last good one, cached in STATE, is used instead: an empty chain would drop
-every visitor. EDGE_PUBLIC_IFACE names the public interface (default: the one
+Cloudflare's list is its row of edges.json, re-read through edge_ranges.py
+(NIN-1-b1): a list that is short, malformed or failed to arrive is refused and
+the last good copy is used instead, since an empty chain would drop every
+visitor. EDGE_PUBLIC_IFACE names the public interface (default: the one
 the default route leaves by); bridges and the tunnel interfaces are never
 filtered. Contract: docs/platform/hosting/contract.origin.md.
 """
-import ipaddress
-import json
 import os
 import sys
-import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import edge_ranges  # noqa: E402
 from edge_chain import TOOL, hook_all, public_iface, run, unhook  # noqa: E402
 
 CHAIN = "TXNET-EDGE"
-SOURCE = "https://api.cloudflare.com/client/v4/ips"
-STATE = os.environ.get("EDGE_FIREWALL_STATE", "/var/lib/txnet/cloudflare-ips.json")
-# Cloudflare publishes 15 IPv4 and 7 IPv6 ranges (2026-10). Far fewer means
-# a broken answer, not a smaller Cloudflare.
-MINIMUM = {4: 10, 6: 5}
-# Nothing Cloudflare publishes is wider than this; a wider one admits the world.
-WIDEST = {4: 8, 6: 16}
+# Its row in edges.json.
+EDGE = "cloudflare"
 CRON = "/etc/cron.d/txnet-cloudflare-firewall"
-
-
-class RangeError(ValueError):
-    pass
-
-
-def parse_ranges(body):
-    """Cloudflare's answer -> {4: [...], 6: [...]}, or RangeError."""
-    try:
-        data = json.loads(body)
-        result = data["result"] if data.get("success") else None
-        lists = {4: result["ipv4_cidrs"], 6: result["ipv6_cidrs"]}
-    except (ValueError, TypeError, KeyError) as e:
-        raise RangeError(f"not Cloudflare's list: {e}") from e
-    for family, cidrs in lists.items():
-        if len(cidrs) < MINIMUM[family]:
-            raise RangeError(f"IPv{family}: {len(cidrs)} ranges, expected at least {MINIMUM[family]}")
-        for cidr in cidrs:
-            try:
-                net = ipaddress.ip_network(cidr)
-            except ValueError as e:
-                raise RangeError(f"IPv{family}: {cidr!r}: {e}") from e
-            if net.version != family or net.prefixlen < WIDEST[family]:
-                raise RangeError(f"IPv{family}: {cidr} is not a Cloudflare range")
-    return lists
 
 
 def restore_payload(cidrs, iface):
     """One atomic `iptables-restore --noflush` write: the chain is redeclared
     (which empties it) and refilled in the same commit."""
-    lines = ["*filter", f":{CHAIN} - [0:0]", f"# Cloudflare's ranges for {iface}, from {SOURCE}"]
+    lines = ["*filter", f":{CHAIN} - [0:0]", f"# Cloudflare's ranges for {iface}, from edges.json"]
     lines += [f"-A {CHAIN} -s {cidr} -j RETURN" for cidr in cidrs]
     lines += [f"-A {CHAIN} -j DROP", "COMMIT"]
     return "\n".join(lines) + "\n"
@@ -83,23 +51,6 @@ def jump_rules(iface):
             rules.append((chain, ["-i", iface, "-p", "tcp", "-m", "conntrack", "--ctorigdstport", port,
                                   "--ctdir", "ORIGINAL", "-j", CHAIN]))
     return rules
-
-
-def current_ranges():
-    """Fresh from Cloudflare, else the last good list, else refuse."""
-    try:
-        with urllib.request.urlopen(SOURCE, timeout=30) as resp:
-            body = resp.read().decode()
-        ranges = parse_ranges(body)
-        os.makedirs(os.path.dirname(STATE), exist_ok=True)
-        with open(STATE + ".tmp", "w") as f:
-            f.write(body)
-        os.replace(STATE + ".tmp", STATE)
-        return ranges
-    except (OSError, RangeError) as e:
-        print(f"Cloudflare's list unusable ({e}); using {STATE}", file=sys.stderr)
-        with open(STATE) as f:
-            return parse_ranges(f.read())
 
 
 def apply(ranges, iface):
@@ -131,7 +82,7 @@ def main(argv):
     if cmd == "remove":
         return remove(iface)
     if cmd in ("apply", "print"):
-        ranges = current_ranges()
+        ranges = edge_ranges.ranges(EDGE)
         if cmd == "print":
             for family in TOOL:
                 print(restore_payload(ranges[family], iface))

@@ -240,3 +240,22 @@ tests:
       - expr: ALERTS{alertname="RedisMemoryHigh"}
         eval_time: 25m
         exp_samples: []
+
+  # Arvan last re-read at epoch 0 goes stale after 3 days and the hour's wait;
+  # Cloudflare, re-read every minute, never does. (1m samples: with no absent()
+  # to bridge them, hourly ones fall outside the 5m lookback and reset `for`.)
+  - interval: 1m
+    input_series:
+      - series: txnet_edge_ranges_last_refresh_timestamp_seconds{edge="arvan"}
+        values: "0x4500"
+      - series: txnet_edge_ranges_last_refresh_timestamp_seconds{edge="cloudflare"}
+        values: "0+60x4500"
+    promql_expr_test:
+      - expr: ALERTS{alertname="EdgeRangesStale",alertstate="firing"}
+        eval_time: 72h
+        exp_samples: []
+      - expr: ALERTS{alertname="EdgeRangesStale",alertstate="firing"}
+        eval_time: 74h
+        exp_samples:
+          - labels: 'ALERTS{alertname="EdgeRangesStale",alertstate="firing",edge="arvan",severity="warning",unit="hosting"}'
+            value: 1

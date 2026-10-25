@@ -76,8 +76,8 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   stores live there, a second entry adds no availability, only a dead address
   Cloudflare's free plan would keep sending visitors to; and Traefik's ACME
   HTTP challenge keeps one `acme.json`, so one Traefik. The zone's records name
-  the data node; `join` puts O7 (`cloudflare_firewall.py`, from the server's
-  last good list) on the node before k3s, since svclb binds 80/443 there too.
+  the data node; `join` puts O7 (`cloudflare_firewall.py`, with O8's
+  edge list and the server's last good copies) on the node before k3s, since svclb binds 80/443 there too.
   Reaching both nodes is OPS-1-o-r's, with the standby, through
   `edge_zone.py repoint`.
 - **The dev host is the second node, and a worker (user, 2026-10-24/25).** It

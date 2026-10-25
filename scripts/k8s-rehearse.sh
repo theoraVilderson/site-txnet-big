@@ -51,6 +51,7 @@ close_ports() {
   iptables -S TXNET-K3S >/dev/null 2>&1 || die "chain TXNET-K3S is not there after install (K13)"
   python3 "$ROOT_DIR/scripts/edge/cloudflare_firewall.py" apply
   python3 "$ROOT_DIR/scripts/edge/cloudflare_firewall.py" install
+  python3 "$ROOT_DIR/scripts/edge/edge_ranges.py" install
 }
 
 # prod.compose.sh's project. `stop`, not `down`: its containers and volumes stay
