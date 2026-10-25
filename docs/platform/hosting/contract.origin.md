@@ -13,7 +13,8 @@ Cloudflare can complete a handshake, and on the production host only Cloudflare'
 addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
 (firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
 responses, decision 8), the domestic door (NIN-1-b2, O12), each door's certificate
-(NIN-1-c, O13 in `contract.origin-cert.md`). Rules O1…O12.
+(NIN-1-c, O13 in `contract.origin-cert.md`), the domestic domain's records
+(NIN-1-d1, O14). Rules O1…O12, O14.
 
 ## The pull certificate (EDGE-1-g)
 
@@ -200,6 +201,17 @@ port 80: routes naming those are skipped, with an `ERR` line at each reload,
 which is expected. Its own certificate is O13's (`contract.origin-cert.md`). Only
 the `domestic` door's edges reach 8443 (O7); never Cloudflare, which proxies 8443 for any zone while nothing here checks a
 certificate. `join` puts the chain on a new node and refuses one where 8443 is held.
+
+**O14 — The domestic domain's records are code** (NIN-1-d1). `edge_zone.py arvan
+plan|apply|repoint|status` (`arvan_zone.py`) makes `api.`, `panel.`, `sub.` of
+`DOMESTIC_DOMAIN_NAME` — the doors `seed.js` makes, held equal by the test; `pay.`
+dropped (user, 2026-10-25) — as A records to `EDGE_ORIGIN_IP`:8443, cloud on,
+upstream HTTPS, TTL 120, and the domain's edge certificate on. An A record keeps the
+visitor's `Host`. A record is its own only in that shape: anything else on a door
+name is refused, other names are never changed (the zone holds the user's site and
+bots), and the cloud off on the origin's address is warned. The key is
+`dev-docker/secrets/arvan/api-key` (scoped to the one domain), sealed (S1
+`tool_files`). Applied on barghgho.ir 2026-10-25: each door 200 through Arvan.
 
 Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:
 an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on

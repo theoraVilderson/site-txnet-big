@@ -10,8 +10,8 @@ contract.secrets.md).
     python3 tools/k8s_secrets.py edit <path>     `sops edit` its sealed copy; then `prod.k8s.sh deploy`
 
 What is sealed is derived: each stack's env files, and each secret file a
-service mounts (k8srender/sealed.py), plus the origin-pull client pair the
-smoke check presents (K16). SOPS_AGE_KEY_FILE overrides the key's
+service mounts (k8srender/sealed.py), plus the files a tool reads that no service
+mounts (`tool_files`). SOPS_AGE_KEY_FILE overrides the key's
 place; sops and age-keygen come from `prod.k8s.sh install-tools`.
 """
 import os
@@ -99,6 +99,15 @@ def open_files(root: Path, paths: list[str], out: Path, env=None) -> None:
             f.write(_decrypt(sealed, env))
 
 
+def opened(rel: str, env=None) -> bytes:
+    """`rel`'s sealed copy decrypted in memory, never written (S4): a tool's own key."""
+    from k8srender.sealed import sealed_path
+    sealed = REPO / sealed_path(rel)
+    if not sealed.is_file():
+        raise SecretsError(f"{rel} is not sealed: `scripts/prod.k8s.sh secrets seal {rel}`")
+    return _decrypt(sealed, env)
+
+
 def _decrypt(sealed: Path, env) -> bytes:
     return subprocess.run(["sops", "decrypt", str(sealed)], check=True, capture_output=True,
                           env=key_env(env)).stdout
@@ -124,21 +133,21 @@ def secret_paths(env_dir: Path | None = None) -> list[str]:
 
 
 def main(argv: list[str]) -> int:
-    from k8srender.sealed import sealed_path, smoke_files
+    from k8srender.sealed import sealed_path, tool_files
     cmd, args = (argv[1], argv[2:]) if len(argv) > 1 else ("", [])
     if cmd == "init":
         recipient = init(REPO, Path(key_env()["SOPS_AGE_KEY_FILE"]))
         print(f"age recipient {recipient}; copy {key_env()['SOPS_AGE_KEY_FILE']} off the server now (K5)")
     elif cmd == "list":
-        for rel in env_files() + secret_paths() + smoke_files():
+        for rel in env_files() + secret_paths() + tool_files():
             print(f"{'sealed ' if (REPO / sealed_path(rel)).is_file() else 'MISSING'}  {rel}")
     elif cmd == "seal":
-        written = seal(REPO, args or env_files() + secret_paths() + smoke_files(), replace=bool(args))
+        written = seal(REPO, args or env_files() + secret_paths() + tool_files(), replace=bool(args))
         print(f"sealed {len(written)}: {', '.join(written) or 'nothing changed'}")
     elif cmd == "open" and len(args) == 1:
         out = Path(args[0])
         open_files(REPO, env_files(), out)
-        open_files(REPO, secret_paths(out) + smoke_files(), out)
+        open_files(REPO, secret_paths(out) + tool_files(), out)
     elif cmd == "edit" and len(args) == 1:
         os.execvpe("sops", ["sops", "edit", str(REPO / sealed_path(args[0]))], key_env())
     else:

@@ -17,12 +17,16 @@ once, from the same env the services read:
     edge_zone.py repoint OLD NEW   the origin's address changed (go-live): every
                                    A record on OLD moves to NEW, proxy state kept
     edge_zone.py status            the three as the zone holds them
+    edge_zone.py arvan <cmd> ...   the same four on the domestic domain's
+                                   ArvanCloud zone (arvan_zone.py, NIN-1-d1)
 
 Every run lists the DNS-only records that name the origin's address: each one
 publishes it. They are reported, never changed (mail has to stay DNS-only).
 Reads CLOUDFLARE_API_TOKEN (Zone / DNS / Edit and Zone / SSL and Certificates /
 Edit), CLOUDFLARE_ZONE_ID, DOMAIN_NAME and EDGE_FALLBACK_ORIGIN from the
 environment, or from ENV_FILE (e.g. ENV_FILE=.env.prod, read on top of .env).
+`arvan` reads DOMESTIC_DOMAIN_NAME and EDGE_ORIGIN_IP the same way, and the
+Arvan API key from dev-docker/secrets/arvan/api-key or its sealed copy.
 Contract: docs/domains/tenant/contract.domains.md "Go-live".
 """
 import ipaddress
@@ -44,7 +48,8 @@ class ZoneError(ValueError):
     pass
 
 
-def _ipv4(value, what):
+def ipv4(value, what):
+    """`value` as an IPv4 address string; raises ZoneError (the doors are A records)."""
     try:
         ip = ipaddress.ip_address(value)
     except ValueError as e:
@@ -81,7 +86,7 @@ def plan(records, domain, fallback, origin_ip, current_fallback):
     origin = _one(records, fallback)
     changes = []
     if origin_ip is not None:
-        changes += _want(origin, {"type": "A", "name": fallback, "content": _ipv4(origin_ip, "EDGE_ORIGIN_IP"),
+        changes += _want(origin, {"type": "A", "name": fallback, "content": ipv4(origin_ip, "EDGE_ORIGIN_IP"),
                                    "proxied": True})
     elif origin is None:
         raise ZoneError(f"{fallback} does not exist; set EDGE_ORIGIN_IP to the origin's address")
@@ -104,7 +109,7 @@ def _body(r):
 
 def repoint(records, old, new):
     """Every A record on `old` -> `new`, proxy state kept. Pure; raises ZoneError."""
-    old, new = _ipv4(old, "OLD"), _ipv4(new, "NEW")
+    old, new = ipv4(old, "OLD"), ipv4(new, "NEW")
     if old == new:
         raise ZoneError("OLD and NEW are the same address")
     moving = [r for r in records if r["type"] == "A" and r["content"] == old]
@@ -115,18 +120,23 @@ def repoint(records, old, new):
 
 # --- Cloudflare -------------------------------------------------------------
 
-def load_env():
+def read_env(required):
+    """os.environ, with ENV_FILE read on top of .env when set; raises ZoneError
+    naming each of `required` that is still empty."""
     env = dict(os.environ)
     if os.environ.get("ENV_FILE"):
         files = " ".join(f'. "{os.path.join(ROOT, f)}";' for f in (".env", os.environ["ENV_FILE"])
                          if os.path.exists(os.path.join(ROOT, f)))
         out = subprocess.run(["bash", "-c", f"set -a; {files} env -0"], check=True, capture_output=True).stdout
         env.update(kv.split("=", 1) for kv in out.decode().split("\0") if "=" in kv)
-    missing = [k for k in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID", "DOMAIN_NAME", "EDGE_FALLBACK_ORIGIN")
-               if not env.get(k)]
+    missing = [k for k in required if not env.get(k)]
     if missing:
         raise ZoneError(f"set {', '.join(missing)} (or ENV_FILE)")
     return env
+
+
+def load_env():
+    return read_env(("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID", "DOMAIN_NAME", "EDGE_FALLBACK_ORIGIN"))
 
 
 def cf(env, method, path, body=None):
@@ -182,6 +192,15 @@ def show(changes, leaks):
 
 def main(argv):
     cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "arvan":
+        # arvan_zone imports this module: run as a script it is __main__, and a
+        # second copy would raise a ZoneError the handler below does not catch.
+        sys.modules.setdefault("edge_zone", sys.modules[__name__])
+        import arvan_zone
+        argv = argv[1:]
+        cmd = argv[1] if len(argv) > 1 else ""
+        if cmd in ("plan", "apply", "repoint", "status") and (cmd == "repoint") == (len(argv) == 4):
+            return arvan_zone.main(cmd, argv[2:])
     if cmd not in ("plan", "apply", "repoint", "status") or (cmd == "repoint") != (len(argv) == 4):
         print(__doc__.split("\n\n")[3], file=sys.stderr)
         return 2

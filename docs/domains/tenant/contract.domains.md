@@ -204,6 +204,7 @@ records at it. This replaces the per-reseller ArvanCloud zones of 2026-09-19 (AD
 | the platform's | `EDGE_FALLBACK_ORIGIN` (`edge-origin.<domain>`) A -> the origin | on | `scripts/edge/edge_zone.py apply` |
 | the platform's | `*.edge.<domain>` CNAME -> `EDGE_FALLBACK_ORIGIN` | on | the same run |
 | the platform's | Custom Hostnames fallback origin = `EDGE_FALLBACK_ORIGIN` | — | the same run |
+| the domestic (Arvan) | `api.`, `panel.`, `sub.` A -> the data node's 8443 (ADR-0165) | cloud on | `edge_zone.py arvan apply` (hosting O14) |
 | the reseller's | ownership TXT, and its domain CNAME -> `<slug>.edge.<domain>` | — | the reseller, from the domains page (panel-web `contract.reseller-domains.md`) |
 
 - **Our table is the list.** With `EDGE_LIFECYCLE_ENABLED=true` the job

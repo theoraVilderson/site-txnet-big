@@ -25,9 +25,11 @@ renders from there; the checkout's plaintext is never read. Rotation is
 (`tables.py` STACKS: `.env`, `.env.prod`, `dev-docker/monitoring/.env.prod`),
 each file under `dev-docker/secrets/` a compose service binds (K7), and each
 compose `secrets:` file a service mounts (K11) — `k8srender/sealed.py`
-`secret_files`. A key file bound tomorrow is sealed with no edit here. One pair
-no service mounts is named instead (`smoke_files`): the origin-pull
-`client.pem`/`client.key`, which the smoke check presents (R6); never `ca.key`.
+`secret_files`. A key file bound tomorrow is sealed with no edit here. What a
+tool reads and no service mounts is named instead (`tool_files`): the origin-pull
+`client.pem`/`client.key`, which the smoke check presents (R6), never `ca.key`;
+the Arvan API key `edge_zone.py arvan` writes with (O14), which a tool opens in
+memory with `k8s_secrets.opened`.
 `dev-docker/secrets/backup-bundle-passphrase` is never sealed, and a service
 mounting it fails the render: the age key rides in the bundle (S3), so the
 passphrase in the repo would let a bundle open itself (B5).

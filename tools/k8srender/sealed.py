@@ -15,11 +15,15 @@ NEVER_SEALED = {"dev-docker/secrets/backup-bundle-passphrase"}
 # presents too: no service mounts it, so it is named here. Never the CA's key.
 ORIGIN_PULL_CLIENT_DIR = f"{SECRET_DIR}/origin-pull"
 ORIGIN_PULL_CLIENT_PAIR = ("client.pem", "client.key")
+# NIN-1-d1: the key `edge_zone.py arvan` writes the domestic domain's records
+# with on the node; scoped to that one domain in Arvan's panel.
+ARVAN_API_KEY_FILE = f"{SECRET_DIR}/arvan/api-key"
 
 
-def smoke_files() -> list[str]:
-    """The files the smoke check reads as secret, sealed beside the render's (S1)."""
-    return [f"{ORIGIN_PULL_CLIENT_DIR}/{name}" for name in ORIGIN_PULL_CLIENT_PAIR]
+def tool_files() -> list[str]:
+    """The files a tool reads as secret and no service mounts, sealed beside the
+    render's (S1): the smoke check's pull pair and the Arvan zone key."""
+    return [f"{ORIGIN_PULL_CLIENT_DIR}/{name}" for name in ORIGIN_PULL_CLIENT_PAIR] + [ARVAN_API_KEY_FILE]
 
 
 def sealed_path(rel: str) -> str:
