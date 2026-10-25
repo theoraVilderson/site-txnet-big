@@ -31,8 +31,10 @@ services:
       # The owner, straight to Postgres: DDL through PgBouncer's transaction
       # pool, or as the RLS-bound app user, fails (H7, H8).
       - DATABASE_URL=postgresql://${MAIN_DB_USERNAME}:${MAIN_DB_PASSWORD}@main-db:${MAIN_DB_PORT:-5432}/${MAIN_DB_NAME}
-      # The platform's own doors (api., panel., sub.) the seed registers.
+      # The platform's own doors (api., panel., sub.) the seed registers, on
+      # both its domains (ADR-0165 point 1): unset, the domestic one adds none.
       - DOMAIN_NAME=${DOMAIN_NAME}
+      - DOMESTIC_DOMAIN_NAME=${DOMESTIC_DOMAIN_NAME:-}
       # Read, never printed: a Job's output reaches Loki.
       - PLATFORM_OWNER_PASSWORD_FILE=/run/secrets/platform-owner-password
     volumes:

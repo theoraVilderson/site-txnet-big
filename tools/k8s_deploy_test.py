@@ -185,6 +185,36 @@ class SeedPasswordTest(unittest.TestCase):
         self.assertEqual(json.loads(run.stdout), {"password": "made", "printable": True})
 
 
+# NIN-1-d2 (ADR-0165 point 1): the platform answers on both domains, so the
+# seed makes the same three doors on the domestic domain as on DOMAIN_NAME.
+class SeedDoorsTest(unittest.TestCase):
+    HELPER = REPO / "txnet-backend/prisma/seed-platform-doors.js"
+
+    def hosts(self, env):
+        script = (f"const {{ platformHosts }} = require({str(self.HELPER)!r});"
+                  "console.log(JSON.stringify(platformHosts(process.env)));")
+        run = subprocess.run(["node", "-e", script], capture_output=True, text=True,
+                             env={"PATH": os.environ["PATH"], **env})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        return json.loads(run.stdout)
+
+    def test_each_domain_gets_an_api_a_panel_and_a_subscription_door(self):
+        self.assertEqual(self.hosts({"DOMAIN_NAME": "txnet.cyou", "DOMESTIC_DOMAIN_NAME": " Barghgho.IR "}), [
+            {"host": "api.txnet.cyou", "purpose": "api"},
+            {"host": "panel.txnet.cyou", "purpose": "panel"},
+            {"host": "sub.txnet.cyou", "purpose": "subscription"},
+            {"host": "api.barghgho.ir", "purpose": "api"},
+            {"host": "panel.barghgho.ir", "purpose": "panel"},
+            {"host": "sub.barghgho.ir", "purpose": "subscription"},
+        ])
+
+    def test_an_unset_domain_adds_no_door_and_one_domain_named_twice_adds_them_once(self):
+        self.assertEqual([d["host"] for d in self.hosts({"DOMAIN_NAME": "txnet.cyou"})],
+                         ["api.txnet.cyou", "panel.txnet.cyou", "sub.txnet.cyou"])
+        self.assertEqual(len(self.hosts({"DOMAIN_NAME": "a.ir", "DOMESTIC_DOMAIN_NAME": "a.ir"})), 3)
+        self.assertEqual(self.hosts({}), [])
+
+
 # R12 (OPS-1-o-y): one Nx workspace builds many apps, so its folder as a whole
 # moved every app's tag: a change to prisma/seed.js rebuilt all 12 images,
 # though an app's image holds only node_modules and its own dist/.

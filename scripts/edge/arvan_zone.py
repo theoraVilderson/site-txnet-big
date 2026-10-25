@@ -26,7 +26,7 @@ import k8s_secrets  # noqa: E402
 from k8srender.sealed import ARVAN_API_KEY_FILE  # noqa: E402
 
 API = "https://napi.arvancloud.ir/cdn/4.0/domains"
-# seed.js platformHosts() makes the same three doors (the test holds them
+# seed-platform-doors.js makes the same three doors (the test holds them
 # equal); `pay.` was dropped by the user on 2026-10-25: a gateway returns to
 # the panel the payer signed in on (NIN-1-d3).
 DOOR_NAMES = ("api", "panel", "sub")

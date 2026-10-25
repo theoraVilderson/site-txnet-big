@@ -109,8 +109,12 @@ and reach psql on stdin, never an argv. A rollback runs it too: a rotated passwo
 **R13 — Every release seeds** (OPS-1-o-x). `db-migrate` runs `prisma/seed.js`
 after `migrate deploy`, with `DOMAIN_NAME`: an empty database has no platform
 tenant, roles or `api.`/`panel.`/`sub.` doors, and auth-service does not start
-without them (the rehearsal's first deploy, 2026-10-24). The seed is idempotent,
-so every release runs it. The owner's first password is the sealed
+without them (the rehearsal's first deploy, 2026-10-24). The same three doors are
+made on `DOMESTIC_DOMAIN_NAME` when it is set (NIN-1-d2, ADR-0165 point 1;
+`prisma/seed-platform-doors.js`), so either panel signs the same account in: both
+doors are the platform tenant's, the refresh cookie is host-only and every `/api`
+route matches by path. The seed is idempotent, so every release runs it; a door
+already held is never moved. The owner's first password is the sealed
 `dev-docker/secrets/platform-owner-password`, read through
 `PLATFORM_OWNER_PASSWORD_FILE` and never printed, since a Job's output reaches
 Loki (`prisma/seed-owner-password.js`); an empty file fails the Job. With no file

@@ -204,7 +204,7 @@ certificate. `join` puts the chain on a new node and refuses one where 8443 is h
 
 **O14 — The domestic domain's records are code** (NIN-1-d1). `edge_zone.py arvan
 plan|apply|repoint|status` (`arvan_zone.py`) makes `api.`, `panel.`, `sub.` of
-`DOMESTIC_DOMAIN_NAME` — the doors `seed.js` makes, held equal by the test; `pay.`
+`DOMESTIC_DOMAIN_NAME` — the doors `seed-platform-doors.js` seeds, held equal by the test; `pay.`
 dropped (user, 2026-10-25) — as A records to `EDGE_ORIGIN_IP`:8443, cloud on,
 upstream HTTPS, TTL 120, and the domain's edge certificate on. An A record keeps the
 visitor's `Host`. A record is its own only in that shape: anything else on a door

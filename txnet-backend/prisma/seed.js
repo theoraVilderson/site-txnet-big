@@ -21,39 +21,17 @@ const { PrismaClient } = require('@prisma/client');
 const argon2 = require('argon2');
 const { randomBytes, randomUUID } = require('crypto');
 const { ownerPassword } = require('./seed-owner-password');
+const { platformHosts } = require('./seed-platform-doors');
 
 const prisma = new PrismaClient();
 
 const ROLE_NAMES = ['user', 'SuperAdmin'];
 
-// The hosts `auth-service` is actually reached on, and `TenantResolverService`
-// matches `tenant_domain.domainValue` against exactly those. `panel.<domain>`
-// is where the platform's own panel calls `/api/*` on its own origin (F-066-u,
-// ADR-0060); `api.<domain>` is still where bot-service and other callers reach
-// the gate (dev-docker/docker-compose.main.yml) — an `api` door, so it answers
-// like a panel but no link ("open your service", a payment's return) lands on it. `subdomain` rather than
-// `custom_domain` because the platform issued them — a custom domain would need
-// verifying before it routed (tenant invariant 5).
-// `sub.<domain>` is the platform's `subscription` door: a Grant's `/sub` link
-// is built only on a `subscription` domain of its own tenant, and the domain
-// route refuses every host under the platform's base, so nothing else can
-// give the platform one. Resellers bring their own (a verified custom domain).
-function platformHosts() {
-  const domain = (process.env.DOMAIN_NAME || '').trim().toLowerCase();
-  return domain
-    ? [
-        { host: `api.${domain}`, purpose: 'api' },
-        { host: `panel.${domain}`, purpose: 'panel' },
-        { host: `sub.${domain}`, purpose: 'subscription' },
-      ]
-    : [];
-}
-
 // Idempotent, and never re-points an existing row: `domainValue` is unique, so
 // a row already claimed by another tenant is that tenant's — a seed run must
 // not move a host between tenants.
 async function seedPlatformDomains(tenantId) {
-  const hosts = platformHosts();
+  const hosts = platformHosts(process.env);
   if (hosts.length === 0) {
     console.log('[seed] DOMAIN_NAME is unset — no tenant_domain row created.');
     console.log('[seed]   the API will answer 404 until one exists (ADR-0025).');

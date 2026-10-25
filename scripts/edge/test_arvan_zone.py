@@ -95,10 +95,10 @@ class Repoint(unittest.TestCase):
 
 class Doors(unittest.TestCase):
     def test_the_names_are_the_doors_the_seed_makes(self):
-        # One list in two languages: seed.js platformHosts() makes the rows the
-        # tenant resolver matches, this makes the records reaching them.
-        with open(os.path.join(ROOT, "txnet-backend/prisma/seed.js"), encoding="utf-8") as f:
-            seeded = re.findall(r"host: `(\w+)\.\$\{domain\}`", f.read())
+        # One list in two languages: the seed makes the rows the tenant
+        # resolver matches, this makes the records reaching them.
+        with open(os.path.join(ROOT, "txnet-backend/prisma/seed-platform-doors.js"), encoding="utf-8") as f:
+            seeded = re.findall(r"\{ prefix: '(\w+)'", f.read())
         self.assertEqual(sorted(seeded), sorted(az.DOOR_NAMES))
 
 
