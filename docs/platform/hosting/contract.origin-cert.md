@@ -58,6 +58,12 @@ pair served for `panel.<domain>` beside O3 `required` and Traefik's own for a
 reseller's host; with `EDGE_ORIGIN_CERT_DEFAULT=true`, the pair for a platform
 host, a reseller's host and no SNI; the gauge carrying only ours each time;
 unset, nothing loaded, no error. The 443 certificate issued for `txnet.cyou`
-(to 2041-10-21) and sealed, as was the domestic one for `barghgho.ir`.
+(to 2041-10-21) and sealed, as was the domestic one for `barghgho.ir`. Live
+on the test server the same day (release `d174c885`), the zone on Full
+(strict): `panel.txnet.cyou` 200, and the Custom Hostnames `panel.barghgho.ir`
+and `edgetest.chillshop.ir` 200, so Cloudflare accepts the fallback origin's
+certificate for a reseller's SNI (526 for all three before the release, when
+the origin served Traefik's own); 8443 served the domestic pair; Prometheus
+read both gauges, `up` 1 on both jobs.
 Tests: `scripts/edge/test_origin_cert.py`, `tools/k8s_render_traefik_test.py`,
 `database.rules.test.yml`.
