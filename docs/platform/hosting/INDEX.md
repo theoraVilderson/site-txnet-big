@@ -22,7 +22,7 @@ connection pool, the log pipeline's bounds and format, healthchecks, and houseke
 | File | Read it when |
 |---|---|
 | [contract.md](contract.md) | building any OPS-1 row — rules H1…H23 are the spec |
-| [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11 |
+| [contract.origin.md](contract.origin.md) | the origin answering only Cloudflare: pull certificate, client address, firewall, private responses (EDGE-1-g, -h, -j) — rules O1…O11; what ArvanCloud does as the domestic edge (NIN-1-a) |
 | [contract.kubernetes.md](contract.kubernetes.md) | production on k3s, rendered from compose, its monitoring, ports and memory (OPS-1-o-a … -r) — rules K1…K19 |
 | [contract.secrets.md](contract.secrets.md) | the env and key files the render reads, sealed with SOPS + age, opened only in memory, rotated (OPS-1-o-j, -u, -w) — rules S1…S8 |
 | [contract.release.md](contract.release.md) | a release: built and pushed off the k3s node, pulled with a sealed pull-only login, each image tagged by its source, a fresh database seeded, smoke-checked, set back whole on a failure or by `rollback [tag]` (OPS-1-o-m, -p, -x, -y) — rules R1…R13 |

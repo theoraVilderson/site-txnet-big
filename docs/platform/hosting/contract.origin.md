@@ -159,3 +159,25 @@ with 443 DNATed to a stand-in pod: a non-Cloudflare caller dropped, a Cloudflare
 one served, an `ACCEPT` for the pod range inserted above ours let the caller in
 until the next `apply` put the jumps back on top. Tests:
 `scripts/edge/test_cloudflare_firewall.py`.
+
+## ArvanCloud as the domestic edge — what it does (NIN-1-a, ADR-0165)
+
+Proven 2026-10-25 on `nin.barghgho.ir` (a throwaway record, Arvan plan level 1)
+to a stdlib TLS echo on the test server's 8443, the port admitted to Arvan's
+ranges only; removed afterwards. Facts NIN-1-b and NIN-1-c build on:
+
+| question | answer |
+|---|---|
+| Origin certificate | **not verified**: a self-signed one (no CA, SAN only) is accepted with `upstream_https: https`. Long-lived, no renewal, no foreign internet (ADR-0165 point 4) |
+| Origin port | any, per record (`value[].port`); 443 stays Cloudflare's |
+| Proof of Arvan to the origin | none below Enterprise: no client certificate is sent, custom headers are Enterprise-only. Ranges (`https://www.arvancloud.ir/en/ips.txt`, 14 IPv4 that day, domestic) are the only proof |
+| Visitor address | `X-Real-IP`, `AR-Real-IP`, `True-Client-IP`: set by Arvan, a client's own value **overwritten**. `X-Forwarded-For` keeps a client's value and appends — never read its left end |
+| Other headers | `X-Forwarded-Proto/-Port`, `AR-Real-Country`/`X-Country-Code`, `AR-Sid`, `CDN-Loop: arvancloud`; `Host` is the visitor's (`host_header: source`) |
+| Caller seen at the origin | `94.101.182.2`, inside `94.101.182.0/27` of the list |
+| WebSockets | pass (`101`, frames both ways). Idle 90 s kept, idle 200 s closed (Arvan's documented bound: 180 s between writes); gateway-service's heartbeat is 30 s (`REALTIME_HEARTBEAT_MS`), so it must stay under 180 s |
+| Direct caller | a non-Arvan address on 8443 was dropped by the proof's chain |
+
+So the Arvan door is its own entrypoint on its own port, admitted by range,
+with no client-certificate requirement there (O3 keeps 443 on `required`). The
+proof used host networking (`INPUT`); through servicelb the chain is also needed
+in `FORWARD`, as O7 does.
