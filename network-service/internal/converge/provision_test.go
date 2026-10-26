@@ -252,6 +252,30 @@ func TestAClientIsCreatedOnTheInboundItsConfigWasPlacedOn(t *testing.T) {
 	}
 }
 
+// Marzneshin lists a service as one inbound per protocol, every one under the
+// service's id (F-027-bg): the pick is the id and the protocol together. Found
+// 2026-10-26 on a live panel, where a vmess config on service 1 waited forever
+// because the first row under "1" was shadowsocks.
+func TestAServiceListedOncePerProtocolIsPickedByItsProtocol(t *testing.T) {
+	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{
+		{RemoteID: "1", Protocol: "shadowsocks", Enabled: true},
+		{RemoteID: "1", Protocol: "trojan", Enabled: true},
+		{RemoteID: "1", Protocol: "vmess", Enabled: true},
+	}})
+	row := wanted("c1")
+	row.InboundRemoteID, row.Protocol = "1", "vmess"
+	r.desired.Put("panel-1", row)
+
+	r.pass(t)
+
+	if n := r.panel.CallCount("CreateClient"); n != 1 {
+		t.Fatalf("CreateClient called %d times, want the vmess config created on service 1", n)
+	}
+	if client, ok := r.client(t, r.row(t, "c1").RemoteID); !ok || client.InboundRemoteID != "1" {
+		t.Fatalf("created on %+v, want service 1", client)
+	}
+}
+
 func TestNothingPickedOrAPickThepanelNoLongerServesCreatesNothing(t *testing.T) {
 	r := newProvRig(t, fake.Config{Inbounds: []driver.Inbound{
 		{RemoteID: "1", Protocol: "vless", Enabled: true},

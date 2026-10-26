@@ -568,9 +568,9 @@ func (c *inboundCache) named(ctx context.Context, remoteID, protocol string) (dr
 	if err != nil {
 		return driver.Inbound{}, false, err
 	}
-	for _, inbound := range rows {
-		if inbound.RemoteID == remoteID {
-			return inbound, inbound.Enabled && inbound.Protocol == protocol, nil
+	for _, inbound := range rows { // the id and the protocol: Marzneshin lists a service once per protocol (F-027-ba-a)
+		if inbound.RemoteID == remoteID && inbound.Protocol == protocol {
+			return inbound, inbound.Enabled, nil
 		}
 	}
 	return driver.Inbound{}, false, nil

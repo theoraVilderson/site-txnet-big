@@ -56,6 +56,9 @@ The rules:
    each service is answered once per protocol we sell (`vless`, `vmess`,
    `trojan`, `shadowsocks`, `hysteria2`, `tuic`, `wireguard`) and a config is
    created under that service. `shadowsocks2022` and the rest are left out.
+   The pass picks a config's inbound by the service id **and** the protocol
+   together (`converge` `inboundCache.named`, F-027-ba-a): the first row under
+   the id may serve another protocol.
 6. **A modify is partial.** PUT changes only the fields it is sent (the
    username is required), so `SetClientDataLimit` is one request.
 7. **A client wanted disabled is created, then disabled.** Create has no
