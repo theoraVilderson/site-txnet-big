@@ -19,7 +19,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { MigrationRun, UsersCatalogProduct } from "@/lib/billing-api";
-import type { ResellerDomain } from "@/lib/tenant-api";
+import type { ResellerDomain } from "@/lib/tenant-domains-api";
 import { tenantChannel, userChannel } from "@/lib/realtime";
 import { REALTIME_TENANT_READ } from "@/lib/tenant-channel";
 import {

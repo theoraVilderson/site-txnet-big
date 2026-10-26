@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Link2, Plus, Radar } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { LegacyHost, LegacyTestResult, MigrationRunsApi } from "@/lib/billing-api";
-import { resellerDomainsApi, type ResellerDomain } from "@/lib/tenant-api";
+import { resellerDomainsApi, type ResellerDomain } from "@/lib/tenant-domains-api";
 import { DOMAIN_KEYS } from "../../../_lib/domains";
 import { MIGRATION_KEYS as K, legacyStepOf, reasonKey, servesOnlySubPath } from "../../../_lib/migration";
 import { DomainCard } from "../../domains/_components/ResellerDomainsView";

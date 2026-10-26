@@ -31,8 +31,10 @@ vi.mock("@/lib/auth-api", () => ({
   resellerBotsApi: { list: vi.fn(async () => []), connect: vi.fn(), retire: vi.fn() },
 }));
 vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn(), skip: vi.fn(), unskip: vi.fn() } }));
+vi.mock("@/lib/tenant-domains-api", () => ({
+  resellerDomainsApi: { list: vi.fn(async () => []), paths: vi.fn(async () => []), add: vi.fn(), check: vi.fn(), setPath: vi.fn() },
+}));
 vi.mock("@/lib/tenant-api", () => ({
-  resellerDomainsApi: { list: vi.fn(async () => []), add: vi.fn(), check: vi.fn() },
   resellerBrandingApi: { get: vi.fn(async () => ({ lineNameTemplate: null })), previewLineName: vi.fn(async () => null), save: vi.fn() },
 }));
 vi.mock("./_lib/workspace", async (importOriginal) => ({

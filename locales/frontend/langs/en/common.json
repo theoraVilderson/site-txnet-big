@@ -2771,7 +2771,10 @@
       "http": "HTTP",
       "https": "HTTPS",
       "cache": "Signed-in pages not cached",
-      "edge_owner": "Ownership record (your own CDN)"
+      "edge_owner": "Ownership record (your own CDN)",
+      "address": "Not our address directly",
+      "door": "Through an approved CDN",
+      "websocket": "WebSocket"
     },
     "errors": {
       "domain": "Enter a host name such as panel.example.com — no port, no IP address.",
@@ -2784,7 +2787,8 @@
       "reseller_terminated": "This reseller is terminated.",
       "domain_not_found": "That domain no longer exists. Reload the list.",
       "domain_taken": "That domain is already in use.",
-      "domain_reserved": "That is one of the platform's own addresses. Use a domain of your own."
+      "domain_reserved": "That is one of the platform's own addresses. Use a domain of your own.",
+      "own_edge_unavailable": "Your own CDN is not offered on this platform yet. Use ours for now."
     },
     "backToConsole": "Back to setup",
     "live": "Live",
@@ -2818,6 +2822,33 @@
       "websocket": "WebSocket",
       "websocketOn": "On",
       "cache": "Never cache pages for signed-in users: honour Cache-Control: private, no-store. The check fails a CDN that does."
+    },
+    "statusHintOwn": "Verified through your own CDN: the domain is live.",
+    "path": {
+      "label": "Reaches us through",
+      "platform_cdn": "Our CDN (Cloudflare)",
+      "own_edge": "Your own CDN account",
+      "platformHint": "One CNAME record and nothing else to run. When the internet in Iran goes national, Cloudflare is cut off and this domain closes with it.",
+      "ownHint": "Your own account at an approved CDN ({{edges}}) points at us. It keeps working when the internet goes national. Your domain is never added to any account of ours.",
+      "cut": "Through Cloudflare, or through a CDN not on the list ({{edges}}), this domain closes when the internet in Iran goes national.",
+      "change": "Change path",
+      "switching": "Moving to the new path: the domain keeps working on the old one until the new path's check passes."
+    },
+    "own": {
+      "title": "Set this in your CDN account",
+      "intro": "In your {{edges}} account, add this domain with its cloud (CDN) on, and set it up exactly like this. Publish the TXT record above too.",
+      "origin": "Origin (CNAME to)",
+      "port": "Origin port",
+      "protocol": "Protocol to the origin",
+      "host": "Host header sent to the origin",
+      "cloud": "Cloud (CDN)",
+      "websocket": "WebSocket",
+      "on": "On",
+      "hostVisitor": "the visitor's (your domain)",
+      "cache": "Never cache pages for signed-in users: honour Cache-Control: private, no-store. The check fails a CDN that does."
+    },
+    "edgeNames": {
+      "arvan": "ArvanCloud"
     }
   },
   "resellerOnboarding": {

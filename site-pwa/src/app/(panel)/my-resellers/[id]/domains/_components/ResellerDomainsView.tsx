@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { AlertCircle, Check, CheckCircle2, Clock, Copy, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, CheckCircle2, Clock, Loader2, RefreshCw, XCircle, type LucideIcon } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { authApi } from "@/lib/auth-api";
-import { resellerDomainsApi, type DomainPurpose, type DomainStatus, type EdgeStatus, type ResellerDomain } from "@/lib/tenant-api";
+import { resellerDomainsApi, type DomainPath, type DomainPurpose, type DomainStatus, type EdgeStatus, type PathOffer, type ResellerDomain } from "@/lib/tenant-domains-api";
 import { Select } from "../../../../_components/kit/Select";
 import { TableSkeleton } from "../../../../_components/kit/TableSkeleton";
 import { DataTable } from "../../../../_components/kit/DataTable";
 import { formatInstant } from "../../../../_lib/datetime";
 import { Badge } from "../../../../financial/_components/Badge";
 import { Field } from "../../../../catalog/_components/catalog-ui";
-import { CHECK_LINE_KEYS, DOMAIN_KEYS as K, DOMAIN_PURPOSES, DOMAIN_STATUS_KEYS, EDGE_HINT_KEYS, EDGE_STATUS_KEYS, canRequestCheck, domainHost, dnsName, isApex, isLive, isRoutable } from "../../../_lib/domains";
-import { useDomainMessage, useResellerDomains } from "../_hooks/useResellerDomains";
-import { Alert, Button, IconButton, Input, PageHeader } from "../../../../_components/kit";
-import { COPY_FEEDBACK_MS, copyText } from "../../../../_lib/clipboard";
+import { CHECK_LINE_KEYS, DOMAIN_KEYS as K, DOMAIN_PURPOSES, DOMAIN_STATUS_KEYS, EDGE_HINT_KEYS, EDGE_STATUS_KEYS, apexRefused, canRequestCheck, domainHost, domainRecords, dnsName, isLive, isOwnEdge, isRoutable } from "../../../_lib/domains";
+import { useDomainMessage, useDomainPaths, useResellerDomains } from "../_hooks/useResellerDomains";
+import { Alert, Button, Input, PageHeader } from "../../../../_components/kit";
+import { Copyable } from "./Copyable";
+import { CdnSettings, CutWarning, OwnEdgeSettings, PathChoice, PathControl } from "./DomainPath";
 
 const STATUS_TONE: Record<DomainStatus, { icon: LucideIcon; className: string }> = {
   pending: { icon: Clock, className: "border-gold/20 bg-gold-bg text-gold" },
@@ -95,6 +96,7 @@ export function DomainsPanel({ id, asked = 0 }: { id: string; asked?: number }) 
   const { t } = useLocale();
   const message = useDomainMessage();
   const { domains, loadError, retry, replace } = useResellerDomains(id, asked);
+  const offers = useDomainPaths(id);
 
   if (loadError !== null) {
     return (
@@ -109,36 +111,37 @@ export function DomainsPanel({ id, asked = 0 }: { id: string; asked?: number }) 
   if (domains === null) return <TableSkeleton rows={3} columns={2} />;
   return (
     <>
-      <AddDomain id={id} onAdded={replace} />
+      <AddDomain id={id} offers={offers} onAdded={replace} />
       {domains.length === 0 ? (
         <p className="rounded-2xl border border-card-border bg-card-bg p-6 text-sm text-text-secondary">
           {t("common", K.empty)}
         </p>
       ) : (
-        domains.map((d) => <DomainCard key={d.id} tenantId={id} domain={d} onChanged={replace} />)
+        domains.map((d) => <DomainCard key={d.id} tenantId={id} domain={d} offers={offers} onChanged={replace} />)
       )}
     </>
   );
 }
 
-function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) => void }) {
+function AddDomain({ id, offers, onAdded }: { id: string; offers: PathOffer[]; onAdded: (d: ResellerDomain) => void }) {
   const { t } = useLocale();
   const message = useDomainMessage();
   const [raw, setRaw] = useState("");
   const [purpose, setPurpose] = useState<DomainPurpose>("panel");
+  const [path, setPath] = useState<DomainPath>("platform_cdn");
   const [error, setError] = useState<string | undefined>();
   const [failure, setFailure] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     const host = domainHost(raw);
-    const problem = !host ? K.errors.domain : isApex(host) ? K.errors.apex : undefined;
+    const problem = !host ? K.errors.domain : apexRefused(host, path) ? K.errors.apex : undefined;
     setError(problem);
     if (!host || problem) return;
     setBusy(true);
     setFailure(null);
     try {
-      onAdded(await resellerDomainsApi.add(id, { domainValue: host, purpose }));
+      onAdded(await resellerDomainsApi.add(id, { domainValue: host, purpose, path }));
       setRaw("");
     } catch (e) {
       setFailure(e);
@@ -175,6 +178,7 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
           />
         </Field>
       </div>
+      <PathChoice offers={offers} value={path} onChange={setPath} />
       {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
       <Button variant="primary" size="sm" type="submit" loading={busy}>
         {t("common", busy ? K.add.adding : K.add.submit)}
@@ -187,10 +191,12 @@ function AddDomain({ id, onAdded }: { id: string; onAdded: (d: ResellerDomain) =
 export function DomainCard({
   tenantId,
   domain,
+  offers = [],
   onChanged,
 }: {
   tenantId: string;
   domain: ResellerDomain;
+  offers?: PathOffer[];
   onChanged: (d: ResellerDomain) => void;
 }) {
   const { lang, t } = useLocale();
@@ -201,6 +207,8 @@ export function DomainCard({
   const tone = STATUS_TONE[domain.status];
   // A verified domain whose edge failed is started over by the same route.
   const checkable = canRequestCheck(domain.status) || (isRoutable(domain.status) && domain.edge.status === "failed");
+  const own = isOwnEdge(domain.path);
+  const ownOffer = offers.find((o) => isOwnEdge(o.path));
 
   async function check() {
     setBusy(true);
@@ -222,7 +230,7 @@ export function DomainCard({
             {domain.domainValue}
           </span>
           <Badge {...tone} label={t("common", DOMAIN_STATUS_KEYS[domain.status])} />
-          {isLive(domain.status, domain.edge.status) && <Badge {...EDGE_TONE.issued} label={t("common", K.live)} />}
+          {isLive(domain.status, domain.edge.status, domain.path) && <Badge {...EDGE_TONE.issued} label={t("common", K.live)} />}
           <span className="text-xs text-text-secondary">{t("common", K.purposes[domain.purpose])}</span>
         </div>
         {checkable && (
@@ -231,7 +239,8 @@ export function DomainCard({
           </Button>
         )}
       </div>
-      <p className="text-xs text-text-secondary">{t("common", K.statusHint[domain.status])}</p>
+      <p className="text-xs text-text-secondary">{t("common", own && isRoutable(domain.status) ? K.statusHintOwn : K.statusHint[domain.status])}</p>
+      <PathControl tenantId={tenantId} domain={domain} offers={offers} onChanged={onChanged} />
       {failure !== null && <Alert tone="error">{message(failure)}</Alert>}
 
       <div className="space-y-2">
@@ -242,11 +251,7 @@ export function DomainCard({
           compact
           bare
           rowClassName="align-top"
-          rows={[
-            { type: domain.record.type, name: domain.record.name, value: domain.record.value },
-            { type: "CNAME", name: domain.domainValue, value: domain.cnameTarget },
-            ...(domain.edge.record ? [domain.edge.record] : []),
-          ]}
+          rows={domainRecords(domain)}
           rowKey={(r) => `${r.type}|${r.name}`}
           columns={[
             { id: "type", header: t("common", K.records.type), cell: (r) => r.type, className: "font-mono" },
@@ -254,12 +259,13 @@ export function DomainCard({
             { id: "value", header: t("common", K.records.value), cell: (r) => <Copyable text={r.value} /> },
           ]}
         />
-        {domain.edge.record && <p className="text-xs text-text-secondary">{t("common", K.records.edgeHint)}</p>}
+        {!own && domain.edge.record && <p className="text-xs text-text-secondary">{t("common", K.records.edgeHint)}</p>}
       </div>
 
-      {(isRoutable(domain.status) || domain.edge.status !== "none") && <EdgeStep domain={domain} />}
+      {((!own && isRoutable(domain.status)) || domain.edge.status !== "none") && <EdgeStep domain={domain} />}
 
-      <CdnSettings domain={domain} />
+      {own && ownOffer ? <OwnEdgeSettings domain={domain} offer={ownOffer} /> : <CdnSettings domain={domain} />}
+      {!own && ownOffer && <CutWarning offers={offers} />}
 
       <p className="text-2xs text-text-secondary">
         {domain.verifiedAt && <span>{t("common", K.verifiedAt, { date: when(domain.verifiedAt) })} · </span>}
@@ -316,34 +322,6 @@ function EdgeStep({ domain }: { domain: ResellerDomain }) {
   );
 }
 
-/** What a reseller's own CDN in front of the domain must send (ADR-0129 (4), ADR-0063). */
-function CdnSettings({ domain }: { domain: ResellerDomain }) {
-  const { t } = useLocale();
-  const rows = [
-    { id: "origin", label: t("common", K.cdn.origin), value: domain.cnameTarget, copy: true },
-    { id: "host", label: t("common", K.cdn.host), value: domain.domainValue, copy: true },
-    { id: "sni", label: t("common", K.cdn.sni), value: domain.domainValue, copy: true },
-    { id: "websocket", label: t("common", K.cdn.websocket), value: t("common", K.cdn.websocketOn), copy: false },
-  ];
-  return (
-    <details className="rounded-xl border border-card-border p-3 text-xs">
-      <summary className="cursor-pointer font-bold text-text-secondary">{t("common", K.cdn.title)}</summary>
-      <div className="mt-2 space-y-2">
-        <p className="text-text-secondary">{t("common", K.cdn.intro)}</p>
-        <dl className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[auto_1fr]">
-          {rows.map((r) => (
-            <div key={r.id} className="contents">
-              <dt className="text-text-secondary">{r.label}</dt>
-              <dd className="text-text-primary">{r.copy ? <Copyable text={r.value} /> : r.value}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="text-text-secondary">{t("common", K.cdn.cache)}</p>
-      </div>
-    </details>
-  );
-}
-
 /** The name the DNS panel takes, copied as is; the full name under it for a panel that wants that (EDGE-1-o). */
 function RecordName({ name }: { name: string }) {
   const { t } = useLocale();
@@ -355,42 +333,5 @@ function RecordName({ name }: { name: string }) {
         <span dir="ltr" className="break-all font-mono">{full}</span>
       </span>
     </Copyable>
-  );
-}
-
-/**
- * The copy button first, at a fixed place, so every row's button sits in one
- * column whatever the text's length; the text (left-to-right) takes the rest.
- */
-function Copyable({ text, children }: { text: string; children?: ReactNode }) {
-  return (
-    <span className="flex items-start gap-2">
-      <CopyButton text={text} />
-      <span className="min-w-0 flex-1 pt-1">
-        <span dir="ltr" className="block break-all font-mono">{text}</span>
-        {children}
-      </span>
-    </span>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const { t } = useLocale();
-  const [copied, setCopied] = useState(false);
-  const label = t("common", copied ? K.copied : K.copy);
-  return (
-    <IconButton
-      size="sm"
-      aria-label={label}
-      title={label}
-      className="shrink-0"
-      onClick={() => {
-        void copyText(text).then((ok) => {
-          setCopied(ok);
-          setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-        });
-      }}
-      icon={copied ? <Check size={14} aria-hidden className="text-primary" /> : <Copy size={14} aria-hidden />}
-    />
   );
 }

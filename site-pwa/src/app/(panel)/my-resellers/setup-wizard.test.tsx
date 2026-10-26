@@ -32,8 +32,8 @@ vi.mock("@/lib/auth-api", () => ({
 vi.mock("../gateways/_components/GatewaysView", () => ({ GatewaysView: () => <div data-testid="gateways-view" /> }));
 vi.mock("../catalog/_components/CatalogView", () => ({ CatalogView: () => <div data-testid="catalog-view" /> }));
 vi.mock("@/lib/tenant-onboarding-api", () => ({ resellerOnboardingApi: { get: vi.fn(), skip: vi.fn(), unskip: vi.fn() } }));
-vi.mock("@/lib/tenant-api", () => ({
-  resellerDomainsApi: { list: vi.fn(), add: vi.fn(), check: vi.fn() },
+vi.mock("@/lib/tenant-domains-api", () => ({
+  resellerDomainsApi: { list: vi.fn(), paths: vi.fn(async () => []), add: vi.fn(), check: vi.fn(), setPath: vi.fn() },
 }));
 const { live } = vi.hoisted(() => ({ live: [] as { channel: string | null; types: readonly string[] | "any"; reread: () => void }[] }));
 vi.mock("@/hooks/useLiveReread", () => ({
@@ -46,7 +46,7 @@ vi.mock("./_lib/workspace", async (importOriginal) => ({
   useWorkspaceSelf: () => false,
 }));
 
-import { resellerDomainsApi } from "@/lib/tenant-api";
+import { resellerDomainsApi } from "@/lib/tenant-domains-api";
 import { resellerOnboardingApi, type ResellerOnboarding } from "@/lib/tenant-onboarding-api";
 
 const view = (done: Partial<Record<"domain" | "gateway" | "bot" | "pricing", boolean>>): ResellerOnboarding => {

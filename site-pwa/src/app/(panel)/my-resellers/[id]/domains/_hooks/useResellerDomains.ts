@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useLocale } from "@/context/LocaleContext";
 import { useApiErrorMessage } from "@/hooks/useApiError";
 import { useLiveReread } from "@/hooks/useLiveReread";
-import { resellerDomainsApi, type ResellerDomain } from "@/lib/tenant-api";
+import { resellerDomainsApi, type PathOffer, type ResellerDomain } from "@/lib/tenant-domains-api";
 import { usePanelSession } from "../../../../_context/PanelSessionContext";
 import { DOMAIN_LIVE_EVENTS, domainLiveChannels, domainRefusalKey } from "../../../_lib/domains";
 
@@ -16,6 +16,23 @@ export function useDomainMessage() {
     const key = domainRefusalKey(e);
     return key ? t("common", key) : errorMessage(e);
   };
+}
+
+/**
+ * The paths this reseller's domains may take (NIN-1-e3), read once: they
+ * change only with the platform's configuration. Until read, or if the read
+ * fails, ours alone — the add route's default.
+ */
+export function useDomainPaths(id: string): PathOffer[] {
+  const [offers, setOffers] = useState<PathOffer[]>([]);
+  useEffect(() => {
+    let alive = true;
+    resellerDomainsApi.paths(id).then((list) => alive && setOffers(list), () => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return offers;
 }
 
 /**

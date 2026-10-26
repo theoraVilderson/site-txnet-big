@@ -371,45 +371,6 @@ export const resellerLimitsApi = {
     call<void>(`/tenants/limits/packages/${encodeURIComponent(packageId)}/products/${encodeURIComponent(productId)}`, { method: "DELETE" }),
 };
 
-/** A custom domain as the reseller sees it; `revalidating` is `verified` inside its grace. */
-export type DomainStatus = "pending" | "verifying" | "verified" | "revalidating" | "failed";
-/** Prisma's `TenantDomainPurpose`. */
-export type DomainPurpose = "panel" | "subscription" | "assets" | "legacy_sub";
-export type CheckName = "txt" | "cname" | "http" | "https" | "cache" | "edge_owner";
-/** Prisma's `TenantDomainEdgeStatus`: the domain's step at the CDN (EDGE-1-e). */
-export type EdgeStatus = "none" | "registering" | "issuing" | "issued" | "renew_failed" | "failed";
-/** One line of a check: what it expected, what it found (`tenant/contract.domains.md` "What a check is"). */
-export interface CheckLine {
-  check: CheckName;
-  expected: string[];
-  found: string[];
-  ok: boolean;
-}
-
-/** The domain view (`tenant/contract.domains.md` "The routes"). */
-export interface ResellerDomain {
-  id: string;
-  domainValue: string;
-  purpose: DomainPurpose;
-  status: DomainStatus;
-  /** The record to publish at the reseller's own DNS provider. */
-  record: { type: "TXT"; name: string; value: string };
-  /** Where the domain, or its CDN's origin, points. */
-  cnameTarget: string;
-  verifiedAt: string | null;
-  lastCheckedAt: string | null;
-  lastCheck: { at: string; ok: boolean; lines: CheckLine[] } | null;
-  /**
-   * The domain at the CDN. `record` is the edge's ownership TXT while it still
-   * asks for it: needed behind the reseller's own CDN, where the edge answers
-   * 409 until it is published (EDGE-1-d).
-   */
-  edge: {
-    status: EdgeStatus;
-    record: { type: "TXT"; name: string; value: string } | null;
-    lastError: string | null;
-  };
-}
 
 /**
  * The door's verdict on the caller for one tenant (F-311-e): never refuses, a
@@ -537,26 +498,6 @@ export const resellerBrandingApi = {
   },
 };
 
-/**
- * A reseller's custom domains (F-018-i), by the reseller the path names
- * (ADR-0064): the owner, a staff seat with `domain.manage`, or platform staff
- * are admitted there (invariant 21) — so no permission key is checked here.
- */
-export const resellerDomainsApi = {
-  async list(tenantId: string): Promise<ResellerDomain[]> {
-    return call<ResellerDomain[]>(`/tenants/${encodeURIComponent(tenantId)}/domains`, { method: "GET" });
-  },
-  async add(tenantId: string, body: { domainValue: string; purpose: DomainPurpose }): Promise<ResellerDomain> {
-    return call<ResellerDomain>(`/tenants/${encodeURIComponent(tenantId)}/domains`, { method: "POST", body: JSON.stringify(body) });
-  },
-  /** `pending` / `failed` -> `verifying`; the sweep does the checking, within five minutes. */
-  async check(tenantId: string, domainId: string): Promise<ResellerDomain> {
-    return call<ResellerDomain>(
-      `/tenants/${encodeURIComponent(tenantId)}/domains/${encodeURIComponent(domainId)}/check`,
-      { method: "POST" },
-    );
-  },
-};
 
 /**
  * A platform user buying a reseller of their own (F-019-i,

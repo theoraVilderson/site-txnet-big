@@ -1,7 +1,7 @@
 import { FrontendI18nKeys } from "@/generated/i18n-keys";
 import { RealtimeEvents } from "@/generated/wire";
 import type { MigrationInbound, MigrationRun, UsersCatalogProduct } from "@/lib/billing-api";
-import type { ResellerDomain } from "@/lib/tenant-api";
+import type { ResellerDomain } from "@/lib/tenant-domains-api";
 import { userChannel } from "@/lib/realtime";
 import { tenantChannelOf } from "@/lib/tenant-channel";
 import { DRIVER_PROFILES, composeLogin, loginErrors, type LoginParts } from "../../systems/_lib/register-wizard";
@@ -218,7 +218,7 @@ export function legacyStepOf(host: string, domains: readonly ResellerDomain[]): 
   const domain = domains.find((d) => d.domainValue === host);
   if (!domain) return { kind: "add" };
   if (domain.purpose !== "legacy_sub") return { kind: "otherPurpose", domain };
-  return { kind: isLive(domain.status, domain.edge.status) ? "live" : "pointing", domain };
+  return { kind: isLive(domain.status, domain.edge.status, domain.path) ? "live" : "pointing", domain };
 }
 
 /** Hiddify serves a link at its own path, not `/sub/`; such a path answers on an old host only from F-204-c on. */

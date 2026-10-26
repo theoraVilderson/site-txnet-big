@@ -7,6 +7,11 @@ import { PANEL_MY_RESELLERS, myResellerDomainsPath } from "@/lib/routes";
 import {
   CHECK_LINE_KEYS,
   DOMAIN_LIVE_EVENTS,
+  DOMAIN_PATHS,
+  apexRefused,
+  domainRecords,
+  edgeLabelKey,
+  ownEdgeSettings,
   DOMAIN_PURPOSES,
   EDGE_STATUS_KEYS,
   domainLiveChannels,
@@ -77,11 +82,13 @@ describe("what a domain can be", () => {
     expect(Object.keys(EDGE_STATUS_KEYS).sort()).toEqual(steps.sort());
   });
 
-  it("is live only verified with its certificate issued (ADR-0129 (3))", () => {
-    expect(isLive("verified", "issued")).toBe(true);
-    expect(isLive("revalidating", "issued")).toBe(true);
-    expect(isLive("verified", "issuing")).toBe(false);
-    expect(isLive("pending", "issued")).toBe(false);
+  it("is live only verified with its certificate issued (ADR-0129 (3)), or verified on its own edge (NIN-1-e1)", () => {
+    expect(isLive("verified", "issued", "platform_cdn")).toBe(true);
+    expect(isLive("revalidating", "issued", "platform_cdn")).toBe(true);
+    expect(isLive("verified", "issuing", "platform_cdn")).toBe(false);
+    expect(isLive("pending", "issued", "platform_cdn")).toBe(false);
+    expect(isLive("verified", "none", "own_edge")).toBe(true);
+    expect(isLive("verifying", "none", "own_edge")).toBe(false);
   });
 
   it("offers every purpose Prisma has, panel first", () => {
@@ -97,6 +104,48 @@ describe("what a domain can be", () => {
     expect(isRoutable("revalidating")).toBe(true);
     expect(isRoutable("verifying")).toBe(false);
     expect(isRoutable("pending")).toBe(false);
+  });
+});
+
+describe("the path a domain takes (NIN-1-e3, ADR-0165 point 7)", () => {
+  const ownOffer = { path: "own_edge" as const, target: "ali.edge.barghgho.ir", port: 8443, edges: ["arvan"] };
+
+  it("offers every path Prisma has, ours first", () => {
+    const block = /enum TenantDomainPath \{([^}]*)\}/.exec(read("prisma/domains/tenant.prisma"));
+    const paths = block![1].split("\n").map((l) => l.trim()).filter((l) => /^[a-z_]+$/.test(l));
+    expect([...DOMAIN_PATHS].sort()).toEqual(paths.sort());
+    expect(DOMAIN_PATHS[0]).toBe("platform_cdn");
+  });
+
+  it("names every edge the domestic door admits, so adding one to the list fails here until it has a name", () => {
+    const edges = JSON.parse(readFileSync(join(REPO, "scripts/edge/edges.json"), "utf8")).edges as { name: string; door: string }[];
+    for (const e of edges.filter((x) => x.door === "domestic")) expect(edgeLabelKey(e.name), e.name).not.toBeNull();
+    expect(edgeLabelKey("nobody")).toBeNull();
+  });
+
+  it("tells its own edge what to set: the target, port 8443, HTTPS, the visitor's host, the cloud and WebSockets on", () => {
+    const rows = ownEdgeSettings(ownOffer, "shop.ali.ir");
+    expect(rows.map((r) => r.id)).toEqual(["origin", "port", "protocol", "host", "cloud", "websocket"]);
+    expect(rows.find((r) => r.id === "origin")).toMatchObject({ value: "ali.edge.barghgho.ir", copy: true });
+    expect(rows.find((r) => r.id === "port")).toMatchObject({ value: "8443" });
+    expect(rows.find((r) => r.id === "host")).toMatchObject({ value: "shop.ali.ir" });
+  });
+
+  it("asks for a CNAME at the DNS only on our Cloudflare: on its own edge the origin is set in the edge", () => {
+    const domain = {
+      domainValue: "shop.ali.ir",
+      record: { type: "TXT" as const, name: "_domain-verification.shop.ali.ir", value: "t" },
+      cnameTarget: "ali.edge.txnet.cyou",
+      edge: { status: "none" as const, record: null, lastError: null },
+    };
+    expect(domainRecords({ ...domain, path: "platform_cdn" }).map((r) => r.type)).toEqual(["TXT", "CNAME"]);
+    expect(domainRecords({ ...domain, path: "own_edge" }).map((r) => r.type)).toEqual(["TXT"]);
+  });
+
+  it("refuses an apex only on our Cloudflare, whose Custom Hostname cannot be one", () => {
+    expect(apexRefused("ali.ir", "platform_cdn")).toBe(true);
+    expect(apexRefused("ali.ir", "own_edge")).toBe(false);
+    expect(apexRefused("shop.ali.ir", "platform_cdn")).toBe(false);
   });
 });
 
