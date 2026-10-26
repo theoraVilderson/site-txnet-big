@@ -52,7 +52,7 @@ func (d *Driver) lines(f found) []string {
 	return driver.XrayLines(
 		driver.XrayInbound{
 			Listen: f.inbound.Listen, Port: f.inbound.Port, Protocol: f.inbound.Protocol,
-			Remark: f.inbound.Remark, Settings: f.inbound.Settings, StreamSettings: f.inbound.StreamSettings,
+			Remark: f.inbound.Remark, Settings: string(f.inbound.Settings), StreamSettings: string(f.inbound.StreamSettings),
 		},
 		driver.XrayClient{
 			ID: f.client.ID, Password: f.client.Password, Email: f.client.Email,

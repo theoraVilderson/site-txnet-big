@@ -35,6 +35,9 @@ type farEnd struct {
 	writes  int
 	logins  int
 	nextSID int
+	// settingsAsObjects is 3.11's inbound list: `settings` and
+	// `streamSettings` as JSON objects, not JSON text (2026-10-26, a live panel).
+	settingsAsObjects bool
 
 	// subURI and subOff are the sub server's settings; subCookies counts
 	// subscription reads that carried a cookie, which none may (F-027-bi).
@@ -193,10 +196,15 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && api == "/inbounds/list":
 		out := []map[string]any{}
 		for _, in := range inbounds {
-			out = append(out, map[string]any{
+			row := map[string]any{
 				"id": in.id, "enable": true, "port": in.port, "protocol": in.protocol,
-				"tag": "inbound-" + strconv.Itoa(in.port), "settings": "{}", "clientStats": []any{},
-			})
+				"tag": "inbound-" + strconv.Itoa(in.port), "settings": `{"clients":[]}`, "streamSettings": `{"network":"tcp"}`, "clientStats": []any{},
+			}
+			if f.settingsAsObjects {
+				row["settings"] = map[string]any{"clients": []any{}}
+				row["streamSettings"] = map[string]any{"network": "tcp"}
+			}
+			out = append(out, row)
 		}
 		reply(w, true, "", out)
 	case r.Method == http.MethodPost && api == "/setting/all":
@@ -655,4 +663,34 @@ func TestAnUnlimitedClientCarriesNoLimit(t *testing.T) {
 	conformance.NoLimitRoundTrip(t, d, driver.CreateClientRequest{
 		ClaimTag: "cfg_7f3a", UUID: "8a3c1e2b-0000-4000-8000-00000000abcd", InboundRemoteID: "2", Protocol: "trojan", Enabled: true,
 	}, 0)
+}
+
+// 3.11 answers an inbound's settings as JSON objects where earlier v3 panels
+// answered JSON text. Both are read, and an inbound reads the same either way:
+// its fingerprint is what an edit on the panel is seen by, so a panel
+// upgraded in place must not read as every inbound edited.
+func TestSettingsAnsweredAsObjectsReadAsTheirText(t *testing.T) {
+	f, d := open(t)
+	asText, err := d.ListInbounds(context.Background())
+	if err != nil {
+		t.Fatalf("ListInbounds (text): %v", err)
+	}
+	f.mu.Lock()
+	f.settingsAsObjects = true
+	f.mu.Unlock()
+	asObjects, err := d.ListInbounds(context.Background())
+	if err != nil {
+		t.Fatalf("ListInbounds (objects): %v", err)
+	}
+	if len(asObjects) != len(inbounds) {
+		t.Fatalf("got %d inbounds, want %d", len(asObjects), len(inbounds))
+	}
+	for i := range asText {
+		if asText[i].Fingerprint != asObjects[i].Fingerprint {
+			t.Errorf("%s: fingerprint %q as text, %q as objects", asText[i].Tag, asText[i].Fingerprint, asObjects[i].Fingerprint)
+		}
+	}
+	if err := d.HealthCheck(context.Background()); err != nil {
+		t.Fatalf("HealthCheck: %v", err)
+	}
 }

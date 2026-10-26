@@ -172,6 +172,10 @@ Its own rules, beside Sanaee's rules 1, 5 and 6, which hold unchanged:
 3. **A delete is a delete.** v3 has no last-client rule; the counters go too.
 4. **A client is not moved.** One on several inbounds reports its lowest id;
    an update naming another inbound is `unsupported`.
+5. **Settings in either form.** 3.11 answers an inbound's `settings` and
+   `streamSettings` as JSON objects, earlier v3 as JSON text; both are read as
+   the panel's text (`xuifamily.JSONText`, F-027-bb-a). Found on a live 3.11
+   panel 2026-10-26: every call failed before it.
 
 A v3 panel registered as `sanaee` fails its connection test at the login
 (`403`, no token); a v2 panel as `three_x_ui` fails at `/csrf-token` (`404`).

@@ -52,8 +52,30 @@ type Inbound struct {
 	// built from (ClientLinks, ADR-0088), and the fingerprint an edit is seen by.
 	Listen         string `json:"listen"`
 	Remark         string `json:"remark"`
-	Settings       string `json:"settings"`
-	StreamSettings string `json:"streamSettings"`
+	Settings       JSONText `json:"settings"`
+	StreamSettings JSONText `json:"streamSettings"`
+}
+
+// JSONText is a JSON value x-ui answers as its text (v2, early v3) or, since
+// 3.11, as the value itself: kept as text either way, the bytes as the panel
+// sent them, so a line and a fingerprint are built from one form.
+type JSONText string
+
+// UnmarshalJSON takes a JSON string as its contents and any other value as written.
+func (t *JSONText) UnmarshalJSON(b []byte) error {
+	switch {
+	case len(b) > 0 && b[0] == '"':
+		var s string
+		if err := json.Unmarshal(b, &s); err != nil {
+			return err
+		}
+		*t = JSONText(s)
+	case string(b) == "null":
+		*t = ""
+	default:
+		*t = JSONText(b)
+	}
+	return nil
 }
 
 // InboundsOf is the list as driver.Inbound rows, ordered by tag.
@@ -64,7 +86,7 @@ func InboundsOf(list []Inbound) []driver.Inbound {
 			RemoteID: strconv.Itoa(in.ID), Tag: in.Tag, Protocol: in.Protocol, Port: in.Port, Enabled: in.Enable,
 			Fingerprint: driver.XrayFingerprint(driver.XrayInbound{
 				Listen: in.Listen, Port: in.Port, Protocol: in.Protocol, Remark: in.Remark,
-				Settings: in.Settings, StreamSettings: in.StreamSettings,
+				Settings: string(in.Settings), StreamSettings: string(in.StreamSettings),
 			}),
 		})
 	}
