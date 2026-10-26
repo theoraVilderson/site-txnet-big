@@ -9,7 +9,7 @@ Rebuild: `python3 tools/features-scan.py`
 
 - catalog files: 1
 - addressable blocks: 164
-- features: 221
+- features: 222
 
 **Never read the catalog directly.** `python3 tools/spec.py <F-id>` prints exactly the block you need.
 
@@ -30,7 +30,7 @@ Rebuild: `python3 tools/features-scan.py`
 | `App-Features.md` · 1.7 Ambient Brand Variables | 6 |  |  |  |
 | `App-Features.md` · 1.8 Full Text Override by Tenant | 10 | F-1533 F-1545 F-317 |  |  |
 | `App-Features.md` Identity, Login and Account Security | 2 |  |  |  |
-| `App-Features.md` · 2.1 Registration and Login | 15 | F-0101 | C-15 |  |
+| `App-Features.md` · 2.1 Registration and Login | 16 | F-0101 F-0102 | C-15 |  |
 | `App-Features.md` · 2.2 Password Policy | 7 |  |  |  |
 | `App-Features.md` · 2.3 OTP System | 20 | F-0202 F-0203 F-0204 | C-05 C-20 |  |
 | `App-Features.md` · 2.4 Sessions and Tokens | 9 |  |  |  |
@@ -293,6 +293,7 @@ Rebuild: `python3 tools/features-scan.py`
 | F-906 | RLS and audit down to the reseller-node level (ltree path prefix) | new | 3.12 RBAC Down to the Reseller Level |
 | F-907 | Separate brand and bot for a reseller | new | Multi-Tier Reseller |
 | F-0101 | Authenticating again while already signed in is rejected with 409 auth.alreadyAuthenticate | new | 2.1 Registration and Login |
+| F-0102 | First sign-in of a fresh install's platform owner: the seeded platform_owner account, sign | new | 2.1 Registration and Login |
 | F-0201 | Server-verified slide challenge gates register and login: auth-service issues a short-live | new | 2.7 Bot / Human Verification (CAPTCHA) |
 | F-0202 | Delivery channels are switched on per environment via OTP_ALLOWED_CHANNELS, and a client d | new | 2.3 OTP System |
 | F-0203 | A user who picks Telegram or Bale without a connected account gets a ?start=<token> deep l | new | 2.3 OTP System |
