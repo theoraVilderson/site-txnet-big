@@ -213,7 +213,7 @@ name is refused, other names are never changed (the zone holds the user's site a
 bots), and the cloud off on the origin's address is warned — except `*.edge`, an A record
 to it with the cloud **off** on purpose: a reseller's own Arvan account points there
 (tenant `contract.domain-path.md`, NIN-1-e1). Key: `dev-docker/secrets/arvan/api-key` (one domain),
-sealed (S1 `tool_files`). Applied on barghgho.ir 2026-10-25: each door 200 through Arvan.
+sealed (S1 `tool_files`). Applied on barghgho.ir 2026-10-25 (each door 200 through Arvan); `*.edge` 2026-10-26.
 
 Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:
 an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on
