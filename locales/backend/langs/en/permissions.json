@@ -48,6 +48,9 @@
     "migration": {
       "label": "Imports"
     },
+    "node": {
+      "label": "Panels"
+    },
     "payment": {
       "label": "Payments"
     },
@@ -214,6 +217,12 @@
       "manage": {
         "label": "Import from another panel",
         "description": "Connect the tenant's old panel and bring its users over."
+      }
+    },
+    "node": {
+      "manage": {
+        "label": "Manage its own panels",
+        "description": "Register the tenant's own panels, their logins and inbounds, and group them for sale."
       }
     },
     "payment": {

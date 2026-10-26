@@ -24,6 +24,14 @@ const BODY = { family: DriverType.mikrotik_user_manager, name: 'home-router', ap
 
 type Row = Record<string, unknown>;
 
+const LIMIT_TABLES = {
+  tenant: { findUnique: async () => ({ tenantType: 'reseller' }) },
+  tenantSubscription: { findUnique: async () => null },
+  resellerLimit: { findMany: async () => [] },
+  packageLimit: { findMany: async () => [] },
+  resellerLimitSetting: { findMany: async () => [] },
+};
+
 function harness(stored: Row[] = []) {
   const panels: Row[] = [];
   const seen: string[] = [];
@@ -43,8 +51,14 @@ function harness(stored: Row[] = []) {
       create: async ({ data }: { data: Row }) => (panels.push(data), data),
       delete: async () => undefined,
       updateMany: async () => ({ count: 1 }),
+      // BYO-1-a: the reseller's live panels, under `panels_max`'s default.
+      count: async () => 0,
     },
   };
+  Object.assign(all, {
+    $transaction: async (work: (tx: unknown) => unknown) =>
+      work({ ...all, ...LIMIT_TABLES, $executeRaw: async () => 1 }),
+  });
   const written: Row[] = [];
   const vault: PanelCredentialWriter = {
     set: async (target, credentials, actorId, secret) => {

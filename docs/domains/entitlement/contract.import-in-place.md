@@ -115,4 +115,5 @@ All three routes are `migration.manage`: `staffWrite` to write, `read` to list.
 | `panel_required` | 422 | a family imported in place named by an address |
 | `family_not_in_place` | 422 | a panel named for a family read through a source login |
 | `panel_already_registered` | 409 | a router's address is registered already, anyone's (`facts.panelId` only when it is the tenant's) |
+| `reseller_limit_reached` | 409 | the reseller's live panels are at its `panels_max` (BYO-1-a, ADR-0166): a router counts as a panel; `facts {key, limit, used}` |
 | `panel_refused` | 409 | a login re-entered on a router its test refused |

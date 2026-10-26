@@ -7,6 +7,7 @@ export const RESELLER_LIMIT_KEYS = [
   "platform_open_grants_max",
   "admin_issues_30d_max",
   "custom_domains_max",
+  "panels_max",
   "staff_members_max",
   "bulk_job_grants_max",
   "campaign_sends_daily_max",

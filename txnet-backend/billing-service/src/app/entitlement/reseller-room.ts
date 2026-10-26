@@ -11,8 +11,8 @@ import { onPlatformPanel } from '../traffic/vpn-wholesale';
  * reseller's workspace shows (F-019-s). No limit — or the platform's own
  * tenant (`exempt`) — counts nothing.
  */
-async function room(tx: Prisma.TransactionClient, key: 'platform_open_grants_max' | 'admin_issues_30d_max', now: Date): Promise<void> {
-  const tenantId = TenantContext.current(`reseller limit ${key}`).id;
+async function room(tx: Prisma.TransactionClient, key: 'platform_open_grants_max' | 'admin_issues_30d_max' | 'panels_max', at: { now: Date; tenantId?: string }): Promise<void> {
+  const { now, tenantId = TenantContext.current(`reseller limit ${key}`).id } = at;
   const inEffect = await resellerLimitOf(tx, tenantId, key);
   if (inEffect.limit === null) return;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`reseller_limit:${key}:${tenantId}`}))`;
@@ -29,8 +29,17 @@ async function room(tx: Prisma.TransactionClient, key: 'platform_open_grants_max
 export async function assertPlatformGrantRoom(tx: Prisma.TransactionClient, panelGroupId: string | null): Promise<void> {
   if (!(await onPlatformPanel(tx, panelGroupId))) return;
   const now = new Date();
-  await room(tx, 'platform_open_grants_max', now);
+  await room(tx, 'platform_open_grants_max', { now });
   await trafficRoom(tx, now);
+}
+
+/**
+ * One more panel of a reseller's own (BYO-1-a, `panels_max`, ADR-0166 point
+ * 4): the owner is named, not read from the context, because the import's
+ * door and the systems door both register under the path's tenant.
+ */
+export function assertPanelRoom(tx: Prisma.TransactionClient, tenantId: string): Promise<void> {
+  return room(tx, 'panels_max', { now: new Date(), tenantId });
 }
 
 /**
@@ -61,5 +70,5 @@ async function trafficRoom(tx: Prisma.TransactionClient, now: Date): Promise<voi
  * reseller's own people are refused; the caller skips this for platform staff.
  */
 export async function assertAdminIssueRoom(tx: Prisma.TransactionClient, now: Date): Promise<void> {
-  await room(tx, 'admin_issues_30d_max', now);
+  await room(tx, 'admin_issues_30d_max', { now });
 }

@@ -36,11 +36,11 @@ function build(
     callerType?: string;
     resellers?: string[];
     packages?: string[];
-    usage?: { open?: number; issued?: number; domains?: number; staff?: number; sends?: number; users?: number; gib?: number };
+    usage?: { open?: number; issued?: number; domains?: number; staff?: number; sends?: number; users?: number; gib?: number; panels?: number };
     refuse?: ResellerAccessRejection;
   } = {},
 ) {
-  const usage = { open: 0, issued: 0, domains: 0, staff: 0, sends: 0, users: 0, gib: 0, ...opts.usage };
+  const usage = { open: 0, issued: 0, domains: 0, staff: 0, sends: 0, users: 0, gib: 0, panels: 0, ...opts.usage };
   const admitted: Array<{ tenantId: string; capability: string }> = [];
   const audit: Array<Record<string, unknown>> = [];
   const writes: string[] = [];
@@ -137,6 +137,8 @@ function build(
     adminAuditLog: { create: async ({ data }: { data: Record<string, unknown> }) => (audit.push(data), {}) },
     grant: { count: async ({ where }: { where: { source?: string } }) => (where.source === 'admin_grant' ? usage.issued : usage.open) },
     tenantDomain: { count: async () => usage.domains },
+    // BYO-1-a: its own live panels.
+    panel: { count: async () => usage.panels },
     // GR-1-b: staff are the people holding a reseller key through a group, each once.
     userGroupMember: { findMany: async () => Array.from({ length: usage.staff }, (_, i) => ({ userId: `staff-${i}` })) },
     notificationCampaign: { count: async () => usage.sends },
@@ -335,7 +337,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
   const owner = { userId: ADMIN, tenantId: RESELLER_A, permissions: [] };
 
   it('answers each key in effect, where it comes from and how much is used — the refusals\' own counts', async () => {
-    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2, staff: 6, sends: 1, users: 120, gib: 37 } });
+    const { service, admitted } = build({ usage: { open: 7, issued: 4, domains: 2, staff: 6, sends: 1, users: 120, gib: 37, panels: 4 } });
     await service.setPlatform(actor, 'custom_domains_max', 3);
     await service.setResellers(actor, 'admin_issues_30d_max', [RESELLER_A], null, 'trusted');
     const view = await service.ofReseller(owner, RESELLER_A);
@@ -345,6 +347,7 @@ describe('ResellerLimitsService.ofReseller (F-019-r, F-019-s)', () => {
       { key: 'platform_open_grants_max', kind: 'guard', limit: 500, source: 'default', used: 7, overage: null, statement: null , lockedUntil: null },
       { key: 'admin_issues_30d_max', kind: 'guard', limit: null, source: 'reseller', used: 4, overage: null, statement: null , lockedUntil: null },
       { key: 'custom_domains_max', kind: 'guard', limit: 3, source: 'platform', used: 2, overage: null, statement: null , lockedUntil: null },
+      { key: 'panels_max', kind: 'guard', limit: 20, source: 'default', used: 4, overage: null, statement: null , lockedUntil: null },
       { key: 'staff_members_max', kind: 'guard', limit: 20, source: 'default', used: 6, overage: null, statement: null , lockedUntil: null },
       { key: 'bulk_job_grants_max', kind: 'guard', limit: 10_000, source: 'default', used: null, overage: null, statement: null , lockedUntil: null },
       { key: 'campaign_sends_daily_max', kind: 'quota', limit: 10, source: 'default', used: 1, overage: { mode: 'stop', unitPrice: null, currencyCode: null, source: 'default' }, statement: { period: expect.objectContaining({ kind: 'day' }), includedUsed: 1, overageQty: 0, overageAmount: '0.00' } , lockedUntil: null },

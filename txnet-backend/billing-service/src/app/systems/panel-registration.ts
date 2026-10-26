@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConnectionTestFault, CounterSemantics, DriverType, PanelReviewState, PanelRole, PanelTransport } from '@prisma/client';
+import { ConnectionTestFault, CounterSemantics, DriverType, PanelReviewState, PanelRole, PanelTransport, type Prisma } from '@prisma/client';
 import { panelCredentialRef, PanelSecret, panelRadiusSecretRef } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
+import { assertPanelRoom } from '../entitlement/reseller-room';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { claimingAddress, claimingPushAddress } from './panel-address';
@@ -107,28 +108,25 @@ export class PanelRegistrationService {
 
     // Registered once (F-027-cd; a push panel's IP, F-027-ff): 409 `panel_already_registered`, naming the holder if it is ours to see.
     const pushAddress = input.transport === PanelTransport.push ? input.ipAddress : null;
+    const data = {
+      id,
+      ...scope,
+      name: input.name,
+      ipAddress: input.ipAddress ?? null,
+      apiBaseUrl: input.apiBaseUrl ?? null,
+      clientBaseUrl: input.clientBaseUrl ?? null,
+      driverType: input.driverType,
+      counterSemantics: input.counterSemantics,
+      transport: input.transport,
+      role: input.role,
+      region: input.region,
+      ...(input.maxRequestsPerMinute !== undefined ? { maxRequestsPerMinute: input.maxRequestsPerMinute } : {}),
+      reviewState: PanelReviewState.pending,
+      panelApiCredentials: panelCredentialRef(vaultTenantId, id),
+      ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(vaultTenantId, id) } : {}),
+    };
     await claimingAddress(this.all, scope, input.apiBaseUrl, null, () =>
-      claimingPushAddress(this.all, scope, pushAddress, null, () =>
-        this.all.panel.create({
-          data: {
-            id,
-            ...scope,
-            name: input.name,
-            ipAddress: input.ipAddress ?? null,
-            apiBaseUrl: input.apiBaseUrl ?? null,
-            clientBaseUrl: input.clientBaseUrl ?? null,
-            driverType: input.driverType,
-            counterSemantics: input.counterSemantics,
-            transport: input.transport,
-            role: input.role,
-            region: input.region,
-            ...(input.maxRequestsPerMinute !== undefined ? { maxRequestsPerMinute: input.maxRequestsPerMinute } : {}),
-            reviewState: PanelReviewState.pending,
-            panelApiCredentials: panelCredentialRef(vaultTenantId, id),
-            ...(input.radiusSecret !== undefined ? { panelRadiusSecret: panelRadiusSecretRef(vaultTenantId, id) } : {}),
-          },
-        }),
-      ),
+      claimingPushAddress(this.all, scope, pushAddress, null, () => this.createWithinLimit(scope, data)),
     );
 
     const target = { tenantId: vaultTenantId, panelId: id };
@@ -146,6 +144,22 @@ export class PanelRegistrationService {
 
     this.logger.log(`panel ${id} (${input.driverType}) registered by ${adminId}; pending its connection test`);
     return { id, reviewState: PanelReviewState.pending, credentials, ...(radiusSecret ? { radiusSecret } : {}) };
+  }
+
+  /**
+   * The row itself: a platform panel as it is, a reseller's own only under
+   * its `panels_max` (BYO-1-a, ADR-0166 point 4) — counted and written in one
+   * transaction behind the reseller's limit lock, so two registrations racing
+   * for the last seat cannot both land. Before the vault, so a refusal stores
+   * no login.
+   */
+  private createWithinLimit(scope: PanelScope, data: Prisma.PanelUncheckedCreateInput) {
+    const { tenantId } = scope;
+    if (tenantId === null) return this.all.panel.create({ data });
+    return this.all.$transaction(async (tx) => {
+      await assertPanelRoom(tx, tenantId);
+      return tx.panel.create({ data });
+    });
   }
 
   /**

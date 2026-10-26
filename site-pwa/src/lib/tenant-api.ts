@@ -199,7 +199,7 @@ export const tenantApi = {
 export const packageTranslationsApi = translationReviewApi(call, "/tenant-packages");
 
 /** A reseller limit key (ADR-0106): shared-core's `RESELLER_LIMITS`; `resellers/_lib/limits.ts` holds the list. */
-export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max" | "platform_traffic_gib_monthly_max" | "user_purchases_daily_max" | "user_purchases_weekly_max" | "user_purchases_monthly_max" | "storage_mib_max" | "coupon_discount_pct_max";
+export type ResellerLimitKey = "user_metered_cap_max" | "platform_open_grants_max" | "admin_issues_30d_max" | "custom_domains_max" | "panels_max" | "staff_members_max" | "bulk_job_grants_max" | "campaign_sends_daily_max" | "end_users_max" | "platform_traffic_gib_monthly_max" | "user_purchases_daily_max" | "user_purchases_weekly_max" | "user_purchases_monthly_max" | "storage_mib_max" | "coupon_discount_pct_max";
 
 /** A `quota` is sold past (or stopped at); a `guard` always refuses (ADR-0107 point 1). */
 export type ResellerLimitKind = "quota" | "guard";

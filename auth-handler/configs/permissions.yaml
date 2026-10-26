@@ -135,6 +135,9 @@ grantable:
   # Bringing the reseller's users from another panel (F-201-d, D-63): its
   # source login, kept for one run.
   - migration.manage
+  # A reseller's own panels (BYO-1-a, ADR-0166): register, logins, inbounds
+  # and groups, on its own tenant only — the twin of `platform.node.manage`.
+  - node.manage
 roles:
   # The seed makes the platform owner this role, and the database grants it the
   # one permission `*`, so a feature that adds a permission needs no line here

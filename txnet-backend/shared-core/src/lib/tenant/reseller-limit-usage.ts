@@ -14,7 +14,7 @@ const MIB = 1024 * 1024;
 /** The reads the counts need. Pass the reseller's own scope, or a cross-tenant pool. */
 export type ResellerUsageReader = Pick<
   Prisma.TransactionClient,
-  'grant' | 'tenantDomain' | 'userGroupMember' | 'user' | 'trafficDailyAggregate' | 'storedObject'
+  'grant' | 'tenantDomain' | 'userGroupMember' | 'user' | 'trafficDailyAggregate' | 'storedObject' | 'panel'
 >;
 
 /** A group that gives at least one reseller key, through its role or its own keys (ADR-0139). */
@@ -87,6 +87,8 @@ export const RESELLER_LIMIT_USAGE: Record<ResellerLimitKey, Count | null> = {
     tx.grant.count({ where: { tenantId, source: GrantSource.admin_grant, createdAt: { gt: new Date(now.getTime() - 30 * DAY_MS) } } }),
   /** Its custom domains, proved or not — each asks a certificate (F-019-q). */
   custom_domains_max: (tx, tenantId) => tx.tenantDomain.count({ where: { tenantId, domainType: TenantDomainType.custom_domain } }),
+  /** Its own panels not retired, an import's router too — retired ones are dialed no more (BYO-1-a). */
+  panels_max: (tx, tenantId) => tx.panel.count({ where: { tenantId, ownershipType: PanelOwnershipType.tenant, retiredAt: null } }),
   /** People holding a reseller key through its groups, not seats — a seat admits nobody since GR-1-a (GR-1-b, ADR-0139). */
   staff_members_max: staffThroughGroups,
   /** A ceiling on one job's size, checked against the job (F-019-t5). */

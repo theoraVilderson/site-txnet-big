@@ -2548,6 +2548,10 @@
           "name": "Custom domains",
           "hint": "How many custom domains a reseller may add. Each one needs a certificate."
         },
+        "panels_max": {
+          "name": "Own panels",
+          "hint": "How many of its own panels a reseller may register. Each one is checked and read by the platform. Past it, a new panel is refused; nothing registered is removed."
+        },
         "staff_members_max": {
           "name": "Team members",
           "hint": "How many people a reseller may have on its team — invited or joined, not removed or expired."

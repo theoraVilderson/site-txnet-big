@@ -20,6 +20,7 @@ level that has a row wins.
 | `platform_open_grants_max` | open Grants of its users on platform panels | 500 | 1 000 000 | F-019-o |
 | `admin_issues_30d_max` | services its own people issue by hand in any 30 days | 50 | 100 000 | F-019-p |
 | `custom_domains_max` | its custom domains | 5 | 1000 | F-019-q |
+| `panels_max` | its own live panels (`ownershipType tenant`, not retired), an import's router too — a new registration is refused past it, behind its lock (`reseller_limit:panels_max:<tenant>`); billing's `assertPanelRoom` | 20 | 1000 | BYO-1-a, ADR-0166 |
 | `staff_members_max` | its people holding a reseller key (`reseller-keys.ts`) through its groups while the membership lasts, each once, not deleted — a member add, or a key put on a group, that would pass it is refused; seats are not counted (GR-1-b, ADR-0139) | 20 | 1000 | GR-1-b, governance `contract.md` |
 | `end_users_max` | its users, any status, not deleted — a new registration is refused, to the stranger without figures | 50 000 | 10 000 000 | F-019-t2, `auth-api/contract.md` register |
 | `platform_traffic_gib_monthly_max` | whole GiB its users moved on platform panels this UTC month — past it no new service or renewal there until the month ends | **none** | 10 000 000 | F-019-t6, `entitlement/contract.limits.md` |

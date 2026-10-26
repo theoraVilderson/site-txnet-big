@@ -1,4 +1,5 @@
 import { BadGatewayException, BadRequestException, ConflictException, ForbiddenException, HttpException, NotFoundException } from '@nestjs/common';
+import { BackendI18nKeys, ResellerLimitReached } from '@txnet-backend/shared-core';
 
 import { ConfigMoveJobRefused } from '../payment/gift/config-move-job';
 import { moveJobRefusal } from '../payment/gift/reseller-config-move-job.controller';
@@ -48,6 +49,7 @@ export async function refusing<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
+    if (e instanceof ResellerLimitReached) throw limitReached(e);
     // A Grant moved to another group, and its job (F-027-et): the reseller surface's statuses.
     if (e instanceof GrantRegroupRefused) {
       const Exception = GRANT_REGROUP_STATUS[e.reason] === 404 ? NotFoundException : ConflictException;
@@ -78,10 +80,16 @@ export async function relayingVault<T>(work: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof PanelScopeRefused) throw new ForbiddenException({ reason: e.reason, message: e.message });
     if (e instanceof PanelResubmitRefused) throw new ConflictException({ reason: e.reason, message: e.message });
+    if (e instanceof ResellerLimitReached) throw limitReached(e);
     if (e instanceof PanelCredentialRefused) throw new HttpException({ reason: e.reason, message: e.message }, e.status);
     if (e instanceof PanelCredentialUnavailable) {
       throw new BadGatewayException({ reason: 'credentials_unavailable', message: 'the credential vault could not be reached' });
     }
     throw e;
   }
+}
+
+/** A reseller past its own limit (`panels_max`, BYO-1-a): 409 with its figures, for the page to name. */
+function limitReached(e: ResellerLimitReached): ConflictException {
+  return new ConflictException({ i18nKey: BackendI18nKeys.errors.billing.resellerLimitReached, reason: e.reason, message: e.message, facts: e.facts });
 }

@@ -23,6 +23,7 @@ export const PERMISSION_REGISTRY = [
   { permission: "grant.repair", area: "grant", platformOnly: false },
   { permission: "guide.manage", area: "guide", platformOnly: false },
   { permission: "migration.manage", area: "migration", platformOnly: false },
+  { permission: "node.manage", area: "node", platformOnly: false },
   { permission: "payment.confirm_manual", area: "payment", platformOnly: false },
   { permission: "platform.impersonate", area: "platform", platformOnly: true },
   { permission: "platform.node.manage", area: "platform", platformOnly: true },

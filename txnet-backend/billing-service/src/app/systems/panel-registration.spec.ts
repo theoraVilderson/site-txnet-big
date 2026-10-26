@@ -327,3 +327,72 @@ describe('registerPanelSchema and register, ipAddress (F-027-br)', () => {
     expect(panels[0]['ipAddress']).toBeNull();
   });
 });
+
+/**
+ * A reseller's own panels are bounded by `panels_max` (BYO-1-a, ADR-0166
+ * point 4): the code default 20 unless a level sets it. What breaks quietly:
+ * a count of the wrong rows (another tenant's, or retired ones), two
+ * registrations racing for the last seat, and a refusal that has already
+ * written the row or the login.
+ */
+describe('PanelRegistrationService.registerFor, panels_max (BYO-1-a)', () => {
+  const RESELLER_OWNER = { scope: { ownershipType: 'tenant' as const, tenantId: RESELLER }, vaultTenantId: RESELLER };
+
+  function limited(opts: { live: number; own?: number | null }) {
+    const base = harness();
+    const counted: Array<Record<string, unknown>> = [];
+    const locks: string[] = [];
+    const all = (base.service as unknown as { all: Record<string, unknown> }).all as Record<string, unknown> & { panel: Record<string, unknown> };
+    const tx = {
+      ...all,
+      tenant: { findUnique: async () => ({ tenantType: TenantType.reseller }) },
+      tenantSubscription: { findUnique: async () => null },
+      resellerLimit: { findMany: async () => (opts.own === undefined ? [] : [{ key: 'panels_max', value: opts.own }]) },
+      packageLimit: { findMany: async () => [] },
+      resellerLimitSetting: { findMany: async () => [] },
+      $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        locks.push(String(values[0]));
+        return 1;
+      },
+      panel: {
+        ...all.panel,
+        count: async ({ where }: { where: Record<string, unknown> }) => {
+          counted.push(where);
+          return opts.live;
+        },
+      },
+    };
+    all['$transaction'] = async (work: (t: typeof tx) => Promise<unknown>) => work(tx);
+    return { ...base, counted, locks };
+  }
+
+  it('registers under the limit, counting only its own live panels under a per-reseller lock', async () => {
+    const { service, panels, counted, locks } = limited({ live: 19 });
+
+    await service.registerFor(RESELLER_OWNER, ADMIN, INPUT);
+
+    expect(panels).toHaveLength(1);
+    expect(panels[0]).toMatchObject({ ownershipType: 'tenant', tenantId: RESELLER });
+    expect(counted).toEqual([{ tenantId: RESELLER, ownershipType: 'tenant', retiredAt: null }]);
+    expect(locks).toEqual([`reseller_limit:panels_max:${RESELLER}`]);
+  });
+
+  it('refuses the panel past the code default of 20 with its figures, writing no row and no login', async () => {
+    const { service, panels, written } = limited({ live: 20 });
+
+    await expect(service.registerFor(RESELLER_OWNER, ADMIN, INPUT)).rejects.toMatchObject({
+      reason: 'reseller_limit_reached',
+      facts: { key: 'panels_max', limit: 20, used: 20 },
+    });
+    expect(panels).toHaveLength(0);
+    expect(written).toHaveLength(0);
+  });
+
+  it('follows the level set for the reseller, and no limit counts nothing', async () => {
+    await expect(limited({ live: 3, own: 3 }).service.registerFor(RESELLER_OWNER, ADMIN, INPUT)).rejects.toMatchObject({ facts: { limit: 3 } });
+    const open = limited({ live: 500, own: null });
+    await open.service.registerFor(RESELLER_OWNER, ADMIN, INPUT);
+    expect(open.panels).toHaveLength(1);
+    expect(open.counted).toHaveLength(0);
+  });
+});
