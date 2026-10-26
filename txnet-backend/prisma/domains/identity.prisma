@@ -136,6 +136,10 @@ model User {
   /// the same key as the Grant's `remoteIdentity`, so a second import run
   /// finds them instead of creating them again. Null for anyone who signed up.
   remoteIdentity         String?
+  /// F-0102: the seeded platform owner has not set its own username, password
+  /// and phone yet. Its password sign-in answers a setup token and opens no
+  /// session until it does (auth-api `POST /auth/owner-setup`).
+  setupRequired          Boolean    @default(false)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

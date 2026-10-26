@@ -117,7 +117,9 @@ route matches by path. The seed is idempotent, so every release runs it; a door
 already held is never moved. The owner's first password is the sealed
 `dev-docker/secrets/platform-owner-password`, read through
 `PLATFORM_OWNER_PASSWORD_FILE` and never printed, since a Job's output reaches
-Loki (`prisma/seed-owner-password.js`); an empty file fails the Job. With no file
+Loki (`prisma/seed-owner-password.js`); an empty file fails the Job. It opens
+only the owner's setup (`setupRequired`, F-0102): the first sign-in sets the
+owner's own username, password and phone before any session exists. With no file
 set, as on the dev host, one is made and shown once.
 
 **R8 — The record.** ConfigMap `txnet-release` in `txnet`: `history` (the last

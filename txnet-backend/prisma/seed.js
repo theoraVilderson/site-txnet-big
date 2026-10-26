@@ -205,6 +205,9 @@ async function main() {
       roleId: superAdminRole.id,
       status: 'active',
       phoneVerifiedAt: new Date(),
+      // F-0102: the first sign-in sets the owner's own username, password and
+      // phone; the sealed first password opens nothing else.
+      setupRequired: true,
     },
   });
 
