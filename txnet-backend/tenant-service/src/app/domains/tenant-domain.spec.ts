@@ -762,7 +762,7 @@ describe('TenantDomainService', () => {
       const { service } = build();
       await expect(service.paths(owner, RESELLER)).resolves.toEqual([
         { path: 'platform_cdn', target: 'ali.edge.txnet.app', port: null, edges: [] },
-        { path: 'own_edge', target: 'ali.edge.barghgho.ir', port: 8443, edges: ['arvan'] },
+        { path: 'own_edge', target: 'ali.edge.barghgho.ir', port: 443, edges: ['arvan'] },
       ]);
 
       const one = build({ domestic: '' });

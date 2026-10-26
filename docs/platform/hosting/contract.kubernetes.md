@@ -133,8 +133,8 @@ argon2's native build kept); `APP_NAME` is declared after the shared stages, so
 the eleven apps share one install. A Go image's `WORKDIR` is its compose
 `working_dir`, where dev mounts the source.
 
-**K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8), and on it the domestic door's
-(`gateway-domestic`, O12), run as Deployments behind `LoadBalancer`s on 80/443 and 8443. `--providers.docker*`
+**K9 — Traefik.** Our Traefik (`gateway-handler`'s image, K8), one for every edge (O12), runs as a
+Deployment behind a `LoadBalancer` on 80/443. `--providers.docker*`
 becomes `--providers.kubernetescrd` (namespaces `txnet`, `txnet-monitoring`, as service account
 `traefik-ingress-controller`) with `--providers.file` kept for the
 baked `dynamic/`. Each `traefik.http.routers.<r>.*` label set is one
@@ -210,7 +210,7 @@ Passed 2026-10-24 on the test server, all five steps (commit c98bf9e2): roll 0 o
 **K13 — k3s's own ports.** The API server (6443), the kubelet (10250),
 kube-proxy's health (10256), flannel (8472, 51820–51821/udp) and every NodePort
 (30000–32767, which a LoadBalancer Service also gets) answer from localhost, the
-node and K17's peers only, never the public address; only 80/443 and 8443 are reached from outside,
+node and K17's peers only, never the public address; only 80/443 are reached from outside,
 through O7 (K9). `scripts/edge/k3s_ports.py apply` drops them on the public
 interface in chain `TXNET-K3S` (INPUT; FORWARD by `--ctorigdstport` for a
 NodePort), jumps kept on top as O7's are — another `TXNET-*` chain's jumps are

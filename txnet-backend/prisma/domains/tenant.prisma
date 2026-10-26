@@ -83,7 +83,7 @@ enum TenantDomainPath {
   /// `<slug>.edge.<DOMAIN_NAME>` (ADR-0129). Closes when the internet goes national.
   platform_cdn
   /// The reseller's own account at an approved edge (Arvan first), whose origin is
-  /// `<slug>.edge.<DOMESTIC_DOMAIN_NAME>`:8443. Never a Custom Hostname.
+  /// `<slug>.edge.<DOMESTIC_DOMAIN_NAME>` on 443. Never a Custom Hostname.
   own_edge
 
   @@schema("tenant")

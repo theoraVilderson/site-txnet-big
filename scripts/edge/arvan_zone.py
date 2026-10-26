@@ -1,8 +1,8 @@
 """The domestic domain's records on ArvanCloud (NIN-1-d1, ADR-0165 points 1-2).
 
 The platform's own doors on the domestic domain — `api.`, `panel.`, `sub.` —
-each an A record to the data node's domestic port (O12), the cloud on, HTTPS
-to the origin (Arvan accepts our own origin certificate, O13), and the
+each an A record to the data node's 443 (O12, NIN-1-b4), the cloud on, HTTPS
+to the origin (Arvan verifies no origin certificate, NIN-1-a), and the
 domain's edge certificate on. An A record keeps the visitor's `Host`, which
 the tenant resolver matches. Run through `edge_zone.py arvan <cmd>`.
 
@@ -12,7 +12,8 @@ cloud off, so a reseller's Arvan never chains through ours. It publishes the
 address on purpose, so it is never warned as a leak.
 
 A record is this driver's only when it has the shape it makes: an A record on
-a door name, every address on DOOR_PORT; an A record on the target name. Anything else on a door name (a
+a door name, every address on DOOR_PORT (or a former one, which it moves);
+an A record on the target name. Anything else on a door name (a
 reseller's CNAME, a bot's port) is refused, and records on other names are
 never read for a change: the zone holds the user's site and bots too.
 """
@@ -35,8 +36,11 @@ API = "https://napi.arvancloud.ir/cdn/4.0/domains"
 # equal); `pay.` was dropped by the user on 2026-10-25: a gateway returns to
 # the panel the payer signed in on (NIN-1-d3).
 DOOR_NAMES = ("api", "panel", "sub")
-# The domestic door's entrypoint (hosting O12): only approved edges reach it.
-DOOR_PORT = 8443
+# The gateway's 443, which every approved edge reaches (hosting O7, NIN-1-b4).
+DOOR_PORT = 443
+# NIN-1-b2's own port for the domestic door: a door still on it is this
+# driver's, and `apply` moves it to DOOR_PORT.
+FORMER_DOOR_PORTS = (8443,)
 # Every reseller's own-edge origin (tenant-service `cnameTargetHost`, `edge` label).
 TARGET_NAME = "*.edge"
 # Short, so a repoint (go-live, a move) reaches resolvers within minutes.
@@ -49,7 +53,7 @@ Plan = namedtuple("Plan", "changes leaks")
 
 def _ours(record):
     values = record.get("value") if isinstance(record.get("value"), list) else []
-    return record["type"] == "a" and values and all(v.get("port") == DOOR_PORT for v in values)
+    return record["type"] == "a" and values and all(v.get("port") in (DOOR_PORT, *FORMER_DOOR_PORTS) for v in values)
 
 
 def _door(records, name):

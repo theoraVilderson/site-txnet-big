@@ -82,12 +82,9 @@ scrape_configs:
     static_configs:
       - targets: ["redis-exporter:9121"]
 
-  # Each door's certificate expiry (NIN-1-c, hosting O13): Traefik's own
-  # traefik_tls_certs_not_after, so the alert reads what the door serves, not
-  # a file beside it. The internal :8080, never published.
+  # The origin certificate's expiry (NIN-1-c2, hosting O13): Traefik's own
+  # traefik_tls_certs_not_after, so the alert reads what the gateway serves,
+  # not a file beside it. The internal :8080, never published.
   - job_name: "gateway-handler"
     static_configs:
       - targets: ["gateway-handler:8080"]
-  - job_name: "gateway-domestic"
-    static_configs:
-      - targets: ["gateway-domestic:8080"]

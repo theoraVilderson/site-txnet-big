@@ -45,7 +45,7 @@ require_node() {
 }
 
 # K13: the chain is in place, and kept so by its timer, before k3s opens a port;
-# O7's door chains too, since svclb binds 80/443 and 8443 here (K9). `down` keeps O7: compose's host has it.
+# O7's chain too, since svclb binds 80/443 here (K9). `down` keeps O7: compose's host has it.
 close_ports() {
   python3 "$ROOT_DIR/scripts/edge/k3s_ports.py" install
   iptables -S TXNET-K3S >/dev/null 2>&1 || die "chain TXNET-K3S is not there after install (K13)"

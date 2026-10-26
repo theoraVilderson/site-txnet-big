@@ -9,14 +9,14 @@ import { cnameTargetHost } from '@txnet-backend/shared-core';
  *   platform zone, CNAME to `<slug>.edge.<DOMAIN_NAME>` (ADR-0129). It closes
  *   when the internet goes national.
  * - `own_edge` — the reseller's own account at an approved edge (Arvan
- *   first). Its origin is `<slug>.edge.<DOMESTIC_DOMAIN_NAME>` on the domestic
- *   door's port, a DNS-only name to the nodes that serves nothing as itself
- *   (ADR-0063), so it never chains through our CDN. Never a Custom Hostname:
+ *   first). Its origin is `<slug>.edge.<DOMESTIC_DOMAIN_NAME>` on 443, the
+ *   port every edge shares (NIN-1-b4): a DNS-only name to the nodes that
+ *   serves nothing as itself (ADR-0063), so it never chains through our CDN. Never a Custom Hostname:
  *   no reseller's domain enters an account of ours.
  */
 
-/** The domestic door's port (hosting O12): what an own edge sends its origin requests to. */
-export const OWN_EDGE_PORT = 8443;
+/** The gateway's port every edge shares (hosting O7, NIN-1-b4): what an own edge sends its origin requests to — an edge's default. */
+export const OWN_EDGE_PORT = 443;
 
 /** The platform's two domains and the domestic door's approved edges, from the validated env. */
 export type PlatformDomains = { domain: string; domestic: string; ownEdges: readonly string[] };

@@ -3,55 +3,54 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
-# Contract — hosting: each door's origin certificate
+# Contract — hosting: the origin certificate
 
 ADR-0165 point 4: no origin certificate needs the foreign internet to stay
-valid. The edges terminate the visitor's TLS; each door presents a long-lived
-certificate to its own edge, and an alert fires 30 days before one ends. Rows
-NIN-1-c1 (the domestic door, 8443) and NIN-1-c2 (the Cloudflare door, 443). The
-doors themselves are `contract.origin.md` (O3, O4, O12). Rule O13.
+valid. The edges terminate the visitor's TLS; the origin presents one
+long-lived certificate to every edge on 443, and an alert fires 30 days before
+it ends. Row NIN-1-c2; NIN-1-c1's own certificate for the domestic door went
+with its port (NIN-1-b4: Arvan verifies none, NIN-1-a). The door itself is
+`contract.origin.md` (O3, O4, O12). Rule O13.
 
 ## The rule
 
-**O13 — No door's certificate is renewed online.** Each is a file issued once
+**O13 — The origin certificate is never renewed online.** It is a file issued once
 by `scripts/edge/origin-cert.sh` into `dev-docker/secrets/origin-cert/`, which
 replaces one only with `FORCE=1`:
 
-| door | command | issuer, life | names |
+| served by | command | issuer, life | names |
 |---|---|---|---|
 | 443, `gateway-handler` | `cloudflare` | Cloudflare's Origin CA, from our CSR (the key never leaves the host), 15 years | `<DOMAIN_NAME>`, `*.<DOMAIN_NAME>` |
-| 8443, `gateway-domestic` | `domestic <domain>` | our origin CA (made once, 20 years; its key bound by nothing, so never sealed), 10 years | `<domain>`, `*.<domain>` |
 
 `cloudflare` and `strict` read the EDGE-1-c token (Zone / SSL and Certificates /
 Edit), the zone and `DOMAIN_NAME` from `ENV_FILE`; a refused answer writes
 nothing. `strict` puts the zone on Full (strict), so Cloudflare verifies the
 certificate on every pull (set by the user 2026-10-25).
 
-**Served.** A gateway names its pair in `EDGE_ORIGIN_CERT`;
+**Served.** The gateway names its pair in `EDGE_ORIGIN_CERT`;
 `dynamic/origin-cert.yml` loads `/etc/traefik/origin-cert/<name>.pem|.key`,
 bound from that folder, so the pair is sealed (S1) and carried by a move and a
 bundle (`move_plan.py` `CARRIED_FILES`). With `EDGE_ORIGIN_CERT_DEFAULT=true`
-(443) it is the default certificate, served for every name: a Custom Hostname's
+it is the default certificate, served for every name: a Custom Hostname's
 pull carries the reseller's domain as SNI, and Full (strict) accepts a
 certificate for the fallback origin (`edge-origin.<domain>`, under the
-wildcard). Without it (8443) it is one certificate among none, so an unknown
-SNI and a reseller's host get Traefik's own, which Arvan takes unverified (O4).
+wildcard). Arvan takes it unverified for a domestic domain's names (O4).
 
 **Nothing fetches one.** Traefik has no certificate resolver, no `acme.json`, no
 `letsencrypt` claim; `k8srender` refuses a route naming a `tls.certresolver`,
 and `k8s_render_traefik_test.py` holds every tracked compose and dynamic file
-free of one. A route that wants TLS says `tls=true` and gets its door's pair.
+free of one. A route that wants TLS says `tls=true` and gets the pair.
 
 **Alerted.** The expiry is read from the Traefik that serves it:
-`--metrics.prometheus` on the internal :8080 (no request series), jobs
-`gateway-handler` and `gateway-domestic`, `traefik_tls_certs_not_after`.
+`--metrics.prometheus` on the internal :8080 (no request series), job
+`gateway-handler`, `traefik_tls_certs_not_after`.
 `OriginCertExpiring` (`database.rules.yml`) fires 30 days before the end,
-`OriginCertNotServed` when a door answers with none of ours (on 443, every
-pull is then refused: 526). Re-issue: `FORCE=1` and the door's command, `secrets
-seal` the pair, commit, deploy.
+`OriginCertNotServed` when the gateway answers with none of ours (every
+Cloudflare pull is then refused: 526). Re-issue: `FORCE=1 origin-cert.sh
+cloudflare`, `secrets seal` the pair, commit, deploy.
 
 **Proof.** 2026-10-25 on Traefik v3.7 with the real dynamic files: the domestic
 pair served for `panel.<domain>` beside O3 `required` and Traefik's own for a

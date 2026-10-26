@@ -1,7 +1,7 @@
 ---
 id: adr-0165
 status: accepted
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
 # ADR 0165 — Iran keeps selling when the internet goes national: a domestic door beside Cloudflare, and a cluster that needs nothing from abroad
@@ -117,7 +117,7 @@ Iran reaches only Iranian addresses. Checked against the stack on 2026-10-25:
 - **A foreign node in this cluster**: split by every cut, and K17's 10 ms bound
   makes it a standby at best.
 
-## Amendment 1, 2026-10-25 — each door is its own Traefik (NIN-1-b2)
+## Amendment 1, 2026-10-25 — each door is its own Traefik (NIN-1-b2; reversed by amendment 2)
 
 Point 3 assumed the domestic door is another entrypoint of the one Traefik. It
 cannot be: Traefik picks the handshake rule for a host no route names from its
@@ -133,3 +133,22 @@ choice — a second copy of each route with its own TLS options — served only
 the platform's own hosts and would have been rebuilt at NIN-1-e. Cloudflare's
 ranges never reach 8443: nothing there checks a certificate, and Cloudflare
 proxies 8443 for any zone. Rules: hosting `contract.origin.md` O7, O12.
+
+## Amendment 2, 2026-10-26 — one door on 443 for every edge (NIN-1-b4)
+
+Amendment 1 is reversed. A reseller left Arvan's origin on its default port,
+443, and its check timed out: 443 dropped Arvan (Arvan 504). Asking every
+reseller to set 8443 by hand is a support call per reseller, forever; the
+user chose (2026-10-26) one door on 443 and no 8443 at all, with no reseller
+yet on it. The one Traefik's `default` TLS options now *ask* for O1's
+certificate without demanding it (`VerifyClientCertIfGiven`), and the
+`edgeclientip` plugin decides: a verified pull is Cloudflare; a request from
+a domestic edge's ranges — the same last good copies the firewall admits (O8),
+read from the node — is that edge, its visitor in its own header; on O3
+`required`, any other TLS request is refused (403). So a Cloudflare zone
+without our certificate is still refused, now in the plugin rather than the
+handshake, and the firewall admits every edge to 80/443. Lost: the handshake
+as the boundary — a router reached without the entrypoint's middleware would
+be open, which the entrypoint-level middleware (O5) already rules out. The
+domestic door's own certificate (NIN-1-c1) went with its port: Arvan verifies
+none. Rules: hosting `contract.origin.md` O3, O5, O7, O12.

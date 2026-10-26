@@ -287,13 +287,12 @@ tests:
         eval_time: 90m
         exp_samples: []
 
-  # NIN-1-c (O13): a door's certificate 31 days from its end is quiet, and
-  # fires an hour after crossing 30. A door scraped with none loaded fires —
-  # each door alone (c2: on 443 that is every pull refused under Full strict);
-  # with one, or not scraped at all, it does not.
+  # NIN-1-c2 (O13): the certificate 31 days from its end is quiet, and fires
+  # an hour after crossing 30. The gateway scraped with none loaded fires (every
+  # Cloudflare pull is then refused under Full strict); with one, it does not.
   - interval: 1m
     input_series:
-      - series: traefik_tls_certs_not_after{job="gateway-domestic",cn="barghgho.ir",sans="*.barghgho.ir,barghgho.ir",serial="1"}
+      - series: traefik_tls_certs_not_after{job="gateway-handler",cn="txnet.cyou",sans="*.txnet.cyou,txnet.cyou",serial="1"}
         values: "2678400x1600"
     promql_expr_test:
       - expr: ALERTS{alertname="OriginCertExpiring",alertstate="firing"}
@@ -302,26 +301,12 @@ tests:
       - expr: ALERTS{alertname="OriginCertExpiring",alertstate="firing"}
         eval_time: 26h
         exp_samples:
-          - labels: 'ALERTS{alertname="OriginCertExpiring",alertstate="firing",cn="barghgho.ir",job="gateway-domestic",severity="warning",unit="hosting"}'
-            value: 1
-  - interval: 1m
-    input_series:
-      - series: up{job="gateway-domestic",instance="gateway-domestic:8080"}
-        values: "1x120"
-    promql_expr_test:
-      - expr: ALERTS{alertname="OriginCertNotServed",alertstate="firing"}
-        eval_time: 70m
-        exp_samples:
-          - labels: 'ALERTS{alertname="OriginCertNotServed",alertstate="firing",instance="gateway-domestic:8080",job="gateway-domestic",severity="warning",unit="hosting"}'
+          - labels: 'ALERTS{alertname="OriginCertExpiring",alertstate="firing",cn="txnet.cyou",job="gateway-handler",severity="warning",unit="hosting"}'
             value: 1
   - interval: 1m
     input_series:
       - series: up{job="gateway-handler",instance="gateway-handler:8080"}
         values: "1x120"
-      - series: up{job="gateway-domestic",instance="gateway-domestic:8080"}
-        values: "1x120"
-      - series: traefik_tls_certs_not_after{job="gateway-domestic",cn="barghgho.ir",sans="*.barghgho.ir,barghgho.ir",serial="1"}
-        values: "2108303078x120"
     promql_expr_test:
       - expr: ALERTS{alertname="OriginCertNotServed",alertstate="firing"}
         eval_time: 70m
@@ -330,9 +315,9 @@ tests:
             value: 1
   - interval: 1m
     input_series:
-      - series: up{job="gateway-domestic",instance="gateway-domestic:8080"}
+      - series: up{job="gateway-handler",instance="gateway-handler:8080"}
         values: "1x120"
-      - series: traefik_tls_certs_not_after{job="gateway-domestic",cn="barghgho.ir",sans="*.barghgho.ir,barghgho.ir",serial="1"}
+      - series: traefik_tls_certs_not_after{job="gateway-handler",cn="txnet.cyou",sans="*.txnet.cyou,txnet.cyou",serial="1"}
         values: "2108303078x120"
       - series: up{job="node-exporter"}
         values: "1x120"

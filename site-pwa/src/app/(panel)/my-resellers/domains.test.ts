@@ -108,7 +108,7 @@ describe("what a domain can be", () => {
 });
 
 describe("the path a domain takes (NIN-1-e3, ADR-0165 point 7)", () => {
-  const ownOffer = { path: "own_edge" as const, target: "ali.edge.barghgho.ir", port: 8443, edges: ["arvan"] };
+  const ownOffer = { path: "own_edge" as const, target: "ali.edge.barghgho.ir", port: 443, edges: ["arvan"] };
 
   it("offers every path Prisma has, ours first", () => {
     const block = /enum TenantDomainPath \{([^}]*)\}/.exec(read("prisma/domains/tenant.prisma"));
@@ -123,11 +123,11 @@ describe("the path a domain takes (NIN-1-e3, ADR-0165 point 7)", () => {
     expect(edgeLabelKey("nobody")).toBeNull();
   });
 
-  it("tells its own edge what to set: the target, port 8443, HTTPS, the visitor's host, the cloud and WebSockets on", () => {
+  it("tells its own edge what to set: the target, port 443, HTTPS, the visitor's host, the cloud and WebSockets on", () => {
     const rows = ownEdgeSettings(ownOffer, "shop.ali.ir");
     expect(rows.map((r) => r.id)).toEqual(["origin", "port", "protocol", "host", "cloud", "websocket"]);
     expect(rows.find((r) => r.id === "origin")).toMatchObject({ value: "ali.edge.barghgho.ir", copy: true });
-    expect(rows.find((r) => r.id === "port")).toMatchObject({ value: "8443" });
+    expect(rows.find((r) => r.id === "port")).toMatchObject({ value: "443" });
     expect(rows.find((r) => r.id === "host")).toMatchObject({ value: "shop.ali.ir" });
   });
 

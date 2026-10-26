@@ -21,7 +21,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 from k8srender import RenderError, render  # noqa: E402
-from k8srender.tables import BAKED_BINDS, DATA_NODE_LABEL, DOMESTIC_TRAEFIK, TRAEFIK  # noqa: E402
+from k8srender.tables import BAKED_BINDS, DATA_NODE_LABEL, TRAEFIK  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 OPTIONS = {"registry": "registry.example", "tag": "t1", "host_gateway": "10.0.0.5"}
@@ -103,64 +103,42 @@ def model(repo: Path) -> dict:
     }}
 
 
-class DomesticGatewayAtHead(unittest.TestCase):
-    """NIN-1-b2 at HEAD: what makes the second Traefik the domestic door."""
+class DomesticEdgesAtHead(unittest.TestCase):
+    """NIN-1-b4 at HEAD (ADR-0165 amendment 2): the domestic edges come in on the
+    one gateway's 443 and 80, known by the ranges the firewall admits (O7, O8)."""
 
     def setUp(self):
-        services = yaml.safe_load((REPO / "dev-docker/compose/edge.yml").read_text())["services"]
-        self.main, self.domestic = services[TRAEFIK], services[DOMESTIC_TRAEFIK]
-
-    # Its own `default` TLS options: O3's switch is off here whatever the env
-    # says, since Arvan sends no certificate (contract.origin.md, NIN-1-a).
-    def test_it_asks_no_client_certificate(self):
-        self.assertIn("EDGE_ORIGIN_PULL=off", self.domestic["environment"])
-
-    # Named `websecure`, every route already on the 443 door is on this one too,
-    # behind the same middlewares (O5, O10, O11).
-    def test_it_serves_every_route_of_the_443_door_on_8443(self):
-        args, main = self.domestic["command"], self.main["command"]
-        self.assertIn("--entrypoints.websecure.address=:8443", args)
-        self.assertEqual(self.domestic["ports"], ["${DOMESTIC_ENTRANCE_PORT:-8443}:8443"])
-        for flag in ("--entrypoints.websecure.http.middlewares=", "--entrypoints.websecure.forwardedHeaders"):
-            self.assertEqual([a for a in args if a.startswith(flag)], [a for a in main if a.startswith(flag)])
-
-    # NIN-1-b3: the client address is the header its edges overwrite, named in
-    # their row of edges.json. One header for the door: telling two edges apart
-    # would need their ranges in the plugin.
-    def test_its_visitor_header_is_the_one_its_edges_name(self):
+        self.services = yaml.safe_load((REPO / "dev-docker/compose/edge.yml").read_text())["services"]
+        self.main = self.services[TRAEFIK]
         edges = json.loads((REPO / "scripts/edge/edges.json").read_text())["edges"]
-        headers = {e["visitor_header"] for e in edges if e["door"] == "domestic"}
+        self.domestic = [e for e in edges if e["door"] == "domestic"]
+
+    def test_there_is_one_gateway(self):
+        self.assertEqual([n for n in self.services if n.startswith("gateway")], [TRAEFIK])
+
+    # The client address from a domestic edge is the header those edges
+    # overwrite, named in their rows. One header for all of them: the plugin
+    # knows a domestic edge, not which one.
+    def test_its_visitor_header_is_the_one_its_edges_name(self):
+        headers = {e["visitor_header"] for e in self.domestic}
         self.assertEqual(len(headers), 1, headers)
-        self.assertIn(f"EDGE_VISITOR_HEADER={headers.pop()}", self.domestic["environment"])
-        self.assertFalse([e for e in self.main["environment"] if e.startswith("EDGE_VISITOR_HEADER")])
+        self.assertIn(f"EDGE_VISITOR_HEADER={headers.pop()}", self.main["environment"])
+
+    # The plugin reads the very copies the firewall admits (O8), bound read-only
+    # from the host: one list, never a second one baked into the image.
+    def test_it_reads_the_firewalls_copies_of_the_domestic_ranges(self):
+        sys.path.insert(0, str(REPO / "scripts/edge"))
+        import edge_ranges
+        files = ",".join(f"{edge_ranges.STATE_DIR}/{e['name']}.json" for e in self.domestic)
+        self.assertIn(f"EDGE_RANGE_FILES={files}", self.main["environment"])
+        self.assertIn(f"{edge_ranges.STATE_DIR}:{edge_ranges.STATE_DIR}:ro", self.main["volumes"])
 
     # NIN-1-e1: the edges a reseller's own-edge domain may sit behind are the
-    # ones this door admits, so tenant-service names exactly the list's rows.
-    def test_tenant_service_offers_the_edges_this_door_admits(self):
-        edges = json.loads((REPO / "scripts/edge/edges.json").read_text())["edges"]
-        names = ",".join(sorted(e["name"] for e in edges if e["door"] == "domestic"))
+    # ones the gateway admits, so tenant-service names exactly the list's rows.
+    def test_tenant_service_offers_the_edges_the_gateway_admits(self):
+        names = ",".join(sorted(e["name"] for e in self.domestic))
         tenant = yaml.safe_load((REPO / "dev-docker/compose/tenant-service.yml").read_text())["services"]["tenant-service"]
         self.assertIn(f"OWN_EDGE_NAMES={names}", tenant["environment"])
-
-    # NIN-1-c1 (O13): its own certificate, bound from dev-docker/secrets/ so it
-    # is sealed with the rest (S1) — the pair only, never the CA's key — and
-    # its expiry served where Prometheus scrapes it.
-    def test_it_serves_its_own_certificate_and_exports_its_expiry(self):
-        self.assertIn("EDGE_ORIGIN_CERT=domestic", self.domestic["environment"])
-        bound = [v.split(":")[0] for v in self.domestic["volumes"] if "origin-cert" in v]
-        self.assertEqual(bound, ["./secrets/origin-cert/domestic.pem", "./secrets/origin-cert/domestic.key"])
-        self.assertIn("--metrics.prometheus=true", self.domestic["command"])
-        scrape = yaml.safe_load((REPO / "dev-docker/monitoring/config-dev/prometheus.yml").read_text())
-        targets = {t for job in scrape["scrape_configs"] for s in job.get("static_configs", []) for t in s["targets"]}
-        self.assertIn(f"{DOMESTIC_TRAEFIK}:8080", targets)
-        self.assertEqual(self.domestic["expose"], ["8080"])
-
-    # No dashboard and no plain-HTTP door; no ACME on either door (O13).
-    def test_it_holds_no_certificates_dashboard_or_port_80(self):
-        self.assertEqual(self.domestic["image"], self.main["image"])
-        self.assertNotIn("build", self.domestic)
-        self.assertFalse([a for a in self.domestic["command"]
-                          if a.startswith(("--certificatesresolvers", "--api", "--entrypoints.web."))])
 
 
 class CloudflareDoorAtHead(unittest.TestCase):
@@ -303,33 +281,17 @@ class TraefikTest(unittest.TestCase):
         public = named(objs, "Service", f"{TRAEFIK}-public")["spec"]
         self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
 
-    # NIN-1-b2 (ADR-0165 amendment 1): the domestic door is a second Traefik over
-    # the same routes, on the same image — the CRD provider, the data node, a
-    # LoadBalancer for 8443 that keeps the client address — holding no ACME state.
-    def test_the_domestic_gateway_is_a_second_edge(self):
+    # NIN-1-b4: the ranges' host directory is a read-only hostPath on the data
+    # node, where the gateway runs and edge_ranges.py keeps the copies (K17).
+    def test_the_edge_ranges_are_the_data_nodes_own(self):
         m = copy.deepcopy(self.model)
-        m["services"][TRAEFIK]["image"] = "txnet/gateway:test"
-        m["services"][DOMESTIC_TRAEFIK] = {
-            "image": "txnet/gateway:test",
-            "command": ["--providers.docker=true", "--entrypoints.websecure.address=:8443",
-                        "--providers.file.directory=/etc/traefik/dynamic"],
-            "ports": [{"target": 8443, "published": "8443"}],
-            "volumes": [{"type": "bind", "source": str(self.repo / d), "target": f"/baked/{i}", "read_only": True}
-                        for i, d in enumerate(sorted(BAKED_BINDS))],
-        }
-        objs = self.render(m)
-        main = named(objs, "Deployment", TRAEFIK)["spec"]["template"]["spec"]
-        pod = named(objs, "Deployment", DOMESTIC_TRAEFIK)["spec"]["template"]["spec"]
-        args = pod["containers"][0]["args"]
-        self.assertFalse([a for a in args if a.startswith("--providers.docker")])
-        self.assertIn("--providers.kubernetescrd=true", args)
-        self.assertEqual(pod["serviceAccountName"], "traefik-ingress-controller")
+        m["services"][TRAEFIK]["volumes"].append(
+            {"type": "bind", "source": "/var/lib/txnet/edge-ranges", "target": "/var/lib/txnet/edge-ranges", "read_only": True})
+        pod = named(self.render(m), "Deployment", TRAEFIK)["spec"]["template"]["spec"]
         self.assertEqual(pod["nodeSelector"], dict([DATA_NODE_LABEL]))
-        self.assertEqual(pod["containers"][0]["image"], main["containers"][0]["image"])
-        self.assertNotIn("volumeMounts", pod["containers"][0])
-        public = named(objs, "Service", f"{DOMESTIC_TRAEFIK}-public")["spec"]
-        self.assertEqual((public["type"], public["externalTrafficPolicy"]), ("LoadBalancer", "Local"))
-        self.assertEqual([p["port"] for p in public["ports"]], [8443])
+        volume = next(v for v in pod["volumes"] if v.get("hostPath", {}).get("path") == "/var/lib/txnet/edge-ranges")
+        mount = next(v for v in pod["containers"][0]["volumeMounts"] if v["name"] == volume["name"])
+        self.assertEqual((mount["mountPath"], mount.get("readOnly")), ("/var/lib/txnet/edge-ranges", True))
 
     # O13: a certificate resolver would fetch online again (ADR-0165 point 4).
     def test_a_certificate_resolver_fails(self):

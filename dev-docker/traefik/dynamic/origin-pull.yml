@@ -5,13 +5,16 @@
 #   off       no client certificate asked for; CF-Connecting-IP is dropped.
 #   optional  a certificate is checked if presented (dev: Cloudflare pulls get
 #             the visitor's address, a direct caller still gets in).
-#   anything else — `required` on swarm — every TLS handshake must present a
+#   anything else — `required` in production — a TLS request must carry a
 #             certificate from OUR origin-pull CA, never Cloudflare's shared
-#             one, which any Cloudflare customer can send. A typo fails closed.
+#             one, which any Cloudflare customer can send, or come from a
+#             domestic edge's ranges. A typo fails closed.
 #
-# The options are `default`, so they hold for every router and for an unknown
-# SNI, which also gets only Traefik's self-signed default certificate: no
-# certificate here names a real host for an address scan to read.
+# Either way the handshake only *asks* (VerifyClientCertIfGiven): a domestic
+# edge has no certificate to give (NIN-1-a), so on `required` the plugin
+# refuses the rest (`requirePull`, NIN-1-b4). A certificate from another CA is
+# still refused at the handshake. The options are `default`, so they hold for
+# every router and for an unknown SNI.
 # scripts/edge/origin-pull.sh issues the CA and uploads the client certificate.
 {{- $mode := env "EDGE_ORIGIN_PULL" | default "off" }}
 http:
@@ -26,9 +29,14 @@ http:
           # amendment 2). CloudFront-Viewer-Address is `ip:port`.
           claimHeaders: [True-Client-IP, AR-Real-IP, Fastly-Client-IP, X-Azure-ClientIP, CloudFront-Viewer-Address]
 {{- with env "EDGE_VISITOR_HEADER" }}
-          # The domestic door only (NIN-1-b3, hosting O12): the header its edges
-          # overwrite with the visitor is the client address; nothing else is read.
+          # The domestic edges (NIN-1-b4, hosting O12): from their ranges, the
+          # header they overwrite with the visitor is the client address and
+          # nothing else is read. The ranges are the firewall's own copies (O8).
           visitorHeader: {{ . }}
+          edgeRangeFiles: [{{ env "EDGE_RANGE_FILES" | splitList "," | join ", " }}]
+{{- end }}
+{{- if and (ne $mode "off") (ne $mode "optional") }}
+          requirePull: true
 {{- end }}
     # Also on every router: a response to a signed-in caller (bearer token or a
     # session cookie) or one that sets a cookie leaves `private, no-store` when
@@ -44,5 +52,5 @@ tls:
       clientAuth:
         caFiles:
           - /etc/traefik/origin-pull/ca.pem
-        clientAuthType: {{ if eq $mode "optional" }}VerifyClientCertIfGiven{{ else }}RequireAndVerifyClientCert{{ end }}
+        clientAuthType: VerifyClientCertIfGiven
 {{- end }}

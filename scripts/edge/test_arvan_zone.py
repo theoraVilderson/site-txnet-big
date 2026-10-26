@@ -48,6 +48,13 @@ class Plan(unittest.TestCase):
             ops = az.plan([wrong] + READY[1:], IP, SSL_ON)
             self.assertEqual(ops.changes, [("update", "0", want("api"))])
 
+    # NIN-1-b4: the doors made on the former domestic port are this driver's,
+    # and move to 443 — the port every edge now shares.
+    def test_a_door_on_the_former_port_moves_to_443(self):
+        self.assertEqual(az.DOOR_PORT, 443)
+        ops = az.plan([door("0", "api", port=8443)] + READY[1:], None, SSL_ON)
+        self.assertEqual(ops.changes, [("update", "0", want("api"))])
+
     def test_a_new_address_moves_the_doors_only_when_given(self):
         ops = az.plan(READY, "203.0.113.99", SSL_ON)
         moved = dict(TARGET, value=[{"ip": "203.0.113.99"}])

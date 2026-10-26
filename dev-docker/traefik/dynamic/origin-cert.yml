@@ -1,16 +1,16 @@
-# The certificate a door presents to its edge (ADR-0165 point 4, hosting O13).
+# The certificate the origin presents to its edges (ADR-0165 point 4, hosting O13).
 # A Go template: Traefik's file provider renders it with the gateway's env.
 #
-# EDGE_ORIGIN_CERT names the door's pair, bound read-only from
+# EDGE_ORIGIN_CERT names the pair, bound read-only from
 # dev-docker/secrets/origin-cert/ (scripts/edge/origin-cert.sh issues it).
-# Unset, nothing is loaded and the door serves Traefik's default certificate.
+# Unset, nothing is loaded and the gateway serves Traefik's default certificate.
 #
-# EDGE_ORIGIN_CERT_DEFAULT=true makes the pair the door's default certificate,
-# served for a name no certificate holds. The 443 door needs that: a Custom
-# Hostname's pull carries the reseller's domain as SNI, and Full (strict)
-# checks the certificate against the fallback origin, which the pair covers.
-# Otherwise the pair is one certificate among none, and an unknown SNI gets
-# Traefik's own, so an address scan reads no host name (O4) — the domestic door.
+# EDGE_ORIGIN_CERT_DEFAULT=true makes the pair the default certificate, served
+# for a name no certificate holds: a Custom Hostname's pull carries the
+# reseller's domain as SNI, and Full (strict) checks the certificate against
+# the fallback origin, which the pair covers. A domestic edge verifies none
+# (NIN-1-a). Otherwise the pair is one certificate among none, and an unknown
+# SNI gets Traefik's own (O4).
 {{- with env "EDGE_ORIGIN_CERT" }}
 tls:
 {{- if eq (env "EDGE_ORIGIN_CERT_DEFAULT") "true" }}

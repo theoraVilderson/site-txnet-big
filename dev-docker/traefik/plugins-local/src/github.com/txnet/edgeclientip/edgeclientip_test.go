@@ -6,7 +6,10 @@ import (
 	"crypto/x509"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 )
 
 // seen is what the next handler — Traefik's proxy to the service — receives.
@@ -270,10 +273,25 @@ func TestAHostWithAPortAndAWebSocketKeepTraefiksSpelling(t *testing.T) {
 	}
 }
 
-// NIN-1-b2/-b3: the domestic door's Traefik is reached only from the approved
-// edges' ranges (hosting O7, O12), and its edge names the visitor in a header
-// it overwrites — Arvan's X-Real-IP (NIN-1-a). No certificate exists there.
-func domestic() *Config { return &Config{VisitorHeader: "X-Real-IP"} }
+// NIN-1-b4: one door on 443 (ADR-0165 amendment 2). A domestic edge — Arvan,
+// which sends no certificate (NIN-1-a) — is known by its address alone, read
+// from the last good copy of its ranges that edge_ranges.py keeps beside the
+// firewall's (hosting O8). It names the visitor in a header it overwrites:
+// Arvan's X-Real-IP.
+const arvanRanges = `{"edge": "arvan", "ipv4": ["94.101.182.0/27"], "ipv6": ["2a0f:1::/32"]}`
+
+func rangeFile(t *testing.T, body string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "arvan.json")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func domestic(t *testing.T) *Config {
+	return &Config{VisitorHeader: "X-Real-IP", EdgeRangeFiles: []string{rangeFile(t, arvanRanges)}}
+}
 
 func fromArvan(headers map[string]string) *http.Request {
 	req := httptest.NewRequest(http.MethodGet, "https://shop.reseller.ir/", nil)
@@ -285,21 +303,35 @@ func fromArvan(headers map[string]string) *http.Request {
 	return req
 }
 
-func TestOnTheDomesticDoorTheEdgesHeaderIsTheVisitor(t *testing.T) {
-	got := serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"}))
+func TestADomesticEdgesHeaderIsTheVisitor(t *testing.T) {
+	got := serveWith(t, domestic(t), fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"}))
 	if got.remoteAddr != "5.6.7.8:41000" || got.realIP != "5.6.7.8" {
 		t.Fatalf("got %+v, want the visitor 5.6.7.8", got)
 	}
-	got = serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": "2001:db8::7"}))
+	got = serveWith(t, domestic(t), fromArvan(map[string]string{"X-Real-IP": "2001:db8::7"}))
 	if got.remoteAddr != "[2001:db8::7]:41000" {
 		t.Fatalf("IPv6 visitor: got %+v", got)
+	}
+	v6 := fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"})
+	v6.RemoteAddr = "[2a0f:1::9]:41000"
+	if got := serveWith(t, domestic(t), v6); got.realIP != "5.6.7.8" {
+		t.Fatalf("an edge's IPv6 address: got %+v", got)
+	}
+}
+
+// Port 80 too: Arvan's default protocol pulls an http visitor over http.
+func TestADomesticEdgeOverPlainHTTPIsStillThatEdge(t *testing.T) {
+	req := fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"})
+	req.TLS = nil
+	if got := serveWith(t, domestic(t), req); got.realIP != "5.6.7.8" {
+		t.Fatalf("got %+v", got)
 	}
 }
 
 // Arvan keeps a client's X-Forwarded-For and appends to it, and passes any
 // header it does not set: none of those may name the visitor here.
-func TestOnTheDomesticDoorNothingAClientCanSetIsRead(t *testing.T) {
-	got := serveWith(t, domestic(), fromArvan(map[string]string{
+func TestFromADomesticEdgeNothingAClientCanSetIsRead(t *testing.T) {
+	got := serveWith(t, domestic(t), fromArvan(map[string]string{
 		"X-Real-IP":         "5.6.7.8",
 		"X-Forwarded-For":   "6.6.6.6, 5.6.7.8",
 		"CF-Connecting-IP":  "7.7.7.7",
@@ -312,27 +344,125 @@ func TestOnTheDomesticDoorNothingAClientCanSetIsRead(t *testing.T) {
 	}
 }
 
-// CF-Connecting-IP never counts here, even with a verified chain: this door's
-// proof is the ranges, and its own edge's header is the only name it trusts.
-func TestOnTheDomesticDoorCloudflaresHeaderNeverCounts(t *testing.T) {
-	req := verified(fromArvan(map[string]string{"CF-Connecting-IP": "7.7.7.7"}))
-	if got := serveWith(t, domestic(), req); got.remoteAddr != "94.101.182.2:41000" || got.realIP != "94.101.182.2" {
-		t.Fatalf("got %+v, want the socket address", got)
-	}
-}
-
-func TestOnTheDomesticDoorAMissingOrMalformedHeaderLeavesTheSocket(t *testing.T) {
+func TestFromADomesticEdgeAMissingOrMalformedHeaderLeavesTheSocket(t *testing.T) {
 	for _, value := range []string{"", "not-an-ip", "5.6.7.8, 6.6.6.6", "5.6.7.8:443"} {
-		got := serveWith(t, domestic(), fromArvan(map[string]string{"X-Real-IP": value}))
+		got := serveWith(t, domestic(t), fromArvan(map[string]string{"X-Real-IP": value}))
 		if got.remoteAddr != "94.101.182.2:41000" || got.realIP != "94.101.182.2" {
 			t.Fatalf("%q: got %+v, want the edge's own address", value, got)
 		}
 	}
 }
 
+// The header is the edge's only from the edge: anyone else's is dropped.
+func TestTheVisitorHeaderFromOutsideTheRangesIsDropped(t *testing.T) {
+	req := fromArvan(map[string]string{"X-Real-IP": "5.6.7.8"})
+	req.RemoteAddr = "6.6.6.6:41000"
+	if got := serveWith(t, domestic(t), req); got.remoteAddr != "6.6.6.6:41000" || got.realIP != "6.6.6.6" {
+		t.Fatalf("got %+v, want the socket address", got)
+	}
+}
+
+// A verified pull is Cloudflare's, whatever address it comes from: the
+// certificate is the stronger proof, and only Cloudflare holds ours.
+func TestAVerifiedPullIsCloudflaresEvenFromADomesticRange(t *testing.T) {
+	req := verified(fromArvan(map[string]string{"CF-Connecting-IP": "7.7.7.7", "X-Real-IP": "5.6.7.8"}))
+	if got := serveWith(t, domestic(t), req); got.realIP != "7.7.7.7" {
+		t.Fatalf("got %+v, want Cloudflare's visitor", got)
+	}
+}
+
+// Day to day the list changes under a running gateway: a new copy is read
+// within rangeRecheck, and a copy that is gone or broken keeps the last one.
+func TestTheRangesFollowTheirFile(t *testing.T) {
+	path := rangeFile(t, `{"ipv4": ["10.9.0.0/16"], "ipv6": []}`)
+	h, err := New(context.Background(), http.NotFoundHandler(), &Config{VisitorHeader: "X-Real-IP", EdgeRangeFiles: []string{path}}, "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := h.(*edgeClientIP)
+	now := time.Now()
+	e.ranges.now = func() time.Time { return now }
+	if e.fromDomesticEdge("94.101.182.2:1") {
+		t.Fatal("not yet listed")
+	}
+	write := func(body string) {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		later := now.Add(time.Hour)
+		if err := os.Chtimes(path, later, later); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(arvanRanges)
+	if e.fromDomesticEdge("94.101.182.2:1") {
+		t.Fatal("re-read before rangeRecheck passed")
+	}
+	now = now.Add(rangeRecheck + time.Second)
+	if !e.fromDomesticEdge("94.101.182.2:1") {
+		t.Fatal("the new copy was not read")
+	}
+	for _, broken := range []string{"{", `{"ipv4": ["not-a-range"]}`} {
+		write(broken)
+		now = now.Add(rangeRecheck + time.Second)
+		if !e.fromDomesticEdge("94.101.182.2:1") {
+			t.Fatalf("%q: the last good copy was dropped", broken)
+		}
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(rangeRecheck + time.Second)
+	if !e.fromDomesticEdge("94.101.182.2:1") {
+		t.Fatal("a missing copy dropped the last good one")
+	}
+}
+
+func TestRangesWithNoVisitorHeaderAreRefused(t *testing.T) {
+	if _, err := New(context.Background(), http.NotFoundHandler(), &Config{EdgeRangeFiles: []string{"x"}}, "x"); err == nil {
+		t.Fatal("want an error: an edge known by its ranges must say where it names the visitor")
+	}
+}
+
+// RequirePull (hosting O3 `required`): the handshake asks for a certificate
+// without demanding one, so a domestic edge can complete it, and this
+// refuses the rest — a TLS request with neither our certificate nor a
+// domestic edge's address. Cloudflare without ours is any free zone (O1).
+func statusAfter(t *testing.T, cfg *Config, req *http.Request) (int, bool) {
+	t.Helper()
+	reached := false
+	next := http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) { reached = true })
+	h, err := New(context.Background(), next, cfg, "edge-client-ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec.Code, reached
+}
+
+func TestRequirePullRefusesATLSCallerWithNoCertificateAndNoEdge(t *testing.T) {
+	cfg := domestic(t)
+	cfg.RequirePull = true
+	if code, reached := statusAfter(t, cfg, fromEdge("5.6.7.8")); reached || code != http.StatusForbidden {
+		t.Fatalf("no certificate, Cloudflare's address: %d reached=%v, want 403 and nothing served", code, reached)
+	}
+	for name, req := range map[string]*http.Request{
+		"verified pull":   verified(fromEdge("5.6.7.8")),
+		"a domestic edge": fromArvan(nil),
+		"plain http":      func() *http.Request { r := fromEdge("5.6.7.8"); r.TLS = nil; return r }(),
+	} {
+		if _, reached := statusAfter(t, cfg, req); !reached {
+			t.Errorf("%s: refused, want served", name)
+		}
+	}
+	if _, reached := statusAfter(t, domestic(t), fromEdge("5.6.7.8")); !reached {
+		t.Error("without RequirePull (O3 `optional`) a direct caller still gets in")
+	}
+}
+
 // NIN-1-e2: the door a request came through is the gateway's to say, so the
-// domain check can tell an approved edge (only its ranges reach the domestic
-// door, hosting O7) from Cloudflare or a caller with no edge at all.
+// domain check can tell an approved edge from Cloudflare or no edge at all.
 func doorAfter(t *testing.T, cfg *Config, req *http.Request) string {
 	t.Helper()
 	var door string
@@ -353,9 +483,10 @@ func TestEachDoorNamesItselfAndAClientCannotNameOne(t *testing.T) {
 		req  *http.Request
 		want string
 	}{
-		{"verified pull", CreateConfig(), forged(verified(fromEdge("5.6.7.8"))), "cloudflare"},
-		{"no certificate on 443", CreateConfig(), forged(fromEdge("5.6.7.8")), "direct"},
-		{"the domestic door", domestic(), fromArvan(map[string]string{"X-Edge-Door": "cloudflare"}), "domestic"},
+		{"verified pull", domestic(t), forged(verified(fromEdge("5.6.7.8"))), "cloudflare"},
+		{"no certificate, no edge", domestic(t), forged(fromEdge("5.6.7.8")), "direct"},
+		{"a domestic edge", domestic(t), fromArvan(map[string]string{"X-Edge-Door": "cloudflare"}), "domestic"},
+		{"no domestic edge configured", CreateConfig(), forged(fromArvan(nil)), "direct"},
 	}
 	for _, c := range cases {
 		if got := doorAfter(t, c.cfg, c.req); got != c.want {

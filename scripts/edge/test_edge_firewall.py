@@ -1,4 +1,4 @@
-"""EDGE-1-h, OPS-1-o-g, NIN-1-b2: each door of the origin admits its own edges' ranges only.
+"""EDGE-1-h, OPS-1-o-g, NIN-1-b4: the origin's 80/443 admit the approved edges' ranges only.
 
 Run: python3 -m unittest scripts/edge/test_edge_firewall.py
 """
@@ -11,10 +11,7 @@ import edge_chain as ec  # noqa: E402
 import edge_firewall as fw  # noqa: E402
 from test_edge_ranges import ARVAN, CF_V4 as V4  # noqa: E402
 
-CF = fw.DOORS["origin-pull"]
-DOMESTIC = fw.DOORS["domestic"]
-
-
+CF = fw.DOOR
 
 class Rules(unittest.TestCase):
     def setUp(self):
@@ -53,37 +50,33 @@ class Rules(unittest.TestCase):
 
 
 class Doors(unittest.TestCase):
-    """NIN-1-b2, ADR-0165 point 3: each edge comes in by its own proof. Cloudflare
-    is verified by O1's certificate on 443; on 8443 nothing is verified but the
-    source, so Cloudflare's ranges there would let any Cloudflare zone around O1."""
+    """NIN-1-b4, ADR-0165 amendment 2: every edge comes in on 80/443, and past
+    the firewall each proves itself its own way — Cloudflare by O1's
+    certificate, a domestic edge by these same ranges in the gateway."""
 
-    def ranges(self, door):
-        published = {"cloudflare": {4: V4, 6: []}, "arvan": {4: ARVAN, 6: []}}
-        return fw.door_ranges(door, ranges=lambda name: published[name])
+    def test_every_edge_is_admitted_to_80_and_443(self):
+        published = {"cloudflare": {4: V4, 6: ["2400:cb00::/32"]}, "arvan": {4: ARVAN, 6: []}}
+        self.assertEqual(fw.all_ranges(ranges=lambda name: published[name]), {4: V4 + ARVAN, 6: ["2400:cb00::/32"]})
+        self.assertEqual(fw.DOOR.ports, ("80", "443"))
 
-    def test_the_domestic_door_admits_its_edges_and_never_cloudflare(self):
-        self.assertEqual(self.ranges(DOMESTIC), {4: ARVAN, 6: []})
-        self.assertEqual(self.ranges(CF), {4: V4, 6: []})
-
-    def test_every_listed_edge_names_a_door(self):
-        for edge in fw.edge_ranges.load_edges().values():
-            self.assertIn(edge["door"], fw.DOORS, edge["name"])
-
-    def test_the_domestic_door_is_its_own_chain_on_its_own_port(self):
-        self.assertNotEqual(DOMESTIC.chain, CF.chain)
-        jumps = fw.jump_rules(DOMESTIC, "ens192")
-        self.assertIn(("INPUT", ["-i", "ens192", "-p", "tcp", "-m", "multiport", "--dports", "8443",
-                                 "-j", DOMESTIC.chain]), jumps)
-        # servicelb DNATs 8443 to the domestic gateway's pod on every node (K9).
-        self.assertIn(("FORWARD", ["-i", "ens192", "-p", "tcp", "-m", "conntrack", "--ctorigdstport", "8443",
-                                   "--ctdir", "ORIGINAL", "-j", DOMESTIC.chain]), jumps)
-        self.assertFalse([a for _, a in jumps if "443" in a or "80,443" in a], "443 stays the Cloudflare door's")
-
-    def test_an_edge_with_no_good_copy_fails_the_door_and_changes_nothing(self):
+    def test_an_edge_with_no_good_copy_fails_and_changes_nothing(self):
         def broken(name):
             raise fw.edge_ranges.RangeError(f"{name}: no good copy")
         with self.assertRaises(fw.edge_ranges.RangeError):
-            fw.door_ranges(DOMESTIC, ranges=broken)
+            fw.all_ranges(ranges=broken)
+
+    # NIN-1-b2's 8443 chain is unhooked by every apply where a node still has it.
+    def test_the_former_domestic_chain_is_removed(self):
+        calls = []
+        original = fw.unhook
+        fw.unhook = lambda tool, jumps, chain: calls.append((tool, chain, jumps))
+        try:
+            fw.remove_former("ens192")
+        finally:
+            fw.unhook = original
+        self.assertEqual({(t, c) for t, c, _ in calls}, {("iptables", "TXNET-DOMESTIC"), ("ip6tables", "TXNET-DOMESTIC")})
+        self.assertTrue(all(("INPUT", ["-i", "ens192", "-p", "tcp", "-m", "multiport", "--dports", "8443",
+                                       "-j", "TXNET-DOMESTIC"]) in j for _, _, j in calls))
 
 
 class FakeChain:

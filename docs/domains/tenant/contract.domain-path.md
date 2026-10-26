@@ -18,7 +18,7 @@ ADR-0129 decision 4). Code: `txnet-backend/tenant-service/src/app/domains/`
 | `path` | the reseller sets | target | Custom Hostname | in a national-internet cut |
 |---|---|---|---|---|
 | `platform_cdn` (default; every domain made before) | CNAME -> target, or its own CDN with the target as origin | `<slug>.edge.$DOMAIN_NAME` | yes (ADR-0129) | closes |
-| `own_edge` | its own account at an approved edge (Arvan first): origin = target, port 8443, HTTPS, the visitor's host, cloud on | `<slug>.edge.$DOMESTIC_DOMAIN_NAME` | **never** | stays open |
+| `own_edge` | its own account at an approved edge (Arvan first): origin = target, port 443 (the edge's default, NIN-1-b4), HTTPS, the visitor's host, cloud on | `<slug>.edge.$DOMESTIC_DOMAIN_NAME` | **never** | stays open |
 
 - **No reseller's domain enters an account of ours** (user, 2026-10-25): not
   Arvan's by NS delegation, not its CNAME Setup. The own-edge target is
@@ -27,7 +27,7 @@ ADR-0129 decision 4). Code: `txnet-backend/tenant-service/src/app/domains/`
   through ours. Like every target it serves nothing as itself (ADR-0063): no
   `tenant_domain` row names it, so it gets the neutral 404.
 - **Own edge is offered** only when `DOMESTIC_DOMAIN_NAME` is set and
-  `OWN_EDGE_NAMES` names at least one edge: the domestic door's rows of
+  `OWN_EDGE_NAMES` names at least one edge: the `domestic` rows of
   `scripts/edge/edges.json`, held equal to tenant-service's compose by
   `tools/k8s_render_traefik_test.py`. Adding an edge is a row there, not code (C-18).
 - A host inside either platform domain is `domain_reserved`.
@@ -36,7 +36,7 @@ ADR-0129 decision 4). Code: `txnet-backend/tenant-service/src/app/domains/`
 
 | Route | Answer |
 |---|---|
-| `GET /api/tenants/:id/domains/paths` | `[{path, target, port, edges}]`: ours first; `own_edge` (port 8443, `edges` the approved names) only when offered |
+| `GET /api/tenants/:id/domains/paths` | `[{path, target, port, edges}]`: ours first; `own_edge` (port 443, `edges` the approved names) only when offered |
 | `POST /api/tenants/:id/domains` `{domainValue, purpose?, path?}` | as before; `path` defaults to `platform_cdn` |
 | `PUT /api/tenants/:id/domains/:domainId/path` `{path}` | the domain view; the same path again changes nothing |
 
@@ -69,15 +69,15 @@ After the TXT proof (EDGE-1-n), the lines of [contract.domains.md](contract.doma
 | line | path | expected | passes when |
 |---|---|---|---|
 | `address` | both, once a domestic domain is set | an edge's addresses, never ours | the domain's A/AAAA share none with the own-edge target's (the nodes). Found names each `<ip> (ours, no edge in front)`: one filtered domain on the shared address would take every tenant with it (ADR-0063), and it shows the origin |
-| `door` | own edge | through your own `<edges>` account, origin port 8443 over HTTPS | the https probe's answer says `door: domestic` |
+| `door` | own edge | through your own `<edges>` account, origin port 443 over HTTPS | the https probe's answer says `door: domestic` |
 | `websocket` | own edge | 101 and our first message | an upgrade to the probe path through the domain gets 101 and the nonce as its first frame |
 
 - **The door is the gateway's word** (`X-Edge-Door`, `edgeclientip`, hosting
-  O5): `domestic` on 8443, `cloudflare` on a verified pull, `direct` otherwise,
-  always over what a client sent. Only the approved edges' ranges reach 8443
-  (O7), so `domestic` means "through a listed edge's range"; dev, which runs no
-  firewall, cannot tell an edge from a direct caller there. Over HTTPS: 8443 speaks
-  TLS alone, so an edge set to plain HTTP fails `https` with the edge's error.
+  O5, O12): `cloudflare` on a verified pull, `domestic` from a listed domestic
+  edge's ranges (the firewall's own copies, NIN-1-b4), `direct` otherwise,
+  always over what a client sent. Dev, with no copies, has no `domestic`. An
+  edge left on plain HTTP pulls over 80: `http` passes and `door` (judged on
+  the `https` probe) still needs HTTPS to the origin.
 - **The WebSocket probe** is tenant-service's own (`DomainProbeSocket`, RFC 6455
   by hand in `ws-frame.ts`): on the probe path, a valid nonce, a key and a host
   with a row, `101` + the nonce + close; any other upgrade the neutral 404.

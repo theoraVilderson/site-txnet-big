@@ -3,17 +3,18 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-25
+updated: 2026-10-26
 ---
 
-# Contract — hosting: the origin answers only Cloudflare
+# Contract — hosting: the origin answers only the approved edges
 
-ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 443 open, but only
-Cloudflare can complete a handshake, and on the production host only Cloudflare's
-addresses reach it. Rows EDGE-1-g (certificate, client address) and EDGE-1-h
+ADR-0129 amendment 1 (D-70): no tunnel. The origin keeps 80/443 open, but on
+the production host only the approved edges' addresses reach it, and past that
+each edge proves itself: Cloudflare by our certificate, a domestic edge by its
+ranges (ADR-0165 amendment 2, NIN-1-b4: one door, no 8443). Rows EDGE-1-g (certificate, client address) and EDGE-1-h
 (firewall), EDGE-1-k/m (a CDN's claim, amendment 2), EDGE-1-j (private
-responses, decision 8), the domestic door (NIN-1-b2, O12), each door's certificate
-(NIN-1-c, O13 in `contract.origin-cert.md`), the domestic domain's records
+responses, decision 8), the domestic edges on the same door (NIN-1-b4, O12), the certificate
+(NIN-1-c2, O13 in `contract.origin-cert.md`), the domestic domain's records
 (NIN-1-d1, O14). Rules O1…O12, O14.
 
 ## The pull certificate (EDGE-1-g)
@@ -41,17 +42,17 @@ restarting the gateway. Until the restart, the gateway still trusts the old CA.
 |---|---|---|
 | `off` (unset) | none: no certificate asked | before O2 is done |
 | `optional` | `VerifyClientCertIfGiven` | Cloudflare's pulls verify, direct callers still get in (dev until 2026-10-07) |
-| `required` (any other value) | `RequireAndVerifyClientCert` | dev since 2026-10-07 (user), and prod at go-live. A typo fails closed. |
+| `required` (any other value) | `VerifyClientCertIfGiven`, and the plugin's `requirePull` | dev since 2026-10-07 (user), and prod at go-live. A typo fails closed. |
 
-Options `default` hold for every router and for an unknown SNI. No router may
-name other TLS options: they would bypass this. All of this is gateway-handler's,
-the 443 door; the domestic door's Traefik is `off` (O12).
+On `required` the handshake only asks, since a domestic edge has no certificate
+(NIN-1-a); `edgeclientip` then refuses (403) a TLS request that is neither a
+verified pull nor from a domestic edge's ranges (O12). Another CA's certificate
+is still refused at the handshake. Options `default` hold for every router and
+for an unknown SNI. No router may name other TLS options: they would bypass this.
 
-**O4 — Each door chooses what an unknown SNI gets (O13); no `sniStrict`.** On
-8443, no `defaultCertificate`: with no SNI or a name we hold no certificate
-for, Traefik serves its self-signed `TRAEFIK DEFAULT CERT`, so an address scan
-reads no host name. On 443 the default is Cloudflare's Origin CA certificate
-(NIN-1-c2): a Custom Hostname's pull carries that hostname as SNI, and Full
+**O4 — An unknown SNI gets the Origin CA certificate (O13); no `sniStrict`.**
+The default is Cloudflare's Origin CA certificate (NIN-1-c2), which a domestic
+edge takes unverified: a Custom Hostname's pull carries that hostname as SNI, and Full
 (strict) refuses Traefik's own; a scan there must come from Cloudflare (O7) and
 reads only `<domain>`, which DNS publishes anyway. `sniStrict` is not used for
 the same reason: we hold no certificate naming a Custom Hostname.
@@ -65,9 +66,9 @@ becomes `RemoteAddr` (from which Traefik's proxy writes `X-Forwarded-For`) and
 `X-Real-Ip`, and any leftover `X-Forwarded-For` is dropped. In every case
 `CF-Connecting-IP` itself is removed, so no service can read it. Services keep
 `TRUST_PROXY=1` and change nothing. Per-caller rate limits (ADR-0070) then see
-the visitor, not a Cloudflare edge. On the domestic door the plugin runs with
+the visitor, not a Cloudflare edge. From a domestic edge's ranges it reads
 `visitorHeader` instead, and nothing else names the visitor there (O12). It also sets `X-Edge-Door`
-(`domestic`, `cloudflare` on a verified pull, else `direct`) over a client's, for the domain check (NIN-1-e2).
+(`cloudflare` on a verified pull, `domestic` from those ranges, else `direct`) over a client's, for the domain check (NIN-1-e2).
 
 **O6 — Proof** (2026-10-07, throwaway Traefik v3.7, same files):
 
@@ -106,7 +107,8 @@ adding the header to the list. Any other CDN already works through
 `X-Forwarded-For`.
 
 **O10 — The plugin makes every forwarded header (EDGE-1-m).** To read
-`X-Forwarded-For`, websecure runs with `forwardedHeaders.insecure=true`, so
+`X-Forwarded-For`, websecure — and web, for a domestic edge's `X-Real-IP` on
+80 (NIN-1-b4) — run with `forwardedHeaders.insecure=true`, so
 Traefik keeps whatever a request arrives with. The plugin therefore drops every
 `X-Forwarded-*` and `X-Real-Ip` on every request and rewrites them from the
 request itself:
@@ -139,11 +141,11 @@ marked, `/realtime` still `101`. Tests: `privatecache_test.go`.
 
 ## The firewall (EDGE-1-h)
 
-**O7 — Each door admits its own edges, production host.** `scripts/edge/edge_firewall.py
-apply` re-reads each door's edges (O8) and writes one chain a door — `TXNET-EDGE`
-for 80/443 (door `origin-pull`: Cloudflare), `TXNET-DOMESTIC` for 8443 (door
-`domestic`, O12) — each in one `iptables-restore --noflush` / `ip6tables-restore`
-commit: `RETURN` per range, then `DROP`. A chain is reached from `INPUT`
+**O7 — 80/443 admit every approved edge, production host.** `scripts/edge/edge_firewall.py
+apply` re-reads every edge (O8) and writes the chain `TXNET-EDGE` for 80/443 —
+Cloudflare and the domestic edges alike — in one `iptables-restore --noflush` /
+`ip6tables-restore` commit: `RETURN` per range, then `DROP`, and unhooks NIN-1-b2's
+`TXNET-DOMESTIC` (8443) where a node still has it. The chain is reached from `INPUT`
 (`--dports` its ports), and from `FORWARD` and `DOCKER-USER`
 (`--ctorigdstport <port>`: a published port is DNATed before it is forwarded —
 k3s's servicelb through `FORWARD`, Docker's through `DOCKER-USER`; a chain the
@@ -160,11 +162,12 @@ and `print` shows the rules without changing anything.
 are read and in which format (`cloudflare-api`, `lines`), the header it names
 the visitor in, and the fewest IPv4/IPv6 ranges a real answer has (Cloudflare
 10/5, Arvan 10/0). `edge_ranges.py` is the only fetcher: `ranges(name)` re-reads
-one edge, and `edge_firewall.py apply` admits each door's. A list under
+one edge, `edge_firewall.py apply` admits them all, and the gateway reads the
+domestic edges' copies (O12). A list under
 its edge's floor, a malformed or wrong-family range, a range wider than /8 (v4)
 or /16 (v6), or a failed answer is refused. That edge's last good copy
 (`/var/lib/txnet/edge-ranges/<name>.json`, with when it was taken, held to
-today's floors) is used instead; with none, that edge's door is left as it was. Each copy's time is exported (`edge_ranges.prom`,
+today's floors) is used instead; with none, the chain is left as it was. Each copy's time is exported (`edge_ranges.prom`,
 `txnet_edge_ranges_last_refresh_timestamp_seconds{edge}`), and `EdgeRangesStale`
 (`database.rules.yml`) warns after 3 days; `EdgeRangesNeverRecorded`, on
 Kubernetes only (the kubelet's job), when none was ever written. `edge_firewall.py install`
@@ -182,31 +185,27 @@ one served, an `ACCEPT` for the pod range inserted above ours let the caller in
 until the next `apply` put the jumps back on top. Tests:
 `scripts/edge/test_edge_firewall.py`, `test_edge_ranges.py`.
 
-## The domestic door (NIN-1-b2, ADR-0165 amendment 1)
+## The domestic edges (NIN-1-b4, ADR-0165 amendment 2)
 
-**O12 — A second Traefik answers 8443, asking no certificate.** `gateway-domestic`
-(`dev-docker/compose/edge.yml`) runs gateway-handler's image and baked files
-with O3 fixed `off`. Arvan sends no certificate (NIN-1-a), and Traefik takes the
-handshake rule for a host no route names — any reseller's domain — from its one
-`default` TLS options, so the doors cannot share a process: per-entrypoint
-options reach `Host()` routes only (Traefik v3.7, tried 2026-10-25). Its
-entrypoint is named `websecure`, so every route of the 443 door is on it, behind
-the same middlewares (O5, O10, O11). The client address is the visitor header
-its edges name in `edges.json` (Arvan's `X-Real-IP`, which Arvan overwrites),
-given to the plugin as `visitorHeader` from `EDGE_VISITOR_HEADER`; one header
-for the door, held equal to the list by the render test (NIN-1-b3).
-`CF-Connecting-IP`, the claim headers, a client's `X-Edge-Claimed-Ip` and
-`X-Forwarded-For` (Arvan keeps a client's) are dropped and no claim is made; a
-missing or malformed value leaves the socket's, the edge's. No dashboard, no
-port 80: routes naming those are skipped, with an `ERR` line at each reload,
-which is expected. Its own certificate is O13's (`contract.origin-cert.md`). Only
-the `domestic` door's edges reach 8443 (O7); never Cloudflare, which proxies 8443 for any zone while nothing here checks a
-certificate. `join` puts the chain on a new node and refuses one where 8443 is held.
+**O12 — A domestic edge is known by its ranges, on the same 443 and 80.** No
+second Traefik and no 8443 (NIN-1-b2's, reversed 2026-10-26: a reseller's Arvan
+left on its default port timed out). `edgeclientip` reads `edgeRangeFiles` —
+`EDGE_RANGE_FILES`, the last good copies O8 keeps for the firewall, bound
+read-only from the data node — re-stating them at most once a minute and
+keeping the last good read of a copy that is missing or broken. A request with
+no verified chain from inside them is that edge's: the client address is the
+one header its edges name in `edges.json` (`EDGE_VISITOR_HEADER`, Arvan's
+`X-Real-IP`, which Arvan overwrites); `CF-Connecting-IP`, the claim headers, a
+client's `X-Edge-Claimed-Ip` and `X-Forwarded-For` (Arvan keeps a client's) are
+dropped and no claim is made; a missing or malformed value leaves the socket's.
+A verified pull stays Cloudflare's whatever its address. The render test holds
+the header and the files equal to the list (NIN-1-b4). Never Cloudflare's ranges
+in these files: a zone without our certificate would pass as an edge.
 
 **O14 — The domestic domain's records are code** (NIN-1-d1). `edge_zone.py arvan
 plan|apply|repoint|status` (`arvan_zone.py`) makes `api.`, `panel.`, `sub.` of
 `DOMESTIC_DOMAIN_NAME` — the doors `seed-platform-doors.js` seeds, held equal by the test; `pay.`
-dropped (user, 2026-10-25) — as A records to `EDGE_ORIGIN_IP`:8443, cloud on,
+dropped (user, 2026-10-25) — as A records to `EDGE_ORIGIN_IP`:443 (8443 until NIN-1-b4; `apply` moves them), cloud on,
 upstream HTTPS, TTL 120, and the domain's edge certificate on. An A record keeps the
 visitor's `Host`. A record is its own only in that shape: anything else on a door
 name is refused, other names are never changed (the zone holds the user's site and
@@ -215,17 +214,9 @@ to it with the cloud **off** on purpose: a reseller's own Arvan account points t
 (tenant `contract.domain-path.md`, NIN-1-e1). Key: `dev-docker/secrets/arvan/api-key` (one domain),
 sealed (S1 `tool_files`). Applied on barghgho.ir 2026-10-25 (each door 200 through Arvan); `*.edge` 2026-10-26.
 
-Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:
-an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on
-443 and dropped on 8443, any other dropped on both; re-applying kept one jump a
-door, `remove` reopened 8443. The real dynamic files on Traefik v3.7, `off` on
-one port and `required` on another: a reseller's host served on the first with
-forged headers dropped, the second refused without a certificate; with
-`EDGE_VISITOR_HEADER`, Arvan's `X-Real-IP` arrived as `X-Real-Ip` and
-`X-Forwarded-For`, a forged `X-Forwarded-For`, `CF-Connecting-IP`,
-`True-Client-IP` and claim did not, and on 443 (`optional`) the same forged
-`X-Real-IP` was ignored. Tests: `test_edge_firewall.py`,
-`tools/k8s_render_traefik_test.py`, `edgeclientip_test.go` (domestic door).
+Proven 2026-10-25 for the two-door design (Traefik v3.7, network namespaces); the
+one door's proof is NIN-1-b4's note. Tests: `test_edge_firewall.py`,
+`tools/k8s_render_traefik_test.py`, `edgeclientip_test.go`.
 
 ## ArvanCloud as the domestic edge — what it does (NIN-1-a, ADR-0165)
 
@@ -236,7 +227,7 @@ ranges only; removed afterwards. Facts NIN-1-b and NIN-1-c build on:
 | question | answer |
 |---|---|
 | Origin certificate | **not verified**: a self-signed one (no CA, SAN only) is accepted with `upstream_https: https`. Long-lived, no renewal, no foreign internet (ADR-0165 point 4) |
-| Origin port | any, per record (`value[].port`); 443 stays Cloudflare's |
+| Origin port | any, per record (`value[].port`); 443 by default, which is ours since NIN-1-b4 |
 | Proof of Arvan to the origin | none below Enterprise: no client certificate is sent, custom headers are Enterprise-only. Ranges (`https://www.arvancloud.ir/en/ips.txt`, 14 IPv4 that day, domestic) are the only proof |
 | Visitor address | `X-Real-IP`, `AR-Real-IP`, `True-Client-IP`: set by Arvan, a client's own value **overwritten**. `X-Forwarded-For` keeps a client's value and appends — never read its left end |
 | Other headers | `X-Forwarded-Proto/-Port`, `AR-Real-Country`/`X-Country-Code`, `AR-Sid`, `CDN-Loop: arvancloud`; `Host` is the visitor's (`host_header: source`) |
@@ -244,7 +235,5 @@ ranges only; removed afterwards. Facts NIN-1-b and NIN-1-c build on:
 | WebSockets | pass (`101`, frames both ways). Idle 90 s kept, idle 200 s closed (Arvan's documented bound: 180 s between writes); gateway-service's heartbeat is 30 s (`REALTIME_HEARTBEAT_MS`), so it must stay under 180 s |
 | Direct caller | a non-Arvan address on 8443 was dropped by the proof's chain |
 
-So the Arvan door is its own entrypoint on its own port, admitted by range,
-with no client-certificate requirement there (O3 keeps 443 on `required`). The
-proof used host networking (`INPUT`); through servicelb the chain is also needed
-in `FORWARD`, as O7 does.
+So Arvan is admitted by range, with no client certificate, on the same
+443 (O12); the chain is needed in `FORWARD` too through servicelb, as O7 does.

@@ -28,21 +28,28 @@
 // untrusted sender. A client's `X-Forwarded-Host` would otherwise choose the
 // tenant (EDGE-1-m).
 //
-// The domestic door (NIN-1-b2) is a second Traefik with no certificate to
-// verify: only the approved domestic edges' ranges reach it (hosting O7, O12).
-// There `visitorHeader` names the header that edge overwrites with the visitor
-// (Arvan's X-Real-IP, NIN-1-a), and it alone is read: CF-Connecting-IP, the
-// claim headers and X-Forwarded-For, which Arvan keeps from the client, are
-// dropped and no claim is made (NIN-1-b3).
+// A domestic edge (NIN-1-b4, ADR-0165 amendment 2) comes in on the same 443
+// with no certificate: Arvan sends none (NIN-1-a). It is known by its address
+// alone, inside the ranges edge_ranges.py keeps for the firewall (hosting O7,
+// O8). From there `visitorHeader` names the header that edge overwrites with
+// the visitor (Arvan's X-Real-IP), and it alone is read: CF-Connecting-IP,
+// the claim headers and X-Forwarded-For, which Arvan keeps from the client,
+// are dropped and no claim is made.
 //
-// Every request also leaves with `X-Edge-Door`, whatever a client sent: on
-// the domestic door `domestic`, on 443 `cloudflare` for a verified pull and
-// `direct` otherwise. The domain check reads it to tell a reseller's approved
-// edge from Cloudflare or no edge at all (NIN-1-e2); nothing authorizes on it.
+// With `requirePull` (O3 `required`), a TLS request that is neither a verified
+// pull nor from a domestic edge is refused here. The handshake asks for the
+// certificate without demanding it, because a domestic edge has none; a
+// Cloudflare pull without ours is any free zone (O1).
+//
+// Every request also leaves with `X-Edge-Door`, whatever a client sent:
+// `cloudflare` for a verified pull, `domestic` from a domestic edge, `direct`
+// otherwise. The domain check reads it to tell a reseller's approved edge from
+// Cloudflare or no edge at all (NIN-1-e2); nothing authorizes on it.
 package edgeclientip
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -69,13 +76,15 @@ var forwardedHeaders = []string{
 	"X-Forwarded-Tls-Client-Cert", "X-Forwarded-Tls-Client-Cert-Info",
 }
 
-// Config holds no trust decision: that is the TLS options' on the 443 door and
-// the firewall's on the domestic one. ClaimHeaders is the order a CDN's claim
-// is looked for in; empty means the defaults. VisitorHeader is set on the
-// domestic door only, from its edges' row in scripts/edge/edges.json.
+// Config: ClaimHeaders is the order a CDN's claim is looked for in; empty
+// means the defaults. VisitorHeader and EdgeRangeFiles come from the domestic
+// edges' rows in scripts/edge/edges.json: where they name the visitor, and
+// the last good copies of their ranges. RequirePull is O3 `required`.
 type Config struct {
-	ClaimHeaders  []string `json:"claimHeaders,omitempty"`
-	VisitorHeader string   `json:"visitorHeader,omitempty"`
+	ClaimHeaders   []string `json:"claimHeaders,omitempty"`
+	VisitorHeader  string   `json:"visitorHeader,omitempty"`
+	EdgeRangeFiles []string `json:"edgeRangeFiles,omitempty"`
+	RequirePull    bool     `json:"requirePull,omitempty"`
 }
 
 // CreateConfig is Traefik's plugin entry point for the configuration.
@@ -85,24 +94,36 @@ type edgeClientIP struct {
 	next          http.Handler
 	claimHeaders  []string
 	visitorHeader string
+	ranges        *edgeRanges
+	requirePull   bool
 }
 
 // New is Traefik's plugin entry point for the middleware.
 func New(_ context.Context, next http.Handler, cfg *Config, _ string) (http.Handler, error) {
+	if cfg == nil {
+		cfg = CreateConfig()
+	}
+	if len(cfg.EdgeRangeFiles) > 0 && cfg.VisitorHeader == "" {
+		return nil, errors.New("edgeRangeFiles needs visitorHeader: where those edges name the visitor")
+	}
 	headers := defaultClaimHeaders
-	if cfg != nil && len(cfg.ClaimHeaders) > 0 {
+	if len(cfg.ClaimHeaders) > 0 {
 		headers = cfg.ClaimHeaders
 	}
-	e := &edgeClientIP{next: next, claimHeaders: headers}
-	if cfg != nil {
-		e.visitorHeader = cfg.VisitorHeader
-	}
-	return e, nil
+	return &edgeClientIP{
+		next: next, claimHeaders: headers, visitorHeader: cfg.VisitorHeader,
+		ranges: newEdgeRanges(cfg.EdgeRangeFiles), requirePull: cfg.RequirePull,
+	}, nil
 }
 
 func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if e.visitorHeader != "" {
+	pulled := verifiedPull(req)
+	if !pulled && e.fromDomesticEdge(req.RemoteAddr) {
 		e.serveDomestic(rw, req)
+		return
+	}
+	if e.requirePull && req.TLS != nil && !pulled {
+		http.Error(rw, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 	cfVisitor := net.ParseIP(strings.TrimSpace(req.Header.Get(cfConnectingIP)))
@@ -119,12 +140,12 @@ func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	req.Header.Del(claimedIP)
 	rewriteForwarded(req)
 	door := "direct"
-	if verifiedPull(req) {
+	if pulled {
 		door = "cloudflare"
 	}
 	req.Header.Set(edgeDoor, door)
 
-	if cfVisitor != nil && verifiedPull(req) {
+	if cfVisitor != nil && pulled {
 		setVisitor(req, cfVisitor)
 		if cdnClaim == nil {
 			cdnClaim = appendedBefore(chain, cfVisitor)
@@ -134,6 +155,12 @@ func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		}
 	}
 	e.next.ServeHTTP(rw, req)
+}
+
+// fromDomesticEdge: the socket's address is inside a domestic edge's ranges.
+// With no visitor header configured there is no domestic edge (dev, NIN-1-b4).
+func (e *edgeClientIP) fromDomesticEdge(remoteAddr string) bool {
+	return e.visitorHeader != "" && e.ranges.contains(remoteAddr)
 }
 
 // serveDomestic: the edge's own header, one IP, is the visitor; every other

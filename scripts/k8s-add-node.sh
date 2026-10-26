@@ -6,7 +6,7 @@
 #   scripts/k8s-add-node.sh check  <host> [ssh-port]   what join would refuse, changing nothing
 #   scripts/k8s-add-node.sh join   <host> [ssh-port]   check, then: its address in K13's peers here, K13's
 #                                                      chain there with this node as its only peer, O7's
-#                                                      door chains there (80/443, 8443), k3s agent at
+#                                                      edge chain there (80/443), k3s agent at
 #                                                      k8s/versions.env's pin with this node's
 #                                                      registries.yaml (K14), then Ready and on WireGuard
 #   scripts/k8s-add-node.sh remove <host> [ssh-port]   drain and delete the node, uninstall k3s there,
@@ -41,9 +41,9 @@ MIN_NODE_DISK_GIB="${MIN_NODE_DISK_GIB:-30}"
 # Beyond this round trip a pod on one node querying a store on the other pays
 # it per query (K17); the node is then a standby, not a worker.
 MAX_WORKER_RTT_MS=10
-# svclb binds these on every node for the LoadBalancers (K17): Traefik's, and
-# the domestic door's 8443 (NIN-1-b2).
-LB_PORTS="80 443 8443"
+# svclb binds these on every node for Traefik's LoadBalancer (K17); every edge
+# shares them since NIN-1-b4.
+LB_PORTS="80 443"
 INOTIFY_INSTANCES=512 # as k8s-rehearse.sh's (K11)
 NODE_REGISTER_TIMEOUT_S=120
 NODE_READY_TIMEOUT=300s
@@ -193,8 +193,8 @@ stage() {
 }
 
 # On the other server: K13's chain and O7's before k3s opens a port, then the
-# agent. svclb binds 80/443 and 8443 on every node; the edges reach only the data
-# node (K17), and O7's door chains keep anyone else off these. No proxy reaches k3s (K14), so
+# agent. svclb binds 80/443 on every node; the edges reach only the data
+# node (K17), and O7's chain keeps anyone else off these. No proxy reaches k3s (K14), so
 # install.sh writes none into the unit's env file.
 install_agent() {
   remote "bash -s" <<EOF

@@ -13,7 +13,7 @@ WireGuard), and a NodePort for every LoadBalancer Service, which bypasses O7's
 route's interface), except from the other nodes listed in K3S_PEERS_FILE (one
 address per line, K17); lo, cni0 and flannel's interfaces are never filtered,
 so the node reaches its own ports on any of its addresses. 80/443 stay with
-edge_firewall.py (O7), and so does the domestic door's 8443 (O12). Run `install` before k3s is installed (ADR-0163
+edge_firewall.py (O7). Run `install` before k3s is installed (ADR-0163
 point 3).
 """
 import ipaddress
