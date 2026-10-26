@@ -1,5 +1,6 @@
 // Signing in and out: password, OTP and its delivery, register, reset, the Mini App, captcha (F-0201, F-310).
 import { loginRequest, rawRequest, request, setAccessToken } from "./credential";
+import type { OwnerSetupRequired } from "./owner-setup";
 
 export type AuthResult = { accessToken: string; expiresIn: number };
 
@@ -79,7 +80,7 @@ export type BotLinkStatus = {
 /** Sign-in and sign-out calls — spread into `authApi` (`lib/auth-api.ts`). */
 export const signInCalls = {
   async loginPassword(identifier: string, password: string, captchaToken: string) {
-    const result = await loginRequest<AuthResult | { requiresOtp: true; chooseChannel: true; otpToken: string }>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
+    const result = await loginRequest<AuthResult | { requiresOtp: true; chooseChannel: true; otpToken: string } | OwnerSetupRequired>("/auth/login/password", { method: "POST", body: JSON.stringify({ identifier, password }) }, captchaToken);
     if ("accessToken" in result) setAccessToken(result.accessToken);
     return result;
   },

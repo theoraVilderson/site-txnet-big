@@ -15,7 +15,7 @@ direction remembers, in `src/lib/return-to.ts`.
 
 ## Auth-screen session guard (F-0101)
 
-A signed-in visitor must never be shown the login or register screen. The check
+A signed-in visitor must never be shown the login, register or owner-setup screen. The check
 runs in `src/proxy.ts` (the Next 16 proxy, formerly `middleware.ts`), before the
 screen renders — not in the browser. That is the whole trick: the refresh token
 is httpOnly and unreadable by script, but on the server it is just a request

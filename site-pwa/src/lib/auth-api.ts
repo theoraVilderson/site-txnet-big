@@ -4,6 +4,7 @@
 // the shared refresh and the transport are `./auth/credential.ts`'s.
 import { accountCalls } from "./auth/account";
 import { sessionCalls } from "./auth/credential";
+import { ownerSetupCalls } from "./auth/owner-setup";
 import { signInCalls } from "./auth/sign-in";
 
 export * from "./auth/account";
@@ -12,6 +13,7 @@ export * from "./auth/reseller-users";
 export * from "./auth/restrictions";
 export * from "./auth/roles";
 export * from "./auth/sign-in";
+export * from "./auth/owner-setup";
 export * from "./auth/support-consent";
 export * from "./auth/user-groups";
 
@@ -20,4 +22,5 @@ export const authApi = {
   ...signInCalls,
   ...sessionCalls,
   ...accountCalls,
+  ...ownerSetupCalls,
 };

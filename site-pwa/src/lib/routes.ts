@@ -17,6 +17,8 @@ export const AUTH_HANDOFF = "/auth/handoff";
  * existed and the path was written out by hand at each call site.
  */
 export const AUTH_REGISTER = "/auth/register";
+/** A fresh install owner's first sign-in: their own username, password and phone (F-0102). */
+export const AUTH_OWNER_SETUP = "/auth/owner-setup";
 /** The Mini App's password, for an account the messenger alone does not sign in (SA-1-e). */
 export const AUTH_MINI_APP = "/auth/mini-app";
 /** Adding another account to the switch group (F-0205 / F-0209). */

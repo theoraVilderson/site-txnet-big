@@ -1,7 +1,7 @@
 // Next 16 middleware (`proxy.ts`, formerly `middleware.ts`).
 import { NextResponse, type NextRequest } from "next/server";
 import { Cookies, ProxyHeaders } from "@/generated/wire";
-import { AUTH_LOGIN, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
+import { AUTH_LOGIN, AUTH_OWNER_SETUP, AUTH_REGISTER, PANEL_HOME } from "@/lib/routes";
 import { visitorHost as hostOfVisitor } from "@/lib/visitor-host";
 import { doorServes } from "@/lib/door";
 
@@ -10,7 +10,7 @@ import { doorServes } from "@/lib/door";
  * deliberately absent: resetting a password while signed in elsewhere is
  * legitimate.
  */
-const GUARDED_PATHS = [AUTH_LOGIN, AUTH_REGISTER];
+const GUARDED_PATHS = [AUTH_LOGIN, AUTH_REGISTER, AUTH_OWNER_SETUP];
 
 /**
  * The session cookie this middleware reads. Exported so `proxy.test.ts` asserts

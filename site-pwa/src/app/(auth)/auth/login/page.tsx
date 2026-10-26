@@ -26,7 +26,8 @@ import { useOtpChannels } from "@auth/auth/_hooks/useOtpChannels";
 import { useBotLink } from "@auth/auth/_hooks/useBotLink";
 import { useOtpDelivery } from "@auth/auth/_hooks/useOtpDelivery";
 import { useResend } from "@auth/auth/_hooks/useResend";
-import { authApi, type OtpQueuedResult } from "@/lib/auth-api";
+import { authApi, holdSetupToken, type OtpQueuedResult } from "@/lib/auth-api";
+import { AUTH_OWNER_SETUP } from "@/lib/routes";
 import { consumeReturnTo } from "@/lib/return-to";
 import { OTP_LENGTH } from "@/lib/otp";
 
@@ -110,6 +111,8 @@ export default function LoginPage() {
           } finally {
             captcha.spend();
           }
+          // F-0102: a fresh install's owner sets up their own account before any session.
+          if ("setupRequired" in result) { holdSetupToken(result.setupToken); router.push(AUTH_OWNER_SETUP); return; }
           // The password is proven; the person picks the code's channel, as on the phone tab.
           if ("requiresOtp" in result) { setOtpToken(result.otpToken); if (channels.hasChoice) setStep("channel"); else await sendSecondFactor(result.otpToken); }
           else { setIsSuccess(true); router.replace(consumeReturnTo()); }

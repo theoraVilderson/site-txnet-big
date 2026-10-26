@@ -99,6 +99,13 @@ export const AUTH_KEY_MAP = {
   miniAppSubtitle: A.miniApp.subtitle,
   miniAppSubmit: A.miniApp.submit,
   miniAppOtherWay: A.miniApp.otherWay,
+
+  ownerSetupTitle: A.ownerSetup.title,
+  ownerSetupSubtitle: A.ownerSetup.subtitle,
+  ownerSetupAction: A.ownerSetup.action,
+  ownerSetupFinish: A.ownerSetup.finish,
+  ownerSetupSuccess: A.ownerSetup.success,
+  ownerSetupExpired: A.ownerSetup.expired,
 } as const;
 
 /** `{ loginTitle: string; usernameTab: string; ... }` — the shape components see. */

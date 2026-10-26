@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import type { ApiFieldError } from "@/lib/api-error";
+import type { SubmitError } from "@auth/auth/_hooks/useSubmitError";
 
 /**
  * The one place an auth screen says that something went wrong.
@@ -55,4 +56,9 @@ export function FormError({
       )}
     </AnimatePresence>
   );
+}
+
+/** `FormError` for a screen's `useSubmitError()` state — what the last submit was refused with, if anything. */
+export function SubmitFormError({ error }: { error: SubmitError | null }) {
+  return <FormError message={error?.message ?? null} fieldErrors={error?.fieldErrors} reference={error?.ref} detail={error?.detail} />;
 }
