@@ -21,6 +21,9 @@ import { TokenService } from './token.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { SecondFactorService } from './second-factor.service';
+import { OwnerSetupController } from './owner-setup/owner-setup.controller';
+import { OwnerSetupService } from './owner-setup/owner-setup.service';
+import { PhoneCodeSender } from './otp/phone-code-sender.service';
 import { OtpResendService } from './otp/otp-resend.service';
 import { OtpResendGrants } from './otp/otp-resend.store';
 import { SurfaceOwnerService } from './surface-owner/surface-owner.service';
@@ -119,6 +122,7 @@ import { ConfigService } from '@nestjs/config';
     ActiveSessionsController,
     KeyWindowInternalController,
     UserImportInternalController,
+    OwnerSetupController,
   ],
   providers: [
     SignedInCaptchaGuard,
@@ -146,6 +150,8 @@ import { ConfigService } from '@nestjs/config';
     MeAccountService,
     AuthService,
     SecondFactorService,
+    OwnerSetupService,
+    PhoneCodeSender,
     OtpResendService,
     OtpResendGrants,
     SurfaceOwnerService,

@@ -5,6 +5,7 @@ import { RegisterService } from './register.service';
 import { RedisTtl } from '../../redis/redis.keys';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { runWithTenant } from '../../tenant-context/tenant-context';
+import { PhoneCodeSender } from '../otp/phone-code-sender.service';
 
 vi.mock('argon2', () => ({
   argon2id: 2,
@@ -95,9 +96,8 @@ function harness(limits: { tenantType?: string; endUsers?: number; users?: numbe
     prisma as never,
     redis as never,
     otpService as never,
-    channels as never,
+    new PhoneCodeSender(otpService as never, channels as never, botLinks as never, deliveries as never),
     botLinks as never,
-    deliveries as never,
     owners as never,
     botStore as never,
   );

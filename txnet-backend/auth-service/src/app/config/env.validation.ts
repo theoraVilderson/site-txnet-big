@@ -156,6 +156,9 @@ export const envSchema = z.object({
   JWT_ACCESS_TTL_SEC: z.coerce.number().int().positive().default(900),
   OTP_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(300),
   RESET_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(300),
+  // F-0102: the owner's first sign-in fills a username, a password and a
+  // phone, then waits for a code — longer than the second factor's 300.
+  OWNER_SETUP_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(900),
   IMPERSONATION_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(1800),
   // SA-1-a: how many people may hold `*` (the platform owner's SuperAdmin) at once.
   SUPERADMIN_MAX: z.coerce.number().int().positive().default(2),

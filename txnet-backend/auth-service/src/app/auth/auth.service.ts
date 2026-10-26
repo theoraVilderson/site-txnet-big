@@ -1,11 +1,8 @@
-import { BackendI18nKeys, RedisTtl } from '@txnet-backend/shared-core';
-import {
-  RateLimitBucket,
-  rateLimitBucketKey,
-} from '@txnet-backend/shared-core';
+import { BackendI18nKeys, RedisTtl, RateLimitBucket, rateLimitBucketKey } from '@txnet-backend/shared-core';
 import {
   BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
   Logger,
@@ -41,7 +38,6 @@ import { SessionService } from './session/session.service';
 import { SessionStore } from './session/session.store';
 import { SurfaceOwnerService } from './surface-owner/surface-owner.service';
 import { runWithTenant } from '../tenant-context/tenant-context';
-import { Inject } from '@nestjs/common';
 import {
   ok,
   err,
@@ -57,6 +53,7 @@ import {
   RefreshInput,
   ResetPasswordInput,
 } from './auth.schema';
+import { offerOwnerSetup } from './owner-setup/offer-owner-setup';
 import { OWNER_NEEDS_BOTH_FACTORS, OwnerNeedsBothFactors, SECOND_FACTOR_UNAVAILABLE, needsBothFactors, offerSecondFactor, roleGivesEverything } from './owner-factors';
 
 /** What `LOGIN_FAILURE_LOCK_THRESHOLD` is when a deployment sets nothing. */
@@ -224,6 +221,9 @@ export class AuthService {
       return err('auth.phoneVerificationRequired');
     }
 
+    // F-0102: before the code step, which a seeded owner has no phone for.
+    const setup = offerOwnerSetup(user, this.tokens);
+    if (setup) return setup;
     if (user.twoFactorEnabled || needsBothFactors(await this.access.ofLoaded(user))) return offerSecondFactor(user, this.tokens);
 
     const sessionData = await this.issueSession(user, ip, userAgent, scopeKey);

@@ -14,19 +14,16 @@ import {
   OTP_SERVICE,
   OtpPurpose,
 } from '../otp/otp.interface';
-import { OtpChannelRegistry } from '../otp/otp-channels.service';
 import { OutboxEventType, tenantTransaction, USER_SIGNED_UP_AGGREGATE, type ResellerLimitReader, type ResellerUsageReader, type UserSignedUpPayload } from '@txnet-backend/shared-core';
-import { OtpDeliveryStore } from '../otp/otp-delivery.store';
 import { SurfaceOwnerService } from '../surface-owner/surface-owner.service';
 import { BotLinkService } from '../bot-link/bot-link.service';
+import { PhoneCodeSender } from '../otp/phone-code-sender.service';
 import { BotLinkStore } from '../bot-link/bot-link.store';
 import { signupSourceOf } from './signup-source';
 import { END_USER_ROLE_NAME, endUserRoom, lockEndUserRoom } from '../users/end-user-room';
-import { BotPlatform } from '@txnet-backend/messenger';
 import { normalizePhone } from '../../common/validation/phone.schema';
 import { ok, err, safeExecute } from '../../common/response/response.util';
 import { TenantContext } from '../../tenant-context/tenant-context';
-import { deliveryHandles } from '../otp/otp-answer';
 
 /**
  * Registration data held in Redis between `register` and a successful
@@ -50,9 +47,8 @@ export class RegisterService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     @Inject(OTP_SERVICE) private readonly otpService: IOtpService,
-    private readonly channels: OtpChannelRegistry,
+    private readonly codes: PhoneCodeSender,
     private readonly botLinks: BotLinkService,
-    private readonly deliveries: OtpDeliveryStore,
     private readonly owners: SurfaceOwnerService,
     private readonly botStore: BotLinkStore,
   ) {}
@@ -167,53 +163,9 @@ export class RegisterService {
     });
   }
 
-  /**
-   * The code (or the bot link) for a pending registration. SMS is no longer
-   * assumed: an operator running messengers-only must still be able to
-   * register people.
-   */
-  private async sendCode(phoneNumber: string, chosen: OtpChannel | undefined, requestIp: string, lang: string) {
-    const channel = chosen ?? (await this.channels.defaultChannel());
-    if (!channel) return err('otp.noChannelAvailable');
-
-    if (this.channels.requiresLink(channel)) {
-      await this.channels.assertUsable(channel);
-      const platform = channel as unknown as BotPlatform;
-      if (!(await this.botLinks.hasVerifiedLink(phoneNumber, platform))) {
-        // No code yet: the bot sends it once this person proves the number
-        // is theirs. `verify-phone` turns that proof into a linked account.
-        const started = await this.botLinks.startLink({
-          platform,
-          phoneNumber,
-          purpose: OtpPurpose.register_phone_verify,
-          lang,
-          ip: requestIp,
-        });
-        return ok(
-          { phoneNumber, requiresPhoneVerification: true, ...started },
-          'auth.botLinkRequired',
-        );
-      }
-    }
-
-    const delivery = await this.deliveries.mintHandles();
-    await this.otpService.issueOtp(
-      phoneNumber,
-      OtpPurpose.register_phone_verify,
-      channel,
-      requestIp,
-      lang,
-      delivery,
-    );
-
-    return ok(
-      {
-        phoneNumber,
-        requiresPhoneVerification: true,
-        ...deliveryHandles(delivery),
-      },
-      'register.success',
-    );
+  /** The code (or the bot link) for a pending registration (`PhoneCodeSender`). */
+  private sendCode(phoneNumber: string, chosen: OtpChannel | undefined, requestIp: string, lang: string) {
+    return this.codes.send(phoneNumber, OtpPurpose.register_phone_verify, { chosen, ip: requestIp, lang, sentKey: 'register.success' });
   }
 
   /**

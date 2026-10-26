@@ -14,7 +14,11 @@ type TokenTtlKey =
   | 'JWT_ACCESS_TTL_SEC'
   | 'OTP_TOKEN_TTL_SEC'
   | 'RESET_TOKEN_TTL_SEC'
+  | 'OWNER_SETUP_TOKEN_TTL_SEC'
   | 'IMPERSONATION_TOKEN_TTL_SEC';
+
+/** The `purpose` of the token an owner's first sign-in answers (F-0102). */
+export const OWNER_SETUP_PURPOSE = 'owner_setup';
 
 export type RoleScope = 'system' | 'tenant';
 
@@ -158,6 +162,26 @@ export class TokenService {
         purpose: 'password_reset',
       },
       this.ttl('RESET_TOKEN_TTL_SEC'),
+    );
+  }
+
+  /**
+   * F-0102: the password step of an owner still on the seed's account. No
+   * session id, so the gate and `AuthGuard` admit it nowhere; only the
+   * `owner-setup` routes read it.
+   */
+  signSetupToken(userId: string): string {
+    return this.sign(
+      {
+        sub: userId,
+        tenantId: '',
+        roleId: '',
+        roleName: '',
+        permissions: [],
+        sessionId: '',
+        purpose: OWNER_SETUP_PURPOSE,
+      },
+      this.ttl('OWNER_SETUP_TOKEN_TTL_SEC'),
     );
   }
 
