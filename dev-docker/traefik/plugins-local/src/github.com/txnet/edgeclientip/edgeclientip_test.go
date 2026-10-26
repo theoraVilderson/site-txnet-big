@@ -329,3 +329,37 @@ func TestOnTheDomesticDoorAMissingOrMalformedHeaderLeavesTheSocket(t *testing.T)
 		}
 	}
 }
+
+// NIN-1-e2: the door a request came through is the gateway's to say, so the
+// domain check can tell an approved edge (only its ranges reach the domestic
+// door, hosting O7) from Cloudflare or a caller with no edge at all.
+func doorAfter(t *testing.T, cfg *Config, req *http.Request) string {
+	t.Helper()
+	var door string
+	next := http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) { door = r.Header.Get("X-Edge-Door") })
+	h, err := New(context.Background(), next, cfg, "edge-client-ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	return door
+}
+
+func TestEachDoorNamesItselfAndAClientCannotNameOne(t *testing.T) {
+	forged := func(req *http.Request) *http.Request { req.Header.Set("X-Edge-Door", "domestic"); return req }
+	cases := []struct {
+		name string
+		cfg  *Config
+		req  *http.Request
+		want string
+	}{
+		{"verified pull", CreateConfig(), forged(verified(fromEdge("5.6.7.8"))), "cloudflare"},
+		{"no certificate on 443", CreateConfig(), forged(fromEdge("5.6.7.8")), "direct"},
+		{"the domestic door", domestic(), fromArvan(map[string]string{"X-Edge-Door": "cloudflare"}), "domestic"},
+	}
+	for _, c := range cases {
+		if got := doorAfter(t, c.cfg, c.req); got != c.want {
+			t.Errorf("%s: X-Edge-Door = %q, want %q", c.name, got, c.want)
+		}
+	}
+}

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { DOMAIN_LOOKUP, NodeDomainLookup } from './domain-lookup';
+import { DomainProbeSocket } from './domain-probe-socket';
 import { CloudflareEdgeProvider } from './edge/cloudflare-edge-provider';
 import { EDGE_PROVIDER, EdgeProvider, UnconfiguredEdgeProvider } from './edge/edge-provider';
 import { ServesPanelController } from './serves-panel.controller';
@@ -26,6 +27,7 @@ const edgeProvider = (config: ConfigService): EdgeProvider => {
   controllers: [TenantDomainController, TenantDomainInternalController, DomainProbeController, ServesPanelController],
   providers: [
     TenantDomainService,
+    DomainProbeSocket,
     ResellerAccess,
     { provide: DOMAIN_LOOKUP, useClass: NodeDomainLookup },
     { provide: EDGE_PROVIDER, useFactory: edgeProvider, inject: [ConfigService] },

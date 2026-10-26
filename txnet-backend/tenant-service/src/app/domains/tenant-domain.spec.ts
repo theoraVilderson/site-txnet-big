@@ -157,6 +157,11 @@ describe('TenantDomainService', () => {
       txt: {} as Record<string, string[]>,
       cname: {} as Record<string, string[]>,
       arrivesAs: {} as Record<string, string | number>,
+      /** A and AAAA answers, and the door each origin's requests arrive by (`X-Edge-Door`, NIN-1-e2). */
+      addresses: {} as Record<string, string[]>,
+      door: {} as Record<string, string>,
+      /** What a WebSocket upgrade through each origin gets: our first message, a status, or a 101 with nothing after. */
+      ws: {} as Record<string, 'ok' | 'silent' | number>,
       /** A CDN that caches the probe by URL alone, whatever the request carried. */
       cachesEverything: false,
     };
@@ -164,6 +169,14 @@ describe('TenantDomainService', () => {
     const lookup: DomainLookup = {
       txt: vi.fn(async (name: string) => world.txt[name] ?? []),
       cname: vi.fn(async (host: string) => world.cname[host] ?? []),
+      addresses: vi.fn(async (host: string) => world.addresses[host] ?? []),
+      upgrade: vi.fn(async (url: string) => {
+        const u = new URL(url);
+        const ws = world.ws[`${u.protocol}//${u.hostname}`];
+        if (ws === undefined) return { error: 'ECONNREFUSED' };
+        if (typeof ws === 'number') return { status: ws, frame: null };
+        return { status: 101, frame: ws === 'ok' ? u.searchParams.get('n') : null };
+      }),
       probe: vi.fn(async (url: string, headers: Record<string, string> = {}): Promise<ProbeAnswer> => {
         const u = new URL(url);
         if (world.cachesEverything && cached.has(url)) return cached.get(url)!;
@@ -171,7 +184,7 @@ describe('TenantDomainService', () => {
         if (as === undefined) return { error: 'ECONNREFUSED' };
         if (typeof as === 'number') return { status: as, body: null };
         const nonce = u.searchParams.get('n') ?? headers[RequestHeaders.domainProbe] ?? null;
-        const answer = { status: 200, body: { ok: true, data: { host: as, nonce } } };
+        const answer = { status: 200, body: { ok: true, data: { host: as, nonce, door: world.door[`${u.protocol}//${u.hostname}`] ?? 'cloudflare' } } };
         cached.set(url, answer);
         return answer;
       }),
@@ -318,7 +331,7 @@ describe('TenantDomainService', () => {
       const [view] = await service.list(owner, RESELLER);
       const txt = view.lastCheck!.lines.find((l) => l.check === 'txt')!;
       expect(txt).toEqual({ check: 'txt', expected: [`${verifyRecordName('ali-vpn.ir')} TXT tok-1`], found: ['tok-old', 'v=spf1 -all'], ok: false });
-      expect(view.lastCheck!.lines.filter((l) => l.ok).map((l) => l.check)).toEqual(['cname', 'http', 'https', 'cache']);
+      expect(view.lastCheck!.lines.filter((l) => l.ok).map((l) => l.check)).toEqual(['cname', 'address', 'http', 'https', 'cache']);
     });
 
     it('fails once the window closes', async () => {
@@ -487,7 +500,7 @@ describe('TenantDomainService', () => {
       healthy(world);
       world.cname['ali-vpn.ir'] = ['ali-vpn.ir.cdn.arvancdn.ir'];
       expect(await service.checkDue(at(1))).toMatchObject({ verified: 1 });
-      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toEqual(['txt', 'cname', 'http', 'https', 'cache', 'edge_owner']);
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toEqual(['txt', 'cname', 'address', 'http', 'https', 'cache', 'edge_owner']);
     });
 
     it('adds no line for a domain with no record', async () => {
@@ -720,13 +733,21 @@ describe('TenantDomainService', () => {
     });
   });
 
-  describe('the path (NIN-1-e1, ADR-0165 point 7)', () => {
-    /** The reseller's own Arvan in front: DNS answers with Arvan's names, and the request arrives as the domain. */
-    const behindOwnEdge = (world: ReturnType<typeof build>['world']) => {
-      healthy(world);
-      world.cname['ali-vpn.ir'] = [];
-    };
+  /**
+   * The reseller's own Arvan in front: DNS answers with Arvan's addresses, the
+   * request arrives as the domain on the domestic door, and WebSockets pass.
+   */
+  const behindOwnEdge = (world: ReturnType<typeof build>['world']) => {
+    healthy(world);
+    world.cname['ali-vpn.ir'] = [];
+    world.addresses['ali-vpn.ir'] = ['185.143.233.1'];
+    world.addresses['ali.edge.barghgho.ir'] = ['203.0.113.10'];
+    world.door['https://ali-vpn.ir'] = 'domestic';
+    world.ws['https://ali-vpn.ir'] = 'ok';
+  };
+  const lineOf = (row: Row, check: string) => (row['lastCheck'] as DomainCheck).lines.find((l) => l.check === check);
 
+  describe('the path (NIN-1-e1, ADR-0165 point 7)', () => {
     it('names our Cloudflare by default, and its own edge points at the reseller target on the domestic domain', async () => {
       const { service, rows } = build();
       const ours = await service.add(owner, RESELLER, addDomainSchema.parse({ domainValue: 'ali-vpn.ir' }), T0);
@@ -806,6 +827,66 @@ describe('TenantDomainService', () => {
       await expect(service.setPath(owner, RESELLER, 'd1', 'own_edge', at(1))).resolves.toMatchObject({ path: 'own_edge', switching: false });
       expect(rows[0]['pathSwitchedAt']).toBeNull();
       await expect(service.setPath(stranger, RESELLER, 'd1', 'platform_cdn', at(1))).rejects.toMatchObject({ reason: 'not_allowed' });
+    });
+  });
+
+  describe('the own-edge check (NIN-1-e2, ADR-0165 point 7)', () => {
+    const verifying = () => build({ rows: [pendingRow({ verificationStatus: 'verifying', edgePath: 'own_edge' })], edgeOff: true });
+
+    it('passes only through an approved edge, as the domain itself, with WebSockets, on an edge address', async () => {
+      const { service, rows, world } = verifying();
+      behindOwnEdge(world);
+      await service.checkDue(at(1));
+      expect(rows[0]['verificationStatus']).toBe('verified');
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => [l.check, l.ok])).toEqual([
+        ['txt', true], ['cname', true], ['address', true], ['http', true], ['https', true], ['door', true], ['websocket', true], ['cache', true],
+      ]);
+    });
+
+    it('names the door when the request came through Cloudflare, or straight to our address', async () => {
+      for (const [door, found] of [['cloudflare', 'through Cloudflare'], ['direct', 'straight to our address, no edge']]) {
+        const { service, rows, world } = verifying();
+        behindOwnEdge(world);
+        world.door['https://ali-vpn.ir'] = door;
+        await service.checkDue(at(1));
+        expect(rows[0]['verificationStatus']).toBe('verifying');
+        expect(lineOf(rows[0], 'door')).toMatchObject({ ok: false, found: [found] });
+        expect(lineOf(rows[0], 'door')?.expected[0]).toContain('arvan');
+      }
+    });
+
+    it('refuses a domain whose address is ours directly, with that reason, on either path', async () => {
+      const own = verifying();
+      behindOwnEdge(own.world);
+      own.world.addresses['ali-vpn.ir'] = ['203.0.113.10'];
+      await own.service.checkDue(at(1));
+      expect(own.rows[0]['verificationStatus']).toBe('verifying');
+      expect(lineOf(own.rows[0], 'address')).toMatchObject({ ok: false, found: ['203.0.113.10 (ours, no edge in front)'] });
+
+      const ours = build({ rows: [pendingRow({ verificationStatus: 'verifying' })], edgeOff: true });
+      healthy(ours.world);
+      ours.world.addresses['ali-vpn.ir'] = ['203.0.113.10'];
+      ours.world.addresses['ali.edge.barghgho.ir'] = ['203.0.113.10'];
+      await ours.service.checkDue(at(1));
+      expect(lineOf(ours.rows[0], 'address')).toMatchObject({ ok: false });
+    });
+
+    it('fails a CDN that does not carry the upgrade, or carries no message back', async () => {
+      for (const [ws, found] of [[400, '400'], ['silent', '101, no message from us']] as const) {
+        const { service, rows, world } = verifying();
+        behindOwnEdge(world);
+        world.ws['https://ali-vpn.ir'] = ws;
+        await service.checkDue(at(1));
+        expect(lineOf(rows[0], 'websocket')).toMatchObject({ ok: false, found: [found] });
+      }
+    });
+
+    it('asks no door and no WebSocket of a domain on our Cloudflare', async () => {
+      const { service, rows, world } = build({ rows: [pendingRow({ verificationStatus: 'verifying' })], edgeOff: true });
+      healthy(world);
+      await service.checkDue(at(1));
+      expect(rows[0]['verificationStatus']).toBe('verified');
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toEqual(['txt', 'cname', 'address', 'http', 'https', 'cache']);
     });
   });
 

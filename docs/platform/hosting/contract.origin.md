@@ -66,7 +66,8 @@ becomes `RemoteAddr` (from which Traefik's proxy writes `X-Forwarded-For`) and
 `CF-Connecting-IP` itself is removed, so no service can read it. Services keep
 `TRUST_PROXY=1` and change nothing. Per-caller rate limits (ADR-0070) then see
 the visitor, not a Cloudflare edge. On the domestic door the plugin runs with
-`visitorHeader` instead, and nothing else names the visitor there (O12).
+`visitorHeader` instead, and nothing else names the visitor there (O12). It also sets `X-Edge-Door`
+(`domestic`, `cloudflare` on a verified pull, else `direct`) over a client's, for the domain check (NIN-1-e2).
 
 **O6 — Proof** (2026-10-07, throwaway Traefik v3.7, same files):
 
@@ -211,9 +212,8 @@ visitor's `Host`. A record is its own only in that shape: anything else on a doo
 name is refused, other names are never changed (the zone holds the user's site and
 bots), and the cloud off on the origin's address is warned — except `*.edge`, an A record
 to it with the cloud **off** on purpose: a reseller's own Arvan account points there
-(tenant `contract.domain-path.md`, NIN-1-e1). The key is
-`dev-docker/secrets/arvan/api-key` (scoped to the one domain), sealed (S1
-`tool_files`). Applied on barghgho.ir 2026-10-25: each door 200 through Arvan.
+(tenant `contract.domain-path.md`, NIN-1-e1). Key: `dev-docker/secrets/arvan/api-key` (one domain),
+sealed (S1 `tool_files`). Applied on barghgho.ir 2026-10-25: each door 200 through Arvan.
 
 Proven 2026-10-25 in empty network namespaces, from each edge's last good copy:
 an Arvan address served on 8443 and dropped on 443, a Cloudflare one served on

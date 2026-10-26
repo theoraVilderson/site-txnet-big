@@ -29,7 +29,7 @@ import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service'
 import { RedisService } from '../redis/redis.service';
 import { ADVISORY_LINES, CheckLine, DomainCheck, resultOf, verifyRecordName } from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
-import { HELD, isHeld, isReservedHost, ownEdgeOffered, PathOffer, pathOffers, PlatformDomains, RELEASED, targetOf } from './domain-path';
+import { HELD, isHeld, isReservedHost, ownEdgeOffered, PathOffer, pathOffers, PlatformDomains, proofPlan, RELEASED, targetOf } from './domain-path';
 import { DomainProber } from './domain-prober';
 import { EDGE_PROVIDER, EdgeProvider, EdgeProviderError, EdgeRecord, edgeColumns } from './edge/edge-provider';
 import type { AddDomainInput } from './tenant-domain.schema';
@@ -412,11 +412,9 @@ export class TenantDomainService {
   }
 
   private async checkOne(row: DomainRow, now: Date): Promise<SweepOutcome> {
-    const domains = this.domains();
-    const target = targetOf(row.edgePath, row.tenant.slug, domains);
-    const zones = [domains.domain, domains.domestic];
+    const plan = proofPlan(row.edgePath, row.tenant.slug, this.domains());
     if (row.verificationStatus === DomainVerificationStatus.verifying) {
-      const proof = this.prober.proof(row, target, zones);
+      const proof = this.prober.proof(row, plan);
       const check = await this.check(now, proof.lines);
       if (check.ok) {
         await this.write(row, now, check, {
@@ -441,7 +439,7 @@ export class TenantDomainService {
 
     // `verified`: its record (catalog 13.2 step 6), or the new path's whole check while it moves (NIN-1-e1).
     const switching = row.pathSwitchedAt !== null;
-    const check = await this.check(now, switching ? this.prober.proof(row, target, zones).lines : this.prober.revalidation(row, target));
+    const check = await this.check(now, switching ? this.prober.proof(row, plan).lines : this.prober.revalidation(row, plan.target));
     const recorded = check.lines.some((l) => l.check === 'txt' && l.ok);
     if (recorded) {
       await this.write(row, now, check, { lastRevalidatedAt: now, revalidatingSince: null, ...(switching && check.ok ? { pathSwitchedAt: null } : {}) }, false);

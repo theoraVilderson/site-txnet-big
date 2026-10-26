@@ -1,6 +1,6 @@
 import { CNAME_TARGET_ZONE, publicPath } from '@txnet-backend/shared-core';
 
-import type { ProbeAnswer } from './domain-lookup';
+import type { ProbeAnswer, UpgradeAnswer } from './domain-lookup';
 
 /**
  * What a custom domain is checked against, and how each answer is judged
@@ -21,9 +21,13 @@ export const PROBE_PATH = publicPath('tenant', 'domain-probe');
 /** @deprecated since 2026-09-19, remove after the next release: the probe's path before ADR-0065 (F-018-ak). */
 export const LEGACY_PROBE_PATH = 'tenant-domain-probe';
 
+/** A nonce the check made: hex, so nothing a caller sends is echoed back but that. */
+export const PROBE_NONCE = /^[0-9a-f]{16,64}$/;
+
 export const verifyRecordName = (host: string): string => `${VERIFY_RECORD_LABEL}.${host}`;
 
-export type CheckName = 'txt' | 'cname' | 'http' | 'https' | 'cache' | 'edge_owner';
+/** In the order a check shows them; `door` and `websocket` on an own edge only (NIN-1-e2). */
+export type CheckName = 'txt' | 'cname' | 'address' | 'http' | 'https' | 'door' | 'websocket' | 'cache' | 'edge_owner';
 
 /**
  * Lines shown with a check that never decide it: the edge's ownership record
@@ -105,6 +109,52 @@ export function cacheLine(nonces: [string, string], answers: [ProbeAnswer, Probe
     if (nonce !== nonces[i]) return { check: 'cache', expected, found: ['cached'], ok: false };
   }
   return { check: 'cache', expected, found: ['each its own'], ok: true };
+}
+
+/**
+ * The domain reaches us through an edge, never at our address itself (ADR-0165
+ * point 7): one filtered domain on the shared address would take every tenant
+ * with it (ADR-0063's reason), and it would show where the origin is. `ours`
+ * is what the reseller's own-edge target resolves to — the nodes.
+ */
+export function addressLine(ours: string[], found: string[]): CheckLine {
+  const direct = found.filter((a) => ours.includes(a));
+  const expected = ["an edge's addresses, never ours directly — the CDN (cloud) on in front of the domain"];
+  if (direct.length > 0) return { check: 'address', expected, found: direct.map((a) => `${a} (ours, no edge in front)`), ok: false };
+  return { check: 'address', expected, found, ok: true };
+}
+
+/** How the page reads the gateway's `X-Edge-Door` back to the reseller. */
+const DOOR_FOUND: Record<string, string> = {
+  domestic: 'through an approved edge',
+  cloudflare: 'through Cloudflare',
+  direct: 'straight to our address, no edge',
+};
+
+/**
+ * An own-edge domain arrives on the domestic door, which only the approved
+ * edges' ranges reach (hosting O7): the gateway names the door (NIN-1-e2). Through
+ * Cloudflare is the other path's, and closes with the cut.
+ */
+export function doorLine(edges: readonly string[], port: number, answer: ProbeAnswer): CheckLine {
+  const expected = [`through your own ${edges.join(' / ')} account, its origin on port ${port} over HTTPS`];
+  if ('error' in answer) return { check: 'door', expected, found: [answer.error], ok: false };
+  const door = envelopeData(answer.body)?.['door'];
+  const found = typeof door === 'string' ? (DOOR_FOUND[door] ?? door) : String(answer.status);
+  return { check: 'door', expected, found: [found], ok: door === 'domestic' };
+}
+
+/**
+ * The edge carries a WebSocket both ways (NIN-1-e2): the panel's live updates
+ * ride one (ADR-0121), and a CDN with them off answers the upgrade as a page.
+ * The probe answers 101 and sends the nonce as its one message.
+ */
+export function websocketLine(nonce: string, answer: UpgradeAnswer): CheckLine {
+  const expected = ['101 and our first message — WebSockets allowed at the CDN'];
+  if ('error' in answer) return { check: 'websocket', expected, found: [answer.error], ok: false };
+  if (answer.status !== 101) return { check: 'websocket', expected, found: [String(answer.status)], ok: false };
+  if (answer.frame !== nonce) return { check: 'websocket', expected, found: ['101, no message from us'], ok: false };
+  return { check: 'websocket', expected, found: ['101 and our message'], ok: true };
 }
 
 function envelopeData(body: unknown): Record<string, unknown> | null {

@@ -81,6 +81,8 @@ exists to prevent):
 | `cache` | each request answered on its own | two requests to one `https` URL, each with its own nonce in `x-domain-probe`, each got its own answer. A CDN that caches by URL whatever the request carries serves one signed-in user's page to another: `found: ['cached']` (ADR-0129 (8), EDGE-1-e) |
 | `http`, `https` | `200 as <host>` | the platform answered the probe with the nonce this check sent (redirects followed), and the request arrived **as the domain itself**. Arriving as the reseller's own target fails too (ADR-0063): the target serves nothing, so a CDN that forwards it would break every page — the line names the host the CDN sent |
 
+Also `address` on both paths, and `door` and `websocket` on an own edge: [contract.domain-path.md](contract.domain-path.md).
+
 A domain with an `edge.record` gets a sixth line, `edge_owner`: that TXT holds
 the value, or the CNAME names the target straight (then the CDN proves the
 hostname by it). It is **advisory**: shown, never part of `ok`, so a missing

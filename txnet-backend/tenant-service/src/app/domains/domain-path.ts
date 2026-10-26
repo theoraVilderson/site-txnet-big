@@ -41,6 +41,23 @@ export function pathOffers(slug: string, domains: PlatformDomains): PathOffer[] 
   return [ours, { path: TenantDomainPath.own_edge, target: targetOf(TenantDomainPath.own_edge, slug, domains), port: OWN_EDGE_PORT, edges: domains.ownEdges }];
 }
 
+/**
+ * What a domain's check asks of its path: the target, every platform domain a
+ * CNAME may not point under, the approved edges when it is its own edge, and
+ * the host our address is read from (the own-edge target: the nodes), once a
+ * domestic domain exists.
+ */
+export type ProofPlan = { target: string; zones: readonly string[]; ownEdges: readonly string[] | null; ourOrigin: string | null };
+
+export function proofPlan(path: TenantDomainPath, slug: string, domains: PlatformDomains): ProofPlan {
+  return {
+    target: targetOf(path, slug, domains),
+    zones: [domains.domain, domains.domestic],
+    ownEdges: path === TenantDomainPath.own_edge ? domains.ownEdges : null,
+    ourOrigin: domains.domestic ? targetOf(TenantDomainPath.own_edge, slug, domains) : null,
+  };
+}
+
 /** A host inside either of the platform's domains is the platform's, never a reseller's to add. */
 export function isReservedHost(host: string, domains: PlatformDomains): boolean {
   return [domains.domain, domains.domestic].some((base) => base !== '' && (host === base || host.endsWith(`.${base}`)));

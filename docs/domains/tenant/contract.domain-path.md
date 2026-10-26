@@ -61,6 +61,28 @@ path's target.
 - **Live** is `verified` and edge `issued`, or `verified` on `own_edge`
   (no certificate of ours): the owner is told when it lands (RT-1-e2).
 
+## The own-edge check (NIN-1-e2)
+
+After the TXT proof (EDGE-1-n), the lines of [contract.domains.md](contract.domains.md)
+"What a check is", with the path's target, plus:
+
+| line | path | expected | passes when |
+|---|---|---|---|
+| `address` | both, once a domestic domain is set | an edge's addresses, never ours | the domain's A/AAAA share none with the own-edge target's (the nodes). Found names each `<ip> (ours, no edge in front)`: one filtered domain on the shared address would take every tenant with it (ADR-0063), and it shows the origin |
+| `door` | own edge | through your own `<edges>` account, origin port 8443 over HTTPS | the https probe's answer says `door: domestic` |
+| `websocket` | own edge | 101 and our first message | an upgrade to the probe path through the domain gets 101 and the nonce as its first frame |
+
+- **The door is the gateway's word** (`X-Edge-Door`, `edgeclientip`, hosting
+  O5): `domestic` on 8443, `cloudflare` on a verified pull, `direct` otherwise,
+  always over what a client sent. Only the approved edges' ranges reach 8443
+  (O7), so `domestic` means "through a listed edge's range"; dev, which runs no
+  firewall, cannot tell an edge from a direct caller there. Over HTTPS: 8443 speaks
+  TLS alone, so an edge set to plain HTTP fails `https` with the edge's error.
+- **The WebSocket probe** is tenant-service's own (`DomainProbeSocket`, RFC 6455
+  by hand in `ws-frame.ts`): on the probe path, a valid nonce, a key and a host
+  with a row, `101` + the nonce + close; any other upgrade the neutral 404.
+- Uncached and as the domain itself are the `cache` and `https` lines, as on our path.
+
 ## Consumers
 
 | Consumer | Uses |

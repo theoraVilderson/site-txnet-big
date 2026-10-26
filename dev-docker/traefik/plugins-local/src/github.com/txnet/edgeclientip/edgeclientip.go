@@ -34,6 +34,11 @@
 // (Arvan's X-Real-IP, NIN-1-a), and it alone is read: CF-Connecting-IP, the
 // claim headers and X-Forwarded-For, which Arvan keeps from the client, are
 // dropped and no claim is made (NIN-1-b3).
+//
+// Every request also leaves with `X-Edge-Door`, whatever a client sent: on
+// the domestic door `domestic`, on 443 `cloudflare` for a verified pull and
+// `direct` otherwise. The domain check reads it to tell a reseller's approved
+// edge from Cloudflare or no edge at all (NIN-1-e2); nothing authorizes on it.
 package edgeclientip
 
 import (
@@ -47,6 +52,7 @@ const (
 	cfConnectingIP = "CF-Connecting-IP"
 	claimedIP      = "X-Edge-Claimed-Ip"
 	forwardedFor   = "X-Forwarded-For"
+	edgeDoor       = "X-Edge-Door"
 )
 
 // defaultClaimHeaders: where CDNs put the visitor's address — Akamai, Arvan,
@@ -112,6 +118,11 @@ func (e *edgeClientIP) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	req.Header.Del(cfConnectingIP)
 	req.Header.Del(claimedIP)
 	rewriteForwarded(req)
+	door := "direct"
+	if verifiedPull(req) {
+		door = "cloudflare"
+	}
+	req.Header.Set(edgeDoor, door)
 
 	if cfVisitor != nil && verifiedPull(req) {
 		setVisitor(req, cfVisitor)
@@ -137,6 +148,7 @@ func (e *edgeClientIP) serveDomestic(rw http.ResponseWriter, req *http.Request) 
 	req.Header.Del(cfConnectingIP)
 	req.Header.Del(claimedIP)
 	rewriteForwarded(req)
+	req.Header.Set(edgeDoor, "domestic")
 	if visitor != nil {
 		setVisitor(req, visitor)
 	}

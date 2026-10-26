@@ -123,6 +123,14 @@ export const FORWARDED_FOR_HEADER = 'X-Forwarded-For';
  */
 export const EDGE_CLAIMED_IP_HEADER = 'X-Edge-Claimed-Ip';
 
+/**
+ * Which door a request came through (NIN-1-e2): `domestic` (8443, which only
+ * the approved edges' ranges reach, hosting O7), `cloudflare` (a verified pull
+ * on 443) or `direct`. Written only by `edgeclientip`, over whatever a client
+ * sent. The domain check reads it; nothing authorizes on it.
+ */
+export const EDGE_DOOR_HEADER = 'X-Edge-Door';
+
 /** Every header name declared here, in the fixture's order. */
 export const ALL_WIRE_HEADERS = [
   ...Object.values(IdentityHeaders),

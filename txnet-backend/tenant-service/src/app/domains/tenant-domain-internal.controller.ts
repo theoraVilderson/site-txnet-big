@@ -1,8 +1,8 @@
 import { Controller, Get, Header, HttpCode, HttpStatus, NotFoundException, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { headerValue, PublicRoute, RequestHeaders, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
+import { EDGE_DOOR_HEADER, headerValue, PublicRoute, RequestHeaders, ServiceOnlyGuard, TenantCapability } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { LEGACY_PROBE_PATH, PROBE_PATH } from './domain-check';
+import { LEGACY_PROBE_PATH, PROBE_NONCE, PROBE_PATH } from './domain-check';
 import { DomainSweep, TenantDomainService } from './tenant-domain.service';
 
 /**
@@ -22,9 +22,6 @@ export class TenantDomainInternalController {
   }
 }
 
-/** A nonce the check made: hex, so nothing a caller sends is echoed back but that. */
-const NONCE = /^[0-9a-f]{16,64}$/;
-
 /**
  * What the http and https checks request through the reseller's domain:
  * `GET /api/public/tenant/domain-probe?n=<nonce>`. Public (ADR-0065) because the
@@ -40,6 +37,9 @@ const NONCE = /^[0-9a-f]{16,64}$/;
  * requests to one URL, as two signed-in users load one page, and the answer is
  * `private, no-store` — a CDN that serves the second the first one's answer
  * fails the check (ADR-0129 (8), EDGE-1-e).
+ *
+ * `door` is the gateway's `X-Edge-Door` (NIN-1-e2): an own-edge domain passes
+ * only through the domestic door. The WebSocket line is `DomainProbeSocket`'s.
  */
 @Controller([PROBE_PATH, LEGACY_PROBE_PATH])
 export class DomainProbeController {
@@ -49,10 +49,10 @@ export class DomainProbeController {
   @PublicRoute({ doors: 'none' })
   @TenantCapability('system')
   @Header('Cache-Control', 'private, no-store')
-  async probe(@Req() req: Request, @Query('n') query: unknown): Promise<{ host: string; nonce: string }> {
+  async probe(@Req() req: Request, @Query('n') query: unknown): Promise<{ host: string; nonce: string; door: string | null }> {
     const nonce = query ?? headerValue(req.headers, RequestHeaders.domainProbe);
-    const answer = typeof nonce === 'string' && NONCE.test(nonce) ? await this.domains.probeAnswer(req.hostname, nonce) : null;
+    const answer = typeof nonce === 'string' && PROBE_NONCE.test(nonce) ? await this.domains.probeAnswer(req.hostname, nonce) : null;
     if (!answer) throw new NotFoundException();
-    return answer;
+    return { ...answer, door: headerValue(req.headers, EDGE_DOOR_HEADER) ?? null };
   }
 }
