@@ -328,7 +328,7 @@
   "txnet-backend/shared-core/src/lib/redis/rate-limit-buckets.ts": 629,
   "txnet-backend/shared-core/src/lib/tenant/vault/credential-vault.service.ts": 536,
   "txnet-backend/support-service/src/app/conversations/conversations.service.ts": 576,
-  "txnet-backend/tenant-service/src/app/domains/tenant-domain.service.ts": 683,
+  "txnet-backend/tenant-service/src/app/domains/tenant-domain.service.ts": 680,
   "txnet-backend/tenant-service/src/app/guide/guide-admin.ts": 566,
   "txnet-backend/tenant-service/src/app/limits/reseller-limits.service.ts": 535,
   "txnet-backend/tenant-service/src/app/subscription/tenant-subscription.service.ts": 516,

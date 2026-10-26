@@ -6,8 +6,13 @@ to the origin (Arvan accepts our own origin certificate, O13), and the
 domain's edge certificate on. An A record keeps the visitor's `Host`, which
 the tenant resolver matches. Run through `edge_zone.py arvan <cmd>`.
 
+Beside them, `*.edge` (NIN-1-e1, ADR-0165 point 7): the origin a reseller's
+own edge account points at, `<slug>.edge.<domestic>`, an A record with the
+cloud off, so a reseller's Arvan never chains through ours. It publishes the
+address on purpose, so it is never warned as a leak.
+
 A record is this driver's only when it has the shape it makes: an A record on
-a door name, every address on DOOR_PORT. Anything else on a door name (a
+a door name, every address on DOOR_PORT; an A record on the target name. Anything else on a door name (a
 reseller's CNAME, a bot's port) is refused, and records on other names are
 never read for a change: the zone holds the user's site and bots too.
 """
@@ -32,6 +37,8 @@ API = "https://napi.arvancloud.ir/cdn/4.0/domains"
 DOOR_NAMES = ("api", "panel", "sub")
 # The domestic door's entrypoint (hosting O12): only approved edges reach it.
 DOOR_PORT = 8443
+# Every reseller's own-edge origin (tenant-service `cnameTargetHost`, `edge` label).
+TARGET_NAME = "*.edge"
 # Short, so a repoint (go-live, a move) reaches resolvers within minutes.
 TTL = 120
 # Arvan's largest page; the zone is read whole before any change.
@@ -53,6 +60,17 @@ def _door(records, name):
         raise ZoneError(f"{name}: a {found[0]['type']} record this driver did not make; move it off the name by "
                         "hand first (ADR-0165: the platform takes the standard names)")
     return found[0] if found else None
+
+
+def _target(records):
+    found = [r for r in records if r["name"] == TARGET_NAME]
+    if len(found) > 1 or (found and found[0]["type"] != "a"):
+        raise ZoneError(f"{TARGET_NAME}: {len(found)} record(s), not one A record; fix it by hand, nothing is guessed")
+    return found[0] if found else None
+
+
+def _target_body(ip):
+    return {"type": "a", "name": TARGET_NAME, "value": [{"ip": ip}], "cloud": False, "ttl": TTL}
 
 
 def _body(name, ip):
@@ -81,9 +99,15 @@ def plan(records, origin_ip, ssl):
             changes.append(("create", None, body))
         elif _differs(current, body):
             changes.append(("update", current["id"], body))
+    current = _target(records)
+    body = _target_body(origin_ip or (current["value"][0]["ip"] if current else sorted(addresses)[0]))
+    if current is None:
+        changes.append(("create", None, body))
+    elif [v["ip"] for v in current["value"]] != [body["value"][0]["ip"]] or current.get("cloud") is not False:
+        changes.append(("update", current["id"], body))
     if not ssl.get("ssl_status"):
         changes.append(("ssl", None, {"ssl_status": True}))
-    leaks = sorted(r["name"] for r in records if r["type"] == "a" and not r.get("cloud")
+    leaks = sorted(r["name"] for r in records if r["type"] == "a" and not r.get("cloud") and r["name"] != TARGET_NAME
                    and any(v.get("ip") in addresses for v in r.get("value") or []))
     return Plan(changes, leaks)
 
@@ -97,7 +121,9 @@ def repoint(records, old, new):
               if r and any(v["ip"] == old for v in r["value"])]
     if not moving:
         raise ZoneError(f"none of {', '.join(DOOR_NAMES)} holds {old}; nothing to move")
-    return [("update", r["id"], _body(r["name"], new)) for r in moving]
+    target = _target(records)
+    tail = [("update", target["id"], _target_body(new))] if target and any(v["ip"] == old for v in target["value"]) else []
+    return [("update", r["id"], _body(r["name"], new)) for r in moving] + tail
 
 
 # --- ArvanCloud -------------------------------------------------------------
@@ -162,8 +188,9 @@ def send(env, changes):
 
 def show(changes, leaks, domain):
     for op, _, body in changes:
-        what = (f"{body['name']}.{domain} -> <address>:{DOOR_PORT} cloud https" if op != "ssl"
-                else "the domain's edge certificate on")
+        what = ("the domain's edge certificate on" if op == "ssl"
+                else f"{body['name']}.{domain} -> <address> cloud off (own edges' origin)" if body["name"] == TARGET_NAME
+                else f"{body['name']}.{domain} -> <address>:{DOOR_PORT} cloud https")
         print(f"  {op:8} {what}")
     if not changes:
         print("  nothing to change")
@@ -187,6 +214,8 @@ def main(cmd, args):
             print(f"  {name}.{domain}: " + (f"a -> <address>:{r['value'][0]['port']} cloud "
                                            f"{'on' if r.get('cloud') else 'off'} upstream {r['upstream_https']}"
                                            if r else "missing"))
+        t = _target(records)
+        print(f"  {TARGET_NAME}.{domain}: " + (f"a -> <address> cloud {'on' if t.get('cloud') else 'off'}" if t else "missing"))
         print(f"  edge certificate: {'on' if ssl.get('ssl_status') else 'off'}")
     show(p.changes, p.leaks, domain)
     if cmd == "apply":

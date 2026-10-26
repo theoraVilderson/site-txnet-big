@@ -23,8 +23,11 @@ the `/sub` domain, TLS and the CDN setup are other ids of area 13, not here.
 | `POST /api/internal/tenant-domains/check-due` | `worker-service` (`ServiceOnlyGuard`) | `{due, verified, waiting, failed, revalidated, revalidating, dropped, edgeRegistered, edgeIssued, edgeWaiting, edgeFailed, edgeRemoved, errors}` |
 | `GET /api/public/tenant/domain-probe?n=<hex nonce>` | public (ADR-0065, `@PublicRoute` doors `'none'`: an unverified domain has no surface yet, so the handler checks the row; `system`, so no status refuses it). `GET /api/tenant-domain-probe` is **@deprecated since 2026-09-19**, remove after the next release | `{host, nonce}` on a host with a `tenant_domain` row; the neutral 404 elsewhere (F-1210). The nonce is `n`, or the `x-domain-probe` header for the `cache` line; always `Cache-Control: private, no-store` |
 
+Our Cloudflare or the reseller's own edge — `path`, `GET …/domains/paths`, `PUT
+…/:domainId/path` and moving a verified domain: [contract.domain-path.md](contract.domain-path.md) (NIN-1-e1).
+
 The domain view: `{id, domainValue, purpose, status, record: {type: 'TXT',
-name, value}, cnameTarget, verifiedAt, lastCheckedAt, lastCheck, edge: {status,
+name, value}, path, switching, cnameTarget, verifiedAt, lastCheckedAt, lastCheck, edge: {status,
 record, lastError}}`. `edge.record` is the CDN's ownership TXT while the CDN
 still asks for it, else null (EDGE-1-d). The page lists it as a third record and
 says it is needed only behind the reseller's own CDN, which answers 409 until
@@ -94,7 +97,7 @@ lookup that errors (not "no record") is a sweep `error` and changes nothing.
 Run by `check-due` after the checks, so a domain verified this tick is
 registered this tick; only with `EDGE_LIFECYCLE_ENABLED=true` (off until
 go-live, EDGE-1-i, "The CDN and go-live" below). **Live = `verified` and edge `issued`.**
-**Held** = `verified`, or `verifying` with `ownershipProvenAt`: the probe lines
+**Held** = on `platform_cdn` (or a verified one still switching off it), and `verified`, or `verifying` with `ownershipProvenAt`: the probe lines
 reach us through the edge, which answers 409 for a host it does not hold, so a
 domain is held once TXT and CNAME prove it, and verified once they pass.
 

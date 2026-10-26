@@ -1,4 +1,4 @@
-import { TenantDomainPurpose } from '@prisma/client';
+import { TenantDomainPath, TenantDomainPurpose } from '@prisma/client';
 import { normalizeHost } from '@txnet-backend/shared-core';
 import { z } from 'zod';
 
@@ -29,7 +29,14 @@ export const addDomainSchema = z
     purpose: z
       .enum([TenantDomainPurpose.panel, TenantDomainPurpose.subscription, TenantDomainPurpose.assets, TenantDomainPurpose.legacy_sub])
       .default(TenantDomainPurpose.panel),
+    // How it reaches us (NIN-1-e1): our Cloudflare unless the reseller chose its own edge.
+    path: z.nativeEnum(TenantDomainPath).default(TenantDomainPath.platform_cdn),
   })
   .strict();
 
 export type AddDomainInput = z.infer<typeof addDomainSchema>;
+
+/** `PUT /api/tenants/:id/domains/:domainId/path` (NIN-1-e1). */
+export const setPathSchema = z.object({ path: z.nativeEnum(TenantDomainPath) }).strict();
+
+export type SetPathInput = z.infer<typeof setPathSchema>;

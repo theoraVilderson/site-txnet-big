@@ -77,6 +77,18 @@ enum TenantDomainEdgeProvider {
   @@schema("tenant")
 }
 
+/// How a reseller's custom domain reaches the platform (ADR-0165 point 7, NIN-1-e1).
+enum TenantDomainPath {
+  /// Our Cloudflare: a Custom Hostname on the platform zone, CNAME to
+  /// `<slug>.edge.<DOMAIN_NAME>` (ADR-0129). Closes when the internet goes national.
+  platform_cdn
+  /// The reseller's own account at an approved edge (Arvan first), whose origin is
+  /// `<slug>.edge.<DOMESTIC_DOMAIN_NAME>`:8443. Never a Custom Hostname.
+  own_edge
+
+  @@schema("tenant")
+}
+
 /// A custom domain at the CDN once it is `verified` (ADR-0129 (6), catalog 13.1
 /// `tlsStatus`). Live means `verified` and `issued`.
 enum TenantDomainEdgeStatus {
@@ -314,6 +326,12 @@ model TenantDomain {
   /// amendment 3): the edge holds the domain from then, so its certificate can
   /// issue before the probe lines verify it. Cleared when it leaves `verifying`.
   ownershipProvenAt  DateTime?
+  /// The way it reaches us (NIN-1-e1). `platform_cdn` for every domain made before it.
+  edgePath           TenantDomainPath         @default(platform_cdn)
+  /// Set when a `verified` domain changes `edgePath`: it keeps routing, and the
+  /// sweep runs the new path's whole check until it passes, then clears this.
+  /// While set, a Custom Hostname it has is kept, so moving costs no downtime.
+  pathSwitchedAt     DateTime?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

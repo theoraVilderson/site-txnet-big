@@ -4,6 +4,7 @@ import {
   DomainVerificationStatus,
   Prisma,
   TenantDomainEdgeStatus,
+  TenantDomainPath,
   TenantDomainPurpose,
   TenantDomainType,
   TenantType,
@@ -12,10 +13,8 @@ import {
   AdmittedReseller,
   assertUnderLimit,
   RESELLER_LIMIT_USAGE,
-  cnameTargetHost,
   normalizeHost,
   OutboxEventType,
-  RequestHeaders,
   ResellerAccess,
   ResellerAccessRefused,
   ResellerAccessRejection,
@@ -28,19 +27,10 @@ import { randomBytes } from 'node:crypto';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { RedisService } from '../redis/redis.service';
-import {
-  ADVISORY_LINES,
-  CheckLine,
-  DomainCheck,
-  cacheLine,
-  PROBE_PATH,
-  cnameLine,
-  edgeOwnerLine,
-  probeLine,
-  txtLine,
-  verifyRecordName,
-} from './domain-check';
+import { ADVISORY_LINES, CheckLine, DomainCheck, resultOf, verifyRecordName } from './domain-check';
 import { DOMAIN_LOOKUP, DomainLookup } from './domain-lookup';
+import { HELD, isHeld, isReservedHost, ownEdgeOffered, PathOffer, pathOffers, PlatformDomains, RELEASED, targetOf } from './domain-path';
+import { DomainProber } from './domain-prober';
 import { EDGE_PROVIDER, EdgeProvider, EdgeProviderError, EdgeRecord, edgeColumns } from './edge/edge-provider';
 import type { AddDomainInput } from './tenant-domain.schema';
 
@@ -74,6 +64,12 @@ import type { AddDomainInput } from './tenant-domain.schema';
  * is the provider's; `renew_failed` is read, never retried). A domain no
  * that loses both leaves the CDN. Live = `verified` and `issued`.
  *
+ * **The path (NIN-1-e1, ADR-0165 point 7).** Our Cloudflare (the default), or
+ * the reseller's own account at an approved edge, whose domain is never a
+ * Custom Hostname (`domain-path.ts`). A verified domain that changes path keeps
+ * routing while the new path's whole check runs every tick (`pathSwitchedAt`);
+ * its Custom Hostname stays until that passes, so the move costs no downtime.
+ *
  * **Every change of status writes `tenant.domain.changed`** in the transaction
  * that made it (RT-1-e, C-14), for the owner's page and the platform staff's;
  * so does a check whose result changed (RT-1-e2), never the same result again.
@@ -97,7 +93,10 @@ export type DomainView = {
   status: DomainStatus;
   /** The record to publish at the tenant's own registrar. */
   record: { type: 'TXT'; name: string; value: string };
-  /** Where the domain, or its CDN's origin, points (ADR-0060 (6)). */
+  /** How it reaches us (NIN-1-e1); `switching` while a verified domain's new path is unproven. */
+  path: TenantDomainPath;
+  switching: boolean;
+  /** Where the domain, or its CDN's origin, points (ADR-0060 (6)): its path's target. */
   cnameTarget: string;
   verifiedAt: Date | null;
   lastCheckedAt: Date | null;
@@ -130,7 +129,7 @@ export type DomainSweep = {
 type EdgeOutcome = 'edgeRegistered' | 'edgeIssued' | 'edgeWaiting' | 'edgeFailed' | 'edgeRemoved';
 type SweepOutcome = Exclude<keyof DomainSweep, 'due' | 'errors' | EdgeOutcome>;
 
-export type DomainRejection = ResellerAccessRejection | 'domain_not_found' | 'domain_taken' | 'domain_reserved';
+export type DomainRejection = ResellerAccessRejection | 'domain_not_found' | 'domain_taken' | 'domain_reserved' | 'own_edge_unavailable';
 
 export class DomainRefused extends Error {
   constructor(
@@ -163,6 +162,8 @@ const DOMAIN_SELECT = {
   edgeLastError: true,
   edgeOwnershipName: true,
   edgeOwnershipValue: true,
+  edgePath: true,
+  pathSwitchedAt: true,
   tenant: { select: { slug: true, ownerUserId: true } },
 } satisfies Prisma.TenantDomainSelect;
 
@@ -179,22 +180,6 @@ const HOUR_MS = 3_600_000;
 /** Edge steps read every tick; the rest wait for the re-validation clock. */
 const EDGE_MOVING: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.none, TenantDomainEdgeStatus.registering, TenantDomainEdgeStatus.issuing];
 const EDGE_SETTLED: TenantDomainEdgeStatus[] = [TenantDomainEdgeStatus.issued, TenantDomainEdgeStatus.renew_failed, TenantDomainEdgeStatus.failed];
-
-/** A check's result as the page shows it, order aside: two equal ones are no news (RT-1-e2). */
-function resultOf(check: DomainCheck | Prisma.JsonValue | null): string {
-  const lines = (check as DomainCheck | null)?.lines ?? [];
-  return JSON.stringify(lines.map((l) => [l.check, l.ok, [...l.found].sort()]).sort());
-}
-
-/** The rows the edge holds (ADR-0129 amendment 3): verified, or verifying with ownership proven. */
-const HELD: Prisma.TenantDomainWhereInput[] = [
-  { verificationStatus: DomainVerificationStatus.verified },
-  { verificationStatus: DomainVerificationStatus.verifying, ownershipProvenAt: { not: null } },
-];
-
-function isHeld(row: Pick<DomainRow, 'verificationStatus' | 'ownershipProvenAt'>): boolean {
-  return row.verificationStatus === DomainVerificationStatus.verified || (row.verificationStatus === DomainVerificationStatus.verifying && row.ownershipProvenAt !== null);
-}
 
 /** The edge columns of a domain the CDN does not hold. */
 const OFF_EDGE = {
@@ -217,15 +202,19 @@ export class TenantDomainService {
     private readonly all: CrossTenantPrismaService,
     private readonly redis: RedisService,
     private readonly config: ConfigService,
-    @Inject(DOMAIN_LOOKUP) private readonly lookup: DomainLookup,
+    @Inject(DOMAIN_LOOKUP) lookup: DomainLookup,
     @Inject(EDGE_PROVIDER) private readonly edge: EdgeProvider,
-  ) {}
+  ) {
+    this.prober = new DomainProber(lookup, this.config.get<string>('GLOBAL_PREFIX') ?? 'api');
+  }
+
+  private readonly prober: DomainProber;
 
   async add(actor: DomainActor, tenantId: string, input: AddDomainInput, now = new Date()): Promise<DomainView> {
     const reseller = await this.access(actor, tenantId, 'staffWrite');
     const host = input.domainValue;
-    const base = this.base();
-    if (host === base || host.endsWith(`.${base}`)) throw new DomainRefused('domain_reserved', host);
+    if (isReservedHost(host, this.domains())) throw new DomainRefused('domain_reserved', host);
+    this.assertOffered(input.path);
 
     const existing = await this.all.tenantDomain.findUnique({ where: { domainValue: host }, select: DOMAIN_SELECT });
     if (existing?.tenantId === reseller.id && existing.domainType === TenantDomainType.custom_domain) return this.view(existing);
@@ -256,6 +245,7 @@ export class TenantDomainService {
             domainType: TenantDomainType.custom_domain,
             domainValue: host,
             purpose: input.purpose,
+            edgePath: input.path,
             verificationStatus: DomainVerificationStatus.pending,
             verificationToken: randomBytes(16).toString('hex'),
             statusChangedAt: now,
@@ -283,6 +273,38 @@ export class TenantDomainService {
       select: DOMAIN_SELECT,
     });
     return rows.map((r) => this.view(r));
+  }
+
+  /** The paths a domain of this reseller may take, with what each points at (NIN-1-e1). */
+  async paths(actor: DomainActor, tenantId: string): Promise<PathOffer[]> {
+    const reseller = await this.access(actor, tenantId, 'read');
+    const tenant = await this.all.tenant.findUnique({ where: { id: reseller.id }, select: { slug: true } });
+    return pathOffers(tenant?.slug ?? '', this.domains());
+  }
+
+  /**
+   * A domain changes path. Unverified, it is simply the path its check runs
+   * on. Verified, it keeps routing (TXT still proves it) and `pathSwitchedAt`
+   * has the sweep run the new path's whole check until it passes.
+   */
+  async setPath(actor: DomainActor, tenantId: string, domainId: string, path: TenantDomainPath, now = new Date()): Promise<DomainView> {
+    const reseller = await this.access(actor, tenantId, 'staffWrite');
+    this.assertOffered(path);
+    const where = { id: domainId, tenantId: reseller.id, domainType: TenantDomainType.custom_domain };
+    const row = await this.all.tenantDomain.findFirst({ where, select: DOMAIN_SELECT });
+    if (!row) throw new DomainRefused('domain_not_found', domainId);
+    if (row.edgePath === path) return this.view(row);
+    const verified = row.verificationStatus === DomainVerificationStatus.verified;
+    await this.all.$transaction(async (tx) => {
+      const { count } = await tx.tenantDomain.updateMany({
+        where: { ...where, edgePath: row.edgePath, verificationStatus: row.verificationStatus },
+        data: { edgePath: path, pathSwitchedAt: verified ? now : null },
+      });
+      if (count > 0) await this.announce(tx, row);
+    });
+    this.logger.log(`custom domain ${row.domainValue} of ${reseller.id} moves to ${path} by ${actor.userId}`);
+    const current = await this.all.tenantDomain.findFirst({ where, select: DOMAIN_SELECT });
+    return this.view(current ?? row);
   }
 
   /** Step 2: the tenant says the record is in place. Repeats safely. */
@@ -324,7 +346,13 @@ export class TenantDomainService {
           {
             verificationStatus: DomainVerificationStatus.verified,
             // Inside its grace every tick: a restored record clears it and a lost one drops on time.
-            OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: new Date(now.getTime() - every) } }, { revalidatingSince: { not: null } }],
+            OR: [
+              { lastCheckedAt: null },
+              { lastCheckedAt: { lte: new Date(now.getTime() - every) } },
+              { revalidatingSince: { not: null } },
+              // A new path is checked every tick through the window, then on the clock (NIN-1-e1).
+              { pathSwitchedAt: { gte: new Date(now.getTime() - this.hours('DOMAIN_VERIFY_WINDOW_HOURS')) } },
+            ],
           },
         ],
       },
@@ -384,26 +412,12 @@ export class TenantDomainService {
   }
 
   private async checkOne(row: DomainRow, now: Date): Promise<SweepOutcome> {
-    const host = row.domainValue;
-    const token = row.verificationToken ?? '';
-
-    const target = cnameTargetHost(row.tenant.slug, this.base());
+    const domains = this.domains();
+    const target = targetOf(row.edgePath, row.tenant.slug, domains);
+    const zones = [domains.domain, domains.domestic];
     if (row.verificationStatus === DomainVerificationStatus.verifying) {
-      const cname = this.lookup.cname(host);
-      const txt = this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found));
-      const pointed = cname.then((found) => cnameLine(target, this.base(), found));
-      const check = await this.check(now, [
-        txt,
-        pointed,
-        ...(['http', 'https'] as const).map((scheme) => {
-          const nonce = randomBytes(8).toString('hex');
-          return this.lookup
-            .probe(`${scheme}://${host}/${this.prefix()}/${PROBE_PATH}?n=${nonce}`)
-            .then((answer) => probeLine(scheme, host, target, nonce, answer));
-        }),
-        this.cacheCheck(host),
-        ...this.edgeLines(row, target, cname),
-      ]);
+      const proof = this.prober.proof(row, target, zones);
+      const check = await this.check(now, proof.lines);
       if (check.ok) {
         await this.write(row, now, check, {
           verificationStatus: DomainVerificationStatus.verified,
@@ -420,19 +434,17 @@ export class TenantDomainService {
         return 'failed';
       }
       // The first stage (ADR-0129 amendment 3): owned and pointed at us, so the edge may hold it.
-      const proven = !row.ownershipProvenAt && (await txt).ok && (await pointed).ok;
+      const proven = !row.ownershipProvenAt && (await proof.owned);
       await this.write(row, now, check, proven ? { ownershipProvenAt: now } : {}, false);
       return 'waiting';
     }
 
-    // `verified`: catalog 13.2 step 6 re-validates the record, not the path —
-    // a CDN outage is not a lost domain.
-    const check = await this.check(now, [
-      this.lookup.txt(verifyRecordName(host)).then((found) => txtLine(host, token, found)),
-      ...this.edgeLines(row, target),
-    ]);
-    if (check.ok) {
-      await this.write(row, now, check, { lastRevalidatedAt: now, revalidatingSince: null }, false);
+    // `verified`: its record (catalog 13.2 step 6), or the new path's whole check while it moves (NIN-1-e1).
+    const switching = row.pathSwitchedAt !== null;
+    const check = await this.check(now, switching ? this.prober.proof(row, target, zones).lines : this.prober.revalidation(row, target));
+    const recorded = check.lines.some((l) => l.check === 'txt' && l.ok);
+    if (recorded) {
+      await this.write(row, now, check, { lastRevalidatedAt: now, revalidatingSince: null, ...(switching && check.ok ? { pathSwitchedAt: null } : {}) }, false);
       return 'revalidated';
     }
     if (!row.revalidatingSince) {
@@ -448,19 +460,11 @@ export class TenantDomainService {
       verifiedAt: null,
       revalidatingSince: null,
       ownershipProvenAt: null,
+      pathSwitchedAt: null,
       statusChangedAt: now,
     }, true);
-    this.logger.log(`custom domain ${host} of ${row.tenantId} lost its record: back to pending, no longer routed`);
+    this.logger.log(`custom domain ${row.domainValue} of ${row.tenantId} lost its record: back to pending, no longer routed`);
     return 'dropped';
-  }
-
-  /** Two requests to one URL, one after the other, each with its own nonce (ADR-0129 (8)). */
-  private async cacheCheck(host: string): Promise<CheckLine> {
-    const url = `https://${host}/${this.prefix()}/${PROBE_PATH}`;
-    const nonces: [string, string] = [randomBytes(8).toString('hex'), randomBytes(8).toString('hex')];
-    const first = await this.lookup.probe(url, { [RequestHeaders.domainProbe]: nonces[0] });
-    const second = await this.lookup.probe(url, { [RequestHeaders.domainProbe]: nonces[1] });
-    return cacheLine(nonces, [first, second]);
   }
 
   /**
@@ -480,11 +484,7 @@ export class TenantDomainService {
             edgeStatus: { in: EDGE_SETTLED },
             OR: [{ edgeCheckedAt: null }, { edgeCheckedAt: { lte: new Date(now.getTime() - every) } }],
           })),
-          {
-            verificationStatus: { not: DomainVerificationStatus.verified },
-            edgeHostnameId: { not: null },
-            OR: [{ verificationStatus: { not: DomainVerificationStatus.verifying } }, { ownershipProvenAt: null }],
-          },
+          ...RELEASED,
         ],
       },
       orderBy: { edgeCheckedAt: { sort: 'asc', nulls: 'first' } },
@@ -591,15 +591,6 @@ export class TenantDomainService {
     return { at: now.toISOString(), ok: done.every((l) => l.ok || ADVISORY_LINES.has(l.check)), lines: done };
   }
 
-  /** The edge's ownership record, read while the provider asks for one (EDGE-1-d). */
-  private edgeLines(row: DomainRow, target: string, cname?: Promise<string[]>): Promise<CheckLine>[] {
-    const name = row.edgeOwnershipName;
-    const value = row.edgeOwnershipValue;
-    if (!name || !value) return [];
-    const found = cname ?? this.lookup.cname(row.domainValue);
-    return [Promise.all([this.lookup.txt(name), found]).then(([txt, names]) => edgeOwnerLine({ name, value }, target, txt, names))];
-  }
-
   /**
    * One row's outcome, guarded on the status it was read in: a row claimed or
    * re-requested meanwhile is left alone. `retract` when what routes changed.
@@ -617,10 +608,12 @@ export class TenantDomainService {
         data: { ...data, lastCheckedAt: now, lastCheck: check as unknown as Prisma.InputJsonValue },
       });
       if (count > 0 && retract) await this.redis.del(UnscopedRedisKeys.tenantByHost(row.domainValue));
-      const news = statusOf({ ...row, ...data } as DomainRow) !== statusOf(row) || resultOf(check) !== resultOf(row.lastCheck) || data.ownershipProvenAt instanceof Date;
+      const moved = data.pathSwitchedAt === null && row.pathSwitchedAt !== null;
+      const news = statusOf({ ...row, ...data } as DomainRow) !== statusOf(row) || resultOf(check) !== resultOf(row.lastCheck) || data.ownershipProvenAt instanceof Date || moved;
       if (count > 0 && news) await this.announce(tx, row);
       const outcome =
-        data.verificationStatus === DomainVerificationStatus.verified && row.edgeStatus === TenantDomainEdgeStatus.issued
+        // Live: verified with its certificate issued, or verified on an own edge, which has none of ours (NIN-1-e1).
+        data.verificationStatus === DomainVerificationStatus.verified && (row.edgeStatus === TenantDomainEdgeStatus.issued || row.edgePath === TenantDomainPath.own_edge)
           ? 'live'
           : data.verificationStatus === DomainVerificationStatus.failed
             ? 'failed'
@@ -649,7 +642,9 @@ export class TenantDomainService {
       purpose: row.purpose,
       status,
       record: { type: 'TXT', name: verifyRecordName(row.domainValue), value: row.verificationToken ?? '' },
-      cnameTarget: cnameTargetHost(row.tenant.slug, this.base()),
+      path: row.edgePath,
+      switching: row.pathSwitchedAt !== null,
+      cnameTarget: targetOf(row.edgePath, row.tenant.slug, this.domains()),
       verifiedAt: row.verifiedAt,
       lastCheckedAt: row.lastCheckedAt,
       lastCheck: (row.lastCheck as unknown as DomainCheck | null) ?? null,
@@ -664,12 +659,14 @@ export class TenantDomainService {
     };
   }
 
-  private base(): string {
-    return String(this.config.get<string>('DOMAIN_NAME')).toLowerCase();
+  private domains(): PlatformDomains {
+    const name = (key: string) => String(this.config.get<string>(key) ?? '').trim().toLowerCase();
+    return { domain: name('DOMAIN_NAME'), domestic: name('DOMESTIC_DOMAIN_NAME'), ownEdges: this.config.get<string[]>('OWN_EDGE_NAMES') ?? [] };
   }
 
-  private prefix(): string {
-    return this.config.get<string>('GLOBAL_PREFIX') ?? 'api';
+  /** Own edge is refused where it is not offered: no domestic domain, or no edge its door admits. */
+  private assertOffered(path: TenantDomainPath): void {
+    if (path === TenantDomainPath.own_edge && !ownEdgeOffered(this.domains())) throw new DomainRefused('own_edge_unavailable');
   }
 
   private hours(key: string): number {

@@ -54,6 +54,17 @@ export const envSchema = z.object({
    * (F-018-y). Required — an empty one would issue a host nobody can reach.
    */
   DOMAIN_NAME: z.string().min(1, 'DOMAIN_NAME is required'),
+  /**
+   * The domestic domain (ADR-0165, NIN-1-d2) and the approved edges of its door,
+   * by their `scripts/edge/edges.json` names (held equal by
+   * `tools/k8s_render_traefik_test.py`). A reseller's own-edge domain points at
+   * `<slug>.edge.$DOMESTIC_DOMAIN_NAME` (NIN-1-e1); either empty, that path is not offered.
+   */
+  DOMESTIC_DOMAIN_NAME: z.string().default(''),
+  OWN_EDGE_NAMES: z
+    .string()
+    .default('')
+    .transform((raw) => raw.split(',').map((n) => n.trim()).filter(Boolean)),
 
   /**
    * Custom-domain proof (F-018-i, catalog 13.2): how long a `verifying` domain

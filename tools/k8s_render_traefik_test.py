@@ -134,6 +134,14 @@ class DomesticGatewayAtHead(unittest.TestCase):
         self.assertIn(f"EDGE_VISITOR_HEADER={headers.pop()}", self.domestic["environment"])
         self.assertFalse([e for e in self.main["environment"] if e.startswith("EDGE_VISITOR_HEADER")])
 
+    # NIN-1-e1: the edges a reseller's own-edge domain may sit behind are the
+    # ones this door admits, so tenant-service names exactly the list's rows.
+    def test_tenant_service_offers_the_edges_this_door_admits(self):
+        edges = json.loads((REPO / "scripts/edge/edges.json").read_text())["edges"]
+        names = ",".join(sorted(e["name"] for e in edges if e["door"] == "domestic"))
+        tenant = yaml.safe_load((REPO / "dev-docker/compose/tenant-service.yml").read_text())["services"]["tenant-service"]
+        self.assertIn(f"OWN_EDGE_NAMES={names}", tenant["environment"])
+
     # NIN-1-c1 (O13): its own certificate, bound from dev-docker/secrets/ so it
     # is sealed with the rest (S1) — the pair only, never the CA's key — and
     # its expiry served where Prometheus scrapes it.

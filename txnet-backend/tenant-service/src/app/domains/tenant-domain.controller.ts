@@ -10,13 +10,15 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Req,
 } from '@nestjs/common';
 import { ResellerLimitReached, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
-import { AddDomainInput, addDomainSchema } from './tenant-domain.schema';
+import type { PathOffer } from './domain-path';
+import { AddDomainInput, addDomainSchema, SetPathInput, setPathSchema } from './tenant-domain.schema';
 import { DomainActor, DomainRefused, DomainRejection, DomainView, TenantDomainService } from './tenant-domain.service';
 
 /** Every refusal gets a status; a new reason does not compile until it gets one. */
@@ -28,6 +30,7 @@ const STATUS: Record<DomainRejection, 403 | 404 | 409> = {
   reseller_terminated: 409,
   domain_taken: 409,
   domain_reserved: 409,
+  own_edge_unavailable: 409,
 };
 
 /**
@@ -44,6 +47,12 @@ export class TenantDomainController {
   @Get()
   list(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<DomainView[]> {
     return this.refusing(() => this.domains.list(actorOf(req), id));
+  }
+
+  /** The paths a domain may take and what each points at (NIN-1-e1); the add form reads it before any domain exists. */
+  @Get('paths')
+  paths(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string): Promise<PathOffer[]> {
+    return this.refusing(() => this.domains.paths(actorOf(req), id));
   }
 
   @Post()
@@ -64,6 +73,16 @@ export class TenantDomainController {
     @Param('domainId', new ParseUUIDPipe()) domainId: string,
   ): Promise<DomainView> {
     return this.refusing(() => this.domains.requestCheck(actorOf(req), id, domainId));
+  }
+
+  @Put(':domainId/path')
+  setPath(
+    @Req() req: Request,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('domainId', new ParseUUIDPipe()) domainId: string,
+    @Body(new ZodValidationPipe(setPathSchema)) body: SetPathInput,
+  ): Promise<DomainView> {
+    return this.refusing(() => this.domains.setPath(actorOf(req), id, domainId, body.path));
   }
 
   private async refusing<T>(work: () => Promise<T>): Promise<T> {

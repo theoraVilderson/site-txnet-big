@@ -38,6 +38,11 @@ services:
       - PUBLIC_HOST=tenant-service
       # A new reseller's host is `<slug>.${DOMAIN_NAME}` (F-018-y).
       - DOMAIN_NAME=${DOMAIN_NAME}
+      # A reseller's own-edge domain points at `<slug>.edge.<domestic>` (NIN-1-e1);
+      # the names are the domestic door's rows of scripts/edge/edges.json (the
+      # render test holds them equal). Either empty: that path is not offered.
+      - DOMESTIC_DOMAIN_NAME=${DOMESTIC_DOMAIN_NAME:-}
+      - OWN_EDGE_NAMES=arvan
       # A reseller's domain is a Custom Hostname on this zone (ADR-0129, EDGE-1-c).
       # Both empty: no edge provider, and every edge call refuses.
       - CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN:-}

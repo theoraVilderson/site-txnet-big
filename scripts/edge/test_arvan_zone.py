@@ -24,14 +24,19 @@ def want(name, ip=IP):
             "upstream_https": "https", "ttl": az.TTL}
 
 
-READY = [door(str(i), name) for i, name in enumerate(az.DOOR_NAMES)]
+def target(rid="50", ip=IP, cloud=False):
+    return {"id": rid, "type": "a", "name": az.TARGET_NAME, "value": [{"ip": ip}], "cloud": cloud, "upstream_https": "default"}
+
+
+TARGET = {"type": "a", "name": az.TARGET_NAME, "value": [{"ip": IP}], "cloud": False, "ttl": az.TTL}
+READY = [door(str(i), name) for i, name in enumerate(az.DOOR_NAMES)] + [target()]
 SSL_ON = {"ssl_status": True}
 
 
 class Plan(unittest.TestCase):
     def test_an_empty_zone_gets_each_door_on_the_domestic_port(self):
         ops = az.plan([], IP, SSL_ON)
-        self.assertEqual(ops.changes, [("create", None, want(name)) for name in az.DOOR_NAMES])
+        self.assertEqual(ops.changes, [("create", None, want(name)) for name in az.DOOR_NAMES] + [("create", None, TARGET)])
 
     def test_a_ready_zone_changes_nothing(self):
         ops = az.plan(READY, IP, SSL_ON)
@@ -45,12 +50,21 @@ class Plan(unittest.TestCase):
 
     def test_a_new_address_moves_the_doors_only_when_given(self):
         ops = az.plan(READY, "203.0.113.99", SSL_ON)
+        moved = dict(TARGET, value=[{"ip": "203.0.113.99"}])
         self.assertEqual(ops.changes, [("update", str(i), want(name, "203.0.113.99"))
-                                       for i, name in enumerate(az.DOOR_NAMES)])
+                                       for i, name in enumerate(az.DOOR_NAMES)] + [("update", "50", moved)])
 
     def test_a_missing_door_with_no_address_is_refused(self):
         with self.assertRaises(az.ZoneError):
             az.plan(READY[1:], None, SSL_ON)
+
+    # NIN-1-e1, ADR-0165 point 7: a reseller's own edge points at
+    # `<slug>.edge.<domestic>`, DNS-only, so its requests never chain through
+    # our Arvan. It publishes the address on purpose: never a leak warning.
+    def test_the_resellers_target_is_dns_only_and_is_not_a_leak(self):
+        self.assertEqual(az.plan(READY, IP, SSL_ON).leaks, [])
+        ops = az.plan(READY[:-1] + [target(cloud=True)], IP, SSL_ON)
+        self.assertEqual(ops.changes, [("update", "50", TARGET)])
 
     def test_a_record_it_did_not_make_on_a_door_name_is_refused_never_overwritten(self):
         # barghgho.ir's `panel` was a reseller's CNAME to our Cloudflare edge.
@@ -85,7 +99,8 @@ class Repoint(unittest.TestCase):
         bot = door("20", "tel-bot", upstream="http", port=8780)  # same address, not ours
         ops = az.repoint(READY + [bot], IP, "203.0.113.99")
         self.assertEqual([(rid, body["name"], body["value"][0]["ip"]) for _, rid, body in ops],
-                         [(str(i), name, "203.0.113.99") for i, name in enumerate(az.DOOR_NAMES)])
+                         [(str(i), name, "203.0.113.99") for i, name in enumerate(az.DOOR_NAMES)]
+                         + [("50", az.TARGET_NAME, "203.0.113.99")])
 
     def test_an_old_address_none_of_its_doors_holds_or_a_bad_address_is_refused(self):
         for old, new in (("198.51.100.200", "203.0.113.99"), (IP, IP), (IP, "nope"), (IP, "2001:db8::1")):

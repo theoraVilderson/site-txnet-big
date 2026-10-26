@@ -209,7 +209,9 @@ dropped (user, 2026-10-25) — as A records to `EDGE_ORIGIN_IP`:8443, cloud on,
 upstream HTTPS, TTL 120, and the domain's edge certificate on. An A record keeps the
 visitor's `Host`. A record is its own only in that shape: anything else on a door
 name is refused, other names are never changed (the zone holds the user's site and
-bots), and the cloud off on the origin's address is warned. The key is
+bots), and the cloud off on the origin's address is warned — except `*.edge`, an A record
+to it with the cloud **off** on purpose: a reseller's own Arvan account points there
+(tenant `contract.domain-path.md`, NIN-1-e1). The key is
 `dev-docker/secrets/arvan/api-key` (scoped to the one domain), sealed (S1
 `tool_files`). Applied on barghgho.ir 2026-10-25: each door 200 through Arvan.
 

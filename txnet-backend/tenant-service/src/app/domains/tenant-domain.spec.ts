@@ -38,7 +38,7 @@ describe('TenantDomainService', () => {
 
   type Row = Record<string, unknown> & { id: string; tenantId: string; domainValue: string };
 
-  const build = (opts: { rows?: Row[]; redisFails?: boolean; domainLimit?: number | null; edgeOff?: boolean; unconfigured?: boolean } = {}) => {
+  const build = (opts: { rows?: Row[]; redisFails?: boolean; domainLimit?: number | null; edgeOff?: boolean; unconfigured?: boolean; domestic?: string } = {}) => {
     const rows: Row[] = [...(opts.rows ?? [])];
     const tenants: Record<string, Record<string, unknown>> = {
       [PLATFORM]: { id: PLATFORM, tenantType: 'platform_owner', slug: 'platform_owner', ownerUserId: STAFF, status: 'active', deletedAt: null },
@@ -50,9 +50,10 @@ describe('TenantDomainService', () => {
       Object.entries(where).every(([k, v]) => {
         if (k === 'OR') return (v as Record<string, unknown>[]).some((w) => matches(row, w));
         if (v && typeof v === 'object' && !(v instanceof Date)) {
-          const cond = v as { lte?: Date; in?: unknown[]; not?: unknown };
+          const cond = v as { lte?: Date; gte?: Date; in?: unknown[]; not?: unknown };
           if ('not' in cond) return (row[k] ?? null) !== cond.not;
           if (cond.lte) return row[k] instanceof Date && (row[k] as Date) <= cond.lte;
+          if (cond.gte) return row[k] instanceof Date && (row[k] as Date) >= cond.gte;
           if (cond.in) return cond.in.includes(row[k]);
         }
         return (row[k] ?? null) === v;
@@ -71,7 +72,7 @@ describe('TenantDomainService', () => {
       }),
       findMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => rows.filter((r) => matches(r, where)).map(withTenant)),
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: `d${rows.length + 1}`, verifiedAt: null, lastCheck: null, lastCheckedAt: null, revalidatingSince: null, ...data } as unknown as Row;
+        const row = { id: `d${rows.length + 1}`, verifiedAt: null, lastCheck: null, lastCheckedAt: null, revalidatingSince: null, pathSwitchedAt: null, ...data } as unknown as Row;
         rows.push(row);
         writes.push(`create ${row.domainValue}`);
         return withTenant(row);
@@ -142,6 +143,8 @@ describe('TenantDomainService', () => {
     };
     const env: Record<string, unknown> = {
       DOMAIN_NAME: 'txnet.app',
+      DOMESTIC_DOMAIN_NAME: opts.domestic ?? 'barghgho.ir',
+      OWN_EDGE_NAMES: ['arvan'],
       DOMAIN_VERIFY_WINDOW_HOURS: 72,
       DOMAIN_REVALIDATE_EVERY_HOURS: 6,
       DOMAIN_REVALIDATION_GRACE_HOURS: 72,
@@ -201,6 +204,8 @@ describe('TenantDomainService', () => {
     edgeOwnershipName: null,
     edgeOwnershipValue: null,
     ownershipProvenAt: null,
+    edgePath: 'platform_cdn',
+    pathSwitchedAt: null,
     ...over,
   });
 
@@ -712,6 +717,95 @@ describe('TenantDomainService', () => {
       healthy(world);
       await service.checkDue(at(1));
       expect(outbox).toEqual([]);
+    });
+  });
+
+  describe('the path (NIN-1-e1, ADR-0165 point 7)', () => {
+    /** The reseller's own Arvan in front: DNS answers with Arvan's names, and the request arrives as the domain. */
+    const behindOwnEdge = (world: ReturnType<typeof build>['world']) => {
+      healthy(world);
+      world.cname['ali-vpn.ir'] = [];
+    };
+
+    it('names our Cloudflare by default, and its own edge points at the reseller target on the domestic domain', async () => {
+      const { service, rows } = build();
+      const ours = await service.add(owner, RESELLER, addDomainSchema.parse({ domainValue: 'ali-vpn.ir' }), T0);
+      expect(ours).toMatchObject({ path: 'platform_cdn', cnameTarget: 'ali.edge.txnet.app', switching: false });
+
+      const own = await service.add(owner, RESELLER, addDomainSchema.parse({ domainValue: 'shop.ali.ir', path: 'own_edge' }), T0);
+      expect(own).toMatchObject({ path: 'own_edge', cnameTarget: 'ali.edge.barghgho.ir' });
+      expect(rows.find((r) => r.domainValue === 'shop.ali.ir')?.['edgePath']).toBe('own_edge');
+    });
+
+    it('offers its own edge only with a domestic domain, and lists what each path points at', async () => {
+      const { service } = build();
+      await expect(service.paths(owner, RESELLER)).resolves.toEqual([
+        { path: 'platform_cdn', target: 'ali.edge.txnet.app', port: null, edges: [] },
+        { path: 'own_edge', target: 'ali.edge.barghgho.ir', port: 8443, edges: ['arvan'] },
+      ]);
+
+      const one = build({ domestic: '' });
+      await expect(one.service.paths(owner, RESELLER)).resolves.toHaveLength(1);
+      await expect(one.service.add(owner, RESELLER, { domainValue: 'ali-vpn.ir', purpose: 'panel', path: 'own_edge' }, T0)).rejects.toMatchObject({
+        reason: 'own_edge_unavailable',
+      });
+    });
+
+    it('refuses a host inside the domestic domain as the platform own', async () => {
+      const { service } = build();
+      await expect(service.add(owner, RESELLER, { domainValue: 'x.barghgho.ir', purpose: 'panel', path: 'platform_cdn' }, T0)).rejects.toMatchObject({
+        reason: 'domain_reserved',
+      });
+    });
+
+    it('never makes an own-edge domain a Custom Hostname, proven or verified', async () => {
+      const { service, rows, world, edge } = build({ rows: [pendingRow({ verificationStatus: 'verifying', edgePath: 'own_edge' })] });
+      world.txt[verifyRecordName('ali-vpn.ir')] = ['tok-1'];
+      await service.checkDue(at(1));
+      expect(rows[0]['ownershipProvenAt']).toEqual(at(1));
+      behindOwnEdge(world);
+      await service.checkDue(at(2));
+      expect(rows[0]['verificationStatus']).toBe('verified');
+      expect(edge.hostnames.size).toBe(0);
+    });
+
+    it('refuses a CNAME to another reseller target on the domestic domain', async () => {
+      const { service, rows, world } = build({ rows: [pendingRow({ verificationStatus: 'verifying', edgePath: 'own_edge' })], edgeOff: true });
+      behindOwnEdge(world);
+      world.cname['ali-vpn.ir'] = ['reza.edge.barghgho.ir'];
+      await service.checkDue(at(1));
+      const cname = (rows[0]['lastCheck'] as DomainCheck).lines.find((l) => l.check === 'cname');
+      expect(cname).toMatchObject({ ok: false, expected: ['ali.edge.barghgho.ir'] });
+    });
+
+    it('moves a verified domain without unrouting it: the Custom Hostname stays until the new path passes', async () => {
+      const issued = pendingRow({ verificationStatus: 'verified', verifiedAt: T0, lastCheckedAt: T0, edgeProvider: 'cloudflare', edgeHostnameId: 'fake-1', edgeStatus: 'issued', edgeCheckedAt: T0 });
+      const { service, rows, world, edge, outbox } = build({ rows: [issued] });
+      edge.hostnames.set('fake-1', { id: 'fake-1', host: 'ali-vpn.ir', status: 'issued', ownership: null, errors: [] });
+      world.txt[verifyRecordName('ali-vpn.ir')] = ['tok-1'];
+
+      const moving = await service.setPath(owner, RESELLER, 'd1', 'own_edge', at(1));
+      expect(moving).toMatchObject({ status: 'verified', path: 'own_edge', switching: true, cnameTarget: 'ali.edge.barghgho.ir' });
+      expect(outbox.filter((e) => e.type === OutboxEventType.TENANT_DOMAIN_CHANGED)).toHaveLength(1);
+
+      // Not yet through its own edge: the whole check runs, the domain keeps routing and its hostname.
+      await service.checkDue(at(1.1));
+      expect((rows[0]['lastCheck'] as DomainCheck).lines.map((l) => l.check)).toContain('https');
+      expect(rows[0]).toMatchObject({ verificationStatus: 'verified', revalidatingSince: null, pathSwitchedAt: at(1) });
+      expect(edge.hostnames.has('fake-1')).toBe(true);
+
+      behindOwnEdge(world);
+      await service.checkDue(at(1.2));
+      expect(rows[0]['pathSwitchedAt']).toBeNull();
+      expect(edge.hostnames.size).toBe(0);
+      expect(rows[0]).toMatchObject({ edgeHostnameId: null, edgeStatus: 'none' });
+    });
+
+    it('changes an unverified domain path with no switch to prove', async () => {
+      const { service, rows } = build({ rows: [pendingRow()] });
+      await expect(service.setPath(owner, RESELLER, 'd1', 'own_edge', at(1))).resolves.toMatchObject({ path: 'own_edge', switching: false });
+      expect(rows[0]['pathSwitchedAt']).toBeNull();
+      await expect(service.setPath(stranger, RESELLER, 'd1', 'platform_cdn', at(1))).rejects.toMatchObject({ reason: 'not_allowed' });
     });
   });
 

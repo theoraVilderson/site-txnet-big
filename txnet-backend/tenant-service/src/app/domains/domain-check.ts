@@ -37,6 +37,12 @@ export type CheckLine = { check: CheckName; expected: string[]; found: string[];
 /** A whole check, as stored in `tenant_domain.lastCheck` and shown to the tenant. */
 export type DomainCheck = { at: string; ok: boolean; lines: CheckLine[] };
 
+/** A check's result as the page shows it, order aside: two equal ones are no news (RT-1-e2). */
+export function resultOf(check: unknown): string {
+  const lines = (check as DomainCheck | null)?.lines ?? [];
+  return JSON.stringify(lines.map((l) => [l.check, l.ok, [...l.found].sort()]).sort());
+}
+
 /** The record holds the token among whatever else the name carries. */
 export function txtLine(host: string, token: string, found: string[]): CheckLine {
   return { check: 'txt', expected: [`${verifyRecordName(host)} TXT ${token}`], found, ok: found.includes(token) };
@@ -47,12 +53,14 @@ export function txtLine(host: string, token: string, found: string[]): CheckLine
  * name this one's: a CDN in front of the domain answers DNS with its own name,
  * and the target is then its origin, visible only in the host a request
  * arrives as — which the probe lines judge. A CNAME to someone else's target
- * is the one DNS answer that is wrong on its face.
+ * is the one DNS answer that is wrong on its face — under either of the
+ * platform's domains, so this reseller's target on the other path fails too
+ * (NIN-1-e1).
  */
-export function cnameLine(target: string, domain: string, found: string[]): CheckLine {
-  const zone = `.${CNAME_TARGET_ZONE}.${domain}`.toLowerCase();
+export function cnameLine(target: string, domains: readonly string[], found: string[]): CheckLine {
+  const zones = domains.filter(Boolean).map((d) => `.${CNAME_TARGET_ZONE}.${d}`.toLowerCase());
   const names = found.map((n) => n.toLowerCase().replace(/\.+$/, ''));
-  return { check: 'cname', expected: [target], found: names, ok: !names.some((n) => n.endsWith(zone) && n !== target) };
+  return { check: 'cname', expected: [target], found: names, ok: !names.some((n) => zones.some((z) => n.endsWith(z)) && n !== target) };
 }
 
 /**
