@@ -23,16 +23,14 @@ is on this surface with this door: [network/contract.panel-cost.md](../network/c
 
 | Door | Boundary |
 |---|---|
-| `PanelPermissionGuard`: `platform.node.manage` (was `panel.manage`; migration `20261009000400`, AC-1-d; granted to no role, so SuperAdmin via `*`) | `panelScopeOf` (`panel-scope.ts`): the caller's tenant is `platform_owner`, else 403 `not_platform_owner` |
+| Owner's: `/api/billing/systems/…`, `SystemsDoorGuard` on `platform.node.manage` (was `panel.manage`; migration `20261009000400`, AC-1-d; granted to no role, so SuperAdmin via `*`) | `panelScopeOf` (`panel-scope.ts`): the platform's panels (`ownershipType = platform`, `tenantId` null) |
+| A reseller's: `/api/billing/tenants/:tenantId/systems/…`, every route below but `grants/…` — [contract.systems-reseller.md](contract.systems-reseller.md) (BYO-1-b, ADR-0166) | the path's tenant's own panels and groups; `ResellerAccess` on `node.manage` |
 
 Every route opens with `panelScopeOf`, which answers the `where` of every read
-and the ownership of every write: for the owner, the **platform's** panels
-(`ownershipType = platform`, `tenantId` null), not a reseller's dedicated one.
-Opening the page to a reseller is a change to that one function, not to a
-route (ADR-0080 decision 2). **Registering** here stays owner-only. A
-reseller registers its own router only for an import in place, through the
-import's door: the same `registerFor` / `resubmitFor` with the reseller as
-owner (entitlement `contract.import-in-place.md` rules 10-13, ADR-0162).
+and the ownership of every write, on the cross-tenant pool (`network.panel` is
+tenant-isolated). A panel or group outside it is `not_found`, never named. A
+reseller's router for an import in place also comes through the import's door
+(ADR-0162).
 
 ## Routes
 

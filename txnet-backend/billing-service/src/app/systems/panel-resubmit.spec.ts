@@ -19,7 +19,6 @@ import { ConnectionTestFault, PanelReviewState, TenantType } from '@prisma/clien
 
 import { PanelCredentialWriter, PanelRegistrationService, PanelResubmitRefused } from './panel-registration';
 import { resubmitCredentialsSchema } from './panel-registration.schema';
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -87,11 +86,9 @@ function harness(row: Partial<Row> | null, opts: { vaultFails?: boolean; duringV
 const actor = { adminId: ADMIN, tenantId: OWNER };
 
 describe('PanelRegistrationService.resubmitCredentials', () => {
-  it('refuses a tenant that is not the platform owner, and writes nothing', async () => {
+  it("is not_found to a reseller for the platform's panel, and writes nothing (ADR-0166)", async () => {
     const { service, written, updates } = harness({});
-    await expect(service.resubmitCredentials({ adminId: ADMIN, tenantId: RESELLER }, PANEL, LOGIN)).rejects.toBeInstanceOf(
-      PanelScopeRefused,
-    );
+    await expect(service.resubmitCredentials({ adminId: ADMIN, tenantId: RESELLER }, PANEL, LOGIN)).rejects.toMatchObject({ reason: 'not_found' });
     expect(written).toHaveLength(0);
     expect(updates).toHaveLength(0);
   });

@@ -6,7 +6,8 @@ import { GrantGroupMoveJobBody, grantGroupMoveJobSchema, GrantGroupMoveSelection
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { GrantGroupMoveService } from './grant-group-move';
-import { PanelPermissionGuard, SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
+import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE } from './systems.controller';
+import { SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing } from './systems-refusals';
 
 /**
@@ -18,7 +19,7 @@ import { refusing } from './systems-refusals';
  * 422 `selection_empty` / `selection_too_large`.
  */
 @Controller('billing/systems')
-@UseGuards(PanelPermissionGuard)
+@UseGuards(SystemsDoorGuard)
 export class GrantGroupMoveController {
   constructor(private readonly moves: GrantGroupMoveService) {}
 
@@ -27,7 +28,7 @@ export class GrantGroupMoveController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   regroup(@Param('grantId', new ParseUUIDPipe()) grantId: string, @Body(new ZodValidationPipe(grantRegroupSchema)) body: GrantRegroupBody, @Req() req: Request, @Ip() ip: string) {
-    return refusing(() => this.moves.one({ ...actorOf(req), ip }, grantId, body));
+    return refusing(() => this.moves.one({ ...systemsActorOf(req), ip }, grantId, body));
   }
 
   /** The confirm's figures: `{grants, keep, move}`. */
@@ -35,26 +36,26 @@ export class GrantGroupMoveController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(SYSTEMS_ADMIN_READ)
   count(@Body(new ZodValidationPipe(grantGroupMoveSelectionSchema)) body: GrantGroupMoveSelection, @Req() req: Request) {
-    return refusing(() => this.moves.count(actorOf(req), body));
+    return refusing(() => this.moves.count(systemsActorOf(req), body));
   }
 
   @Post('grant-group-moves')
   @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   start(@Body(new ZodValidationPipe(grantGroupMoveJobSchema)) body: GrantGroupMoveJobBody, @Req() req: Request, @Ip() ip: string) {
-    return refusing(() => this.moves.start({ ...actorOf(req), ip }, body));
+    return refusing(() => this.moves.start({ ...systemsActorOf(req), ip }, body));
   }
 
   @Get('grant-group-moves/:jobId')
   @RateLimit(SYSTEMS_ADMIN_READ)
   job(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request) {
-    return refusing(() => this.moves.job(actorOf(req), jobId));
+    return refusing(() => this.moves.job(systemsActorOf(req), jobId));
   }
 
   @Get('grant-group-moves/:jobId/outcomes')
   @RateLimit(SYSTEMS_ADMIN_READ)
   outcomes(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Query(new ZodValidationPipe(grantBulkPageSchema)) page: GrantBulkPage, @Req() req: Request) {
-    return refusing(() => this.moves.outcomes(actorOf(req), jobId, page));
+    return refusing(() => this.moves.outcomes(systemsActorOf(req), jobId, page));
   }
 
   /** Stops it: the Grants moved stay moved. */
@@ -62,6 +63,6 @@ export class GrantGroupMoveController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   cancel(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request, @Ip() ip: string) {
-    return refusing(() => this.moves.cancel({ ...actorOf(req), ip }, jobId));
+    return refusing(() => this.moves.cancel({ ...systemsActorOf(req), ip }, jobId));
   }
 }

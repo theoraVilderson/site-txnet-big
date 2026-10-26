@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ResellerAccess } from '@txnet-backend/shared-core';
 
 import { TrafficModule } from '../traffic/traffic.module';
 import { GrantGroupMoveController } from './grant-group-move.controller';
@@ -14,12 +15,13 @@ import { PanelCostService } from './panel-cost';
 import { PanelLifecycleService } from './panel-lifecycle';
 import { PANEL_CREDENTIAL_WRITER, PanelRegistrationService } from './panel-registration';
 import { SystemsReadService } from './systems-read';
-import { PanelPermissionGuard, SystemsController } from './systems.controller';
+import { SystemsDoorGuard } from './systems-door';
+import { SystemsController } from './systems.controller';
 import { UsageHoldsService } from './usage-holds';
 
 /**
- * The platform owner's systems surface (F-027-ar, ADR-0080): the routes behind
- * the systems page (F-027-ad). Every one writes or reads desired state and
+ * The systems surface (F-027-ar, ADR-0080), the owner's and a reseller's own
+ * (ADR-0166): the routes behind the systems page (F-027-ad). Every one writes or reads desired state and
  * observations in the database; nothing here calls `network-service`, which
  * has no route to call (ADR-0071).
  *
@@ -42,7 +44,8 @@ import { UsageHoldsService } from './usage-holds';
     InboundReleaseService,
     PanelLifecycleService,
     PanelCostService,
-    PanelPermissionGuard,
+    SystemsDoorGuard,
+    ResellerAccess,
     PanelCredentialClient,
     { provide: PANEL_CREDENTIAL_WRITER, useExisting: PanelCredentialClient },
   ],

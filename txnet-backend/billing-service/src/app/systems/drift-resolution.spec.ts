@@ -61,7 +61,8 @@ function harness() {
       },
     },
   };
-  const all = { $transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) };
+  // The event is read on the cross-tenant pool, the panel's scope in its where (BYO-1-b).
+  const all = { panelDriftEvent: prisma.panelDriftEvent, $transaction: async <T>(fn: (t: typeof tx) => Promise<T>) => fn(tx) };
   return { service: new SystemsReadService(prisma as never, all as never), panel, events };
 }
 

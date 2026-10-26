@@ -82,13 +82,13 @@ export class PanelCostService {
 
   private async panelOf(actor: SystemsActor, panelId: string) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panel = await this.prisma.panel.findFirst({ where: { id: panelId, ...scope }, select: { id: true, retiredAt: true } });
+    const panel = await this.all.panel.findFirst({ where: { id: panelId, ...scope }, select: { id: true, retiredAt: true } });
     if (!panel) throw new SystemsRefused('not_found');
     return panel;
   }
 
   private async view(panelId: string, now: Date): Promise<{ current: PanelCostView | null; history: PanelCostView[] }> {
-    const rows = await this.prisma.panelCost.findMany({ where: { panelId }, orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }] });
+    const rows = await this.all.panelCost.findMany({ where: { panelId }, orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }] });
     const current = costOn(rows, dayOf(now));
     return { current: current && viewOf(current), history: rows.map(viewOf) };
   }

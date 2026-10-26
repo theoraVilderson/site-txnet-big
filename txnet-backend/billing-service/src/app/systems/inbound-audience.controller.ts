@@ -7,7 +7,8 @@ import { GrantBulkPage, grantBulkPageSchema } from '../payment/gift/grant-bulk-j
 import { InboundReleaseInput, InboundReleaseService } from './inbound-release';
 import { InboundAudienceInput, MemberInboundsService } from './member-inbounds';
 import { ReleaseInboundBody, releaseInboundSchema, SetInboundAudienceBody, setInboundAudienceSchema, SetListingShareBody, setListingShareSchema } from './panel-registration.schema';
-import { PanelPermissionGuard, SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE, actorOf } from './systems.controller';
+import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE } from './systems.controller';
+import { RESELLER_SYSTEMS_PATH, SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing } from './systems-refusals';
 
 /**
@@ -16,8 +17,8 @@ import { refusing } from './systems-refusals';
  * decisions 1, 3 and 6). Beside `SystemsController` rather than in it, which
  * is past its size.
  */
-@Controller('billing/systems')
-@UseGuards(PanelPermissionGuard)
+@Controller(['billing/systems', RESELLER_SYSTEMS_PATH])
+@UseGuards(SystemsDoorGuard)
 export class InboundAudienceController {
   constructor(
     private readonly memberInbounds: MemberInboundsService,
@@ -33,7 +34,7 @@ export class InboundAudienceController {
     @Body(new ZodValidationPipe(setInboundAudienceSchema)) body: SetInboundAudienceBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.memberInbounds.setAudience(actorOf(req), id, remoteId, body as InboundAudienceInput));
+    return refusing(() => this.memberInbounds.setAudience(systemsActorOf(req), id, remoteId, body as InboundAudienceInput));
   }
 
   /** A group's share of an inbound it lists; `404 listing_not_found` on any other. */
@@ -46,7 +47,7 @@ export class InboundAudienceController {
     @Body(new ZodValidationPipe(setListingShareSchema)) body: SetListingShareBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.memberInbounds.setShare(actorOf(req), id, panelId, remoteId, body.maxClients));
+    return refusing(() => this.memberInbounds.setShare(systemsActorOf(req), id, panelId, remoteId, body.maxClients));
   }
 
   /** The way out of `inbound_has_configs`: **202** a release job, `move` or `empty`; the listing changes when it ends. */
@@ -60,19 +61,19 @@ export class InboundAudienceController {
     @Req() req: Request,
     @Ip() ip: string,
   ) {
-    return refusing(() => this.releases.start({ ...actorOf(req), ip }, id, remoteId, body as InboundReleaseInput));
+    return refusing(() => this.releases.start({ ...systemsActorOf(req), ip }, id, remoteId, body as InboundReleaseInput));
   }
 
   @Get('inbound-releases/:jobId')
   @RateLimit(SYSTEMS_ADMIN_READ)
   releaseJob(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request) {
-    return refusing(() => this.releases.job(actorOf(req), jobId));
+    return refusing(() => this.releases.job(systemsActorOf(req), jobId));
   }
 
   @Get('inbound-releases/:jobId/outcomes')
   @RateLimit(SYSTEMS_ADMIN_READ)
   releaseOutcomes(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Query(new ZodValidationPipe(grantBulkPageSchema)) page: GrantBulkPage, @Req() req: Request) {
-    return refusing(() => this.releases.outcomes(actorOf(req), jobId, page));
+    return refusing(() => this.releases.outcomes(systemsActorOf(req), jobId, page));
   }
 
   /** Stops it: what moved stays moved, the listing is as it was. */
@@ -80,6 +81,6 @@ export class InboundAudienceController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   cancelRelease(@Param('jobId', new ParseUUIDPipe()) jobId: string, @Req() req: Request, @Ip() ip: string) {
-    return refusing(() => this.releases.cancel({ ...actorOf(req), ip }, jobId));
+    return refusing(() => this.releases.cancel({ ...systemsActorOf(req), ip }, jobId));
   }
 }

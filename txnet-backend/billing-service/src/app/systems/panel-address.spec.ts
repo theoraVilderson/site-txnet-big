@@ -69,6 +69,14 @@ function harness(
     tenant: {
       findUnique: async () => ({ tenantType: TenantType.platform_owner }),
     },
+  };
+  const all = {
+    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      lookups.push(values);
+      const holder = holders.shift();
+      return holder ? [holder] : [];
+    },
+    // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
     panel: {
       findFirst: async () => ({
         transport: PanelTransport.pull,
@@ -80,15 +88,6 @@ function harness(
         retiredAt: null,
         ...opts.panel,
       }),
-    },
-  };
-  const all = {
-    $queryRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
-      lookups.push(values);
-      const holder = holders.shift();
-      return holder ? [holder] : [];
-    },
-    panel: {
       create: async (args: unknown) => {
         opts.write?.();
         writes.push(args);

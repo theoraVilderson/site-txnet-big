@@ -60,7 +60,7 @@ export class PanelLifecycleService {
   async update(actor: SystemsActor, panelId: string, input: PanelSettingsInput) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: panelId, ...scope };
-    const panel = await this.prisma.panel.findFirst({
+    const panel = await this.all.panel.findFirst({
       where,
       select: { transport: true, driverType: true, reviewState: true, apiBaseUrl: true, clientBaseUrl: true, ipAddress: true, retiredAt: true },
     });
@@ -107,7 +107,7 @@ export class PanelLifecycleService {
    */
   async remove(actor: SystemsActor, panelId: string, orphans?: EvictOrphans) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panel = await this.prisma.panel.findFirst({ where: { id: panelId, ...scope }, select: { retiredAt: true } });
+    const panel = await this.all.panel.findFirst({ where: { id: panelId, ...scope }, select: { retiredAt: true } });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.retiredAt !== null) throw new SystemsRefused('panel_retired');
     if (orphans) {
@@ -149,7 +149,7 @@ export class PanelLifecycleService {
   async restore(actor: SystemsActor, panelId: string) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: panelId, ...scope };
-    const panel = await this.prisma.panel.findFirst({ where, select: { transport: true, ipAddress: true, retiredAt: true } });
+    const panel = await this.all.panel.findFirst({ where, select: { transport: true, ipAddress: true, retiredAt: true } });
     if (!panel) throw new SystemsRefused('not_found');
     if (panel.retiredAt === null) throw new SystemsRefused('panel_not_retired');
     // An archived push panel holds no IP (F-027-ff): coming back, it claims it again.
@@ -173,7 +173,7 @@ export class PanelLifecycleService {
    */
   async removePreview(actor: SystemsActor, panelId: string) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panel = await this.prisma.panel.findFirst({ where: { id: panelId, ...scope }, select: { id: true } });
+    const panel = await this.all.panel.findFirst({ where: { id: panelId, ...scope }, select: { id: true } });
     if (!panel) throw new SystemsRefused('not_found');
     const memberships = await this.all.panelGroupMember.findMany({ where: { panelId }, select: { groupId: true } });
     let liveConfigs = 0;

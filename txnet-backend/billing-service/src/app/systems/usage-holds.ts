@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Prisma, UsageDispositionState } from '@prisma/client';
 import { OutboxEventType, USAGE_RELEASE_AGGREGATE, type UsageReleasePayload } from '@txnet-backend/shared-core';
 
+import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { panelScopeOf, SystemsActor } from './panel-scope';
 import { SystemsRefused } from './systems-read';
@@ -48,7 +49,11 @@ type HoldRow = Prisma.UsageHoldGetPayload<{ select: typeof HOLD_FIELDS }>;
 export class UsageHoldsService {
   private readonly logger = new Logger(UsageHoldsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    /** `network.panel` is tenant-isolated: a reseller's panels are read here, the scope in the `where` (BYO-1-b). */
+    private readonly all: CrossTenantPrismaService,
+  ) {}
 
   /** Holds on panels in scope, newest first, keyset-paged by id. `state: pending` narrows to the open ones. */
   async holds(actor: SystemsActor, query: HoldQueueQuery) {
@@ -115,7 +120,7 @@ export class UsageHoldsService {
 
   private async panelsInScope(actor: SystemsActor) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panels = await this.prisma.panel.findMany({ where: scope, select: { id: true, name: true } });
+    const panels = await this.all.panel.findMany({ where: scope, select: { id: true, name: true } });
     return new Map(panels.map((p) => [p.id, p.name]));
   }
 

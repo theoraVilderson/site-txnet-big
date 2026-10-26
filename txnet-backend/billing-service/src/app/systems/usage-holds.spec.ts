@@ -15,7 +15,6 @@
 import { HoldReason, TenantType, UsageDispositionState } from '@prisma/client';
 import { OutboxEventType, USAGE_RELEASE_AGGREGATE } from '@txnet-backend/shared-core';
 
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 import { UsageHoldsService } from './usage-holds';
 
@@ -82,7 +81,8 @@ function harness() {
       },
     },
   };
-  return { service: new UsageHoldsService(prisma as never), holds, outbox };
+  // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
+  return { service: new UsageHoldsService(prisma as never, { panel: prisma.panel } as never), holds, outbox };
 }
 
 const owner = { adminId: ADMIN, tenantId: OWNER };
@@ -99,11 +99,11 @@ describe('UsageHoldsService', () => {
     expect(page.next).toBeNull();
   });
 
-  it('refuses a reseller before reading a hold, on every route', async () => {
+  it("shows a reseller the holds on its own panels only, and never resolves the platform's (ADR-0166)", async () => {
     const { service, holds, outbox } = harness();
-    await expect(service.holds(reseller, {})).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.release(reseller, HOLD, {})).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.writeOff(reseller, HOLD, { note: 'x' })).rejects.toBeInstanceOf(PanelScopeRefused);
+    expect((await service.holds(reseller, {})).items.map((h) => h.id)).toEqual([FOREIGN_HOLD]);
+    await expect(service.release(reseller, HOLD, {})).rejects.toEqual(new SystemsRefused('not_found'));
+    await expect(service.writeOff(reseller, HOLD, { note: 'x' })).rejects.toEqual(new SystemsRefused('not_found'));
     expect(outbox).toHaveLength(0);
     expect(holds[0]['state']).toBe(UsageDispositionState.pending);
   });

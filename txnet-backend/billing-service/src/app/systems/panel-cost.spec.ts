@@ -18,7 +18,6 @@ import { PanelCostService, panelCostSchema } from './panel-cost';
 
 const PLATFORM_TENANT = '10000000-0000-4000-8000-000000000001';
 import { costOn } from './panel-cost-on';
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 import { currencyRegistry } from '../../../../test-support/currency-registry';
 
@@ -42,13 +41,14 @@ function build(history = [row('2026-09-01', '40.00')]) {
   const prisma = {
     ...currencyRegistry,
     tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === PLATFORM ? 'platform_owner' : 'reseller' }) },
-    panel: { findFirst: async ({ where }: { where: { id: string } }) => (where.id === PANEL ? { id: PANEL, retiredAt: null } : null) },
-    panelCost: { findMany: async () => [...history].sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime() || b.createdAt.getTime() - a.createdAt.getTime()) },
   };
   const restated: unknown[][] = [];
   const all = {
     ...currencyRegistry,
+    // Panels and their prices are read on the cross-tenant pool, the scope in the where (BYO-1-b).
+    panel: { findFirst: async ({ where }: { where: { id: string; ownershipType: string } }) => (where.id === PANEL && where.ownershipType === 'platform' ? { id: PANEL, retiredAt: null } : null) },
     panelCost: {
+      findMany: async () => [...history].sort((a, b) => b.effectiveFrom.getTime() - a.effectiveFrom.getTime() || b.createdAt.getTime() - a.createdAt.getTime()),
       create: async ({ data }: { data: Record<string, unknown> }) => {
         created.push(data);
         history.push({ ...row(String(data.effectiveFrom instanceof Date ? data.effectiveFrom.toISOString().slice(0, 10) : ''), String(data.monthlyCostUsd)), createdAt: NOW });
@@ -108,9 +108,9 @@ describe('PanelCostService', () => {
     expect(created).toHaveLength(1);
   });
 
-  it('knows no panel outside the scope, and no scope outside the platform', async () => {
+  it("knows no panel outside the scope: a reseller's scope holds its own panels, never the platform's (ADR-0166)", async () => {
     const { service } = build();
     await expect(service.set(platform, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', { monthlyCostUsd: '1' }, NOW)).rejects.toBeInstanceOf(SystemsRefused);
-    await expect(service.history({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.history({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toEqual(new SystemsRefused('not_found'));
   });
 });

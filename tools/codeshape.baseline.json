@@ -314,7 +314,7 @@
   "txnet-backend/billing-service/src/app/payment/pricing/gateway-pricing.ts": 425,
   "txnet-backend/billing-service/src/app/revenue/reseller-revenue.service.ts": 451,
   "txnet-backend/billing-service/src/app/settlement/settlement.service.ts": 519,
-  "txnet-backend/billing-service/src/app/systems/systems.controller.ts": 445,
+  "txnet-backend/billing-service/src/app/systems/systems.controller.ts": 420,
   "txnet-backend/billing-service/src/app/wallet/wallet-history.service.ts": 457,
   "txnet-backend/bot-service/src/app/auth-api/auth-api.client.ts": 492,
   "txnet-backend/bot-service/src/app/conversation/router.ts": 598,

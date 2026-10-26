@@ -14,6 +14,11 @@ export function isPlatformTenant(type: TenantType | null | undefined): boolean {
   return type === PLATFORM_TENANT_TYPE;
 }
 
+/** Is this a reseller's tenant (ADR-0166: one that owns panels of its own)? A tenant nobody found is neither. */
+export function isResellerTenant(type: TenantType | null | undefined): boolean {
+  return type === TenantType.reseller;
+}
+
 /**
  * The platform owner's tenant id (ADR-0142): what every row the platform owns
  * carries, read on the caller's client (`tenant` has no RLS). One tenant is

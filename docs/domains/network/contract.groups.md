@@ -32,7 +32,8 @@ tenant's rows and the platform's), everything for `txnet_cross_tenant`.
    for one panel would make fulfilment create two configs on it.
 2. **Tenancy follows the panels.** A platform group (`tenantId` null) holds
    platform panels only; a tenant's group holds its own panels and platform
-   ones. The member carries its group's tenant, so RLS reads it without a join.
+   ones as far as the database goes, but billing's door adds only the actor's
+   own (ADR-0166 point 5: no mixed group). The member carries its group's tenant, so RLS reads it without a join.
    A platform group holding one reseller's dedicated panel would serve every
    tenant's users from it — `panel_group_member_fits` refuses it, and
    `panel_keeps_its_groups` refuses giving a platform panel to a tenant while

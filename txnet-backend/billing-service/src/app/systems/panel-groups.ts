@@ -120,7 +120,7 @@ export class PanelGroupsService {
     const group = await this.groupInScope(scope, groupId);
     // An archived panel (F-027-bz) takes no group; the trigger `panel_group_member_panel_not_retired` holds it too.
     // ... nor one being deleted (F-027-eg): the sweep is taking it out of every group.
-    const panel = await this.prisma.panel.findFirst({ where: { id: input.panelId, ...panelScope, retiredAt: null, removeRequestedAt: null }, select: { id: true } });
+    const panel = await this.crossTenant.panel.findFirst({ where: { id: input.panelId, ...panelScope, retiredAt: null, removeRequestedAt: null }, select: { id: true } });
     if (!panel) throw new SystemsRefused('panel_not_found');
 
     try {

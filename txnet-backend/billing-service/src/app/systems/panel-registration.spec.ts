@@ -3,9 +3,9 @@
  * `panel` row as `pending` and nothing tests it — `network-service` does, on
  * its own tick. What would break silently here:
  *
- *  - **who.** The platform owner registers, nobody else (decision 2): a
- *    reseller's panel would have the cross-tenant collector dial an address a
- *    tenant chose. The refusal writes nothing and calls no vault;
+ *  - **whose.** The platform owner registers the platform's panel; a
+ *    reseller its own, its login sealed under it (ADR-0166); a tenant nobody
+ *    found is refused, writing nothing and calling no vault;
  *  - **the secret.** The panel's login goes to the owner's vault and never
  *    into `panel.panelApiCredentials`, which holds only where the vault keeps
  *    it — a column is read by every `select *`, a vault row by one audited
@@ -81,17 +81,21 @@ function harness(opts: { vaultFails?: boolean; secretFails?: boolean } = {}) {
 }
 
 describe('PanelRegistrationService.register', () => {
-  it('refuses a tenant that is not the platform owner, before anything is written', async () => {
+  it("writes a reseller's panel as its own, its login sealed under it, and refuses a tenant nobody found (ADR-0166)", async () => {
     const { service, panels, written } = harness();
+    const all = (service as unknown as { all: Record<string, unknown> }).all;
+    // Under `panels_max`'s code default: the limit's levels are empty and it holds none.
+    const tx = { ...all, tenant: { findUnique: async () => ({ tenantType: TenantType.reseller }) }, tenantSubscription: { findUnique: async () => null },
+      resellerLimit: { findMany: async () => [] }, packageLimit: { findMany: async () => [] }, resellerLimitSetting: { findMany: async () => [] },
+      $executeRaw: async () => 1, panel: { ...(all['panel'] as object), count: async () => 0 } };
+    all['$transaction'] = async (work: (t: typeof tx) => Promise<unknown>) => work(tx);
 
-    await expect(service.register({ adminId: ADMIN, tenantId: RESELLER }, INPUT)).rejects.toMatchObject({
-      reason: 'not_platform_owner',
-    });
-    await expect(service.register({ adminId: ADMIN, tenantId: RESELLER }, INPUT)).rejects.toBeInstanceOf(
-      PanelScopeRefused,
-    );
-    expect(panels).toHaveLength(0);
-    expect(written).toHaveLength(0);
+    await service.register({ adminId: ADMIN, tenantId: RESELLER }, INPUT);
+    expect(panels[0]).toMatchObject({ ownershipType: 'tenant', tenantId: RESELLER, panelApiCredentials: panelCredentialRef(RESELLER, panels[0]['id'] as string) });
+    expect(written[0]).toMatchObject({ tenantId: RESELLER });
+
+    await expect(service.register({ adminId: ADMIN, tenantId: '99999999-9999-4999-8999-999999999999' }, INPUT)).rejects.toBeInstanceOf(PanelScopeRefused);
+    expect(panels).toHaveLength(1);
   });
 
   it('writes a pending platform panel whose credential column names the vault, never the secret', async () => {
@@ -232,12 +236,11 @@ describe('PanelRegistrationService.resubmitRadiusSecret (F-027-az)', () => {
     const updates: Array<Record<string, unknown>> = [];
     const prisma = {
       tenant: { findUnique: async ({ where }: { where: { id: string } }) => ({ tenantType: where.id === OWNER ? TenantType.platform_owner : TenantType.reseller }) },
-      panel: {
-        findFirst: async ({ where }: { where: { id: string } }) => (panel && panel.id === where.id ? { ...panel } : null),
-      },
     };
+    // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
     const all = {
       panel: {
+        findFirst: async ({ where }: { where: { id: string } }) => (panel && panel.id === where.id ? { ...panel } : null),
         update: async ({ data }: { data: Record<string, unknown> }) => {
           updates.push(data);
           Object.assign(panel as Row, data);

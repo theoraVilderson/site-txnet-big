@@ -18,7 +18,6 @@ import { ConfigProtocol, InboundPlacement, TenantType } from '@prisma/client';
 
 import { PanelInboundsService } from './panel-inbounds';
 import { updatePanelInboundsSchema } from './panel-registration.schema';
-import { PanelScopeRefused } from './panel-scope';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -140,9 +139,9 @@ describe('PanelInboundsService', () => {
     expect(panels[0].inboundsReadAt).toBeNull();
   });
 
-  it("is the platform owner's, over the platform's panels only", async () => {
+  it("reaches only a panel in scope: the platform's to the owner, a reseller's own to it (ADR-0166)", async () => {
     const { service } = harness();
-    await expect(service.inbounds({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.inbounds({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toMatchObject({ reason: 'panel_not_found' });
     await expect(service.inbounds(owner, RESELLER_PANEL)).rejects.toMatchObject({ reason: 'panel_not_found' });
   });
 });

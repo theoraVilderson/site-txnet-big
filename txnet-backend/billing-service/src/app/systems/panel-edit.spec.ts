@@ -18,7 +18,6 @@ import { DriverType, PanelReviewState, PanelTransport, TenantType } from '@prism
 
 import { PanelLifecycleService } from './panel-lifecycle';
 import { updatePanelSchema } from './panel-registration.schema';
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -56,14 +55,13 @@ function harness(row: Row = {}) {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === OWNER ? { tenantType: TenantType.platform_owner } : { tenantType: TenantType.reseller },
     },
-    panel: {
-      findFirst: async ({ where }: { where: Row }) => (inScope(where) ? { ...panel } : null),
-    },
   };
+  // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
   const all = {
     // No other panel holds the address (F-027-cd).
     $queryRaw: async () => [],
     panel: {
+      findFirst: async ({ where }: { where: Row }) => (inScope(where) ? { ...panel } : null),
       updateMany: async ({ where, data }: { where: Row; data: Row }) => {
         if (!inScope(where) || (where['retiredAt'] === null && panel['retiredAt'] !== null)) return { count: 0 };
         Object.assign(panel, data);
@@ -147,10 +145,11 @@ describe('PanelLifecycleService.update (F-027-by)', () => {
     expect(panel['ovpnProfile']).toBeUndefined();
   });
 
-  it('refuses a reseller before reading, and a panel outside the scope is not found', async () => {
-    const { service } = harness({ tenantId: RESELLER, ownershipType: 'tenant' });
-    await expect(service.update({ adminId: ADMIN, tenantId: RESELLER }, PANEL, { name: 'x' })).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.update({ adminId: ADMIN, tenantId: OWNER }, PANEL, { name: 'x' })).rejects.toEqual(new SystemsRefused('not_found'));
+  it("edits a reseller's own panel for the reseller (ADR-0166), and is not_found to the owner", async () => {
+    const { service, panel } = harness({ tenantId: RESELLER, ownershipType: 'tenant' });
+    await service.update({ adminId: ADMIN, tenantId: RESELLER }, PANEL, { name: 'x' });
+    expect(panel['name']).toBe('x');
+    await expect(service.update({ adminId: ADMIN, tenantId: OWNER }, PANEL, { name: 'y' })).rejects.toEqual(new SystemsRefused('not_found'));
   });
 });
 

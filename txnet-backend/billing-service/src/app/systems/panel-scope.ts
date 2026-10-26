@@ -1,7 +1,7 @@
 import { PanelOwnershipType } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { isPlatformTenant } from '@txnet-backend/shared-core';
+import { isPlatformTenant, isResellerTenant } from '@txnet-backend/shared-core';
 
 /** Who is acting on the systems surface: the gate's user and tenant, never a body field. */
 export type SystemsActor = { adminId: string; tenantId: string };
@@ -20,19 +20,21 @@ export class PanelScopeRefused extends Error {
  * (ADR-0080 decision 2). Every systems route starts here, so it doubles as the
  * `where` of each read and the ownership of each write.
  *
- * Today only the platform owner passes, and its scope is the platform's panels
- * (`ownershipType = platform`, `tenantId` null — network invariant 9), not a
- * reseller's dedicated one. Opening the surface to a reseller is a change here
- * — `{ownershipType: tenant, tenantId}` — plus a decision
- * (`network/open-questions.md`), not a rewrite of any route.
+ * The platform's tenant gets the platform's panels (`ownershipType =
+ * platform`, `tenantId` null — network invariant 9); a reseller its own
+ * (`{tenant, tenantId}`, ADR-0166 point 2) — the actor's tenant is the path's
+ * behind the reseller's door (`systems-door.ts`). No tenant is refused.
  *
- * Read on the app pool: `tenant.tenant` has no RLS policy (as in
- * `GatewayAdminService.isOwner`).
+ * `network.panel` is tenant-isolated: a reseller's panel is invisible to a
+ * bare app-pool read, so every scoped read goes through the cross-tenant pool
+ * with this scope in its `where` (BYO-1-b). `tenant.tenant` has no RLS policy,
+ * so this read stays on the app pool (as in `GatewayAdminService.isOwner`).
  */
 export async function panelScopeOf(prisma: PrismaService, actor: SystemsActor): Promise<PanelScope> {
   const tenant = await prisma.tenant.findUnique({ where: { id: actor.tenantId }, select: { tenantType: true } });
-  if (!isPlatformTenant(tenant?.tenantType)) throw new PanelScopeRefused('not_platform_owner');
-  return { ownershipType: PanelOwnershipType.platform, tenantId: null };
+  if (isPlatformTenant(tenant?.tenantType)) return { ownershipType: PanelOwnershipType.platform, tenantId: null };
+  if (isResellerTenant(tenant?.tenantType)) return { ownershipType: PanelOwnershipType.tenant, tenantId: actor.tenantId };
+  throw new PanelScopeRefused('not_platform_owner');
 }
 
 /** Whose panels a read or write is scoped to: the platform's (`tenantId` null), or one tenant's own (ADR-0162). */

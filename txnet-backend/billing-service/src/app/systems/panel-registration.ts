@@ -61,12 +61,11 @@ export class PanelResubmitRefused extends Error {
  * (`network/contract.registration.md`); nothing calls the Go service, which by
  * ADR-0071 has no route to call.
  *
- * **Owner-only, scoped by tenant from the first line** (decision 2). The
- * caller's tenant must be the platform owner, and the panel is written as the
- * platform's (`ownershipType = platform`, `tenantId` null — network invariant
- * 9). Opening this to a reseller is a change to {@link panelScopeOf} and a decision
- * (`network/open-questions.md`: the collector would dial an address a tenant
- * chose), not a rewrite.
+ * **Scoped by tenant from the first line** (decision 2, ADR-0166). The
+ * platform owner writes the platform's panel (`ownershipType = platform`,
+ * `tenantId` null — network invariant 9); a reseller, behind its own door
+ * (`systems-door.ts`), its own (`{tenant, tenantId}`), under `panels_max`.
+ * The collector dials it through the bare guard (ADR-0095).
  *
  * **The login goes to the vault and nowhere else.** `panelApiCredentials`
  * holds {@link panelCredentialRef}; the login itself is relayed to
@@ -76,10 +75,10 @@ export class PanelResubmitRefused extends Error {
  * deletes the row again, so no tick ever tests a panel whose login was never
  * stored.
  *
- * Every panel write goes through the cross-tenant pool, after `panelScopeOf`
- * has proved the caller is the platform owner on the scoped one: a platform
- * panel's `tenantId` is null, and `network.panel`'s RLS `WITH CHECK` refuses a
- * null tenant on the app pool (20260909001500, list B: shared-read).
+ * Every panel read and write goes through the cross-tenant pool, the scope
+ * `panelScopeOf` answered in its `where`: a platform panel's `tenantId` is
+ * null, which `network.panel`'s RLS `WITH CHECK` refuses on the app pool
+ * (20260909001500, list B: shared-read), and a reseller's is invisible there.
  */
 @Injectable()
 export class PanelRegistrationService {
@@ -228,7 +227,7 @@ export class PanelRegistrationService {
   async resubmitRadiusSecret(actor: SystemsActor, panelId: string, radiusSecret: string) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: panelId, ...scope };
-    const panel = await this.prisma.panel.findFirst({
+    const panel = await this.all.panel.findFirst({
       where,
       select: { transport: true, reviewState: true, panelRadiusSecret: true },
     });

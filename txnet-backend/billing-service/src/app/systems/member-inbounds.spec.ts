@@ -23,7 +23,6 @@ import { sellingInbounds } from '../traffic/selling-settings';
 import { InboundHeldElsewhere, MemberInboundsService } from './member-inbounds';
 import { PanelAlreadyRegistered } from './panel-address';
 import { assignMemberInboundsSchema, setInboundAudienceSchema, setListingShareSchema } from './panel-registration.schema';
-import { PanelScopeRefused } from './panel-scope';
 import { refusing } from './systems-refusals';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -175,11 +174,11 @@ describe('MemberInboundsService.assign — the membership\'s listings', () => {
     await expect(service.assign(owner, GROUP, PANEL, ['5'])).rejects.toMatchObject({ reason: 'inbound_not_sellable' });
   });
 
-  it('reaches only a member of a group in scope, and only for the platform owner', async () => {
+  it("reaches only a member of a group in scope: the platform's group is not_found to a reseller (ADR-0166)", async () => {
     const { service } = harness();
     await expect(service.assign(owner, GROUP, 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ['1'])).rejects.toMatchObject({ reason: 'member_not_found' });
     await expect(service.assign(owner, 'ffffffff-ffff-4fff-8fff-ffffffffffff', PANEL, ['1'])).rejects.toMatchObject({ reason: 'not_found' });
-    await expect(service.assign({ adminId: ADMIN, tenantId: RESELLER }, GROUP, PANEL, ['1'])).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.assign({ adminId: ADMIN, tenantId: RESELLER }, GROUP, PANEL, ['1'])).rejects.toMatchObject({ reason: 'not_found' });
   });
 });
 
@@ -244,7 +243,7 @@ describe('MemberInboundsService.setShare — a group\'s share of a listed inboun
     const { service } = harness();
     await expect(service.setShare(owner, GROUP, PANEL, '1', 5)).rejects.toMatchObject({ reason: 'listing_not_found' });
     await expect(service.setShare(owner, GROUP, PANEL, '3', 5)).rejects.toMatchObject({ reason: 'listing_not_found' });
-    await expect(service.setShare({ adminId: ADMIN, tenantId: RESELLER }, OTHER_GROUP, PANEL, '3', 5)).rejects.toBeInstanceOf(PanelScopeRefused);
+    await expect(service.setShare({ adminId: ADMIN, tenantId: RESELLER }, OTHER_GROUP, PANEL, '3', 5)).rejects.toMatchObject({ reason: 'not_found' });
   });
 });
 

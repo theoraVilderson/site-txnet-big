@@ -132,8 +132,10 @@ const DRIFT_FIELDS = {
  * call to `network-service` (ADR-0071): health, budget and the matrix are what
  * its loops last wrote, and a figure that is stale says so by its timestamp.
  *
- * `network.panel` and `network.panel_drift_event` have no RLS policy, so the
- * app pool reads and writes them directly.
+ * `network.panel` is tenant-isolated and a reseller's panel is invisible to
+ * a bare app-pool read, so panels are read on the cross-tenant pool with the
+ * scope in the `where` (BYO-1-b); drift events, which have no RLS policy, by
+ * the in-scope panels' ids.
  */
 @Injectable()
 export class SystemsReadService {
@@ -152,20 +154,20 @@ export class SystemsReadService {
    */
   async panels(actor: SystemsActor) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panels = await this.prisma.panel.findMany({ where: scope, select: PANEL_FIELDS, orderBy: { name: 'asc' } });
-    const open = await this.prisma.panelDriftEvent.findMany({
+    const panels = await this.all.panel.findMany({ where: scope, select: PANEL_FIELDS, orderBy: { name: 'asc' } });
+    const open = await this.all.panelDriftEvent.findMany({
       where: { panelId: { in: panels.map((p) => p.id) }, acknowledgedAt: null },
       select: { panelId: true, collectionHalted: true },
     });
     // The collector's own heartbeat (F-027-em, ADR-0122): a stored state is
     // current only while something is still judging it.
-    const beat = await this.prisma.collectorHeartbeat.findFirst({
+    const beat = await this.all.collectorHeartbeat.findFirst({
       orderBy: { passAt: 'desc' },
       select: { passAt: true, egress: true, egressSince: true },
     });
     const now = new Date();
     // Every price of the listed panels: a handful each, history kept whole (F-1002-a).
-    const costs = await this.prisma.panelCost.findMany({ where: { panelId: { in: panels.map((p) => p.id) } } });
+    const costs = await this.all.panelCost.findMany({ where: { panelId: { in: panels.map((p) => p.id) } } });
 
     return panels.map((p) => {
       const mine = open.filter((e) => e.panelId === p.id);
@@ -217,7 +219,7 @@ export class SystemsReadService {
   /** One panel's questionnaire, every row in order, as the connection test last answered it. */
   async capabilities(actor: SystemsActor, panelId: string) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panel = await this.prisma.panel.findFirst({
+    const panel = await this.all.panel.findFirst({
       where: { id: panelId, ...scope },
       select: { id: true, transport: true, reviewState: true, connectionTestedAt: true, capabilities: true },
     });
@@ -233,7 +235,7 @@ export class SystemsReadService {
    */
   async driftEvents(actor: SystemsActor, query: DriftEventQuery) {
     const scope = await panelScopeOf(this.prisma, actor);
-    const panels = await this.prisma.panel.findMany({ where: scope, select: { id: true, name: true } });
+    const panels = await this.all.panel.findMany({ where: scope, select: { id: true, name: true } });
     const names = new Map(panels.map((p) => [p.id, p.name]));
     const take = query.limit ?? DRIFT_PAGE;
 
@@ -271,7 +273,7 @@ export class SystemsReadService {
   async acknowledge(actor: SystemsActor, eventId: string, input: { note?: string; resolution?: DriftResolution }) {
     const scope = await panelScopeOf(this.prisma, actor);
     const where = { id: eventId, panel: scope };
-    const found = await this.prisma.panelDriftEvent.findFirst({ where, select: { ...DRIFT_FIELDS, panelId: true } });
+    const found = await this.all.panelDriftEvent.findFirst({ where, select: { ...DRIFT_FIELDS, panelId: true } });
     if (!found) throw new SystemsRefused('not_found');
     if (found.acknowledgedAt) throw new SystemsRefused('already_acknowledged');
     const write = acknowledgeWrite({ eventType: found.eventType, seenAddresses: found.seenAddresses }, input.resolution);

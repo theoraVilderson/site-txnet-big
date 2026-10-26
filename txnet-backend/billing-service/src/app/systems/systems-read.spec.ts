@@ -19,7 +19,6 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { CAPABILITIES_VERSION, CAPABILITY_ROWS } from './capabilities';
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused, SystemsReadService } from './systems-read';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -115,8 +114,8 @@ function harness() {
       },
     },
   };
-  // The acknowledgement writes through the platform owner's pool (F-027-fa); same rows.
-  const all = { $transaction: async <T>(fn: (tx: typeof prisma) => Promise<T>) => fn(prisma) };
+  // Panels are read, and the acknowledgement written (F-027-fa), on the cross-tenant pool: same rows (BYO-1-b).
+  const all = { ...prisma, $transaction: async <T>(fn: (tx: typeof prisma) => Promise<T>) => fn(prisma) };
   const service = new SystemsReadService(prisma as never, all as never);
   return { service, events, selects, panels };
 }
@@ -139,13 +138,15 @@ describe('SystemsReadService', () => {
     for (const s of selects) expect(s).not.toHaveProperty('panelApiCredentials');
   });
 
-  it('refuses a reseller before reading a panel, on every route', async () => {
+  it("shows a reseller its own panels and their events only, never the platform's (ADR-0166)", async () => {
     const { service, events } = harness();
-    await expect(service.panels(reseller)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.capabilities(reseller, RESELLER_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.driftEvents(reseller, {})).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.acknowledge(reseller, FOREIGN_EVENT, {})).rejects.toBeInstanceOf(PanelScopeRefused);
-    expect(events[1]['acknowledgedAt']).toBeNull();
+    expect((await service.panels(reseller)).map((p) => p.id)).toEqual([RESELLER_PANEL]);
+    await expect(service.capabilities(reseller, PLATFORM_PANEL)).rejects.toEqual(new SystemsRefused('not_found'));
+    expect((await service.driftEvents(reseller, {})).items.map((e) => e.id)).toEqual([FOREIGN_EVENT]);
+    await expect(service.acknowledge(reseller, OPEN_EVENT, {})).rejects.toEqual(new SystemsRefused('not_found'));
+    expect(events[0]['acknowledgedAt']).toBeNull();
+    await service.acknowledge(reseller, FOREIGN_EVENT, {});
+    expect(events[1]['acknowledgedAt']).not.toBeNull();
   });
 
   it('mirrors contracts/network/capabilities.json: every key, its scope and its severity', () => {

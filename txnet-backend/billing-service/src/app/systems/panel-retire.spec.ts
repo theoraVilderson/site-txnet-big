@@ -19,7 +19,6 @@
 import { EvictOrphans, Prisma, PanelReviewState, TenantType } from '@prisma/client';
 
 import { PanelLifecycleService } from './panel-lifecycle';
-import { PanelScopeRefused } from './panel-scope';
 import { SystemsRefused } from './systems-read';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
@@ -49,7 +48,6 @@ function harness(row: Row = {}, state: State = {}) {
       findUnique: async ({ where }: { where: { id: string } }) =>
         where.id === OWNER ? { tenantType: TenantType.platform_owner } : { tenantType: TenantType.reseller },
     },
-    panel: { findFirst: async ({ where }: { where: Row }) => (inScope(where) ? { ...panel } : null) },
   };
   const all = {
     panelGroupMember: {
@@ -69,7 +67,9 @@ function harness(row: Row = {}, state: State = {}) {
       panel['retiredAt'] = new Date();
       return 1;
     },
+    // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
     panel: {
+      findFirst: async ({ where }: { where: Row }) => (inScope(where) ? { ...panel } : null),
       deleteMany: async ({ where }: { where: Row }) => {
         if (state.keyedByDelete) throw new Prisma.PrismaClientKnownRequestError('fk', { code: 'P2003', clientVersion: 'test' });
         if (!inScope(where)) return { count: 0 };
@@ -121,10 +121,10 @@ describe('PanelLifecycleService.remove (F-027-bz)', () => {
     await expect(h.service.remove(h.actor, PANEL)).rejects.toEqual(new SystemsRefused('panel_retired'));
   });
 
-  it('refuses a reseller before reading, and a panel outside the scope is not found', async () => {
+  it("removes a reseller's own panel for the reseller (ADR-0166), and is not_found to the owner", async () => {
     const h = harness({ tenantId: RESELLER, ownershipType: 'tenant' });
-    await expect(h.service.remove({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
     await expect(h.service.remove(h.actor, PANEL)).rejects.toEqual(new SystemsRefused('not_found'));
+    await expect(h.service.remove({ adminId: ADMIN, tenantId: RESELLER }, PANEL)).resolves.toMatchObject({ id: PANEL });
   });
 });
 

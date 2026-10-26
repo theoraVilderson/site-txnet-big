@@ -1,13 +1,9 @@
 import {
   Body,
-  CanActivate,
   Controller,
-  ExecutionContext,
-  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
-  Injectable,
   Delete,
   Param,
   ParseUUIDPipe,
@@ -18,7 +14,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { holdsPermission, RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
+import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
 import { identityOf } from '../request/identity.middleware';
@@ -63,29 +59,11 @@ import {
   WriteOffHoldBody,
   writeOffHoldSchema,
 } from './panel-registration.schema';
-import { SystemsActor } from './panel-scope';
 import { MemberInboundsService } from './member-inbounds';
 import { SystemsReadService } from './systems-read';
+import { RESELLER_SYSTEMS_PATH, SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing, relayingVault } from './systems-refusals';
 import { UsageHoldsService } from './usage-holds';
-
-/** The permission the systems surface needs (F-027-ar; `panel.manage` until AC-1-d, ADR-0135). SuperAdmin holds it as `*`. */
-export const NODE_MANAGE = 'platform.node.manage';
-
-/**
- * The first door, like `GatewayPermissionGuard`, and like it **not the
- * boundary**: `PanelRegistrationService` admits the platform owner only.
- */
-@Injectable()
-export class PanelPermissionGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest<Request>();
-    if (!holdsPermission(identityOf(req).permissions, NODE_MANAGE)) {
-      throw new ForbiddenException(`${NODE_MANAGE} is required`);
-    }
-    return true;
-  }
-}
 
 export const SYSTEMS_ADMIN_WRITE = {
   key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SYSTEMS_ADMIN_WRITE, identityOf(req).userId),
@@ -100,7 +78,9 @@ export const SYSTEMS_ADMIN_READ = {
 };
 
 /**
- * The platform owner's systems surface (F-027-ar, ADR-0080): `/api/billing/systems`.
+ * The systems surface (F-027-ar, ADR-0080): the owner's at `/api/billing/systems`, and
+ * the same routes for a reseller's own panels at `/api/billing/tenants/:tenantId/systems`
+ * (ADR-0166) — which door, and whose panels, is `SystemsDoorGuard`'s.
  *
  * `POST panels` registers a panel as desired state and answers `201` with
  * `reviewState: pending` — the verdict arrives on `network-service`'s next
@@ -128,8 +108,8 @@ export const SYSTEMS_ADMIN_READ = {
  * Who the caller is comes from the gate (`X-User-Id`, `X-Tenant-Id`), never
  * from the body.
  */
-@Controller('billing/systems')
-@UseGuards(PanelPermissionGuard)
+@Controller(['billing/systems', RESELLER_SYSTEMS_PATH])
+@UseGuards(SystemsDoorGuard)
 export class SystemsController {
   constructor(
     private readonly registration: PanelRegistrationService,
@@ -144,7 +124,7 @@ export class SystemsController {
   @Get('panel-groups')
   @RateLimit(SYSTEMS_ADMIN_READ)
   groups(@Req() req: Request) {
-    return refusing(() => this.panelGroups.groups(actorOf(req)));
+    return refusing(() => this.panelGroups.groups(systemsActorOf(req)));
   }
 
   @Post('panel-groups')
@@ -152,7 +132,7 @@ export class SystemsController {
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   createGroup(@Body(new ZodValidationPipe(createPanelGroupSchema)) body: CreatePanelGroupBody, @Req() req: Request) {
     // `name` is required by the schema; the cast is for the non-strict tsconfig, as in `register`.
-    return refusing(() => this.panelGroups.create(actorOf(req), body as PanelGroupInput & { name: string }));
+    return refusing(() => this.panelGroups.create(systemsActorOf(req), body as PanelGroupInput & { name: string }));
   }
 
   @Patch('panel-groups/:id')
@@ -162,14 +142,14 @@ export class SystemsController {
     @Body(new ZodValidationPipe(updatePanelGroupSchema)) body: UpdatePanelGroupBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.update(actorOf(req), id, body));
+    return refusing(() => this.panelGroups.update(systemsActorOf(req), id, body));
   }
 
   /** Delete a group (F-027-ca). 409 `group_has_members` / `group_in_use` while it has members or a variant names it. */
   @Delete('panel-groups/:id')
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   removeGroup(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.panelGroups.remove(actorOf(req), id));
+    return refusing(() => this.panelGroups.remove(systemsActorOf(req), id));
   }
 
   @Post('panel-groups/:id/members')
@@ -180,7 +160,7 @@ export class SystemsController {
     @Body(new ZodValidationPipe(addPanelGroupMemberSchema)) body: AddPanelGroupMemberBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.addMember(actorOf(req), id, body as PanelGroupMemberInput));
+    return refusing(() => this.panelGroups.addMember(systemsActorOf(req), id, body as PanelGroupMemberInput));
   }
 
   /**
@@ -195,7 +175,7 @@ export class SystemsController {
     @Body(new ZodValidationPipe(updatePanelGroupMemberSchema)) body: UpdatePanelGroupMemberBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.updateMember(actorOf(req), id, panelId, body as MemberSellingInput));
+    return refusing(() => this.panelGroups.updateMember(systemsActorOf(req), id, panelId, body as MemberSellingInput));
   }
 
   /**
@@ -211,7 +191,7 @@ export class SystemsController {
     @Body(new ZodValidationPipe(assignMemberInboundsSchema)) body: AssignMemberInboundsBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.memberInbounds.assign(actorOf(req), id, panelId, body.inbounds as string[]));
+    return refusing(() => this.memberInbounds.assign(systemsActorOf(req), id, panelId, body.inbounds as string[]));
   }
 
   /** `409 member_has_configs` while a live config of the group's Grants is on it: drain it instead. */
@@ -222,7 +202,7 @@ export class SystemsController {
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.removeMember(actorOf(req), id, panelId));
+    return refusing(() => this.panelGroups.removeMember(systemsActorOf(req), id, panelId));
   }
 
   /** `200` the member, `drain`, with `drainingSince` and the least `waitSeconds` before its configs go. */
@@ -234,7 +214,7 @@ export class SystemsController {
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.drain(actorOf(req), id, panelId));
+    return refusing(() => this.panelGroups.drain(systemsActorOf(req), id, panelId));
   }
 
   /** What "remove now" would take: `liveConfigs`, and `soleLineGrants` — active Grants left with no line. */
@@ -245,7 +225,7 @@ export class SystemsController {
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.evictPreview(actorOf(req), id, panelId));
+    return refusing(() => this.panelGroups.evictPreview(systemsActorOf(req), id, panelId));
   }
 
   /**
@@ -263,13 +243,13 @@ export class SystemsController {
     @Body(new ZodValidationPipe(evictPanelGroupMemberSchema)) body: EvictPanelGroupMemberBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelGroups.evict(actorOf(req), id, panelId, body.orphans));
+    return refusing(() => this.panelGroups.evict(systemsActorOf(req), id, panelId, body.orphans));
   }
 
   @Get('panels')
   @RateLimit(SYSTEMS_ADMIN_READ)
   panels(@Req() req: Request) {
-    return refusing(() => this.reads.panels(actorOf(req)));
+    return refusing(() => this.reads.panels(systemsActorOf(req)));
   }
 
   /**
@@ -283,7 +263,7 @@ export class SystemsController {
     @Body(new ZodValidationPipe(updatePanelSchema)) body: UpdatePanelBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.lifecycle.update(actorOf(req), id, body as PanelSettingsInput));
+    return refusing(() => this.lifecycle.update(systemsActorOf(req), id, body as PanelSettingsInput));
   }
 
   /**
@@ -300,14 +280,14 @@ export class SystemsController {
     @Query(new ZodValidationPipe(removePanelQuerySchema)) query: RemovePanelQuery,
     @Req() req: Request,
   ) {
-    return refusing(() => this.lifecycle.remove(actorOf(req), id, query.orphans));
+    return refusing(() => this.lifecycle.remove(systemsActorOf(req), id, query.orphans));
   }
 
   /** What deleting it in one step would take: `{groups, liveConfigs, soleLineGrants}`, summed over its groups. */
   @Get('panels/:id/remove-preview')
   @RateLimit(SYSTEMS_ADMIN_READ)
   removePanelPreview(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.lifecycle.removePreview(actorOf(req), id));
+    return refusing(() => this.lifecycle.removePreview(systemsActorOf(req), id));
   }
 
   /** Restore an archived panel (F-027-bz). `200 {id, reviewState: 'pending'}`: it is re-tested first. */
@@ -315,19 +295,19 @@ export class SystemsController {
   @HttpCode(HttpStatus.OK)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   restorePanel(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.lifecycle.restore(actorOf(req), id));
+    return refusing(() => this.lifecycle.restore(systemsActorOf(req), id));
   }
 
   @Get('panels/:id/capabilities')
   @RateLimit(SYSTEMS_ADMIN_READ)
   capabilities(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.reads.capabilities(actorOf(req), id));
+    return refusing(() => this.reads.capabilities(systemsActorOf(req), id));
   }
 
   @Get('panels/:id/inbounds')
   @RateLimit(SYSTEMS_ADMIN_READ)
   inbounds(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.panelInbounds.inbounds(actorOf(req), id));
+    return refusing(() => this.panelInbounds.inbounds(systemsActorOf(req), id));
   }
 
   @Put('panels/:id/inbounds')
@@ -337,20 +317,20 @@ export class SystemsController {
     @Body(new ZodValidationPipe(updatePanelInboundsSchema)) body: UpdatePanelInboundsBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.panelInbounds.update(actorOf(req), id, body as PanelInboundsInput));
+    return refusing(() => this.panelInbounds.update(systemsActorOf(req), id, body as PanelInboundsInput));
   }
 
   @Post('panels/:id/inbounds/refresh')
   @HttpCode(HttpStatus.ACCEPTED)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   refreshInbounds(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
-    return refusing(() => this.panelInbounds.refresh(actorOf(req), id));
+    return refusing(() => this.panelInbounds.refresh(systemsActorOf(req), id));
   }
 
   @Get('drift-events')
   @RateLimit(SYSTEMS_ADMIN_READ)
   driftEvents(@Query(new ZodValidationPipe(driftEventQuerySchema)) query: DriftEventQueryInput, @Req() req: Request) {
-    return refusing(() => this.reads.driftEvents(actorOf(req), query));
+    return refusing(() => this.reads.driftEvents(systemsActorOf(req), query));
   }
 
   @Post('drift-events/:id/acknowledge')
@@ -361,13 +341,13 @@ export class SystemsController {
     @Body(new ZodValidationPipe(acknowledgeDriftSchema)) body: AcknowledgeDriftBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.reads.acknowledge(actorOf(req), id, body));
+    return refusing(() => this.reads.acknowledge(systemsActorOf(req), id, body));
   }
 
   @Get('holds')
   @RateLimit(SYSTEMS_ADMIN_READ)
   holds(@Query(new ZodValidationPipe(holdQueueQuerySchema)) query: HoldQueueQueryInput, @Req() req: Request) {
-    return refusing(() => this.holdsQueue.holds(actorOf(req), query));
+    return refusing(() => this.holdsQueue.holds(systemsActorOf(req), query));
   }
 
   @Post('holds/:id/release')
@@ -378,7 +358,7 @@ export class SystemsController {
     @Body(new ZodValidationPipe(releaseHoldSchema)) body: ReleaseHoldBody,
     @Req() req: Request,
   ) {
-    return refusing(() => this.holdsQueue.release(actorOf(req), id, body));
+    return refusing(() => this.holdsQueue.release(systemsActorOf(req), id, body));
   }
 
   @Post('holds/:id/write-off')
@@ -390,17 +370,16 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     // Required by the schema; the cast is for the non-strict tsconfig, as in `register`.
-    return refusing(() => this.holdsQueue.writeOff(actorOf(req), id, body as { note: string }));
+    return refusing(() => this.holdsQueue.writeOff(systemsActorOf(req), id, body as { note: string }));
   }
 
   @Post('panels')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(SYSTEMS_ADMIN_WRITE)
   async register(@Body(new ZodValidationPipe(registerPanelSchema)) body: RegisterPanelBody, @Req() req: Request) {
-    const { userId, tenantId } = identityOf(req);
     // The schema requires every field; the cast is for this project's
     // non-strict tsconfig, under which zod infers every key as optional.
-    return relayingVault(() => this.registration.register({ adminId: userId, tenantId }, body as RegisterPanelInput));
+    return relayingVault(() => this.registration.register(systemsActorOf(req), body as RegisterPanelInput));
   }
 
   /**
@@ -417,7 +396,7 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return relayingVault(() =>
-      refusing(() => this.registration.resubmitCredentials(actorOf(req), id, body.credentials as string)),
+      refusing(() => this.registration.resubmitCredentials(systemsActorOf(req), id, body.credentials as string)),
     );
   }
 
@@ -434,12 +413,8 @@ export class SystemsController {
     @Req() req: Request,
   ) {
     return relayingVault(() =>
-      refusing(() => this.registration.resubmitRadiusSecret(actorOf(req), id, body.radiusSecret as string)),
+      refusing(() => this.registration.resubmitRadiusSecret(systemsActorOf(req), id, body.radiusSecret as string)),
     );
   }
 }
 
-export function actorOf(req: Request): SystemsActor {
-  const { userId, tenantId } = identityOf(req);
-  return { adminId: userId, tenantId };
-}

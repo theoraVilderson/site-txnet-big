@@ -27,7 +27,6 @@ import { GrantStatus, PanelGroupMemberRole, PanelGroupStrategy, Prisma, TenantTy
 import { DrainConfig } from '../traffic/group-drain';
 import { PanelGroupsService } from './panel-groups';
 import { createPanelGroupSchema, updatePanelGroupSchema, addPanelGroupMemberSchema, evictPanelGroupMemberSchema } from './panel-registration.schema';
-import { PanelScopeRefused } from './panel-scope';
 
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const RESELLER = '22222222-2222-4222-8222-222222222222';
@@ -87,14 +86,15 @@ function harness() {
       findUnique: async ({ where }: { where: { id: string } }) =>
         tenants.has(where.id) ? { tenantType: tenants.get(where.id) } : null,
     },
+  };
+  const crossTenant = {
+    // Panels are read on the cross-tenant pool, the scope in the where (BYO-1-b).
     panel: {
       findFirst: async ({ where }: { where: Row }) => {
         const p = panels.find((row) => matches(row, where));
         return p ? { id: p['id'], name: p['name'] } : null;
       },
     },
-  };
-  const crossTenant = {
     panelGroup: {
       findMany: async ({ where }: { where: Row }) => groups.filter((g) => matches(g, where)).map(withMembers),
       findFirst: async ({ where }: { where: Row }) => {
@@ -170,19 +170,26 @@ describe('PanelGroupsService', () => {
     ]);
   });
 
-  it('refuses a reseller before reading or writing a group, on every route', async () => {
+  it("gives a reseller its own groups of its own panels only, never the platform's (ADR-0166 points 2, 5)", async () => {
     const { service, groups, members } = harness();
-    await expect(service.groups(reseller)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.create(reseller, { name: 'x' })).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.update(reseller, GROUP, { name: 'x' })).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.addMember(reseller, GROUP, { panelId: SECOND_PANEL })).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.removeMember(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.drain(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.evict(reseller, GROUP, PLATFORM_PANEL, 'pause')).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.evictPreview(reseller, GROUP, PLATFORM_PANEL)).rejects.toBeInstanceOf(PanelScopeRefused);
-    await expect(service.remove(reseller, GROUP)).rejects.toBeInstanceOf(PanelScopeRefused);
-    expect(groups).toHaveLength(2);
-    expect(members).toHaveLength(1);
+    expect((await service.groups(reseller)).map((g) => g.id)).toEqual([TENANT_GROUP]);
+    for (const act of [
+      service.update(reseller, GROUP, { name: 'x' }),
+      service.addMember(reseller, GROUP, { panelId: RESELLER_PANEL }),
+      service.removeMember(reseller, GROUP, PLATFORM_PANEL),
+      service.drain(reseller, GROUP, PLATFORM_PANEL),
+      service.evict(reseller, GROUP, PLATFORM_PANEL, 'pause'),
+      service.evictPreview(reseller, GROUP, PLATFORM_PANEL),
+      service.remove(reseller, GROUP),
+    ]) {
+      await expect(act).rejects.toMatchObject({ reason: 'not_found' });
+    }
+    // Never a mixed group: the platform's panel is outside a reseller's scope.
+    await expect(service.addMember(reseller, TENANT_GROUP, { panelId: PLATFORM_PANEL })).rejects.toMatchObject({ reason: 'panel_not_found' });
+    await service.addMember(reseller, TENANT_GROUP, { panelId: RESELLER_PANEL });
+    expect(members[1]).toMatchObject({ groupId: TENANT_GROUP, panelId: RESELLER_PANEL, tenantId: RESELLER });
+    await service.create(reseller, { name: 'Mine' });
+    expect(groups[2]).toMatchObject({ name: 'Mine', tenantId: RESELLER });
   });
 
   it('creates a platform group as mirror, whatever it is asked', async () => {
