@@ -199,11 +199,8 @@ type ProvisionReport struct {
 	Stopped   map[string]DriftState
 	// Foreign is the panel whose clients this one answered with; set, the
 	// pass wrote nothing (F-027-cf).
-	Foreign *ForeignHolder
-	// Creates is the creates this turn attempted, landed or refused; Deferred
-	// is the ones past MaxCreates, left for the next turn (F-027-fj).
-	Creates  int
-	Deferred int
+	Foreign     *ForeignHolder
+	CreateTally // the turn's creates, and the ones left for the next (F-027-fj)
 }
 
 // Provisioning converges one panel's desired state per call. It holds no state
@@ -216,12 +213,10 @@ type Provisioning struct {
 	// Claims and Events are the collector guard (F-027-cf, foreign.go): an
 	// orphan carrying another panel's config stops the pass before it writes
 	// and raises a halting event naming both. Nil Claims guards nothing.
-	Claims Claims
-	Events collect.DriftEvents
-	// MaxCreates bounds the clients one turn creates or makes again
-	// (DefaultMaxCreates); the rest are Deferred to the next turn (F-027-fj).
-	MaxCreates int
-	Log        *slog.Logger
+	Claims       Claims
+	Events       collect.DriftEvents
+	CreateBudget // how many creates a turn makes, and for how long (F-027-fj)
+	Log          *slog.Logger
 }
 
 // InboundReadEvery is how stale a panel's stored inbounds may get before a
@@ -501,7 +496,7 @@ func (v *Provisioning) create(
 		return nil, found(ActionNoInbound, "", nil)
 	}
 
-	if !v.mayCreate(report) {
+	if !v.mayCreate(&report.CreateTally) {
 		return nil, nil
 	}
 	key, name := names.For(row)

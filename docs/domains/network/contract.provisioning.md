@@ -159,8 +159,9 @@ copied from its Grant at create, is what was sold, so there is no allocation to
 wait for and none to run out of: `CreateClient` goes out with `NoDataLimit`, and
 a rebuilt client gets no limit back where a limited one gets its first block.
 
-**A turn creates at most `MaxCreates` clients** (10, F-027-fj, ADR-0167). A
-create or recreate past it is `Deferred`: no outcome, the row as it was, and
+**A turn creates at most `MaxCreates` clients** (10, F-027-fj, ADR-0167), and
+none once `CreateWindow` (10 s) has passed since its first — always made, so a
+backlog moves. A create or recreate past either is `Deferred`: no outcome, the row as it was, and
 the converger asks the waker for another convergence-only turn on the panel,
 until a turn defers nothing. Only a create that reaches the panel spends the
 budget; deletes, enables, disables and ceilings are never deferred, so a

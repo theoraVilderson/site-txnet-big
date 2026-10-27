@@ -24,9 +24,12 @@ The same shape ran seven minutes for a 201-user import the day before, unseen.
 
 ## Decision
 
-1. **A turn makes at most `MaxCreates` creates** (`DefaultMaxCreates` = 10):
-   a create or a recreate counts only when it reaches the panel; one skipped
-   for no allowance or no inbound spends nothing.
+1. **A turn makes at most `MaxCreates` creates** (`DefaultMaxCreates` = 10),
+   and none once `CreateWindow` (10 s) has passed since its first — which is
+   always made, so a backlog always moves. A create or a recreate counts only
+   when it reaches the panel; one skipped for no allowance or no inbound
+   spends nothing. The window was added the same day, live: at 1100 users on
+   a loaded disk a Marzban create took 4–9 s, so ten held the pass 45–95 s.
 2. **The rest are deferred, not failed.** No outcome is recorded, the row
    stays as it was, and the next turn reaches it.
 3. **A turn that deferred asks for another** (`Converger.Owe` →
@@ -38,8 +41,9 @@ The same shape ran seven minutes for a 201-user import the day before, unseen.
 
 ## Consequences
 
-- The bulk pass waits on one bounded turn per panel at most (~20 s on a slow
-  Marzban), so usage and cut-off keep their minute cadence through a migration.
+- The bulk pass waits on one bounded turn per panel at most (about the
+  window plus one create, whatever the panel's speed), so usage and cut-off
+  keep their minute cadence through a migration.
 - A purchase's few configs are still created in the turn its wake runs.
 - A backlog survives a restart: the first bulk pass defers again and owes the
   turn again; nothing is kept in memory but the waker's arm.

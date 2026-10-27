@@ -103,3 +103,22 @@ func (r *provRig) clients(t *testing.T) int {
 	}
 	return len(clients)
 }
+
+// A count alone does not bound a turn: on the LIVE-1 node a Marzban of 1100
+// users took 4–9 s a create, so ten held the panel's lock — and the bulk pass —
+// for 45–95 s. Creates also stop once CreateWindow has passed since the
+// turn's first one; the first is always made, so a backlog always moves.
+func TestATurnStopsCreatingOnceItsWindowHasPassed(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.conv.Provisioning.MaxCreates = 10
+	r.conv.Provisioning.CreateWindow = 10 * time.Second
+	at := time.Date(2026, 10, 27, 6, 30, 0, 0, time.UTC)
+	r.conv.Provisioning.Now = func() time.Time { at = at.Add(4 * time.Second); return at } // each create costs 4 s
+	for i := 0; i < 6; i++ {
+		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
+	}
+
+	if report := r.pass(t); report.Creates != 3 || report.Deferred != 3 {
+		t.Fatalf("created %d, deferred %d; want 3 inside 10 s and 3 deferred", report.Creates, report.Deferred)
+	}
+}
