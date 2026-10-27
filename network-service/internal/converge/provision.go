@@ -200,6 +200,10 @@ type ProvisionReport struct {
 	// Foreign is the panel whose clients this one answered with; set, the
 	// pass wrote nothing (F-027-cf).
 	Foreign *ForeignHolder
+	// Creates is the creates this turn attempted, landed or refused; Deferred
+	// is the ones past MaxCreates, left for the next turn (F-027-fj).
+	Creates  int
+	Deferred int
 }
 
 // Provisioning converges one panel's desired state per call. It holds no state
@@ -214,7 +218,10 @@ type Provisioning struct {
 	// and raises a halting event naming both. Nil Claims guards nothing.
 	Claims Claims
 	Events collect.DriftEvents
-	Log    *slog.Logger
+	// MaxCreates bounds the clients one turn creates or makes again
+	// (DefaultMaxCreates); the rest are Deferred to the next turn (F-027-fj).
+	MaxCreates int
+	Log        *slog.Logger
 }
 
 // InboundReadEvery is how stale a panel's stored inbounds may get before a
@@ -494,6 +501,9 @@ func (v *Provisioning) create(
 		return nil, found(ActionNoInbound, "", nil)
 	}
 
+	if !v.mayCreate(report) {
+		return nil, nil
+	}
 	key, name := names.For(row)
 	created, err := p.Driver.CreateClient(ctx, driver.CreateClientRequest{
 		ClaimTag: row.ClaimTag, UUID: row.UUID, InboundRemoteID: inbound.RemoteID,
@@ -537,45 +547,6 @@ func ipLimitFor(p collect.Panel, row DesiredConfig, client driver.RemoteClient) 
 	return client.IPLimit
 }
 
-// inboundCache reads the panel's inbounds at most once a pass, and only when
-// something is to be created or the inventory is due — a pass with neither
-// costs nothing.
-type inboundCache struct {
-	driver driver.Driver
-	read   bool
-	rows   []driver.Inbound
-}
-
-func (c *inboundCache) all(ctx context.Context) ([]driver.Inbound, error) {
-	if !c.read {
-		rows, err := c.driver.ListInbounds(ctx)
-		if err != nil {
-			return nil, err
-		}
-		c.rows, c.read = rows, true
-	}
-	return c.rows, nil
-}
-
-// named is the inbound a config was placed on, if the panel still has it
-// enabled and serving the config's protocol (F-114-b). No read is spent on a
-// config that names none.
-func (c *inboundCache) named(ctx context.Context, remoteID, protocol string) (driver.Inbound, bool, error) {
-	if remoteID == "" {
-		return driver.Inbound{}, false, nil
-	}
-	rows, err := c.all(ctx)
-	if err != nil {
-		return driver.Inbound{}, false, err
-	}
-	for _, inbound := range rows { // the id and the protocol: Marzneshin lists a service once per protocol (F-027-ba-a)
-		if inbound.RemoteID == remoteID && inbound.Protocol == protocol {
-			return inbound, inbound.Enabled, nil
-		}
-	}
-	return driver.Inbound{}, false, nil
-}
-
 // ConvergeReport is one panel's whole convergence.
 type ConvergeReport struct {
 	Provisioning ProvisionReport
@@ -599,7 +570,11 @@ type Converger struct {
 	Provisioning *Provisioning
 	Ceilings     *Ceilings
 	Confirm      func(ctx context.Context, panelID string)
-	Log          *slog.Logger
+	// Owe, when set, is asked for another convergence turn on a panel whose
+	// turn deferred creates (`collect.Waker.Wake`, F-027-fj): the backlog is
+	// carried by woken turns, never by the bulk pass.
+	Owe func(ctx context.Context, panelID string)
+	Log *slog.Logger
 }
 
 func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.Result) error {
@@ -608,10 +583,13 @@ func (c *Converger) Converge(ctx context.Context, p collect.Panel, res collect.R
 		return err
 	}
 	prov, ceil := report.Provisioning, report.Ceilings
-	if prov.Written > 0 || prov.Failed > 0 || prov.Captured > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 {
+	if prov.Written > 0 || prov.Failed > 0 || prov.Captured > 0 || ceil.Written > 0 || ceil.Failed > 0 || len(prov.Orphans) > 0 || prov.Deferred > 0 {
 		c.log().Info("panel converged",
 			"panel", p.ID, "provisioned", prov.Written, "provision_failed", prov.Failed, "links_captured", prov.Captured, "links_refreshed", prov.Refreshed,
-			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans))
+			"ceilings_written", ceil.Written, "ceilings_failed", ceil.Failed, "orphans", len(prov.Orphans), "deferred", prov.Deferred)
+	}
+	if prov.Deferred > 0 && c.Owe != nil {
+		c.Owe(ctx, p.ID)
 	}
 	if prov.Written > 0 && !res.Confirming && c.Confirm != nil {
 		c.Confirm(ctx, p.ID)

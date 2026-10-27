@@ -182,6 +182,10 @@ func main() {
 	// (F-111-n), so a Grant activates seconds after its client is created.
 	waker := &collect.Waker{Loop: collector, Panels: panels.Offered}
 	converger.Confirm = waker.Confirm
+	// A turn that deferred creates past its budget is woken again until none
+	// is left (F-027-fj): a migration's backlog rides woken turns, so the bulk
+	// pass — every panel's usage and cut-off — never waits on it.
+	converger.Owe = waker.Wake
 	go func() { _ = collector.Run(runCtx) }()
 	wakes := &collect.WakeListener{
 		DatabaseURL:    cfg.DatabaseListenURL,
