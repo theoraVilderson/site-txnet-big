@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"sync"
 	"time"
 
 	"network-service/internal/anchor"
@@ -56,6 +57,9 @@ type Registered struct {
 	// KnownAddresses and AddressMayMove are its pin (F-027-ez).
 	KnownAddresses []string
 	AddressMayMove bool
+	// Halted is an open drift event stopping its collection: its anchor is
+	// then not known to stand (F-027-fi).
+	Halted bool
 }
 
 // Holder is the registered panel a duplicate is.
@@ -128,16 +132,50 @@ func (r *Registrar) bySuspects(ctx context.Context, d driver.Driver, p Pending) 
 	if ips == nil {
 		ips = r.ipsOf(ctx, p.APIBaseURL)
 	}
+	var suspects []Registered
 	for _, reg := range registered {
-		if !sameInbounds(reg.Inbounds, inbounds) && !r.sharesIP(ctx, reg, ips) {
+		if anchorStands(reg) {
+			// Rule 6 already searched the new panel's clients for this anchor;
+			// not finding it there is the answer (F-027-fi).
 			continue
 		}
-		seen, err := r.canary(ctx, reg, d)
-		if err != nil {
-			return Holder{}, false, fmt.Errorf("duplicate check: canary on panel %s (%s): %w", reg.Name, reg.PanelID, err)
+		if sameInbounds(reg.Inbounds, inbounds) || r.sharesIP(ctx, reg, ips) {
+			suspects = append(suspects, reg)
 		}
-		if seen {
+	}
+	return r.canaries(ctx, d, suspects)
+}
+
+// anchorStands is a suspect whose anchor the collector keeps checking: planted,
+// and no open drift event halting it — identity_lost is a missing anchor.
+func anchorStands(reg Registered) bool {
+	return reg.Anchor.Planted() && !reg.Halted
+}
+
+// canaries runs one canary per suspect side by side (F-027-fi), so the check's
+// deadline bounds the slowest suspect rather than their sum. A copy found wins
+// over a failure elsewhere; otherwise the first failure in suspect order names
+// its suspect, so the fault reads the same on every retry.
+func (r *Registrar) canaries(ctx context.Context, d driver.Driver, suspects []Registered) (Holder, bool, error) {
+	seen := make([]bool, len(suspects))
+	errs := make([]error, len(suspects))
+	var wg sync.WaitGroup
+	for i, reg := range suspects {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			seen[i], errs[i] = r.canary(ctx, reg, d)
+		}()
+	}
+	wg.Wait()
+	for i, reg := range suspects {
+		if seen[i] {
 			return Holder{PanelID: reg.PanelID, Name: reg.Name}, true, nil
+		}
+	}
+	for i, reg := range suspects {
+		if errs[i] != nil {
+			return Holder{}, false, fmt.Errorf("duplicate check: canary on panel %s (%s): %w", reg.Name, reg.PanelID, errs[i])
 		}
 	}
 	return Holder{}, false, nil

@@ -253,14 +253,18 @@ func (s PostgresStore) holder(ctx context.Context, sql, panelID string, tags, uu
 }
 
 // registeredSQL is every pull panel in service but $1, with the inbounds it
-// was last read with — the suspects a new panel is compared against.
+// was last read with — the suspects a new panel is compared against — and its
+// anchor and whether a drift event halts it, which decide its canary (F-027-fi).
 const registeredSQL = `
 SELECT p.id::text, p."driverType"::text, p.transport::text, p."counterSemantics"::text,
        p."apiBaseUrl", coalesce(p."clientBaseUrl", ''), p."panelApiCredentials",
        p.name, coalesce(p."ipAddress", ''), p."knownAddresses", p."addressMayMove",
        coalesce(array_agg(i."remoteId" ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
        coalesce(array_agg(i.port ORDER BY i."remoteId") FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
-       coalesce(array_agg(coalesce(i.protocol::text, '')) FILTER (WHERE i."remoteId" IS NOT NULL), '{}')
+       coalesce(array_agg(coalesce(i.protocol::text, '')) FILTER (WHERE i."remoteId" IS NOT NULL), '{}'),
+       coalesce(p."anchorTag", ''), coalesce(p."anchorUuid", ''), coalesce(p."anchorRemoteId", ''),
+       EXISTS (SELECT 1 FROM network.panel_drift_event e
+                WHERE e."panelId" = p.id AND e."collectionHalted" AND e."acknowledgedAt" IS NULL)
   FROM network.panel p
   LEFT JOIN network.panel_inbound i ON i."panelId" = p.id AND i."goneAt" IS NULL
  WHERE p.id <> $1::uuid
@@ -284,7 +288,8 @@ func (s PostgresStore) Registered(ctx context.Context, panelID string) ([]Regist
 		var ports []int32
 		if err := rows.Scan(&r.PanelID, &family, &transport, &semantics,
 			&r.APIBaseURL, &r.ClientBaseURL, &r.Credentials, &r.Name, &r.IPAddress,
-			&r.KnownAddresses, &r.AddressMayMove, &ids, &ports, &protocols); err != nil {
+			&r.KnownAddresses, &r.AddressMayMove, &ids, &ports, &protocols,
+			&r.Anchor.Tag, &r.Anchor.UUID, &r.Anchor.RemoteID, &r.Halted); err != nil {
 			return nil, fmt.Errorf("reading registered panels: %w", err)
 		}
 		r.DriverType = driver.DriverType(family)

@@ -88,16 +88,16 @@ refused one is not taken anyway, and a push panel is never called
    warning (`Report.Leftovers`, a log line) names no panel — never a refusal,
    or a server once used by panel A is refused to anyone, forever.
 7. **A suspect gets a canary.** Otherwise every panel in service (pull,
-   accepted, not archived) whose inbound set equals the new panel's — remote
-   id and port, and protocol where `panel_inbound` has one — or whose IP (its
-   `ipAddress`, or its host resolved) is one the new host resolves to, is a
-   suspect. Through the **registered** panel a disabled client is created
-   (random `canary-` tag and uuid, a 1-byte limit, an hour's expiry) and looked
-   for on the new one. Seen = the same panel. It is deleted either way, on a
-   context the test's own deadline cannot cut; a delete that fails is logged
-   with the tag, for removal by hand. It runs whether or not the new panel has
-   clients — a panel's own users are not ours and would hide the copy (widens
-   ADR-0090's "no clients", at the cost of one disabled client on a suspect).
+   accepted, not archived) whose inbound set equals the new panel's (remote
+   id, port, protocol where known) or whose IP is one the new host resolves
+   to is a suspect — **unless its anchor stands** (planted, no open halting
+   drift event): rule 6 found it absent, which is the answer (F-027-fi,
+   ADR-0130 amendment). Through each remaining suspect, side by side, a
+   disabled client is created (random `canary-` tag and uuid, 1-byte limit,
+   an hour's expiry) and looked for on the new one. Seen = the same panel.
+   It is deleted either way, on a context the deadline cannot cut; a failed
+   delete is logged with the tag. It runs whether or not the new panel has
+   clients — its own users are not ours and would hide the copy (ADR-0090).
 8. **Found = `refused`, naming the holder.** `duplicateOfPanelId` is written
    with the verdict, in the same guarded, announced statement as an answer
    (rule 3); CHECK `panel_duplicate_is_refused` keeps it on a refused panel

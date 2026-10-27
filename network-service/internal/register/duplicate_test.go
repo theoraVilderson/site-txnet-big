@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"network-service/internal/anchor"
 	"network-service/internal/driver"
@@ -196,5 +197,65 @@ func TestAPanelsOwnClaimTagsAreNotAnotherPanels(t *testing.T) {
 	pass(t, r)
 	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewAccepted {
 		t.Fatalf("B = %s duplicate of %q, want accepted: its own configs are not a duplicate", got.ReviewState, got.DuplicateOf)
+	}
+}
+
+// F-027-fi (user 2026-10-26, LIVE-1): a suspect whose anchor stands — planted,
+// and no open drift event halting it — is not canaried. The new panel's client
+// list was already searched for every anchor (rule 6); its absence there is the
+// answer. Eleven panels behind one IP each took a canary per registration,
+// serially inside one deadline, and none could be accepted.
+func TestASuspectWhoseAnchorStandsGetsNoCanary(t *testing.T) {
+	a, b := fake.New(fake.Config{}), fake.New(fake.Config{}) // same inbound set, two servers
+	plant(t, a, "anchor-a", "u-anchor-a")
+	holder := registered("")
+	holder.Anchor = anchor.Anchor{Tag: "anchor-a", UUID: "u-anchor-a", RemoteID: "1"}
+	r, store := dupSetup(a, b, holder, nil)
+	planted := a.CallCount("CreateClient")
+
+	pass(t, r)
+	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewAccepted || got.DuplicateOf != "" {
+		t.Fatalf("B = %s duplicate of %q, want accepted", got.ReviewState, got.DuplicateOf)
+	}
+	if a.CallCount("CreateClient") != planted {
+		t.Fatal("A's anchor is not on B: that is the answer, no canary on A")
+	}
+}
+
+// A halted suspect's anchor is not known to stand (identity_lost is exactly a
+// missing anchor), so it still gets the canary — and a copy is still found.
+func TestAHaltedSuspectStillGetsTheCanary(t *testing.T) {
+	same := fake.New(fake.Config{}) // one panel, two rows; its anchor was deleted
+	holder := registered("")
+	holder.Anchor = anchor.Anchor{Tag: "anchor-a", UUID: "u-anchor-a", RemoteID: "1"}
+	holder.Halted = true
+	r, store := dupSetup(same, same, holder, nil)
+
+	pass(t, r)
+	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewRefused || got.DuplicateOf != holderID {
+		t.Fatalf("B = %s duplicate of %q, want refused as a duplicate of %s", got.ReviewState, got.DuplicateOf, holderID)
+	}
+}
+
+// Suspects with no standing anchor are canaried side by side, so the check's
+// deadline bounds the slowest one, not their sum.
+func TestCanariesOnSeveralSuspectsRunSideBySide(t *testing.T) {
+	const stall = 200 * time.Millisecond
+	a, c, b := fake.New(fake.Config{}), fake.New(fake.Config{}), fake.New(fake.Config{})
+	r, store, _ := setup(map[string]driver.Driver{holderID: a, "panel-c": c, "panel-b": b}, pending("panel-b", driver.TransportPull, driver.CounterCumulative))
+	r.Timeout = 300 * time.Millisecond // one stall fits; two in a row do not
+	store.PutRegistered(registered(""), driver.ReviewAccepted)
+	other := registered("")
+	other.Pending = pending("panel-c", driver.TransportPull, driver.CounterCumulative)
+	store.PutRegistered(other, driver.ReviewAccepted)
+	a.StallNextCall(stall)
+	c.StallNextCall(stall)
+
+	pass(t, r)
+	if got := store.Record("panel-b"); got.ReviewState != driver.ReviewAccepted {
+		t.Fatalf("B = %s fault %q (%s), want accepted inside one deadline", got.ReviewState, got.Fault, got.Detail)
+	}
+	if a.CallCount("CreateClient") != 1 || c.CallCount("CreateClient") != 1 {
+		t.Fatalf("canaries: A %d, C %d; want one each", a.CallCount("CreateClient"), c.CallCount("CreateClient"))
 	}
 }

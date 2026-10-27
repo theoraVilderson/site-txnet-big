@@ -104,6 +104,18 @@ reaches nobody but the systems page.
 | Halt on any IP change, no opt-out | a panel behind a CDN would halt every few minutes |
 | Lower the `mass_reset` floor below 5 | a three-client panel with one ordinary reset would halt; the user set 5 and 20% on 2026-09-23 |
 
+## Amendment 2026-10-26 (user, F-027-fi): no canary where an anchor stands
+
+The duplicate check canaried every suspect, one after another, inside the
+test's one 30 s deadline. On the LIVE-1 run eleven panels shared one IP, every
+new registration ran out of time, and each wrote a client onto other
+resellers' panels. Decision: a suspect whose anchor stands — planted, no open
+drift event halting it — gets no canary; decision 3 already searched the new
+panel's clients for that anchor, and its absence is the answer. The collector
+checks it every pass (F-027-ex), and an anchor deleted in the gap is caught
+after acceptance by the orphan halt (F-027-cf). Suspects with no standing
+anchor are canaried side by side, so the deadline bounds the slowest one.
+
 ## Revisit trigger
 A family that cannot create a disabled client, a reseller base that mostly
 fronts panels with a CDN, or `orphanPolicy` actions being built.
