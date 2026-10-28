@@ -63,8 +63,11 @@ stage. Build args are left out: they name a mirror or a proxy and differ
 between hosts. So a seed change rebuilds db-migrate alone, a billing change
 billing alone, a `shared-core` or lockfile change every app. `build` skips a tag
 the registry or this host holds, `push` one the registry holds, and `build` refuses
-a checkout `git status` shows changed. The release is still the commit (R5): a
-rollback renders an older commit with its own renderer, so a release made
+a checkout `git status` shows changed. "Holds" is asked with `docker buildx
+imagetools inspect`, which reads the OCI manifest buildx pushes (`docker manifest
+inspect` cannot, and called every tag absent — LIVE-1-ab); only `not found` is
+absent, and a dropped request is asked again up to three times. The release is
+still the commit (R5): a rollback renders an older commit with its own renderer, so a release made
 before R12 comes back on its commit tags.
 
 **R10 — The registry answers before anything is sent** (OPS-1-o-t). `push`

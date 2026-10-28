@@ -79,8 +79,18 @@ require_build_host() {
 }
 
 # K8 (OPS-1-o-y): a tag is its source's fingerprint, so a tag the registry holds is built.
+# imagetools, not `docker manifest inspect`: that one cannot read the OCI
+# manifest buildx pushes, and called every image absent (LIVE-1-ab). Only
+# `not found` is an answer; a dropped request is asked again, and one that
+# never answers counts as absent, so the image is built or pushed rather than lost.
+REGISTRY_ASKS=3
 in_registry() {
-  docker manifest inspect "$1" >/dev/null 2>&1
+  local err ask
+  for ((ask = 1; ask <= REGISTRY_ASKS; ask++)); do
+    err="$(docker buildx imagetools inspect "$1" 2>&1 >/dev/null)" && return 0
+    case "$err" in *"not found"*) return 1 ;; esac
+  done
+  return 1
 }
 
 # The same holds for a tag this host already has: an interrupted build, run

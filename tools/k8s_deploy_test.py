@@ -356,7 +356,7 @@ class ScriptTest(unittest.TestCase):
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
                       "require_clean() { :; }\nrenice() { echo \"renice $*\" >&2; }\ncompose() { :; }\n"
-                      "docker() { [ \"$1\" != manifest ] && [ \"$1\" != image ]; }\nbuild")
+                      "docker() { [ \"$1\" != buildx ] && [ \"$1\" != image ]; }\nbuild")
             return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                   env={**os.environ, "K3S_ETC": node, "IMAGE_TAG": "t1"})
 
@@ -382,8 +382,8 @@ class ScriptTest(unittest.TestCase):
         script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
                   "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:old\\n'; }\n"
                   "require_registry() { :; }\ncompose() { echo \"compose $*\"; }\n"
-                  'docker() { case "$1 $2 ${3:-}" in "manifest inspect reg.example/txnet/web:old") return 0 ;;'
-                  ' "manifest inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
+                  'docker() { case "$*" in "buildx imagetools inspect reg.example/txnet/web:old") return 0 ;;'
+                  ' "buildx imagetools inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
         run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("compose build api", run.stdout)
@@ -391,14 +391,34 @@ class ScriptTest(unittest.TestCase):
         self.assertNotIn("compose build web", run.stdout)
         self.assertNotIn("docker push reg.example/txnet/web:old", run.stdout)
 
+    # LIVE-1-ab: the registry drops a request now and then (a TLS handshake
+    # timeout). That is no answer about the tag, so it is asked again; only
+    # `not found` is an absent image, and a tag that answers on the second try
+    # is neither built nor pushed again.
+    def test_a_registry_that_fails_once_is_asked_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            seen = Path(tmp, "seen")
+            script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
+                      f'docker() {{ if [ ! -e "{seen}" ]; then : >"{seen}"; echo "ERROR: TLS handshake timeout" >&2; return 1; fi; }}\n'
+                      'in_registry reg.example/txnet/web:old && echo present')
+            run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
+            self.assertIn("present", run.stdout)
+            calls = Path(tmp, "calls")
+            script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
+                      f'docker() {{ echo "docker $*" >>"{calls}"; echo "ERROR: reg.example/txnet/web:new: not found" >&2; return 1; }}\n'
+                      'in_registry reg.example/txnet/web:new || echo absent')
+            run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
+            self.assertIn("absent", run.stdout)
+            self.assertEqual(calls.read_text().count("docker buildx imagetools inspect"), 1, "a `not found` is final")
+
     # A tag already built here is that source too: an interrupted build, run
     # again, builds only what it had not reached.
     def test_an_image_built_here_is_not_built_again(self):
         script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
                   "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:here\\n'; }\n"
                   "compose() { echo \"compose $*\"; }\n"
-                  'docker() { case "$1 $2 ${3:-}" in "image inspect reg.example/txnet/web:here") return 0 ;;'
-                  ' "manifest inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild')
+                  'docker() { case "$*" in "image inspect reg.example/txnet/web:here") return 0 ;;'
+                  ' "buildx imagetools inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild')
         run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
         self.assertEqual(run.returncode, 0, run.stderr)
         self.assertIn("compose build api", run.stdout)
@@ -411,7 +431,7 @@ class ScriptTest(unittest.TestCase):
             script = (f'source "{REPO}/scripts/prod.k8s.sh"\n'
                       "images() { printf 'billing-service\\tlocal\\treg.example/txnet/billing-service:t1\\n'; }\n"
                       f'curl() {{ echo "curl $*" >>"{calls}"; printf {status}; }}\n'
-                      f'docker() {{ echo "docker $*" >>"{calls}"; [ "$1" != manifest ]; }}\n{command}')
+                      f'docker() {{ echo "docker $*" >>"{calls}"; [ "$1" != buildx ]; }}\n{command}')
             run = subprocess.run(["bash", "-c", script], capture_output=True, text=True,
                                  env={**os.environ, "IMAGE_TAG": "t1"})
             return run, calls.read_text() if calls.exists() else ""
