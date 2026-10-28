@@ -6,7 +6,7 @@ import { AuditActor, auditedConfigAct, auditedGrantRegroup } from '../grant-audi
 import { ConfigActionsService } from './config-actions';
 import { deliverableGroupIds, GroupFulfilmentService } from './group-fulfilment';
 import { groupHasRoom, LIVE_CONFIG, MemberFacts } from './group-plan';
-import { onPlatformPanel } from './vpn-wholesale';
+import { onPlatformPanel, soldWithoutLeg } from './vpn-wholesale';
 
 /** Declared once (C-09): why one Grant was not moved to another group. */
 export const GRANT_REGROUP_REJECTIONS = [
@@ -18,6 +18,7 @@ export const GRANT_REGROUP_REJECTIONS = [
   'target_not_deliverable',
   'target_full',
   'no_target',
+  'wholesale_rate_missing',
 ] as const;
 export type GrantRegroupRejection = (typeof GRANT_REGROUP_REJECTIONS)[number];
 
@@ -31,6 +32,7 @@ export const GRANT_REGROUP_STATUS: Record<GrantRegroupRejection, 404 | 409> = {
   target_not_deliverable: 409,
   target_full: 409,
   no_target: 409,
+  wholesale_rate_missing: 409,
 };
 
 export class GrantRegroupRefused extends Error {
@@ -89,8 +91,9 @@ export function splitForTarget(configs: RegroupConfig[], target: MemberFacts[]):
  *
  * Refused before anything is written: a Grant with no group or not serving, the
  * same group, a group it may not use (a platform group or its own tenant's —
- * `grant_panel_group_fits`), one that cannot deliver a sale (F-111-i), or one
- * whose seats a kept config would overfill. Refused **after**, rolling back: a
+ * `grant_panel_group_fits`), one that cannot deliver a sale (F-111-i), one
+ * holding a platform panel for a Grant sold with no wholesale leg (F-118-n7),
+ * or one whose seats a kept config would overfill. Refused **after**, rolling back: a
  * Grant that held a line and would be left with none (`no_target`).
  */
 @Injectable()
@@ -107,6 +110,7 @@ export class GrantRegroupActs {
     if (!fromGroupId || !MOVABLE.has(grant.status)) throw new GrantRegroupRefused('grant_not_movable', grant.status);
     if (fromGroupId === input.toGroupId) throw new GrantRegroupRefused('same_group', fromGroupId);
     await this.assertTarget(tx, grant.tenantId, input.toGroupId);
+    if ((await onPlatformPanel(tx, input.toGroupId)) && (await soldWithoutLeg(tx, grant))) throw new GrantRegroupRefused('wholesale_rate_missing', input.toGroupId);
     // One more open Grant on the platform's panels only if it was not on them already.
     if (input.bounded && !(await onPlatformPanel(tx, fromGroupId))) await assertPlatformGrantRoom(tx, input.toGroupId);
 

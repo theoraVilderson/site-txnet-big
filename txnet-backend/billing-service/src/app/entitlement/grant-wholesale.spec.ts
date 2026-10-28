@@ -8,10 +8,12 @@
  *  - **a sold Grant repriced wholesale.** The package rate in force at the sale
  *    is copied; one written later is never the one locked (ADR-0073);
  *  - **usage on platform panels that nobody pays for.** A reseller whose
- *    package prices none of the Grant's meters cannot sell it — always, not
- *    only when its panel group holds a platform panel today, since a group's
- *    members change after the sale (user, 2026-09-29). Whether a unit is
- *    charged is decided per usage by its panel's owner (F-118-n3);
+ *    package prices none of the Grant's meters cannot sell it on a group
+ *    holding a platform panel at the sale (F-118-n7, user 2026-10-26, as a
+ *    package plan — package rule 4). On its own panels it sells with no leg:
+ *    LIVE-1 found chillshop's PAYG refused on panels the platform never
+ *    serves. Whether a unit is charged is decided per usage by its panel's
+ *    owner (F-118-n3);
  *  - **the platform billing itself.** The platform owner's own sales carry no
  *    wholesale leg, and a package plan (decision 0) never reads a rate.
  *
@@ -77,6 +79,7 @@ const variantRow = (billingMode: VariantBillingMode) => ({
   billingMode,
   quotas: billingMode === VariantBillingMode.prepaid ? { traffic_bytes: { limit: 50 * 1073741824 } } : {},
   durationDays: 30,
+  panelGroupId: 'group',
   rateCards: [card],
   product: { tenantId: TENANT, isActive: true, featureKeys: ['vpn.access'], categories: [{ position: 0, category: { key: 'vpn', isActive: true, parentId: null } }] },
 });
@@ -86,6 +89,8 @@ function fakeTx(opts: {
   billingMode?: VariantBillingMode;
   subscribed?: boolean;
   rates?: PackageRate[];
+  /** The variant's group holds a platform panel at the sale (F-118-n7). */
+  platformPanel?: boolean;
 }) {
   const grants: Array<Record<string, unknown>> = [];
   const meters: Array<Record<string, unknown>> = [];
@@ -109,6 +114,7 @@ function fakeTx(opts: {
       ),
     },
     productVariant: { findUnique: vi.fn(async () => variant) },
+    panelGroupMember: { findFirst: vi.fn(async () => (opts.platformPanel ? { panelId: 'platform-panel' } : null)) },
     // PT-1-b: the product names no group, so everyone may buy it.
     productAudience: { findMany: async () => [] },
     grant: {
@@ -157,8 +163,8 @@ describe('GrantService.issue locks the wholesale rate on a reseller\'s metered G
     expect((meters[0]['wholesaleUnitPrice'] as Prisma.Decimal).toString()).toBe('0.15');
   });
 
-  it('refuses the sale when the reseller\'s package prices none of the Grant\'s meters, and writes nothing', async () => {
-    const { tx, grants, meters } = fakeTx({ tenantType: TenantType.reseller, rates: [rate('ai', { meterKey: 'ai.tokens' })] });
+  it('refuses the sale when the package prices none of the Grant\'s meters and its group holds a platform panel, and writes nothing', async () => {
+    const { tx, grants, meters } = fakeTx({ tenantType: TenantType.reseller, platformPanel: true, rates: [rate('ai', { meterKey: 'ai.tokens' })] });
 
     await expect(issue(tx)).rejects.toMatchObject({ reason: 'wholesale_rate_missing' });
     expect(grants).toHaveLength(0);
@@ -168,17 +174,30 @@ describe('GrantService.issue locks the wholesale rate on a reseller\'s metered G
   it('refuses it when the rate is only scheduled, or switched off', async () => {
     const scheduled = rate('next', { effectiveFrom: new Date('2026-10-01T00:00:00Z') });
     const off = rate('off', { isActive: false });
-    const { tx, grants } = fakeTx({ tenantType: TenantType.reseller, rates: [scheduled, off] });
+    const { tx, grants } = fakeTx({ tenantType: TenantType.reseller, platformPanel: true, rates: [scheduled, off] });
 
     await expect(issue(tx)).rejects.toMatchObject({ reason: 'wholesale_rate_missing' });
     expect(grants).toHaveLength(0);
   });
 
-  it('refuses it for a reseller with no package at all', async () => {
-    const { tx, grants } = fakeTx({ tenantType: TenantType.reseller, subscribed: false, rates: [rate('now')] });
+  it('refuses it for a reseller with no package at all, on a platform panel', async () => {
+    const { tx, grants } = fakeTx({ tenantType: TenantType.reseller, subscribed: false, platformPanel: true, rates: [rate('now')] });
 
     await expect(issue(tx)).rejects.toMatchObject({ reason: 'wholesale_rate_missing' });
     expect(grants).toHaveLength(0);
+  });
+
+  it('sells it with no wholesale leg on the reseller\'s own panels, priced or not by a package (F-118-n7)', async () => {
+    for (const unpriced of [{ rates: [rate('ai', { meterKey: 'ai.tokens' })] }, { subscribed: false }]) {
+      const { tx, grants, meters } = fakeTx({ tenantType: TenantType.reseller, ...unpriced });
+
+      await issue(tx);
+
+      expect(grants).toHaveLength(1);
+      expect(meters).toHaveLength(1);
+      expect(meters[0]).toMatchObject({ meterKey: 'vpn.traffic', rateCardId: 'card' });
+      expect(meters[0]).not.toHaveProperty('wholesaleRateId');
+    }
   });
 
   it('gives the platform owner\'s own sale no wholesale leg, and reads no package', async () => {

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 3
-updated: 2026-10-22
+updated: 2026-10-28
 ---
 
 # Moving many configs as a job (F-311-ad), releasing an inbound (F-027-es), Grants to another group (F-027-et), and a user's own move (F-410)
@@ -116,7 +116,7 @@ One answers `{grantId, fromGroupId, toGroupId, kept, moved}`; `count` answers
 |---|---|
 | **A config on an inbound the target sells on that panel stays** — a non-`drain` member, the inbound listed to it or `every_group`, not being released; a row with no inbound, on any member. Same client, same link | the point of a shared inbound: users moved between groups keep their line |
 | Every other live config is drained, audited `config_move` with the reason (the user told), and the target's fulfilment places the Grant **in the same transaction**, under its panels' locks, against every cap | moved, never cut off; nobody takes a seat twice |
-| Refused before any write: no group or not `pending`/`active` (`grant_not_movable`), `same_group`, a group it may not use (`group_not_for_grant`: not the platform's or its tenant's), one that cannot deliver a sale (`target_not_deliverable`, F-111-i), or a kept config over the target's share or member cap (`target_full`, F-027-eq). 404 `grant_not_found` / `group_not_found`, the rest 409 | the move is the target's to carry or not |
+| Refused before any write: no group or not `pending`/`active` (`grant_not_movable`), `same_group`, a group it may not use (`group_not_for_grant`: not the platform's or its tenant's), one that cannot deliver a sale (`target_not_deliverable`, F-111-i), one holding a platform panel for a reseller's Grant with a meter sold with no wholesale leg (`wholesale_rate_missing`, F-118-n7), or a kept config over the target's share or member cap (`target_full`, F-027-eq). 404 `grant_not_found` / `group_not_found`, the rest 409 | the move is the target's to carry or not |
 | A Grant that held a line and would be left with none is `no_target`, and the whole move rolls back | the target's panels cannot place it now; it stays serving where it was |
 | A reseller's own people (a reseller's job, or `as !== 'staff'`) spend its `platform_open_grants_max` / month's traffic room only when the move takes the Grant onto a platform panel it was not on (`reseller_limit_reached`) | ADR-0106: one more Grant on the platform's panels |
 | Written down against the Grant, `grant_group_move` (`{panelGroupId}` before and after, `{kept, moved}`), no notice of its own; a job's start and cancel as above; its list is `to_group` jobs only, as a move job's is `to_panel` only | "who put this user on that group" is one row |

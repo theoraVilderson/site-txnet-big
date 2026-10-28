@@ -7616,6 +7616,7 @@
       "target_not_deliverable": "The target group cannot deliver a service right now.",
       "target_full": "The target group is full.",
       "no_target": "The target group's panels had no room for this service; it stayed in its old group.",
+      "wholesale_rate_missing": "This service was sold with no wholesale rate, so it cannot move to a group that holds a platform panel.",
       "reseller_limit_reached": "The reseller's limit of services or monthly traffic on the platform's panels is reached.",
       "failed": "This service could not be moved; it stayed in its old group.",
       "request_reused": "This request was already sent with another selection; close the window and open it again.",

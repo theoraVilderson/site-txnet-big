@@ -464,8 +464,8 @@ export class GrantService {
     // Each card in effect is locked beside the quotas (F-118-e, ADR-0105 decision 4).
     const { meters: retail, unserved } = grantMetersFromVariant(variant, startsAt, currencyCode);
     if (unserved) throw new EntitlementRefused('meter_not_served', `${input.variantId} ${unserved}`);
-    // A reseller's meter also locks what the platform charges it (F-118-n2).
-    const { meters, missing } = await lockWholesale(tx, tenant.id, retail, startsAt);
+    // A reseller's meter also locks what the platform charges it (F-118-n2); unpriced, only off a platform panel (F-118-n7).
+    const { meters, missing } = await lockWholesale(tx, { tenantId: tenant.id, panelGroupId: variant.panelGroupId }, retail, startsAt);
     if (missing) throw new EntitlementRefused('wholesale_rate_missing', `${input.variantId} ${missing}`);
     // The buyer's own caps: open metered Grants (F-118-ao), staff's restrictions (F-030-e); staff's own issue counts, never refused.
     await assertBuyerRoom(tx, input.userId, { source: input.source, metered: variant.billingMode === VariantBillingMode.metered });

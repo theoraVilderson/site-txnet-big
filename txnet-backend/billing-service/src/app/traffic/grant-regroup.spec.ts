@@ -12,9 +12,11 @@
  *  - a target the Grant may not use, one that cannot deliver, the same group,
  *    or a Grant with no group is refused before anything is written;
  *  - a reseller's own people spend its platform-panel room only when the move
- *    takes the Grant onto a platform panel it was not on.
+ *    takes the Grant onto a platform panel it was not on;
+ *  - **a reseller's Grant sold with no wholesale leg reaches a platform panel**
+ *    (F-118-n7): nobody would pay the platform for what it serves there.
  */
-import { ConfigProtocol, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelReviewState, PanelState } from '@prisma/client';
+import { ConfigProtocol, GrantStatus, InboundPlacement, PanelGroupMemberRole, PanelReviewState, PanelState, TenantType } from '@prisma/client';
 import { vi } from 'vitest';
 
 import { MemberFacts } from './group-plan';
@@ -111,7 +113,7 @@ describe('splitForTarget — which configs keep their link', () => {
 
 type Row = Record<string, unknown>;
 
-function harness(over: { grant?: Row; target?: MemberFacts[]; placeAfter?: number; groupTenant?: string | null } = {}) {
+function harness(over: { grant?: Row; target?: MemberFacts[]; placeAfter?: number; groupTenant?: string | null; unpricedMeters?: number; tenantType?: TenantType } = {}) {
   grantAudits.length = 0;
   configAudits.length = 0;
   roomAsked.length = 0;
@@ -130,6 +132,8 @@ function harness(over: { grant?: Row; target?: MemberFacts[]; placeAfter?: numbe
       update: async ({ data }: { data: Row }) => Object.assign(grant, data),
     },
     panelGroup: { findUnique: async ({ where }: { where: Row }) => (where.id === GAMING ? { id: GAMING, tenantId: over.groupTenant === undefined ? null : over.groupTenant } : null) },
+    grantMeter: { count: async () => over.unpricedMeters ?? 0 },
+    tenant: { findUnique: async () => ({ tenantType: over.tenantType ?? TenantType.reseller }) },
     config: {
       findMany: async () => configs.filter((c) => c.live).map(({ id, panelId, inboundRemoteId }) => ({ id, panelId, inboundRemoteId })),
       count: async () => configs.filter((c) => c.live).length,
@@ -219,5 +223,20 @@ describe('GrantRegroupActs.regroup — one Grant to another group', () => {
     onPlatform = { [GAMING]: true };
     await owner.regroup({ bounded: false });
     expect(roomAsked).toEqual([]);
+  });
+
+  it('refuses a reseller\'s Grant sold with no wholesale leg a move onto a platform panel, and nothing else (F-118-n7)', async () => {
+    const unpriced = harness({ unpricedMeters: 1 });
+    onPlatform = { [GAMING]: true };
+    expect(await refusal(unpriced.regroup())).toBe('wholesale_rate_missing');
+    expect(unpriced.grant.panelGroupId).toBe(EU);
+    expect(unpriced.drained).toEqual([]);
+
+    const ownPanels = harness({ unpricedMeters: 1 });
+    expect((await ownPanels.regroup()).toGroupId).toBe(GAMING);
+
+    const platformsOwn = harness({ unpricedMeters: 1, tenantType: TenantType.platform_owner });
+    onPlatform = { [GAMING]: true };
+    expect((await platformsOwn.regroup()).toGroupId).toBe(GAMING);
   });
 });

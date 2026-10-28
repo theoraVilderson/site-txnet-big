@@ -3,7 +3,7 @@ id: billing
 layer: domain
 status: active
 version: 5
-updated: 2026-10-18
+updated: 2026-10-28
 ---
 
 # Contract — billing / purchase
@@ -84,7 +84,7 @@ and 8 — [contract.renewal.md](contract.renewal.md) "Paying it" (F-305-d).
 | `409` `reason`: `already_paid` / `expired` / `cancelled` | its i18n key beside it. Past `expiresAt` is `expired` even before the sweep flips it. A `refunded` invoice (F-111-d) is `already_paid`: it was, and its clock may still run |
 | `409 insufficient_balance` + `error.facts: {total, balance, missing, currencyCode}` (the invoice's, F-116-h2) | the wallet holds less than `total`; nothing is written. `missing` is the top-up to offer — "The shortfall" below. In `facts` because the shared envelope drops any other field (F-111-e: until then the figure never reached a client) |
 | `404 errors.billing.invoice.variantNotFound` | the variant was switched off since the invoice, or its platform product left the reseller's package (F-019-v5): the Grant cannot be issued and the whole payment rolls back |
-| `409 errors.billing.invoice.variantNotFound`, `reason` `wholesale_rate_missing` / `wholesale_unfunded` | a reseller's plan on a group holding a platform panel whose package prices no VPN traffic, or whose billing wallet cannot buy the bag wholesale (F-118-p, entitlement `contract.package-wholesale.md`): the whole payment rolls back; the buyer is told only that it is not for sale |
+| `409 errors.billing.invoice.variantNotFound`, `reason` `wholesale_rate_missing` / `wholesale_unfunded` | a reseller's plan or meter on a group holding a platform panel whose package prices no VPN traffic (on its own panels it sells with no leg, F-118-n7), or whose billing wallet cannot buy the bag wholesale (F-118-p, entitlement `contract.package-wholesale.md`): the whole payment rolls back; the buyer is told only that it is not for sale |
 | `409 errors.billing.invoice.meteredCapReached`, `reason` `metered_cap_reached` + `error.facts: {cap, open}` | the user reached their cap of open metered Grants since the invoice (F-118-ao): the whole payment rolls back |
 
 **One transaction, in this order** (spec §5.8 step 2):

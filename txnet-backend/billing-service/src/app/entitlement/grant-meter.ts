@@ -2,6 +2,7 @@ import { Prisma, TenantType, VariantBillingMode, type RateCardAfterIncluded, typ
 import { DOOR_METERS, METER_KEYS, packageMeterRatesAt } from '@txnet-backend/shared-core';
 
 import { rateCardAt, vpnTrafficRateAt, type RateCardRow } from '../catalog/catalog-reads';
+import { onPlatformPanel } from '../traffic/vpn-wholesale';
 
 /** A `grant_meter` row as issue writes it, before its Grant and tenant are known. */
 export type GrantMeterTerms = {
@@ -32,7 +33,7 @@ export type WholesaleTerms = {
   wholesaleBilled: bigint;
 };
 
-type WholesaleReader = Pick<Prisma.TransactionClient, 'tenant' | 'tenantSubscription' | 'tenantPackageMeterRate'>;
+type WholesaleReader = Pick<Prisma.TransactionClient, 'tenant' | 'tenantSubscription' | 'tenantPackageMeterRate' | 'panelGroupMember'>;
 
 /**
  * The meters a Grant is sold with (F-118-e, ADR-0105 decision 4): per meter,
@@ -83,23 +84,25 @@ export function grantMetersFromVariant(
 /**
  * Locks the wholesale rate on each of a reseller's meters (F-118-n2, ADR-0105
  * decisions 4 and 10): the rate its package charges for that platform meter
- * at `startsAt`. Always, whatever panels the variant's group holds today — a
- * group's members change after the sale, and a Grant with no price must never
- * reach a platform panel (user, 2026-09-29); whether a unit is charged is its
- * panel owner's question, per usage (F-118-n3).
+ * at `startsAt`, whenever the package has one — so a platform panel that joins
+ * the group later is still charged; whether a unit is, is its panel owner's
+ * question, per usage (F-118-n3).
  *
- * The platform owner's own sale has no wholesale leg, and no meters (a package
- * plan, decision 0) reads nothing. `missing` names the first meter the package
- * does not price — or every one, for a reseller with no package: the sale is
- * then refused (`wholesale_rate_missing`).
+ * A meter the package does not price — or every one, for a reseller with no
+ * package — is refused (`missing`, `wholesale_rate_missing`) only when the
+ * variant's group holds a platform panel at the sale; on the reseller's own
+ * panels it sells with no leg (F-118-n7, user 2026-10-26, as a package plan
+ * does — package rule 4). The platform owner's own sale has no wholesale leg,
+ * and no meters (a package plan, decision 0) reads nothing.
  */
 export async function lockWholesale(
   tx: WholesaleReader,
-  tenantId: string,
+  sale: { tenantId: string; panelGroupId: string | null },
   meters: GrantMeterTerms[],
   startsAt: Date,
 ): Promise<{ meters: GrantMeterTerms[]; missing: string | null }> {
   if (meters.length === 0) return { meters, missing: null };
+  const { tenantId } = sale;
   const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { tenantType: true } });
   if (tenant?.tenantType !== TenantType.reseller) return { meters, missing: null };
 
@@ -107,14 +110,20 @@ export async function lockWholesale(
     where: { tenantId },
     select: { package: { select: { id: true, currencyCode: true } } },
   });
-  if (!subscription) return { meters: [], missing: meters[0].meterKey };
-  const { id: packageId, currencyCode } = subscription.package;
-  const rates = (await packageMeterRatesAt(tx, new Map([[packageId, currencyCode]]), startsAt)).get(packageId) ?? [];
+  const rates = subscription
+    ? ((await packageMeterRatesAt(tx, new Map([[subscription.package.id, subscription.package.currencyCode]]), startsAt)).get(subscription.package.id) ?? [])
+    : [];
 
   const locked: GrantMeterTerms[] = [];
+  let onPlatform: boolean | undefined;
   for (const meter of meters) {
     const rate = rates.find((r) => r.meterKey === meter.meterKey);
-    if (!rate) return { meters: [], missing: meter.meterKey };
+    if (!rate) {
+      onPlatform ??= await onPlatformPanel(tx, sale.panelGroupId);
+      if (onPlatform) return { meters: [], missing: meter.meterKey };
+      locked.push(meter);
+      continue;
+    }
     locked.push({
       ...meter,
       wholesalePayerTenantId: tenantId,

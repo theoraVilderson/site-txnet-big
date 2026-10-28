@@ -1,4 +1,4 @@
-import { Grant, GrantMeter, GrantStatus, PanelOwnershipType, Prisma } from '@prisma/client';
+import { Grant, GrantMeter, GrantStatus, PanelOwnershipType, Prisma, TenantType } from '@prisma/client';
 import type { TenantBillingLedger } from '@txnet-backend/shared-core';
 
 import { toCents, unitsCovered, ZERO } from '../usage/usage-price';
@@ -39,13 +39,25 @@ const max = (a: bigint, b: bigint) => (a > b ? a : b);
  * sale. Also a package plan's question (F-118-p). A sold Grant asks its own
  * group (F-027-er); a sale not yet written asks its variant's.
  */
-export async function onPlatformPanel(tx: Prisma.TransactionClient, panelGroupId: string | null): Promise<boolean> {
+export async function onPlatformPanel(tx: Pick<Prisma.TransactionClient, 'panelGroupMember'>, panelGroupId: string | null): Promise<boolean> {
   if (!panelGroupId) return false;
   const member = await tx.panelGroupMember.findFirst({
     where: { groupId: panelGroupId, panel: { ownershipType: PanelOwnershipType.platform } },
     select: { panelId: true },
   });
   return member !== null;
+}
+
+/**
+ * A reseller's Grant holds a meter sold with no wholesale leg (F-118-n7: its
+ * package priced none, on its own panels) — no platform panel may serve it,
+ * since nobody would pay the platform for what it served. The platform
+ * owner's own meters carry no leg and are never this.
+ */
+export async function soldWithoutLeg(tx: Pick<Prisma.TransactionClient, 'grantMeter' | 'tenant'>, grant: { id: string; tenantId: string }): Promise<boolean> {
+  if ((await tx.grantMeter.count({ where: { grantId: grant.id, wholesalePayerTenantId: null } })) === 0) return false;
+  const tenant = await tx.tenant.findUnique({ where: { id: grant.tenantId }, select: { tenantType: true } });
+  return tenant?.tenantType === TenantType.reseller;
 }
 
 export class VpnWholesale {
