@@ -472,10 +472,6 @@ func (d *Driver) SetClientEnabled(ctx context.Context, remoteID string, enabled 
 	return err
 }
 
-func (d *Driver) DeleteClient(ctx context.Context, remoteID string) error {
-	return d.call(ctx, "DeleteClient", http.MethodDelete, []string{"api", "user", remoteID}, nil, nil, nil)
-}
-
 // SetClientDataLimit writes the ceiling Marzban enforces. Raising it above
 // used_traffic is also what reactivates a user Marzban marked `limited`.
 func (d *Driver) SetClientDataLimit(ctx context.Context, remoteID string, ceilingBytes int64) error {

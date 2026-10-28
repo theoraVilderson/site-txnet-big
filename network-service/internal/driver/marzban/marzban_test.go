@@ -35,6 +35,7 @@ type farEnd struct {
 	nextStall    time.Duration
 	nextStatus   int
 	ceilingDelay int
+	deletes      deleteScript // delete_test.go
 }
 
 type farUser struct {
@@ -177,12 +178,19 @@ func (f *farEnd) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			u.apply(body)
 			writeJSON(w, u.wire())
 		case r.Method == http.MethodDelete && action == "":
+			if f.deletes.refuse(w, u) {
+				return
+			}
 			delete(f.users, name)
 			for i, n := range f.order {
 				if n == name {
 					f.order = append(f.order[:i], f.order[i+1:]...)
 					break
 				}
+			}
+			if f.deletes.landThen500 {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
 			}
 			writeJSON(w, map[string]string{"detail": "User successfully deleted"})
 		case r.Method == http.MethodPost && action == "reset":

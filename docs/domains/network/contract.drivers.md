@@ -89,6 +89,13 @@ Conformance: the eleven pull scenarios pass. The four push scenarios and
 `ceiling_refused` are skipped by name (no sessions, and the ceiling always
 exists). `marzban_test.go` also pins rules 1-3 and the one-login retry.
 
+7. **A delete disables first** (F-027-fl). Marzban 0.8.4 commits a delete,
+   then 500s on a user with no owner admin (every user the env sudo admin
+   made) before its background tasks run — Xray's removal among them — so the
+   client went on serving, unread. `DeleteClient` disables (modify_user's Xray
+   removal runs), then deletes; a 5xx is read back, and a 404 is a delete that
+   landed. A user already gone is deleted.
+
 ## Sanaee — MHSanaei 3x-ui (F-027-ah)
 
 `internal/driver/sanaee`: a dialect of `internal/driver/xuifamily`, the v2 x-ui
