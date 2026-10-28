@@ -29,7 +29,10 @@ entry() {
 # default_transaction_read_only is tracked, not ignored: sub-service opens
 # every connection read-only (ADR-0082 (1)) and PgBouncer would refuse the
 # startup parameter; tracked, it is restored on each server connection that
-# client is given and on no other client's.
+# client is given and on no other client's. server_login_retry is 2 s, not the
+# default 15: after a failed login PgBouncer refuses every client until it
+# retries, so a main-db restart cost 15 s more and crashed services booting in
+# that window (LIVE-1-s, 2026-10-28).
 cat > "$DIR/pgbouncer.ini" <<INI
 [databases]
 ${MAIN_DB_NAME} = host=main-db port=5432 dbname=${MAIN_DB_NAME}
@@ -49,6 +52,7 @@ max_prepared_statements = 200
 server_reset_query =
 ignore_startup_parameters = extra_float_digits,options
 server_idle_timeout = 300
+server_login_retry = 2
 track_extra_parameters = IntervalStyle, default_transaction_read_only
 INI
 

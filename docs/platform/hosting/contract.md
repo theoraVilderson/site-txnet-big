@@ -94,7 +94,7 @@ mode 600, on tmpfs), then `su-exec` to its own user. Settings: `listen_port=6432
 `pool_mode=transaction`, `auth_type=scram-sha-256`, `max_client_conn=2000`,
 `default_pool_size=20`, `reserve_pool_size=5`, `reserve_pool_timeout=3`,
 `max_prepared_statements=200`, `server_reset_query=` (empty),
-`ignore_startup_parameters=extra_float_digits,options`, `server_idle_timeout=300`,
+`ignore_startup_parameters=extra_float_digits,options`, `server_idle_timeout=300`, `server_login_retry=2` (not 15: a refused login blocks every client until the retry, LIVE-1-s),
 `track_extra_parameters=IntervalStyle,default_transaction_read_only` (sub-service's
 read-only startup parameter, ADR-0082 (1); refused otherwise). One `[databases]`
 entry: `${MAIN_DB_NAME}` → `main-db:5432`. Healthcheck `pg_isready -h 127.0.0.1 -p 6432`; no host port.
