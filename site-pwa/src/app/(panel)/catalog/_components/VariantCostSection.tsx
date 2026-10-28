@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import { catalogCostApi, type CostRow } from "@/lib/catalog-cost-api";
 import { useCatalogSurface } from "../_lib/surface";
 import { CATALOG_KEYS as K } from "../_lib/catalog-form";
+import type { VariantCostHistory } from "../_hooks/useProductVariantCosts";
 import { COST_FROM, currentCost, isCostSet, validateVariantCost, type CostFrom } from "../_lib/cost-form";
 import { DataTable } from "../../_components/kit/DataTable";
 import { formatMoney } from "../../_lib/money";
@@ -24,12 +25,15 @@ const C = K.cost;
  * tenant: billing answers this surface's own variants only. A cost in effect
  * can be taken back from the same starts (F-1002-j): "no cost set" again, the
  * history keeping both rows.
+ *
+ * The history arrives from the product sheet's one read (`initial`, LIVE-1-d);
+ * this card reads its own only after it writes.
  */
-export function VariantCostSection({ variantId, now = new Date() }: { variantId: string; now?: Date }) {
+export function VariantCostSection({ variantId, initial, now = new Date() }: { variantId: string; initial: VariantCostHistory; now?: Date }) {
   const { t, lang } = useLocale();
   const { tenantId } = useCatalogSurface();
   const api = useMemo(() => catalogCostApi(tenantId), [tenantId]);
-  const [rows, setRows] = useState<CostRow[] | null>(null);
+  const [own, setOwn] = useState<CostRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [amount, setAmount] = useState("");
   const [from, setFrom] = useState<CostFrom>("now");
@@ -39,12 +43,12 @@ export function VariantCostSection({ variantId, now = new Date() }: { variantId:
   const load = useCallback(
     () =>
       api.variantCosts(variantId).then(
-        (r) => (setRows(r), setFailed(false)),
+        (r) => (setOwn(r), setFailed(false)),
         () => setFailed(true),
       ),
     [api, variantId],
   );
-  useEffect(() => void load(), [load]);
+  const rows = own ?? (Array.isArray(initial) ? initial : null);
 
   const current = rows ? currentCost(rows, now) : null;
   const money = (r: CostRow) => (r.amount === null ? t("common", C.notSet) : formatMoney(r.amount, r.currencyCode, { lang, t }));
@@ -104,7 +108,7 @@ export function VariantCostSection({ variantId, now = new Date() }: { variantId:
           ]}
         />
       )}
-      {failed && <Alert>{t("common", C.loadFailed)}</Alert>}
+      {(failed || (own === null && initial === "failed")) && <Alert>{t("common", C.loadFailed)}</Alert>}
       {error && <Alert>{error}</Alert>}
     </div>
   );

@@ -19,7 +19,11 @@ reading a product with no panel as 100% margin. Over catalog
 1. **A variant's cost per sale** (`VariantCostSection`, in each variant card,
    `VariantCard.tsx`): the cost in effect, or **"no cost set"** in the error
    tone — the line that explains a 100% margin; a new cost; its history. A
-   cost is never edited: a new row replaces it from its day.
+   cost is never edited: a new row replaces it from its day. **One read per
+   product, not per variant** (LIVE-1-d): the sheet reads every variant's
+   history at once (`_hooks/useProductVariantCosts.ts`) and a card re-reads
+   its own only after a write — one read per variant ran a 32-variant product
+   out of `CATALOG_ADMIN_READ` (120 / 15 min) in three opens.
 2. **From now, or from the 1st of this month** (`SegmentedControl`, `COST_FROM`):
    the two starts billing accepts — no earlier than this UTC month. The second
    costs this month's sales too; the hint says closed months never change.
@@ -43,4 +47,6 @@ reading a product with no panel as 100% margin. Over catalog
 `catalog/cost.test.tsx`: the form's rules, the two starts, the cost in
 effect; the section says "no cost set", writes one from the 1st of the month
 and reads it back; a take-back in effect is "no cost set", and "Remove cost"
-calls it and shows "not set" in the history.
+calls it and shows "not set" in the history; the product's histories are one
+read, a card waits for it and reads its own only after a write (LIVE-1-d).
+`catalog-cost.service.spec.ts` (billing): the product read, keyed by variant.

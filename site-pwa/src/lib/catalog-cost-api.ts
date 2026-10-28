@@ -1,5 +1,5 @@
-// A product's cost (F-1002-d, ADR-0151): `/api/catalog[/tenants/:id]/variants/:id/costs`
-// and `…/meter-costs`, on the catalog's own client and prefix — a cost is a
+// A product's cost (F-1002-d, ADR-0151): `/api/catalog[/tenants/:id]/variants/:id/costs`,
+// `…/products/:id/variant-costs` and `…/meter-costs`, on the catalog's own client and prefix — a cost is a
 // catalog row, private to its tenant.
 import { call, catalogApiPrefix, id, json } from "./catalog-api";
 
@@ -49,6 +49,8 @@ export function catalogCostApi(tenantId: string | null) {
   const at = catalogApiPrefix(tenantId);
   return {
     variantCosts: (variantId: string) => call<CostRow[]>(`${at}/variants/${id(variantId)}/costs`, { method: "GET" }),
+    /** Every variant's history of one product, keyed by variant id — the product sheet's one read (LIVE-1-d). */
+    productVariantCosts: (productId: string) => call<Record<string, CostRow[]>>(`${at}/products/${id(productId)}/variant-costs`, { method: "GET" }),
     setVariantCost: (variantId: string, body: SetVariantCostBody) => call<CostRow>(`${at}/variants/${id(variantId)}/costs`, { method: "POST", ...json(body) }),
     meterCosts: () => call<MeterCostLine[]>(`${at}/meter-costs`, { method: "GET" }),
     setMeterCost: (body: SetMeterCostBody) => call<MeterCostRow>(`${at}/meter-costs`, { method: "POST", ...json(body) }),

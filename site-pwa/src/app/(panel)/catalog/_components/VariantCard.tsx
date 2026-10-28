@@ -24,6 +24,7 @@ import {
 } from "../_lib/catalog-form";
 import { RateCardSection, RegenerateCardSection } from "./RateCardSection";
 import { VariantCostSection } from "./VariantCostSection";
+import type { VariantCostHistory } from "../_hooks/useProductVariantCosts";
 import { ActiveCapSection, SalesCapSection } from "./SalesCapSection";
 import { PanelGroupSelect, type PanelGroups } from "./PanelGroupSelect";
 import { CopyId, Field, useMessage } from "./catalog-ui";
@@ -47,12 +48,15 @@ export function VariantCard({
   kind,
   groups,
   money,
+  costs,
   onChanged,
 }: {
   variant: CatalogVariant;
   kind: FulfilmentKind;
   groups: PanelGroups;
   money: (price: CatalogPrice) => string;
+  /** Its cost history from the sheet's one read (LIVE-1-d). */
+  costs: VariantCostHistory;
   onChanged: () => Promise<void>;
 }) {
   const { t, lang } = useLocale();
@@ -122,7 +126,7 @@ export function VariantCard({
       <ActiveCapSection variant={v} act={act} />
       {v.billingMode === "metered" && <RateCardSection variant={v} act={act} />}
       {takesPanelGroup(kind) && <RegenerateCardSection variant={v} act={act} />}
-      <VariantCostSection variantId={v.id} />
+      <VariantCostSection variantId={v.id} initial={costs} />
 
       <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
         <Field label={pricedIn(t("common", K.price.amount), currency)} error={errors.amount}>

@@ -29,6 +29,7 @@ import { setsSelfMove } from "../../_lib/self-move-settings";
 import { usePanelGroups, type PanelGroups } from "./PanelGroupSelect";
 import { VariantFields } from "./VariantFields";
 import { VariantCard } from "./VariantCard";
+import { historyOf, useProductVariantCosts } from "../_hooks/useProductVariantCosts";
 import { Sheet, useMessage } from "./catalog-ui";
 import { Alert, Button } from "../../_components/kit";
 import { isPlatformTenant } from "@/lib/tenant-type";
@@ -71,6 +72,7 @@ export function ProductDetailSheet({
   const kind = product.fulfilmentKind;
   const groups = usePanelGroups(takesPanelGroup(kind));
   const offered = { ...groups, options: groupsForVariant(groups.options, product.tenantId) };
+  const costs = useProductVariantCosts(product.id);
 
   const load = useCallback(async () => {
     try {
@@ -132,7 +134,7 @@ export function ProductDetailSheet({
       )}
       {detail?.variants.length === 0 && !adding && <p className="rounded-xl bg-[var(--leaf-bg)] p-3 text-xs text-text-primary">{t("common", K.wizard.skipVariant)}</p>}
       {detail?.variants.map((v) => (
-        <VariantCard key={v.id} variant={v} kind={kind} groups={offered} money={money} onChanged={load} />
+        <VariantCard key={v.id} variant={v} kind={kind} groups={offered} money={money} costs={historyOf(costs, v.id)} onChanged={load} />
       ))}
       {detail &&
         (adding ? (

@@ -77,6 +77,24 @@ export class CatalogCostService {
     });
   }
 
+  /**
+   * Every variant's cost history of one product, keyed by variant — one read
+   * for a product sheet however many variants it holds, where one read per
+   * variant ran a 32-variant product out of `CATALOG_ADMIN_READ` (LIVE-1-d).
+   */
+  async productVariantCosts(actor: CatalogActor, productId: string): Promise<Record<string, VariantCostView[]>> {
+    const { owner } = await this.catalog.access(actor);
+    return this.catalog.within(owner, async (tx) => {
+      await this.catalog.managed(tx, 'product', 'product_not_found', actor, productId, owner);
+      const variants = await tx.productVariant.findMany({ where: { productId }, select: { id: true } });
+      const ids = variants.map((v) => v.id);
+      const rows = await tx.variantCost.findMany({ where: { variantId: { in: ids } }, orderBy: NEWEST, take: COST_HISTORY_SHOWN * ids.length });
+      const byVariant: Record<string, VariantCostView[]> = Object.fromEntries(ids.map((id) => [id, []]));
+      for (const r of rows) if (byVariant[r.variantId].length < COST_HISTORY_SHOWN) byVariant[r.variantId].push(variantCostView(r));
+      return byVariant;
+    });
+  }
+
   /** A new cost for one sale of a variant, in its tenant's pricing currency, audited. */
   setVariantCost(actor: CatalogActor, variantId: string, input: VariantCostInput): Promise<VariantCostView> {
     return this.writeVariantCost(actor, variantId, { amount: new Prisma.Decimal(input.amount), effectiveFrom: input.effectiveFrom, action: 'catalog_variant_cost_set' });

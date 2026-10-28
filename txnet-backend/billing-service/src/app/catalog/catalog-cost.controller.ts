@@ -45,6 +45,13 @@ export class CatalogCostController {
     return refusingCatalog(() => this.costs.variantCosts(catalogActorOf(req, ip), id));
   }
 
+  /** LIVE-1-d: every variant's of a product at once, for its sheet. */
+  @Get('products/:id/variant-costs')
+  @RateLimit(READ)
+  productVariantCosts(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return refusingCatalog(() => this.costs.productVariantCosts(catalogActorOf(req, ip), id));
+  }
+
   @Post('variants/:id/costs')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit(WRITE)
@@ -98,6 +105,12 @@ export class ResellerCatalogCostController {
   @RateLimit(READ)
   variantCosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
     return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'read', (as) => this.costs.variantCosts(as, id)));
+  }
+
+  @Get('products/:id/variant-costs')
+  @RateLimit(READ)
+  productVariantCosts(@Param('tenantId', new ParseUUIDPipe()) tenantId: string, @Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request, @Ip() ip: string) {
+    return refusingResellerCatalog(() => this.reseller.run(resellerCatalogActorOf(req, ip), tenantId, 'read', (as) => this.costs.productVariantCosts(as, id)));
   }
 
   @Post('variants/:id/costs')

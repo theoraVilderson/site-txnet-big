@@ -42,6 +42,7 @@ On `/api/catalog` (behind `catalog.manage`, as every route there) and on
 | Route | Body / query | Answer | Refusals |
 |---|---|---|---|
 | `GET /variants/:id/costs` | — | the history, newest first, ≤ 50: `{id, amount, currencyCode, effectiveFrom, createdAt}`, `amount` null on a take-back | `variant_not_found` 404 |
+| `GET /products/:id/variant-costs` | — | every variant of the product, keyed by id: `{[variantId]: history}`, each as above, `[]` for none — the product sheet's one read (LIVE-1-d) | `product_not_found` 404 |
 | `POST /variants/:id/costs` | `amount`, `effectiveFrom?` | the new row, in the tenant's pricing currency; audited `catalog_variant_cost_set` | the same; 400 for a closed month |
 | `POST /variants/:id/costs/unset` | `effectiveFrom?` | the take-back row (rule 6); audited `catalog_variant_cost_unset` | as `POST …/costs` |
 | `GET /meter-costs` | `tenantId?` (ambient, owner: uuid or `platform`) | every meter but `vpn.traffic`: `{meterKey, unit, nameKey, costs[]}` (`costs` as above with `unitSize`, null on a take-back) | — |

@@ -23,6 +23,8 @@ import { currencyRegistry } from '../../../../test-support/currency-registry';
 const TENANT = '11111111-1111-4111-8111-111111111111';
 const OTHER = '22222222-2222-4222-8222-222222222222';
 const VARIANT = '44444444-4444-4444-8444-4444444444c1';
+const VARIANT_2 = '44444444-4444-4444-8444-4444444444c2';
+const PRODUCT = '55555555-5555-4555-8555-555555555551';
 const actor: CatalogActor = { adminId: '33333333-3333-4333-8333-333333333333', tenantId: TENANT, ip: '127.0.0.1', permissions: ['catalog.manage'] };
 const AT = new Date('2026-10-17T10:00:00Z');
 
@@ -34,7 +36,14 @@ function harness(variantTenant: string) {
     ...currencyRegistry,
     $executeRaw: async (_s: TemplateStringsArray, ...values: unknown[]) => (restated.push(values), 1),
     tenant: { findUnique: async () => ({ operatingCurrencyCode: 'IRT' }) },
-    variantCost: { create: async ({ data }: { data: Record<string, unknown> }) => (written.push(data), { id: 'c1', createdAt: AT, ...data }) },
+    variantCost: {
+      create: async ({ data }: { data: Record<string, unknown> }) => (written.push(data), { id: 'c1', createdAt: AT, ...data }),
+      findMany: async ({ where }: { where: { variantId: { in: string[] } } }) =>
+        [VARIANT, VARIANT, VARIANT_2]
+          .filter((v) => where.variantId.in.includes(v))
+          .map((variantId, i) => ({ id: `h${i}`, variantId, amount: i === 1 ? null : new Prisma.Decimal('2500'), currencyCode: 'IRT', effectiveFrom: AT, createdAt: AT })),
+    },
+    productVariant: { findMany: async () => [{ id: VARIANT }, { id: VARIANT_2 }, { id: '44444444-4444-4444-8444-4444444444c3' }] },
     meter: {
       findUnique: async ({ where }: { where: { key: string } }) => (where.key === 'api.calls' ? { key: 'api.calls' } : null),
       findMany: async ({ where }: { where: { key: { not: string } } }) =>
@@ -49,7 +58,7 @@ function harness(variantTenant: string) {
     access: async () => ({ owner: false }),
     ownerOfNew: async (a: CatalogActor, requested?: string) => requested ?? a.tenantId,
     within: (_owner: boolean, fn: (db: typeof tx) => Promise<unknown>) => fn(tx),
-    managed: async (_db: unknown, _model: string, missing: 'variant_not_found', a: CatalogActor, id: string) => {
+    managed: async (_db: unknown, _model: string, missing: 'variant_not_found' | 'product_not_found', a: CatalogActor, id: string) => {
       if (variantTenant !== a.tenantId) throw new CatalogAdminRefused(missing, id);
       return { id, tenantId: variantTenant };
     },
@@ -79,6 +88,14 @@ describe('CatalogCostService', () => {
     const h = harness(OTHER);
     await expect(h.costs.setVariantCost(actor, VARIANT, { amount: '1.00' })).rejects.toMatchObject({ reason: 'variant_not_found' });
     expect(h.written).toEqual([]);
+  });
+
+  it("reads every variant's cost history of a product in one call, a variant with none answered empty (LIVE-1-d)", async () => {
+    const byVariant = await harness(TENANT).costs.productVariantCosts(actor, PRODUCT);
+    expect(byVariant[VARIANT]).toEqual([expect.objectContaining({ id: 'h0', amount: '2500.00' }), expect.objectContaining({ id: 'h1', amount: null })]);
+    expect(byVariant[VARIANT_2]).toEqual([expect.objectContaining({ id: 'h2', currencyCode: 'IRT' })]);
+    expect(byVariant['44444444-4444-4444-8444-4444444444c3']).toEqual([]);
+    await expect(harness(OTHER).costs.productVariantCosts(actor, PRODUCT)).rejects.toMatchObject({ reason: 'product_not_found' });
   });
 
   it('lists every meter but vpn.traffic with its cost history, and refuses a meter that does not exist', async () => {
