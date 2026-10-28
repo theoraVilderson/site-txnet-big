@@ -1,15 +1,21 @@
 /**
  * The order of locks in paying an invoice (LIVE-1, 2026-10-28). Thirty buyers
- * paying for one variant at once deadlocked on its row: the Grant's insert
- * takes a KEY SHARE on `catalog.product_variant` through its foreign key, and
- * the sales move after it asks FOR UPDATE on the same row (`move_variant_sales`),
- * so two payers each held what the other waited to upgrade (40P01). The move
- * is taken first, so every payer queues on the row before anything refers to
- * it. What breaks without anyone seeing it: concurrent sales of one product
- * fail at random, never in a test that pays alone.
+ * paying for one variant at once first deadlocked on its row (LIVE-1-v): the
+ * Grant's insert takes a KEY SHARE on `catalog.product_variant` through its
+ * foreign key, and `move_variant_sales` then asked FOR UPDATE on the same row,
+ * so two payers each held what the other waited to upgrade (40P01). Taking
+ * the move first cured that and queued every payer on the row for the whole
+ * transaction instead — six ran past the 5 s timeout (LIVE-1-w). Now the
+ * function locks FOR NO KEY UPDATE, which a KEY SHARE does not block, and the
+ * move is the payment's last write, so the row is held for milliseconds.
+ * What breaks without anyone seeing it: concurrent sales of one product fail
+ * at random, never in a test that pays alone.
  *
  * The money, the Grant and the counts are `invoice-payment.int.spec.ts`.
  */
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { GrantStatus, InvoiceStatus, Prisma } from '@prisma/client';
 import { runWithTenant } from '@txnet-backend/shared-core';
 import { vi } from 'vitest';
@@ -46,14 +52,30 @@ const grants = {
 };
 const reservations = { confirm: async () => void steps.push('coupons:confirm') };
 
-describe('InvoicePaymentService.pay — the variant row is locked before anything refers to it', () => {
-  it('moves the reserved unit to sold before the Grant is inserted', async () => {
+const MIGRATIONS = join(__dirname, '../../../../prisma/domains/migrations');
+
+/** The newest migration that defines `catalog.move_variant_sales` — the body Postgres runs. */
+function latestSalesMove(): string {
+  const dirs = readdirSync(MIGRATIONS).filter((d) => !d.includes('.')).sort();
+  const bodies = dirs.map((d) => readFileSync(join(MIGRATIONS, d, 'migration.sql'), 'utf8')).filter((sql) => sql.includes('FUNCTION catalog.move_variant_sales'));
+  return bodies[bodies.length - 1] ?? '';
+}
+
+describe('InvoicePaymentService.pay — one variant\'s payers never deadlock, nor queue for long', () => {
+  it('moves the reserved unit to sold as its last step, after the Grant is inserted', async () => {
     const service = new InvoicePaymentService({} as never, ledger as never, grants as never, reservations as never);
 
     const paid = await runWithTenant({ id: TENANT }, () => service.pay({ userId: USER, invoiceId: INVOICE }));
 
     expect(paid.status).toBe(InvoiceStatus.paid);
-    expect(steps.indexOf('sales:sellReserved')).toBeGreaterThanOrEqual(0);
-    expect(steps.indexOf('sales:sellReserved')).toBeLessThan(steps.indexOf('grant:insert'));
+    expect(steps.indexOf('grant:insert')).toBeGreaterThanOrEqual(0);
+    expect(steps.indexOf('sales:sellReserved')).toBeGreaterThan(steps.indexOf('grant:insert'));
+  });
+
+  it('locks the variant FOR NO KEY UPDATE, which the Grant\'s foreign-key KEY SHARE does not block', () => {
+    const body = latestSalesMove();
+
+    expect(body).toMatch(/FOR NO KEY UPDATE/);
+    expect(body).not.toMatch(/\bFOR UPDATE\b/);
   });
 });

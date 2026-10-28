@@ -3,7 +3,7 @@ id: catalog
 layer: domain
 status: active
 version: 15
-updated: 2026-10-18
+updated: 2026-10-28
 ---
 
 # Contract — catalog / a variant's sales and active caps (F-513, F-514)
@@ -69,11 +69,16 @@ the edit is audited with it (`catalog_variant_update`).
 ## The writers (F-513-b)
 
 `sales-counts.ts`. Every move is one call of `catalog.move_variant_sales`
-(migrations `20261018000600`, `…0700`, `…0900`), a SECURITY DEFINER function: a
+(migrations `20261018000600`, `…0700`, `…0900`, `20261028000100`), a SECURITY DEFINER function: a
 reseller's users buy the platform's variants, and `tenant_isolation`'s
 WITH CHECK refuses a reseller's transaction writing a platform row (proved on
 dev, 2026-10-18). It writes the two counts only, of a variant the bound tenant
-can read, and its UPDATE is the row lock two buyers of the last unit queue on.
+can read, and its row lock is what two buyers of the last unit queue on. That
+lock is FOR NO KEY UPDATE (LIVE-1-w, 2026-10-28): a Grant's foreign key takes
+a KEY SHARE on the variant, which this mode does not wait on, so a payment
+moves its sale as its last write and holds the row only to its commit. With
+FOR UPDATE, thirty payers of one variant deadlocked (40P01); with the move
+first instead, they queued on the row past the 5 s transaction timeout.
 
 | Move | sold / held | Refused when full | Who |
 |---|---|---|---|
