@@ -393,9 +393,9 @@ export const envSchema = z.object({
   /** Gateway management (`payment/gateway-admin/gateway-admin.controller.ts`, F-102-c), per user. */
   GATEWAY_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   GATEWAY_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
-  /** The systems surface (`systems/systems.controller.ts`, F-027-ar), per user. */
+  /** The systems surface (`systems/systems-budgets.ts`), per user: remote writes, desired-state writes (LIVE-1-e: ~60 set up six panels), reads. */
   SYSTEMS_ADMIN_WRITE_RATE_LIMIT: rateLimit(30),
-  /** The systems page's reads (F-027-as), per user. Acknowledging a drift event shares the write budget. */
+  SYSTEMS_ADMIN_SETTINGS_RATE_LIMIT: rateLimit(300),
   SYSTEMS_ADMIN_READ_RATE_LIMIT: rateLimit(120),
   /** Manual payment confirmation (`payment/deposit/manual-confirm.controller.ts`, F-092-z), per user. */
   PAYMENT_MANUAL_READ_RATE_LIMIT: rateLimit(120),

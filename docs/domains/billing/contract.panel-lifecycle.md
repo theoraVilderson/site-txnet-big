@@ -24,7 +24,8 @@ its next tick.
 | `GET /api/billing/systems/panels/:id/remove-preview` | — | `{groups, liveConfigs, soleLineGrants}`, summed over its groups (rule 6a) | 400; 403; 404 `not_found` |
 | `POST /api/billing/systems/panels/:id/restore` | — | `200 {id, reviewState: 'pending'}` | 400; 403; 404 `not_found`; 409 `panel_not_retired` / `panel_already_registered` |
 
-`SYSTEMS_ADMIN_WRITE` (30 per user per 15 minutes), as every systems write.
+`SYSTEMS_ADMIN_WRITE` (30 per user per 15 minutes), as every systems write that
+reaches a panel ([contract.systems.md](contract.systems.md), LIVE-1-e).
 
 ## Editing a panel — the rules (F-027-by)
 

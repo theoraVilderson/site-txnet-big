@@ -14,11 +14,11 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { RateLimitBucket, rateLimitBucketKey, ZodValidationPipe } from '@txnet-backend/shared-core';
+import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import type { Request } from 'express';
 
-import { identityOf } from '../request/identity.middleware';
 import { RateLimit } from '../request/rate-limit';
+import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_SETTINGS, SYSTEMS_ADMIN_WRITE } from './systems-budgets';
 import { PanelRegistrationService, RegisterPanelInput } from './panel-registration';
 import { MemberSellingInput, PanelGroupInput, PanelGroupMemberInput, PanelGroupsService } from './panel-groups';
 import { PanelInboundsInput, PanelInboundsService } from './panel-inbounds';
@@ -64,18 +64,6 @@ import { SystemsReadService } from './systems-read';
 import { RESELLER_SYSTEMS_PATH, SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing, relayingVault } from './systems-refusals';
 import { UsageHoldsService } from './usage-holds';
-
-export const SYSTEMS_ADMIN_WRITE = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SYSTEMS_ADMIN_WRITE, identityOf(req).userId),
-  configKey: 'SYSTEMS_ADMIN_WRITE_RATE_LIMIT' as const,
-  windowSec: 900,
-};
-
-export const SYSTEMS_ADMIN_READ = {
-  key: (req: Request) => rateLimitBucketKey(RateLimitBucket.SYSTEMS_ADMIN_READ, identityOf(req).userId),
-  configKey: 'SYSTEMS_ADMIN_READ_RATE_LIMIT' as const,
-  windowSec: 900,
-};
 
 /**
  * The systems surface (F-027-ar, ADR-0080): the owner's at `/api/billing/systems`, and
@@ -129,14 +117,14 @@ export class SystemsController {
 
   @Post('panel-groups')
   @HttpCode(HttpStatus.CREATED)
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   createGroup(@Body(new ZodValidationPipe(createPanelGroupSchema)) body: CreatePanelGroupBody, @Req() req: Request) {
     // `name` is required by the schema; the cast is for the non-strict tsconfig, as in `register`.
     return refusing(() => this.panelGroups.create(systemsActorOf(req), body as PanelGroupInput & { name: string }));
   }
 
   @Patch('panel-groups/:id')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   updateGroup(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updatePanelGroupSchema)) body: UpdatePanelGroupBody,
@@ -147,14 +135,14 @@ export class SystemsController {
 
   /** Delete a group (F-027-ca). 409 `group_has_members` / `group_in_use` while it has members or a variant names it. */
   @Delete('panel-groups/:id')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   removeGroup(@Param('id', new ParseUUIDPipe()) id: string, @Req() req: Request) {
     return refusing(() => this.panelGroups.remove(systemsActorOf(req), id));
   }
 
   @Post('panel-groups/:id/members')
   @HttpCode(HttpStatus.CREATED)
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   addMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(addPanelGroupMemberSchema)) body: AddPanelGroupMemberBody,
@@ -168,7 +156,7 @@ export class SystemsController {
    * `200` the member, with `effective` — each value and its layer.
    */
   @Patch('panel-groups/:id/members/:panelId')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   updateMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
@@ -184,7 +172,7 @@ export class SystemsController {
    * lose an inbound with live configs there, with the count.
    */
   @Put('panel-groups/:id/members/:panelId/inbounds')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   assignMemberInbounds(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
@@ -196,7 +184,7 @@ export class SystemsController {
 
   /** `409 member_has_configs` while a live config of the group's Grants is on it: drain it instead. */
   @Delete('panel-groups/:id/members/:panelId')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   removeMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('panelId', new ParseUUIDPipe()) panelId: string,
@@ -311,7 +299,7 @@ export class SystemsController {
   }
 
   @Put('panels/:id/inbounds')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   updateInbounds(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(updatePanelInboundsSchema)) body: UpdatePanelInboundsBody,
@@ -335,7 +323,7 @@ export class SystemsController {
 
   @Post('drift-events/:id/acknowledge')
   @HttpCode(HttpStatus.OK)
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   acknowledge(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body(new ZodValidationPipe(acknowledgeDriftSchema)) body: AcknowledgeDriftBody,

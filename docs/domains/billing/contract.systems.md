@@ -51,8 +51,15 @@ reseller's router for an import in place also comes through the import's door
 | `PUT /api/billing/systems/panels/:id/inbounds` | any of the five selling settings as on a member (null = platform default), `inbounds: [{remoteId, sold, maxClients?}]` (≤500, each once); `.strict()` | `200` as the `GET` | 400; 403; 404 `panel_not_found` / `inbound_not_found`; 409 `inbound_not_sellable` |
 | `POST /api/billing/systems/panels/:id/inbounds/refresh` | — | `202 {panelId, refreshRequested: true}` | 400; 403; 404 `panel_not_found` |
 
-Rate limits, per user, per 15 minutes: `SYSTEMS_ADMIN_WRITE` 30 (register,
-both re-submits, the panel edit, delete and restore, acknowledge, release, write-off, the eight group writes, the two inbound writes), `SYSTEMS_ADMIN_READ` 120 (the six reads).
+Rate limits, per user, per 15 minutes (LIVE-1-e): `SYSTEMS_ADMIN_SETTINGS`
+300 for a write that only changes desired state — group create/edit/delete,
+member add/edit/inbounds/remove, `PUT …/panels/:id/inbounds`, an inbound's
+audience and share, a panel cost, acknowledge; `SYSTEMS_ADMIN_WRITE` 30 for one
+that reaches a panel, the vault, money or many configs — register, both
+re-submits, the panel edit (a retest), delete and restore, inbound refresh,
+drain, evict, release, write-off, an inbound release and its cancel, a Grant's
+regroup and a group move job; `SYSTEMS_ADMIN_READ` 120 (the reads). A setup of
+six panels was ~60 writes, almost all of the first kind.
 
 ## Registering a panel — the rules
 

@@ -7,7 +7,7 @@ import { GrantBulkPage, grantBulkPageSchema } from '../payment/gift/grant-bulk-j
 import { InboundReleaseInput, InboundReleaseService } from './inbound-release';
 import { InboundAudienceInput, MemberInboundsService } from './member-inbounds';
 import { ReleaseInboundBody, releaseInboundSchema, SetInboundAudienceBody, setInboundAudienceSchema, SetListingShareBody, setListingShareSchema } from './panel-registration.schema';
-import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE } from './systems.controller';
+import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_SETTINGS, SYSTEMS_ADMIN_WRITE } from './systems-budgets';
 import { RESELLER_SYSTEMS_PATH, SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing } from './systems-refusals';
 
@@ -27,7 +27,7 @@ export class InboundAudienceController {
 
   /** Every group of the panel, or the groups listed. `409 inbound_has_configs` names a group that would lose it with live configs there. */
   @Put('panels/:id/inbounds/:remoteId/audience')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   set(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('remoteId') remoteId: string,
@@ -39,7 +39,7 @@ export class InboundAudienceController {
 
   /** A group's share of an inbound it lists; `404 listing_not_found` on any other. */
   @Put('panel-groups/:id/members/:panelId/inbounds/:remoteId/share')
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   share(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('panelId', new ParseUUIDPipe()) panelId: string,

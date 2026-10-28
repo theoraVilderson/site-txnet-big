@@ -4,7 +4,7 @@ import type { Request } from 'express';
 import { RateLimit } from '../request/rate-limit';
 import { ZodValidationPipe } from '@txnet-backend/shared-core';
 import { PanelCostBody, PanelCostService, panelCostSchema } from './panel-cost';
-import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_WRITE } from './systems.controller';
+import { SYSTEMS_ADMIN_READ, SYSTEMS_ADMIN_SETTINGS } from './systems-budgets';
 import { RESELLER_SYSTEMS_PATH, SystemsDoorGuard, systemsActorOf } from './systems-door';
 import { refusing } from './systems-refusals';
 
@@ -26,7 +26,7 @@ export class PanelCostController {
   }
 
   @Post()
-  @RateLimit(SYSTEMS_ADMIN_WRITE)
+  @RateLimit(SYSTEMS_ADMIN_SETTINGS)
   set(@Param('id', new ParseUUIDPipe()) id: string, @Body(new ZodValidationPipe(panelCostSchema)) body: PanelCostBody, @Req() req: Request) {
     return refusing(() => this.costs.set(systemsActorOf(req), id, body));
   }

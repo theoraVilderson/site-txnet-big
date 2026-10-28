@@ -372,15 +372,13 @@ export const RateLimitBucket = {
    * The platform owner's systems surface in `billing-service` (F-027-ar), per
    * user. Registering a panel is a handful of acts ever, and each costs a call
    * to `tenant-service`'s vault seam and, on the next tick, a connection test
-   * against somebody's server — the budget bounds both.
+   * against somebody's server — the budget bounds both. A write of desired
+   * state only (a group, member, inbound list) is a setup's own (LIVE-1-e).
    */
   SYSTEMS_ADMIN_WRITE: 'systems:admin:write',
+  SYSTEMS_ADMIN_SETTINGS: 'systems:admin:settings',
 
-  /**
-   * The systems page's reads (F-027-as), per user: the panel list, a panel's
-   * capability matrix and the drift report. Database reads only — nothing
-   * here reaches a panel — so the budget is a screen's, not a remote's.
-   */
+  /** The systems page's reads (F-027-as), per user: database only, nothing reaches a panel — a screen's budget. */
   SYSTEMS_ADMIN_READ: 'systems:admin:read',
 
   /**
