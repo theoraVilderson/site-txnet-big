@@ -49,44 +49,55 @@ def container(name: str, service: dict, image: str, env_secret: dict | None, mou
     resources = _resources(service)
     if resources:
         spec["resources"] = resources
-    spec.update(probes(name, service.get("healthcheck"), sidecar=sidecar))
+    spec.update(probes(name, service.get("healthcheck"), sidecar=sidecar, liveness=service.get("x-liveness")))
     if mounts:
         spec["volumeMounts"] = mounts
     return spec
 
 
-def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False) -> dict:
+def probes(name: str, healthcheck: dict | None, *, sidecar: bool = False, liveness: list | None = None) -> dict:
     """K6: the compose healthcheck as readiness and liveness, with a startup probe
     holding both off for the start period and the retries compose allows after it.
     A sidecar gets no readiness: a pod is ready only when every container is, and
-    pg-backup failing must restart the backup, never take main-db out of its Service."""
+    pg-backup failing must restart the backup, never take main-db out of its Service.
+    `liveness` (the service's `x-liveness` test) is what liveness and the startup
+    probe run instead: whether the process answers, never what it depends on — a
+    healthcheck that asks the database restarted every service on a main-db
+    restart (LIVE-1-r). Readiness keeps the healthcheck."""
     if not healthcheck or healthcheck.get("disable"):
         return {}
-    test = healthcheck.get("test") or []
-    if test[:1] == ["CMD"]:
-        command = test[1:]
-    elif test[:1] == ["CMD-SHELL"]:
-        command = ["sh", "-c", test[1]]
-    elif test[:1] == ["NONE"]:
+    command = _exec(name, healthcheck.get("test") or [])
+    if command is None:
         return {}
-    else:
-        raise RenderError(f"{name}: healthcheck test {test!r}")
+    alive = _exec(name, liveness) if liveness else command
     period = seconds(healthcheck.get("interval"), _HC_INTERVAL_S)
     base = {"exec": {"command": command}, "periodSeconds": period,
             "timeoutSeconds": seconds(healthcheck.get("timeout"), _HC_TIMEOUT_S),
             "failureThreshold": int(healthcheck.get("retries") or _HC_RETRIES)}
-    out = {"livenessProbe": dict(base)} if sidecar else {"readinessProbe": dict(base), "livenessProbe": dict(base)}
+    live = {**base, "exec": {"command": alive}}
+    out = {"livenessProbe": dict(live)} if sidecar else {"readinessProbe": dict(base), "livenessProbe": dict(live)}
     start = seconds(healthcheck.get("start_period"), 0) if healthcheck.get("start_period") else 0
     if start:
         # Compose ignores misses inside the start period and then still waits for
         # `retries` of them; the start period alone gave main-db one probe (OPS-1-o-d).
-        out["startupProbe"] = {**base, "failureThreshold": math.ceil(start / period) + base["failureThreshold"]}
+        out["startupProbe"] = {**live, "failureThreshold": math.ceil(start / period) + base["failureThreshold"]}
     else:
         # Docker's first check comes one interval after the start, not at it. A
         # probe at t=0 raced rabbitmq's own first write to an empty claim (OPS-1-o-i).
         for probe in out.values():
             probe["initialDelaySeconds"] = period
     return out
+
+
+def _exec(name: str, test: list) -> list[str] | None:
+    """A compose healthcheck `test` as an exec probe's command; None for NONE."""
+    if test[:1] == ["CMD"]:
+        return test[1:]
+    if test[:1] == ["CMD-SHELL"]:
+        return ["sh", "-c", test[1]]
+    if test[:1] == ["NONE"]:
+        return None
+    raise RenderError(f"{name}: healthcheck test {test!r}")
 
 
 def _resources(service: dict) -> dict:

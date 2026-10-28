@@ -173,6 +173,26 @@ class RenderTest(unittest.TestCase):
         db = by_kind(objs, "StatefulSet", "main-db")["spec"]["template"]["spec"]["containers"][0]
         self.assertEqual(db["readinessProbe"]["exec"]["command"], ["sh", "-c", "pg_isready -U admin"])
 
+    # K6 (LIVE-1-r, 2026-10-28): liveness never asks the database. `x-liveness`
+    # is the service's own "does the process answer" check; readiness keeps the
+    # healthcheck. A main-db restart otherwise had every Nest service killed for
+    # an outage that was not its own, and a pod booting while it was down never
+    # started at all, so the startup probe takes the liveness check too.
+    def test_liveness_and_startup_take_x_liveness_readiness_keeps_the_healthcheck(self):
+        changed = copy.deepcopy(self.model)
+        changed["services"]["billing-service"]["x-liveness"] = ["CMD", "node", "-e", "2"]
+        _, objs = self.run_render(changed)
+        c = by_kind(objs, "Deployment", "billing-service")["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(c["readinessProbe"]["exec"]["command"], ["node", "-e", "1"])
+        self.assertEqual(c["livenessProbe"]["exec"]["command"], ["node", "-e", "2"])
+        self.assertEqual(c["startupProbe"]["exec"]["command"], ["node", "-e", "2"])
+        self.assertEqual(c["livenessProbe"]["failureThreshold"], 3)
+
+    def test_without_x_liveness_every_probe_is_the_healthcheck(self):
+        _, objs = self.run_render()
+        c = by_kind(objs, "Deployment", "billing-service")["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(c["livenessProbe"]["exec"]["command"], ["node", "-e", "1"])
+
     # K6 (OPS-1-o-d): the startup probe allows what compose does — the start period,
     # then `retries` misses after it. A threshold of the start period alone gave
     # main-db one probe, so a first initdb or a crash recovery was killed mid-way.

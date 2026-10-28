@@ -82,7 +82,7 @@ node outside the checkout, rides in the bundle (B5) and is kept off the server
 beside the bundle's passphrase; k3s stores Secrets encrypted
 (`--secrets-encryption`). Rules S1–S8 in `contract.secrets.md` (OPS-1-o-j).
 
-**K6 — Probes from H15.** A compose `healthcheck` becomes the same command as
+**K6 — Probes from H15** (liveness and startup from `x-liveness` when set, H25). A compose `healthcheck` becomes the same command as
 an `exec` probe (`CMD-SHELL` -> `sh -c`): `readinessProbe` and `livenessProbe`
 with compose's interval, timeout and retries; a `startupProbe` with
 `failureThreshold = ceil(start_period / interval) + retries` holds both off for

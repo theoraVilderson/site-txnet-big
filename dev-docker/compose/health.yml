@@ -15,6 +15,11 @@ services:
       timeout: 3s
       retries: 3
       start_period: 60s
+    # Kubernetes' liveness and startup check (LIVE-1-r, hosting K6): the same
+    # URL, but any answer, 503 included, is a live process. Only no answer is a
+    # hung one. The healthcheck above stays readiness, so a main-db outage takes
+    # a pod out of its Service and never restarts it.
+    x-liveness: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+process.env.PORT+(process.env.HEALTH_PATH||'/'+(process.env.GLOBAL_PREFIX||'api')+'/health')).then(()=>process.exit(0),()=>process.exit(1))"]
 
   # worker-service and metering-service serve no HTTP (ADR-0027): the broker
   # service touches /tmp/healthy every 15s until its channel closes.

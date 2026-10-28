@@ -39,3 +39,20 @@ only when all its containers are. So `pg-backup`, a container in `main-db`'s
 pod (K3), gets a liveness and a startup probe and no readiness probe. A
 failing backup check restarts the backup and leaves the database's Service
 alone.
+
+## H25 — Liveness never asks what the process depends on (LIVE-1-r)
+
+A Node service's `healthcheck` (H15) answers 200 only while `SELECT 1` on its
+pool succeeds. That is **readiness**: a pod that cannot reach Postgres leaves
+its Service and gets no traffic. It is never **liveness**: on the 2026-10-28
+main-db restart (~30 s) Kubernetes restarted seven services for an outage that
+was not theirs, and one booting before PgBouncer retried never started.
+
+- `compose/health.yml`'s `http-health` carries `x-liveness`: the same URL, but
+  any answer, 503 included, is a live process; only no answer within the
+  timeout is a hung one.
+- The renderer (K6, `tools/k8srender/container.py`) runs `x-liveness` as the
+  `livenessProbe` and the `startupProbe`; `readinessProbe` stays the
+  healthcheck. A service with no `x-liveness` keeps one check for all three.
+- Compose itself has no liveness: `docker compose` behaviour is unchanged.
+

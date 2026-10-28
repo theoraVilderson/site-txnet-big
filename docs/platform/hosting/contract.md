@@ -188,7 +188,7 @@ keeps its own). worker-service and metering-service (no HTTP, ADR-0027) call
 `test $(( $(date +%s) - $(stat -c %Y /tmp/healthy) )) -lt 60`. HTTP check:
 `node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/'+(process.env.GLOBAL_PREFIX||'api')+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"`
 (`HEALTH_PATH` for an app with no prefix); both in `compose/health.yml`, which a service `extends`.
-Interval 10s, timeout 3s, retries 3, `start_period` 60s; `/health` is 200 while `SELECT 1` on its pool succeeds, else 503.
+Interval 10s, timeout 3s, retries 3, `start_period` 60s; `/health` is 200 while `SELECT 1` on its pool succeeds, else 503. That is readiness only; liveness is H25.
 Every other container: H24, `contract.health.md`.
 
 **H16 — Orchestration (ADR-0147).** Production is Kubernetes (k3s), rendered
