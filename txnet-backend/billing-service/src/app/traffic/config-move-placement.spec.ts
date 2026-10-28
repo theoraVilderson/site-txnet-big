@@ -29,6 +29,11 @@ type Load = { panelId: string; inboundRemoteId: string | null; total: number; cl
 function build(target: { inbounds: Inbound[]; inboundPlacement?: InboundPlacement; panelState?: PanelState }, load: Load[] = []) {
   const configs: Row[] = [];
   let next = 0;
+  const addConfig = (data: Record<string, unknown>): Row => {
+    const row: Row = { id: `config-${++next}`, status: ConfigStatus.active, regenerateUsedCount: 0, maxRegenerateCount: 3, ...data };
+    configs.push(row);
+    return row;
+  };
   const locks: unknown[] = [];
   const panel = {
     id: XRAY,
@@ -48,11 +53,8 @@ function build(target: { inbounds: Inbound[]; inboundPlacement?: InboundPlacemen
     panel: { findUnique: async ({ where }: { where: { id: string } }) => (where.id === XRAY ? panel : { id: ROUTER, tenantId: TENANT, retiredAt: null }) },
     panelGroupMember: { findUnique: async () => null },
     config: {
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row: Row = { id: `config-${++next}`, status: ConfigStatus.active, regenerateUsedCount: 0, maxRegenerateCount: 3, ...data };
-        configs.push(row);
-        return row;
-      },
+      create: async ({ data }: { data: Record<string, unknown> }) => addConfig(data),
+      createManyAndReturn: async ({ data }: { data: Record<string, unknown>[] }) => data.map(addConfig),
       findUnique: async ({ where }: { where: { id: string } }) => configs.find((c) => c.id === where.id) ?? null,
       // A live row matching every equality in `where`; `{ not: retired }` is the live part.
       findMany: async ({ where }: { where: Record<string, unknown> }) =>
@@ -63,7 +65,7 @@ function build(target: { inbounds: Inbound[]; inboundPlacement?: InboundPlacemen
         return { count: hit.length };
       },
     },
-    configActionLog: { create: async () => ({}) },
+    configActionLog: { create: async () => ({}), createMany: async ({ data }: { data: unknown[] }) => ({ count: data.length }) },
   };
   const crossTenant = { $queryRaw: async () => load } as unknown as CrossTenantPrismaService;
   const service = new ConfigActionsService(null, crossTenant);

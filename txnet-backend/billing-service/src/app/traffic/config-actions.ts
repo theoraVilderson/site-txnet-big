@@ -6,18 +6,10 @@ import { METER_KEYS } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { UsageDoorRefused, UsageDoorService, type UsageDoorRefusal } from '../usage/usage-door';
+import { configRow } from './config-row';
 import { MOVE_HANDOFF_ACTOR, handOver, waitingOn } from './move-handoff';
 import { movePlacements } from './panel-load';
 
-
-/**
- * The second matching key (network F-027-aa): written into the client's label
- * on every panel family that has one, so a rename on the panel does not orphan
- * the config's usage. Ours and global (`@unique`, invariant 17), and random
- * rather than derived from the `uuid`, because a regenerate rotates the
- * credential and the tag has to survive it. A move is a new row and a new tag.
- */
-const claimTag = (): string => `txn-${randomUUID().replace(/-/g, '')}`;
 
 /** Who asked. `actorId` is the user, the admin, or the job's own id for `system`. */
 export type ConfigActor = { actorType: ActorType; actorId: string };
@@ -172,11 +164,12 @@ export class ConfigActionsService {
     if (grant.status !== GrantStatus.active && grant.status !== GrantStatus.pending) throw new ConfigActionRefused('grant_not_active', grant.status);
     if (input.placements.length === 0) return [];
 
-    const made: { configId: string; uuid: string }[] = [];
-    for (const p of input.placements) {
-      made.push(await this.create(tx, grant, p.panelId, p.protocol, input.credentialGroupId, input.actor, p.inboundRemoteId));
-    }
-    return made;
+    // One statement for the rows, one for their logs: this runs under every member panel's lock (LIVE-1-x).
+    const rows = input.placements.map((p) => configRow(grant, p.panelId, p.protocol, input.credentialGroupId, p.inboundRemoteId));
+    const made = await tx.config.createManyAndReturn({ data: rows, select: { id: true, uuid: true } });
+    const { actorType, actorId } = input.actor;
+    await tx.configActionLog.createMany({ data: made.map((c) => ({ configId: c.id, actorType, actorId, action: 'provision' })) });
+    return made.map((c) => ({ configId: c.id, uuid: c.uuid }));
   }
 
   private async create(
@@ -189,30 +182,10 @@ export class ConfigActionsService {
     inboundRemoteId: string | null = null,
     adopted: { remoteId: string; adoptedProfile: string; adoptedLabel: string } | null = null,
   ): Promise<{ configId: string; uuid: string }> {
-    const uuid = randomUUID();
-    const config = await tx.config.create({
-      data: {
-        tenantId: grant.tenantId,
-        userId: grant.userId,
-        grantId: grant.id,
-        panelId,
-        protocol,
-        uuid,
-        claimTag: claimTag(),
-        credentialGroupId,
-        inboundRemoteId,
-        // Copied, never re-read: the Grant's flag is set at issue and never
-        // changes, and network-service reads only this row (F-111-r).
-        trafficUnlimited: grant.trafficUnlimited,
-        desiredRemote: DesiredRemote.present,
-        desiredEnabled: true,
-        enforcementState: EnforcementState.pending,
-        ...adopted,
-      },
-      select: { id: true },
-    });
+    const row = { ...configRow(grant, panelId, protocol, credentialGroupId, inboundRemoteId), ...adopted };
+    const config = await tx.config.create({ data: row, select: { id: true } });
     await this.log(tx, config.id, actor, 'provision');
-    return { configId: config.id, uuid };
+    return { configId: config.id, uuid: row.uuid };
   }
 
   /**

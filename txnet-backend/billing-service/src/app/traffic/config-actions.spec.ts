@@ -40,6 +40,8 @@ function matches(row: Row, where: Record<string, unknown>) {
 function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited = false, door: UsageDoorService | null = null) {
   const configs: Row[] = [];
   const logs: Row[] = [];
+  /** Statements that write configs or their logs: a group's run under every member panel's lock (LIVE-1-x). */
+  const writes = { config: 0, log: 0 };
   let next = 0;
 
   const tx = {
@@ -60,19 +62,12 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
     },
     config: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row: Row = {
-          id: `config-${++next}`,
-          status: ConfigStatus.active,
-          desiredEnabled: true,
-          desiredRemote: DesiredRemote.present,
-          enforcementState: EnforcementState.pending,
-          regenerateUsedCount: 0,
-          maxRegenerateCount: 3,
-          remoteId: null,
-          ...data,
-        };
-        configs.push(row);
-        return row;
+        writes.config += 1;
+        return addConfig(data);
+      },
+      createManyAndReturn: async ({ data }: { data: Record<string, unknown>[] }) => {
+        writes.config += 1;
+        return data.map(addConfig);
       },
       findUnique: async ({ where }: { where: { id: string } }) => configs.find((c) => c.id === where.id) ?? null,
       findMany: async ({ where }: { where: Record<string, unknown> }) => configs.filter((c) => matches(c, where)),
@@ -89,15 +84,41 @@ function build(grantStatus: GrantStatus = GrantStatus.active, trafficUnlimited =
     },
     configActionLog: {
       create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row = { id: `log-${logs.length + 1}`, ...data };
-        logs.push(row);
-        return row;
+        writes.log += 1;
+        return addLog(data);
+      },
+      createMany: async ({ data }: { data: Record<string, unknown>[] }) => {
+        writes.log += 1;
+        data.forEach(addLog);
+        return { count: data.length };
       },
     },
   };
 
+  function addConfig(data: Record<string, unknown>): Row {
+    const row: Row = {
+      id: `config-${++next}`,
+      status: ConfigStatus.active,
+      desiredEnabled: true,
+      desiredRemote: DesiredRemote.present,
+      enforcementState: EnforcementState.pending,
+      regenerateUsedCount: 0,
+      maxRegenerateCount: 3,
+      remoteId: null,
+      ...data,
+    };
+    configs.push(row);
+    return row;
+  }
+
+  function addLog(data: Record<string, unknown>): Row {
+    const row = { id: `log-${logs.length + 1}`, ...data };
+    logs.push(row);
+    return row;
+  }
+
   const service = new ConfigActionsService(door);
-  return { service, tx: tx as unknown as Prisma.TransactionClient, configs, logs };
+  return { service, tx: tx as unknown as Prisma.TransactionClient, configs, logs, writes };
 }
 
 const refusal = (reason: string) => expect.objectContaining({ name: 'ConfigActionRefused', reason });
@@ -144,6 +165,25 @@ describe('ConfigActionsService', () => {
       actor: ADMIN,
     });
     expect(configs.map((c) => c.trafficUnlimited)).toEqual([true, true]);
+  });
+
+  /**
+   * A group's placements are written under every member panel's lock, so each
+   * round trip there is time the next buyer of the group waits (LIVE-1-x: 17
+   * configs on 6 panels were 34 statements, and 13 buyers ran past 5 s).
+   */
+  it("writes a group's configs and their logs in one statement each, however many it places", async () => {
+    const { service, tx, configs, logs, writes } = build(GrantStatus.pending);
+    const placements = [PANEL_A, PANEL_B, PANEL_A, PANEL_B, PANEL_A].map((panelId, i) => ({ panelId, protocol: 'vless' as const, inboundRemoteId: `${i + 1}` }));
+
+    const made = await service.provisionForGroup(tx, { grantId: GRANT, credentialGroupId: '55555555-5555-4555-8555-555555555555', placements, actor: ADMIN });
+
+    expect(writes).toEqual({ config: 1, log: 1 });
+    expect(made.map((m) => m.configId)).toEqual(configs.map((c) => c.id));
+    expect(configs.map((c) => c.inboundRemoteId)).toEqual(['1', '2', '3', '4', '5']);
+    expect(new Set(configs.map((c) => c.claimTag)).size).toBe(5);
+    expect(logs.map((l) => l.configId)).toEqual(configs.map((c) => c.id));
+    expect(logs.every((l) => l.action === 'provision' && l.actorType === ADMIN.actorType)).toBe(true);
   });
 
   it('refuses a Grant that cannot carry service, and a panel another tenant owns', async () => {

@@ -83,6 +83,11 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
   const outbox: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const locked: string[] = [];
   let next = 0;
+  const addConfig = (data: Record<string, unknown>): Row => {
+    const row: Row = { id: `config-${++next}`, status: ConfigStatus.active, ...data };
+    configs.push(row);
+    return row;
+  };
 
   const tx = {
     $executeRaw: async (_s: TemplateStringsArray, key: string) => void locked.push(key),
@@ -97,13 +102,13 @@ function build(opts: { status?: GrantStatus; strategy?: PanelGroupStrategy; minH
     },
     config: {
       findMany: async ({ where }: { where: { grantId: string } }) => configs.filter((c) => c.grantId === where.grantId).map((c) => ({ inboundRemoteId: null, drainedAt: null, ...c })),
-      create: async ({ data }: { data: Record<string, unknown> }) => {
-        const row: Row = { id: `config-${++next}`, status: ConfigStatus.active, ...data };
-        configs.push(row);
-        return row;
-      },
+      create: async ({ data }: { data: Record<string, unknown> }) => addConfig(data),
+      createManyAndReturn: async ({ data }: { data: Record<string, unknown>[] }) => data.map(addConfig),
     },
-    configActionLog: { create: async ({ data }: { data: Record<string, unknown> }) => data },
+    configActionLog: {
+      create: async ({ data }: { data: Record<string, unknown> }) => data,
+      createMany: async ({ data }: { data: Record<string, unknown>[] }) => ({ count: data.length }),
+    },
     outboxEvent: { create: async ({ data }: { data: { type: string; payload: Record<string, unknown> } }) => void outbox.push(data) },
     // A delivery's "open it" link (F-601-h): no panel host here, so none.
     tenantDomain: { findMany: async () => [] },
@@ -454,7 +459,8 @@ describe('the system actor', () => {
   it('is logged as system, not as the user the Grant belongs to', async () => {
     const { service, tx } = build({ members: [member(A)] });
     const logs: Record<string, unknown>[] = [];
-    (tx as unknown as { configActionLog: { create: (a: { data: Record<string, unknown> }) => unknown } }).configActionLog.create = async ({ data }) => logs.push(data);
+    (tx as unknown as { configActionLog: { createMany: (a: { data: Record<string, unknown>[] }) => unknown } }).configActionLog.createMany = async ({ data }) =>
+      logs.push(...data);
     await service.fulfil(tx, GRANT);
     expect(logs).toEqual([expect.objectContaining({ actorType: ActorType.system, action: 'provision' })]);
   });
