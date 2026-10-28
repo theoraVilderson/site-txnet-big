@@ -24,7 +24,7 @@ func (o *owed) owe(_ context.Context, panelID string) { *o = append(*o, panelID)
 
 func TestATurnCreatesAtMostItsBudgetAndOwesThePanelTheRest(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
-	r.conv.Provisioning.MaxCreates = 10
+	r.conv.Provisioning.MaxWrites = 10
 	var asked owed
 	r.conv.Owe = asked.owe
 	for i := 0; i < 15; i++ {
@@ -51,7 +51,7 @@ func TestATurnCreatesAtMostItsBudgetAndOwesThePanelTheRest(t *testing.T) {
 // A cut-off is a disable: it never waits behind a backlog of creates.
 func TestADisableIsNeverDeferredBehindCreates(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
-	r.conv.Provisioning.MaxCreates = 2
+	r.conv.Provisioning.MaxWrites = 2
 	for i := 0; i < 5; i++ {
 		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
 	}
@@ -72,7 +72,7 @@ func TestADisableIsNeverDeferredBehindCreates(t *testing.T) {
 // A client made again (a repair) is a create, and spends the same budget.
 func TestARecreateSpendsTheCreateBudget(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
-	r.conv.Provisioning.MaxCreates = 1
+	r.conv.Provisioning.MaxWrites = 1
 	for _, id := range []string{"c1", "c2"} {
 		row := wanted(id)
 		row.RemoteID = "gone-" + id // ours, and no longer on the panel
@@ -110,15 +110,83 @@ func (r *provRig) clients(t *testing.T) int {
 // turn's first one; the first is always made, so a backlog always moves.
 func TestATurnStopsCreatingOnceItsWindowHasPassed(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
-	r.conv.Provisioning.MaxCreates = 10
-	r.conv.Provisioning.CreateWindow = 10 * time.Second
+	r.conv.Provisioning.MaxWrites = 10
+	r.conv.Provisioning.WriteWindow = 10 * time.Second
 	at := time.Date(2026, 10, 27, 6, 30, 0, 0, time.UTC)
 	r.conv.Provisioning.Now = func() time.Time { at = at.Add(4 * time.Second); return at } // each create costs 4 s
 	for i := 0; i < 6; i++ {
 		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
 	}
 
-	if report := r.pass(t); report.Creates != 3 || report.Deferred != 3 {
-		t.Fatalf("created %d, deferred %d; want 3 inside 10 s and 3 deferred", report.Creates, report.Deferred)
+	if report := r.pass(t); report.Writes != 3 || report.Deferred != 3 {
+		t.Fatalf("created %d, deferred %d; want 3 inside 10 s and 3 deferred", report.Writes, report.Deferred)
+	}
+}
+
+// F-027-fk (user 2026-10-28, LIVE-1): a delete is as slow as a create. A move
+// left 350 deletes on one Marzban; one turn tried them all, the first timed
+// out, the breaker opened, and the panel's usage went unread. Deletes spend
+// the same budget, and what is left is owed the same woken turns.
+func TestADeleteSpendsTheWriteBudget(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.conv.Provisioning.MaxWrites = 10
+	var asked owed
+	r.conv.Owe = asked.owe
+	for i := 0; i < 15; i++ {
+		id := fmt.Sprintf("old-%02d", i)
+		r.panel.Given(id)
+		row := wanted(id)
+		row.RemoteID, row.UUID, row.Present = id, id, false // moved away: the client goes
+		r.desired.Put("panel-1", row)
+	}
+
+	r.converge(t)
+	if n := r.clients(t); n != 5 {
+		t.Fatalf("%d clients left after one turn, want 5: ten deletes, five deferred", n)
+	}
+	if len(asked) != 1 {
+		t.Fatalf("turns owed = %v, want one", asked)
+	}
+}
+
+// A panel that stops answering mid-turn is not written to again in that turn:
+// the rest are left for the next pass instead of failing one by one into an
+// open breaker, and no woken turn is asked — a panel that is down is the bulk
+// pass's to retry.
+func TestATurnStopsWritingOnceThePanelStopsAnswering(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	var asked owed
+	r.conv.Owe = asked.owe
+	for i := 0; i < 5; i++ {
+		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
+	}
+	r.panel.FailOp("CreateClient", 504, 0) // a gateway timeout: no answer
+
+	report := r.pass(t)
+	if calls := r.panel.CallCount("CreateClient"); calls != 1 {
+		t.Fatalf("%d creates tried against a panel that stopped answering, want 1", calls)
+	}
+	if !report.Stalled || report.Failed != 1 {
+		t.Fatalf("stalled %v, failed %d; want stalled after the one failure", report.Stalled, report.Failed)
+	}
+	r.converge(t)
+	if len(asked) != 0 {
+		t.Fatalf("a stalled turn owed %v, want none", asked)
+	}
+}
+
+// One client the panel refuses is that row's failure, not the panel's: a 500
+// with a status leaves the turn writing, or the same row, first on every pass,
+// would block the panel's every later write for good.
+func TestOneRefusedClientDoesNotStopTheTurn(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	for i := 0; i < 3; i++ {
+		r.desired.Put("panel-1", wanted(fmt.Sprintf("c%02d", i)))
+	}
+	r.panel.FailOp("CreateClient", 500, 1)
+
+	report := r.pass(t)
+	if report.Stalled || report.Failed != 1 || r.clients(t) != 2 {
+		t.Fatalf("stalled %v, failed %d, clients %d; want the other two created", report.Stalled, report.Failed, r.clients(t))
 	}
 }

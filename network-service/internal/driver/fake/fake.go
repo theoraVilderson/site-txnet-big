@@ -97,6 +97,7 @@ type Panel struct {
 
 	nextStall  time.Duration
 	nextStatus int
+	failOps    map[string]opFailure // FailOp's scripts, by operation
 	// ceilingDelay is consumed by the next ceiling write.
 	ceilingDelay int
 	// linksDown is the subscription server off while the admin API answers.
@@ -287,30 +288,6 @@ func (p *Panel) RestoreBackup() {
 	}
 }
 
-// StallNextCall makes the next call take this long before it replies. The
-// stall honours the caller's context, so the same script is a slow reply under
-// a generous deadline and a timeout under a tight one.
-func (p *Panel) StallNextCall(d time.Duration) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.nextStall = d
-}
-
-// FailNextCall makes the next call fail with this HTTP status, once.
-func (p *Panel) FailNextCall(status int) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.nextStatus = status
-}
-
-// FailLinks turns the panel's subscription server off, or back on: every
-// ClientLinks fails as unavailable while the admin API goes on answering.
-func (p *Panel) FailLinks(down bool) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.linksDown = down
-}
-
 // SetLinkHost edits the panel's inbound: every client's lines name host from
 // the next read, and no client key moves.
 func (p *Panel) SetLinkHost(host string) {
@@ -376,6 +353,9 @@ func (p *Panel) gate(ctx context.Context, op string) error {
 	p.mu.Lock()
 	stall, status := p.nextStall, p.nextStatus
 	p.nextStall, p.nextStatus = 0, 0
+	if status == 0 {
+		status = p.failing(op)
+	}
 	p.calls[op]++
 	p.mu.Unlock()
 

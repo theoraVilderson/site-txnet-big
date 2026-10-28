@@ -107,7 +107,7 @@ before the old row retires (`movePlacements`, `traffic/panel-load.ts`):
 
 ## The pass — `converge.Provisioning` (network-service)
 
-`internal/converge/provision.go`. `converge.Converger` is the collection pass's
+`internal/converge/provision.go`; `converge.Converger` (`converger.go`) is the pass's
 converger: **one** `ListClients` per panel, then provisioning, then the ceiling
 pass over the same read (invariant 34) — minus the clients provisioning just
 deleted, so a stale share is never written to a client that is gone.
@@ -159,14 +159,15 @@ copied from its Grant at create, is what was sold, so there is no allocation to
 wait for and none to run out of: `CreateClient` goes out with `NoDataLimit`, and
 a rebuilt client gets no limit back where a limited one gets its first block.
 
-**A turn creates at most `MaxCreates` clients** (10, F-027-fj, ADR-0167), and
-none once `CreateWindow` (10 s) has passed since its first — always made, so a
-backlog moves. A create or recreate past either is `Deferred`: no outcome, the row as it was, and
-the converger asks the waker for another convergence-only turn on the panel,
-until a turn defers nothing. Only a create that reaches the panel spends the
-budget; deletes, enables, disables and ceilings are never deferred, so a
-cut-off never waits behind a migration's backlog, and the bulk pass waits on
-one bounded turn per panel at most.
+**A turn makes at most `MaxWrites` slow writes** — creates, recreates,
+deletes (10, F-027-fj/fk, ADR-0167) — and none once `WriteWindow` (10 s) has
+passed since its first, which is always made. One past either is `Deferred`:
+no outcome, the row as it was, and the waker runs another convergence-only
+turn until one defers nothing. Enables, disables, limits and ceilings are never
+deferred, so a cut-off never waits behind a backlog. **A panel that stops
+answering** (a timeout, a 429, an open circuit, no status) `Stalls` the turn:
+its rest waits for the bulk pass, with no woken turn. A 5xx with a status is
+that one client's refusal, and the turn goes on.
 
 ## One purchase, one account (F-114-n)
 

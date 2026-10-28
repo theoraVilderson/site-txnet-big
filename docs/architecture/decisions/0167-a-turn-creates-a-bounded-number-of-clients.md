@@ -50,6 +50,17 @@ The same shape ran seven minutes for a 201-user import the day before, unseen.
 - Woken turns are not bounded across panels: a hundred panels with backlogs
   are a hundred chains, each one panel's lock at a time.
 
+## Amendment 2026-10-28 (user, F-027-fk): deletes, and a panel that stops answering
+
+A move left 350 deletes on one Marzban. One turn tried them all; the first
+timed out, the driver's breaker opened, the other ~345 failed at once, and the
+open breaker then stopped the panel's usage read. Decision: the budget covers
+every slow write — deletes as well as creates (`MaxWrites`, `WriteWindow`) —
+and a turn stops writing at the first sign that the panel gave no answer
+(timeout, 429, open circuit, no status): `Stalled`, the rest left as they are,
+no woken turn, the bulk pass retries. A 5xx with a status is one client's
+refusal and does not stall the turn, or a poison row would block the panel.
+
 ## Alternatives rejected
 
 | Option | Why rejected |
