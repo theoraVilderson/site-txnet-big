@@ -90,6 +90,11 @@ export const usageUnattributedRowSchema = z.object({
   upBytes: byteString,
   downBytes: byteString,
   observedAt: timestamp,
+  /**
+   * The figures are the client's running total, not a rise (LIVE-1-z). Absent
+   * is a collector from before the field, whose figures are read as a rise.
+   */
+  cumulative: z.boolean().optional(),
 });
 
 /** One pass over one panel. */

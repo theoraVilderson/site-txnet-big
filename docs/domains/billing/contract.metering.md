@@ -67,6 +67,10 @@ not hold the same bytes twice.
 `unattributed_usage` has no delta id to dedupe on, so it dedupes on time: the
 update applies only to a row whose `lastSeenAt` is **before** this observation.
 A redelivered pass carries the same `observedAt` and therefore adds nothing.
+A row marked `cumulative` is the panel's running total, not a rise: it adds
+only its rise above the row's `lastUpBytes`/`lastDownBytes` (a fall is a reset,
+counted whole — the collector's rule) and moves that cursor, under a guard on
+the `lastSeenAt` it read (LIVE-1-z, `unattributed-usage.ts`).
 
 ## A released hold
 

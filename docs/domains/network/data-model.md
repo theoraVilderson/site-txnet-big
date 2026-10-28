@@ -125,9 +125,9 @@ true because carrying on is ~$16k of wrong charges in a minute.
 
 `unattributed_usage` is the byte we measured and could not place. It exists so
 the bytes cannot be dropped for want of a row, and it is **one row per remote
-client**, accumulated — an orphan is re-observed every pass, so per-reading
-rows would be a row a minute per unclaimed client. What happens to the client
-itself is the panel's `orphanPolicy`, not this table's.
+client**, accumulated by rise: a running total adds only what it rose above
+`lastUpBytes`/`lastDownBytes` (LIVE-1-z), and per-reading rows would be a row a
+minute. The client itself is the panel's `orphanPolicy`, not this table's.
 
 ## A session is closed, never abandoned (F-027-d, ADR-0074)
 

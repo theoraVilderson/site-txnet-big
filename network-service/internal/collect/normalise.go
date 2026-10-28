@@ -94,13 +94,15 @@ type Quarantine struct {
 }
 
 // Unattributed is usage against a remote client no config claims. It exists so
-// the bytes cannot be dropped for want of a row (invariant 24/25).
+// the bytes cannot be dropped for want of a row (invariant 24/25). Cumulative
+// marks a running total: with no config there is no cursor (LIVE-1-z).
 type Unattributed struct {
 	PanelID          string
 	RemoteIdentifier string
 	UpBytes          int64
 	DownBytes        int64
 	ObservedAt       time.Time
+	Cumulative       bool
 }
 
 // Result is one panel's whole pass. Everything it read is in exactly one of
@@ -173,11 +175,9 @@ func (n Normaliser) Pass(readings []driver.ClientUsage, at time.Time) Result {
 		ref, claimed := n.Panel.Configs[reading.RemoteID]
 		if !claimed {
 			res.Unattributed = append(res.Unattributed, Unattributed{
-				PanelID:          n.Panel.ID,
-				RemoteIdentifier: reading.RemoteID,
-				UpBytes:          reading.UpBytes,
-				DownBytes:        reading.DownBytes,
-				ObservedAt:       at,
+				PanelID: n.Panel.ID, RemoteIdentifier: reading.RemoteID,
+				UpBytes: reading.UpBytes, DownBytes: reading.DownBytes, ObservedAt: at,
+				Cumulative: n.Panel.CounterSemantics != driver.CounterResetOnRead,
 			})
 			continue
 		}

@@ -21,12 +21,12 @@ import {
   type UsageDeltaRow,
   type UsageQuarantineRow,
   type UsageReleasePayload,
-  type UsageUnattributedRow,
 } from '@txnet-backend/shared-core';
 
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubUsagePublisher } from './sub-usage.publisher';
+import { writeDownUnattributed } from './unattributed-usage';
 import { usageThresholdCrossed, type UsageThresholdGrant } from './usage-threshold';
 
 /** How often a Grant's owner is told its total, at most (F-307-t; user, 2026-09-27). */
@@ -138,7 +138,7 @@ export class MeteringService {
         // client to a config id this platform does not hold. The bytes are
         // real and belong to the panel's own identifier until someone places
         // them (invariant 25).
-        if (await this.writeDown(message.panelId, delta.remoteId, delta)) outcome.unattributed += 1;
+        if (await writeDownUnattributed(this.prisma, message.panelId, delta.remoteId, delta)) outcome.unattributed += 1;
         continue;
       }
       if (config.remoteId !== null && config.remoteId !== delta.remoteId) {
@@ -155,7 +155,7 @@ export class MeteringService {
 
     outcome.quarantined = await this.quarantine(message.panelId, message.quarantines);
     for (const row of message.unattributed) {
-      if (await this.writeDown(message.panelId, row.remoteIdentifier, row)) outcome.unattributed += 1;
+      if (await writeDownUnattributed(this.prisma, message.panelId, row.remoteIdentifier, row)) outcome.unattributed += 1;
     }
 
     this.logger.log(
@@ -533,46 +533,6 @@ export class MeteringService {
     return count;
   }
 
-  /**
-   * Usage against a remote client no config claims (invariant 24: one row per
-   * `(panel, remote identifier)`).
-   *
-   * Deduplicated on `lastSeenAt` rather than on an id, because these rows have
-   * none: the update only applies bytes observed *after* what the row already
-   * counted, so a redelivered pass — which carries the same `observedAt` —
-   * adds nothing. Without that a retried message inflates the one number the
-   * unattributed report exists to show.
-   */
-  private async writeDown(
-    panelId: string,
-    remoteIdentifier: string,
-    row: Pick<UsageUnattributedRow, 'upBytes' | 'downBytes' | 'observedAt'>,
-  ): Promise<boolean> {
-    const up = BigInt(row.upBytes);
-    const down = BigInt(row.downBytes);
-    const observedAt = new Date(row.observedAt);
-    const { count } = await this.prisma.unattributedUsage.updateMany({
-      where: { panelId, remoteIdentifier, lastSeenAt: { lt: observedAt } },
-      data: {
-        upBytes: { increment: up },
-        downBytes: { increment: down },
-        observationCount: { increment: 1 },
-        lastSeenAt: observedAt,
-      },
-    });
-    if (count > 0) return true;
-    try {
-      await this.prisma.unattributedUsage.create({
-        data: { panelId, remoteIdentifier, upBytes: up, downBytes: down, lastSeenAt: observedAt },
-      });
-      return true;
-    } catch (err) {
-      // The row exists and its `lastSeenAt` is at or past this observation:
-      // this pass has already been counted into it.
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false;
-      throw err;
-    }
-  }
 }
 
 /** The four columns of a `config` this consumer reads, and no usage. */

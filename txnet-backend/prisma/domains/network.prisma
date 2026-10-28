@@ -1176,6 +1176,10 @@ model UnattributedUsage {
   remoteIdentifier   String
   upBytes            BigInt                 @default(0)
   downBytes          BigInt                 @default(0)
+  /// The running total the panel last reported for the client, when it reports
+  /// one: the cursor its next total's rise is taken from (LIVE-1-z).
+  lastUpBytes        BigInt                 @default(0)
+  lastDownBytes      BigInt                 @default(0)
   observationCount   Int                    @default(1)
   firstSeenAt        DateTime               @default(now())
   lastSeenAt         DateTime

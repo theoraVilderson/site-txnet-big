@@ -79,6 +79,7 @@ func passResult() collect.Result {
 		Unattributed: []collect.Unattributed{{
 			PanelID:          "11111111-1111-1111-1111-111111111111",
 			RemoteIdentifier: "stranger", UpBytes: 7, DownBytes: 8, ObservedAt: at(0),
+			Cumulative: true,
 		}},
 	}
 }
@@ -119,6 +120,9 @@ func TestOnePassIsOneMessageCarryingAllThreeStreams(t *testing.T) {
 	}
 	if msg.Unattributed[0].RemoteIdentifier != "stranger" {
 		t.Errorf("unattributed remoteIdentifier = %q", msg.Unattributed[0].RemoteIdentifier)
+	}
+	if !msg.Unattributed[0].Cumulative {
+		t.Error("cumulative was dropped; without it a running total is added as a rise (LIVE-1-z)")
 	}
 }
 

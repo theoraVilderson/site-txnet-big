@@ -101,7 +101,10 @@ function fakeStore(
   const rawLog: Array<Record<string, unknown>> = [];
   const holds: Array<Record<string, unknown>> = [...stored];
   const quarantines: Array<Record<string, unknown>> = [];
-  const unattributed = new Map<string, { upBytes: bigint; downBytes: bigint; observationCount: number; lastSeenAt: Date }>();
+  const unattributed = new Map<
+    string,
+    { upBytes: bigint; downBytes: bigint; lastUpBytes: bigint; lastDownBytes: bigint; observationCount: number; lastSeenAt: Date }
+  >();
   const consumed = new Map<string, bigint>([[GRANT, 0n]]);
   const pushedAt = new Map<string, Date>();
   const outbox: Array<Record<string, unknown>> = [];
@@ -220,18 +223,32 @@ function fakeStore(
       },
     },
     unattributedUsage: {
+      findUnique: async ({
+        where,
+      }: {
+        where: { panelId_remoteIdentifier: { panelId: string; remoteIdentifier: string } };
+      }) => {
+        const { panelId, remoteIdentifier } = where.panelId_remoteIdentifier;
+        const row = unattributed.get(`${panelId}|${remoteIdentifier}`);
+        return row ? { ...row } : null;
+      },
       updateMany: async ({
         where,
         data,
       }: {
-        where: { panelId: string; remoteIdentifier: string; lastSeenAt: { lt: Date } };
-        data: Record<string, { increment: bigint | number } | Date>;
+        where: { panelId: string; remoteIdentifier: string; lastSeenAt: { lt: Date } | Date };
+        data: Record<string, { increment: bigint | number } | bigint | Date>;
       }) => {
         const key = `${where.panelId}|${where.remoteIdentifier}`;
         const row = unattributed.get(key);
-        if (!row || !(row.lastSeenAt < where.lastSeenAt.lt)) return { count: 0 };
+        const guard = where.lastSeenAt;
+        const matches =
+          row && (guard instanceof Date ? row.lastSeenAt.getTime() === guard.getTime() : row.lastSeenAt < guard.lt);
+        if (!row || !matches) return { count: 0 };
         row.upBytes += (data['upBytes'] as { increment: bigint }).increment;
         row.downBytes += (data['downBytes'] as { increment: bigint }).increment;
+        if (data['lastUpBytes'] !== undefined) row.lastUpBytes = data['lastUpBytes'] as bigint;
+        if (data['lastDownBytes'] !== undefined) row.lastDownBytes = data['lastDownBytes'] as bigint;
         row.observationCount += 1;
         row.lastSeenAt = data['lastSeenAt'] as Date;
         return { count: 1 };
@@ -242,6 +259,8 @@ function fakeStore(
         unattributed.set(key, {
           upBytes: data['upBytes'] as bigint,
           downBytes: data['downBytes'] as bigint,
+          lastUpBytes: (data['lastUpBytes'] as bigint | undefined) ?? 0n,
+          lastDownBytes: (data['lastDownBytes'] as bigint | undefined) ?? 0n,
           observationCount: 1,
           lastSeenAt: data['lastSeenAt'] as Date,
         });
@@ -510,6 +529,32 @@ describe('MeteringService', () => {
       upBytes: 10n,
       downBytes: 20n,
       observationCount: 1,
+    });
+  });
+
+  /**
+   * A cumulative panel sends an unclaimed client's running total each pass
+   * (LIVE-1-z): adding it whole made a 12 GiB client read 12 TiB. Only the
+   * rise above the row's cursor counts, and a total that fell is a reset whose
+   * whole figure is new — the collector's own rule for a config.
+   */
+  it('adds only the rise of a running total, and a reset whole', async () => {
+    const store = fakeStore([]);
+    const meter = service(store);
+    const total = (up: string, down: string, observedAt: string) =>
+      pass({ unattributed: [{ remoteIdentifier: 'nobody', upBytes: up, downBytes: down, observedAt, cumulative: true }] });
+
+    await meter.apply(total('100', '50', '2026-09-21T10:00:00.000Z'));
+    await meter.apply(total('300', '150', '2026-09-21T10:01:00.000Z'));
+    await meter.apply(total('300', '150', '2026-09-21T10:01:00.000Z'));
+    await meter.apply(total('120', '60', '2026-09-21T10:02:00.000Z'));
+
+    expect(store.unattributed.get(`${PANEL}|nobody`)).toMatchObject({
+      upBytes: 420n,
+      downBytes: 210n,
+      lastUpBytes: 120n,
+      lastDownBytes: 60n,
+      observationCount: 3,
     });
   });
 

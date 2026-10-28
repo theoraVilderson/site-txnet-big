@@ -450,6 +450,30 @@ func TestUsageWithNoConfigBecomesUnattributedRatherThanNothing(t *testing.T) {
 	}
 }
 
+// A cumulative panel's figure for an unclaimed client is its running total:
+// the collector holds no cursor for a client no config owns, so the row says
+// which it is and the consumer adds only the rise (LIVE-1-z). A reset_on_read
+// figure is already the rise.
+func TestAnUnattributedReadingSaysWhetherItIsATotal(t *testing.T) {
+	for _, tc := range []struct {
+		semantics driver.CounterSemantics
+		total     bool
+	}{
+		{driver.CounterCumulative, true},
+		{driver.CounterResetOnRead, false},
+	} {
+		r := newRig(t, tc.semantics, "c1")
+		r.panel.Given("stranger")
+		r.panel.Serve("stranger", 700, 300)
+		r.pass(t)
+
+		res := r.sink.last(t)
+		if len(res.Unattributed) != 1 || res.Unattributed[0].Cumulative != tc.total {
+			t.Errorf("%s: unattributed = %+v, want cumulative = %v", tc.semantics, res.Unattributed, tc.total)
+		}
+	}
+}
+
 // ---- the loop itself --------------------------------------------------------
 
 func TestOnePassOverAPanelCostsOneRequest(t *testing.T) {

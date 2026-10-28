@@ -102,7 +102,8 @@
       { "name": "remoteIdentifier", "type": "string", "note": "`unattributed_usage.remoteIdentifier` — the panel's own identifier for a client no config claims." },
       { "name": "upBytes", "type": "bytes" },
       { "name": "downBytes", "type": "bytes" },
-      { "name": "observedAt", "type": "timestamp" }
+      { "name": "observedAt", "type": "timestamp" },
+      { "name": "cumulative", "type": "bool", "note": "true: the two figures are the panel's running total for the client, and the consumer adds only their rise above `unattributed_usage.lastUpBytes`/`lastDownBytes` (a fall is a reset, counted whole). false: they are already a rise. The collector keeps no cursor for a client no config owns, which is why the total travels (LIVE-1-z). Absent reads as false — a collector from before the field." }
     ]
   }
 }

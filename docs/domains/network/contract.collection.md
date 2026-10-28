@@ -53,7 +53,9 @@ Every byte read is billed, quarantined or written down as `unattributed`
 (invariant 18), and **the cursor moves only after the publish succeeds** — a
 failed pass re-reads rather than loses, and the repeat is what
 `usage_delta_seen` absorbs (F-027-n). The cursors are durable (see "Running
-it", below).
+it", below). A client no config claims has no cursor, so its row carries
+the panel's figure as read and says whether it is a running total
+(`cumulative`, every semantics but `reset_on_read`); metering takes the rise.
 
 **A population going backward together is not a set of resets.** Before the
 publish, `collect.Containment` counts this pass's cumulative resets; past 20%

@@ -94,12 +94,15 @@ type Quarantine struct {
 	Reason     string  `json:"reason"`
 }
 
-// Unattributed is usage against a remote client no config claims.
+// Unattributed is usage against a remote client no config claims. Cumulative
+// says the figures are its running total; metering keeps the cursor a config
+// would hold here and adds the rise (LIVE-1-z).
 type Unattributed struct {
 	RemoteIdentifier string `json:"remoteIdentifier"`
 	UpBytes          string `json:"upBytes"`
 	DownBytes        string `json:"downBytes"`
 	ObservedAt       string `json:"observedAt"`
+	Cumulative       bool   `json:"cumulative"`
 }
 
 // messages turns one pass into the messages that carry it: one, or one per
@@ -144,6 +147,7 @@ func messages(res collect.Result) []UsageDeltaMessage {
 					UpBytes:          bytesOf(u.UpBytes),
 					DownBytes:        bytesOf(u.DownBytes),
 					ObservedAt:       stamp(u.ObservedAt),
+					Cumulative:       u.Cumulative,
 				})
 			}
 		}
