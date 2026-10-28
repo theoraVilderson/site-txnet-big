@@ -70,8 +70,9 @@ services:
       - AUTH_API_BASE_URL=http://auth-service:${AUTH_PORT}
       # The app role, never the owner: RLS does not bind a table's owner
       # (F-066-m-a). Every gated route reads the tenant forward-auth forwards
-      # (F-092-a) and uses this pool.
-      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=5&pool_timeout=20
+      # (F-092-a) and uses this pool: 20, so a burst of purchases queues in
+      # PgBouncer instead of failing P2028 (LIVE-1-a, user 2026-10-28).
+      - DATABASE_APP_URL=postgresql://txnet_app_user:${DB_APP_PASSWORD}@db-pool:6432/${MAIN_DB_NAME}?pgbouncer=true&connection_limit=20&pool_timeout=20
       # The second pool, for the one read that resolves a tenant instead of
       # running inside one: the public gateway callback's host lookup (F-092-j).
       # Its role's policy is `USING (true)` and it holds no BYPASSRLS.

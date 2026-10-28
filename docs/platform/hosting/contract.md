@@ -103,7 +103,7 @@ entry: `${MAIN_DB_NAME}` → `main-db:5432`. Healthcheck `pg_isready -h 127.0.0.
 
 | through `db-pool` | client setting |
 |---|---|
-| every Prisma URL in `DATABASE_APP_URL`, `DATABASE_CROSS_TENANT_URL`, `DATABASE_AI_READER_URL` | host `db-pool:6432`, `?pgbouncer=true&connection_limit=5&pool_timeout=20` |
+| every Prisma URL in `DATABASE_APP_URL`, `DATABASE_CROSS_TENANT_URL`, `DATABASE_AI_READER_URL` | host `db-pool:6432`, `?pgbouncer=true&connection_limit=5&pool_timeout=20` — billing's `DATABASE_APP_URL` 20, and its transactions wait 10 s (LIVE-1-a: a burst of purchases) |
 | network-service, sub-service pools | `NETWORK_DB_POOL_MAX_CONNS=5`, `SUB_DB_POOL_MAX_CONNS=5`, host `db-pool:6432` |
 
 Server side: 3 roles × (20 + 5 reserve) = 75 at most.

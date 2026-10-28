@@ -25,6 +25,13 @@ import { PrismaClient } from '@prisma/client';
  * reads that *resolve* a tenant; this service never resolves one — the gate
  * forwards it.
  */
+/**
+ * How long a transaction waits for a free connection before Prisma refuses it
+ * (P2028). Prisma's default is 2 s; thirty purchases at once on billing's pool
+ * waited longer and failed (LIVE-1-a, user 2026-10-28: pool 20, wait 10 s).
+ */
+const TRANSACTION_MAX_WAIT_MS = 10_000;
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -33,7 +40,7 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(datasourceUrl: string) {
-    super({ datasourceUrl });
+    super({ datasourceUrl, transactionOptions: { maxWait: TRANSACTION_MAX_WAIT_MS } });
   }
 
   async onModuleInit() {
