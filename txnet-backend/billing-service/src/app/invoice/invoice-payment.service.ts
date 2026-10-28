@@ -173,6 +173,10 @@ export class InvoicePaymentService {
         return paidAnswer(invoice, total, balanceAfter, walletTransactionId, renewed);
       }
 
+      // The variant's row is locked before the Grant refers to it: the insert's
+      // KEY SHARE taken first, a second payer's FOR UPDATE would deadlock on
+      // the upgrade (LIVE-1, 30 payers of one variant, 40P01).
+      await moveSales(tx, invoice.variantId, invoice.salesCounted ? 'sellReserved' : 'count');
       const issued = await this.grants.issue(tx, {
         userId,
         variantId: invoice.variantId,
@@ -184,7 +188,6 @@ export class InvoicePaymentService {
       if (!issued.token) throw new Error(`invoice ${invoice.id} already had a Grant`);
 
       await this.reservations.confirm(tx, invoice.id);
-      await moveSales(tx, invoice.variantId, invoice.salesCounted ? 'sellReserved' : 'count');
 
       await tx.outboxEvent.create({
         data: {
