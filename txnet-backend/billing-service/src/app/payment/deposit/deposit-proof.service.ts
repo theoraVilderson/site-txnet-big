@@ -95,14 +95,19 @@ export class DepositProofService {
     return accepted;
   }
 
-  private keepProof(userId: string, paymentId: string, input: unknown): Promise<{ accepted: ProofAccepted; review: ProofToReview }> {
+  private async keepProof(userId: string, paymentId: string, input: unknown): Promise<{ accepted: ProofAccepted; review: ProofToReview }> {
+    // The receipt's row lives in the owner's scope, its own transaction: read before the write one, never inside
+    // it, where it would wait for a second pool connection while holding the first (C-29, LIVE-1-b).
+    const first = await tenantTransaction(this.prisma, (tx) => this.openTransfer(tx, userId, paymentId));
+    if (!first.method) throw new ProofRefused('transfer_not_found');
+    const receiptKey = objectKey(first.setting.tenantId, receiptPath(paymentId));
+    const checked = checkProof({ method: first.method, destination: first.destination, requiredProof: first.setting.requiredProof, input, receiptKey });
+    if ('refusals' in checked) throw new ProofRefused('invalid_proof', checked.refusals);
+    if (checked.fields['receiptImage'] !== undefined && !(await this.receiptExists(first.setting.tenantId, receiptKey))) throw new ProofRefused('receipt_missing');
+
     return tenantTransaction(this.prisma, async (tx) => {
+      // Read again: the payment may have closed, or had its proof, since the first read.
       const rows = await this.openTransfer(tx, userId, paymentId);
-      if (!rows.method) throw new ProofRefused('transfer_not_found');
-      const receiptKey = objectKey(rows.setting.tenantId, receiptPath(paymentId));
-      const checked = checkProof({ method: rows.method, destination: rows.destination, requiredProof: rows.setting.requiredProof, input, receiptKey });
-      if ('refusals' in checked) throw new ProofRefused('invalid_proof', checked.refusals);
-      if (checked.fields['receiptImage'] !== undefined && !(await this.receiptExists(rows.setting.tenantId, receiptKey))) throw new ProofRefused('receipt_missing');
       if (checked.ref && (await tx.transferTxRef.findFirst({ where: checked.ref, select: { id: true } }))) throw new ProofRefused('duplicate_ref');
 
       const now = new Date();
