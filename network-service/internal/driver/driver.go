@@ -132,6 +132,11 @@ type RemoteClient struct {
 	// scopes clients to one.
 	InboundRemoteID string
 	Enabled         bool
+	// Limited is a client the panel switched off itself because its counter
+	// reached DataLimitBytes or its expiry passed (x-ui's depletion job), where
+	// a family reads that as a disable (LIVE-1-y). It is the ceiling working,
+	// not a drift; Marzban's `limited` reads as Enabled instead.
+	Limited bool
 	// DataLimitBytes is the ceiling the panel is currently enforcing. Zero
 	// means the panel reports no limit, which under ADR-0072 rule 2 is a
 	// finding and not a default: a limit higher than ours is a money hole and

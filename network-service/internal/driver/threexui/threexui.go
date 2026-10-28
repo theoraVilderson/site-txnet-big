@@ -181,12 +181,12 @@ func noRenewal(c wireClient) wireClient {
 	return c
 }
 
-func (r record) remote() driver.RemoteClient {
+func (r record) remote(at time.Time) driver.RemoteClient {
 	c := driver.RemoteClient{
-		RemoteID:       r.Email,
-		Label:          r.Comment,
-		UUID:           r.UUID,
-		Enabled:        r.Enable,
+		RemoteID: r.Email,
+		Label:    r.Comment,
+		UUID:     r.UUID,
+		Enabled:  r.Enable, Limited: r.limited(at),
 		DataLimitBytes: r.TotalGB,
 		IPLimit:        r.LimitIP, TelegramID: driver.TelegramIDOfNumber(r.TgID),
 	}
@@ -472,13 +472,13 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 // ListClients reads the panel, never our last write: the limit reported is
 // the one the counters row holds now.
 func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error) {
-	list, _, err := d.list(ctx, "ListClients")
+	list, at, err := d.list(ctx, "ListClients")
 	if err != nil {
 		return nil, err
 	}
 	out := make([]driver.RemoteClient, 0, len(list))
 	for _, r := range list {
-		out = append(out, r.remote())
+		out = append(out, r.remote(at))
 	}
 	return out, nil
 }
@@ -521,7 +521,7 @@ func (d *Driver) CreateClient(ctx context.Context, req driver.CreateClientReques
 	if err := d.call(ctx, op, http.MethodPost, []string{"panel", "api", "clients", "add"}, body, nil); err != nil {
 		return driver.RemoteClient{}, err
 	}
-	return r.remote(), nil
+	return r.remote(time.Time{}), nil // just created: not cut by the panel yet
 }
 
 // UpdateClient writes the whole client as it should now be. The inbound is

@@ -119,7 +119,7 @@ inbound's `clientStats`.
 | `id` (or `password` for trojan) | `UUID` |
 | `clientStats.up` / `.down` | `UpBytes` / `DownBytes` |
 | `totalGB` (bytes, despite the name) | `DataLimitBytes` |
-| `enable` | `Enabled` |
+| `enable` | `Enabled`; off at its `total` or expiry is also `Limited` (rule 7) |
 | `expiryTime` (unix ms, 0 = none) | `ExpiresAt` |
 
 The rules:
@@ -142,6 +142,13 @@ The rules:
    scheme, domain (or the panel's host), port and path, then the client's
    `subId`, all read from `POST /panel/setting/all`. With the sub server off it
    returns false. `ClientLinks` builds instead (`contract.links.md` rule 1).
+7. **The depletion job's cut reads `Limited`.** At `up + down >= total` or a
+   passed expiry, 3x-ui's traffic job (every 10 s) turns `enable` off and,
+   with `restartXrayOnClientDisable` (default on), restarts Xray: every user
+   on the panel drops. A client off at its total or expiry is read `Limited`
+   (`xuifamily.Limited`, the job's own test), and provisioning does not enable
+   it again at the same ceiling. It did, under a zero-lease replica's
+   ceiling = used: 47 restarts in 20 min on a live 2.9.4 (LIVE-1-y).
 
 `apiBaseUrl` includes the panel's secret web path, and every route above is
 relative to it.
@@ -169,7 +176,8 @@ routes v2 writes through: its own family (user, 2026-09-24). Pull, `cumulative`,
 | `traffic.total` / `totalGB` | `DataLimitBytes` (the traffic row is the one enforced) |
 | `POST /panel/api/setting/all` | `SubscriptionURL`, built as Sanaee's rule 6. v3's `ClientLinks` still reads that address with no session (ADR-0088 leaves v3 for its own row) |
 
-Its own rules, beside Sanaee's rules 1, 5 and 6, which hold unchanged:
+Its own rules, beside Sanaee's rules 1, 5, 6 and 7, which hold unchanged
+(rule 7 from the `traffic` row):
 
 1. **An update writes the whole client.** A field left out is zeroed, except
    the credentials and `subId`. Every write reads the client first and carries

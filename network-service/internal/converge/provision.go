@@ -451,7 +451,7 @@ func (v *Provisioning) one(
 			action = ActionRestored
 		}
 		return outcome(client.RemoteID, StatePartial), found(action, client.RemoteID, nil)
-	case client.Enabled != row.Enabled:
+	case enabledDiffers(row, client):
 		if err := p.Driver.SetClientEnabled(ctx, client.RemoteID, row.Enabled); err != nil {
 			return refused(client.RemoteID, err)
 		}

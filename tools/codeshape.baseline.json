@@ -134,7 +134,6 @@
   "txnet-backend/billing-service/src/app/payment/gateway/airwallex.provider.ts": 1,
   "txnet-backend/billing-service/src/app/payment/gateway/nowpayments.provider.ts": 1,
   "txnet-backend/billing-service/src/app/prisma/prisma.module.ts": 6,
-  "txnet-backend/billing-service/src/app/prisma/prisma.service.ts": 5,
   "txnet-backend/billing-service/src/app/redis/redis.module.ts": 2,
   "txnet-backend/billing-service/src/app/redis/redis.service.ts": 23,
   "txnet-backend/billing-service/src/app/request/identity.middleware.ts": 29,

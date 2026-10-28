@@ -452,7 +452,7 @@ func (p *Panel) ListClients(ctx context.Context) ([]driver.RemoteClient, error) 
 		}
 		out = append(out, driver.RemoteClient{
 			RemoteID: c.remoteID, Label: c.label, UUID: c.uuid,
-			InboundRemoteID: c.inbound, Enabled: c.enabled,
+			InboundRemoteID: c.inbound, Enabled: c.enabled, Limited: !c.enabled && atLimit(c),
 			DataLimitBytes: enforcing, RateLimitBps: c.rateLimit, IPLimit: c.ipLimit, ExpiresAt: c.expiresAt,
 		})
 		if p.cfg.LinesInList && p.supports(driver.RowNativeSubscriptionLink) {

@@ -69,7 +69,7 @@ func (d *Driver) ListInbounds(ctx context.Context) ([]driver.Inbound, error) {
 // ListClients reads the panel, never our last write: the limit reported is
 // the one the panel's counters row holds now.
 func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error) {
-	list, _, err := d.list(ctx, "ListClients")
+	list, at, err := d.list(ctx, "ListClients")
 	if err != nil {
 		return nil, err
 	}
@@ -80,6 +80,7 @@ func (d *Driver) ListClients(ctx context.Context) ([]driver.RemoteClient, error)
 	out := make([]driver.RemoteClient, 0, len(all))
 	for _, f := range all {
 		c := f.remote()
+		c.Limited = f.limited(at)
 		c.Lines, c.LinesRead = d.lines(f), true
 		out = append(out, c)
 	}

@@ -50,8 +50,8 @@ type Inbound struct {
 	Tag      string `json:"tag"`
 	// Listen, Remark, Settings and StreamSettings are what a client's line is
 	// built from (ClientLinks, ADR-0088), and the fingerprint an edit is seen by.
-	Listen         string `json:"listen"`
-	Remark         string `json:"remark"`
+	Listen         string   `json:"listen"`
+	Remark         string   `json:"remark"`
 	Settings       JSONText `json:"settings"`
 	StreamSettings JSONText `json:"streamSettings"`
 }
@@ -140,6 +140,22 @@ func (f found) remote() driver.RemoteClient {
 		c.ExpiresAt = time.UnixMilli(f.client.ExpiryTime).UTC()
 	}
 	return c
+}
+
+// Limited is what the forks' depletion job switches a client off for: its
+// counter at a non-zero total, or its expiry passed (LIVE-1-y). The job turns
+// `enable` off, so without this a cut reads as a disable we never asked for.
+func Limited(enable bool, used, total, expiryMs int64, at time.Time) bool {
+	if enable {
+		return false
+	}
+	return (total > 0 && used >= total) || (expiryMs > 0 && expiryMs <= at.UnixMilli())
+}
+
+// limited reads the counters row, which the depletion job checks; a client
+// with none can only have expired.
+func (f found) limited(at time.Time) bool {
+	return Limited(f.client.Enable, f.stat.Up+f.stat.Down, f.stat.Total, f.client.ExpiryTime, at)
 }
 
 // telegramIDOf reads tgId as the forks store it: a JSON number, or the

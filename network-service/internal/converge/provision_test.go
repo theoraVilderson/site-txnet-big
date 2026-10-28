@@ -355,6 +355,36 @@ func TestDisablingIsCarriedAndConfirmedByTheRead(t *testing.T) {
 	}
 }
 
+// LIVE-1-y: 3x-ui restarts Xray each time its depletion job switches a client
+// off, so enabling it again at the same ceiling restarted it every 10 s.
+func TestAClientThePanelCutAtItsCeilingIsNotEnabledAgainUntilTheCeilingRises(t *testing.T) {
+	r := newProvRig(t, fake.Config{})
+	r.panel.Given("remote-a")
+	row := wanted("c1")
+	row.RemoteID, row.UUID = "remote-a", "remote-a"
+	r.desired.Put("panel-1", row)
+	if err := r.panel.SetClientDataLimit(context.Background(), "remote-a", 20*mb); err != nil {
+		t.Fatal(err)
+	}
+	r.panel.Serve("remote-a", 0, 20*mb)
+	r.panel.CutAtLimit("remote-a")
+
+	for range 3 {
+		r.pass(t)
+	}
+	if n := r.panel.CallCount("SetClientEnabled"); n != 0 {
+		t.Fatalf("SetClientEnabled called %d times on a client the panel cut at its ceiling", n)
+	}
+	if got := r.row(t, "c1"); got.State != converge.StateComplete {
+		t.Fatalf("state = %s, want complete: the cut is the ceiling working", got.State)
+	}
+
+	if err := r.panel.SetClientDataLimit(context.Background(), "remote-a", 40*mb); err != nil {
+		t.Fatal(err)
+	}
+	onlyAction(t, r.pass(t), converge.ActionEnabled)
+}
+
 func TestARegeneratedCredentialReplacesTheOldOneAndKeepsTheCeiling(t *testing.T) {
 	r := newProvRig(t, fake.Config{})
 	r.panel.Given("remote-a")

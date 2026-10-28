@@ -714,3 +714,43 @@ func TestListClientsCarriesTheLinesClientLinksGives(t *testing.T) {
 	}
 	t.Fatalf("ListClients does not hold %s", created.RemoteID)
 }
+
+// LIVE-1-y: the depletion job switches a client off at its total or expiry;
+// that reads Limited, never as a disable provisioning should undo.
+func TestAClientCutAtItsTotalOrExpiryReadsLimited(t *testing.T) {
+	f, d := open(t)
+	h := &harness{f: f, d: d}
+	cases := []struct {
+		name        string
+		enable      bool
+		used, total int64
+		expiry      int64
+		want        bool
+	}{
+		{"cut at its total", false, 100, 100, 0, true},
+		{"cut at its expiry", false, 0, 0, time.Now().Add(-time.Hour).UnixMilli(), true},
+		{"disabled under its total", false, 50, 100, 0, false},
+		{"still on at its total", true, 100, 100, 0, false},
+	}
+	for _, c := range cases {
+		h.Given(c.name)
+		f.mu.Lock()
+		fc := f.clients[c.name]
+		fc.Enable, fc.Up, fc.Total, fc.Expiry = c.enable, c.used, c.total, c.expiry
+		f.mu.Unlock()
+	}
+	clients, err := d.ListClients(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		for _, got := range clients {
+			if got.RemoteID == c.name && got.Limited != c.want {
+				t.Errorf("%s: Limited = %v, want %v", c.name, got.Limited, c.want)
+			}
+		}
+	}
+	if len(clients) != len(cases) {
+		t.Fatalf("read %d clients, want %d", len(clients), len(cases))
+	}
+}

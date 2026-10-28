@@ -125,7 +125,7 @@ client's id — a renamed or rebuilt client is re-keyed and carried on.
 | `present`, `remoteId` | holds it under no key | recreated, as a create — `missing`, a repair under the anti-flap stop (`contract.drift.md`) |
 | `present` | rebuilt: our `uuid`, not our tag | `UpdateClient` with the tag and a create's first block → `partial` |
 | `present` | `uuid` differs | `UpdateClient` with the new `uuid`, the panel's own ceiling kept → `partial` |
-| `present` | `enabled` differs | `SetClientEnabled` → `partial` |
+| `present` | `enabled` differs | `SetClientEnabled` → `partial`; a client read `Limited` (the panel cut it at its ceiling or expiry) under an enabled row is `complete` until the ceiling rises (LIVE-1-y, `contract.drivers.md` Sanaee rule 7) |
 | `present` | matches, under another id | re-keys `remoteId` → `complete` |
 | `present` | matches | `complete` |
 
