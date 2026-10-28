@@ -89,8 +89,17 @@ def require_db_passwords(stack: Stack, env_files: list[str], overrides: dict, va
 
 
 def load_model(stack: Stack, env_files: list[str], overrides: dict) -> dict:
-    """A production compose model, interpolated by compose itself (K2)."""
-    return json.loads(compose(stack, ["--format", "json"], env_files, overrides))
+    """A production compose model, interpolated by compose itself (K2). The JSON
+    form drops a service's `x-` keys, so they are read from the YAML form, which
+    keeps them: `x-liveness` (H25) went missing, and the first release with it
+    still restarted every service on a main-db outage (LIVE-1-r)."""
+    model = json.loads(compose(stack, ["--format", "json"], env_files, overrides))
+    extended = yaml.safe_load(compose(stack, ["--format", "yaml"], env_files, overrides)) or {}
+    for name, service in (extended.get("services") or {}).items():
+        extensions = {k: v for k, v in service.items() if k.startswith("x-")}
+        if extensions and name in model.get("services", {}):
+            model["services"][name].update(extensions)
+    return model
 
 
 def git_tag() -> str:

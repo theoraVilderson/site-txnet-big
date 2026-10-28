@@ -391,6 +391,18 @@ class RepoModelTest(unittest.TestCase):
         self.assertTrue(self.objects)
         self.assertEqual(unprobed, [])
 
+    # H25 (LIVE-1-r): on the real model — through `docker compose config` — a
+    # Node service's liveness accepts any answer and its readiness keeps the
+    # database check. The JSON form drops `x-` keys; a model-only test missed it
+    # and the first release still killed services on a main-db outage.
+    def test_a_node_service_lives_by_any_answer_and_is_ready_by_the_database(self):
+        c = next(o for o in self.objects if o["kind"] == "Deployment"
+                 and o["metadata"]["name"] == "billing-service")["spec"]["template"]["spec"]["containers"][0]
+        live, ready = c["livenessProbe"]["exec"]["command"][-1], c["readinessProbe"]["exec"]["command"][-1]
+        self.assertIn("then(()=>process.exit(0)", live)
+        self.assertIn("r.ok?0:1", ready)
+        self.assertEqual(c["startupProbe"]["exec"]["command"][-1], live)
+
     # K6 (OPS-1-o-f): a probe that fails kills, where Docker's only marks. On the
     # test server main-db's crash recovery fsyncs its data directory for over a
     # minute, and the 60s startup budget killed each recovery mid-way, in a loop.
