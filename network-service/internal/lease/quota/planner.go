@@ -144,7 +144,7 @@ func (a *Account) Plan(now time.Time, p Params) PlanResult {
 			for _, v := range vs {
 				dem += v.vDem
 			}
-			reopenAt = max(p.ReopenMin, p.FinishMin, toBytes(dem*p.FinishTime.Seconds()))
+			reopenAt = max(p.ReopenMin, p.FinishMin, toBytes(dem*p.FinishTime.Seconds()), a.returnReserve(vs))
 		}
 		// A figure still in flight from before the close is not ours to
 		// hand out again (Replica.closePeak).

@@ -3,7 +3,7 @@ id: network
 layer: domain
 status: active
 version: 3
-updated: 2026-10-14
+updated: 2026-10-28
 ---
 
 # Close by disable — when the planner closes a Grant, and what reopens it
@@ -50,8 +50,16 @@ is told about it. Split out of [contract.lease.md](contract.lease.md) on
     figure written — for a written 0, the one byte every family stores it
     as, `quota.CutOffBytes`, F-027-eb), every reading from a panel tick past the close plus
     that panel's lag, and `avail ≥ max(ReopenMin, FinishMin, ΣvDem ×
-    FinishTime)` — enough to finish on at the demand that closed it, or it
-    closes again at once. Either way, a figure written before the close and
+    FinishTime, PeakReplica × lag)` — enough to finish on at the demand
+    that closed it, or it closes again at once, and at least what a device
+    returning at the account's recent peak takes through the slowest
+    panel's lag, so a returning burst cannot take more past the bag than
+    it was owed. **The demand ages while the close stands** (LIVE-1-u,
+    2026-10-28): a replica off because its Grant is closed reads idle, not
+    blocked (rate rule 3 is for a cut mid-demand), so the reopen bar falls
+    once traffic stops; held as blocked it stayed at its peak until a
+    restart, and a package Grant read `active` with 27.6 MB paid and no
+    way to connect. Either way, a figure written before the close and
     still in flight counts against avail (`Replica.closePeak`): the close
     writes the counter, which the panel may already show, so a reading of it
     cannot prove the older write landed; the figure is held until a reading

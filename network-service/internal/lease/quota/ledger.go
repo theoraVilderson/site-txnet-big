@@ -70,8 +70,12 @@ func (a *Account) Observe(r *Replica, o Observation, driftAfter time.Duration) O
 		res.Anomaly = true // still charged; flag the panel for review
 	}
 
+	// A closed account's replicas are off because we closed it, not cut
+	// mid-demand: their zeros are idle, so the demand that closed it ages
+	// and a settled guard close can reopen on what is left (LIVE-1-u,
+	// lease-close rule 25). Held as blocked, it stayed at its peak.
 	wasBlocked := !r.EnabledSeen || (r.Panel.CanSetLimit && r.Counter >= r.LimitSeen)
-	r.Rate.Observe(d, dt, wasBlocked || !o.Enabled, r.Panel.JobInterval)
+	r.Rate.Observe(d, dt, !a.Closed && (wasBlocked || !o.Enabled), r.Panel.JobInterval)
 
 	// --- lag calibration -------------------------------------------------
 	if r.depl.pending {
