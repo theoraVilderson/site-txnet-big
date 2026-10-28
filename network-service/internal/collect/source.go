@@ -182,6 +182,12 @@ func (s *PostgresSource) Panels(ctx context.Context) ([]Panel, error) {
 		p.Configs = configs[p.ID]
 		offered = append(offered, p)
 	}
+	if len(offered) == 0 && len(panels) > 0 {
+		// Not one listed panel opened: the vault, not the panels, is down. That
+		// is a failed read, not an empty fleet, and the last good list stays
+		// offered to the waker and the hot loop (LIVE-1-t).
+		return nil, fmt.Errorf("opening panels: none of the %d listed could be opened", len(panels))
+	}
 	s.forgetExcept(ids)
 	s.mu.Lock()
 	s.offered = append([]Panel(nil), offered...)

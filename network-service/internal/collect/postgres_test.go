@@ -216,6 +216,32 @@ func TestSourceReopensAPanelWhoseRowChangedAndSkipsOneItCannotOpen(t *testing.T)
 	}
 }
 
+// LIVE-1-t (2026-10-28): after a main-db restart the vault answered nothing,
+// every panel failed to open, and the pass logged "panels: 0, failed: 0" as a
+// success — and handed the waker and the hot loop an empty list. A source that
+// opens none of the panels it listed has not been read: that is an error, and
+// the last good list stays offered.
+func TestASourceThatOpensNoneOfItsPanelsIsNotRead(t *testing.T) {
+	pool := &pgDB{answers: map[string][]pgRow{
+		`FROM network.panel`: {panelRow(pgPanelA, "vault:a", 60, "healthy", nil), panelRow(pgPanelB, "vault:b", 60, "healthy", nil)},
+	}}
+	opener := &countingOpener{}
+	source := &collect.PostgresSource{DB: pool, Opener: opener, Cursors: &collect.PostgresCursors{DB: pool}}
+	if _, err := source.Panels(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	pool.answers[`FROM network.panel`] = []pgRow{panelRow(pgPanelA, "vault:a2", 60, "healthy", nil), panelRow(pgPanelB, "vault:b2", 60, "healthy", nil)}
+	vault := errors.New("vault unreachable")
+	opener.fail = map[string]error{pgPanelA: vault, pgPanelB: vault}
+	if _, err := source.Panels(context.Background()); err == nil {
+		t.Fatal("Panels = nil error, want one: none of the two listed panels could be opened")
+	}
+	if got := source.Offered(); len(got) != 2 {
+		t.Fatalf("offered %d panels after the failed read, want the last good 2", len(got))
+	}
+}
+
 func TestSourceRestoresABanTheDatabaseAlreadyHolds(t *testing.T) {
 	blocked := time.Date(2026, 9, 25, 8, 55, 0, 0, time.UTC)
 	pool := &pgDB{answers: map[string][]pgRow{

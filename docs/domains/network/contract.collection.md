@@ -74,7 +74,9 @@ loop is proved against.
    its own `maxRequestsPerMinute`, and **kept**: an open is an audited vault
    read, so a driver is rebuilt only when its row changes or after 15 minutes
    (`DefaultReopenAfter`). A panel that will not open is logged and left out,
-   so it is never stamped and ages into the watchdog's alert.
+   so it is never stamped and ages into the watchdog's alert. **None opening
+   of those listed is a failed read** (LIVE-1-t): the vault is down, not the
+   fleet empty — the pass fails, and the last good list stays offered.
 2. **`PostgresCursors` is `config_counter_state`, keyed by config.** The map
    the normaliser reads is rebuilt from the join each pass, so a client the
    convergence pass re-keyed keeps its cursor. `Apply` writes the whole pass in
