@@ -3,6 +3,7 @@ package auth
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -400,8 +401,10 @@ func TestCheckTenantRoleUsesTheCeilingOfEveryNonWildcardRole(t *testing.T) {
 // The platform set is never a tenant's (AC-1-c, catalog §3.3, ADR-0135), read
 // from the shipped policy file itself: every `platform.` key is held by
 // SuperAdmin alone, so a role a tenant made is refused the claim, and no named
-// role below SuperAdmin allows it. Six keys from ADR-0135, and ADR-0141's
-// seventh, `platform.support`. The reverse half — a platform key counts
+// role below SuperAdmin allows it. Named, not counted, so a new key fails
+// with its name: six from ADR-0135, ADR-0141's `platform.support`, and
+// ADR-0164's `platform.release.manage` (LIVE-1-g) — the same list as Nest's
+// `PLATFORM_KEYS`. The reverse half — a platform key counts
 // only for a caller of the platform's tenant — is Nest's
 // (`shared-core/.../tenant/platform-keys.spec.ts`).
 func TestPlatformKeysAreRefusedToEveryTenantRole(t *testing.T) {
@@ -417,8 +420,13 @@ func TestPlatformKeysAreRefusedToEveryTenantRole(t *testing.T) {
 			}
 		}
 	}
-	if len(platform) != 7 {
-		t.Fatalf("the shipped policy names %d platform keys (%v), want the six of ADR-0135 and ADR-0141's platform.support", len(platform), platform)
+	want := []string{
+		"platform.impersonate", "platform.node.manage", "platform.plan.assign", "platform.release.manage",
+		"platform.report.read", "platform.support", "platform.tenant.create", "platform.tenant.manage",
+	}
+	sort.Strings(platform)
+	if !slices.Equal(platform, want) {
+		t.Fatalf("the shipped policy names platform keys %v, want %v (shared-core platform-keys.ts)", platform, want)
 	}
 	for _, key := range platform {
 		if _, ok := engine.CheckTenantRole([]string{key}); ok {
