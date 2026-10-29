@@ -81,12 +81,14 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   edge list and the server's last good copies) on the node before k3s, since svclb binds 80/443 there too.
   Reaching both nodes is OPS-1-o-r's, with the standby, through
   `edge_zone.py repoint`.
-- **The dev host is the second node, and a worker (user, 2026-10-24/25).** It
-  stays an agent past the trial; the stateless release pods run on both nodes
-  (1–2 ms apart, under K17's 10 ms), the stores stay on the data node, and the
-  dev host also builds (R4). Its dev stack, site and bot stay stopped while it is
-  joined. Its 21 GiB free is under `MIN_NODE_DISK_GIB`: images pulled there too
-  narrow it, so room is freed before OPS-1-y's standby lands.
+- **The dev host is the second node, carrying no release pod (user,
+  2026-10-29; a worker 2026-10-25 to 10-29).** It stays an agent for builds
+  (R4) and OPS-1-y's standby, and runs the dev stack again. Two nodes in
+  different datacenters meet over the internet: network-service there read
+  db-pool and the panels across it, ~57 MB/min (~80 GB/day each way). It
+  registers with `NODE_NO_RELEASE=1`'s `node-taint` (svclb does not tolerate
+  it, so 80/443 stay free for the dev Traefik); a pod meant for it, the
+  standby, tolerates the taint.
 
 Proven 2026-10-24, the dev host joining the test server as a trial (the user set
 ADR-0147 point 6 aside for it; the dev stack, site and bot stopped first).

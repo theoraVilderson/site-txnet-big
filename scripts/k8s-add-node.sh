@@ -16,6 +16,7 @@
 #   SERVER_PRIVATE_IP  this one's: the API and flannel go over it (K17). Unset: the public addresses
 #   SSH_KEY            the identity ssh uses (default: ssh's own)
 #   MIN_NODE_MEM_MIB / MIN_NODE_DISK_GIB   lower floors for a trial node that will carry no release
+#   NODE_NO_RELEASE=1  the node registers with NO_RELEASE_TAINT: no release pod lands there (K17)
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -27,6 +28,10 @@ EDGE_DIR=/usr/local/lib/txnet/edge
 STAGE=/root/.txnet-join
 # K17: the stores' local-path volumes stay on the node that carries it (the render's DATA_NODE_LABEL).
 DATA_LABEL=txnet.io/data=true
+# K17 (user, 2026-10-29): a pod there querying the data node's stores crossed the
+# internet, ~80 GB a day for network-service alone. In the agent's config, not set
+# by hand, because a hand-set taint was lost and the scheduler moved it back.
+NO_RELEASE_TAINT=txnet.io/no-release=true:NoSchedule
 # Every approved edge's last good ranges (edge_ranges.py STATE_DIR, NIN-1-b1): the
 # node starts from the server's, so a join never waits on an edge's list.
 EDGE_RANGES=/var/lib/txnet/edge-ranges
@@ -56,7 +61,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,18p' "$0" >&2
+  sed -n '2,19p' "$0" >&2
   exit 2
 }
 
@@ -182,6 +187,7 @@ stage() {
     echo "server: https://$SERVER_ADDR:6443"
     echo "token-file: $K3S_ETC/token"
     echo "node-ip: $NODE_ADDR"
+    [ "${NODE_NO_RELEASE:-}" != 1 ] || printf 'node-taint:\n  - %s\n' "$NO_RELEASE_TAINT"
     if [ -n "${NODE_PRIVATE_IP:-}" ]; then
       iface="$(remote ip -4 -o addr show | awk -v ip="$NODE_PRIVATE_IP" '$4 ~ "^"ip"/" {print $2}')"
       [ -n "$iface" ] || die "$NODE_PRIVATE_IP is on no interface of $HOST"
