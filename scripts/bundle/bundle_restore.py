@@ -34,6 +34,10 @@ ROLES = 'psql -U "$POSTGRES_USER" -d postgres -q -v ON_ERROR_STOP=0 -f "$1" && r
 RESTORE_DIR = "/tmp/txnet-restore"
 
 
+# What a --scrub command reads to find the opened bundle.
+RESTORE_WORK = "TXNET_RESTORE_WORK"
+
+
 class Abort(Exception):
     """Stops the restore; the message says what state this server is in."""
 
@@ -181,7 +185,7 @@ def restore(host, root, work, manifest, passphrase, options, say):
     host.stop_all()
     restore_stores(host, work, manifest, say)
     if options.scrub:
-        run_scrub(options.scrub, say)
+        run_scrub(options.scrub, work, say)
     start(host, work, relation, say)
     if had_data and host.has_service("pg-backup"):
         # a new server's pg-backup makes its own first full on its first start (H3); a second would hit its lock
@@ -189,11 +193,13 @@ def restore(host, root, work, manifest, passphrase, options, say):
         say("a full pgBackRest backup has started: the baseline after this restore")
 
 
-def run_scrub(argv, say):
+def run_scrub(argv, work, say):
     """argv against the restored stores before any service reads them (staging's
-    copy of production, ADR-0168); a failure stops the restore with every service down."""
+    copy of production, ADR-0168); a failure stops the restore with every service down.
+    It is handed the bundle's work directory: the queued messages published back
+    after the services start are there (RESTORE_WORK)."""
     say("the stores are restored and no service runs: %s", " ".join(argv))
-    if subprocess.run(argv).returncode != 0:
+    if subprocess.run(argv, env={**os.environ, RESTORE_WORK: work}).returncode != 0:
         raise Abort("the scrub refused this copy; every service stays stopped")
 
 

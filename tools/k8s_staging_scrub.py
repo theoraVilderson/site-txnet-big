@@ -10,14 +10,17 @@ B10's restore runs this between the stores and the services (`backup.py restore
                              logins); every other one wiped — addresses, login,
                              vault rows, OpenVPN file — and archived, which
                              stops its collection; then `guard`
+                             then the people (`k8s_staging_people.py`, OPS-1-ah-g)
     guard                    exit 1, naming each, while a panel row names an
-                             address that is not a local panel
+                             address that is not a local panel, or a person's
+                             contact is not a fake
 
 The closed network stays the other layer (ADR-0168 point 2): one mistake in
 either reaches nothing real.
 """
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.parse
@@ -27,9 +30,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
+import k8s_staging_people as kp  # noqa: E402
 
 MAIN_DB_POD, MAIN_DB_CONTAINER = "main-db-0", "main-db"
 NAMESPACE = "txnet"
+KUBECTL = [str(ks.KUBECTL_WRAPPER), "-n", NAMESPACE]
+# B10's restore names the opened bundle here (bundle_restore.RESTORE_WORK).
+RESTORE_WORK = "TXNET_RESTORE_WORK"
 # TEST-NET-1 (RFC 5737), routed nowhere: what a wiped panel's NOT NULL address
 # columns hold (`panel_pull_has_base_url`, `panel_push_has_ip_address`). The URL
 # ends in the panel's id: `panel_api_address_key` holds one panel per address.
@@ -160,7 +167,7 @@ def offenders(rows: list[dict], local: Local, vault_labels: list[str], source_lo
 
 def psql(sql: str) -> str:
     """sql in main-db as its own user; small statements only (B10: large stdin truncates)."""
-    argv = [str(ks.KUBECTL_WRAPPER), "-n", NAMESPACE, "exec", "-i", MAIN_DB_POD, "-c", MAIN_DB_CONTAINER, "--",
+    argv = [*KUBECTL, "exec", "-i", MAIN_DB_POD, "-c", MAIN_DB_CONTAINER, "--",
             "sh", "-c", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -v ON_ERROR_STOP=1']
     return subprocess.run(argv, input=sql, check=True, text=True, capture_output=True).stdout
 
@@ -181,13 +188,14 @@ def vault_logins() -> tuple[list[str], int]:
 
 
 def guard(local: Local) -> bool:
-    """True when no panel row names a real address; each one said otherwise."""
+    """True when no panel row names a real address and every person's contact is a
+    fake; each finding said otherwise."""
     labels, sources = vault_logins()
-    found = offenders(panel_rows(), local, labels, sources)
+    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql)
     for line in found:
         print(f"REAL  {line}")
     if found:
-        print(f"{len(found)} real address(es) or login(s) left in staging's copy: it does not start")
+        print(f"{len(found)} real address(es), login(s) or contact(s) left in staging's copy: it does not start")
     return not found
 
 
@@ -208,7 +216,12 @@ def main(argv=None) -> int:
     if args.command == "scrub" and not args.prod_host:
         parser.error("scrub needs --prod-host")
     try:
-        local = scrub_panels(ks.docker_run, args.prod_host) if args.command == "scrub" else Local.running(ks.docker_run)
+        if args.command == "scrub":
+            local = scrub_panels(ks.docker_run, args.prod_host)
+            work = os.environ.get(RESTORE_WORK)
+            kp.scrub(psql, KUBECTL, Path(work) if work else None)
+        else:
+            local = Local.running(ks.docker_run)
         return 0 if guard(local) else 1
     except subprocess.CalledProcessError as e:
         print(f"k8s_staging_scrub.py: {' '.join(map(str, e.cmd))} failed: {(e.stderr or '').strip()}", file=sys.stderr)

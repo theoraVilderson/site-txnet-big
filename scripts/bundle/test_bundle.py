@@ -157,9 +157,10 @@ class Restore(unittest.TestCase):
     def test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services(self):
         # ADR-0168: staging's copy of production never starts with a real panel in it
         import bundle_restore as br
-        br.run_scrub([sys.executable, "-c", "pass"], say=lambda *a: None)
+        sees_work = "import os, sys; sys.exit(os.environ['%s'] != '/w')" % br.RESTORE_WORK
+        br.run_scrub([sys.executable, "-c", sees_work], "/w", say=lambda *a: None)
         with self.assertRaisesRegex(br.Abort, "stays stopped"):
-            br.run_scrub([sys.executable, "-c", "raise SystemExit(1)"], say=lambda *a: None)
+            br.run_scrub([sys.executable, "-c", "raise SystemExit(1)"], "/w", say=lambda *a: None)
 
 
 if __name__ == "__main__":
