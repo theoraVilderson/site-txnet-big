@@ -6,6 +6,9 @@
                                            production's server flags, egress proven closed
     python3 tools/k8s_staging.py import IMAGE...
                                            images from this host's Docker into the cluster: it pulls nothing
+    python3 tools/k8s_staging.py restore [--at REF]
+                                           production's newest bundle into it, at the bundle's commit
+                                           (tools/k8s_staging_data.py, OPS-1-ah-b)
     python3 tools/k8s_staging.py status    the container, the node, the egress check
     python3 tools/k8s_staging.py down      container, volume and network removed; the dev stack started
                                            again if `up` stopped it
@@ -35,6 +38,8 @@ STATE_FILE = Path("/var/lib/txnet/staging.json")
 CACHE_DIR = Path("/var/cache/txnet-staging")
 # Where the kubeconfig is written: it is the throwaway cluster's admin login.
 KUBECONFIG = CACHE_DIR / "kubeconfig.yaml"
+# prod.k8s.sh and backup.py run "$KUBECTL" as one program: this one aims at staging.
+KUBECTL_WRAPPER = CACHE_DIR / "kubectl"
 # k3s's system images (pause, coredns, local-path, klipper-lb, metrics-server):
 # the node cannot pull them, so the release's air-gap archive is mounted where
 # k3s imports from at start.
@@ -54,7 +59,10 @@ FAILED_LOG_LINES = 40
 # k3s exits "no default routes found" without one, and an internal network has
 # none: a route on the container's own link, with no gateway behind it. Nothing
 # answers there, which egress_problem proves on every `up`.
-SERVER_COMMAND = "ip route add default dev eth0 && exec /bin/k3s server"
+SERVER_COMMAND = ("ip route add default dev eth0 && exec /bin/k3s server"
+                  # A node with no route out cannot pull an image back: its kubelet never
+                  # deletes one. At 88% disk it deleted 18 of 36 before their pods started.
+                  " --kubelet-arg=image-gc-high-threshold=100 --kubelet-arg=image-gc-low-threshold=99")
 
 
 class StagingError(Exception):
@@ -126,11 +134,15 @@ def remove(docker, root: Path, state: Path) -> None:
     for name in paneltest_containers(docker):
         docker(["docker", "network", "disconnect", "-f", NETWORK, name], check=False)
     docker(["docker", "network", "rm", NETWORK], check=False)
+    # Late: k8s_staging_data imports this module.
+    import k8s_staging_data
+    k8s_staging_data.forget(docker)
     if state.exists():
         if json.loads(state.read_text()).get("devStackWasRunning"):
             docker([f"{root}/scripts/dev.compose.sh", "start"])
         state.unlink()
     KUBECONFIG.unlink(missing_ok=True)
+    KUBECTL_WRAPPER.unlink(missing_ok=True)
 
 
 def paneltest_containers(docker) -> list[str]:
@@ -181,13 +193,21 @@ def wait_ready(docker) -> None:
     raise StagingError(f"the node was not Ready in {NODE_READY_TIMEOUT_S}s: docker logs {CONTAINER}")
 
 
+def container_address(docker) -> str:
+    """The container's address on the network: its API, and Traefik's 80/443 (svclb)."""
+    return docker(["docker", "inspect", "-f", f'{{{{(index .NetworkSettings.Networks "{NETWORK}").IPAddress}}}}',
+                   CONTAINER]).stdout.strip()
+
+
 def write_kubeconfig(docker) -> None:
-    """The cluster's kubeconfig, its server the container's address on the network."""
-    address = docker(["docker", "inspect", "-f", f'{{{{(index .NetworkSettings.Networks "{NETWORK}").IPAddress}}}}',
-                      CONTAINER]).stdout.strip()
+    """The cluster's kubeconfig, its server the container's address, and KUBECTL_WRAPPER
+    using it with no proxy (the host's proxy answers a private address with EOF)."""
     config = docker(["docker", "exec", CONTAINER, "cat", "/etc/rancher/k3s/k3s.yaml"]).stdout
-    KUBECONFIG.write_text(config.replace("https://127.0.0.1:6443", f"https://{address}:6443"))
+    KUBECONFIG.write_text(config.replace("https://127.0.0.1:6443", f"https://{container_address(docker)}:6443"))
     KUBECONFIG.chmod(0o600)
+    KUBECTL_WRAPPER.write_text("#!/bin/sh\nexport NO_PROXY='*' no_proxy='*'\n"
+                               f'exec k3s kubectl --kubeconfig {KUBECONFIG} "$@"\n')
+    KUBECTL_WRAPPER.chmod(0o700)
 
 
 def up(docker, root: Path, state: Path) -> None:
@@ -221,7 +241,7 @@ def up(docker, root: Path, state: Path) -> None:
         print(logs.stdout + logs.stderr, file=sys.stderr)
         remove(docker, root, state)
         raise
-    print(f"staging is up. KUBECTL='k3s kubectl --kubeconfig {KUBECONFIG}'")
+    print(f"staging is up. KUBECTL={KUBECTL_WRAPPER}")
 
 
 def import_images(docker, images: list[str]) -> None:
@@ -247,8 +267,9 @@ def status(docker) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["up", "import", "status", "down"])
+    parser.add_argument("command", choices=["up", "import", "restore", "status", "down"])
     parser.add_argument("images", nargs="*")
+    parser.add_argument("--at", help="restore: deploy this later commit, not the bundle's")
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
         print("k8s_staging.py: run as root on the dev host", file=sys.stderr)
@@ -258,6 +279,10 @@ def main(argv=None) -> int:
             up(docker_run, ROOT, STATE_FILE)
         elif args.command == "import":
             import_images(docker_run, args.images)
+        elif args.command == "restore":
+            import k8s_staging_data as kd  # late: it imports this module
+            kd.restore_production(docker_run, kd.Production.from_env({**parse_env((ROOT / ".env.dev").read_text()),
+                                                                       **os.environ}), args.at)
         elif args.command == "status":
             return status(docker_run)
         else:

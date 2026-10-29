@@ -108,10 +108,13 @@ require_clean() {
 
 # One service at a time: a parallel build starves whatever else runs on the host.
 build() {
-  local service local_image remote
+  local service local_image remote listed
   require_build_host
   require_clean
   renice -n "$BUILD_NICENESS" -p $$ >/dev/null
+  # Listed first, as push does: `done < <(images)` hid a failed listing, and a
+  # build that built nothing exited 0 (OPS-1-ah-b, a worktree with no env files).
+  listed="$(images)"
   while IFS=$'\t' read -r service local_image remote; do
     if in_registry "$remote" </dev/null || built_here "$remote" </dev/null; then
       echo "== built already: $service ($remote)"
@@ -120,7 +123,7 @@ build() {
     echo "== build $service -> $remote"
     compose build "$service" </dev/null
     docker tag "$local_image" "$remote"
-  done < <(images)
+  done <<<"$listed"
 }
 
 # K14 (OPS-1-o-t): the registry's /v2/ answers 200, or 401 asking for the login.

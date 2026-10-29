@@ -376,6 +376,16 @@ class ScriptTest(unittest.TestCase):
         self.assertIn("== build billing-service", run.stdout)
         self.assertRegex(run.stderr, r"renice -n \d+ -p \d+")
 
+    # 2026-10-29 (OPS-1-ah-b): in a worktree with no env files the listing
+    # failed, `done < <(images)` hid it, and `build` built nothing and exited 0.
+    def test_a_listing_that_fails_fails_the_build(self):
+        script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
+                  "renice() { :; }\nimages() { echo 'k8s_render: .env.prod is missing' >&2; return 1; }\n"
+                  "compose() { echo \"compose $*\"; }\nbuild")
+        run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})
+        self.assertNotEqual(run.returncode, 0)
+        self.assertIn(".env.prod is missing", run.stderr)
+
     # K8 (OPS-1-o-y): a tag the registry already holds is that source, built:
     # build and push skip it, so an unchanged service costs nothing.
     def test_an_image_the_registry_holds_is_neither_built_nor_pushed(self):

@@ -155,6 +155,21 @@ on the dev host: `scripts/staging.sh up|import|status|down`
 - **Nothing outlives `down`**: the container, its named volume `txnet-staging-k3s`
   and the network go, and the kubeconfig with them. A failed `up` prints the
   container's log, then does the same.
+- **Production's data** (`restore [--at REF]`, `tools/k8s_staging_data.py`,
+  OPS-1-ah-b): production's newest bundle and passphrase, read over ssh
+  (`STAGING_PROD_SSH`, `_KEY` in `.env.dev`), sum-checked; deployed at the
+  bundle's commit, or `--at` a later one, from a worktree; then B10's restore
+  with `--replace`. Everything that opens production's secrets — the bundle and
+  what it decrypts to, the passphrase, the worktree, the safety bundle — lives in
+  `/dev/shm/txnet-staging`, and `/etc/txnet/age.key` is a link into it, never a
+  file. A failed `restore` and `down` remove all of it. Images the registry
+  lacks are built in the worktree with the build host's env files linked for
+  that step only. The kubelet never deletes an image there (GC thresholds
+  100/99): with no route out it cannot pull one back.
+  Proven 2026-10-29 at `--at 7e49eb78`: 242 tables and Redis matched the bundle,
+  1018 users, 39 pods Running, R6's smoke 85 of 85, egress still closed; `down`
+  left nothing. It also found OPS-1-ai (the translator fetched its models) and
+  that `build` ignored a failed image listing and exited 0.
 
 ## The real login (OPS-1-o-f, with the user)
 

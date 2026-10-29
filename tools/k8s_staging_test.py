@@ -70,11 +70,17 @@ class RunTest(unittest.TestCase):
     def test_state_in_the_named_volume(self):
         self.assertIn(f"{ks.VOLUME}:/var/lib/rancher/k3s", self.argv)
 
+    # 2026-10-29: at 88% disk the kubelet's image GC deleted 18 of 36 imported
+    # images before their pods started; with no route out none came back.
+    def test_the_kubelet_never_deletes_an_image_it_cannot_pull_again(self):
+        self.assertIn("--kubelet-arg=image-gc-high-threshold=100", self.argv[-1])
+        self.assertIn("--kubelet-arg=image-gc-low-threshold=99", self.argv[-1])
+
     # k3s exits "no default routes found" on an internal network (2026-10-29): a
     # route on the container's own link, with no gateway behind it, satisfies it.
     def test_a_default_route_with_no_gateway_before_k3s_starts(self):
         self.assertEqual(self.argv[-3:-1], ["img:tag", "-c"])
-        self.assertEqual(self.argv[-1], "ip route add default dev eth0 && exec /bin/k3s server")
+        self.assertTrue(self.argv[-1].startswith("ip route add default dev eth0 && exec /bin/k3s server"))
 
 
 class EgressTest(unittest.TestCase):
@@ -113,6 +119,22 @@ class PanelsTest(unittest.TestCase):
 
 
 class PauseTest(unittest.TestCase):
+    # `remove` deletes real paths: a test run beside a live staging must not take them.
+    def setUp(self):
+        import k8s_staging_data as kd
+        self.tmp = tempfile.TemporaryDirectory()
+        base = Path(self.tmp.name)
+        patches = [(ks, "KUBECONFIG", base / "kubeconfig"), (ks, "KUBECTL_WRAPPER", base / "kubectl"),
+                   (kd, "SHM_DIR", base / "shm"), (kd, "AGE_KEY_FILE", str(base / "age.key"))]
+        self.saved = [(m, name, getattr(m, name)) for m, name, _ in patches]
+        for module, name, value in patches:
+            setattr(module, name, value)
+
+    def tearDown(self):
+        for module, name, value in self.saved:
+            setattr(module, name, value)
+        self.tmp.cleanup()
+
     def test_down_starts_the_dev_stack_only_when_up_stopped_it(self):
         with tempfile.TemporaryDirectory() as d:
             state = Path(d) / "staging.json"
