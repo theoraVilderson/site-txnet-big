@@ -92,7 +92,7 @@ and a believed ceiling is worse than a missing one — the traffic past it is
 served with nothing red anywhere. `appliedCeilingBytes` is therefore read back
 off `ListClients` and set with `ceilingAppliedAt` in the same write
 (invariant 14). A panel reporting **zero** confirms nothing: zero read means
-*no limit* there, so it is never recorded as an applied ceiling.
+*no limit* there, so it is never recorded as an applied ceiling. A figure the panel repeats is rewritten only when its `ceilingAppliedAt` is 10 min old (LIVE-1-ad).
 The write locks its rows in id order, as the planner's lease write does, or the two
 deadlock and the pass's confirmations are lost (invariant 54, F-027-cv).
 

@@ -13,10 +13,19 @@ package db
 // list, reading the batch as `v`. The lock is `NO KEY UPDATE`, the one the
 // UPDATE itself takes, so a row referencing the config is not held up by it.
 func OrderedConfigUpdate(set, rows string) string {
+	return OrderedConfigUpdateWhere(set, rows, "true")
+}
+
+// OrderedConfigUpdateWhere is OrderedConfigUpdate over only the rows `where`
+// keeps, reading `c` and `v`. It filters before the lock, because a row lock
+// is a write too: a batch that would change nothing touches nothing
+// (LIVE-1-ad).
+func OrderedConfigUpdateWhere(set, rows, where string) string {
 	return `
 WITH v AS (SELECT * FROM ` + rows + `),
 locked AS (
   SELECT c.id FROM network.config c JOIN v ON c.id = v.id::uuid
+   WHERE ` + where + `
    ORDER BY c.id
      FOR NO KEY UPDATE OF c)
 UPDATE network.config c

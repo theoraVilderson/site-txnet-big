@@ -572,3 +572,23 @@ func TestAnUnchangedRecordWritesItsReconcileTimeEveryTenMinutes(t *testing.T) {
 		t.Errorf("refresh cutoff missing or wrong in %v, want ten minutes before the pass", args)
 	}
 }
+
+// LIVE-1-ad, measured after the first fix: the 4.2k config rows a minute were
+// `ceilingAppliedAt`, rewritten for every confirmation the panel repeated. A
+// confirmation is written when the figure changed or its time is ten minutes
+// old, and the filter comes before the row lock, which writes too.
+func TestARepeatedConfirmationIsWrittenEveryTenMinutes(t *testing.T) {
+	at := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	if err := (PostgresAllocations{DB: f}).Record(context.Background(), []AppliedCeiling{{ConfigID: pgConfig, Bytes: 4_000, At: at}}); err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	sql := f.sql[0]
+	filter := `c."appliedCeilingBytes" IS DISTINCT FROM v.bytes OR c."ceilingAppliedAt" IS NULL OR c."ceilingAppliedAt" < v.at - $4::int * interval '1 second'`
+	if i, lock := strings.Index(sql, filter), strings.Index(sql, `FOR NO KEY UPDATE`); i < 0 || i > lock {
+		t.Fatal("a repeated confirmation is not filtered before the row lock")
+	}
+	if args := f.args[0]; len(args) < 4 || args[3] != int32(600) {
+		t.Errorf("refresh = %v, want 600 seconds", args)
+	}
+}

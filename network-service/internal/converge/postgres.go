@@ -163,7 +163,7 @@ const ConfirmedEvent = "network.config.confirmed"
 // lifetime and reset count: it is not a reset. It is
 // not held to the desired-state guard, because the client was made either way.
 // An outcome that changes nothing else writes `lastReconciledAt` only once it
-// is reconciledRefresh old ($20, LIVE-1-ad): every config every pass was a
+// is standingRefresh old ($20, LIVE-1-ad): every config every pass was a
 // third of the node disk's writes at idle, and the time is only shown.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt", "linkLines", "linksUuid" FROM network.config WHERE id = $1::uuid),
@@ -214,9 +214,9 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
  WHERE e.due AND CASE WHEN e.confirm THEN r."grantId" IS NOT NULL AND prior."confirmedAt" IS NULL
                       ELSE prior."linkLines" IS DISTINCT FROM $9::text[] OR prior."linksUuid" IS DISTINCT FROM $11 END`
 
-// reconciledRefresh is how stale `lastReconciledAt` may grow on a config the
-// pass found as it was (LIVE-1-ad).
-const reconciledRefresh = 10 * time.Minute
+// standingRefresh is how stale `lastReconciledAt` and `ceilingAppliedAt` may
+// grow on a config the pass found as it was (LIVE-1-ad).
+const standingRefresh = 10 * time.Minute
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is
@@ -241,7 +241,7 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
 			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint, o.Recreated,
-			o.At.Add(-reconciledRefresh)); err != nil {
+			o.At.Add(-standingRefresh)); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}
@@ -358,10 +358,13 @@ func (s PostgresAllocations) For(ctx context.Context, panelID string) ([]Allocat
 
 // appliedSQL records what the panel was read enforcing — a read, never our
 // write (invariant 36). In id order: a hot, bulk or woken turn and billing's
-// re-split all write these rows (F-027-cv).
-var appliedSQL = db.OrderedConfigUpdate(`"appliedCeilingBytes" = v.bytes,
+// re-split all write these rows (F-027-cv). A confirmation the panel repeats
+// is written once its time is standingRefresh old (LIVE-1-ad): every pass
+// rewrote every config's `ceilingAppliedAt`, which nothing reads.
+var appliedSQL = db.OrderedConfigUpdateWhere(`"appliedCeilingBytes" = v.bytes,
        "ceilingAppliedAt" = v.at`,
-	`unnest($1::text[], $2::bigint[], $3::timestamp(3)[]) AS v(id, bytes, at)`)
+	`unnest($1::text[], $2::bigint[], $3::timestamp(3)[]) AS v(id, bytes, at)`,
+	`c."appliedCeilingBytes" IS DISTINCT FROM v.bytes OR c."ceilingAppliedAt" IS NULL OR c."ceilingAppliedAt" < v.at - $4::int * interval '1 second'`)
 
 func (s PostgresAllocations) Record(ctx context.Context, rows []AppliedCeiling) error {
 	if len(rows) == 0 {
@@ -371,7 +374,7 @@ func (s PostgresAllocations) Record(ctx context.Context, rows []AppliedCeiling) 
 	for i, r := range rows {
 		ids[i], bytes[i], at[i] = r.ConfigID, r.Bytes, r.At
 	}
-	if _, err := s.DB.Exec(ctx, appliedSQL, ids, bytes, at); err != nil {
+	if _, err := s.DB.Exec(ctx, appliedSQL, ids, bytes, at, int32(standingRefresh/time.Second)); err != nil {
 		return fmt.Errorf("recording applied ceilings: %w", err)
 	}
 	return nil
