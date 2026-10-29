@@ -4,6 +4,7 @@ import { ResellerLimitReached, runWithTenant, tenantTransaction } from '@txnet-b
 
 import { errorLine } from '../log-line';
 import { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
+import { isTransientDbError } from '../prisma/transient-error';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigActionRefused, ConfigActionsService, type ConfigActor } from '../traffic/config-actions';
 import { GroupFulfilmentRefused, GroupFulfilmentService } from '../traffic/group-fulfilment';
@@ -44,8 +45,8 @@ class RunLost extends Error {}
 
 export type MigrationCommitResult = { outcome: 'none' | 'batch' | 'finished' | 'waiting' | 'lost'; items: number };
 
-/** What one item became; `lost` stops the batch. */
-type ItemResult = 'done' | 'failed' | 'moved' | 'lost';
+/** What one item became; `lost` stops the batch, `retry` (a passing database fault, LIVE-1-k) leaves it pending and ends the batch for the next tick. */
+type ItemResult = 'done' | 'failed' | 'moved' | 'lost' | 'retry';
 
 /** Each person by the source's key: found or made, and what their Telegram claim came to (F-210). */
 type People = { made: Map<string, { userId: string; created: boolean; telegram?: string }>; refused: Map<string, string> };
@@ -155,6 +156,10 @@ export class MigrationCommitService {
     for (const item of batch) {
       const result = await this.commitItem(run, item, people, variantOf, now);
       if (result === 'lost') return { outcome: 'lost', items };
+      if (result === 'retry') {
+        await this.release(run, items > 0);
+        return { outcome: 'waiting', items };
+      }
       items += 1;
     }
     await this.release(run, true);
@@ -198,6 +203,10 @@ export class MigrationCommitService {
     } catch (e) {
       if (e instanceof ItemMoved) return 'moved';
       if (e instanceof RunLost) return 'lost';
+      if (isTransientDbError(e)) {
+        this.logger.warn(`run ${run.id}: item ${item.id} left for the next tick: ${errorLine(e)}`);
+        return 'retry';
+      }
       const reason = reasonOf(e);
       if (reason === null) this.logger.error(`run ${run.id}: item ${item.id} failed: ${errorLine(e)}`);
       return this.fail(run, item, reason ?? UNEXPECTED);

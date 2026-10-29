@@ -1,4 +1,4 @@
-import { DriverType, FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus } from '@prisma/client';
+import { DriverType, FreezeMode, GrantSource, MigrationItemAction, MigrationItemOutcome, MigrationRunKind, MigrationRunStatus, Prisma } from '@prisma/client';
 import { OutboxEventType } from '@txnet-backend/shared-core';
 
 import type { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.service';
@@ -263,6 +263,26 @@ describe('MigrationCommitService — one committing run, one batch per tick', ()
     expect(db.state.run).toMatchObject({ status: MigrationRunStatus.committed, rollbackUntil: new Date(NOW.getTime() + MIGRATION_ROLLBACK_DAYS * DAY_MS), workerClaimedAt: null });
     expect(c.destroy).toHaveBeenCalledWith(RUN.tenantId, RUN.id);
     expect(db.state.outbox).toHaveLength(1);
+  });
+
+  it('leaves an item pending on a passing database fault and stops the batch for the next tick; any other fault is final (LIVE-1-k)', async () => {
+    const db = fakeDb([item('ali'), item('busy'), item('reza')]);
+    const timeout = new Prisma.PrismaClientKnownRequestError('Transaction API error: Unable to start a transaction in the given time.', { code: 'P2028', clientVersion: 'test' });
+    const c = commit(db, {
+      issue: async (_tx, input) => {
+        if (input.sourceReferenceId === 'item-busy') throw timeout;
+        return { grant: { id: `grant-${input.sourceReferenceId}` }, token: 'token' } as Awaited<ReturnType<GrantService['issue']>>;
+      },
+    });
+    expect(await c.run()).toMatchObject({ outcome: 'waiting', items: 1 });
+    expect(byId(db, 'ali')).toMatchObject({ outcome: MigrationItemOutcome.created });
+    expect(byId(db, 'busy')).toMatchObject({ outcome: MigrationItemOutcome.pending, failureReason: null });
+    expect(byId(db, 'reza')['outcome']).toBe(MigrationItemOutcome.pending);
+    expect(db.state.run).toMatchObject({ status: MigrationRunStatus.committing, workerClaimedAt: null, failedItems: 0 });
+
+    const broken = fakeDb([item('ali')]);
+    await commit(broken, { issue: async () => Promise.reject(new TypeError('a bug')) }).run();
+    expect(byId(broken, 'ali')).toMatchObject({ outcome: MigrationItemOutcome.failed, failureReason: 'unexpected' });
   });
 
   it('writes nothing while identity cannot be asked, and leaves the run to the next tick', async () => {

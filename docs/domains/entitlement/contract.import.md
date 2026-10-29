@@ -144,8 +144,8 @@ Code: `migration-commit.ts` (`MigrationCommitService`), the import shape in
     (`over_cap`, `deleted`), the sale's (`wholesale_unfunded`,
     `variant_not_assignable`, …), `import_traffic_mismatch` (the variant's
     traffic changed since the dry run planned it, rule 11), `inbound_unmapped`, `expired` (its end came since the preview), or
-    `unexpected` (logged). Identity unreachable writes nothing; the next tick
-    retries.
+    `unexpected` (logged). Identity unreachable, or a passing database fault on an item
+    (`isTransientDbError`, LIVE-1-k), writes nothing for it: pending, the next tick retries.
 21. **The end.** Nothing pending: `committed`, `rollbackUntil` = 7 days on
     (D-63), the source login destroyed. Each batch and the end write the
     page's event (rule 13).
