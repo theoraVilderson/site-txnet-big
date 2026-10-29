@@ -25,6 +25,7 @@ import { SEASON_HORIZON_DAYS, seasonCampaignKey, seasonDateRefusal, seasonRuleOf
 import { mustStateTraffic, trafficQuotaOf } from './traffic-quota';
 import { priceView, rateCardView, variantView, type VariantView } from './catalog-views';
 import { withLiveCountRows } from './live-grants';
+import { aroundTexts, drafts, itemTexts, keyHeld } from './catalog-texts-around';
 import { variantPatchData } from './variant-patch';
 
 /**
@@ -482,12 +483,6 @@ const TEXT_ITEMS = {
   }
 >;
 
-type DraftRequest = { key: string; from: string; text: string; written: string[] };
-
-/** What to draft for one text: from its source language, into every language not written. */
-const drafts = (key: string, from: string, text: ItemTexts): DraftRequest[] =>
-  text[from] ? [{ key, from, text: text[from], written: Object.keys(text) }] : [];
-
 @Injectable()
 export class CatalogAdminService {
   private readonly logger = new Logger(CatalogAdminService.name);
@@ -637,16 +632,19 @@ export class CatalogAdminService {
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
     const sourceLang = this.sourceLang(input.sourceLang, input.name, undefined);
     const nameKey = catalogTextKey(await this.keyOwner(tenantId), 'category', input.key, 'name');
-    const view = await this.within(owner, async (tx) => {
+    await this.within(owner, async (tx) => {
+      if (await keyHeld(tx.productCategory, tenantId, input.key)) throw new CatalogAdminRefused('key_taken', input.key);
+      await this.placeUnder(tx, null, tenantId, input.parentId);
+    });
+    const view = await aroundTexts(this.texts, { publish: [{ key: nameKey, text: input.name }], clear: [] }, this.logger, () => this.within(owner, async (tx) => {
       await this.placeUnder(tx, null, tenantId, input.parentId);
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
         tx.productCategory.create({ data: { tenantId, parentId: input.parentId ?? null, key: input.key, nameKey, sourceLang } }),
       )) as unknown as Row;
       const created = categoryView(row, this.texts.defaultLanguage(), pid);
       await this.audit(tx, actor, tenantId, 'catalog_category_create', 'product_category', created.id, null, { ...created, name: input.name });
-      await this.texts.publishSources([{ key: nameKey, text: input.name }]);
       return created;
-    });
+    }));
     if (input.translateAll) void this.texts.draftOthers(drafts(nameKey, sourceLang, input.name));
     return view;
   }
@@ -655,11 +653,17 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     const pid = await this.platformId();
     const renaming = patch.name !== undefined || patch.sourceLang !== undefined;
-    let sourceLang: string | null = null;
-    const view = await this.within(owner, async (tx) => {
+    // Read and checked first, so a refusal publishes nothing; the name goes out before the write (LIVE-1-j).
+    const { sourceLang, nameKey } = await this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'productCategory', 'category_not_found', actor, id, owner);
-      sourceLang = renaming ? this.sourceLang(patch.sourceLang ?? sourceOf(before, this.texts.defaultLanguage()), patch.name ?? {}, undefined) : null;
-      const nameKey = catalogTextKey(await this.keyOwner(before['tenantId'] as string), 'category', before['key'] as string, 'name');
+      if (patch.parentId !== undefined) await this.placeUnder(tx, id, before['tenantId'] as string, patch.parentId);
+      return {
+        sourceLang: renaming ? this.sourceLang(patch.sourceLang ?? sourceOf(before, this.texts.defaultLanguage()), patch.name ?? {}, undefined) : null,
+        nameKey: catalogTextKey(await this.keyOwner(before['tenantId'] as string), 'category', before['key'] as string, 'name'),
+      };
+    });
+    const view = await aroundTexts(this.texts, { publish: patch.name ? [{ key: nameKey, text: patch.name }] : [], clear: [] }, this.logger, () => this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'productCategory', 'category_not_found', actor, id, owner);
       if (patch.parentId !== undefined) await this.placeUnder(tx, id, before['tenantId'] as string, patch.parentId);
       const data = {
         ...(patch.parentId !== undefined ? { parentId: patch.parentId } : {}),
@@ -670,9 +674,8 @@ export class CatalogAdminService {
       const row = (await this.refuseCycle(id, () => tx.productCategory.update({ where: { id }, data }))) as unknown as Row;
       const updated = categoryView(row, this.texts.defaultLanguage(), pid);
       await this.audit(tx, actor, updated.tenantId, 'catalog_category_update', 'product_category', id, categoryView(before, this.texts.defaultLanguage(), pid), { ...updated, name: patch.name });
-      if (patch.name) await this.texts.publishSources([{ key: nameKey, text: patch.name }]);
       return updated;
-    });
+    }));
     if (patch.translateAll && patch.name && sourceLang) void this.texts.draftOthers(drafts(view.nameKey, sourceLang, patch.name));
     return view;
   }
@@ -816,10 +819,12 @@ export class CatalogAdminService {
     const pid = await this.platformId();
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
     const sourceLang = this.sourceLang(input.sourceLang, input.name, input.description);
-    const texts = this.itemTexts('capability', await this.keyOwner(tenantId), input.key, sourceLang, input.name, input.description);
-    const view = await this.within(owner, async (tx) => {
-      const clash = await tx.productCapability.findFirst({ where: tenantId === pid ? { key: input.key } : { key: input.key, OR: [{ tenantId: pid }, { tenantId }] } });
-      if (clash) throw new CatalogAdminRefused('key_taken', input.key);
+    const texts = itemTexts('capability', await this.keyOwner(tenantId), input.key, sourceLang, input.name, input.description);
+    const clash = (tx: Prisma.TransactionClient) => tx.productCapability.findFirst({ where: tenantId === pid ? { key: input.key } : { key: input.key, OR: [{ tenantId: pid }, { tenantId }] } });
+    // Asked before the texts go out (LIVE-1-j), and again inside, where the write settles a race.
+    if (await this.within(owner, clash)) throw new CatalogAdminRefused('key_taken', input.key);
+    const view = await aroundTexts(this.texts, texts, this.logger, () => this.within(owner, async (tx) => {
+      if (await clash(tx)) throw new CatalogAdminRefused('key_taken', input.key);
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
         tx.productCapability.create({
           data: { tenantId, key: input.key, nameKey: texts.nameKey, descriptionKey: input.description ? texts.descriptionKey : null, sourceLang },
@@ -831,10 +836,8 @@ export class CatalogAdminService {
         name: input.name,
         description: input.description ?? null,
       });
-      await this.texts.publishSources(texts.publish);
-      await this.texts.clear(texts.clear);
       return created;
-    });
+    }));
     if (input.translateAll) void this.texts.draftOthers(texts.draft);
     return view;
   }
@@ -844,14 +847,15 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     const pid = await this.platformId();
     const renaming = patch.name !== undefined || patch.sourceLang !== undefined;
-    let draft: DraftRequest[] = [];
-    const view = await this.within(owner, async (tx) => {
+    // Read and checked first, so a refusal publishes nothing; the texts go out before the write (LIVE-1-j).
+    const { sourceLang, texts } = await this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'productCapability', 'capability_not_found', actor, id, owner);
       const current = sourceOf(before, this.texts.defaultLanguage());
-      const sourceLang =
-        renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
-      const texts = this.itemTexts('capability', await this.keyOwner(before['tenantId'] as string), before['key'] as string, sourceLang, patch.name, patch.description);
-      draft = texts.draft;
+      const lang = renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
+      return { sourceLang: lang, texts: itemTexts('capability', await this.keyOwner(before['tenantId'] as string), before['key'] as string, lang, patch.name, patch.description) };
+    });
+    const view = await aroundTexts(this.texts, texts, this.logger, () => this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'productCapability', 'capability_not_found', actor, id, owner);
       const data = {
         ...(renaming ? { nameKey: texts.nameKey, sourceLang } : {}),
         ...(patch.description !== undefined ? { descriptionKey: patch.description ? texts.descriptionKey : null } : {}),
@@ -862,11 +866,9 @@ export class CatalogAdminService {
         name: patch.name,
         description: patch.description,
       });
-      await this.texts.publishSources(texts.publish);
-      await this.texts.clear(texts.clear);
       return updated;
-    });
-    if (patch.translateAll) void this.texts.draftOthers(draft);
+    }));
+    if (patch.translateAll) void this.texts.draftOthers(texts.draft);
     return view;
   }
 
@@ -963,8 +965,14 @@ export class CatalogAdminService {
     const pid = await this.platformId();
     const tenantId = await this.ownerOfNew(actor, input.tenantId);
     const sourceLang = this.sourceLang(input.sourceLang, input.name, input.description);
-    const texts = this.itemTexts('product', await this.keyOwner(tenantId), input.key, sourceLang, input.name, input.description);
-    const view = await this.within(owner, async (tx) => {
+    const texts = itemTexts('product', await this.keyOwner(tenantId), input.key, sourceLang, input.name, input.description);
+    // Checked before the texts go out, so a refusal publishes nothing (LIVE-1-j); the write checks again.
+    await this.within(owner, async (tx) => {
+      if (await keyHeld(tx.product, tenantId, input.key)) throw new CatalogAdminRefused('key_taken', input.key);
+      await this.usableCategories(tx, input.categoryIds, tenantId);
+      await this.knownCapabilities(tx, tenantId, input.featureKeys);
+    });
+    const view = await aroundTexts(this.texts, texts, this.logger, () => this.within(owner, async (tx) => {
       await this.usableCategories(tx, input.categoryIds, tenantId);
       await this.knownCapabilities(tx, tenantId, input.featureKeys);
       const row = (await this.refuseDuplicate('key_taken', input.key, () =>
@@ -988,10 +996,8 @@ export class CatalogAdminService {
         name: input.name,
         description: input.description ?? null,
       });
-      await this.texts.publishSources(texts.publish);
-      await this.texts.clear(texts.clear);
       return created;
-    });
+    }));
     if (input.translateAll) void this.texts.draftOthers(texts.draft);
     return view;
   }
@@ -1001,18 +1007,21 @@ export class CatalogAdminService {
     const { owner } = await this.access(actor);
     const pid = await this.platformId();
     const renaming = patch.name !== undefined || patch.sourceLang !== undefined;
-    let draft: DraftRequest[] = [];
-    const view = await this.within(owner, async (tx) => {
+    // Read and checked first, so a refusal publishes nothing; the texts go out before the write (LIVE-1-j).
+    const { sourceLang, texts } = await this.within(owner, async (tx) => {
+      const before = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
+      if (patch.categoryIds) await this.usableCategories(tx, patch.categoryIds, before['tenantId'] as string);
+      await this.knownCapabilities(tx, before['tenantId'] as string, patch.featureKeys);
+      const current = sourceOf(before, this.texts.defaultLanguage());
+      const lang = renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
+      return { sourceLang: lang, texts: itemTexts('product', await this.keyOwner(before['tenantId'] as string), before['key'] as string, lang, patch.name, patch.description) };
+    });
+    const view = await aroundTexts(this.texts, texts, this.logger, () => this.within(owner, async (tx) => {
       const before = await this.managed(tx, 'product', 'product_not_found', actor, id, owner);
       const tenantId = before['tenantId'] as string;
       const categoriesBefore = (await this.categoryIdsOf(tx, [id])).get(id) ?? [];
       if (patch.categoryIds) await this.usableCategories(tx, patch.categoryIds, tenantId);
       await this.knownCapabilities(tx, tenantId, patch.featureKeys);
-      const current = sourceOf(before, this.texts.defaultLanguage());
-      const sourceLang =
-        renaming || patch.description ? this.sourceLang(patch.sourceLang ?? current, patch.name ?? (renaming ? {} : undefined), patch.description) : current;
-      const texts = this.itemTexts('product', await this.keyOwner(before['tenantId'] as string), before['key'] as string, sourceLang, patch.name, patch.description);
-      draft = texts.draft;
       const data: Prisma.ProductUpdateInput = {
         ...(renaming ? { nameKey: texts.nameKey, sourceLang } : {}),
         ...(patch.description !== undefined ? { descriptionKey: patch.description ? texts.descriptionKey : null } : {}),
@@ -1029,11 +1038,9 @@ export class CatalogAdminService {
         name: patch.name,
         description: patch.description,
       });
-      await this.texts.publishSources(texts.publish);
-      await this.texts.clear(texts.clear);
       return updated;
-    });
-    if (patch.translateAll) void this.texts.draftOthers(draft);
+    }));
+    if (patch.translateAll) void this.texts.draftOthers(texts.draft);
     return view;
   }
 
@@ -1673,33 +1680,6 @@ export class CatalogAdminService {
       if (isCategoryCycle(e)) throw new CatalogAdminRefused('category_cycle', id);
       throw e;
     }
-  }
-
-  /** A product's or capability's derived keys, the texts a create or patch publishes or clears, and what to draft after. */
-  private itemTexts(
-    kind: 'product' | 'capability',
-    keyOwner: string | null,
-    key: string,
-    sourceLang: string,
-    name: ItemTexts | undefined,
-    description: ItemTexts | null | undefined,
-  ) {
-    const nameKey = catalogTextKey(keyOwner, kind, key, 'name');
-    const descriptionKey = catalogTextKey(keyOwner, kind, key, 'description');
-    const publish: { key: string; text: ItemTexts }[] = [];
-    const draft: DraftRequest[] = [];
-    const clear: string[] = [];
-    if (name) {
-      publish.push({ key: nameKey, text: name });
-      draft.push(...drafts(nameKey, sourceLang, name));
-    }
-    if (description) {
-      publish.push({ key: descriptionKey, text: description });
-      draft.push(...drafts(descriptionKey, sourceLang, description));
-    } else if (description === null) {
-      clear.push(descriptionKey);
-    }
-    return { nameKey, descriptionKey, publish, draft, clear };
   }
 
   /**

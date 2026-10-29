@@ -113,7 +113,13 @@ function pools(db: object) {
           .map(([op, fn]) => [op, (...args: unknown[]) => (calls.push(`${name}:${model}.${op}`), (fn as (...a: unknown[]) => unknown)(...args))]),
       );
     }
-    client['$transaction'] = async (fn: (tx: unknown) => unknown) => fn(client);
+    // Its edges logged, so a test can see what ran inside and what ran outside (LIVE-1-j).
+    client['$transaction'] = async (fn: (tx: unknown) => unknown) => {
+      calls.push(`${name}:begin`);
+      const out = await fn(client);
+      calls.push(`${name}:commit`);
+      return out;
+    };
     return client;
   };
   return { app: pool('app'), all: pool('all'), calls };
@@ -318,14 +324,20 @@ function build() {
   const { app, all, calls } = pools(db);
   // What reached locale-service, in order. The text rules themselves are catalog-texts.spec.ts.
   const texts: string[] = [];
+  let textsDown = false;
+  let clearFails = false;
   const textService = {
     languages: () => ['de', 'en', 'fa'],
     defaultLanguage: () => 'fa',
     publishSources: async (t: { key: string; text: Record<string, string> }[]) => {
+      if (textsDown) throw new CatalogAdminRefused('texts_unavailable');
       writes.push('texts.publish');
+      calls.push('texts.publish');
       texts.push(...t.map((x) => `publish ${x.key} ${Object.entries(x.text).map(([l, v]) => `${l}=${v}`).join(' ')}`));
     },
     clear: async (keys: string[]) => {
+      calls.push('texts.clear');
+      if (clearFails) throw new Error('locale-service gone');
       texts.push(...keys.map((k) => `clear ${k}`));
     },
     draftOthers: async (t: { key: string; from: string; written: string[] }[]) => {
@@ -344,7 +356,8 @@ function build() {
       return Object.keys(t).length;
     },
   };
-  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls, product, links, refile };
+  const locale = { down: () => void (textsDown = true), clearFails: () => void (clearFails = true) };
+  return { service: inTenant(new CatalogAdminService(app as never, all as never, textService as unknown as CatalogTextService)), db, writes, audit, texts, calls, product, links, refile, locale };
 }
 
 async function refusal(run: () => Promise<unknown>): Promise<CatalogAdminRefused> {
@@ -571,10 +584,43 @@ describe('CatalogAdminService — names (F-1533-d)', () => {
     expect(texts).toEqual([`publish ${mine.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`, `publish ${platform.nameKey} fa=وی‌پی‌ان پرو en=VPN Pro`]);
   });
 
-  it('writes the name inside the transaction, after the row and its audit', async () => {
-    const { service, writes } = build();
+  it('publishes the name before the transaction opens, then writes the row and its audit (C-29, LIVE-1-j)', async () => {
+    const { service, writes, calls } = build();
     await service.createCategory(actor(RESELLER), { key: 'games', name: { fa: 'بازی' } });
-    expect(writes).toEqual(['productCategory.create', 'audit', 'texts.publish']);
+    expect(writes).toEqual(['texts.publish', 'productCategory.create', 'audit']);
+    const create = calls.indexOf('app:productCategory.create');
+    expect(calls.lastIndexOf('app:begin', create)).toBeGreaterThan(calls.indexOf('texts.publish'));
+  });
+
+  it("publishes a product's names outside every transaction, and refuses a taken key before publishing anything (LIVE-1-j)", async () => {
+    const { service, calls, texts } = build();
+    await service.createProduct(actor(RESELLER), NEW_PRODUCT);
+    const publish = calls.indexOf('texts.publish');
+    // No transaction is open while locale-service is asked: every begin before it has its commit before it too.
+    expect(calls.slice(0, publish).filter((c) => c.endsWith(':begin')).length).toBe(calls.slice(0, publish).filter((c) => c.endsWith(':commit')).length);
+    expect(calls.indexOf('app:product.create')).toBeGreaterThan(publish);
+
+    texts.length = 0;
+    expect((await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, key: 'vpn_alpha' }))).reason).toBe('key_taken');
+    expect(texts).toEqual([]);
+  });
+
+  it('writes nothing when locale-service is down: texts_unavailable before the row (LIVE-1-j)', async () => {
+    const { service, writes, locale } = build();
+    locale.down();
+    expect((await refusal(() => service.createProduct(actor(RESELLER), NEW_PRODUCT))).reason).toBe('texts_unavailable');
+    expect((await refusal(() => service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { name: { fa: 'آلفا' } }))).reason).toBe('texts_unavailable');
+    expect(writes).toEqual([]);
+  });
+
+  it("clears a dropped description after the commit, and a failed clear costs the text, never the write (LIVE-1-j)", async () => {
+    const { service, calls, locale } = build();
+    locale.clearFails();
+    const view = await service.updateProduct(actor(RESELLER), RESELLER_PRODUCT, { name: { fa: 'آلفا' }, description: null });
+    expect(view.descriptionKey).toBeNull();
+    const update = calls.indexOf('app:product.update');
+    expect(calls.indexOf('texts.publish')).toBeLessThan(calls.lastIndexOf('app:begin', update));
+    expect(calls.indexOf('texts.clear')).toBeGreaterThan(calls.indexOf('app:commit', update));
   });
 
   it('re-keys an edited name to the derived key, and removes a description set to null', async () => {
@@ -998,7 +1044,8 @@ describe('CatalogAdminService — capabilities are catalog rows (F-114-f-a, ADR-
     await expect(service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, featureKeys: ['vpn.access', 'alpha.extra'] })).resolves.toMatchObject({
       featureKeys: ['vpn.access', 'alpha.extra'],
     });
-    expect(locks(calls, 'FOR SHARE')).toHaveLength(1);
+    // Once in the check before the texts go out (LIVE-1-j), once held by the write.
+    expect(locks(calls, 'FOR SHARE')).toHaveLength(2);
     writes.length = 0;
     const foreign = await refusal(() => service.createProduct(actor(RESELLER), { ...NEW_PRODUCT, key: 'vpn_x', featureKeys: ['vpn.access', 'other.only'] }));
     expect([foreign.reason, foreign.message]).toEqual(['capability_unknown', expect.stringContaining('other.only')]);
