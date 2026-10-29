@@ -183,29 +183,18 @@ def drop_queued(work: Path) -> int:
     return count
 
 
-# Redis renames its process, so its password is read from the StatefulSet and
-# handed over as stdin's first line: never on a command line, ours or the pod's.
-REDIS_AUTH = 'IFS= read -r pw; export REDISCLI_AUTH="$pw"; '
-
-
-def redis_password(kubectl: list[str]) -> str:
-    args = json.loads(subprocess.run([*kubectl, "get", "statefulset", "memory-data", "-o",
-                                      "jsonpath={.spec.template.spec.containers[0].args}"],
-                                     check=True, text=True, capture_output=True).stdout)
-    return args[args.index("--requirepass") + 1]
-
-
-def redis(kubectl: list[str], password: str, script: str, stdin: str = "") -> str:
-    argv = [*kubectl, "exec", "-i", "memory-data-0", "-c", "memory-data", "--", "sh", "-c", REDIS_AUTH + script]
-    return subprocess.run(argv, input=f"{password}\n{stdin}", check=True, text=True, capture_output=True).stdout
+def redis(kubectl: list[str], script: str, stdin: str = "") -> str:
+    """script in memory-data's pod. Its redis-cli reads the password from the pod's
+    own REDISCLI_AUTH (data.yml, K5): none passes through here."""
+    argv = [*kubectl, "exec", "-i", "memory-data-0", "-c", "memory-data", "--", "sh", "-c", script]
+    return subprocess.run(argv, input=stdin, check=True, text=True, capture_output=True).stdout
 
 
 def scrub(psql, kubectl: list[str], work: Path | None) -> None:
     psql(scrub_sql())
-    password = redis_password(kubectl)
-    keys = personal_keys(redis(kubectl, password, "redis-cli --no-auth-warning --scan").splitlines())
+    keys = personal_keys(redis(kubectl, "redis-cli --no-auth-warning --scan").splitlines())
     if keys:
-        redis(kubectl, password, "tr '\\n' '\\0' | xargs -0 -r -n 500 redis-cli --no-auth-warning unlink >/dev/null",
+        redis(kubectl, "tr '\\n' '\\0' | xargs -0 -r -n 500 redis-cli --no-auth-warning unlink >/dev/null",
               stdin="\n".join(keys) + "\n")
     dropped = drop_queued(work) if work else 0
     print(f"people: {len(COLUMNS)} columns faked, {len(CLEARED)} table emptied, "

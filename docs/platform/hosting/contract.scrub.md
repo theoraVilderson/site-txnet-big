@@ -49,8 +49,8 @@ mistake in either reaches no real panel and no real person.
   families (after the client's `txnet:<app>:v<n>:` prefix) and any key with a
   segment that is a `+` phone, digits alone or an email are deleted. A UUID's
   digits don't count: deleting an outbox `processed` key would send a notice
-  twice. Redis's password comes from the StatefulSet as stdin, never as an
-  argument. RabbitMQ's queued messages, which the restore would publish back
+  twice. `redis-cli` runs in memory-data's pod and reads the pod's own
+  `REDISCLI_AUTH` (`data.yml`, K5), so no password passes through the scrub. RabbitMQ's queued messages, which the restore would publish back
   once the services start, are dropped: they were addressed to real people.
   Message bodies (support tickets, notices) are content, not a contact, and stay.
 - **The guard.** It reads every panel row and the vault. It refuses, naming
@@ -84,3 +84,10 @@ holding real values before (57 OTP codes, 27 phones, cards, shebas, chat ids),
 none after, and no contact column unknown. Redis's scan picked 4 of 3402 keys
 (`bot:session`, `bot:lang`); the first pattern, which matched any 10-digit run,
 would have caught outbox UUIDs. The delete path was checked on a key made for it.
+Live, 2026-10-29, `twin --from 21c9d8f8` over production's 08:51 bundle: panels
+6 pointed and 4 wiped; people 13 columns faked, OTP emptied, no Redis key or
+queued message to drop; the guard clean before the services and again after
+the new release's migration; ready 35/35, 6 panels collected, roll 0 of 2522,
+stores back. Its first try stopped at the scrub with every service down:
+production's memory-data has no `--requirepass` argument (K5), so redis-cli now
+uses the pod's own `REDISCLI_AUTH`.
