@@ -19,7 +19,6 @@ STATE_VOLUMES = frozenset({
 REBUILT_VOLUMES = frozenset({
     "pg_socket",              # a socket directory, recreated at start
     "locale_cache",           # snapshots locale-service serves again (H17)
-    "translator_models",      # downloaded again on first start
     "translator_llm_models",
 })
 

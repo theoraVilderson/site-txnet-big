@@ -384,6 +384,18 @@ class RepoModelTest(unittest.TestCase):
     def test_the_production_model_renders(self):
         self.assertEqual(self.result.returncode, 0, self.result.stderr)
 
+    # OPS-1-ai (ADR-0165, ADR-0166): staging, with no route out, waited on the
+    # translator downloading its models until the deploy set back. A new server
+    # or a national internet would too: the models are in our image, not fetched.
+    def test_the_translator_starts_with_no_internet(self):
+        d = next(o for o in self.objects if o["kind"] == "Deployment" and o["metadata"]["name"] == "translator")
+        c = d["spec"]["template"]["spec"]["containers"][0]
+        self.assertTrue(c["image"].startswith("registry.") or "/txnet/" in c["image"], c["image"])
+        # The image says it (its one home); the pod must not say otherwise.
+        self.assertIn("ENV LT_UPDATE_MODELS=false", (REPO / "dev-docker/translator/Dockerfile").read_text())
+        self.assertNotIn("LT_UPDATE_MODELS", {e["name"] for e in c.get("env", [])})
+        self.assertEqual([m["mountPath"] for m in c.get("volumeMounts", []) if ".local" in m["mountPath"]], [])
+
     # H15, H24 (OPS-1-aa): every container is checked, so every rollout waits on health (K6).
     def test_every_container_is_probed(self):
         unprobed = [c["name"] for o in self.objects if o["kind"] in ("Deployment", "StatefulSet")

@@ -178,7 +178,7 @@ campaign texts (`message`).
 | The first engine that drafts wins; a stopped LLM falls through to LibreTranslate | `translator.spec.ts` |
 | `kind: 'message'` prompts the LLM for a customer message (tone, line breaks, links kept), never a store name; the chain forwards it | `translator.spec.ts` |
 | Output is a **draft** only — nothing publishes it but a human (ADR-0050 decision 3) | callers (F-1533-d) |
-| No language list in code: pairs come from the engine, languages from locale-service; which models load is `TRANSLATOR_LANGUAGES` | §1.1 |
+| No language list in code: pairs come from the engine, languages from locale-service; which models load is `dev-docker/translator/languages`, built into the translator's image (OPS-1-ai: it starts with no internet) | §1.1 |
 
 ## Item text writer (`ItemTextWriter`, ADR-0154 decision 6)
 

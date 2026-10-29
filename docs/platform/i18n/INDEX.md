@@ -10,6 +10,7 @@ source:
   - txnet-backend/shared-core/src/lib/i18n/**
   - site-pwa/src/generated/i18n-keys.ts
   - auth-handler/internal/i18nkeys/**
+  - dev-docker/translator/**
 owns_tables: []
 depends_on: []
 updated: 2026-09-11

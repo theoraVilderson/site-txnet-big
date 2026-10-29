@@ -46,22 +46,23 @@ services:
   # ===========================================================================
   # translator — self-hosted LibreTranslate (Argos models). Drafts catalog text
   # for every language an admin did not write; a human publishes it (ADR-0050).
-  # Private network only; models download once into the volume. Which models
-  # load is deployment data (TRANSLATOR_LANGUAGES), never code (§1.1): add a
-  # language's code there when the language is added to locales/.
+  # Private network only. Its models are built into our image, so it starts
+  # with no route out (OPS-1-ai). Which models load is deployment data, never
+  # code (§1.1): add a language's code to translator/languages when the
+  # language is added to locales/; that rebuilds the image (R12).
   # ===========================================================================
   translator:
     extends: { file: compose/logging.yml, service: rotated-logs }
-    image: ${DOCKER_REGISTRY}/libretranslate/libretranslate:v1.6.2
+    build:
+      context: ./translator
+      args:
+        DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+    image: txnet/translator:1.6.2
     container_name: ${STACK_NAME:-txnet}-translator
     mem_reservation: 512m # the k8s request: measured peak + headroom (K19)
     mem_limit: 1536m
     restart: unless-stopped
-    volumes:
-      - translator_models:/home/libretranslate/.local
     environment:
-      - LT_LOAD_ONLY=${TRANSLATOR_LANGUAGES:-en,fa}
-      - LT_UPDATE_MODELS=true
       - LT_DISABLE_WEB_UI=true
       - LT_THREADS=${TRANSLATOR_THREADS:-2}
     healthcheck:

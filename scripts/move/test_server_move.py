@@ -29,7 +29,7 @@ def compose_config(volumes, binds=None):
 
 class StateVolumes(unittest.TestCase):
     def test_state_is_moved_and_rebuildable_volumes_are_not(self):
-        config = compose_config(["postgres_data", "pg_socket", "redis_vol_internal", "translator_models"])
+        config = compose_config(["postgres_data", "pg_socket", "redis_vol_internal", "locale_cache"])
         self.assertEqual(
             mp.state_volumes(config),
             {"postgres_data": "devtxnet_postgres_data", "redis_vol_internal": "devtxnet_redis_vol_internal"},

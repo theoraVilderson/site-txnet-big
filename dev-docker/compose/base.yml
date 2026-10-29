@@ -19,7 +19,6 @@ volumes:
   # main-db's socket, shared with pg-backup so pgBackRest connects locally (H3).
   pg_socket:
   rabbitmq_data:
-  translator_models:
   translator_llm_models:
   locales_runtime:
   # Every Node service's and auth-handler's saved locale snapshots (H17): one volume, files named by scope and language.

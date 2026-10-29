@@ -61,7 +61,6 @@ DATA_NODE_LABEL = ("txnet.io/data", "true")
 VOLUME_SIZES = {
     "postgres_data": "50Gi",
     "object_storage": "20Gi",
-    "translator_models": "10Gi",
     "translator_llm_models": "10Gi",
     "rabbitmq_data": "5Gi",
     "redis_vol_internal": "2Gi",
