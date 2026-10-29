@@ -154,6 +154,13 @@ class Restore(unittest.TestCase):
     def test_a_move_still_reads_all_expiring_keys_gone_as_a_flush(self):
         self.assertEqual(len(mf.compare({"redis:volatile": 8000}, {"redis:volatile": 0})), 1)
 
+    def test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services(self):
+        # ADR-0168: staging's copy of production never starts with a real panel in it
+        import bundle_restore as br
+        br.run_scrub([sys.executable, "-c", "pass"], say=lambda *a: None)
+        with self.assertRaisesRegex(br.Abort, "stays stopped"):
+            br.run_scrub([sys.executable, "-c", "raise SystemExit(1)"], say=lambda *a: None)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -77,18 +77,26 @@ class AtTest(unittest.TestCase):
     # Production's own commit cannot start offline until OPS-1-ai reaches it; a
     # newer commit is restored into, as B9 allows only when asked.
     def test_a_newer_commit_is_asked_for_by_name(self):
-        argv, _ = kd.restore_command(Path("/t"), Path("/b"), Path("/p"), Path("/m"), newer_code=True)
+        argv, _ = kd.restore_command(Path("/t"), Path("/b"), Path("/p"), Path("/m"), "h", newer_code=True)
         self.assertEqual(argv[-1], "--allow-newer-code")
-        argv, _ = kd.restore_command(Path("/t"), Path("/b"), Path("/p"), Path("/m"))
+        argv, _ = kd.restore_command(Path("/t"), Path("/b"), Path("/p"), Path("/m"), "h")
         self.assertNotIn("--allow-newer-code", argv)
 
 
 class RestoreTest(unittest.TestCase):
     def test_restore_replaces_staging_and_keeps_its_safety_bundle_in_memory(self):
-        argv, env = kd.restore_command(Path("/shm/tree"), Path("/shm/b.gpg"), Path("/shm/p"), Path("/shm"))
-        self.assertEqual(argv, ["python3", "/shm/tree/scripts/bundle/backup.py", "restore", "/shm/b.gpg",
-                                "--stack", "k8s", "--passphrase-file", "/shm/p", "--replace"])
+        argv, env = kd.restore_command(Path("/shm/tree"), Path("/shm/b.gpg"), Path("/shm/p"), Path("/shm"), "2.144.31.149")
+        self.assertEqual(argv[:9], ["python3", f"{kd.ROOT}/scripts/bundle/backup.py", "restore", "/shm/b.gpg",
+                                    "--stack", "k8s", "--passphrase-file", "/shm/p", "--replace"])
         self.assertEqual(env["BACKUP_BUNDLE_DIR"], "/shm/safety")
+
+    # ADR-0168 point 1: the copy is scrubbed before any service of staging starts.
+    # This checkout's restore runs it: production's tree may predate --scrub.
+    def test_the_restore_scrubs_the_tree_it_restores_into_before_the_services(self):
+        argv, _ = kd.restore_command(Path("/shm/tree"), Path("/shm/b.gpg"), Path("/shm/p"), Path("/shm"), "2.144.31.149")
+        self.assertEqual(argv[argv.index("--checkout") + 1], "/shm/tree")
+        scrub = argv[argv.index("--scrub") + 1]
+        self.assertIn(f"{kd.ROOT}/tools/k8s_staging_scrub.py scrub --prod-host 2.144.31.149", scrub)
 
 
 class WorktreeTest(unittest.TestCase):

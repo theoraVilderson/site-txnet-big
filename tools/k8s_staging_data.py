@@ -15,6 +15,7 @@ place sops reads it), the worktree with its rendered manifests and env files.
     STAGING_PROD_SSH_KEY  the identity that reaches it
 """
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -57,6 +58,11 @@ class Production:
         if missing:
             raise StagingError(f"set {', '.join(missing)} (in .env.dev): production's server is reached by ssh")
         return cls(env[HOST_VAR], env[KEY_VAR])
+
+    @property
+    def address(self) -> str:
+        """The server's own host, without ssh's user."""
+        return self.host.rpartition("@")[2]
 
     def ssh(self, command: str) -> list[str]:
         return ["ssh", "-i", self.key, "-o", "BatchMode=yes", self.host, command]
@@ -133,13 +139,17 @@ def rendered_images(dirs) -> list[str]:
     return sorted(found)
 
 
-def restore_command(tree: Path, bundle: Path, passphrase: Path, memory: Path,
+def restore_command(tree: Path, bundle: Path, passphrase: Path, memory: Path, prod_host: str,
                     newer_code: bool = False) -> tuple[list[str], dict]:
     """B10's restore into staging. --replace: the deploy seeded it, so it "holds data";
     the safety bundle that makes first stays in memory with the rest. `newer_code`:
-    the tree is a later commit than the bundle's, which B9 allows only when asked."""
-    argv = ["python3", f"{tree}/scripts/bundle/backup.py", "restore", str(bundle),
-            "--stack", "k8s", "--passphrase-file", str(passphrase), "--replace"]
+    the tree is a later commit than the bundle's, which B9 allows only when asked.
+    This checkout's restore, into the tree: its --scrub runs before any service
+    starts (ADR-0168), and production's commit may predate it."""
+    scrub = shlex.join(["python3", f"{ROOT}/tools/k8s_staging_scrub.py", "scrub", "--prod-host", prod_host])
+    argv = ["python3", f"{ROOT}/scripts/bundle/backup.py", "restore", str(bundle),
+            "--stack", "k8s", "--passphrase-file", str(passphrase), "--replace",
+            "--checkout", str(tree), "--scrub", scrub]
     return argv + (["--allow-newer-code"] if newer_code else []), {"BACKUP_BUNDLE_DIR": str(memory / "safety")}
 
 
@@ -211,7 +221,7 @@ def bring_production(docker, prod: Production, at: str | None) -> None:
     env = staging_env(docker)
     bring_images(docker, tree, env)
     subprocess.run([f"{tree}/scripts/prod.k8s.sh", "deploy"], env=env, check=True)
-    argv, extra = restore_command(tree, bundle, passphrase, SHM_DIR, newer_code=bool(at))
+    argv, extra = restore_command(tree, bundle, passphrase, SHM_DIR, prod.address, newer_code=bool(at))
     subprocess.run(argv, env={**env, **extra}, check=True)
 
 

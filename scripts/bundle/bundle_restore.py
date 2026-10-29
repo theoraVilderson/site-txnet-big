@@ -42,6 +42,7 @@ class Abort(Exception):
 class Options:
     replace_here: bool = False      # this server has data and may lose it (a safety bundle is made first)
     allow_newer_code: bool = False  # the checkout is newer than the bundle: migrations run after
+    scrub: list = dataclasses.field(default_factory=list)  # argv run between the stores and the services
 
 
 def open_bundle(path, passphrase):
@@ -179,11 +180,21 @@ def restore(host, root, work, manifest, passphrase, options, say):
     say("stopping the stack; the platform is down from here")
     host.stop_all()
     restore_stores(host, work, manifest, say)
+    if options.scrub:
+        run_scrub(options.scrub, say)
     start(host, work, relation, say)
     if had_data and host.has_service("pg-backup"):
         # a new server's pg-backup makes its own first full on its first start (H3); a second would hit its lock
         host.start_full_backup()
         say("a full pgBackRest backup has started: the baseline after this restore")
+
+
+def run_scrub(argv, say):
+    """argv against the restored stores before any service reads them (staging's
+    copy of production, ADR-0168); a failure stops the restore with every service down."""
+    say("the stores are restored and no service runs: %s", " ".join(argv))
+    if subprocess.run(argv).returncode != 0:
+        raise Abort("the scrub refused this copy; every service stays stopped")
 
 
 def restore_stores(host, work, manifest, say):

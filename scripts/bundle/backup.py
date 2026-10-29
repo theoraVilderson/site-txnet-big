@@ -20,6 +20,7 @@ import argparse
 import getpass
 import glob
 import os
+import shlex
 import shutil
 import sys
 import tempfile
@@ -105,18 +106,22 @@ def main(argv=None):
     parser.add_argument("--passphrase-file", help="the bundle's passphrase, when this server does not hold it yet")
     parser.add_argument("--replace", action="store_true", help="restore over this server's data (a safety bundle first)")
     parser.add_argument("--allow-newer-code", action="store_true", help="restore into a checkout newer than the bundle")
+    parser.add_argument("--checkout", default=ROOT, help="restore: the checkout the stack runs from, when not this one")
+    parser.add_argument("--scrub", help="restore: a command run after the stores and before any service starts; "
+                        "its failure leaves every service stopped")
     args = parser.parse_args(argv)
     if args.command in ("inspect", "verify", "restore") and not args.file:
         parser.error("%s needs the bundle file" % args.command)
-    host = bs.open_stack(ROOT, args.stack)
-    options = br.Options(replace_here=args.replace, allow_newer_code=args.allow_newer_code)
+    host = bs.open_stack(args.checkout, args.stack)
+    options = br.Options(replace_here=args.replace, allow_newer_code=args.allow_newer_code,
+                         scrub=shlex.split(args.scrub or ""))
     actions = {
         "now": lambda: make_now(host),
         "list": list_bundles,
         "install-timers": lambda: say("enabled: %s", ", ".join(bt.install(ROOT, args.stack))),
         "inspect": lambda: open_and(args, host, lambda work, manifest, _: print_manifest(manifest)),
         "verify": lambda: open_and(args, host, lambda work, manifest, _: [say(line) for line in br.drill(host, work, manifest)]),
-        "restore": lambda: open_and(args, host, lambda work, manifest, pf: br.restore(host, ROOT, work, manifest, pf, options, say)),
+        "restore": lambda: open_and(args, host, lambda work, manifest, pf: br.restore(host, args.checkout, work, manifest, pf, options, say)),
     }
     try:
         actions[args.command]()

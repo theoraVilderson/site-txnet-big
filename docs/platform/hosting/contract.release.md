@@ -159,7 +159,7 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   OPS-1-ah-b): production's newest bundle and passphrase, read over ssh
   (`STAGING_PROD_SSH`, `_KEY` in `.env.dev`), sum-checked; deployed at the
   bundle's commit, or `--at` a later one, from a worktree; then B10's restore
-  with `--replace`. Everything that opens production's secrets — the bundle and
+  with `--replace`, scrubbed before any service starts (R16). Everything that opens production's secrets — the bundle and
   what it decrypts to, the passphrase, the worktree, the safety bundle — lives in
   `/dev/shm/txnet-staging`, and `/etc/txnet/age.key` is a link into it, never a
   file. A failed `restore` and `down` remove all of it. Images the registry
@@ -173,9 +173,10 @@ on the dev host: `scripts/staging.sh up|import|status|down`
 - **The twin run** (`twin [--from REF] [--to REF]`, `tools/k8s_staging_twin.py`,
   OPS-1-ah-c): `restore` at `--from` (default the bundle's commit), then `--to`
   (HEAD) by `prod.k8s.sh deploy` from its own worktree, old pods beside new as in
-  production; production's panel rows that name its server's test panels are
-  pointed at the local copies on staging's network, which is TEST-NET-3
-  (`203.0.113.0/24`) so ADR-0095's egress guard lets the drivers dial them.
+  production; then R16's guard again (`contract.scrub.md`: the restore pointed
+  the test panels at their local copies on staging's network, TEST-NET-3
+  `203.0.113.0/24` so ADR-0095's egress guard lets the drivers dial them, and
+  wiped every other panel before any service started).
   Then every check, each even after one fails: K12's `ready`, each pointed
   panel collected from within 600s, K12's `roll` once the 1-minute load is under
   half the cores (up to 600s, said when it is not: at load 9 on 8 cores

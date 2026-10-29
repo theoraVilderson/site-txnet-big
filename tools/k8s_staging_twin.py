@@ -7,8 +7,10 @@ ADR-0166 points 4, 5, OPS-1-ah-c).
    production's running release);
 2. `--to` (default HEAD) deployed over it by `prod.k8s.sh deploy` — the
    migration meets production's rows while the old pods still run, as it will;
-3. production's panel rows that name its own server's test panels pointed at
-   the local copies (/root/paneltest: same panels, same credentials);
+3. the scrub's guard again (ADR-0168): the restore pointed production's test
+   panels at their local copies and wiped every other one before any service
+   started (`k8s_staging_scrub.py`); the new release's migration must not have
+   brought a real address back;
 4. every check, each run even after one fails: every workload ready, each
    pointed panel collected from by production's drivers, K12's roll under load
    with no failed request, the stores killed and back with their data.
@@ -16,12 +18,10 @@ ADR-0166 points 4, 5, OPS-1-ah-c).
 Production's secrets leave this host when it ends, pass or fail; the cluster
 stays for its logs until `down`.
 """
-import json
 import os
 import subprocess
 import sys
 import time
-import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -30,10 +30,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
 import k8s_staging_data as kd  # noqa: E402
+import k8s_staging_scrub as sc  # noqa: E402
 
 TO_TREE = "tree-to"
-MAIN_DB_POD, MAIN_DB_CONTAINER = "main-db-0", "main-db"
-NAMESPACE = "txnet"
 # network-service collects each panel once per tick (tens of seconds); a pass
 # that has not reached every pointed panel in this long has a broken driver.
 PANEL_WAIT_S = 600
@@ -50,71 +49,26 @@ class Stages:
     """The run's steps, as functions, so their order is a thing a test can hold."""
     restore: Callable[[str | None], None]
     deploy: Callable[[str], None]
-    repoint: Callable[[], None]
+    guard: Callable[[], None]
     checks: dict[str, Callable[[], bool]] = field(default_factory=dict)
 
 
 def run(stages: Stages, from_ref: str | None, to_ref: str) -> dict[str, bool]:
-    """Restore, deploy over it, point the panels, then every check."""
+    """Restore, deploy over it, the guard, then every check."""
     stages.restore(from_ref)
     stages.deploy(to_ref)
-    stages.repoint()
+    stages.guard()
     return {name: check() for name, check in stages.checks.items()}
 
 
-def panel_ports(inspect_json: str) -> dict[str, tuple[str, str]]:
-    """{published TCP port: (address on staging's network, container port)} of the
-    local panels' containers, from `docker inspect`."""
-    ports = {}
-    for container in json.loads(inspect_json):
-        address = container["NetworkSettings"]["Networks"].get(ks.NETWORK, {}).get("IPAddress")
-        for inner, bindings in (container["HostConfig"].get("PortBindings") or {}).items():
-            port, _, proto = inner.partition("/")
-            if address and proto == "tcp":
-                ports.update({b["HostPort"]: (address, port) for b in bindings or []})
-    return ports
-
-
-def repoint(url: str, prod_host: str, ports: dict[str, tuple[str, str]]) -> str | None:
-    """url moved to its local copy, or None when it names no test panel of
-    production's server (a real panel stays unreachable)."""
-    parts = urllib.parse.urlsplit(url)
-    if parts.scheme != "http" or parts.hostname != prod_host or str(parts.port) not in ports:
-        return None
-    address, port = ports[str(parts.port)]
-    return urllib.parse.urlunsplit(parts._replace(netloc=f"{address}:{port}"))
-
-
-def sql_text(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
-def repoint_sql(new_urls: dict[str, str]) -> str:
-    return "".join(f'UPDATE network.panel SET "apiBaseUrl" = {sql_text(url)} WHERE id = {sql_text(pid)};\n'
-                   for pid, url in new_urls.items())
-
-
-def psql(sql: str) -> str:
-    """sql in main-db as its own user; small statements only (B10: large stdin truncates)."""
-    argv = [str(ks.KUBECTL_WRAPPER), "-n", NAMESPACE, "exec", "-i", MAIN_DB_POD, "-c", MAIN_DB_CONTAINER, "--",
-            "sh", "-c", 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -v ON_ERROR_STOP=1']
-    return subprocess.run(argv, input=sql, check=True, text=True, capture_output=True).stdout
-
-
-def repoint_panels(docker, prod_host: str) -> tuple[list[str], str]:
-    """Points the panels; returns their ids and the database's time just before."""
-    names = ks.paneltest_containers(docker)
-    if not names:
-        raise ks.StagingError("no local panel is running: `docker compose -p paneltest up -d` in /root/paneltest")
-    ports = panel_ports(docker(["docker", "inspect", *names]).stdout)
-    rows = [line.split("|", 1) for line in psql('SELECT id, "apiBaseUrl" FROM network.panel '
-                                                'WHERE "retiredAt" IS NULL;').splitlines() if "|" in line]
-    moved = {pid: new for pid, url in rows if (new := repoint(url, prod_host, ports))}
-    since = psql("SELECT now();").strip()
-    if moved:
-        psql(repoint_sql(moved))
-    print(f"{len(moved)} of {len(rows)} panels pointed at their local copies")
-    return list(moved), since
+def guard_again(docker) -> tuple[list[str], str]:
+    """The scrub's guard after the new release's migration; returns the panels
+    left in service (each one a local copy) and the database's time now."""
+    if not sc.guard(sc.Local.running(docker)):
+        raise ks.StagingError("a real panel address is in staging's copy: the twin stops here")
+    ids = [row["id"] for row in sc.panel_rows() if not row["retiredAt"]]
+    print(f"{len(ids)} panels in service, each a local copy")
+    return ids, sc.psql("SELECT now();").strip()
 
 
 def panels_collected(ids: list[str], since: str) -> bool:
@@ -122,11 +76,11 @@ def panels_collected(ids: list[str], since: str) -> bool:
     if not ids:
         print("no panel of production's names a local copy: nothing to collect from")
         return False
-    listed = ", ".join(sql_text(i) for i in ids)
+    listed = ", ".join(sc.sql_text(i) for i in ids)
     deadline = time.monotonic() + PANEL_WAIT_S
     while True:
-        late = psql(f'SELECT name FROM network.panel WHERE id IN ({listed}) AND '
-                    f'("lastSuccessfulCollectionAt" IS NULL OR "lastSuccessfulCollectionAt" <= {sql_text(since)});')
+        late = sc.psql(f'SELECT name FROM network.panel WHERE id IN ({listed}) AND '
+                    f'("lastSuccessfulCollectionAt" IS NULL OR "lastSuccessfulCollectionAt" <= {sc.sql_text(since)});')
         if not late.strip():
             print(f"{len(ids)} panels collected from")
             return True
@@ -171,8 +125,8 @@ def deploy_over(docker, ref: str) -> None:
 def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str) -> bool:
     pointed: dict = {}
 
-    def do_repoint():
-        pointed["ids"], pointed["since"] = repoint_panels(docker, prod.host.rpartition("@")[2])
+    def do_guard():
+        pointed["ids"], pointed["since"] = guard_again(docker)
 
     def roll():
         wait_quiet(lambda: os.getloadavg()[0], os.cpu_count() or 1)
@@ -182,7 +136,7 @@ def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str) -> bool
               "panels": lambda: panels_collected(pointed["ids"], pointed["since"]),
               "roll": roll, "stores": lambda: rehearsal_check(docker, "stores")}
     stages = Stages(restore=lambda ref: kd.restore_production(docker, prod, ref),
-                    deploy=lambda ref: deploy_over(docker, ref), repoint=do_repoint, checks=checks)
+                    deploy=lambda ref: deploy_over(docker, ref), guard=do_guard, checks=checks)
     try:
         results = run(stages, from_ref, to_ref)
     finally:
