@@ -63,7 +63,7 @@ top-up arriving during a purge rebuilds the client rather than racing the
 delete. `enforcementState` (`pending | partial | complete`) is how far it got —
 `partial` exists because a purge half-applied across five panels is neither
 pending nor done, and a Grant reports `purged` only when every config is
-`complete`.
+`complete`. `lastReconciledAt` moves with any other change, else at most every 10 min (LIVE-1-ad).
 
 `remoteId`, `claimTag` and `uuid` are the three matching keys, tried in that
 order (F-027-aa). The tag is ours and global: without it a rename on the panel
@@ -101,7 +101,7 @@ what it meant cannot be invalidated. `limitOrigin*` is where the panel's own
 limit counts from when that is not the raw figure's origin — User Manager's
 profile link — and the raw figure when it was first read (F-027-du-b). `lastPublishedAt` is written only after a
 successful publish (F-027-n), so a crash between read and publish re-reads
-rather than loses.
+rather than loses. A cursor whose counters stood still is rewritten only when its `lastObservedAt` is 10 min old (LIVE-1-ad); the collector holds the exact clock in memory for the cap's window.
 
 `usage_delta_seen` makes the delta's **own id the primary key**. The insert is
 the deduplication: applying a redelivered message is a constraint violation the

@@ -548,3 +548,27 @@ func TestARecreateRestartsTheCursorInItsRecordStatement(t *testing.T) {
 		t.Errorf("restart flags = %v, %v; want only the recreate's set", f.args[0][18], f.args[1][18])
 	}
 }
+
+// LIVE-1-ad: every pass rewrote every config to move `lastReconciledAt`
+// (4.2k rows a minute idle). A record that changes nothing else writes only
+// once that time is ten minutes old.
+func TestAnUnchangedRecordWritesItsReconcileTimeEveryTenMinutes(t *testing.T) {
+	at := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	f := &pgDB{}
+	err := PostgresDesired{DB: f}.Record(context.Background(), []Outcome{
+		{ConfigID: pgConfig, RemoteID: "r-9", State: StateComplete, At: at, UUID: "uuid-1", Enabled: true, Present: true},
+	})
+	if err != nil {
+		t.Fatalf("Record: %v", err)
+	}
+	for _, clause := range []string{`$8 OR $15 OR $19 OR $17::bigint IS NOT NULL`,
+		`"remoteId" IS DISTINCT FROM NULLIF($2, '')`, `"enforcementState" IS DISTINCT FROM $3::network."EnforcementState"`,
+		`"lastReconciledAt" IS NULL OR "lastReconciledAt" < $20`} {
+		if !strings.Contains(f.sql[0], clause) {
+			t.Errorf("the record is written without %q", clause)
+		}
+	}
+	if args := f.args[0]; len(args) < 20 || args[19] != at.Add(-10*time.Minute) {
+		t.Errorf("refresh cutoff missing or wrong in %v, want ten minutes before the pass", args)
+	}
+}

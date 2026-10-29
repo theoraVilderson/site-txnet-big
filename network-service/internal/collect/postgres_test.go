@@ -431,3 +431,51 @@ func TestAHaltingDriftEventIsAnnouncedInItsOwnStatement(t *testing.T) {
 		t.Errorf("events.json panelDriftRaised = %q, collect.DriftRaisedEvent = %q", got, collect.DriftRaisedEvent)
 	}
 }
+
+// LIVE-1-ad: an idle pass rewrote every cursor (15.5k rows a minute on the
+// test server) to move only its clock. A cursor is written when it moved, or
+// when its stored clock is ten minutes behind; the map keeps the exact clock,
+// because the cap and the rate samples measure their window from it.
+func TestAStandingCursorIsWrittenOnlyWhenItMovedOrItsClockIsStale(t *testing.T) {
+	at := time.Date(2026, 10, 29, 9, 1, 0, 0, time.UTC)
+	pool := &pgDB{}
+	cursors := &collect.PostgresCursors{DB: pool}
+	held := collect.Counter{Semantics: driver.CounterCumulative, LastUpBytes: 10, LastDownBytes: 20,
+		LifetimeUpBytes: 110, LifetimeDownBytes: 220, LastObservedAt: at}
+	err := cursors.Apply(context.Background(), collect.Result{PanelID: pgPanelA, ObservedAt: at,
+		Advances: []collect.Advance{{PanelID: pgPanelA, ConfigID: pgConfig1, RemoteID: "r1", Counter: held}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	upserts := pool.executed(`INSERT INTO network.config_counter_state`)
+	if len(upserts) != 1 || !strings.Contains(pool.sql[0], `IS DISTINCT FROM`) ||
+		!strings.Contains(pool.sql[0], `s."lastObservedAt" < v.observed - $15::int * interval '1 second'`) {
+		t.Fatal("the upsert does not skip a cursor that stood still")
+	}
+	if got := upserts[0][14]; got != int32(600) {
+		t.Errorf("stale-clock refresh = %v seconds, want 600", got)
+	}
+
+	// The table still holds the clock of the last write; the map keeps the
+	// pass's for a cursor that did not move, and takes the table's for one
+	// that did.
+	stored := held
+	stored.LastObservedAt = at.Add(-7 * time.Minute)
+	moved := stored
+	moved.LastDownBytes = 25
+	err = cursors.Merge(func() (map[collect.CursorKey]collect.Counter, error) {
+		return map[collect.CursorKey]collect.Counter{{PanelID: pgPanelA, RemoteID: "r1"}: stored}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cur, _ := cursors.Counter(pgPanelA, "r1"); !cur.LastObservedAt.Equal(at) {
+		t.Errorf("standing cursor's clock = %v, want the pass's %v", cur.LastObservedAt, at)
+	}
+	_ = cursors.Merge(func() (map[collect.CursorKey]collect.Counter, error) {
+		return map[collect.CursorKey]collect.Counter{{PanelID: pgPanelA, RemoteID: "r1"}: moved}, nil
+	})
+	if cur, _ := cursors.Counter(pgPanelA, "r1"); !cur.LastObservedAt.Equal(moved.LastObservedAt) || cur.LastDownBytes != 25 {
+		t.Errorf("moved cursor = %+v, want the table's", cur)
+	}
+}

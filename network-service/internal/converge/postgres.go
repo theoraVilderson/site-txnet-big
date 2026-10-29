@@ -162,6 +162,9 @@ const ConfirmedEvent = "network.config.confirmed"
 // counter does, and its limit's origin with it (F-027-du-b), and keeps the
 // lifetime and reset count: it is not a reset. It is
 // not held to the desired-state guard, because the client was made either way.
+// An outcome that changes nothing else writes `lastReconciledAt` only once it
+// is reconciledRefresh old ($20, LIVE-1-ad): every config every pass was a
+// third of the node disk's writes at idle, and the time is only shown.
 const recordSQL = `
 WITH prior AS (SELECT "confirmedAt", "linkLines", "linksUuid" FROM network.config WHERE id = $1::uuid),
 restarted AS (
@@ -191,6 +194,11 @@ UPDATE network.config
    AND uuid = $5
    AND ("desiredEnabled" AND NOT EXISTS (SELECT 1 FROM network.lease_close l WHERE l."grantId" = config."grantId")) = $6
    AND ("desiredRemote" = 'present') = $7
+   AND ($8 OR $15 OR $19 OR $17::bigint IS NOT NULL
+        OR "remoteId" IS DISTINCT FROM NULLIF($2, '')
+        OR "enforcementState" IS DISTINCT FROM $3::network."EnforcementState"
+        OR ("inboundRemoteId" IS NULL AND $16 <> '')
+        OR "lastReconciledAt" IS NULL OR "lastReconciledAt" < $20)
 RETURNING id, "tenantId", "userId", "grantId")
 INSERT INTO automation.outbox_event (id, aggregate, "aggregateId", type, payload)
 SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
@@ -205,6 +213,10 @@ SELECT gen_random_uuid(), 'network.config', r.id::text, e.type,
  CROSS JOIN (VALUES ($13::text, $8::boolean, false), ($14::text, $15::boolean, true)) AS e(type, due, confirm)
  WHERE e.due AND CASE WHEN e.confirm THEN r."grantId" IS NOT NULL AND prior."confirmedAt" IS NULL
                       ELSE prior."linkLines" IS DISTINCT FROM $9::text[] OR prior."linksUuid" IS DISTINCT FROM $11 END`
+
+// reconciledRefresh is how stale `lastReconciledAt` may grow on a config the
+// pass found as it was (LIVE-1-ad).
+const reconciledRefresh = 10 * time.Minute
 
 // Record writes each outcome on its own: a capture carries an array per row,
 // which one set-based statement cannot. An outcome whose row moved on is
@@ -228,7 +240,8 @@ func (s PostgresDesired) Record(ctx context.Context, rows []Outcome) error {
 		if _, err := s.DB.Exec(ctx, recordSQL,
 			o.ConfigID, o.RemoteID, string(o.State), o.At,
 			o.UUID, o.Enabled, o.Present,
-			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint, o.Recreated); err != nil {
+			captured, lines, linksRemote, linksUUID, linksAt, LinksCapturedEvent, ConfirmedEvent, o.Confirmed, o.InboundRemoteID, o.SessionBaseline, linksFingerprint, o.Recreated,
+			o.At.Add(-reconciledRefresh)); err != nil {
 			return fmt.Errorf("recording config %s: %w", o.ConfigID, err)
 		}
 	}

@@ -116,7 +116,8 @@ func (c *PostgresCursors) reload(ctx context.Context, panelIDs []string) (map[st
 		if origin != nil {
 			cur.LimitOriginAt = origin.UTC()
 		}
-		counters[key(panelID, remoteID)] = cur
+		k := key(panelID, remoteID)
+		counters[k] = carryClock(cur, c.counters[k])
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("reading cursors: %w", err)
@@ -144,9 +145,32 @@ func (c *PostgresCursors) Merge(read func() (map[CursorKey]Counter, error)) erro
 		c.counters = map[string]Counter{}
 	}
 	for k, cur := range got {
-		c.counters[key(k.PanelID, k.RemoteID)] = cur
+		mk := key(k.PanelID, k.RemoteID)
+		c.counters[mk] = carryClock(cur, c.counters[mk])
 	}
 	return nil
+}
+
+// carryClock keeps the map's later clock for a cursor the table holds
+// unmoved: Apply skips writing a standing cursor (applySQL), so the table's
+// `lastObservedAt` lags, and the cap and the rate samples measure their
+// window from it. A cursor that moved is the table's whole.
+func carryClock(stored, held Counter) Counter {
+	if sameCounts(stored, held) && held.LastObservedAt.After(stored.LastObservedAt) {
+		stored.LastObservedAt = held.LastObservedAt
+	}
+	return stored
+}
+
+// sameCounts is every field applySQL compares; the times within the column's
+// millisecond, since the map holds the pass's own clock.
+func sameCounts(a, b Counter) bool {
+	sameTime := func(x, y time.Time) bool { return x.Sub(y).Abs() < time.Millisecond }
+	return a.Semantics == b.Semantics && a.LastUpBytes == b.LastUpBytes && a.LastDownBytes == b.LastDownBytes &&
+		a.LifetimeUpBytes == b.LifetimeUpBytes && a.LifetimeDownBytes == b.LifetimeDownBytes &&
+		a.ResetCount == b.ResetCount && sameTime(a.LastResetAt, b.LastResetAt) &&
+		a.LimitOriginID == b.LimitOriginID && a.LimitOriginBytes == b.LimitOriginBytes &&
+		sameTime(a.LimitOriginAt, b.LimitOriginAt)
 }
 
 func (c *PostgresCursors) Counter(panelID, remoteID string) (Counter, bool) {
@@ -161,9 +185,23 @@ func (c *PostgresCursors) Session(string, string, string) (SessionMark, bool) {
 	return SessionMark{}, false
 }
 
+// observedRefresh is how far a standing cursor's stored `lastObservedAt` may
+// fall behind before it is written anyway (LIVE-1-ad): it bounds how much
+// wider than a pass the cap's window can be after a restart.
+const observedRefresh = 10 * time.Minute
+
 // applySQL moves every cursor of a pass in one statement. `lastPublishedAt`
 // is the pass's clock: Apply runs only after the publish (invariant 18).
+// A cursor whose counters stand still is skipped until its stored clock is
+// observedRefresh old (LIVE-1-ad): rewriting it was a third of the node
+// disk's writes at idle, and it holds nothing a re-read could lose.
 const applySQL = `
+WITH v AS (
+SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::bigint[], $6::bigint[],
+              $7::bigint[], $8::timestamp(3)[], $9::int[], $10::timestamp(3)[],
+              $12::text[], $13::bigint[], $14::timestamp(3)[])
+       AS v(config, panel, semantics, up, down, lifetime_up, lifetime_down, observed, resets, reset_at,
+            origin, origin_bytes, origin_at))
 INSERT INTO network.config_counter_state AS s
        (id, "configId", "panelId", "counterSemantics", "lastUpBytes", "lastDownBytes",
         "lifetimeUpBytes", "lifetimeDownBytes", "lastObservedAt", "lastPublishedAt",
@@ -171,11 +209,16 @@ INSERT INTO network.config_counter_state AS s
 SELECT gen_random_uuid(), v.config::uuid, v.panel::uuid, v.semantics::network."CounterSemantics",
        v.up, v.down, v.lifetime_up, v.lifetime_down, v.observed, $11, v.resets, v.reset_at,
        NULLIF(v.origin, ''), v.origin_bytes, v.origin_at, now()
-  FROM unnest($1::text[], $2::text[], $3::text[], $4::bigint[], $5::bigint[], $6::bigint[],
-              $7::bigint[], $8::timestamp(3)[], $9::int[], $10::timestamp(3)[],
-              $12::text[], $13::bigint[], $14::timestamp(3)[])
-       AS v(config, panel, semantics, up, down, lifetime_up, lifetime_down, observed, resets, reset_at,
-            origin, origin_bytes, origin_at)
+  FROM v
+  LEFT JOIN network.config_counter_state s ON s."configId" = v.config::uuid
+ WHERE s.id IS NULL
+    OR (s."panelId", s."counterSemantics", s."lastUpBytes", s."lastDownBytes", s."lifetimeUpBytes",
+        s."lifetimeDownBytes", s."resetCount", s."lastResetAt", s."limitOriginId", s."limitOriginBytes", s."limitOriginAt")
+       IS DISTINCT FROM
+       (v.panel::uuid, v.semantics::network."CounterSemantics", v.up, v.down, v.lifetime_up,
+        v.lifetime_down, v.resets, v.reset_at, NULLIF(v.origin, ''), v.origin_bytes, v.origin_at)
+    OR s."lastObservedAt" IS NULL
+    OR s."lastObservedAt" < v.observed - $15::int * interval '1 second'
 ON CONFLICT ("configId") DO UPDATE
    SET "panelId" = EXCLUDED."panelId",
        "counterSemantics" = EXCLUDED."counterSemantics",
@@ -222,7 +265,8 @@ func (c *PostgresCursors) Apply(ctx context.Context, res Result) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, err := c.DB.Exec(ctx, applySQL, configs, panels, semantics, up, down, lifeUp, lifeDown,
-		observed, resets, resetAt, res.ObservedAt, origins, originBytes, originAt); err != nil {
+		observed, resets, resetAt, res.ObservedAt, origins, originBytes, originAt,
+		int32(observedRefresh/time.Second)); err != nil {
 		return fmt.Errorf("moving panel %s cursors: %w", res.PanelID, err)
 	}
 	if c.counters == nil {
