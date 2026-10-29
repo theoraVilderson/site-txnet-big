@@ -5,6 +5,7 @@ import type { CrossTenantPrismaService } from '../prisma/cross-tenant-prisma.ser
 import type { PrismaService } from '../prisma/prisma.service';
 import { INBOUNDS_UNMAPPED, MigrationPreviewService } from './migration-preview';
 import { planRun, type RunPlanContext } from './migration-run-plan';
+import { migrationInboundsSchema } from './migration-run.schema';
 import { MigrationSeamRefused, type SourceSnapshotReader, type SubscriptionLinkProbe } from './migration-seams';
 
 vi.mock('@txnet-backend/shared-core', async (actual) => ({ ...(await actual<typeof import('@txnet-backend/shared-core')>()), endUserRoom: vi.fn() }));
@@ -44,6 +45,7 @@ const context = (over: Partial<RunPlanContext> = {}): RunPlanContext => ({
   sourceAddress: ADDRESS,
   now: NOW,
   variantOf: new Map([['vless-tcp', 'variant-20gb']]),
+  skippedInbounds: new Set(),
   unlimitedVariants: new Set(),
   importedGrants: new Set(),
   importedUsers: new Set(),
@@ -95,6 +97,15 @@ describe('planRun — the report', () => {
     ]);
   });
 
+  it('skips every client of an inbound the reseller chose not to import as inbound_skipped (LIVE-1-h)', () => {
+    const plan = planRun([client('ali'), client('test1', { inboundRemoteId: 'test-ws' })], context({ skippedInbounds: new Set(['test-ws']) }));
+    expect(actions(plan)).toEqual([
+      [key('ali'), MigrationItemAction.create, null],
+      [key('test1'), MigrationItemAction.skip, 'inbound_skipped'],
+    ]);
+    expect(plan).toMatchObject({ plannedCreate: 1, plannedSkip: 1 });
+  });
+
   it('plans an update, never a second Grant, for a key the tenant already holds', () => {
     const plan = planRun([client('ali'), client('reza')], context({ importedGrants: new Set([key('ali')]), importedUsers: new Set([key('ali')]) }));
     expect(actions(plan)).toEqual([
@@ -139,8 +150,8 @@ function fakeDb(run: Row) {
         if (prior) Object.assign(prior, update);
         else state.inbounds.push({ variantId: null, ...create });
       },
-      count: async () => state.inbounds.filter((i) => i['variantId'] === null && (i['clientCount'] as number) > 0).length,
-      findMany: async () => state.inbounds.filter((i) => i['variantId'] !== null),
+      count: async () => state.inbounds.filter((i) => i['variantId'] === null && !i['skipped'] && (i['clientCount'] as number) > 0).length,
+      findMany: async () => state.inbounds,
     },
     migrationItem: {
       deleteMany: async () => ({ count: (state.items.length = 0) }),
@@ -207,6 +218,14 @@ describe('MigrationPreviewService — one previewing run per tick', () => {
     expect([...db.state.touched].filter((m) => !writable.includes(m)).sort()).toEqual(['grant', 'productVariant', 'user']);
   });
 
+  it('previews a run whose only inbound with clients is skipped: nobody imported, each named inbound_skipped (LIVE-1-h)', async () => {
+    const db = fakeDb(RUN);
+    db.state.inbounds.push({ inboundRemoteId: 'vless-tcp', variantId: null, skipped: true, clientCount: 2 });
+    expect(await preview(db, async () => SNAPSHOT)).toBe('previewed');
+    expect(db.state.run).toMatchObject({ status: MigrationRunStatus.previewed, plannedCreate: 0, plannedSkip: 2 });
+    expect(db.state.items.map((i) => i['skipReason'])).toEqual(['inbound_skipped', 'inbound_skipped']);
+  });
+
   it("keeps the source's refusal as the reason the run went back to draft", async () => {
     const db = fakeDb(RUN);
     expect(await preview(db, async () => Promise.reject(new MigrationSeamRefused(422, 'source_login_refused')))).toBe('returned');
@@ -224,5 +243,16 @@ describe('MigrationPreviewService — one previewing run per tick', () => {
     ).toBe('lost');
     expect(db.state.run['status']).toBe(MigrationRunStatus.cancelled);
     expect(db.state.items).toEqual([]);
+  });
+});
+
+describe('the mapping body (LIVE-1-h)', () => {
+  const parse = (inbound: Record<string, unknown>) => migrationInboundsSchema.safeParse({ inbounds: [{ inboundRemoteId: 'test-ws', ...inbound }] }).success;
+
+  it('takes a variant, an undecided null, or an explicit skip — never a skip with a variant', () => {
+    expect(parse({ variantId: '00000000-0000-4000-8000-000000000001' })).toBe(true);
+    expect(parse({ variantId: null })).toBe(true);
+    expect(parse({ variantId: null, skip: true })).toBe(true);
+    expect(parse({ variantId: '00000000-0000-4000-8000-000000000001', skip: true })).toBe(false);
   });
 });

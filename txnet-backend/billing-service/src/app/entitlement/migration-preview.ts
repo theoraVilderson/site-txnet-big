@@ -63,8 +63,9 @@ export function panelSourceOf(run: Pick<MigrationRun, 'id' | 'sourceFamily' | 's
  * 1. The source is read once — network-service's snapshot, the bulk calls
  *    only (network rule 4) — outside any transaction.
  * 2. Its inbounds are recorded with their client counts. One with clients and
- *    no variant sends the run back to `draft` (`inbounds_unmapped`): the
- *    first preview is how the reseller learns the inbounds to map.
+ *    no variant, not skipped (LIVE-1-h), sends the run back to `draft`
+ *    (`inbounds_unmapped`): the first preview is how the reseller learns the
+ *    inbounds to map.
  * 3. Otherwise each client is planned (`planRun`) against what the tenant
  *    already holds, and the report replaces the last one in one transaction.
  *
@@ -144,7 +145,7 @@ export class MigrationPreviewService {
     const prefix = remoteIdentityOf({ family, sourceAddress }, '');
     return tenantTransaction(this.prisma, async (tx) => {
       const [inbounds, grants, users, userRoom] = await Promise.all([
-        tx.migrationInbound.findMany({ where: { runId: run.id, variantId: { not: null } }, select: { inboundRemoteId: true, variantId: true } }),
+        tx.migrationInbound.findMany({ where: { runId: run.id }, select: { inboundRemoteId: true, variantId: true, skipped: true } }),
         tx.grant.findMany({ where: { tenantId: run.tenantId, source: GrantSource.migration, remoteIdentity: { startsWith: prefix } }, select: { remoteIdentity: true } }),
         tx.user.findMany({ where: { tenantId: run.tenantId, remoteIdentity: { startsWith: prefix } }, select: { remoteIdentity: true } }),
         endUserRoom(tx, run.tenantId),
@@ -157,6 +158,7 @@ export class MigrationPreviewService {
         sourceAddress,
         now,
         variantOf,
+        skippedInbounds: new Set(inbounds.filter((i) => i.skipped).map((i) => i.inboundRemoteId)),
         unlimitedVariants: new Set(variants.filter((v) => trafficQuotaOf(v.quotas).kind === 'unlimited').map((v) => v.id)),
         importedGrants: new Set(grants.flatMap((g) => (g.remoteIdentity ? [g.remoteIdentity] : []))),
         importedUsers: new Set(users.flatMap((u) => (u.remoteIdentity ? [u.remoteIdentity] : []))),
@@ -195,7 +197,7 @@ export async function recordInbounds(tx: Prisma.TransactionClient, run: Migratio
       update: fields,
     });
   }
-  return tx.migrationInbound.count({ where: { runId: run.id, variantId: null, clientCount: { gt: 0 } } });
+  return tx.migrationInbound.count({ where: { runId: run.id, variantId: null, skipped: false, clientCount: { gt: 0 } } });
 }
 
 /** The report replaces the last one, conditional on the run still being this tick's; false when it was not. */

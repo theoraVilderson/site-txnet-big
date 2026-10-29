@@ -7,7 +7,7 @@ import { OutboxEventType } from '@txnet-backend/shared-core';
  * page re-reads on (C-14).
  */
 
-export type MigrationInboundView = Pick<MigrationInbound, 'inboundRemoteId' | 'tag' | 'protocol' | 'clientCount' | 'variantId'>;
+export type MigrationInboundView = Pick<MigrationInbound, 'inboundRemoteId' | 'tag' | 'protocol' | 'clientCount' | 'variantId' | 'skipped'>;
 
 /** A run as its page reads it: the report's counts and, on one run, the inbounds and their variants. */
 export type MigrationRunView = Pick<
@@ -52,7 +52,7 @@ export const runView = (r: MigrationRun, inbounds?: MigrationInbound[]): Migrati
   variantId: r.variantId,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
-  ...(inbounds ? { inbounds: inbounds.map(({ inboundRemoteId, tag, protocol, clientCount, variantId }) => ({ inboundRemoteId, tag, protocol, clientCount, variantId })) } : {}),
+  ...(inbounds ? { inbounds: inbounds.map(({ inboundRemoteId, tag, protocol, clientCount, variantId, skipped }) => ({ inboundRemoteId, tag, protocol, clientCount, variantId, skipped })) } : {}),
 });
 
 /** One row of the report's per-user table: what was read and what is planned or was done. */

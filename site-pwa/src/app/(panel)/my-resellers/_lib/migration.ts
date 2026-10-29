@@ -139,11 +139,18 @@ export function mappingOptions(products: readonly UsersCatalogProduct[], texts: 
     );
 }
 
-/** The mapping's body: every inbound, the choice made on the page over the run's own, `""` as none. */
+/** The picker's value for "do not import" (LIVE-1-h) — never a variant id, which is a uuid. */
+export const SKIP_INBOUND = "skip";
+
+/** An inbound's value in the picker: its variant, `SKIP_INBOUND`, or `""` while undecided. */
+export const mappingValue = (i: MigrationInbound) => (i.skipped ? SKIP_INBOUND : (i.variantId ?? ""));
+
+/** The mapping's body: every inbound, the choice made on the page over the run's own; `""` undecided, `SKIP_INBOUND` left out. */
 export function mappingBody(inbounds: readonly MigrationInbound[], chosen: Readonly<Record<string, string>>) {
   return inbounds.map((i) => {
-    const pick = chosen[i.inboundRemoteId] ?? i.variantId ?? "";
-    return { inboundRemoteId: i.inboundRemoteId, variantId: pick || null };
+    const pick = chosen[i.inboundRemoteId] ?? mappingValue(i);
+    const skip = pick === SKIP_INBOUND;
+    return { inboundRemoteId: i.inboundRemoteId, variantId: skip ? null : pick || null, skip };
   });
 }
 

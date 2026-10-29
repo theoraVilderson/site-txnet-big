@@ -28,6 +28,8 @@ export interface MigrationInbound {
   protocol: string;
   clientCount: number;
   variantId: string | null;
+  /** Left out on purpose (LIVE-1-h): its clients are planned `inbound_skipped`. */
+  skipped: boolean;
 }
 
 /** A run as billing's `runView` answers it; `inbounds` only on one run. */
@@ -158,7 +160,7 @@ export function migrationRunsApi(tenantId: string) {
       call<Paged<MigrationRun>>(`${at}?${new URLSearchParams({ page: String(page), pageSize: String(pageSize) })}`, { method: "GET" }),
     get: (runId: string) => call<MigrationRun>(run(runId), { method: "GET" }),
     /** A previewed run's mapping changed is previewed again by billing. */
-    setInbounds: (runId: string, inbounds: { inboundRemoteId: string; variantId: string | null }[]) =>
+    setInbounds: (runId: string, inbounds: { inboundRemoteId: string; variantId: string | null; skip: boolean }[]) =>
       call<MigrationRun>(`${run(runId)}/inbounds`, { method: "PUT", body: JSON.stringify({ inbounds }) }),
     preview: (runId: string) => post(`${run(runId)}/preview`),
     commit: (runId: string) => post(`${run(runId)}/commit`),

@@ -9,6 +9,8 @@ export type RunPlanContext = {
   now: Date;
   /** The variant chosen for each source inbound; every inbound with clients has one before a plan is made. */
   variantOf: ReadonlyMap<string, string>;
+  /** The inbounds the reseller chose not to import (LIVE-1-h): their clients are planned `inbound_skipped`. */
+  skippedInbounds: ReadonlySet<string>;
   /** The mapped variants sold with unlimited traffic (F-111-q): a client imports unlimited only onto one (F-208). */
   unlimitedVariants: ReadonlySet<string>;
   /** `remoteIdentity` of every Grant the tenant already holds from an import: an `update`, never a second Grant (invariant 32). */
@@ -61,6 +63,8 @@ export function clientsPerInbound(clients: readonly unknown[]): Map<string, numb
  * - **expired**, **unknown_protocol** — what the client alone says (F-202).
  * - **no_inbound** — a client on no source inbound: a User Manager user
  *   holding no profile, which cannot log in there (F-1601-b1).
+ * - **inbound_skipped** — a client on an inbound the reseller chose not to
+ *   import (LIVE-1-h).
  * - **traffic_mismatch** — an unlimited client on an inbound mapped to a
  *   limited product, or the other way round (F-208): the reseller maps it
  *   again or leaves it, rather than the commit failing it.
@@ -107,6 +111,10 @@ export function planRun(clients: readonly unknown[], ctx: RunPlanContext): RunPl
     const snapshot = snapshotOf(client);
     if (client.inboundRemoteId === '') {
       skip(remoteIdentity, snapshot, 'no_inbound');
+      continue;
+    }
+    if (ctx.skippedInbounds.has(client.inboundRemoteId)) {
+      skip(remoteIdentity, snapshot, 'inbound_skipped');
       continue;
     }
     const variantId = ctx.variantOf.get(client.inboundRemoteId);

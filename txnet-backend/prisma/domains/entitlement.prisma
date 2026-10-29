@@ -619,6 +619,8 @@ enum MigrationSkipReason {
   currency_mismatch
   /// A client on no source inbound: a User Manager user holding no profile, which cannot log in there (F-1601-b1).
   no_inbound
+  /// A client on an inbound the reseller chose not to import (LIVE-1-h).
+  inbound_skipped
 
   @@schema("entitlement")
 }
@@ -740,6 +742,8 @@ model MigrationInbound {
   /// The snapshot's clients on it; an inbound with none needs no variant.
   clientCount     Int      @default(0)
   variantId       String?  @db.Uuid
+  /// The reseller chose not to import it (LIVE-1-h): its clients are planned `inbound_skipped`. Never with a variant.
+  skipped         Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -7789,7 +7789,8 @@
       "over_cap": "past your users limit",
       "unknown_protocol": "a protocol we do not sell",
       "unreadable": "the panel's data could not be read",
-      "traffic_mismatch": "unlimited user on a limited plan, or the other way round"
+      "traffic_mismatch": "unlimited user on a limited plan, or the other way round",
+      "inbound_skipped": "you chose not to import its inbound"
     },
     "itemFailure": {
       "over_cap": "past your users limit",

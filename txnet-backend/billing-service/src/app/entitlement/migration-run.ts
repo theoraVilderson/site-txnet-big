@@ -141,7 +141,7 @@ export class MigrationRunService {
 
   /**
    * The reseller's choice for each source inbound (F-206): one of its prepaid
-   * variants, or none. A variant is held to what an admin may hand out by
+   * variants, undecided, or skipped — its clients not imported (LIVE-1-h). A variant is held to what an admin may hand out by
    * hand (F-311-o) and to prepaid: an import brings a bag and an end, never a
    * meter. A previewed run's mapping changed is previewed again.
    */
@@ -155,7 +155,7 @@ export class MigrationRunService {
         for (const choice of body.inbounds) {
           if (!ids.has(choice.inboundRemoteId)) throw new MigrationRunRefused('inbound_not_found', choice.inboundRemoteId);
           if (choice.variantId) await assertImportVariant(tx, tenantId, choice.variantId);
-          await tx.migrationInbound.update({ where: { runId_inboundRemoteId: { runId, inboundRemoteId: choice.inboundRemoteId } }, data: { variantId: choice.variantId } });
+          await tx.migrationInbound.update({ where: { runId_inboundRemoteId: { runId, inboundRemoteId: choice.inboundRemoteId } }, data: { variantId: choice.variantId, skipped: choice.skip ?? false } });
         }
         if (run.status === MigrationRunStatus.previewed) await this.startPreview(tx, run);
         return this.viewOf(tx, tenantId, runId);

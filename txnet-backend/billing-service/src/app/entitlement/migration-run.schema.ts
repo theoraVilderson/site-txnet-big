@@ -33,11 +33,20 @@ export const migrationRunCreateSchema = z
   .refine((b) => (b.sourceAddress === undefined) !== (b.panelId === undefined), 'an address or a registered panel, not both');
 export type MigrationRunCreate = z.infer<typeof migrationRunCreateSchema>;
 
-/** `PUT …/migration-runs/:runId/inbounds`: each source inbound to one of the reseller's prepaid variants, or none. */
+/**
+ * `PUT …/migration-runs/:runId/inbounds`: each source inbound to one of the
+ * reseller's prepaid variants, null while undecided, or `skip` — not imported
+ * at all (LIVE-1-h), which never names a variant.
+ */
+const inboundChoiceSchema = z
+  .object({ inboundRemoteId: z.string().min(1).max(INBOUND_ID_MAX), variantId: z.string().uuid().nullable(), skip: z.boolean().optional() })
+  .strict()
+  .refine((c) => !(c.skip && c.variantId !== null), 'a skipped inbound names no variant');
+
 export const migrationInboundsSchema = z
   .object({
     inbounds: z
-      .array(z.object({ inboundRemoteId: z.string().min(1).max(INBOUND_ID_MAX), variantId: z.string().uuid().nullable() }).strict())
+      .array(inboundChoiceSchema)
       .min(1)
       .max(INBOUNDS_PER_MAPPING_MAX),
   })

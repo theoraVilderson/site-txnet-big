@@ -29,6 +29,7 @@ import {
   emptyConnectForm,
   legacyStepOf,
   mappingBody,
+  SKIP_INBOUND,
   mappingOptions,
   migrationLiveOf,
   rollbackDaysLeft,
@@ -60,7 +61,7 @@ const run = (over: Partial<MigrationRun> = {}): MigrationRun => ({
   ...over,
 });
 
-const inbound = { inboundRemoteId: "1", tag: "vless-ws", protocol: "vless", clientCount: 12, variantId: null };
+const inbound = { inboundRemoteId: "1", tag: "vless-ws", protocol: "vless", clientCount: 12, variantId: null, skipped: false };
 
 describe("which step a run is on", () => {
   it("a new draft asks for the login; a draft sent back for its mapping asks for the mapping", () => {
@@ -142,13 +143,23 @@ describe("the mapping", () => {
   it("sends every inbound, an unchosen one as null", () => {
     const inbounds = [inbound, { ...inbound, inboundRemoteId: "2", variantId: "v-old" }];
     expect(mappingBody(inbounds, { "1": "v-pre" })).toEqual([
-      { inboundRemoteId: "1", variantId: "v-pre" },
-      { inboundRemoteId: "2", variantId: "v-old" },
+      { inboundRemoteId: "1", variantId: "v-pre", skip: false },
+      { inboundRemoteId: "2", variantId: "v-old", skip: false },
     ]);
     expect(mappingBody(inbounds, { "2": "" })).toEqual([
-      { inboundRemoteId: "1", variantId: null },
-      { inboundRemoteId: "2", variantId: null },
+      { inboundRemoteId: "1", variantId: null, skip: false },
+      { inboundRemoteId: "2", variantId: null, skip: false },
     ]);
+  });
+
+  it("sends 'do not import' as a skip with no plan, apart from undecided, and reads a skipped inbound back as one (LIVE-1-h)", () => {
+    const inbounds = [inbound, { ...inbound, inboundRemoteId: "2", variantId: null, skipped: true }];
+    expect(mappingBody(inbounds, { "1": SKIP_INBOUND })).toEqual([
+      { inboundRemoteId: "1", variantId: null, skip: true },
+      { inboundRemoteId: "2", variantId: null, skip: true },
+    ]);
+    expect(mappingBody(inbounds, { "2": "v-pre" })[1]).toEqual({ inboundRemoteId: "2", variantId: "v-pre", skip: false });
+    expect(mappingBody(inbounds, { "2": "" })[1]).toEqual({ inboundRemoteId: "2", variantId: null, skip: false });
   });
 });
 

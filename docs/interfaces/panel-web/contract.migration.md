@@ -48,7 +48,10 @@ page decides nothing they decide. The menu row is keyed `migration.manage`.
 5. **An inbound maps to a prepaid plan only** (entitlement rules 7 and 10): the
    active prepaid plans of active products from the users-admin door's
    catalog (`users-catalog`, its `billingMode`) — no `catalog.manage`. An
-   inbound with users offers no "none"; billing would send it back unmapped.
+   inbound with users offers "choose a plan" (undecided — billing sends it
+   back unmapped) apart from "do not import" (`SKIP_INBOUND`, a `skip`): its
+   users stay behind, each named "you chose not to import its inbound" in the
+   report (LIVE-1-h).
    Saving a draft's mapping previews it; a previewed run's is previewed again
    by billing.
 6. **The report is billing's table**, paged, "everyone" or problems only; the

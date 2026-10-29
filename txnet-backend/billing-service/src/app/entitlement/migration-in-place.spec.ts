@@ -48,6 +48,7 @@ const context = (): RunPlanContext => ({
   sourceAddress: ROUTER,
   now: NOW,
   variantOf: new Map([['monthly-20G', 'variant-20gb']]),
+  skippedInbounds: new Set(),
   unlimitedVariants: new Set(),
   importedGrants: new Set(),
   importedUsers: new Set(),

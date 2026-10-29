@@ -57,7 +57,7 @@ describe("an in-place run's steps", () => {
   it("is read again when the read sent it back, and mapped once its profiles are read", () => {
     expect(stageOf(run({ failureReason: "source_unavailable" }))).toBe("retry");
     expect(stageOf(run())).toBe("retry");
-    const profile = { inboundRemoteId: "monthly-20G", tag: "monthly-20G", protocol: "", clientCount: 3, variantId: null };
+    const profile = { inboundRemoteId: "monthly-20G", tag: "monthly-20G", protocol: "", clientCount: 3, variantId: null, skipped: false };
     expect(stageOf(run({ inbounds: [profile], failureReason: "inbounds_unmapped" }))).toBe("mapping");
   });
 

@@ -77,7 +77,7 @@ worker's read), `migration-run-plan.ts` (`planRun`, pure),
    `contract.source-login.md`) → preview. The worker leases one `previewing`
    run (10 minutes), reads network's snapshot — the bulk calls only — and
    records the source's inbounds with their client counts. An inbound with
-   clients and no variant sends the run back to `draft` with
+   clients, no variant and not `skipped` sends the run back to `draft` with
    `failureReason = inbounds_unmapped`: the first preview is how the reseller
    learns what to map. A refusal of the source goes back the same way with
    network's reason (`source_login_refused`, `address_refused`, …;
@@ -85,8 +85,8 @@ worker's read), `migration-run-plan.ts` (`planRun`, pure),
 10. **The mapping** is one prepaid variant per inbound, held to what an admin
     may hand out by hand (F-311-o): the reseller's own product or a platform
     one its package lists, live, deliverable. A metered variant is
-    `variant_not_prepaid`: an import brings a bag and an end, not a meter. It
-    changes in `draft` or `previewed`; on a previewed run it previews again.
+    `variant_not_prepaid` (a bag and an end, not a meter) — or `skip`, never with a variant (LIVE-1-h): its
+    clients plan `inbound_skipped`. Changed in `draft`/`previewed`; a previewed run previews again.
 11. **What the report plans** (`planRun`), per client, in the snapshot's
     order: `unreadable` (fails rule 1; its item keeps the id alone — one with
     no id has no item and is only counted), `expired` / `unknown_protocol`
@@ -222,7 +222,7 @@ Under `/api/billing/tenants/:tenantId/migration-runs`, `ResellerAccess` on
 | `POST` | `family` (a `DriverType`), `sourceAddress` (absolute http(s), kept as its origin) — or `panelId` for a family read in place ([contract.import-in-place.md](contract.import-in-place.md)) | 201 the run, `draft` |
 | `GET` | `page`, `pageSize` | the runs, newest first |
 | `GET /:runId` | — | the run: status, `failureReason`, counts, `rollbackUntil`, `snapshotsPurgedAt`, `inbounds[]` (`inboundRemoteId`, `tag`, `protocol`, `clientCount`, `variantId`) |
-| `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null | the run |
+| `PUT /:runId/inbounds` | `inbounds[]` (1..200): `inboundRemoteId`, `variantId` or null (undecided), `skip?` (no variant) | the run, each inbound with `skipped` |
 | `POST /:runId/preview` | — | 202 the run, `previewing` (answered as it is while it runs) |
 | `POST /:runId/commit` | — | 202 the run, `committing` (answered as it is once started) |
 | `POST /:runId/rollback` | — | 202 the run, `rolling_back` (answered as it is once started) |

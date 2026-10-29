@@ -4,14 +4,15 @@ import { useState } from "react";
 import { Save } from "lucide-react";
 import { useLocale } from "@/context/LocaleContext";
 import type { MigrationRun, MigrationRunsApi } from "@/lib/billing-api";
-import { MIGRATION_KEYS as K, mappingBody } from "../../../_lib/migration";
+import { MIGRATION_KEYS as K, mappingBody, SKIP_INBOUND } from "../../../_lib/migration";
 import { useMigrationMessage } from "../_hooks/useMigrationLive";
 import { usePrepaidPlans } from "../_hooks/usePrepaidPlans";
 import { Alert, Button, NativeSelect } from "../../../../_components/kit";
 
 /**
  * Each source inbound — a router's profile, read in place (F-1601-c) — to
- * one of the reseller's prepaid plans, or none (F-201-f; entitlement
+ * one of the reseller's prepaid plans, or "do not import" on purpose: its
+ * users stay behind, named in the report (LIVE-1-h; F-201-f; entitlement
  * `contract.import.md` rules 7 and 10). The plans are
  * the users-admin door's catalog — the one the issue form reads — so no
  * `catalog.manage` is needed. Saving a previewed run's mapping previews it
@@ -34,7 +35,7 @@ export function InboundMapping({ api, tenantId, run, onSaved }: { api: Migration
     : { title: K.mapping.title, intro: K.mapping.intro, item: K.mapping.inbound };
   const options = plans ?? [];
   const body = mappingBody(inbounds, chosen);
-  const changed = body.some((b, i) => b.variantId !== inbounds[i].variantId);
+  const changed = body.some((b, i) => b.variantId !== inbounds[i].variantId || b.skip !== inbounds[i].skipped);
 
   async function save() {
     if (busy) return;
@@ -70,11 +71,12 @@ export function InboundMapping({ api, tenantId, run, onSaved }: { api: Migration
             <NativeSelect
               className="sm:w-72"
               aria-label={t("common", K.mapping.pick)}
-              value={body[n].variantId ?? ""}
+              value={body[n].skip ? SKIP_INBOUND : (body[n].variantId ?? "")}
               disabled={busy || plans === null}
               onChange={(e) => setChosen((c) => ({ ...c, [i.inboundRemoteId]: e.target.value }))}
             >
               <option value="">{t("common", i.clientCount > 0 ? K.mapping.pick : K.mapping.none)}</option>
+              {i.clientCount > 0 && <option value={SKIP_INBOUND}>{t("common", K.mapping.none)}</option>}
               {options.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
