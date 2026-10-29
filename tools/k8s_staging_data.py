@@ -35,7 +35,9 @@ SHM_DIR = Path("/dev/shm/txnet-staging")
 HOST_VAR, KEY_VAR = "STAGING_PROD_SSH", "STAGING_PROD_SSH_KEY"
 # Where production keeps its bundles (B1) and its checkout's passphrase (B5).
 PROD_BUNDLE_DIR = "/var/backups/txnet/bundles"
-PROD_PASSPHRASE = "/root/site-txnet-big/" + bp.PASSPHRASE_FILE
+# Production's checkout, where every release is deployed from (R5).
+PROD_CHECKOUT = "/root/site-txnet-big"
+PROD_PASSPHRASE = f"{PROD_CHECKOUT}/{bp.PASSPHRASE_FILE}"
 # B1: the cluster's bundles carry the main stack's project; dev's never restore here.
 PROD_PROJECT = STACKS["main"].project
 RENDERED_DIRS = ("k8s/base", "k8s/monitoring/base")
@@ -148,10 +150,15 @@ def staging_env(docker) -> dict:
             "NO_PROXY": "*", "no_proxy": "*"}
 
 
-def worktree(commit: str) -> Path:
-    tree = SHM_DIR / "tree"
+def worktree(commit: str, name: str = "tree") -> Path:
+    """A worktree at commit in SHM_DIR: its rendered manifests and env files hold secrets."""
+    tree = SHM_DIR / name
     if not tree.exists():
         subprocess.run(["git", "-C", str(ROOT), "worktree", "add", "--quiet", "--detach", str(tree), commit], check=True)
+    else:
+        # One left by an earlier run may sit at another commit (2026-10-29: 7e49eb78
+        # deployed under a 4b8a0cfa bundle); --force: its rendered files are not ours.
+        subprocess.run(["git", "-C", str(tree), "checkout", "--quiet", "--force", "--detach", commit], check=True)
     return tree
 
 
@@ -211,8 +218,7 @@ def bring_production(docker, prod: Production, at: str | None) -> None:
 def forget(docker) -> None:
     """Everything of production's on this host, gone: the worktree, the memory
     directory, the age key's link. Safe when there is none."""
-    tree = SHM_DIR / "tree"
-    if tree.exists():
+    for tree in SHM_DIR.glob("tree*"):
         docker(["git", "-C", str(ROOT), "worktree", "remove", "--force", str(tree)], check=False)
     unlink_age_key(SHM_DIR, Path(AGE_KEY_FILE))
     shutil.rmtree(SHM_DIR, ignore_errors=True)

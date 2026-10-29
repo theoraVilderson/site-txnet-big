@@ -3,6 +3,7 @@
 
     python3 tools/k8s_rehearse_test.py
 """
+import os
 import subprocess
 import sys
 import unittest
@@ -31,24 +32,45 @@ def route(name, backend, match):
 # --timeout 0` made crictl 1.34's own call deadline zero: on the test server it
 # failed "context deadline exceeded", and left a container running once.
 class KillTest(unittest.TestCase):
-    def test_main_db_gets_sigkill_from_its_pid(self):
-        calls, killed = [], []
+    def kill(self, node_exec):
+        calls = []
         counts = iter([0, 1])
 
         def run(argv, **_):
             calls.append(argv)
             out = "c0ffee\n" if "ps" in argv else "4242\n" if "inspect" in argv else ""
             return subprocess.CompletedProcess(argv, 0, stdout=out)
-        saved = (kr.subprocess.run, kr.os.kill, kr.restarts, kr.kube, kr.workload, kr.say)
-        kr.subprocess.run, kr.os.kill = run, lambda pid, sig: killed.append((pid, sig))
+        saved = (kr.subprocess.run, kr.restarts, kr.kube, kr.workload, kr.say, os.environ.get("NODE_EXEC"))
+        kr.subprocess.run = run
         kr.restarts, kr.kube = lambda *_: next(counts), lambda *_: ""
         kr.workload, kr.say = lambda _: ["statefulset/main-db"], lambda _: None
+        os.environ["NODE_EXEC"] = node_exec
         try:
             kr.kill_postgres()
         finally:
-            (kr.subprocess.run, kr.os.kill, kr.restarts, kr.kube, kr.workload, kr.say) = saved
-        self.assertEqual(killed, [(4242, kr.signal.SIGKILL)])
+            (kr.subprocess.run, kr.restarts, kr.kube, kr.workload, kr.say, prior) = saved
+            os.environ.pop("NODE_EXEC") if prior is None else os.environ.update(NODE_EXEC=prior)
+        return calls
+
+    def test_main_db_gets_sigkill_from_its_pid(self):
+        calls = self.kill("")
+        self.assertIn(["kill", "-KILL", "4242"], calls)
         self.assertFalse([a for a in calls if "stop" in a])
+
+    # ADR-0166: staging's node is a container on a host whose own k3s is a
+    # production agent. Its crictl and its pids are the container's: both are
+    # reached through NODE_EXEC, never the host's.
+    def test_on_a_node_in_a_container_everything_runs_in_it(self):
+        os.environ["CRICTL"] = "crictl"
+        try:
+            calls = self.kill("docker exec txnet-staging")
+        finally:
+            os.environ.pop("CRICTL")
+        # rancher/k3s has no `k3s crictl`: its own crictl, named by CRICTL
+        self.assertTrue([a for a in calls if a[3:5] == ["crictl", "ps"]])
+        self.assertTrue(calls)
+        self.assertEqual({tuple(a[:3]) for a in calls}, {("docker", "exec", "txnet-staging")})
+        self.assertIn(["docker", "exec", "txnet-staging", "kill", "-KILL", "4242"], calls)
 
 
 # K12 (OPS-1-o-f): a run that failed mid-step left its queued message behind;

@@ -22,7 +22,6 @@ import os
 import re
 import secrets
 import shlex
-import signal
 import subprocess
 import sys
 import threading
@@ -236,18 +235,31 @@ def restarts(pod, container):
                     f'jsonpath={{.status.containerStatuses[?(@.name=="{container}")].restartCount}}') or 0)
 
 
+def on_node(*argv):
+    """argv run on the node: here, or through NODE_EXEC when the node is a
+    container (staging, ADR-0166), whose crictl and pids are its own — on the dev
+    host the host's k3s is a production agent and its pids are another namespace."""
+    return [*shlex.split(os.environ.get("NODE_EXEC", "")), *argv]
+
+
+def crictl(*argv):
+    """crictl on the node: `k3s crictl` on a k3s host, CRICTL where it is its own
+    binary (rancher/k3s, staging's node, has no `k3s crictl`)."""
+    return on_node(*shlex.split(os.environ.get("CRICTL", "k3s crictl")), *argv)
+
+
 def kill_postgres():
     """SIGKILL on the node, no shutdown at all: the container restarts in its pod
     and Postgres replays its WAL. Sent to the container's own pid: `crictl stop
     --timeout 0` also zeroes crictl 1.34's call deadline and failed half the time."""
     pod = workload("main-db")[0].split("/", 1)[1] + "-0"
     before = restarts(pod, "main-db")
-    ids = subprocess.run(["k3s", "crictl", "ps", "-q", "--name", "^main-db$", "--label",
-                          f"io.kubernetes.pod.name={pod}"], check=True, capture_output=True, text=True).stdout.split()
+    ids = subprocess.run(crictl("ps", "-q", "--name", "^main-db$", "--label",
+                                 f"io.kubernetes.pod.name={pod}"), check=True, capture_output=True, text=True).stdout.split()
     for container in ids:
-        pid = subprocess.run(["k3s", "crictl", "inspect", "-o", "go-template", "--template", "{{.info.pid}}",
-                              container], check=True, capture_output=True, text=True).stdout.strip()
-        os.kill(int(pid), signal.SIGKILL)
+        pid = subprocess.run(crictl("inspect", "-o", "go-template", "--template", "{{.info.pid}}",
+                                     container), check=True, capture_output=True, text=True).stdout.strip()
+        subprocess.run(on_node("kill", "-KILL", pid), check=True)
     deadline = time.monotonic() + RESTART_WAIT_S
     while restarts(pod, "main-db") == before:
         if time.monotonic() > deadline:

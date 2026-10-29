@@ -16,6 +16,7 @@ import select
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -46,6 +47,10 @@ class Exec(NamedTuple):
     container: str
     argv: list
     timeout: int
+    # The probe's own patience: the kubelet calls a container unhealthy only after
+    # failureThreshold failures periodSeconds apart (Kubernetes' defaults below).
+    attempts: int = 3
+    period: int = 10
 
 
 class Request(NamedTuple):
@@ -75,7 +80,8 @@ def health_checks(objects: list) -> list[Exec]:
             probe = container.get("readinessProbe") or container.get("livenessProbe") or {}
             if "exec" in probe:
                 checks.append(Exec(_namespace(obj), f"{obj['kind'].lower()}/{obj['metadata']['name']}",
-                                   container["name"], probe["exec"]["command"], probe.get("timeoutSeconds", 1)))
+                                   container["name"], probe["exec"]["command"], probe.get("timeoutSeconds", 1),
+                                   probe.get("failureThreshold", 3), probe.get("periodSeconds", 10)))
     return checks
 
 
@@ -188,16 +194,27 @@ def _api_host(sealed: Path) -> str:
     return "api." + dict(line.split("=", 1) for line in variables.splitlines() if "=" in line)["DOMAIN_NAME"]
 
 
+def healthy(check: Exec, kubectl: str, run=subprocess.run, sleep=time.sleep) -> bool:
+    """The probe asked as the kubelet asks it: unhealthy only after `attempts`
+    failures in a row. Asked once, a single slow answer at load 9 on the staging
+    twin set a Ready release back (OPS-1-ah-c, 2026-10-29)."""
+    for attempt in range(check.attempts):
+        if attempt:
+            sleep(check.period)
+        try:
+            if run([kubectl, "-n", check.namespace, "exec", check.target, "-c", check.container, "--", *check.argv],
+                   capture_output=True, timeout=check.timeout + _EXEC_GRACE_S).returncode == 0:
+                return True
+        except subprocess.TimeoutExpired:
+            pass
+    return False
+
+
 def smoke(manifest: Path, sealed: Path, kubectl: str) -> bool:
     objects = [o for o in yaml.safe_load_all(manifest.read_text()) if o]
     ok = True
     for check in health_checks(objects):
-        try:
-            run = subprocess.run([kubectl, "-n", check.namespace, "exec", check.target, "-c", check.container,
-                                  "--", *check.argv], capture_output=True, timeout=check.timeout + _EXEC_GRACE_S)
-            fine = run.returncode == 0
-        except subprocess.TimeoutExpired:
-            fine = False
+        fine = healthy(check, kubectl)
         ok &= fine
         print(f"{'ok  ' if fine else 'FAIL'}  health {check.target} {check.container}")
     proc, ports = _forward(kubectl)

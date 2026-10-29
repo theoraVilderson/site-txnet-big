@@ -170,6 +170,25 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   1018 users, 39 pods Running, R6's smoke 85 of 85, egress still closed; `down`
   left nothing. It also found OPS-1-ai (the translator fetched its models) and
   that `build` ignored a failed image listing and exited 0.
+- **The twin run** (`twin [--from REF] [--to REF]`, `tools/k8s_staging_twin.py`,
+  OPS-1-ah-c): `restore` at `--from` (default the bundle's commit), then `--to`
+  (HEAD) by `prod.k8s.sh deploy` from its own worktree, old pods beside new as in
+  production; production's panel rows that name its server's test panels are
+  pointed at the local copies on staging's network, which is TEST-NET-3
+  (`203.0.113.0/24`) so ADR-0095's egress guard lets the drivers dial them.
+  Then every check, each even after one fails: K12's `ready`, each pointed
+  panel collected from within 600s, K12's `roll` once the 1-minute load is under
+  half the cores (up to 600s, said when it is not: at load 9 on 8 cores
+  billing's old pod missed its liveness probe and 4 of 2658 requests got 502),
+  and `stores`. K12's checks run in the node container (`NODE_EXEC`), never on
+  the dev host's own k3s. A worktree left by an earlier run is moved to the
+  commit asked; the kubelet evicts at 5% free and `up` refuses unless that plus
+  staging's peak (17 GiB) is free. Production's secrets go when the run ends.
+  Until OPS-1-ai reaches production, `--from` is 7e49eb78 or later: 4b8a0cfa's
+  translator cannot start offline.
+  Proven 2026-10-29, `--from 7e49eb78` over the 08:51 bundle: 35 of 35 ready,
+  6 of 10 panels pointed and collected from, roll 0 of 2803 failed, stores
+  killed and back with their rows; 21 minutes.
 
 ## The real login (OPS-1-o-f, with the user)
 

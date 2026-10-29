@@ -4,10 +4,12 @@
     python3 tools/k8s_staging_data_test.py
 """
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 import k8s_staging_data as kd  # noqa: E402
@@ -87,6 +89,25 @@ class RestoreTest(unittest.TestCase):
         self.assertEqual(argv, ["python3", "/shm/tree/scripts/bundle/backup.py", "restore", "/shm/b.gpg",
                                 "--stack", "k8s", "--passphrase-file", "/shm/p", "--replace"])
         self.assertEqual(env["BACKUP_BUNDLE_DIR"], "/shm/safety")
+
+
+class WorktreeTest(unittest.TestCase):
+    # 2026-10-29: a tree left at 7e49eb78 by an earlier run was deployed under a
+    # bundle of 4b8a0cfa, and B9 refused the restore. A tree is the commit asked.
+    def test_a_tree_left_at_another_commit_is_moved_to_the_one_asked(self):
+        def git(*argv):
+            return subprocess.run(["git", "-C", repo, *argv], check=True, capture_output=True, text=True).stdout.strip()
+        with tempfile.TemporaryDirectory() as repo, tempfile.TemporaryDirectory() as shm:
+            git("init", "-q")
+            commits = []
+            for n in ("one", "two"):
+                git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", n)
+                commits.append(git("rev-parse", "HEAD"))
+            with mock.patch.object(kd, "ROOT", Path(repo)), mock.patch.object(kd, "SHM_DIR", Path(shm)):
+                kd.worktree(commits[0])
+                tree = kd.worktree(commits[1])
+            self.assertEqual(subprocess.run(["git", "-C", str(tree), "rev-parse", "HEAD"], capture_output=True,
+                                            text=True).stdout.strip(), commits[1])
 
 
 if __name__ == "__main__":

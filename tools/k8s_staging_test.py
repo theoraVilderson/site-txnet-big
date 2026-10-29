@@ -83,6 +83,23 @@ class RunTest(unittest.TestCase):
         self.assertTrue(self.argv[-1].startswith("ip route add default dev eth0 && exec /bin/k3s server"))
 
 
+class SubnetTest(unittest.TestCase):
+    # 2026-10-29: network-service's egress guard (ADR-0095) refused the local
+    # panels at 172.24.0.x, rightly: a reseller's panel never reaches a private
+    # address. TEST-NET-3 is neither private nor routed anywhere (RFC 5737).
+    def test_the_network_is_internal_on_a_range_no_guard_calls_private(self):
+        import ipaddress
+        docker = Docker()
+        ks.create_network(docker)
+        self.assertEqual(docker.calls, [["docker", "network", "create", "--internal",
+                                         f"--subnet={ks.STAGING_SUBNET}", ks.NETWORK]])
+        net = ipaddress.ip_network(ks.STAGING_SUBNET)
+        # Go's netip.IsPrivate, which the guard uses (Python's is_private is wider)
+        rfc1918 = [ipaddress.ip_network(n) for n in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")]
+        self.assertFalse([n for n in rfc1918 if net.overlaps(n)])
+        self.assertTrue(net.subnet_of(ipaddress.ip_network("203.0.113.0/24")))
+
+
 class EgressTest(unittest.TestCase):
     def network(self, internal):
         return {f"docker network inspect {ks.NETWORK}": (0, json.dumps([{"Internal": internal}]))}
@@ -107,6 +124,38 @@ class FitTest(unittest.TestCase):
         need = 1500 + ks.K3S_BASE_MIB + ks.K3S_PER_POD_MIB * 1
         self.assertIsNone(ks.fit_problem(self.WS, available_mib=need + 1))
         self.assertIn(f"{need:.0f}", ks.fit_problem(self.WS, available_mib=need - 1))
+
+
+class DiskTest(unittest.TestCase):
+    # 2026-10-29: at 90% the kubelet's DiskPressure evicted pods and deleted 8 of
+    # 36 images (GC off or not); with no route out the deploy could not recover.
+    GIB = 1 << 30
+
+    # One number: the line `up` keeps clear of is the line staging's kubelet evicts at.
+    def test_the_kubelet_evicts_at_the_line_up_checks(self):
+        # As sh reads it: an unquoted `<` would be a redirect and k3s never start.
+        server = ks.run_argv("img:tag", Path("/repo"), Path("/cache/a.tar.zst"))[-1].split(" && ", 1)[1]
+        with tempfile.TemporaryDirectory() as d:
+            words = subprocess.run(["sh", "-c", server.replace("exec /bin/k3s server", "printf '%s\\n'")],
+                                   cwd=d, capture_output=True, text=True).stdout.splitlines()
+        percent = f"{ks.EVICTION_FREE_FRACTION:.0%}"
+        self.assertIn(f"--kubelet-arg=eviction-hard=imagefs.available<{percent},nodefs.available<{percent}", words)
+        self.assertLess(ks.EVICTION_FREE_FRACTION, 0.15)
+
+    def test_room_for_the_kubelets_margin_and_stagings_peak(self):
+        total = 117 * self.GIB
+        need = total * ks.EVICTION_FREE_FRACTION + ks.STAGING_PEAK_GIB * self.GIB
+        self.assertIsNone(ks.disk_problem(total, free=int(need) + 1))
+        self.assertIn("GiB", ks.disk_problem(total, free=int(need) - self.GIB))
+
+
+class ImportTest(unittest.TestCase):
+    # A second deploy named the same 36 images, and all were copied in again (~10 min).
+    def test_an_image_staging_holds_is_not_copied_again(self):
+        held = "docker.arvancloud.ir/redis:8.8-alpine\nregistry.example/txnet/a:1\n"
+        docker = Docker({f"docker exec {ks.CONTAINER} ctr -n k8s.io images ls -q": (0, held)})
+        self.assertEqual(ks.not_held(docker, ["registry.example/txnet/a:1", "registry.example/txnet/b:2"]),
+                         ["registry.example/txnet/b:2"])
 
 
 class PanelsTest(unittest.TestCase):

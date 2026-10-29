@@ -9,6 +9,9 @@
     python3 tools/k8s_staging.py restore [--at REF]
                                            production's newest bundle into it, at the bundle's commit
                                            (tools/k8s_staging_data.py, OPS-1-ah-b)
+    python3 tools/k8s_staging.py twin [--from REF] [--to REF]
+                                           the twin run: production's data at --from, --to (HEAD) deployed
+                                           over it, every check (tools/k8s_staging_twin.py, OPS-1-ah-c)
     python3 tools/k8s_staging.py status    the container, the node, the egress check
     python3 tools/k8s_staging.py down      container, volume and network removed; the dev stack started
                                            again if `up` stopped it
@@ -33,6 +36,10 @@ from bundle_plan import parse_env  # noqa: E402
 from k8s_memfit import K3S_BASE_MIB, K3S_PER_POD_MIB, repo_workloads  # noqa: E402
 
 CONTAINER = NETWORK = "txnet-staging"
+# TEST-NET-3 (RFC 5737): routed nowhere, and not private, so network-service's
+# egress guard (ADR-0095) lets production's drivers reach the local panels on it
+# — at 172.24.0.x it refused them, rightly, as a reseller's panel.
+STAGING_SUBNET = "203.0.113.0/24"
 VOLUME = "txnet-staging-k3s"
 STATE_FILE = Path("/var/lib/txnet/staging.json")
 CACHE_DIR = Path("/var/cache/txnet-staging")
@@ -56,13 +63,25 @@ NODE_POLL_S = 3
 # ctr's namespace the kubelet reads images from.
 CTR_NAMESPACE = "k8s.io"
 FAILED_LOG_LINES = 40
+# The line staging's kubelet evicts at, and `up` keeps clear of. Crossed, it
+# evicts pods and deletes images whatever the GC thresholds say, and staging
+# cannot pull them back. 5%, not the kubelet's 15%: a node policy, not the
+# release's, and the dev host's disk cannot spare 15% beside staging's peak.
+EVICTION_FREE_FRACTION = 0.05
+# What staging adds to the disk at its peak: a release's 36 images plus its pods,
+# measured 2026-10-29: 33 GiB free fell to 18 during a twin run (15), plus 2.
+STAGING_PEAK_GIB = 17
+GIB = 1 << 30
 # k3s exits "no default routes found" without one, and an internal network has
 # none: a route on the container's own link, with no gateway behind it. Nothing
 # answers there, which egress_problem proves on every `up`.
 SERVER_COMMAND = ("ip route add default dev eth0 && exec /bin/k3s server"
                   # A node with no route out cannot pull an image back: its kubelet never
                   # deletes one. At 88% disk it deleted 18 of 36 before their pods started.
-                  " --kubelet-arg=image-gc-high-threshold=100 --kubelet-arg=image-gc-low-threshold=99")
+                  " --kubelet-arg=image-gc-high-threshold=100 --kubelet-arg=image-gc-low-threshold=99"
+                  # quoted: sh reads an unquoted `<` as a redirect
+                  " '--kubelet-arg=eviction-hard=imagefs.available<{0:.0%},nodefs.available<{0:.0%}'"
+                  .format(EVICTION_FREE_FRACTION))
 
 
 class StagingError(Exception):
@@ -120,6 +139,15 @@ def fit_problem(workloads, available_mib: float) -> str | None:
     return None
 
 
+def disk_problem(total: int, free: int) -> str | None:
+    """None when staging's peak fits above the kubelet's eviction line."""
+    need = total * EVICTION_FREE_FRACTION + STAGING_PEAK_GIB * GIB
+    if free < need:
+        return (f"staging needs {need / GIB:.0f} GiB free on / and {free / GIB:.0f} GiB is: "
+                "free room first (docker builder prune, old registry tags — never `docker volume prune`)")
+    return None
+
+
 def write_state(path: Path, dev_stack_was_running: bool) -> None:
     """What `up` changed on the host, for `down` to put back."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,6 +171,10 @@ def remove(docker, root: Path, state: Path) -> None:
         state.unlink()
     KUBECONFIG.unlink(missing_ok=True)
     KUBECTL_WRAPPER.unlink(missing_ok=True)
+
+
+def create_network(docker) -> None:
+    docker(["docker", "network", "create", "--internal", f"--subnet={STAGING_SUBNET}", NETWORK])
 
 
 def paneltest_containers(docker) -> list[str]:
@@ -213,6 +245,10 @@ def write_kubeconfig(docker) -> None:
 def up(docker, root: Path, state: Path) -> None:
     if docker(["docker", "inspect", CONTAINER], check=False).returncode == 0:
         raise StagingError(f"{CONTAINER} exists: `down` first")
+    disk = os.statvfs("/")
+    problem = disk_problem(disk.f_blocks * disk.f_frsize, disk.f_bavail * disk.f_frsize)
+    if problem:
+        raise StagingError(problem)
     versions = parse_env((root / "k8s" / "versions.env").read_text())
     image = k3s_image(parse_env((root / ".env").read_text())["DOCKER_REGISTRY"], versions["K3S_VERSION"])
     airgap = fetch_airgap(versions["K3S_VERSION"])
@@ -226,7 +262,7 @@ def up(docker, root: Path, state: Path) -> None:
         problem = fit_problem(repo_workloads(), mem_available_mib())
         if problem:
             raise StagingError(problem)
-        docker(["docker", "network", "create", "--internal", NETWORK])
+        create_network(docker)
         for name in paneltest_containers(docker):
             docker(["docker", "network", "connect", NETWORK, name])
         docker(run_argv(image, root, airgap))
@@ -244,9 +280,16 @@ def up(docker, root: Path, state: Path) -> None:
     print(f"staging is up. KUBECTL={KUBECTL_WRAPPER}")
 
 
+def not_held(docker, images: list[str]) -> list[str]:
+    """The images staging does not hold yet: a second deploy names mostly the same ones."""
+    held = set(docker(["docker", "exec", CONTAINER, "ctr", "-n", CTR_NAMESPACE, "images", "ls", "-q"]).stdout.split())
+    return [image for image in images if image not in held]
+
+
 def import_images(docker, images: list[str]) -> None:
-    """`docker save | ctr import`, one image at a time: nothing is pulled by the node (K14)."""
-    for image in images:
+    """`docker save | ctr import`, one image at a time, each one staging lacks:
+    nothing is pulled by the node (K14)."""
+    for image in not_held(docker, images):
         save = subprocess.Popen(["docker", "save", image], stdout=subprocess.PIPE)
         subprocess.run(["docker", "exec", "-i", CONTAINER, "ctr", "-n", CTR_NAMESPACE, "images", "import", "-"],
                        stdin=save.stdout, check=True, capture_output=True)
@@ -267,9 +310,11 @@ def status(docker) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["up", "import", "restore", "status", "down"])
+    parser.add_argument("command", choices=["up", "import", "restore", "twin", "status", "down"])
     parser.add_argument("images", nargs="*")
-    parser.add_argument("--at", help="restore: deploy this later commit, not the bundle's")
+    parser.add_argument("--at", "--from", dest="at", help="restore, twin: production's data at this "
+                        "commit, not the bundle's")
+    parser.add_argument("--to", default="HEAD", help="twin: the release deployed over it")
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
         print("k8s_staging.py: run as root on the dev host", file=sys.stderr)
@@ -279,10 +324,14 @@ def main(argv=None) -> int:
             up(docker_run, ROOT, STATE_FILE)
         elif args.command == "import":
             import_images(docker_run, args.images)
-        elif args.command == "restore":
-            import k8s_staging_data as kd  # late: it imports this module
-            kd.restore_production(docker_run, kd.Production.from_env({**parse_env((ROOT / ".env.dev").read_text()),
-                                                                       **os.environ}), args.at)
+        elif args.command in ("restore", "twin"):
+            import k8s_staging_data as kd  # late: both import this module
+            import k8s_staging_twin as kt
+            prod = kd.Production.from_env({**parse_env((ROOT / ".env.dev").read_text()), **os.environ})
+            if args.command == "restore":
+                kd.restore_production(docker_run, prod, args.at)
+            elif not kt.twin(docker_run, prod, args.at, args.to):
+                return 1
         elif args.command == "status":
             return status(docker_run)
         else:

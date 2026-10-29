@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
-from k8s_release import (Exec, Request, after_deploy, after_rollback, current, curl_argv, health_checks,  # noqa: E402
+from k8s_release import (Exec, Request, after_deploy, after_rollback, current, curl_argv, health_checks, healthy,  # noqa: E402
                          passed, previous, route_requests)
 import k8s_release  # noqa: E402
 
@@ -29,8 +29,8 @@ def workload(kind, name, containers, *, replicas=1, namespace="txnet"):
     return {"kind": kind, "metadata": {"name": name, "namespace": namespace}, "spec": spec}
 
 
-def probe(*argv, timeout=5):
-    return {"exec": {"command": list(argv)}, "timeoutSeconds": timeout}
+def probe(*argv, timeout=5, **more):
+    return {"exec": {"command": list(argv)}, "timeoutSeconds": timeout, **more}
 
 
 def route(name, match, entry_points, service, namespace="txnet"):
@@ -45,13 +45,36 @@ class HealthTest(unittest.TestCase):
         objects = [
             workload("StatefulSet", "main-db", [
                 {"name": "main-db", "readinessProbe": probe("pg_isready")},
-                {"name": "pg-backup", "livenessProbe": probe("loop-health", timeout=3)}]),
+                {"name": "pg-backup", "livenessProbe": probe("loop-health", timeout=3, failureThreshold=5,
+                                                             periodSeconds=20)}]),
             workload("DaemonSet", "promtail", [{"name": "promtail"}], namespace="txnet-monitoring"),
         ]
         self.assertEqual(health_checks(objects), [
-            Exec("txnet", "statefulset/main-db", "main-db", ["pg_isready"], 5),
-            Exec("txnet", "statefulset/main-db", "pg-backup", ["loop-health"], 3),
+            Exec("txnet", "statefulset/main-db", "main-db", ["pg_isready"], 5, 3, 10),
+            Exec("txnet", "statefulset/main-db", "pg-backup", ["loop-health"], 3, 5, 20),
         ])
+
+    # OPS-1-ah-c (2026-10-29): the smoke asked once, where the kubelet asks
+    # failureThreshold times. At load 9 on the staging twin locale-service's
+    # probe timed out once, the release was set back, and the pod was Ready.
+    def test_one_slow_answer_is_asked_again_as_the_kubelet_would(self):
+        check = Exec("txnet", "deployment/locale-service", "locale-service", ["health"], 3, 3, 10)
+        answers, slept = iter([subprocess.TimeoutExpired("x", 13), subprocess.CompletedProcess([], 0)]), []
+
+        def run(*_, **__):
+            answer = next(answers)
+            if isinstance(answer, Exception):
+                raise answer
+            return answer
+        self.assertTrue(healthy(check, "kubectl", run=run, sleep=slept.append))
+        self.assertEqual(slept, [10])
+
+    def test_failure_threshold_failures_in_a_row_fail(self):
+        check = Exec("txnet", "deployment/x", "x", ["health"], 3, 3, 10)
+        runs = []
+        self.assertFalse(healthy(check, "kubectl", sleep=lambda _: None,
+                                 run=lambda *a, **k: runs.append(a) or subprocess.CompletedProcess([], 1)))
+        self.assertEqual(len(runs), 3)
 
     # A workload the overlay runs at zero replicas has no pod to ask (OPS-1-o-n).
     def test_zero_replicas_is_not_asked(self):
