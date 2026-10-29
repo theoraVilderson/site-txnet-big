@@ -100,3 +100,6 @@ k8s/monitoring/base/
 # Python bytecode, wherever a tool or script runs from.
 __pycache__/
 *.pyc
+# A kubeconfig is a cluster admin key: never tracked, and never a reason for
+# R5's clean-checkout check to refuse a release (production's, 2026-10-29).
+/.kube/
