@@ -87,9 +87,13 @@ def ancestry_problem(prod_commit: str, head: str, is_ancestor: bool) -> str | No
             "it runs work this checkout lacks, or this checkout rewrote it")
 
 
-def merge_command(bundle: str) -> str:
-    checkout = kd.PROD_CHECKOUT
-    return (f"git -C {checkout} fetch --quiet {bundle} HEAD && git -C {checkout} merge --ff-only FETCH_HEAD"
+def bundle_range(prod_commit: str) -> list[str]:
+    """What the bundle carries: the release branch's commits production lacks."""
+    return [f"{prod_commit}..{RELEASE_BRANCH}"]
+
+
+def merge_command(bundle: str, checkout: str = kd.PROD_CHECKOUT) -> str:
+    return (f"git -C {checkout} fetch --quiet {bundle} {RELEASE_BRANCH} && git -C {checkout} merge --ff-only FETCH_HEAD"
             f" && rm -f {bundle}")
 
 
@@ -162,7 +166,7 @@ def ship(prod: kd.Production, prod_commit: str, head: str) -> None:
         return
     with tempfile.TemporaryDirectory() as work:
         bundle = Path(work) / "release.bundle"
-        sh(["git", "-C", str(ROOT), "bundle", "create", "--quiet", str(bundle), f"{prod_commit}..{RELEASE_BRANCH}"])
+        sh(["git", "-C", str(ROOT), "bundle", "create", "--quiet", str(bundle), *bundle_range(prod_commit)])
         with open(bundle, "rb") as data:
             sh(prod.ssh(f"cat > {REMOTE_BUNDLE}"), stdin=data)
     sh(prod.ssh(merge_command(REMOTE_BUNDLE)))

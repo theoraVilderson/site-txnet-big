@@ -3,7 +3,9 @@
 
     python3 tools/release_test.py
 """
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -84,9 +86,25 @@ class CleanTest(unittest.TestCase):
 
 class ShipTest(unittest.TestCase):
     def test_production_moves_forward_only(self):
-        command = rl.merge_command("/tmp/r.bundle")
-        self.assertIn("merge --ff-only FETCH_HEAD", command)
-        self.assertIn(f"git -C {rl.kd.PROD_CHECKOUT} fetch --quiet /tmp/r.bundle", command)
+        self.assertIn("merge --ff-only FETCH_HEAD", rl.merge_command("/tmp/r.bundle"))
+
+    def test_the_bundle_ship_makes_fast_forwards_a_checkout(self):
+        # 2026-10-29: the first release asked the bundle for HEAD, which a
+        # `prod..master` bundle does not carry ("couldn't find remote ref HEAD").
+        with tempfile.TemporaryDirectory() as d:
+            here, there, bundle = Path(d, "here"), Path(d, "there"), Path(d, "r.bundle")
+            git = lambda repo, *a: subprocess.run(["git", "-C", str(repo), *a], check=True, capture_output=True,
+                                                  text=True).stdout.strip()
+            subprocess.run(["git", "init", "-q", "-b", rl.RELEASE_BRANCH, str(here)], check=True)
+            ident = ("-c", "user.email=t@t", "-c", "user.name=t")
+            git(here, *ident, "commit", "-q", "--allow-empty", "-m", "prod")
+            subprocess.run(["git", "clone", "-q", str(here), str(there)], check=True)
+            prod = git(here, "rev-parse", "HEAD")
+            git(here, *ident, "commit", "-q", "--allow-empty", "-m", "release")
+            git(here, "bundle", "create", "--quiet", str(bundle), *rl.bundle_range(prod))
+            subprocess.run(rl.merge_command(str(bundle), checkout=str(there)), shell=True, check=True,
+                           capture_output=True)
+            self.assertEqual(git(there, "rev-parse", "HEAD"), git(here, "rev-parse", "HEAD"))
 
     def test_production_ahead_of_this_checkout_is_refused(self):
         self.assertIn("not an ancestor", rl.ancestry_problem("abc", "def", is_ancestor=False))
