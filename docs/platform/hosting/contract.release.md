@@ -190,6 +190,19 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   6 of 10 panels pointed and collected from, roll 0 of 2803 failed, stores
   killed and back with their rows; 21 minutes.
 
+**R15 — A release is one command** (ADR-0166 point 5, OPS-1-ah-d).
+`scripts/release.sh [--until STEP] [--from REF]` (`tools/release.py`), as root
+on the dev host, runs in order and stops at the first failure: `clean` (no
+change `git status` shows, on master; production's checkout clean and an
+ancestor of HEAD), `checks` (AGENTS.md's seven), `disk` (build cache and
+dangling images freed, R14's room), `build` (R4, R12), `twin` (R14 from
+production's running commit, or `--from`; staging removed however it ends, the
+dev stack back), `push` (R10), `ship` (production's commit..master as a git
+bundle over ssh, `merge --ff-only` in its checkout), `deploy` (`prod.k8s.sh
+deploy` there, K10, K16). Nothing leaves the dev host before the twin passed.
+`--until twin` proves a release without sending it. A release is a batch of
+fixes, not one per change.
+
 ## The real login (OPS-1-o-f, with the user)
 
 A pull-only token on the registry, made by the user; put in `.env.prod` on the
