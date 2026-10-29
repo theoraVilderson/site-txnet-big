@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-24
+updated: 2026-10-29
 ---
 
 # Contract — hosting: a release, from its images to its way back
@@ -133,6 +133,28 @@ every tag after it, so the next `rollback` goes further back, never forward.
 **R9 — `prod.k8s.sh rollback [tag]`** by hand: R7's path to `tag`, by default
 the release before the one running, with the recorded overlay. A secret file
 only the old commit mounts is not sealed today, and fails its render (S4).
+
+**R14 — A release passes the production twin first** (ADR-0166, OPS-1-ah).
+Staging is k3s at `K3S_VERSION` in one privileged container, `txnet-staging`,
+on the dev host: `scripts/staging.sh up|import|status|down`
+(`tools/k8s_staging.py`). Its rules, each one held by the script:
+- **No route out.** The container's only network is `--internal`; the local
+  panels' containers (`/root/paneltest`) join it, and nothing else does. k3s
+  exits "no default routes found" without one, so the default route is on the
+  container's own link with no gateway behind it. `up` proves, before it
+  returns, that the network is internal and `http://1.1.1.1` gets no answer;
+  either failing removes staging. Proven 2026-10-29 from a pod: the internet
+  "No route to host", outside DNS unanswered, the 3x-ui panel reached.
+- **Production's server, nothing pulled.** `k8s/k3s/config.yaml` mounted as
+  it is (K1). k3s's own images come from the release's air-gap archive,
+  downloaded once per version and checked against the release's sum list on
+  every `up`; ours are imported from the host's Docker (`import`, K14).
+- **Memory is lent by the dev stack.** `up` stops it when running, records
+  that, and refuses unless K19's requests plus k3s fit in what is then free;
+  `down` starts it again only if `up` stopped it.
+- **Nothing outlives `down`**: the container, its named volume `txnet-staging-k3s`
+  and the network go, and the kubeconfig with them. A failed `up` prints the
+  container's log, then does the same.
 
 ## The real login (OPS-1-o-f, with the user)
 

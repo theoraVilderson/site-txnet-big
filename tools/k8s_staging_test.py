@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+"""Spec for the staging cluster on the dev host (OPS-1-ah-a, ADR-0166).
+
+    python3 tools/k8s_staging_test.py
+"""
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+import k8s_staging as ks  # noqa: E402
+from k8s_memfit import Workload  # noqa: E402
+
+
+class Docker:
+    """A stand-in for the docker CLI: records each argv, answers from a table."""
+
+    def __init__(self, answers=None):
+        self.calls, self.answers = [], answers or {}
+
+    def __call__(self, argv, check=True, **_):
+        self.calls.append(argv)
+        for prefix, (code, out) in self.answers.items():
+            if " ".join(argv).startswith(prefix):
+                if check and code:
+                    raise subprocess.CalledProcessError(code, argv, out)
+                return subprocess.CompletedProcess(argv, code, out, "")
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    def ran(self, prefix):
+        return [c for c in self.calls if " ".join(c).startswith(prefix)]
+
+
+class ImageTest(unittest.TestCase):
+    def test_k3s_tag_is_the_pin_with_a_dash(self):
+        self.assertEqual(ks.k3s_image("docker.arvancloud.ir", "v1.34.1+k3s1"),
+                         "docker.arvancloud.ir/rancher/k3s:v1.34.1-k3s1")
+
+    def test_airgap_sum_is_read_from_the_release_list(self):
+        sums = ("aa11  k3s\n"
+                f"bb22  {ks.AIRGAP_FILE}\n"
+                "cc33  k3s-airgap-images-amd64.tar.gz\n")
+        self.assertEqual(ks.airgap_sha256(sums), "bb22")
+
+    def test_a_release_without_the_airgap_file_is_refused(self):
+        with self.assertRaisesRegex(ks.StagingError, ks.AIRGAP_FILE):
+            ks.airgap_sha256("aa11  k3s\n")
+
+
+class RunTest(unittest.TestCase):
+    def setUp(self):
+        self.argv = ks.run_argv("img:tag", Path("/repo"), Path("/cache/a.tar.zst"))
+
+    def test_on_the_internal_network_and_publishing_nothing(self):
+        self.assertIn(f"--network={ks.NETWORK}", self.argv)
+        self.assertFalse([a for a in self.argv if a in ("-p", "--publish") or a.startswith("--publish")])
+
+    # ADR-0166 point 1: the twin runs production's own server flags.
+    def test_production_server_config_mounted_read_only(self):
+        self.assertIn("/repo/k8s/k3s/config.yaml:/etc/rancher/k3s/config.yaml:ro", self.argv)
+
+    def test_airgap_images_where_k3s_imports_them(self):
+        self.assertIn(f"/cache/a.tar.zst:{ks.AIRGAP_DIR}/{ks.AIRGAP_FILE}:ro", self.argv)
+
+    # A named volume, so `down` removes exactly it (an anonymous one outlived the
+    # 2026-10-24 proof and `docker volume prune` is never run here).
+    def test_state_in_the_named_volume(self):
+        self.assertIn(f"{ks.VOLUME}:/var/lib/rancher/k3s", self.argv)
+
+    # k3s exits "no default routes found" on an internal network (2026-10-29): a
+    # route on the container's own link, with no gateway behind it, satisfies it.
+    def test_a_default_route_with_no_gateway_before_k3s_starts(self):
+        self.assertEqual(self.argv[-3:-1], ["img:tag", "-c"])
+        self.assertEqual(self.argv[-1], "ip route add default dev eth0 && exec /bin/k3s server")
+
+
+class EgressTest(unittest.TestCase):
+    def network(self, internal):
+        return {f"docker network inspect {ks.NETWORK}": (0, json.dumps([{"Internal": internal}]))}
+
+    def test_closed_when_internal_and_the_probe_fails(self):
+        docker = Docker({**self.network(True), "docker exec": (1, "")})
+        self.assertIsNone(ks.egress_problem(docker))
+
+    def test_a_network_with_a_route_out_is_named(self):
+        docker = Docker({**self.network(False), "docker exec": (1, "")})
+        self.assertIn("not internal", ks.egress_problem(docker))
+
+    def test_an_answer_from_outside_is_named(self):
+        docker = Docker({**self.network(True), "docker exec": (0, "")})
+        self.assertIn(ks.EGRESS_PROBE_URL, ks.egress_problem(docker))
+
+
+class FitTest(unittest.TestCase):
+    WS = [Workload("a", "a", 1000.0, 2000.0, True), Workload("b", "b", 500.0, 900.0, False)]
+
+    def test_requests_and_k3s_against_what_is_free(self):
+        need = 1500 + ks.K3S_BASE_MIB + ks.K3S_PER_POD_MIB * 1
+        self.assertIsNone(ks.fit_problem(self.WS, available_mib=need + 1))
+        self.assertIn(f"{need:.0f}", ks.fit_problem(self.WS, available_mib=need - 1))
+
+
+class PanelsTest(unittest.TestCase):
+    # marzban-web lives in marzban's namespace (network_mode: service:marzban):
+    # Docker refuses to connect it to a network, and on 2026-10-29 that ended `up`.
+    def test_a_container_sharing_another_ones_network_is_left_out(self):
+        listing = "paneltest-marzban-1 paneltest_default\npaneltest-marzban-web-1 \nxui2 paneltest_default\n"
+        docker = Docker({"docker ps": (0, listing)})
+        self.assertEqual(ks.paneltest_containers(docker), ["paneltest-marzban-1", "xui2"])
+
+
+class PauseTest(unittest.TestCase):
+    def test_down_starts_the_dev_stack_only_when_up_stopped_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            state = Path(d) / "staging.json"
+            for was_running, started in ((True, 1), (False, 0)):
+                ks.write_state(state, dev_stack_was_running=was_running)
+                docker = Docker()
+                ks.remove(docker, Path("/repo"), state)
+                self.assertEqual(len(docker.ran("/repo/scripts/dev.compose.sh start")), started)
+                self.assertFalse(state.exists())
+
+    def test_down_removes_container_volume_and_network(self):
+        with tempfile.TemporaryDirectory() as d:
+            docker = Docker()
+            ks.remove(docker, Path("/repo"), Path(d) / "none.json")
+            for prefix in (f"docker rm -f {ks.CONTAINER}", f"docker volume rm {ks.VOLUME}",
+                           f"docker network rm {ks.NETWORK}"):
+                self.assertTrue(docker.ran(prefix), prefix)
+
+
+if __name__ == "__main__":
+    unittest.main()
