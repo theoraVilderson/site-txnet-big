@@ -25,6 +25,7 @@ belongs to that dependency's own check.
 | `site-pwa`, `coinsite` | H15's `http-health` with `HEALTH_PATH=/api/health` on `PORT` | `src/app/api/health/route.ts` is `force-static`: built once, so a check renders nothing and asks no session or tenant. `PORT` is the port Traefik's label calls, and the prod images listen there on `0.0.0.0` (OPS-1-o-s) |
 | `guide-media` | `wget` `127.0.0.1:8082/healthz` | a loopback-only server in `guide-media.conf`, so the two servers that serve keys still answer nothing else |
 | `mailpit` | `/mailpit readyz` | the image's own command |
+| `locale-service` | `locale-service -healthcheck`: gRPC health on `passthrough:///127.0.0.1:<port>` | its own loopback, no resolver: by name, grpc's DNS resolver also asked `_grpc_config` (TXT) upstream, 7s with none, and the kubelet killed it (OPS-1-aj, ADR-0165) |
 | `pg-backup`, `object-backup` | `compose/health.yml` `loop-health` | see below |
 
 **The backup loops.** Each pass of the loop (every 30s) touches `/tmp/healthy`.

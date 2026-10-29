@@ -41,16 +41,12 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// dialTarget turns a listen addr (":50051" / "0.0.0.0:50051") into something a
-// client can dial ("localhost:50051").
+// dialTarget turns a listen addr (":50051" / "0.0.0.0:50051") into this
+// server's own loopback, dialled with no resolver: grpc's DNS resolver also asks
+// for a `_grpc_config` TXT record, which with no upstream DNS (staging, a
+// national internet) took 7s and failed the 3s probe (OPS-1-aj).
 func dialTarget(addr string) string {
-	if strings.HasPrefix(addr, ":") {
-		return "localhost" + addr
-	}
-	if strings.HasPrefix(addr, "0.0.0.0:") {
-		return "localhost:" + strings.TrimPrefix(addr, "0.0.0.0:")
-	}
-	return addr
+	return "passthrough:///127.0.0.1:" + addr[strings.LastIndex(addr, ":")+1:]
 }
 
 func runHealthcheck(addr string) {
