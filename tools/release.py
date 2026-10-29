@@ -19,7 +19,8 @@ touched until the release passed on production's own data.
 
 --until STEP stops after STEP: `--until twin` proves a release without sending it.
 --from REF starts the twin at REF instead of production's commit, for a commit
-that cannot start in staging (4b8a0cfa and older lack OPS-1-ai's offline translator).
+that cannot start in staging (before 21c9d8f8 the translator and locale-service's
+healthcheck need an outside DNS).
 """
 import argparse
 import os
