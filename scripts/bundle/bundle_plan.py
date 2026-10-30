@@ -7,6 +7,7 @@ answer to "what is state" for both.
 import datetime
 import os
 import sys
+import urllib.parse
 
 _SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_SCRIPTS, "move"))
@@ -125,12 +126,16 @@ def code_relation(bundle_commit, head, is_ancestor):
     return CODE_UNRELATED
 
 
-# ship.py's settings, in dev-docker/secrets/backup-ship.env.
-SHIP_REQUIRED = ("BACKUP_S3_ENDPOINT", "BACKUP_S3_BUCKET", "BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_SECRET_ACCESS_KEY")
-# Passed to rclone as they are: a host that reaches S3 only through a proxy.
+# ship.py's settings, in dev-docker/secrets/backup-ship.env. The lock is named
+# even when there is none ("0"): on Arvan an unset one means unlocked (B7).
+SHIP_REQUIRED = ("BACKUP_S3_ENDPOINT", "BACKUP_S3_BUCKET", "BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_SECRET_ACCESS_KEY",
+                 "BACKUP_S3_LOCK_DAYS")
+# Passed to mc as they are: a host that reaches S3 only through a proxy.
 SHIP_PASSTHROUGH = ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY")
-# rclone's provider when none is named: any S3-compatible store (Arvan, MinIO, …).
-DEFAULT_S3_PROVIDER = "Other"
+# mc's name for the one S3 host it is given (MC_HOST_<alias>).
+MC_ALIAS = "s3"
+# Where ship.py mounts the bundle directory inside mc's container or pod.
+SHIP_MOUNT = "/bundles"
 
 
 def parse_env(text):
@@ -150,26 +155,29 @@ def missing_ship_settings(settings):
 
 
 def s3_destination(settings, name):
-    """rclone's address of name in the bucket, under BACKUP_S3_PREFIX when set."""
+    """mc's address of name in the bucket, under BACKUP_S3_PREFIX when set."""
     prefix = settings.get("BACKUP_S3_PREFIX", "").strip("/")
-    return "s3:%s/%s%s" % (settings["BACKUP_S3_BUCKET"], prefix + "/" if prefix else "", name)
+    return "%s/%s/%s%s" % (MC_ALIAS, settings["BACKUP_S3_BUCKET"], prefix + "/" if prefix else "", name)
 
 
-def rclone_env(settings):
-    """The settings in rclone's own names, for one remote called `s3`."""
-    env = {
-        "RCLONE_CONFIG_S3_TYPE": "s3",
-        "RCLONE_CONFIG_S3_PROVIDER": settings.get("BACKUP_S3_PROVIDER") or DEFAULT_S3_PROVIDER,
-        "RCLONE_CONFIG_S3_ENDPOINT": settings["BACKUP_S3_ENDPOINT"],
-        "RCLONE_CONFIG_S3_ACCESS_KEY_ID": settings["BACKUP_S3_ACCESS_KEY_ID"],
-        "RCLONE_CONFIG_S3_SECRET_ACCESS_KEY": settings["BACKUP_S3_SECRET_ACCESS_KEY"],
-        # a write-only key may not create the bucket, or even ask whether it exists
-        "RCLONE_S3_NO_CHECK_BUCKET": "true",
-    }
-    if settings.get("BACKUP_S3_REGION"):
-        env["RCLONE_CONFIG_S3_REGION"] = settings["BACKUP_S3_REGION"]
+def mc_env(settings):
+    """The settings as mc's one host, MC_HOST_s3=scheme://key:secret@host, plus a proxy if named."""
+    endpoint = urllib.parse.urlsplit(settings["BACKUP_S3_ENDPOINT"])
+    credentials = ":".join(urllib.parse.quote(settings[k], safe="")
+                           for k in ("BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_SECRET_ACCESS_KEY"))
+    env = {"MC_HOST_" + MC_ALIAS: "%s://%s@%s" % (endpoint.scheme, credentials, endpoint.netloc)}
     env.update({k: settings[k] for k in SHIP_PASSTHROUGH if settings.get(k)})
     return env
+
+
+def copy_args(settings, name):
+    """mc's argv sending name, locked in compliance mode for BACKUP_S3_LOCK_DAYS on the object itself:
+    a bucket's default retention is not applied by Arvan (NIN-1-i, 2026-10-30), so it is never relied on."""
+    days = settings["BACKUP_S3_LOCK_DAYS"].strip()
+    if not days.isdigit():
+        raise ValueError("BACKUP_S3_LOCK_DAYS must be a whole number of days, 0 for no lock: %r" % days)
+    lock = ["--retention-mode", "compliance", "--retention-duration", "%dd" % int(days)] if int(days) else []
+    return ["cp", "--quiet", *lock, "%s/%s" % (SHIP_MOUNT, name), s3_destination(settings, name)]
 
 
 def holds_data(volume_dir):

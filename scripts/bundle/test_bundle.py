@@ -86,21 +86,34 @@ class ShipSettings(unittest.TestCase):
 
     def test_the_destination_joins_bucket_prefix_and_name(self):
         self.assertEqual(bp.s3_destination({"BACKUP_S3_BUCKET": "b", "BACKUP_S3_PREFIX": "/nightly/"}, "x.gpg"),
-                         "s3:b/nightly/x.gpg")
-        self.assertEqual(bp.s3_destination({"BACKUP_S3_BUCKET": "b"}, "x.gpg"), "s3:b/x.gpg")
+                         "s3/b/nightly/x.gpg")
+        self.assertEqual(bp.s3_destination({"BACKUP_S3_BUCKET": "b"}, "x.gpg"), "s3/b/x.gpg")
 
-    def test_rclone_gets_its_own_names_and_nothing_extra(self):
-        env = bp.rclone_env({"BACKUP_S3_ENDPOINT": "https://s3.example", "BACKUP_S3_BUCKET": "b",
-                             "BACKUP_S3_ACCESS_KEY_ID": "k", "BACKUP_S3_SECRET_ACCESS_KEY": "s", "OTHER": "x"})
-        self.assertEqual(env["RCLONE_CONFIG_S3_ENDPOINT"], "https://s3.example")
-        self.assertEqual(env["RCLONE_CONFIG_S3_PROVIDER"], "Other")
-        # a write-only key may not create or even look at the bucket
-        self.assertEqual(env["RCLONE_S3_NO_CHECK_BUCKET"], "true")
+    def test_mc_gets_one_host_with_the_key_escaped_and_nothing_extra(self):
+        env = bp.mc_env({"BACKUP_S3_ENDPOINT": "https://s3.example:9000", "BACKUP_S3_BUCKET": "b",
+                         "BACKUP_S3_ACCESS_KEY_ID": "k", "BACKUP_S3_SECRET_ACCESS_KEY": "a/b+c@d",
+                         "HTTPS_PROXY": "http://p:3128", "OTHER": "x"})
+        self.assertEqual(env["MC_HOST_s3"], "https://k:a%2Fb%2Bc%40d@s3.example:9000")
+        self.assertEqual(env["HTTPS_PROXY"], "http://p:3128")
         self.assertNotIn("OTHER", env)
+
+    def test_the_lock_is_set_on_each_object_as_it_is_sent(self):
+        # Arvan keeps a bucket's default retention but never applies it (NIN-1-i, 2026-10-30).
+        settings = {"BACKUP_S3_BUCKET": "b", "BACKUP_S3_LOCK_DAYS": "7"}
+        self.assertEqual(bp.copy_args(settings, "x.gpg"),
+                         ["cp", "--quiet", "--retention-mode", "compliance", "--retention-duration", "7d",
+                          "/bundles/x.gpg", "s3/b/x.gpg"])
+        self.assertEqual(bp.copy_args(dict(settings, BACKUP_S3_LOCK_DAYS="0"), "x.gpg"),
+                         ["cp", "--quiet", "/bundles/x.gpg", "s3/b/x.gpg"])
+
+    def test_a_lock_that_is_not_a_number_of_days_is_refused(self):
+        with self.assertRaises(ValueError):
+            bp.copy_args({"BACKUP_S3_BUCKET": "b", "BACKUP_S3_LOCK_DAYS": "7d"}, "x.gpg")
 
     def test_a_missing_setting_is_named(self):
         self.assertEqual(bp.missing_ship_settings({"BACKUP_S3_BUCKET": "b"}),
-                         ["BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_ENDPOINT", "BACKUP_S3_SECRET_ACCESS_KEY"])
+                         ["BACKUP_S3_ACCESS_KEY_ID", "BACKUP_S3_ENDPOINT", "BACKUP_S3_LOCK_DAYS",
+                          "BACKUP_S3_SECRET_ACCESS_KEY"])
 
 
 class HasData(unittest.TestCase):

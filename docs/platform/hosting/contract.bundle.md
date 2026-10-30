@@ -56,12 +56,18 @@ pgBackRest 01:00 and restic 23:00) and `backup.py now`; one at a time (a lock).
 Seven kept on disk; one not yet in S3 is never deleted while shipping is set up.
 `backup.py install-timers` writes both units from the checkout's own path.
 
-**B7 — Shipping is separate and write-only** (user, 2026-10-23). `ship.py`,
-every 10 minutes, sends each unshipped bundle and then its `.sha256` with
-rclone (`${DOCKER_REGISTRY}/rclone/rclone:1.71`), records it in `.shipped`.
-The key in `dev-docker/secrets/backup-ship.env` may only `PutObject`: no
-list, no delete, no HEAD (`--no-check-dest --s3-no-head`), so whoever takes
-the server cannot erase S3. Retention in S3 is the bucket's lifecycle rule.
+**B7 — Shipping is separate, and each object is locked as it lands** (user,
+2026-10-23; the lock replaced the write-only key 2026-10-30, NIN-1-i1). `ship.py`,
+every 10 minutes, sends each unshipped bundle and then its `.sha256` with mc
+(`${DOCKER_REGISTRY}/minio/mc:RELEASE.2025-08-13T08-35-41Z`), records it in
+`.shipped`. Each `mc cp` sets compliance retention for `BACKUP_S3_LOCK_DAYS`
+on the object itself, so whoever takes the server and its key cannot erase S3
+inside the window. Named even when unwanted (`0`): Arvan's key is all-access,
+and Arvan keeps a bucket's default retention without applying it to new
+objects, so an unset lock is no lock. The bucket (`txnet-backups`, Arvan
+`ir-central1`) has versioning and object lock; lifecycle expires `bundles/`
+after the lock + 1 day and noncurrent versions after 1 day. Prefix per stack:
+`bundles/dev/`, `bundles/prod/`.
 
 **B8 — Alerts** (`database.rules.yml`): `BackupBundleStale` — no bundle for
 26h, or never (critical); `BackupBundleNotShipped` — two or more waiting for
@@ -100,7 +106,7 @@ sides answer; `bundle_k8s.py` the cluster's answers:
   (`kubectl exec`; `pg-backup` in `main-db`'s pod, K3). A throwaway container is
   a pod labelled `app.kubernetes.io/name=txnet-bundle` — never `part-of`, so no
   prune or stop selects it — with no API token, deleted at the end. A file
-  volume is its claim mounted at `/data` in one (K7); ship's rclone pod mounts
+  volume is its claim mounted at `/data` in one (K7); ship's mc pod mounts
   the bundle directory read-only from the node the script runs on, its S3
   settings on stdin (never in a pod spec). The drill's Postgres listens on no
   address. The model is the renderer's (K2), from the sealed secrets opened in
@@ -137,6 +143,9 @@ volumes identical by content, 1426 users, `txnet_app_user` signing in with
 a restore without `--replace` refused on the cluster holding that data, and with
 it made a safety bundle from the cluster, restored and started the pgBackRest
 full (174s); `verify --stack k8s` of the cluster's bundle passed in 58s; `ship`
-sent both from a pod with a put-only key, byte-identical in the bucket. Tests:
+sent both from a pod with a put-only key, byte-identical in the bucket. On Arvan
+(2026-10-30, NIN-1-i1): six dev bundles sent through mc, each version
+`COMPLIANCE` for 7 days, sizes equal; deleting one with the all-access key
+refused (`forbidden by object lock`). Tests:
 `scripts/bundle/test_bundle_k8s.py`.
 

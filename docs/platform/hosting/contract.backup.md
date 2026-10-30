@@ -32,6 +32,10 @@ and remains the restore of everything else. Restore steps:
   that removes noncurrent versions after one day. pgBackRest must list and
   expire, so its key can delete: the lock, not the key, is what protects the
   data — B7's write-only rule does not hold for this repository.
+  **On Arvan the lock does not hold either** (2026-10-30): Arvan keeps a
+  bucket's default retention but never applies it, and pgBackRest cannot set
+  an object's own. repo2 there is a copy against a lost disk, not against
+  whoever holds the key; that copy is B7's locked bundle (NIN-1-i2).
   `repo2-retention-full-type=time` at the same days, so expire only ever asks
   to delete what the lock has released. A delete inside the window, by expire
   or by whoever holds the key, adds a delete marker; the version stays until

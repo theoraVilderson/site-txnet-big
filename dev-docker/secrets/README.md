@@ -17,7 +17,7 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 | `object-backup-password` | `object-backup` (`RESTIC_PASSWORD_FILE`, F-414-m) | the restic repository's password: `openssl rand -base64 32 > dev-docker/secrets/object-backup-password` |
 | `pg-backup-passphrase` | `main-db`, `pg-backup` (OPS-1-a, hosting H2) | pgBackRest's repository cipher passphrase: `openssl rand -base64 48 > dev-docker/secrets/pg-backup-passphrase` |
 | `backup-bundle-passphrase` | `scripts/bundle/` (OPS-1-ad, hosting B5) | opens every backup bundle: `openssl rand -base64 48 > dev-docker/secrets/backup-bundle-passphrase`; **a copy off the server** — never inside a bundle |
-| `backup-ship.env` | `scripts/bundle/ship.py` (OPS-1-ad, B7) | the write-only S3 key and bucket bundles are sent with; absent, nothing is sent (`runbook-backup-bundle.md`) |
+| `backup-ship.env` | `scripts/bundle/ship.py` (OPS-1-ad, B7) | the S3 key, bucket, prefix and `BACKUP_S3_LOCK_DAYS` bundles are sent with, each object locked (B7); absent, nothing is sent (`runbook-backup-bundle.md`) |
 | `origin-cert/` | `gateway-handler` (`cloudflare.*`) — `EDGE_ORIGIN_CERT`, NIN-1-c2, hosting O13 | the origin certificate every edge is served, `scripts/edge/origin-cert.sh`: the pair the gateway binds (sealed). Lost: `FORCE=1` re-issue, seal, deploy |
 | `origin-pull/` | nothing at runtime — `scripts/edge/origin-pull.sh` (EDGE-1-g) | our origin-pull CA's key and the client pair Cloudflare holds; `ca.pem` sits in `traefik/origin-pull/`. Lost: run `issue` with `FORCE=1`, then `upload` |
 

@@ -38,21 +38,24 @@ S3 for an hour — shipping is failing, or was never set up (below).
 ## First 3 checks
 
 1. **The passphrase is kept off this server.** `dev-docker/secrets/backup-bundle-passphrase`
-   opens every bundle; a copy of it lives in your password manager. Without it a
-   bundle in S3 is noise. It is never inside a bundle.
+   opens every bundle; a copy of it lives off every server (a KeePassXC file on
+   the owner's own machine and phone, and on paper), with the S3 key beside it.
+   Without it a bundle in S3 is noise. It is never inside a bundle.
 2. **`$BACKUP list`**: the bundles here, and which reached S3.
-3. **Shipping is set up** (once): a bucket; a key that may only `PutObject` on
-   it (no list, no delete, no read — on MinIO/AWS-style policies:
-   `{"Effect":"Allow","Action":["s3:PutObject","s3:AbortMultipartUpload","s3:ListMultipartUploadParts"],"Resource":["arn:aws:s3:::<bucket>/*"]}`);
-   a lifecycle rule on the bucket for how long bundles stay; then
-   `dev-docker/secrets/backup-ship.env` (0600):
+3. **Shipping is set up** (once, B7): a bucket created with object lock
+   (`txnet-backups` on Arvan `ir-central1`, versioning on), a lifecycle rule
+   expiring `bundles/` one day after the lock and noncurrent versions after one
+   day; then `dev-docker/secrets/backup-ship.env` (0600):
    ```
-   BACKUP_S3_ENDPOINT=https://<the provider's S3 endpoint>
-   BACKUP_S3_BUCKET=<bucket>
-   BACKUP_S3_ACCESS_KEY_ID=<write-only key>
+   BACKUP_S3_ENDPOINT=https://hot.ir-central1.arvanstorage.ir
+   BACKUP_S3_BUCKET=txnet-backups
+   BACKUP_S3_ACCESS_KEY_ID=<key>
    BACKUP_S3_SECRET_ACCESS_KEY=<its secret>
-   # optional: BACKUP_S3_PREFIX=txnet/  BACKUP_S3_REGION=…  BACKUP_S3_PROVIDER=…  HTTPS_PROXY=…
+   BACKUP_S3_PREFIX=bundles/prod/          # bundles/dev/ on the dev host
+   BACKUP_S3_LOCK_DAYS=7                   # set on each object; 0 = no lock
+   # optional: HTTPS_PROXY=…
    ```
+   The bucket's own default retention is not enough: Arvan does not apply it.
    Then `python3 scripts/bundle/ship.py` once by hand: it sends every bundle waiting.
 
 ## Mitigation

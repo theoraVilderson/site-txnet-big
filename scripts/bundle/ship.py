@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Sends every finished backup bundle not yet in S3, with a write-only key (OPS-1-ad).
+"""Sends every finished backup bundle not yet in S3, each locked as it lands (OPS-1-ad, NIN-1-i).
 
 Separate from the bundle on purpose: making a backup never depends on S3
-answering, and this holds the only S3 key on the server — one that can write
-but not delete, so whoever takes the server cannot take the backups too.
-Retention in S3 is the bucket's lifecycle rule, not this script's.
+answering. Each object is sent in compliance mode for BACKUP_S3_LOCK_DAYS, so
+whoever takes the server and its S3 key still cannot delete a bundle inside
+that window (B7). Removal after it is the bucket's lifecycle rule.
 
 Run by txnet-backup-ship.timer every 10 minutes, or by hand:
     python3 scripts/bundle/ship.py [--stack dev|k8s]
-rclone runs in a throwaway container, or pod on Kubernetes (OPS-1-o-k), with
+mc runs in a throwaway container, or pod on Kubernetes (OPS-1-o-k), with
 the bundle directory mounted read-only and its settings on stdin.
 Settings: dev-docker/secrets/backup-ship.env (runbook-backup-bundle.md). Without
 it nothing is sent and it says so; the alert still counts what waits.
@@ -27,17 +27,12 @@ import bundle_plan as bp  # noqa: E402
 import bundle_stack as bs  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# Pulled through ${DOCKER_REGISTRY}, like every image (verified on the mirror 2026-10-23).
-RCLONE_IMAGE = "rclone/rclone:1.71"
-# --no-check-dest and --s3-no-head: a write-only key may not HEAD an object, before
-# the upload or after it (MinIO rehearsal, 2026-10-23: the object landed, the HEAD
-# after it was refused, and rclone reported the copy failed). The PUT's own ETag
-# is still checked, and the .sha256 beside each bundle is checked after a download.
-RCLONE_FLAGS = ["--no-check-dest", "--s3-no-head", "--retries", "3", "--low-level-retries", "10",
-                "--s3-upload-concurrency", "2", "-q"]
+# Pulled through ${DOCKER_REGISTRY}, like every image (verified on the mirror 2026-10-30).
+# mc, not rclone: rclone cannot set an object's retention on upload (NIN-1-i).
+MC_IMAGE = "minio/mc:RELEASE.2025-08-13T08-35-41Z"
 # The settings arrive on stdin as quoted assignments, so the key is never in an
 # argv, an env file on disk or a pod spec.
-RCLONE_WITH_SETTINGS = 'set -a; . /dev/stdin; set +a; exec rclone "$@"'
+MC_WITH_SETTINGS = 'set -a; . /dev/stdin; set +a; exec mc "$@"'
 
 
 def say(message, *args):
@@ -51,11 +46,11 @@ def read_settings(relative):
 
 def send(host, box, settings, name):
     """name, then its .sha256: a checksum in S3 means its bundle arrived whole."""
-    assignments = "".join("%s=%s\n" % (k, shlex.quote(v)) for k, v in sorted(bp.rclone_env(settings).items()))
+    assignments = "".join("%s=%s\n" % (k, shlex.quote(v)) for k, v in sorted(bp.mc_env(settings).items()))
     for path in (name, name + bp.CHECKSUM_SUFFIX):
         try:
-            host.run(box.exec_argv("sh", "-c", RCLONE_WITH_SETTINGS, "_", "copyto", "/bundles/" + path,
-                                   bp.s3_destination(settings, path), *RCLONE_FLAGS), stdin=assignments)
+            host.run(box.exec_argv("sh", "-c", MC_WITH_SETTINGS, "_", *bp.copy_args(settings, path)),
+                     stdin=assignments)
         except RuntimeError as err:
             raise RuntimeError("%s: %s" % (path, err))
 
@@ -76,7 +71,7 @@ def ship(host):
     waiting = bp.unshipped(os.listdir(bio.BUNDLE_DIR), shipped)
     sent = 0
     if waiting:
-        with host.scratch("%s/%s" % (registry, RCLONE_IMAGE), host_dir=(bio.BUNDLE_DIR, "/bundles"), network=True) as box:
+        with host.scratch("%s/%s" % (registry, MC_IMAGE), host_dir=(bio.BUNDLE_DIR, bp.SHIP_MOUNT), network=True) as box:
             for name in waiting:
                 started = time.monotonic()
                 send(host, box, settings, name)
@@ -99,7 +94,7 @@ def main(argv=None):
     try:
         with bio.locked(bio.BUNDLE_DIR, "ship"):
             say("%d sent", ship(host))
-    except RuntimeError as err:
+    except (RuntimeError, ValueError) as err:
         say("STOPPED: %s", err)
         return 1
     finally:
