@@ -12,6 +12,9 @@
     python3 tools/k8s_staging.py twin [--from REF] [--to REF]
                                            the twin run: production's data at --from, --to (HEAD) deployed
                                            over it, every check (tools/k8s_staging_twin.py, OPS-1-ah-c)
+    python3 tools/k8s_staging.py open [--port 8443]
+                                           the owner's browser in staging, through ssh and a proxy
+                                           presenting the origin-pull pair (tools/k8s_staging_open.py, OPS-1-ah-i)
     python3 tools/k8s_staging.py status    the container, the node, the egress check
     python3 tools/k8s_staging.py down      container, volume and network removed; the dev stack started
                                            again if `up` stopped it
@@ -310,11 +313,12 @@ def status(docker) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["up", "import", "restore", "twin", "status", "down"])
+    parser.add_argument("command", choices=["up", "import", "restore", "twin", "open", "status", "down"])
     parser.add_argument("images", nargs="*")
     parser.add_argument("--at", "--from", dest="at", help="restore, twin: production's data at this "
                         "commit, not the bundle's")
     parser.add_argument("--to", default="HEAD", help="twin: the release deployed over it")
+    parser.add_argument("--port", type=int, default=8443, help="open: the proxy's port on this host's loopback")
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
         print("k8s_staging.py: run as root on the dev host", file=sys.stderr)
@@ -332,6 +336,9 @@ def main(argv=None) -> int:
                 kd.restore_production(docker_run, prod, args.at)
             elif not kt.twin(docker_run, prod, args.at, args.to):
                 return 1
+        elif args.command == "open":
+            import k8s_staging_open as ko  # late: it imports this module
+            ko.open_staging(docker_run, args.port)
         elif args.command == "status":
             return status(docker_run)
         else:

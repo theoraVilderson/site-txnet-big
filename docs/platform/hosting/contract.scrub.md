@@ -6,7 +6,7 @@ version: 1
 updated: 2026-10-30
 ---
 
-# Contract — hosting: staging's copy of production holds nothing real
+# Contract — hosting: staging's copy of production holds nothing real, and the owner's way in
 
 R14 restores production's data into staging, a network with no route out. That
 network is one layer; this file is the second (ADR-0168 points 1, 2): one
@@ -90,10 +90,31 @@ mistake in either reaches no real panel and no real person.
   the scrub and the guard in the same change, or the guard misses it
   (ADR-0168, consequences).
 
+**R17 — The owner reaches staging through ssh, and only staging** (ADR-0168
+point 3, OPS-1-ah-i, `tools/k8s_staging_open.py`). `staging.sh open [--port 8443]`,
+while staging holds production's data:
+
+- **The proxy** listens on this host's loopback only; the owner's computer
+  reaches it by `ssh -N -L`. A browser profile kept for staging uses it as its
+  HTTP and HTTPS proxy. Each `CONNECT host:443` is answered with a certificate
+  for that host, and its bytes go to staging's Traefik through a `kubectl
+  port-forward` (the smoke check's, re-opened when it ends) by the host's own
+  SNI, presenting the origin-pull pair (O3), so Traefik sees a verified pull as
+  from Cloudflare. A plain-http request is redirected to https. Any other request is refused. The
+  proxy has no other upstream: nothing the profile asks for reaches the internet.
+- **Its CA.** The panel sends HSTS, so a certificate cannot be clicked past.
+  `/var/lib/txnet/staging-ca` holds a CA made once (key owner-only, kept
+  across `down`), which the owner imports into that profile once. Host
+  certificates are signed per run, in memory. Only that profile trusts it.
+- **The pull pair** opens with production's age key, linked only while staging
+  holds its data (`restore`/`twin`), into `/dev/shm`, removed at exit. Without it,
+  `open` refuses.
+- What the owner changes lives in the copy and goes at `down`.
+
 ## Proof
 
 `tools/k8s_staging_scrub_test.py` (14), `k8s_staging_people_test.py` (9),
-`k8s_staging_keys_test.py` (16), `k8s_staging_data_test.py`,
+`k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_data_test.py`,
 `k8s_staging_twin_test.py`, `scripts/bundle/test_bundle.py`
 (`test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services`).
 2026-10-29, the SQL run on dev's database inside a transaction that was rolled
@@ -116,3 +137,7 @@ Keys, 2026-10-30, on dev: the SQL inside a rolled-back transaction, 7 real
 vault keys (gateways, SMS) and 2 merchant ids before, none after, both dev bots
 `active` and every constraint held. A value Python sealed, under a DEK it
 wrapped, opened through `vault.crypto.ts` itself, and the fingerprints matched.
+Open, 2026-10-30, against dev's Traefik (O3 `required`) with dev's pull pair:
+the panel and the apex 200 through the proxy, curl verifying the staging CA's
+certificate; a client pair of another CA refused at the handshake. Not yet run
+against staging itself.

@@ -140,7 +140,7 @@ sleep 30
     def test_a_forward_that_ends_is_tried_again(self):
         with tempfile.TemporaryDirectory() as tmp:
             kubectl, count = self.fake_kubectl(tmp, fail_times=1)
-            proc, ports = k8s_release._forward(kubectl)
+            proc, ports = k8s_release.forward(kubectl)
             proc.kill()
             self.assertEqual(set(ports), set(k8s_release._DOORS))
             self.assertEqual(count.read_text().strip(), "2")
@@ -149,7 +149,7 @@ sleep 30
         with tempfile.TemporaryDirectory() as tmp:
             kubectl, _ = self.fake_kubectl(tmp, fail_times=99)
             with self.assertRaisesRegex(RuntimeError, "lost connection to pod"):
-                k8s_release._forward(kubectl)
+                k8s_release.forward(kubectl)
 
 
 class HistoryTest(unittest.TestCase):

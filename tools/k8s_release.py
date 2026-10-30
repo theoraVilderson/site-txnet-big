@@ -172,7 +172,7 @@ def _forward_once(kubectl: str) -> tuple[subprocess.Popen | None, dict, str]:
     return proc, ports, ""
 
 
-def _forward(kubectl: str) -> tuple[subprocess.Popen, dict]:
+def forward(kubectl: str) -> tuple[subprocess.Popen, dict]:
     """`kubectl port-forward` to Traefik's pod, waited on until both doors listen.
     A forward that ends is the check's tool failing, not the release (OPS-1-o-f):
     tried again on fresh ports, then failed with kubectl's own words."""
@@ -217,7 +217,7 @@ def smoke(manifest: Path, sealed: Path, kubectl: str) -> bool:
         fine = healthy(check, kubectl)
         ok &= fine
         print(f"{'ok  ' if fine else 'FAIL'}  health {check.target} {check.container}")
-    proc, ports = _forward(kubectl)
+    proc, ports = forward(kubectl)
     try:
         for request in route_requests(objects, _api_host(sealed)):
             status = subprocess.run(curl_argv(request, ports, sealed / ORIGIN_PULL_CLIENT_DIR),
