@@ -11,9 +11,10 @@ B10's restore runs this between the stores and the services (`backup.py restore
                              vault rows, OpenVPN file — and archived, which
                              stops its collection; then `guard`
                              then the people (`k8s_staging_people.py`, OPS-1-ah-g)
+                             and the keys (`k8s_staging_keys.py`, OPS-1-ah-h)
     guard                    exit 1, naming each, while a panel row names an
-                             address that is not a local panel, or a person's
-                             contact is not a fake
+                             address that is not a local panel, a person's
+                             contact is not a fake, or a key is not staging's
 
 The closed network stays the other layer (ADR-0168 point 2): one mistake in
 either reaches nothing real.
@@ -30,6 +31,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
+import k8s_staging_keys as kk  # noqa: E402
 import k8s_staging_people as kp  # noqa: E402
 
 MAIN_DB_POD, MAIN_DB_CONTAINER = "main-db-0", "main-db"
@@ -188,14 +190,15 @@ def vault_logins() -> tuple[list[str], int]:
 
 
 def guard(local: Local) -> bool:
-    """True when no panel row names a real address and every person's contact is a
-    fake; each finding said otherwise."""
+    """True when no panel row names a real address, every person's contact is a
+    fake and every key staging's own; each finding said otherwise."""
     labels, sources = vault_logins()
-    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql)
+    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql) + kk.guard(psql)
     for line in found:
         print(f"REAL  {line}")
     if found:
-        print(f"{len(found)} real address(es), login(s) or contact(s) left in staging's copy: it does not start")
+        print(f"{len(found)} real address(es), login(s), contact(s) or key(s) left in staging's copy: "
+              "it does not start")
     return not found
 
 
@@ -220,6 +223,7 @@ def main(argv=None) -> int:
             local = scrub_panels(ks.docker_run, args.prod_host)
             work = os.environ.get(RESTORE_WORK)
             kp.scrub(psql, KUBECTL, Path(work) if work else None)
+            kk.scrub(psql, KUBECTL)
         else:
             local = Local.running(ks.docker_run)
         return 0 if guard(local) else 1

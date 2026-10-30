@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Contract — hosting: staging's copy of production holds nothing real
@@ -53,6 +53,22 @@ mistake in either reaches no real panel and no real person.
   `REDISCLI_AUTH` (`data.yml`, K5), so no password passes through the scrub. RabbitMQ's queued messages, which the restore would publish back
   once the services start, are dropped: they were addressed to real people.
   Message bodies (support tickets, notices) are content, not a contact, and stay.
+- **Keys** (OPS-1-ah-h, `tools/k8s_staging_keys.py`). Every vault row but
+  `panel_credentials` (the panels' rule above) is deleted, whatever its kind:
+  bots, webhook secrets, SMS, gateways, AI, DNS. So an SMS stays `queued` and
+  an online gateway answers "not configured"; buying is tested by card-to-card,
+  which needs no key (user, 2026-10-29: no SMS stub, no sandbox; billing refuses
+  `PAYMENT_GATEWAY_SANDBOX` under `NODE_ENV=production`, and the sandboxes are
+  out of reach anyway). The encrypted merchant id and key on
+  `tenant_gateway_config` are cleared, and the never-read `payment_gateway.merchantId`
+  becomes `wiped`. The platform's primary Telegram and Bale bots become the dev
+  bots of `.env.dev` (`<PLATFORM>_BOT_TOKEN`, `_BOT_USERNAME`, `_WEBHOOK_SECRET`,
+  as `seed-bot-integration.sh` reads them; an unset secret is derived from the
+  token). Their token and secret are sealed as `vault.crypto.ts` seals, under a
+  new data key wrapped with the KEK that tenant-service mounts, read from the
+  cluster into memory. Nothing of production's is unwrapped. Every other bot is
+  `disabled`. A platform whose token `.env.dev` lacks has no bot. One token answers
+  one webhook, so only the platform's bot can be the dev bot.
 - **The guard.** It reads every panel row and the vault. It refuses, naming
   each one: an address field (`apiBaseUrl`, `clientBaseUrl`, `ipAddress`,
   `knownAddresses`) naming a host that is neither a local panel nor 192.0.2.1;
@@ -61,7 +77,12 @@ mistake in either reaches no real panel and no real person.
   panel's login. For people, it refuses any value in a `COLUMNS` column that
   is not a fake, any OTP row, and any text, json or array column whose name
   says contact (phone, mail, chat, card, sheba, address, wallet …) that neither
-  `COLUMNS` nor `NOT_CONTACT` lists. A migration that adds one therefore stops
+  `COLUMNS` nor `NOT_CONTACT` lists. For keys, it refuses a vault row that is
+  not the platform's and sealing a dev bot's value (by fingerprint), a bot not
+  `disabled` that is not the platform's primary under the dev bot's name, a
+  gateway's key or merchant id, and a column named like a key (secret, token,
+  api key, merchant, password, sealed …) that neither `KEY_COLUMNS` nor
+  `NOT_KEY` lists. A migration that adds one therefore stops
   the twin. The twin runs it again after the new release's migration,
   before its checks (R14), and only panels in service there are counted as
   collected from.
@@ -72,7 +93,7 @@ mistake in either reaches no real panel and no real person.
 ## Proof
 
 `tools/k8s_staging_scrub_test.py` (14), `k8s_staging_people_test.py` (9),
-`k8s_staging_data_test.py`,
+`k8s_staging_keys_test.py` (16), `k8s_staging_data_test.py`,
 `k8s_staging_twin_test.py`, `scripts/bundle/test_bundle.py`
 (`test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services`).
 2026-10-29, the SQL run on dev's database inside a transaction that was rolled
@@ -91,3 +112,7 @@ the new release's migration; ready 35/35, 6 panels collected, roll 0 of 2522,
 stores back. Its first try stopped at the scrub with every service down:
 production's memory-data has no `--requirepass` argument (K5), so redis-cli now
 uses the pod's own `REDISCLI_AUTH`.
+Keys, 2026-10-30, on dev: the SQL inside a rolled-back transaction, 7 real
+vault keys (gateways, SMS) and 2 merchant ids before, none after, both dev bots
+`active` and every constraint held. A value Python sealed, under a DEK it
+wrapped, opened through `vault.crypto.ts` itself, and the fingerprints matched.
