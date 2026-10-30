@@ -77,6 +77,13 @@ which compose would hand every service as an empty password (P1000 at boot).
 `dev-docker/monitoring/.env.prod` holds only what `.env`/`.env.prod` leave unset
 (ports, Grafana's host and login); the move carries it (`move_plan.py`).
 
+**S9 — A sealed copy outlives the last commit that mounts it** (F-018-m2-c,
+2026-10-30). A rollback (R7, R9) renders an older commit with today's opened
+secrets, so a file that commit mounts must still be sealed: deleting
+`object-backup-password.sops` with restic made the twin's set-back fail
+("… is not sealed"). Delete one only when no commit in `txnet-release`'s
+history (R8) mounts it any more.
+
 ## The first seal (OPS-1-o-f, with the user)
 
 On the test server: `install-tools`, `secrets init`, copy the key off the
