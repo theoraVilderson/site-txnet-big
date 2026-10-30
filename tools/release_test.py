@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Spec for `scripts/release.sh` (OPS-1-ah-d, -k; ADR-0166 point 5, ADR-0168 point 4; hosting R15).
+"""Spec for `scripts/release.sh` (OPS-1-ah-d, -k, -l; ADR-0166 point 5, ADR-0168 point 4, ADR-0169; hosting R15).
 
     python3 tools/release_test.py
 """
+import contextlib
+import io
 import subprocess
 import sys
 import tempfile
@@ -11,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 import release as rl  # noqa: E402
+import release_reach as rr  # noqa: E402
 from k8s_staging_data import Production  # noqa: E402
 
 PROD = Production("root@2.144.31.149", "/root/.ssh/key")
@@ -40,7 +43,15 @@ class OrderTest(unittest.TestCase):
     def test_a_failed_step_stops_every_later_one(self):
         log = []
         self.assertEqual(rl.run_steps(self.steps(log, fail="build")), "build")
-        self.assertEqual(log, ["clean", "checks", "disk", "build"])
+        self.assertEqual(log, ["clean", "checks", "reach", "disk", "build"])
+
+    def test_each_step_says_how_long_it_took(self):
+        # ADR-0169: the next slow step is named by a figure, not a guess.
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            rl.run_steps(self.steps([], names=("clean", "checks")), clock=iter([0, 5, 5, 12]).__next__)
+        self.assertIn("-- clean 5s", out.getvalue())
+        self.assertIn("-- checks 7s", out.getvalue())
 
     def test_until_stops_after_the_named_step(self):
         log = []
@@ -65,7 +76,7 @@ class TwinStepTest(unittest.TestCase):
             calls.append(argv[0])
             return argv[0] != "twin"
         with self.assertRaises(rl.ReleaseError):
-            rl.twin_step(staging, prod_commit="abc", head="def", staging_up=False)
+            rl.twin_step(staging, prod_commit="abc", head="def", staging_up=False, checks=("ready",))
         self.assertEqual(calls, ["up", "twin", "down"])
 
     def test_a_passed_twin_leaves_staging_up(self):
@@ -74,8 +85,43 @@ class TwinStepTest(unittest.TestCase):
         def staging(*argv):
             seen.append(argv)
             return True
-        rl.twin_step(staging, prod_commit="abc", head="def", staging_up=True)
-        self.assertEqual(seen, [("twin", "--from", "abc", "--to", "def")])
+        rl.twin_step(staging, prod_commit="abc", head="def", staging_up=True, checks=("ready", "panels"))
+        self.assertEqual(seen, [("twin", "--from", "abc", "--to", "def", "--checks", "ready,panels")])
+
+
+DECLARED = {"site-pwa": {"lane": "quick"}, "network-service": {"checks": ["panels"]}}
+
+
+class LaneTest(unittest.TestCase):
+    # ADR-0169: the path is the reach's; anything that leaves the reach unknown takes the full twin.
+    def test_a_frontend_alone_takes_the_quick_lane(self):
+        plan = rl.lane_plan(rr.Reach(frozenset({"site-pwa"}), ()), DECLARED, full=False)
+        self.assertEqual((plan.lane, plan.checks), (rr.QUICK, ("ready",)))
+
+    def test_a_service_takes_the_twin_with_its_checks(self):
+        plan = rl.lane_plan(rr.Reach(frozenset({"network-service"}), ()), DECLARED, full=False)
+        self.assertEqual((plan.lane, plan.checks), (rr.TWIN, ("ready", "panels")))
+
+    def test_full_is_every_check_whatever_the_reach(self):
+        plan = rl.lane_plan(rr.Reach(frozenset({"site-pwa"}), ()), DECLARED, full=True)
+        self.assertEqual((plan.lane, plan.checks), (rr.TWIN, rr.TWIN_CHECKS))
+
+    def test_a_reach_that_could_not_be_measured_is_every_check(self):
+        plan = rl.lane_plan("production's commit does not render here", DECLARED, full=False)
+        self.assertEqual((plan.lane, plan.checks), (rr.TWIN, rr.TWIN_CHECKS))
+        self.assertIn("does not render", plan.why)
+
+    def test_production_running_other_than_its_checkout_is_unknown(self):
+        # After `prod.k8s.sh rollback` the checkout stays ahead of what runs (R9).
+        self.assertIn("rollback", rl.running_problem(PROD_AT, f"{'b' * 12} {'c' * 12}"))
+        self.assertIsNone(rl.running_problem(PROD_AT, f"{'b' * 12} {PROD_AT[:12]}"))
+        self.assertIsNone(rl.running_problem(PROD_AT, ""))  # the first release has no record
+
+    def test_only_a_twin_brings_staging_down_at_the_end(self):
+        for lane, expected in ((rr.TWIN, [("down",)]), (rr.QUICK, [])):
+            calls = []
+            rl.close_staging(lambda *argv: calls.append(argv) or True, {"lane": lane})
+            self.assertEqual(calls, expected, lane)
 
 
 HEAD = "d" * 40

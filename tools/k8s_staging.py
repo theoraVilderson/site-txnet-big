@@ -10,7 +10,7 @@
     python3 tools/k8s_staging.py restore [--at REF]
                                            production's newest bundle into it, at the bundle's commit
                                            (tools/k8s_staging_data.py, OPS-1-ah-b)
-    python3 tools/k8s_staging.py twin [--from REF] [--to REF]
+    python3 tools/k8s_staging.py twin [--from REF] [--to REF] [--checks a,b]
                                            the twin run: production's data at --from, --to (HEAD) deployed
                                            over it, every check (tools/k8s_staging_twin.py, OPS-1-ah-c)
     python3 tools/k8s_staging.py open [--port 8443]
@@ -338,6 +338,7 @@ def main(argv=None) -> int:
     parser.add_argument("--at", "--from", dest="at", help="restore, twin: production's data at this "
                         "commit, not the bundle's")
     parser.add_argument("--to", default="HEAD", help="twin: the release deployed over it")
+    parser.add_argument("--checks", help="twin: the checks to run, comma-separated (default all; ready always)")
     parser.add_argument("--port", type=int, default=8443, help="open: the proxy's port on this host's loopback")
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
@@ -354,7 +355,7 @@ def main(argv=None) -> int:
             prod = kd.Production.from_env({**parse_env((ROOT / ".env.dev").read_text()), **os.environ})
             if args.command == "restore":
                 kd.restore_production(docker_run, prod, args.at)
-            elif not kt.twin(docker_run, prod, args.at, args.to):
+            elif not kt.twin(docker_run, prod, args.at, args.to, args.checks.split(",") if args.checks else None):
                 return 1
         elif args.command == "open":
             import k8s_staging_open as ko  # late: it imports this module

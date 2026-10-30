@@ -7,6 +7,8 @@ services:
   # Traefik v3.7 — Reverse Proxy & TLS Termination
   # ===========================================================================
   gateway-handler:
+    # ADR-0169: every request crosses it, so a change to it brings the twin's roll under load.
+    x-release: { checks: [roll] }
     extends: { file: compose/logging.yml, service: rotated-logs }
     # The file config and plugins baked in, so Kubernetes mounts no checkout (K8).
     build:
@@ -127,6 +129,8 @@ services:
   # Go Authorization Handler — Traefik ForwardAuth Middleware
   # ===========================================================================
   authorization-handler:
+    # ADR-0169: every request crosses it, so a change to it brings the twin's roll under load.
+    x-release: { checks: [roll] }
     extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: .. # repo root — shared Go module lives here

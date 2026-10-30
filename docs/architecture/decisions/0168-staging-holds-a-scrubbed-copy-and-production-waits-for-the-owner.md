@@ -6,7 +6,7 @@ updated: 2026-10-29
 
 # ADR 0168 — Staging holds a scrubbed copy of production, and production waits for the owner's approval
 
-- **Status:** accepted (rows OPS-1-ah-f … OPS-1-ah-k)
+- **Status:** accepted (rows OPS-1-ah-f … OPS-1-ah-k); point 4 amended by ADR-0169 (the approval stays on every lane; the twin only where the reach needs it)
 - **Date:** 2026-10-29
 - **Decision:** the user's (2026-10-29: «بعد اینکه من تایید دادم که تو حالت staging
   همه چی اوکیه حالا میتونه بره پروداکشن، سر خود نره»; and on the risk: «شاید پنل

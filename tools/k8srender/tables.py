@@ -121,4 +121,5 @@ DROPPED_KEYS = {
     "memswap_limit",  # Kubernetes runs without swap
     "build",  # read for the image name (K8), not a pod field
     "profiles",  # K8: chose which services compose printed; Stack.profiles above
+    "x-release",  # ADR-0169: what proves a change to it, read by tools/release_reach.py
 }

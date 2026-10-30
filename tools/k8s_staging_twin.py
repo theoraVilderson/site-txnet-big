@@ -11,9 +11,10 @@ ADR-0166 points 4, 5, OPS-1-ah-c).
    panels at their local copies and wiped every other one before any service
    started (`k8s_staging_scrub.py`); the new release's migration must not have
    brought a real address back;
-4. every check, each run even after one fails: every workload ready, each
-   pointed panel collected from by production's drivers, K12's roll under load
-   with no failed request, the stores killed and back with their data.
+4. the checks asked (`--checks`, default all; `ready` always: ADR-0169), each run
+   even after one fails: every workload ready, each pointed panel collected from
+   by production's drivers, K12's roll under load with no failed request, the
+   stores killed and back with their data.
 
 Production's secrets leave this host when it ends, pass or fail; the cluster
 stays for its logs until `down`.
@@ -114,6 +115,16 @@ def rehearsal_check(docker, name: str) -> bool:
                            "--address", env["HOST_GATEWAY"]], env=env).returncode == 0
 
 
+def chosen(checks: dict[str, Callable[[], bool]], names) -> dict[str, Callable[[], bool]]:
+    """The checks named, in the twin's own order; `ready` always, since every other one
+    reads a running release."""
+    unknown = set(names) - set(checks)
+    if unknown:
+        raise ks.StagingError(f"no such twin check: {', '.join(sorted(unknown))} ({', '.join(checks)})")
+    wanted = {"ready", *names}
+    return {name: check for name, check in checks.items() if name in wanted}
+
+
 def deploy_over(docker, ref: str) -> None:
     commit = subprocess.run(["git", "-C", str(ROOT), "rev-parse", f"{ref}^{{commit}}"],
                             check=True, text=True, capture_output=True).stdout.strip()
@@ -125,7 +136,7 @@ def deploy_over(docker, ref: str) -> None:
     kg.aim(sc.KUBECTL, restart=True)
 
 
-def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str) -> bool:
+def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str, names=None) -> bool:
     pointed: dict = {}
 
     def do_guard():
@@ -138,6 +149,7 @@ def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str) -> bool
     checks = {"ready": lambda: rehearsal_check(docker, "ready"),
               "panels": lambda: panels_collected(pointed["ids"], pointed["since"]),
               "roll": roll, "stores": lambda: rehearsal_check(docker, "stores")}
+    checks = chosen(checks, checks if names is None else names)
     stages = Stages(restore=lambda ref: kd.restore_production(docker, prod, ref),
                     deploy=lambda ref: deploy_over(docker, ref), guard=do_guard, checks=checks)
     try:

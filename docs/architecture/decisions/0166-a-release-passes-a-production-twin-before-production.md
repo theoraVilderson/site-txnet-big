@@ -6,7 +6,7 @@ updated: 2026-10-29
 
 # ADR 0166 — A release passes a production twin on the dev host before it reaches production
 
-- **Status:** accepted (rows OPS-1-ah, OPS-1-ah-a … OPS-1-ah-d)
+- **Status:** accepted (rows OPS-1-ah, OPS-1-ah-a … OPS-1-ah-d); point 4 amended by ADR-0169 (a release the reach clears skips the twin)
 - **Date:** 2026-10-29
 - **Decision:** the user's (2026-10-29: "the best and most principled option, so
   that what I take to production really does not cause trouble"; staging data:

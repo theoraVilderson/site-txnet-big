@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-29
+updated: 2026-10-30
 ---
 
 # Contract — hosting: a release, from its images to its way back
@@ -201,20 +201,20 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   killed and back with their rows; 21 minutes.
 
 **R15 — A release is one command to prove, one to send** (ADR-0166 point 5,
-OPS-1-ah-d). `scripts/release.sh [--until STEP] [--from REF]`
-(`tools/release.py`), as root on the dev host, runs in order and stops at the
-first failure: `clean` (no change `git status` shows, on master; production's
-checkout clean and an ancestor of HEAD), `checks` (AGENTS.md's seven), `disk`
-(build cache and dangling images freed, R14's room), `build` (R4, R12), `twin`
-(R14 from production's running commit, or `--from`). Then it stops (R19).
-`release.sh send` runs `push` (R10), `ship` (production's commit..master as a
-git bundle over ssh, `merge --ff-only` in its checkout), `deploy` (`prod.k8s.sh
-deploy` there, K10, K16), `close` (staging down, the dev stack back). Nothing
-leaves the dev host before the twin passed. A release is a batch of fixes.
+OPS-1-ah-d). `scripts/release.sh [--until STEP] [--from REF] [--full]` (`tools/release.py`),
+as root on the dev host, runs in order, each step timed, stops at the first failure:
+`clean` (no change `git status` shows, on master; production's checkout clean and
+an ancestor of HEAD), `checks` (AGENTS.md's seven), `reach` (R20: the lane and the
+twin's checks), `disk` (build cache, dangling images freed, R14's room), `build` (R4,
+R12), `twin` (R14 from production's commit, or `--from`; R20's quick lane skips it).
+Then it stops (R19). `send` runs `push` (R10), `ship` (production's commit..master
+as a git bundle over ssh, `merge --ff-only` there), `deploy` (`prod.k8s.sh deploy`
+there, K10, K16), `close` (after a twin, staging down and the dev stack back). Nothing
+leaves the dev host unproved (R14 or R20's quick lane). A release is a batch of fixes.
 
 **R19 — Production waits for the owner** (ADR-0168 point 4, OPS-1-ah-k). A
-passed twin leaves staging up and writes `/var/lib/txnet/release.json`: HEAD
-and production's commit; a failed one takes staging down. `release.sh approve`
+passed twin leaves staging up and writes `/var/lib/txnet/release.json`: HEAD,
+production's commit, the lane; a failed one takes staging down. `release.sh approve`
 adds the owner's name only in a terminal, with the commit's first 12 characters
 typed: an agent's shell has none, and never approves. `send` refuses unless the
 record names HEAD, is approved, and production has not moved since; a newer

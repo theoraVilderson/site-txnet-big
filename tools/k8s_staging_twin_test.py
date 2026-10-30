@@ -29,6 +29,21 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(results, {"ready": True, "roll": False, "panels": True})
 
 
+class ChosenTest(unittest.TestCase):
+    # ADR-0169: the release asks for the checks its reach needs; `ready` is never left out.
+    ALL = {name: (lambda: True) for name in ("ready", "panels", "roll", "stores")}
+
+    def test_only_the_named_checks_in_their_own_order(self):
+        self.assertEqual(list(kt.chosen(self.ALL, ["stores", "ready"])), ["ready", "stores"])
+
+    def test_ready_always_runs(self):
+        self.assertEqual(list(kt.chosen(self.ALL, ["panels"])), ["ready", "panels"])
+
+    def test_an_unknown_check_is_refused(self):
+        with self.assertRaises(kt.ks.StagingError):
+            kt.chosen(self.ALL, ["panel"])
+
+
 class QuietTest(unittest.TestCase):
     # 2026-10-29: the roll began as 35 pods finished booting, at load 9 on 8 cores;
     # billing's old pod missed its liveness probe and 4 of 2658 requests got 502.

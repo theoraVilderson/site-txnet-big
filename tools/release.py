@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""A release from the dev host, in three commands (hosting R15, R19; ADR-0166 point 5, ADR-0168 point 4).
+"""A release from the dev host, in three commands (hosting R15, R19, R20; ADR-0166 point 5, ADR-0168 point 4, ADR-0169).
 
-    scripts/release.sh [--until STEP] [--from REF]   prove: build, twin, staging left up
+    scripts/release.sh [--until STEP] [--from REF] [--full]   prove: reach, build, twin, staging left up
     scripts/release.sh approve                        the owner, in a terminal
     scripts/release.sh send                           push, ship, deploy
 
@@ -13,11 +13,13 @@ pushes, and only for that commit.
   prove
     clean    a checkout git calls unchanged, on master (R5: a release is a commit)
     checks   the repo's seven checks (AGENTS.md "Before declaring any work done")
+    reach    what HEAD changes in production (tools/release_reach.py): the lane, and the twin's checks
     disk     build cache and dangling images freed, then staging's peak must fit (R14)
     build    the images whose source's tag the registry lacks (R4, R12)
     twin     staging up, production's data at its running commit, HEAD over it,
-             every check (R14); a pass is recorded and staging stays up, a failure
-             takes staging down and the dev stack comes back
+             the reach's checks (R14); a pass is recorded and staging stays up, a failure
+             takes staging down and the dev stack comes back. The quick lane records
+             the reach instead, and staging is never started (R20)
   send
     approved the record names HEAD, the owner approved it, production has not moved
     push     the images the twin passed (R10)
@@ -25,7 +27,8 @@ pushes, and only for that commit.
     deploy   `prod.k8s.sh deploy` there (K10, K16: a failure sets every workload back)
     close    staging down, the dev stack back, the record spent
 
---until STEP stops `prove` after STEP. --from REF starts the twin at REF instead
+Each step prints its time. --full takes the twin with every check whatever the
+reach. --until STEP stops `prove` after STEP. --from REF starts the twin at REF instead
 of production's commit, for a commit that cannot start in staging (before
 21c9d8f8 the translator and locale-service's healthcheck need an outside DNS).
 """
@@ -36,6 +39,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import datetime, timezone
@@ -45,9 +49,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
 import k8s_staging_data as kd  # noqa: E402
+import k8s_release  # noqa: E402
+import k8s_render  # noqa: E402
+import release_reach as rr  # noqa: E402
 from bundle_plan import parse_env  # noqa: E402
 
-PROVE_STEPS = ("clean", "checks", "disk", "build", "twin")
+PROVE_STEPS = ("clean", "checks", "reach", "disk", "build", "twin")
 SEND_STEPS = ("approved", "push", "ship", "deploy", "close")
 # What a passed twin proved, and the owner's approval of it; beside staging's own state.
 RECORD_FILE = ks.STATE_FILE.with_name("release.json")
@@ -58,6 +65,8 @@ CHECKS = ("docs-check.py", "backlog.py", "features-scan.py --check", "where.py -
           "conventions.py", "contracts.py", "codeshape.py")
 # Where the bundle waits on production's server between `cat >` and `fetch`.
 REMOTE_BUNDLE = "/tmp/txnet-release.bundle"
+# K16: the ConfigMap `prod.k8s.sh` keeps production's release history in.
+RELEASE_RECORD = "txnet-release"
 
 
 class ReleaseError(Exception):
@@ -70,17 +79,28 @@ class Step:
     run: Callable[[], None]
 
 
-def run_steps(steps: list[Step], until: str | None = None) -> str | None:
-    """Runs steps in order up to `until`; the name of the one that failed, or None."""
+@dataclass(frozen=True)
+class LanePlan:
+    """ADR-0169: the path a release takes, the twin's checks, and why."""
+    lane: str
+    checks: tuple[str, ...]
+    why: str
+
+
+def run_steps(steps: list[Step], until: str | None = None, clock: Callable[[], float] = time.monotonic) -> str | None:
+    """Runs steps in order up to `until`, each timed; the name of the one that failed, or None."""
     if until and until not in (s.name for s in steps):
         raise ReleaseError(f"--until {until}: no such step ({', '.join(s.name for s in steps)})")
     for step in steps:
         print(f"== {step.name}", flush=True)
+        started = clock()
         try:
             step.run()
         except (ReleaseError, ks.StagingError, subprocess.CalledProcessError) as error:
             print(f"release stopped at {step.name}: {error}", file=sys.stderr)
             return step.name
+        finally:
+            print(f"-- {step.name} {clock() - started:.0f}s", flush=True)
         if step.name == until:
             print(f"stopped after {until}, as asked")
             return None
@@ -118,7 +138,33 @@ def deploy_command(prod: kd.Production) -> str:
     return f"cd {kd.PROD_CHECKOUT} && HOST_GATEWAY={prod.host.rpartition('@')[2]} scripts/prod.k8s.sh deploy"
 
 
-def twin_step(staging: Callable[..., bool], prod_commit: str, head: str, staging_up: bool) -> None:
+def lane_plan(reach: "rr.Reach | str", declared: dict, full: bool) -> LanePlan:
+    """The reach's lane and checks; `--full`, or a reach that is only a reason it is
+    unknown, takes the twin with every check: an unmeasured change is never quick."""
+    if full:
+        return LanePlan(rr.TWIN, rr.TWIN_CHECKS, "--full")
+    if isinstance(reach, str):
+        return LanePlan(rr.TWIN, rr.TWIN_CHECKS, f"reach unknown: {reach}")
+    return LanePlan(rr.lane(reach, declared), rr.checks(reach, declared), rr.describe(reach, declared))
+
+
+def running_problem(checkout: str, history: str) -> str | None:
+    """The reach is measured from production's checkout; after a rollback (R9) the
+    cluster runs an older release than it, and that checkout says nothing of what runs."""
+    running = k8s_release.current(history.split())
+    if not running or checkout.startswith(running):
+        return None
+    return f"production runs {running}, its checkout is {checkout[:12]} (a rollback): the reach is from the wrong base"
+
+
+def close_staging(staging: Callable[..., bool], record: dict | None) -> None:
+    """Only a twin started staging; a quick release leaves the dev stack as it was."""
+    if (record or {}).get("lane", rr.TWIN) == rr.TWIN:
+        staging("down")
+
+
+def twin_step(staging: Callable[..., bool], prod_commit: str, head: str, staging_up: bool,
+              checks: tuple[str, ...]) -> None:
     """ADR-0166 point 4: production's running commit first, HEAD over it. A pass leaves
     staging up for the owner (ADR-0168 point 4); any failure removes it, which starts
     the dev stack again (ADR-0166 point 6)."""
@@ -126,7 +172,7 @@ def twin_step(staging: Callable[..., bool], prod_commit: str, head: str, staging
     try:
         if not staging_up and not staging("up"):
             raise ReleaseError("staging did not come up")
-        if not staging("twin", "--from", prod_commit, "--to", head):
+        if not staging("twin", "--from", prod_commit, "--to", head, "--checks", ",".join(checks)):
             raise ReleaseError("the twin failed: nothing was pushed, production untouched")
         passed = True
     finally:
@@ -149,7 +195,7 @@ def write_record(path: Path, record: dict) -> None:
 
 def proved_problem(record: dict | None, head: str) -> str | None:
     if not record or record.get("commit") != head:
-        return f"no passed twin for {head[:APPROVE_PREFIX]}: run scripts/release.sh first"
+        return f"no passed twin or quick lane for {head[:APPROVE_PREFIX]}: run scripts/release.sh first"
     return None
 
 
@@ -172,7 +218,7 @@ def send_problem(record: dict | None, head: str, prod_commit: str) -> str | None
     if problem:
         return problem
     if not record.get("approved_by"):
-        return f"{head[:APPROVE_PREFIX]} passed the twin but is not approved: the owner runs scripts/release.sh approve"
+        return f"{head[:APPROVE_PREFIX]} is proved but not approved: the owner runs scripts/release.sh approve"
     if record.get("production") != prod_commit:
         return (f"production moved since the twin ({record.get('production', '?')[:12]} -> {prod_commit[:12]}): "
                 "run scripts/release.sh again")
@@ -213,6 +259,25 @@ def free_disk() -> None:
         raise ReleaseError(problem)
 
 
+def running_history(prod: kd.Production) -> str:
+    """Production's release record (R8): the last ten tags, the running one last."""
+    return subprocess.run(prod.ssh(f"kubectl -n txnet get configmap {RELEASE_RECORD} "
+                                   "-o jsonpath='{.data.history}' 2>/dev/null || true"),
+                          check=True, text=True, capture_output=True).stdout.strip()
+
+
+def measure_reach(prod: kd.Production, base: str) -> tuple["rr.Reach | str", dict]:
+    """(the reach over production's commit, HEAD's declarations), or (why it cannot be
+    known, {}). A misspelt declaration is not a reason: it stops the release (ReachError)."""
+    problem = running_problem(base, running_history(prod))
+    if problem:
+        return problem, {}
+    try:
+        return rr.measure(base)
+    except (subprocess.CalledProcessError, k8s_render.RenderError) as error:
+        return f"production's commit {base[:12]} does not render here ({error})", {}
+
+
 def production_commit(prod: kd.Production) -> str:
     """Production's running release: its checkout's HEAD, which `deploy` requires clean (R5)."""
     out = subprocess.run(prod.ssh(f"git -C {kd.PROD_CHECKOUT} status --porcelain; "
@@ -236,7 +301,7 @@ def ship(prod: kd.Production, prod_commit: str, head: str) -> None:
     sh(prod.ssh(merge_command(REMOTE_BUNDLE)))
 
 
-def prove_steps(prod: kd.Production, twin_from: str | None = None) -> list[Step]:
+def prove_steps(prod: kd.Production, twin_from: str | None = None, full: bool = False) -> list[Step]:
     head = git("rev-parse", "HEAD")
     known: dict = {}
 
@@ -249,18 +314,31 @@ def prove_steps(prod: kd.Production, twin_from: str | None = None) -> list[Step]
         if problem:
             raise ReleaseError(problem)
 
+    def reach():
+        try:
+            known["plan"] = lane_plan(*measure_reach(prod, known["prod"]), full=full or bool(twin_from))
+        except rr.ReachError as error:
+            raise ReleaseError(str(error)) from error
+        print(known["plan"].why)
+
     def twin():
         # A new run spends any earlier approval before staging changes under it.
         RECORD_FILE.unlink(missing_ok=True)
+        plan = known["plan"]
+        record = {"commit": head, "production": known["prod"], "lane": plan.lane, "checks": list(plan.checks)}
+        if plan.lane == rr.QUICK:
+            write_record(RECORD_FILE, {**record, "passed_at": now()})
+            print(f"quick lane: no twin for {head[:APPROVE_PREFIX]} (ADR-0169); try it on the dev stack, "
+                  "then scripts/release.sh approve, and scripts/release.sh send")
+            return
         up = ks.docker_run(["docker", "inspect", ks.CONTAINER], check=False).returncode == 0
-        twin_step(staging, twin_from or known["prod"], head, staging_up=up)
-        write_record(RECORD_FILE, {"commit": head, "production": known["prod"], "twin_from": twin_from or known["prod"],
-                                   "passed_at": now()})
+        twin_step(staging, twin_from or known["prod"], head, staging_up=up, checks=plan.checks)
+        write_record(RECORD_FILE, {**record, "twin_from": twin_from or known["prod"], "passed_at": now()})
         print(f"staging is up at {head[:APPROVE_PREFIX]} for the owner (scripts/staging.sh open); "
               "then scripts/release.sh approve, and scripts/release.sh send")
 
     prod_k8s = str(ROOT / "scripts" / "prod.k8s.sh")
-    steps = {"clean": clean, "checks": run_checks, "disk": free_disk,
+    steps = {"clean": clean, "checks": run_checks, "reach": reach, "disk": free_disk,
              "build": lambda: sh([prod_k8s, "build"]), "twin": twin}
     return [Step(name, steps[name]) for name in PROVE_STEPS]
 
@@ -277,7 +355,7 @@ def send_steps(prod: kd.Production) -> list[Step]:
             raise ReleaseError(problem)
 
     def close():
-        staging("down")
+        close_staging(staging, read_record())
         RECORD_FILE.unlink(missing_ok=True)
 
     prod_k8s = str(ROOT / "scripts" / "prod.k8s.sh")
@@ -310,7 +388,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", nargs="?", choices=("prove", "approve", "send"), default="prove")
     parser.add_argument("--until", choices=PROVE_STEPS, help="stop prove after this step")
-    parser.add_argument("--from", dest="twin_from", help="the twin starts at this commit, not production's")
+    parser.add_argument("--from", dest="twin_from", help="the twin starts at this commit, not production's; "
+                        "implies --full")
+    parser.add_argument("--full", action="store_true", help="the twin with every check, whatever the reach")
     args = parser.parse_args(argv)
     if os.geteuid() != 0:
         print("release.py: run as root on the dev host (staging needs it)", file=sys.stderr)
@@ -323,7 +403,7 @@ def main(argv=None) -> int:
         if args.action == "send":
             failed = run_steps(send_steps(prod))
         else:
-            failed = run_steps(prove_steps(prod, args.twin_from), args.until)
+            failed = run_steps(prove_steps(prod, args.twin_from, args.full), args.until)
     except (ReleaseError, ks.StagingError, subprocess.CalledProcessError) as error:
         print(f"release.py: {error}", file=sys.stderr)
         return 1

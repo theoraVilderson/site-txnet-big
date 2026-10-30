@@ -20,6 +20,8 @@ services:
   # in the log rather than a wrong number an hour later.
   # ===========================================================================
   network-service:
+    # ADR-0169: a change to the drivers brings the twin's check that each local panel is collected from.
+    x-release: { checks: [panels] }
     extends: { file: compose/logging.yml, service: rotated-logs }
     build:
       context: ../network-service
