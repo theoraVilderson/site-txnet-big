@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ObjectStorage, objectDriverFromEnv, prismaStoredObjects } from '@txnet-backend/shared-core';
+import { type ObjectDriver, ObjectStorage, objectDriverFromConfig, prismaStoredObjects } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../config/env.validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { FilesController, PrivateFilesController } from './files.controller';
+import { GuideMediaController, GuideMediaInternalController } from './guide-media.controller';
+import { OBJECT_DRIVER } from './object-driver';
 import { PlatformTenant } from './platform-tenant';
 import { StorageQuota } from './storage-quota';
 
 /**
- * Object storage's serving route (F-018-m, `platform/object-storage`), and the
+ * Object storage's serving routes (F-018-m; guide media, F-018-m2-b), and the
  * port itself for this service's own uploads (F-018-h), and the reseller's
  * storage quota every upload checks first (`StorageQuota`, F-414-m).
  *
@@ -17,21 +19,19 @@ import { StorageQuota } from './storage-quota';
  * `stored_object` query is scoped and RLS-bound to the tenant in scope.
  */
 @Module({
-  controllers: [FilesController, PrivateFilesController],
+  controllers: [FilesController, PrivateFilesController, GuideMediaController, GuideMediaInternalController],
   providers: [
     PlatformTenant,
     StorageQuota,
     {
+      provide: OBJECT_DRIVER,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvConfig, true>) => objectDriverFromConfig((name) => config.get(name, { infer: true })),
+    },
+    {
       provide: ObjectStorage,
-      inject: [ConfigService, PrismaService],
-      useFactory: (config: ConfigService<EnvConfig, true>, prisma: PrismaService) =>
-        new ObjectStorage(
-          objectDriverFromEnv({
-            OBJECT_STORAGE_DRIVER: config.get('OBJECT_STORAGE_DRIVER', { infer: true }),
-            OBJECT_STORAGE_LOCAL_ROOT: config.get('OBJECT_STORAGE_LOCAL_ROOT', { infer: true }),
-          }),
-          prismaStoredObjects(prisma),
-        ),
+      inject: [OBJECT_DRIVER, PrismaService],
+      useFactory: (driver: ObjectDriver, prisma: PrismaService) => new ObjectStorage(driver, prismaStoredObjects(prisma)),
     },
   ],
   exports: [ObjectStorage, PlatformTenant, StorageQuota],

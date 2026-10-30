@@ -156,7 +156,8 @@ const UNRUNNABLE = {
   'Content-Security-Policy': "default-src 'none'; sandbox",
 } as const;
 
-function keyOf(req: Request): string {
+/** A stored file's key from a route's `*key` wildcard. */
+export function keyOf(req: Request): string {
   const raw = (req.params as Record<string, string | string[]>)['key'];
   return Array.isArray(raw) ? raw.join('/') : raw ?? '';
 }

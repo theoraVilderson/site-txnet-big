@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import type { BotIntegration, TelegramLikeBotClient } from '@txnet-backend/messenger';
+import { serviceCallHeaders } from '@txnet-backend/shared-core';
 import { RedisKeys, RedisTtl } from '../redis/redis.keys';
 import type { RedisService } from '../redis/redis.service';
 
@@ -17,19 +18,32 @@ export type GuideFileFetcher = (key: string) => Promise<{ bytes: Buffer; content
 /** The ceiling a bot may upload (Telegram's), the same as the guide video policy's (F-414-i). */
 const MAX_BYTES = 50 * 1024 * 1024;
 
+/** A guide file may take this long to arrive: up to 50 MiB from the bucket. */
+const FETCH_TIMEOUT_MS = 60_000;
+
 /**
- * Guide files from `guide-media`'s in-network port (F-414-f, ADR-0118): the
- * store serves them to the bot as it serves videos to browsers, so no bytes go
- * through a Nest route. Unset `GUIDE_MEDIA_INTERNAL_URL` fetches nothing — the
- * guide's text still shows.
+ * Guide files by key from `GUIDE_MEDIA_INTERNAL_URL` (F-414-f, ADR-0118):
+ * tenant-service's `internal/guide-media`, which answers a redirect to a
+ * short signed bucket URL (F-018-m2-b), or a server answering the bytes
+ * itself. No bytes go through a Nest route either way. The service token goes
+ * to tenant-service only: the redirect is followed by hand, with no header of
+ * ours, so the store never sees it. Unset fetches nothing — the guide's text
+ * still shows.
  */
 export function guideFileFetcher(config: ConfigService): GuideFileFetcher {
   const base = (config.get<string>('GUIDE_MEDIA_INTERNAL_URL') ?? '').replace(/\/+$/, '');
+  const token = config.get<string>('SERVICE_AUTH_TOKEN') ?? '';
   const logger = new Logger('GuideFileFetcher');
   return async (key) => {
     if (!base) return null;
     try {
-      const response = await fetch(`${base}/${key.split('/').map(encodeURIComponent).join('/')}`, { signal: AbortSignal.timeout(60_000) });
+      const asked = await fetch(`${base}/${key.split('/').map(encodeURIComponent).join('/')}`, {
+        headers: serviceCallHeaders(token),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      const location = asked.headers.get('location');
+      const response = asked.status >= 300 && asked.status < 400 && location ? await fetch(location, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }) : asked;
       const length = Number(response.headers.get('content-length') ?? 0);
       if (!response.ok || length > MAX_BYTES) {
         logger.warn(`guide file ${key}: ${response.status}, ${length} bytes`);

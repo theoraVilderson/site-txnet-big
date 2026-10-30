@@ -46,3 +46,17 @@ and a separate server over the same volume. They chose the last.
 - Videos up to 50 MiB are held in tenant-service's memory while uploading, as
   images are. Streaming the upload to disk becomes worth it with S3's
   multipart upload, not before.
+
+## Amendment, 2026-10-30 — on the `s3` driver the bucket is the media server (F-018-m2-b)
+
+User, 2026-10-30: files move to S3 (Arvan `txnet-main-data`). The decision
+stands — no video bytes through a Nest route — and the server changes. A
+browser asks `GET /api/public/tenant/media/<key>` and tenant-service answers a
+302 to a GET URL the bucket answers itself, signed for an hour, typed by the
+key's extension (`guideMediaType`, shared-core); the redirect is cached five
+minutes. The bot asks `internal/guide-media/<key>` with the service token and
+follows the redirect without it. No row is read: the key's shape is the whole
+check, as the nginx `location` was, and a browser gets only videos, of the
+Host's tenant or the platform's (rule 8). The bucket stays private: an
+unsigned or altered URL is a 403 (proven on Arvan). guide-media's nginx and
+`/api/public/media/` go with the move to `s3` (F-018-m2-d).

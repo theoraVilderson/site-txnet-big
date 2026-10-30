@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { DeleteObjectCommand, GetObjectCommand, NoSuchKey, PutObjectCommand } from '@aws-sdk/client-s3';
 import { describe, expect, it } from 'vitest';
 
-import { objectDriverFromEnv } from './object-storage';
+import { objectDriverFromConfig, objectDriverFromEnv } from './object-storage';
 import { S3ObjectDriver, type S3Sender } from './s3-driver';
 
 const KEY = 'tenants/11111111-1111-4111-8111-111111111111/support/a.png';
@@ -18,6 +18,10 @@ function fakeBucket(): S3Sender & { objects: Map<string, Buffer>; sent: Sent[] }
   return {
     objects,
     sent,
+    async presign(command: GetObjectCommand, expiresInSec: number) {
+      const { Bucket, Key, ResponseContentType } = command.input;
+      return `https://store.example/${Bucket}/${Key}?expires=${expiresInSec}&type=${ResponseContentType}`;
+    },
     async send(command: Sent) {
       sent.push(command);
       const key = command.input.Key ?? '';
@@ -54,7 +58,7 @@ describe('the s3 object driver (F-018-m2-a)', () => {
   });
 
   it('lets any other failure through: an unreachable bucket is not an absent file', async () => {
-    const down: S3Sender = { send: async () => Promise.reject(new Error('connect ETIMEDOUT')) };
+    const down: S3Sender = { ...fakeBucket(), send: async () => Promise.reject(new Error('connect ETIMEDOUT')) };
     await expect(new S3ObjectDriver(down, 'b').read(KEY)).rejects.toThrow('ETIMEDOUT');
   });
 
@@ -65,6 +69,13 @@ describe('the s3 object driver (F-018-m2-a)', () => {
     await driver.remove(KEY);
     await driver.remove(KEY);
     expect(bucket.objects.size).toBe(0);
+  });
+
+  it('signs a short GET for a key, answering with the stored type, and sends nothing', async () => {
+    const bucket = fakeBucket();
+    const url = await new S3ObjectDriver(bucket, 'b').signedReadUrl(KEY, { expiresInSec: 600, contentType: 'video/mp4' });
+    expect(url).toBe(`https://store.example/b/${KEY}?expires=600&type=video/mp4`);
+    expect(bucket.sent).toHaveLength(0);
   });
 
   it('refuses a string that is not an object key before anything is sent', async () => {
@@ -90,5 +101,15 @@ describe('choosing the s3 driver from the environment', () => {
 
   it('names the missing setting at boot instead of failing on the first upload', () => {
     expect(() => objectDriverFromEnv({ ...S3_ENV, OBJECT_STORAGE_S3_BUCKET: '' })).toThrow('OBJECT_STORAGE_S3_BUCKET');
+  });
+
+  it("reads every setting from a service's config, so none is dropped on the way", () => {
+    const asked: string[] = [];
+    const read = (name: keyof typeof S3_ENV | 'OBJECT_STORAGE_LOCAL_ROOT' | 'OBJECT_STORAGE_S3_PATH_STYLE') => {
+      asked.push(name);
+      return (S3_ENV as Record<string, string>)[name];
+    };
+    expect(objectDriverFromConfig(read)).toBeInstanceOf(S3ObjectDriver);
+    expect(asked).toEqual(expect.arrayContaining(Object.keys(S3_ENV)));
   });
 });

@@ -100,6 +100,7 @@ export * from './lib/tenant/platform-access-trail';
 export * from './lib/tenant/line-name-template';
 export * from './lib/tenant/release-flags';
 export * from './lib/object-storage/env';
+export * from './lib/object-storage/guide-media';
 export * from './lib/object-storage/object-key';
 export * from './lib/object-storage/object-storage';
 export * from './lib/object-storage/signed-url';

@@ -14,6 +14,7 @@ import {
   platformTenantIdOf,
   runWithTenant,
   tenantTransaction,
+  GUIDE_FILE_EXTENSIONS,
 } from '@txnet-backend/shared-core';
 import { randomUUID } from 'node:crypto';
 
@@ -167,13 +168,6 @@ export const GUIDE_VIDEO_POLICY: UploadPolicy = {
   types: ['video/mp4', 'video/webm'],
   maxBytes: 50 * KB * KB,
   visibility: 'public',
-};
-const EXTENSION: Record<string, string> = {
-  'image/png': 'png',
-  'image/webp': 'webp',
-  'image/jpeg': 'jpg',
-  'video/mp4': 'mp4',
-  'video/webm': 'webm',
 };
 
 /** Why a stored file cannot play the role a block gives it, or `null` when it can (F-414-i). */
@@ -436,7 +430,7 @@ export class GuideAdmin {
     await this.run(owner, async (tx) => {
       if (!(await tx.guide.findFirst({ where: { id, tenantId: owner }, select: { id: true } }))) throw new GuideRefused('guide_unknown', id);
     });
-    const ext = EXTENSION[file.mimetype];
+    const ext = (GUIDE_FILE_EXTENSIONS as Record<string, string>)[file.mimetype];
     if (!ext || !policy.types.includes(file.mimetype as never)) throw new GuideRefused('type_not_allowed', file.mimetype);
     const storageTenant = owner ?? (await this.platform.id());
     const path = `guides/${id}/${randomUUID()}.${ext}`;

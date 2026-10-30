@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
 import { DeleteObjectCommand, GetObjectCommand, NoSuchKey, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import { parseObjectKey } from './object-key';
-import type { ObjectDriver } from './object-storage';
+import type { ObjectDriver, SignedReadOptions } from './object-storage';
 
 /** The three commands the driver sends. */
 type DriverCommand = PutObjectCommand | GetObjectCommand | DeleteObjectCommand;
@@ -17,6 +18,8 @@ export interface S3Reply {
 /** What the driver needs of a client: S3Client in a service, a map in a spec. */
 export interface S3Sender {
   send(command: DriverCommand): Promise<S3Reply>;
+  /** A URL that performs `command` until it expires, signed here; nothing is sent. */
+  presign(command: GetObjectCommand, expiresInSec: number): Promise<string>;
 }
 
 /** The settings of {@link s3Sender}, from `OBJECT_STORAGE_S3_*` (contract "Configuration"). */
@@ -56,6 +59,7 @@ export function s3Sender(settings: S3Settings): S3Sender {
       if (command instanceof GetObjectCommand) return client.send(command);
       return client.send(command);
     },
+    presign: (command, expiresInSec) => getSignedUrl(client, command, { expiresIn: expiresInSec }),
   };
 }
 
@@ -90,6 +94,16 @@ export class S3ObjectDriver implements ObjectDriver {
 
   async remove(key: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: this.checked(key) }));
+  }
+
+  /**
+   * A GET of `key` the store answers on its own until it expires, typed as
+   * `contentType` (F-018-m2-b): a guide video is played from the bucket, Range
+   * and all, and never passes through a service (ADR-0116 point 3).
+   */
+  signedReadUrl(key: string, options: SignedReadOptions): Promise<string> {
+    const command = new GetObjectCommand({ Bucket: this.bucket, Key: this.checked(key), ResponseContentType: options.contentType });
+    return this.s3.presign(command, options.expiresInSec);
   }
 
   /** The same guard as the local driver's: nothing but a parsed key reaches the store. */

@@ -85,6 +85,17 @@ export interface ObjectDriver {
   /** The bytes, or `null` when the key holds none. */
   read(key: string): Promise<Buffer | null>;
   remove(key: string): Promise<void>;
+  /**
+   * A URL the store itself answers for `key` until it expires — only a store
+   * reachable without this service has one (the `s3` driver, F-018-m2-b).
+   */
+  signedReadUrl?(key: string, options: SignedReadOptions): Promise<string>;
+}
+
+/** How long a {@link ObjectDriver.signedReadUrl} lives, and the type the store answers with. */
+export interface SignedReadOptions {
+  expiresInSec: number;
+  contentType: string;
 }
 
 /**
@@ -156,6 +167,26 @@ export function objectDriverFromEnv(env: ObjectStorageEnv): ObjectDriver {
     throw new Error('OBJECT_STORAGE_LOCAL_ROOT must name the mounted volume for the local driver');
   }
   return new LocalObjectDriver(env.OBJECT_STORAGE_LOCAL_ROOT);
+}
+
+/** Every setting a driver may need, read by name from a service's validated config (C-26). */
+export const OBJECT_DRIVER_SETTINGS = [
+  'OBJECT_STORAGE_DRIVER',
+  'OBJECT_STORAGE_LOCAL_ROOT',
+  'OBJECT_STORAGE_S3_ENDPOINT',
+  'OBJECT_STORAGE_S3_REGION',
+  'OBJECT_STORAGE_S3_BUCKET',
+  'OBJECT_STORAGE_S3_ACCESS_KEY_ID',
+  'OBJECT_STORAGE_S3_SECRET_ACCESS_KEY',
+  'OBJECT_STORAGE_S3_PATH_STYLE',
+] as const satisfies readonly (keyof ObjectStorageEnv)[];
+
+/**
+ * The driver a service's config names: every setting asked for, so a service
+ * never builds `s3` from a hand-picked few (F-018-m2-a's modules passed two).
+ */
+export function objectDriverFromConfig(read: (name: (typeof OBJECT_DRIVER_SETTINGS)[number]) => string | undefined): ObjectDriver {
+  return objectDriverFromEnv(Object.fromEntries(OBJECT_DRIVER_SETTINGS.map((name) => [name, read(name)])));
 }
 
 const S3_REQUIRED = [

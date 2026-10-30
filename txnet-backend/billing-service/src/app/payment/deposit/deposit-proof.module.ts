@@ -1,7 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MulterModule } from '@nestjs/platform-express';
-import { objectDriverFromEnv, scannerFromEnv } from '@txnet-backend/shared-core';
+import { objectDriverFromConfig, scannerFromEnv } from '@txnet-backend/shared-core';
 
 import type { EnvConfig } from '../../config/env.validation';
 import { RECEIPT_POLICY } from '../manual/transfer-proof';
@@ -26,8 +26,7 @@ type Config = ConfigService<EnvConfig, true>;
     {
       provide: PROOF_OBJECT_DRIVER,
       inject: [ConfigService],
-      useFactory: (config: Config) =>
-        objectDriverFromEnv({ OBJECT_STORAGE_DRIVER: config.get('OBJECT_STORAGE_DRIVER', { infer: true }), OBJECT_STORAGE_LOCAL_ROOT: config.get('OBJECT_STORAGE_LOCAL_ROOT', { infer: true }) }),
+      useFactory: (config: Config) => objectDriverFromConfig((name) => config.get(name, { infer: true })),
     },
     {
       provide: PROOF_VIRUS_SCANNER,
