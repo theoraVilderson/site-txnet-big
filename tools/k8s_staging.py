@@ -17,12 +17,13 @@
                                            the owner's browser in staging, through ssh and a proxy
                                            presenting the origin-pull pair (tools/k8s_staging_open.py, OPS-1-ah-i)
     python3 tools/k8s_staging.py status    the container, the node, the egress check
-    python3 tools/k8s_staging.py down      container, volume and network removed; the dev stack started
-                                           again if `up` stopped it
+    python3 tools/k8s_staging.py down      container, volume and network removed; the image store kept once
+                                           proven to hold only images (tools/k8s_staging_images.py,
+                                           OPS-1-ah-e); the dev stack started again if `up` stopped it
 
 Run as root on the dev host, from the checkout (`scripts/staging.sh`). The
 cluster holds production's data in OPS-1-ah-b, so `up` refuses to leave it
-standing with a route out, and `down` leaves nothing of it behind.
+standing with a route out, and `down` leaves nothing of it behind but images.
 """
 import argparse
 import json
@@ -39,6 +40,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "bundle"))
 from bundle_plan import parse_env  # noqa: E402
 from k8s_memfit import K3S_BASE_MIB, K3S_PER_POD_MIB, repo_workloads  # noqa: E402
 import k8s_staging_gate as kg  # noqa: E402
+import k8s_staging_images as ki  # noqa: E402
 
 CONTAINER = NETWORK = "txnet-staging"
 # TEST-NET-3 (RFC 5737): routed nowhere, and not private, so network-service's
@@ -117,7 +119,7 @@ def run_argv(image: str, root: Path, airgap: Path) -> list[str]:
     the internal network only, publishing nothing, production's config (K1)."""
     return ["docker", "run", "-d", "--name", CONTAINER, "--hostname", CONTAINER, "--privileged",
             f"--network={NETWORK}", "--tmpfs", "/run", "--tmpfs", "/var/run",
-            "-v", f"{VOLUME}:/var/lib/rancher/k3s",
+            "-v", f"{VOLUME}:/var/lib/rancher/k3s", *ki.mount_args(),
             "-v", f"{root}/k8s/k3s/config.yaml:/etc/rancher/k3s/config.yaml:ro",
             "-v", f"{airgap}:{AIRGAP_DIR}/{AIRGAP_FILE}:ro",
             "--entrypoint", "/bin/sh", image, "-c", SERVER_COMMAND]
@@ -144,13 +146,20 @@ def fit_problem(workloads, available_mib: float) -> str | None:
     return None
 
 
-def disk_problem(total: int, free: int) -> str | None:
-    """None when staging's peak fits above the kubelet's eviction line."""
-    need = total * EVICTION_FREE_FRACTION + STAGING_PEAK_GIB * GIB
+def disk_problem(total: int, free: int, held: int = 0) -> str | None:
+    """None when staging's peak fits above the kubelet's eviction line; `held` is the
+    kept image store (OPS-1-ah-e), already on the disk and part of that peak."""
+    need = total * EVICTION_FREE_FRACTION + STAGING_PEAK_GIB * GIB - held
     if free < need:
         return (f"staging needs {need / GIB:.0f} GiB free on / and {free / GIB:.0f} GiB is: "
                 "free room first (docker builder prune, old registry tags — never `docker volume prune`)")
     return None
+
+
+def room_problem(docker) -> str | None:
+    """disk_problem for / now, the kept image store counted as part of the peak."""
+    disk = os.statvfs("/")
+    return disk_problem(disk.f_blocks * disk.f_frsize, disk.f_bavail * disk.f_frsize, ki.held_bytes(docker))
 
 
 def write_state(path: Path, dev_stack_was_running: bool) -> None:
@@ -162,6 +171,8 @@ def write_state(path: Path, dev_stack_was_running: bool) -> None:
 def remove(docker, root: Path, state: Path) -> None:
     """Everything `up` made, gone, and the dev stack back if `up` stopped it. Safe
     to run on a half-made staging: each step tolerates what is already absent."""
+    # Before the node goes: the proof that only images are left needs its containerd.
+    ki.keep(docker, CONTAINER)
     docker(["docker", "rm", "-f", CONTAINER], check=False)
     kg.stop(docker)
     docker(["docker", "volume", "rm", VOLUME], check=False)
@@ -251,8 +262,7 @@ def write_kubeconfig(docker) -> None:
 def up(docker, root: Path, state: Path) -> None:
     if docker(["docker", "inspect", CONTAINER], check=False).returncode == 0:
         raise StagingError(f"{CONTAINER} exists: `down` first")
-    disk = os.statvfs("/")
-    problem = disk_problem(disk.f_blocks * disk.f_frsize, disk.f_bavail * disk.f_frsize)
+    problem = room_problem(docker)
     if problem:
         raise StagingError(problem)
     versions = parse_env((root / "k8s" / "versions.env").read_text())

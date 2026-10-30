@@ -70,6 +70,9 @@ class RunTest(unittest.TestCase):
     def test_state_in_the_named_volume(self):
         self.assertIn(f"{ks.VOLUME}:/var/lib/rancher/k3s", self.argv)
 
+    def test_the_image_store_on_its_own_kept_volume(self):
+        self.assertIn(f"{ks.ki.IMAGES_VOLUME}:{ks.ki.CONTAINERD_DIR}", self.argv)
+
     # 2026-10-29: at 88% disk the kubelet's image GC deleted 18 of 36 imported
     # images before their pods started; with no route out none came back.
     def test_the_kubelet_never_deletes_an_image_it_cannot_pull_again(self):
@@ -148,6 +151,12 @@ class DiskTest(unittest.TestCase):
         self.assertIsNone(ks.disk_problem(total, free=int(need) + 1))
         self.assertIn("GiB", ks.disk_problem(total, free=int(need) - self.GIB))
 
+    def test_images_kept_from_the_last_release_are_part_of_the_peak(self):
+        # OPS-1-ah-e: they are already on the disk, so they need no new room.
+        total = 117 * self.GIB
+        need = total * ks.EVICTION_FREE_FRACTION + ks.STAGING_PEAK_GIB * self.GIB
+        self.assertIsNone(ks.disk_problem(total, free=int(need) + 1 - 5 * self.GIB, held=5 * self.GIB))
+
 
 class ImportTest(unittest.TestCase):
     # A second deploy named the same 36 images, and all were copied in again (~10 min).
@@ -201,6 +210,19 @@ class PauseTest(unittest.TestCase):
             for prefix in (f"docker rm -f {ks.CONTAINER}", f"docker volume rm {ks.VOLUME}",
                            f"docker network rm {ks.NETWORK}"):
                 self.assertTrue(docker.ran(prefix), prefix)
+
+    def test_down_decides_on_the_images_before_the_node_goes(self):
+        # The proof that only images are left needs the node's containerd running.
+        with tempfile.TemporaryDirectory() as d:
+            docker = Docker()
+            kept = []
+            saved = ks.ki.keep
+            ks.ki.keep = lambda dk, node: kept.append(len(dk.calls)) or True
+            try:
+                ks.remove(docker, Path("/repo"), Path(d) / "none.json")
+            finally:
+                ks.ki.keep = saved
+            self.assertEqual(kept, [0])
 
 
 if __name__ == "__main__":

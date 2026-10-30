@@ -38,7 +38,8 @@ K10's deploy already sets a failed rollout back (K16), but a release that is
 
 1. **A staging cluster on the dev host**: k3s at `K3S_VERSION` inside one
    privileged Docker container (the recipe proven 2026-10-24 for OPS-1-o-d),
-   created per release and removed after it. Not a namespace of the production
+   created per release and removed after it. *Amended 2026-10-30 (OPS-1-ah-e, user):*
+   its image store alone is kept, once proven to hold nothing of production's (R14). Not a namespace of the production
    cluster: that would share its API, its nodes and K17's tunnel.
 2. **No route out.** The container sits on a Docker `--internal` network: it
    reaches the dev host's local panels (`/root/paneltest`) and nothing else. A

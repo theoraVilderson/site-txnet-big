@@ -208,8 +208,7 @@ def free_disk() -> None:
     """Never `docker volume prune`: the dev stack's and the panels' data live in volumes."""
     for argv in (["docker", "builder", "prune", "-f"], ["docker", "image", "prune", "-f"]):
         sh(argv, stdout=subprocess.DEVNULL)
-    disk = os.statvfs("/")
-    problem = ks.disk_problem(disk.f_blocks * disk.f_frsize, disk.f_bavail * disk.f_frsize)
+    problem = ks.room_problem(ks.docker_run)
     if problem:
         raise ReleaseError(problem)
 
