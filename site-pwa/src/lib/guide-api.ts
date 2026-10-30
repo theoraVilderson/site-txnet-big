@@ -154,11 +154,12 @@ export const guideApi = {
 export const guideFileUrl = (key: string) => `${API_BASE}/public/tenant/files/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 /**
- * Where a guide video is served (F-414-i, ADR-0118): the media server over the
- * object store, on this Host, never a Nest route — Range is the store's. The
- * one place that changes when the store becomes a bucket or a CDN.
+ * Where a guide video is asked for (F-018-m2-d, ADR-0118 amendment): the media
+ * route on this Host, which answers a redirect to the store — a signed bucket
+ * URL on `s3`, nginx on the volume — so the bytes and Range are never a Nest
+ * route's.
  */
-export const guideVideoUrl = (key: string) => `${API_BASE}/public/media/${key.split("/").map(encodeURIComponent).join("/")}`;
+export const guideVideoUrl = (key: string) => `${API_BASE}/public/tenant/media/${key.split("/").map(encodeURIComponent).join("/")}`;
 
 // ------------------------------------------------------------------ reading
 

@@ -13,9 +13,10 @@ source:
   - dev-docker/compose/object-backup.yml
   - dev-docker/backup/**
   - dev-docker/monitoring/config-dev/storage.rules.yml
+  - scripts/objects/**
 owns_tables: [storage.stored_object]
 depends_on: [tenant-context]
-updated: 2026-10-04
+updated: 2026-10-30
 ---
 
 # object-storage
@@ -37,7 +38,7 @@ cite a key.
 `active`. Built by F-018-m: the port and the `local` driver in `shared-core`,
 `stored_object` in its own `storage` schema, and the public serving route in
 `tenant-service`. First consumer: tenant's branding (F-018-h). The `s3` driver
-(F-018-m2-a) is built and selectable; files still on the volume until F-018-m2-d.
+(F-018-m2-a) is built; dev runs on it (F-018-m2-d, txnet-main-data), production on the volume until F-018-m2-d2.
 
 ## Changelog
 | Date | Change |

@@ -81,7 +81,7 @@ does not own, which is a bug to surface.
 9. `storedObject` is in `TENANT_SCOPED_MODELS` and the table has strict RLS: on
    the app pool every query is filtered to, and bound to, the tenant in scope.
 10. **`guide-media` (nginx, `dev-docker/compose/guide-media.yml`) serves guide video keys from the volume, read-only**, at `GET /api/public/media/<key>`: only `tenants/<uuid>/guides/<uuid>/<uuid>.(mp4|webm)` (its one `location`, held by `guide-video.spec.ts`), Range native, `immutable`, `nosniff`, sandbox CSP, no Host check (ADR-0118). It shares the node of the `local` volume (rule 5); an S3 driver replaces it. Its port 8081, not routed, serves every guide file (images too) by the same key shape to the bot (F-414-f). Its healthcheck asks a third server, on loopback only (hosting H24).
-    **On `s3` the bucket serves them** (F-018-m2-b, ADR-0118 amendment): `GET /api/public/tenant/media/<key>` (`GuideMediaController`) answers a 302 to a GET signed for an hour (`signedReadUrl`, typed by `guideMediaType`), the redirect cached five minutes; videos only, of the Host's tenant or the platform's; no row read. The bot reads `internal/guide-media/<key>` (service token, pictures too) and follows the redirect without the token. On `local` both are a 404 and nginx serves, until F-018-m2-d removes it.
+    **On `s3` the bucket serves them** (F-018-m2-b, ADR-0118 amendment): `GET /api/public/tenant/media/<key>` (`GuideMediaController`) answers a 302 to a GET signed for an hour (`signedReadUrl`, typed by `guideMediaType`), the redirect cached five minutes; videos only, of the Host's tenant or the platform's; no row read. The bot reads `internal/guide-media/<key>` (service token, pictures too) and follows the redirect without the token. On `local` both redirect to nginx (`/api/public/media/<key>`, `GUIDE_MEDIA_LOCAL_URL`), so the panel and the bot use this route in every environment; F-018-m2-e removes nginx.
 11. **A reseller's admins' files are held to `storage_mib_max`** (F-414-m, ADR-0120): `StorageQuota.assertRoom(path, bytes)` (tenant-service `files/storage-quota.ts`) before every branding and guide `put` — the bytes under `branding/` and `guides/` (`STORAGE_QUOTA_PREFIXES`), minus the file at `path`, plus the new one. Past it: `reseller_limit_reached` (409, `facts`). Support attachments are never counted; the platform's tenant is exempt. Unused guide files are swept 7 days after upload (guide contract "Upkeep").
 
 ## Backup and disk (F-414-m, ADR-0120)
@@ -121,8 +121,15 @@ does not own, which is a bug to surface.
 | `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one. The three `OBJECT_STORAGE_*` and the scan variables are declared once, `OBJECT_STORAGE_ENV` / `VIRUS_SCAN_ENV` (`object-storage/env.ts`), and spread into each service's schema |
 | `VIRUS_SCAN_DRIVER` / `CLAMD_ADDR` / `CLAMD_TIMEOUT_MS` | in a service that takes uploads (support-service, billing-service); `none` is the default |
 
-Moving to S3: copy each file by key, check it against `sha256`, switch the
-driver. No row changes.
+**Moving to S3** (F-018-m2-d, `scripts/objects/move_to_s3.py`, run in `object-backup`): `copy` (files the
+bucket lacks; never overwrites or deletes there, so a file replaced in the bucket after the switch keeps
+its new bytes); set `OBJECT_STORAGE_DRIVER=s3` and `OBJECT_STORAGE_S3_*` in the env file and recreate
+tenant, support, billing, bot and object-backup; `copy` again; `verify --repair` (every row's bucket bytes
+against its sha256; a mismatch is copied again only from volume bytes that match the row; a row left
+unchecked is bad). No row changes; the volume is kept for a way back. Done on dev 2026-10-30: 10 rows, 10
+match; a ticket attachment read back through `private-files` with its row's sha256; the media route
+answers a signed Arvan URL. Production follows NIN-1-i3 (F-018-m2-d2); nginx, the volume mounts and the
+K17 pin go after it (F-018-m2-e).
 
 ## Not done here
 

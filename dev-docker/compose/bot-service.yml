@@ -66,10 +66,11 @@ services:
       # billing's `/api/internal/*` directly, with the service token and the
       # sender — a payment's events need no chat session.
       - BILLING_INTERNAL_BASE_URL=http://billing-service:3000
-      # Guides (F-414-f): tenant-service's internal resolver, and guide-media's
-      # in-network port for the pictures and video sent into the chat (ADR-0118).
+      # Guides (F-414-f): tenant-service's internal resolver, and its media route
+      # for the pictures and video sent into the chat, which redirects to the
+      # bucket or to guide-media's port on the volume (F-018-m2-d, ADR-0118).
       - TENANT_INTERNAL_BASE_URL=http://tenant-service:3000
-      - GUIDE_MEDIA_INTERNAL_URL=http://guide-media:8081
+      - GUIDE_MEDIA_INTERNAL_URL=http://tenant-service:3000/api/internal/guide-media
       - SERVICE_AUTH_TOKEN=${SERVICE_AUTH_TOKEN:-}
       # The webhook verifies and enqueues; worker-service runs the flow and
       # calls back in (F-067-b). Required here, unlike in auth-service: this

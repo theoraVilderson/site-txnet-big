@@ -70,6 +70,7 @@ function answer(): { status?: number; location?: string; headers: Record<string,
 }
 const request = (key: string): Request => ({ params: { key: key.split('/') } }) as never;
 const platform = { id: async () => P };
+const LOCAL_MEDIA = { get: () => 'http://guide-media:8081' } as never;
 
 describe('the media route answers a short signed URL, never the bytes (ADR-0116 point 3)', () => {
   it("redirects a browser to the bucket, typed, for the Host's own video", async () => {
@@ -93,16 +94,24 @@ describe('the media route answers a short signed URL, never the bytes (ADR-0116 
     await expect(runWithTenant({ id: T }, () => controller.serve(request(other), answer() as never))).rejects.toThrow(NotFoundException);
   });
 
-  it('is a 404 for a key the shape refuses, and on a driver that cannot sign', async () => {
+  it('is a 404 for a key the shape refuses', async () => {
     const controller = new GuideMediaController(signing, platform as never);
     await expect(runWithTenant({ id: T }, () => controller.serve(request(VIDEO.replace('.mp4', '.png')), answer() as never))).rejects.toThrow(NotFoundException);
-    await expect(runWithTenant({ id: T }, () => new GuideMediaController(volume, platform as never).serve(request(VIDEO), answer() as never))).rejects.toThrow(NotFoundException);
+  });
+
+  it('on the volume, sends the browser to the media server and the bot to its in-network port (until F-018-m2-e)', async () => {
+    const browser = answer();
+    await runWithTenant({ id: T }, () => new GuideMediaController(volume, platform as never).serve(request(VIDEO), browser as never));
+    expect([browser.status, browser.location]).toEqual([302, `/api/public/media/${VIDEO}`]);
+    const bot = answer();
+    await new GuideMediaInternalController(volume, LOCAL_MEDIA).serve(request(VIDEO), bot as never);
+    expect([bot.status, bot.location]).toEqual([302, `http://guide-media:8081/${VIDEO}`]);
   });
 
   it('gives the bot pictures too, by tenant in the key, with no Host', async () => {
     const res = answer();
     const picture = VIDEO.replace('.mp4', '.png');
-    await new GuideMediaInternalController(signing).serve(request(picture), res as never);
+    await new GuideMediaInternalController(signing, LOCAL_MEDIA).serve(request(picture), res as never);
     expect(res.status).toBe(302);
     expect(signing.signedReadUrl).toHaveBeenCalledWith(picture, { expiresInSec: GUIDE_MEDIA_URL_TTL_SEC, contentType: 'image/png' });
   });

@@ -143,7 +143,7 @@ describe("the page", () => {
     expect(guideFileUrl("tenants/t-1/guides/g-1/a.png")).toBe("/api/public/tenant/files/tenants/t-1/guides/g-1/a.png");
   });
 
-  it("plays a video from the media server, never the file route (ADR-0118)", () => {
-    expect(guideVideoUrl("tenants/t-1/guides/g-1/a.mp4")).toBe("/api/public/media/tenants/t-1/guides/g-1/a.mp4");
+  it("plays a video through the media route, which sends it to the store, never the file route (ADR-0118, F-018-m2-d)", () => {
+    expect(guideVideoUrl("tenants/t-1/guides/g-1/a.mp4")).toBe("/api/public/tenant/media/tenants/t-1/guides/g-1/a.mp4");
   });
 });

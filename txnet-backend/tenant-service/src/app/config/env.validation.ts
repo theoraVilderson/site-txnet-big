@@ -93,6 +93,11 @@ export const envSchema = z.object({
 
   /** Object storage (F-018-m): the volume branding and guides are stored in, and the key `private-files` verifies. */
   ...OBJECT_STORAGE_ENV,
+  /**
+   * guide-media's in-network port, where the bot's guide files are sent while
+   * the driver is `local` (F-018-m2-d); gone with nginx (F-018-m2-e).
+   */
+  GUIDE_MEDIA_LOCAL_URL: z.string().url().default('http://guide-media:8081'),
 
   /** The panel's origin, for CORS with credentials; required in production (`main.ts`). */
   FRONTEND_ORIGIN: z.string().default(''),
