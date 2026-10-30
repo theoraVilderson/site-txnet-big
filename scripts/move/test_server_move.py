@@ -59,9 +59,9 @@ class StateVolumes(unittest.TestCase):
         config = compose_config([], {
             "pg-backup": [("/var/backups/txnet/pg", "/repo"), ("/var/lib/txnet/node-textfile", "/textfile")],
             "main-db": [("/var/backups/txnet/pg", "/repo")],
-            "object-backup": [("/srv/objects-repo", "/repo")],
+            "pg-backup-2": [("/srv/pg-repo-2", "/repo")],
         })
-        self.assertEqual(mp.backup_dirs(config), ["/srv/objects-repo", "/var/backups/txnet/pg"])
+        self.assertEqual(mp.backup_dirs(config), ["/srv/pg-repo-2", "/var/backups/txnet/pg"])
 
 
 class CarriedFiles(unittest.TestCase):

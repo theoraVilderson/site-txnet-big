@@ -1,26 +1,32 @@
 #!/bin/sh
-# Nightly restic backup of the object-storage volume (F-414-m, ADR-0120).
+# Nightly locked copy of every stored file (F-018-m2-c; was restic, F-414-m, ADR-0120).
 #
-# Backs up /data/objects (the volume, mounted read-only) to RESTIC_REPOSITORY,
-# then keeps 7 daily, 4 weekly and 6 monthly snapshots. After every run it
+# Mirrors the files — the bucket on the `s3` driver, the volume on `local` —
+# into the backup bucket under OBJECT_BACKUP_S3_PREFIX: new and changed files
+# copied, removed ones marked deleted. Then every current copy's compliance
+# lock is renewed for OBJECT_BACKUP_S3_LOCK_DAYS, set on each object because
+# Arvan does not apply a bucket's default (B7). So whoever holds the key can
+# hide a copy but not erase it: a deleted file's last version stays at least
+# that long, then the bucket's noncurrent rule removes it. After every run it
 # writes txnet_object_backup_* to node-exporter's textfile directory, which
 # `storage.rules.yml` alerts on — a run that fails, or none for 36 hours.
 #
 #   OBJECT_BACKUP_AT       HH:MM, UTC, when the nightly run starts (default 23:00)
-#   RESTIC_REPOSITORY      where snapshots go: a path, s3:…, sftp:…, rest:…
-#   RESTIC_PASSWORD_FILE   the repository's password; losing it loses every snapshot
+#   OBJECT_BACKUP_S3_*     the backup bucket: _ENDPOINT, _BUCKET, _ACCESS_KEY_ID,
+#                          _SECRET_ACCESS_KEY, _PREFIX (objects/<stack>/), _LOCK_DAYS
+#   OBJECT_STORAGE_DRIVER  `s3` reads OBJECT_STORAGE_S3_*; `local` reads /data/objects
+# Unset, every run fails and says so, and ObjectBackupStale fires: a server
+# whose files have no copy off it is an alert, not a silence.
 #
 # The first start with no success on record runs at once. A manual run:
 #   docker exec txnet-object-backup sh /usr/local/bin/object-backup.sh --now
 set -u
 
-: "${RESTIC_REPOSITORY:?RESTIC_REPOSITORY is not set}"
-export RESTIC_PASSWORD_FILE="${RESTIC_PASSWORD_FILE:-/run/secrets/object-backup-password}"
 AT="${OBJECT_BACKUP_AT:-23:00}"
-SOURCE=/data/objects
+VOLUME=/data/objects
 TEXTFILE_DIR="${TEXTFILE_DIR:-/textfile}"
 METRICS="$TEXTFILE_DIR/object_backup.prom"
-HOST=txnet-objects
+export MC_CONFIG_DIR=/tmp/mc
 
 # The last success survives a restart: it is read back from the file this writes.
 LAST_OK=$(sed -n 's/^txnet_object_backup_last_success_timestamp_seconds //p' "$METRICS" 2>/dev/null || true)
@@ -37,7 +43,7 @@ record() {
   [ "$ok" = 1 ] && LAST_OK=$(date +%s)
   tmp="$TEXTFILE_DIR/.object_backup.prom.$$"
   {
-    echo "# HELP txnet_object_backup_last_run_success 1 when the last run backed up and pruned, else 0."
+    echo "# HELP txnet_object_backup_last_run_success 1 when the last run copied and locked every file, else 0."
     echo "# TYPE txnet_object_backup_last_run_success gauge"
     echo "txnet_object_backup_last_run_success $ok"
     echo "# HELP txnet_object_backup_last_run_timestamp_seconds When the last run ended."
@@ -51,11 +57,35 @@ record() {
   } > "$tmp" && mv "$tmp" "$METRICS" || log "could not write $METRICS"
 }
 
-# A partial snapshot (restic exit 3: a file could not be read) is a failure.
+# The aliases. `mc alias set` takes each key as an argument inside this container only.
+aliases() {
+  for name in OBJECT_BACKUP_S3_ENDPOINT OBJECT_BACKUP_S3_BUCKET OBJECT_BACKUP_S3_ACCESS_KEY_ID \
+              OBJECT_BACKUP_S3_SECRET_ACCESS_KEY OBJECT_BACKUP_S3_PREFIX OBJECT_BACKUP_S3_LOCK_DAYS; do
+    eval "value=\${$name:-}"
+    [ -n "$value" ] || { log "$name is not set: no backup bucket"; return 1; }
+  done
+  mc alias set dst "$OBJECT_BACKUP_S3_ENDPOINT" "$OBJECT_BACKUP_S3_ACCESS_KEY_ID" "$OBJECT_BACKUP_S3_SECRET_ACCESS_KEY" >/dev/null || return 1
+  DST="dst/$OBJECT_BACKUP_S3_BUCKET/${OBJECT_BACKUP_S3_PREFIX%/}"
+  if [ "${OBJECT_STORAGE_DRIVER:-local}" = s3 ]; then
+    mc alias set src "$OBJECT_STORAGE_S3_ENDPOINT" "$OBJECT_STORAGE_S3_ACCESS_KEY_ID" "$OBJECT_STORAGE_S3_SECRET_ACCESS_KEY" >/dev/null || return 1
+    SRC="src/$OBJECT_STORAGE_S3_BUCKET"
+  else
+    SRC="$VOLUME"
+  fi
+}
+
+# --remove would mark every copy deleted if the source read as empty (a wrong
+# driver, an unmounted volume): an empty source beside a full backup stops.
+looks_lost() {
+  [ -z "$(mc ls --recursive "$SRC" 2>/dev/null | head -1)" ] && [ -n "$(mc ls --recursive "$DST" 2>/dev/null | head -1)" ]
+}
+
 backup() {
-  restic cat config >/dev/null 2>&1 || restic init || return 1
-  restic backup "$SOURCE" --host "$HOST" --tag object_storage --exclude '*.tmp' --one-file-system || return 1
-  restic forget --host "$HOST" --tag object_storage --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune || return 1
+  aliases || return 1
+  if looks_lost; then log "$SRC is empty and $DST is not: refusing to mark every copy deleted"; return 1; fi
+  mc mirror --overwrite --remove --exclude '*.tmp' --quiet "$SRC" "$DST" || return 1
+  [ "$OBJECT_BACKUP_S3_LOCK_DAYS" = 0 ] && return 0
+  mc retention set --recursive --quiet compliance "${OBJECT_BACKUP_S3_LOCK_DAYS}d" "$DST" >/dev/null || return 1
 }
 
 run() {

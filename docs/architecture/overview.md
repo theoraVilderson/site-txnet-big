@@ -123,7 +123,7 @@ are tabled in `dependency-graph.md`.
   cutover (OPS-1-p) it is `scripts/prod.compose.sh`.
 - **Backup.** WAL is archived continuously by pgBackRest; `pg-backup` takes a
   weekly full and nightly differentials, and a restore drill runs every Sunday
-  (H1–H6). Uploaded files: `object-backup` (restic, nightly, ADR-0120). A
+  (H1–H6). Uploaded files: `object-backup` (a nightly locked copy in the backup bucket, F-018-m2-c). A
   standby server is OPS-1-y, blocked on the second server (H22).
 - **Health and logs.** Every Nest service has a healthcheck (`/health` runs
   `SELECT 1` on its pool; a heartbeat file for the no-HTTP ones, H15). Logs are

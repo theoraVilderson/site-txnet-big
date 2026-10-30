@@ -23,11 +23,10 @@ REBUILT_VOLUMES = frozenset({
 })
 
 # Losing any of these makes data on the new server unreadable: the vault's
-# tenant credentials, every pgBackRest set, every restic snapshot (secrets/README.md).
+# tenant credentials and every pgBackRest set (secrets/README.md).
 REQUIRED_FILES = (
     "dev-docker/secrets/vault-kek",
     "dev-docker/secrets/pg-backup-passphrase",
-    "dev-docker/secrets/object-backup-password",
 )
 # What encrypts the backup bundles (OPS-1-ad); not required for a move, carried when present.
 BUNDLE_PASSPHRASE_FILE = "dev-docker/secrets/backup-bundle-passphrase"
@@ -51,7 +50,7 @@ CARRIED_FILES = REQUIRED_FILES + (
 
 # The compose services that hold the state; everything else stops first (H23).
 DATA_SERVICES = ("main-db", "memory-data", "rabbitmq")
-# Where a backup repository is mounted inside pg-backup / object-backup / main-db.
+# Where a backup repository is mounted inside pg-backup / main-db.
 BACKUP_REPO_MOUNT = "/repo"
 # Written on the old server by a finished cutover; the compose wrappers refuse to start beside it.
 MOVED_MARKER = ".moved-to"

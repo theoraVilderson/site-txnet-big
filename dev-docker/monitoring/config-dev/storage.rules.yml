@@ -83,12 +83,12 @@ groups:
         annotations:
           summary: "No object-storage backup has succeeded in 36 hours"
           description: >-
-            `object-backup` has not recorded a successful restic run since
+            `object-backup` has not recorded a successful copy since
             {{ with query "txnet_object_backup_last_success_timestamp_seconds" }}{{ . | first | value | humanizeTimestamp }}{{ else }}ever{{ end }}.
-            Look at `docker logs txnet-object-backup`. A repository that refuses
-            the password is lost snapshots; one that is unreachable is a network
-            or credential problem. In production `RESTIC_REPOSITORY` must be off
-            this server (ADR-0120).
+            Look at `docker logs txnet-object-backup`. "is not set" is a server
+            with no OBJECT_BACKUP_S3_* (its files have no copy off it); "refusing
+            to mark every copy deleted" is an empty source beside a full backup;
+            anything else is the bucket or the key (F-018-m2-c).
 
       - alert: ObjectBackupFailed
         expr: txnet_object_backup_last_run_success == 0

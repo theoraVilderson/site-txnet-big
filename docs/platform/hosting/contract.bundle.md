@@ -8,8 +8,8 @@ updated: 2026-10-24
 
 # Contract — hosting: the whole platform as one file
 
-OPS-1-ad (user, 2026-10-23). pgBackRest (H1–H4) and restic (ADR-0120) stay as
-they are: continuous, point-in-time, on this server. The bundle is the other
+OPS-1-ad (user, 2026-10-23). pgBackRest (H1–H4) and the files' locked copy
+(F-018-m2-c) stay as they are: continuous or nightly, each its own. The bundle is the other
 thing: one encrypted file with everything a new server needs, made without
 stopping the platform, sent to S3 by a separate script. Rules B1…B10. Code:
 `scripts/bundle/`; runbook `operations/runbook-backup-bundle.md`.
@@ -52,7 +52,7 @@ the sealed secrets a restored checkout carries (S3). A wrong one is refused befo
 ## Making and shipping
 
 **B6 — Nightly and on demand.** `txnet-backup.timer` at 03:00 UTC (after
-pgBackRest 01:00 and restic 23:00) and `backup.py now`; one at a time (a lock).
+pgBackRest 01:00 and the files' copy 23:00) and `backup.py now`; one at a time (a lock).
 Seven kept on disk; one not yet in S3 is never deleted while shipping is set up.
 `backup.py install-timers` writes both units from the checkout's own path.
 

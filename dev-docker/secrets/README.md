@@ -14,7 +14,6 @@ openssl rand -base64 32 > dev-docker/secrets/vault-kek
 | file | used by | what it is |
 |---|---|---|
 | `vault-kek` | `auth-service` (`VAULT_KEK_FILE`) | the Credential Vault's key-encryption key — 32 bytes, base64 or hex |
-| `object-backup-password` | `object-backup` (`RESTIC_PASSWORD_FILE`, F-414-m) | the restic repository's password: `openssl rand -base64 32 > dev-docker/secrets/object-backup-password` |
 | `pg-backup-passphrase` | `main-db`, `pg-backup` (OPS-1-a, hosting H2) | pgBackRest's repository cipher passphrase: `openssl rand -base64 48 > dev-docker/secrets/pg-backup-passphrase` |
 | `backup-bundle-passphrase` | `scripts/bundle/` (OPS-1-ad, hosting B5) | opens every backup bundle: `openssl rand -base64 48 > dev-docker/secrets/backup-bundle-passphrase`; **a copy off the server** — never inside a bundle |
 | `backup-ship.env` | `scripts/bundle/ship.py` (OPS-1-ad, B7) | the S3 key, bucket, prefix and `BACKUP_S3_LOCK_DAYS` bundles are sent with, each object locked (B7); absent, nothing is sent (`runbook-backup-bundle.md`) |
@@ -34,9 +33,6 @@ except `backup-bundle-passphrase`, which is never sealed.
 **Losing `vault-kek` makes every stored tenant credential unrecoverable.**
 ADR-0026 accepted that; backing it up is an operational requirement, not a
 nice-to-have.
-
-**Losing `object-backup-password` makes every object-storage snapshot
-unreadable** (ADR-0120): keep it wherever `vault-kek` is kept.
 
 **Losing `pg-backup-passphrase` makes every database backup and archived WAL
 segment unreadable** (ADR-0126): the same rule.

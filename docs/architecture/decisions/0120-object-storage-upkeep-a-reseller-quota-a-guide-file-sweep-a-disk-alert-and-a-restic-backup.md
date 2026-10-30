@@ -62,3 +62,13 @@ the same day and chose the recommended answer to each:
   `vault-kek` (ADR-0026), so it is kept with the other secrets.
 - An S3 driver later replaces points 3–5 with the bucket's own lifecycle and
   versioning; points 1–2 stay.
+
+## Amendment, 2026-10-30 — the files' backup is a locked copy in the bucket, not restic (F-018-m2-c)
+
+User, 2026-10-30, with the move to S3: a nightly `mc mirror` of the files into
+the backup bucket (`txnet-backups`, the bundle's, B7), each copy's compliance
+lock renewed for 7 days, and versioning on `txnet-main-data` with noncurrent
+versions kept 30 days. Restic and its password are gone: the copy left the
+server from its first run, which restic's repository on the host never did,
+and whoever holds the Arvan key can hide a copy but not erase it inside the
+lock. Points 1–2 stand; the "S3 driver later" consequence above is this.
