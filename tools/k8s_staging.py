@@ -3,7 +3,8 @@
 
     python3 tools/k8s_staging.py up        the dev stack paused, k3s at k8s/versions.env's pin in one
                                            container on an --internal network with the local panels,
-                                           production's server flags, egress proven closed
+                                           production's server flags, egress proven closed, the dev bots'
+                                           gate its one way out (tools/k8s_staging_gate.py, OPS-1-ah-j)
     python3 tools/k8s_staging.py import IMAGE...
                                            images from this host's Docker into the cluster: it pulls nothing
     python3 tools/k8s_staging.py restore [--at REF]
@@ -37,6 +38,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "scripts" / "bundle"))
 from bundle_plan import parse_env  # noqa: E402
 from k8s_memfit import K3S_BASE_MIB, K3S_PER_POD_MIB, repo_workloads  # noqa: E402
+import k8s_staging_gate as kg  # noqa: E402
 
 CONTAINER = NETWORK = "txnet-staging"
 # TEST-NET-3 (RFC 5737): routed nowhere, and not private, so network-service's
@@ -161,6 +163,7 @@ def remove(docker, root: Path, state: Path) -> None:
     """Everything `up` made, gone, and the dev stack back if `up` stopped it. Safe
     to run on a half-made staging: each step tolerates what is already absent."""
     docker(["docker", "rm", "-f", CONTAINER], check=False)
+    kg.stop(docker)
     docker(["docker", "volume", "rm", VOLUME], check=False)
     for name in paneltest_containers(docker):
         docker(["docker", "network", "disconnect", "-f", NETWORK, name], check=False)
@@ -253,7 +256,8 @@ def up(docker, root: Path, state: Path) -> None:
     if problem:
         raise StagingError(problem)
     versions = parse_env((root / "k8s" / "versions.env").read_text())
-    image = k3s_image(parse_env((root / ".env").read_text())["DOCKER_REGISTRY"], versions["K3S_VERSION"])
+    registry = parse_env((root / ".env").read_text())["DOCKER_REGISTRY"]
+    image = k3s_image(registry, versions["K3S_VERSION"])
     airgap = fetch_airgap(versions["K3S_VERSION"])
     docker(["docker", "pull", "-q", image])
     # ADR-0166 point 6: the dev stack gives its memory back for the run.
@@ -266,11 +270,12 @@ def up(docker, root: Path, state: Path) -> None:
         if problem:
             raise StagingError(problem)
         create_network(docker)
+        kg.start(docker, root, registry, NETWORK)  # first: its address is fixed
         for name in paneltest_containers(docker):
             docker(["docker", "network", "connect", NETWORK, name])
         docker(run_argv(image, root, airgap))
         wait_ready(docker)
-        problem = egress_problem(docker)
+        problem = egress_problem(docker) or kg.refuses(docker, CONTAINER)
         if problem:
             raise StagingError(f"{problem}: staging removed, nothing was restored into it")
         write_kubeconfig(docker)
@@ -307,7 +312,8 @@ def status(docker) -> int:
         return 1
     print(docker(["docker", "exec", CONTAINER, "kubectl", "get", "nodes"], check=False).stdout.rstrip())
     problem = egress_problem(docker)
-    print(f"egress: {problem or 'closed'}")
+    problem = problem or kg.refuses(docker, CONTAINER)
+    print(f"egress: {problem or 'closed, but for the dev bots gate'}")
     return 1 if problem else 0
 
 

@@ -6,9 +6,9 @@ version: 1
 updated: 2026-10-30
 ---
 
-# Contract — hosting: staging's copy of production holds nothing real, and the owner's way in
+# Contract — hosting: staging's copy of production holds nothing real, the owner's way in, and its one way out
 
-R14 restores production's data into staging, a network with no route out. That
+R14 restores production's data into staging, a network with no route out (but R18's gate). That
 network is one layer; this file is the second (ADR-0168 points 1, 2): one
 mistake in either reaches no real panel and no real person.
 `tools/k8s_staging_scrub.py`.
@@ -111,10 +111,34 @@ while staging holds production's data:
   `open` refuses.
 - What the owner changes lives in the copy and goes at `down`.
 
+**R18 — Staging's one way out is the dev bots' gate** (ADR-0168 point 5,
+OPS-1-ah-j, `tools/k8s_staging_gate.py`, `tools/staging_botgate.py`).
+
+- **The gate.** `up` starts `txnet-staging-botgate` (`python:3.12-alpine`
+  through the mirror, the server mounted read-only) on the host's bridge. It joins
+  staging's network at `203.0.113.250` before the node or any panel does. It
+  forwards `/<platform>/bot<token>/<method>` and `/<platform>/file/bot<token>/…`
+  to `.env.dev`'s `TELEGRAM_API_BASE` / `BALE_API_BASE`, only for a dev bot's token. It holds the tokens'
+  sha256, never a token, and never logs a request line. It forwards only a method
+  that sends, edits, answers or reads (`send*`, `edit*`, `answer*`, `deleteMessage`,
+  `createInvoiceLink`, `getMe`, `getFile`, `getChat*`, `getWebhookInfo`). `setWebhook`,
+  `deleteWebhook`, `setMyCommands`, `getUpdates` and the rest get a 403 from the gate itself. So the
+  dev bot's webhook stays dev's, whatever code runs in staging. `down` removes it.
+- **The services.** The scrub (every service at zero) and the twin after its
+  deploy (then restarting them) patch every env Secret a Deployment loads that
+  names a bot API: `TELEGRAM_API_BASE`, `BALE_API_BASE` to the gate,
+  `BOT_WEBHOOK_AUTO_REGISTER=false`. It is done to the cluster, not to a
+  release, because staging deploys production's env at any commit. A Secret
+  left unpatched points at production's relay, which staging cannot reach:
+  it fails closed.
+- **The checks.** `up` and `status` also require the gate to refuse a
+  `setWebhook` from the node's side, beside R14's closed-egress proof. R16's
+  guard refuses a Secret naming a bot API that is not aimed at the gate.
+
 ## Proof
 
 `tools/k8s_staging_scrub_test.py` (14), `k8s_staging_people_test.py` (9),
-`k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_data_test.py`,
+`k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_gate_test.py` (9), `k8s_staging_data_test.py`,
 `k8s_staging_twin_test.py`, `scripts/bundle/test_bundle.py`
 (`test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services`).
 2026-10-29, the SQL run on dev's database inside a transaction that was rolled
@@ -141,3 +165,9 @@ Open, 2026-10-30, against dev's Traefik (O3 `required`) with dev's pull pair:
 the panel and the apex 200 through the proxy, curl verifying the staging CA's
 certificate; a client pair of another CA refused at the handshake. Not yet run
 against staging itself.
+Gate, 2026-10-30, the real container on an internal network of staging's subnet
+with a probe beside it: both dev bots' `getMe` and `getWebhookInfo` 200 through
+it, `setWebhook` and `getUpdates` 403 from the gate, an unknown token 403, and
+`1.1.1.1` unreachable. The log names no token. Its first probe ran before the
+gate listened, so the check now retries. The Secret patch is not yet run on a
+cluster.

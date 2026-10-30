@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
 import k8s_staging_data as kd  # noqa: E402
+import k8s_staging_gate as kg  # noqa: E402
 import k8s_staging_scrub as sc  # noqa: E402
 
 TO_TREE = "tree-to"
@@ -120,6 +121,8 @@ def deploy_over(docker, ref: str) -> None:
     env = kd.staging_env(docker)
     kd.bring_images(docker, tree, env)
     subprocess.run([f"{tree}/scripts/prod.k8s.sh", "deploy"], env=env, check=True)
+    # The deploy wrote production's env again: aimed at the gate once more (R18).
+    kg.aim(sc.KUBECTL, restart=True)
 
 
 def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str) -> bool:

@@ -11,7 +11,8 @@ B10's restore runs this between the stores and the services (`backup.py restore
                              vault rows, OpenVPN file — and archived, which
                              stops its collection; then `guard`
                              then the people (`k8s_staging_people.py`, OPS-1-ah-g)
-                             and the keys (`k8s_staging_keys.py`, OPS-1-ah-h)
+                             and the keys (`k8s_staging_keys.py`, OPS-1-ah-h), and
+                             the services aimed at the bots' gate (OPS-1-ah-j)
     guard                    exit 1, naming each, while a panel row names an
                              address that is not a local panel, a person's
                              contact is not a fake, or a key is not staging's
@@ -31,6 +32,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging as ks  # noqa: E402
+import k8s_staging_gate as kg  # noqa: E402
 import k8s_staging_keys as kk  # noqa: E402
 import k8s_staging_people as kp  # noqa: E402
 
@@ -193,7 +195,7 @@ def guard(local: Local) -> bool:
     """True when no panel row names a real address, every person's contact is a
     fake and every key staging's own; each finding said otherwise."""
     labels, sources = vault_logins()
-    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql) + kk.guard(psql)
+    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql) + kk.guard(psql) + kg.guard(KUBECTL)
     for line in found:
         print(f"REAL  {line}")
     if found:
@@ -224,6 +226,7 @@ def main(argv=None) -> int:
             work = os.environ.get(RESTORE_WORK)
             kp.scrub(psql, KUBECTL, Path(work) if work else None)
             kk.scrub(psql, KUBECTL)
+            kg.aim(KUBECTL)
         else:
             local = Local.running(ks.docker_run)
         return 0 if guard(local) else 1

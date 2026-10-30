@@ -139,7 +139,8 @@ Staging is k3s at `K3S_VERSION` in one privileged container, `txnet-staging`,
 on the dev host: `scripts/staging.sh up|import|status|down`
 (`tools/k8s_staging.py`). Its rules, each one held by the script:
 - **No route out.** The container's only network is `--internal`; the local
-  panels' containers (`/root/paneltest`) join it, and nothing else does. k3s
+  panels' containers (`/root/paneltest`) and the dev bots' gate (R18,
+  `contract.scrub.md`) join it, and nothing else does. k3s
   exits "no default routes found" without one, so the default route is on the
   container's own link with no gateway behind it. `up` proves, before it
   returns, that the network is internal and `http://1.1.1.1` gets no answer;

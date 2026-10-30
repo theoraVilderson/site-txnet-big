@@ -54,6 +54,11 @@ checks see only what was written into them.
 5. **One way out, for the test bot only.** Staging may reach the dev bot's API
    (Telegram, Bale), so notices can be seen arriving; never a panel, a gateway,
    SMS or mail.
+   *How (user, 2026-10-30):* a gate container, not a route. Staging's services
+   are aimed at it in the cluster's own env Secrets, with webhook registration
+   off. It forwards only the dev bots' sending and reading calls. Without it,
+   staging would register the dev bot's webhook on production's domain, since
+   staging runs production's env, at any commit (OPS-1-ah-j, R18).
 
 ## Consequences
 
