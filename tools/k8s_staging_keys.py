@@ -228,7 +228,11 @@ def findings(state: dict, bots: list[DevBot]) -> list[str]:
 def scrub(psql, kubectl: list[str]) -> None:
     bots = dev_bots(dev_env())
     psql(keys_sql(bots, cluster_kek(kubectl) if bots else b""))
-    named = ", ".join(f"{b.platform} @{b.username}" for b in bots) or "none: every bot disabled"
+    # What was written, not what .env.dev offers: a platform with no primary bot of its own gets none.
+    given = psql(f"SELECT platform FROM automation.bot_integration WHERE \"tenantId\" = {OWNER} "
+                 "AND status <> 'disabled';").split()
+    named = ", ".join(f"{b.platform} @{b.username}" for b in bots if b.platform in given) or \
+        "none (the platform has no primary bot to give one): every bot disabled"
     print(f"keys: every vault key but the panels' logins deleted, gateways' keys cleared; dev bots {named}")
 
 

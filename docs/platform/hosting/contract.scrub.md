@@ -163,11 +163,18 @@ vault keys (gateways, SMS) and 2 merchant ids before, none after, both dev bots
 wrapped, opened through `vault.crypto.ts` itself, and the fingerprints matched.
 Open, 2026-10-30, against dev's Traefik (O3 `required`) with dev's pull pair:
 the panel and the apex 200 through the proxy, curl verifying the staging CA's
-certificate; a client pair of another CA refused at the handshake. Not yet run
-against staging itself.
+certificate; a client pair of another CA refused at the handshake.
 Gate, 2026-10-30, the real container on an internal network of staging's subnet
 with a probe beside it: both dev bots' `getMe` and `getWebhookInfo` 200 through
 it, `setWebhook` and `getUpdates` 403 from the gate, an unknown token 403, and
 `1.1.1.1` unreachable. The log names no token. Its first probe ran before the
-gate listened, so the check now retries. The Secret patch is not yet run on a
-cluster.
+gate listened, so the check now retries.
+Live, 2026-10-30, `up` then `restore` of production's bundle (`fb9fd253`):
+panels 6 pointed and 4 wiped, people 13 columns faked. The vault was left with
+the 6 local panels' logins alone, and no gateway key. Production's one bot (a
+reseller's) was disabled; the platform has none of its own, so no dev bot was
+written, and the scrub now says so. 3 services were aimed at the gate. bot-service logged
+`BOT_WEBHOOK_AUTO_REGISTER=false`, and the gate refused only `up`'s and `status`'s
+probes. The guard was clean, and the smoke check passed 85 of 85. `open` through the proxy: the
+platform's and chillshop's panels and the site 200, with the CA verified. `down` left no container, no
+`/dev/shm` and no key link, and the dev stack came back.
