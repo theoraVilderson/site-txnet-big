@@ -207,22 +207,32 @@ class PauseTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             docker = Docker()
             ks.remove(docker, Path("/repo"), Path(d) / "none.json")
-            for prefix in (f"docker rm -f {ks.CONTAINER}", f"docker volume rm {ks.VOLUME}",
+            for prefix in (f"docker rm -f -v {ks.CONTAINER}", f"docker volume rm {ks.VOLUME}",
                            f"docker network rm {ks.NETWORK}"):
                 self.assertTrue(docker.ran(prefix), prefix)
 
-    def test_down_decides_on_the_images_before_the_node_goes(self):
-        # The proof that only images are left needs the node's containerd running.
+    def test_down_drains_before_the_node_goes_and_seals_after(self):
+        # The drain needs the node's containerd; compaction needs it stopped.
         with tempfile.TemporaryDirectory() as d:
-            docker = Docker()
-            kept = []
-            saved = ks.ki.keep
-            ks.ki.keep = lambda dk, node: kept.append(len(dk.calls)) or True
+            docker, seen = Docker(), []
+            saved = ks.ki.keep, ks.ki.seal
+            ks.ki.keep = lambda dk, node: seen.append(("keep", len(dk.calls))) or True
+            ks.ki.seal = lambda dk: seen.append(("seal", len(dk.calls))) or True
             try:
                 ks.remove(docker, Path("/repo"), Path(d) / "none.json")
             finally:
-                ks.ki.keep = saved
-            self.assertEqual(kept, [0])
+                ks.ki.keep, ks.ki.seal = saved
+            self.assertEqual(seen[0], ("keep", 0))
+            self.assertEqual(docker.calls[0], ["docker", "rm", "-f", "-v", ks.CONTAINER])
+            self.assertEqual(seen[1], ("seal", 1))
+
+    def test_down_removes_the_k3s_images_anonymous_volumes(self):
+        # 2026-10-30: `rm -f` without -v left /var/log and /var/lib/kubelet of every
+        # run since 2026-10-29 behind, 397 txnet pods' logs among them.
+        with tempfile.TemporaryDirectory() as d:
+            docker = Docker()
+            ks.remove(docker, Path("/repo"), Path(d) / "none.json")
+            self.assertTrue(docker.ran(f"docker rm -f -v {ks.CONTAINER}"))
 
 
 if __name__ == "__main__":

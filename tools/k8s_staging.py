@@ -171,9 +171,13 @@ def write_state(path: Path, dev_stack_was_running: bool) -> None:
 def remove(docker, root: Path, state: Path) -> None:
     """Everything `up` made, gone, and the dev stack back if `up` stopped it. Safe
     to run on a half-made staging: each step tolerates what is already absent."""
-    # Before the node goes: the proof that only images are left needs its containerd.
-    ki.keep(docker, CONTAINER)
-    docker(["docker", "rm", "-f", CONTAINER], check=False)
+    # The drain needs the node's containerd running, the compaction needs it stopped.
+    kept = ki.keep(docker, CONTAINER)
+    # -v: the k3s image declares /var/log and /var/lib/kubelet as volumes; without it
+    # every run's pod logs outlived `down`.
+    docker(["docker", "rm", "-f", "-v", CONTAINER], check=False)
+    if kept:
+        ki.seal(docker)
     kg.stop(docker)
     docker(["docker", "volume", "rm", VOLUME], check=False)
     for name in paneltest_containers(docker):

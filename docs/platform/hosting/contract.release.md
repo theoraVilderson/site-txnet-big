@@ -153,14 +153,17 @@ on the dev host: `scripts/staging.sh up|import|status|down`
 - **Memory is lent by the dev stack.** `up` stops it when running, records
   that, and refuses unless K19's requests plus k3s fit in what is then free;
   `down` starts it again only if `up` stopped it.
-- **Nothing but images outlives `down`**: the container, its named volume
-  `txnet-staging-k3s` and the network go, and the kubeconfig with them. A failed
+- **Nothing but images outlives `down`**: the container with its anonymous
+  volumes (`rm -v`: the k3s image declares `/var/log`, `/var/lib/kubelet`), its
+  named volume `txnet-staging-k3s` and the network go, and the kubeconfig. A failed
   `up` prints the container's log, then does the same. containerd's store is its
   own volume, `txnet-staging-images` (OPS-1-ah-e, `tools/k8s_staging_images.py`):
-  `down` first prunes images the running release does not use, deletes every
-  namespace but k3s's own and removes their pods, containers and writable layers
-  with them; it keeps the store only when crictl then lists none, else removes it.
-  `up` counts it as part of the 17 GiB peak. A twin imports only what changed.
+  `down` prunes images the running release does not use, deletes every namespace
+  but k3s's own and removes their pods with their writable layers; kept only when
+  crictl then lists none. With the node gone, its bolt files are compacted (bbolt
+  pinned): freed pages kept a deleted container's env. Any failure removes it.
+  `up` counts it in the 17 GiB peak; a twin imports only what changed. Proven
+  2026-10-30 on a throwaway k3s: a pod's text gone, its image held by a fresh node.
 - **Production's data** (`restore [--at REF]`, `tools/k8s_staging_data.py`,
   OPS-1-ah-b): production's newest bundle and passphrase, read over ssh
   (`STAGING_PROD_SSH`, `_KEY` in `.env.dev`), sum-checked; deployed at the

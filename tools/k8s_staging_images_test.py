@@ -6,6 +6,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -106,6 +107,54 @@ class KeepTest(unittest.TestCase):
         self.assertFalse(self.keep(node))
         self.assertTrue(node.ran(f"docker volume rm {ki.IMAGES_VOLUME}"))
         self.assertFalse(node.ran("crictl"))
+
+
+class SealTest(unittest.TestCase):
+    # 2026-10-30, live: a deleted pod's command line was still in meta.db's freed
+    # pages; production's env Secrets would be too. Compaction writes live records only.
+    def store(self, d):
+        root = Path(d)
+        for rel in ki.BOLT_FILES:
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text("old pages")
+        (root / ki.CONTAINERD_LOG).write_text("log")
+        return root
+
+    def docker_at(self, root):
+        def docker(argv, check=True, **_):
+            out = str(root) if argv[:3] == ["docker", "volume", "inspect"] else ""
+            return subprocess.CompletedProcess(argv, 0, out, "")
+        return docker
+
+    def test_every_bolt_file_rewritten_and_the_log_removed(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, ran = self.store(d), []
+
+            def compact(src, dst):
+                ran.append(src)
+                Path(dst).write_text("live records")
+            self.assertTrue(ki.seal(self.docker_at(root), compact=compact))
+            self.assertEqual(sorted(ran), sorted(str(root / rel) for rel in ki.BOLT_FILES))
+            for rel in ki.BOLT_FILES:
+                self.assertEqual((root / rel).read_text(), "live records")
+            self.assertFalse((root / ki.CONTAINERD_LOG).exists())
+
+    def test_a_failed_compaction_removes_the_store(self):
+        with tempfile.TemporaryDirectory() as d:
+            root, calls = self.store(d), []
+            inner = self.docker_at(root)
+
+            def docker(argv, check=True, **kw):
+                calls.append(argv)
+                return inner(argv, check, **kw)
+
+            def compact(src, dst):
+                raise subprocess.CalledProcessError(1, ["bbolt"])
+            self.assertFalse(ki.seal(docker, compact=compact))
+            self.assertIn(["docker", "volume", "rm", ki.IMAGES_VOLUME], calls)
+
+    def test_the_tool_is_pinned(self):
+        self.assertRegex(ki.BBOLT_VERSION, r"^v\d+\.\d+\.\d+$")
 
 
 class RoomTest(unittest.TestCase):

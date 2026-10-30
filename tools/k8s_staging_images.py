@@ -10,10 +10,17 @@ only the images that changed instead of all ~36 (~5 min).
 `down` keeps it only when it can prove, on the running node, that the store
 holds images and nothing of production's: every namespace but the cluster's own
 deleted, their pods removed with their containers and writable layers, none
-left. Anything short of that proof, and the volume goes with the rest.
+left (`keep`). Then, the node stopped, containerd's bolt files are compacted
+(`seal`): a deleted container's record stays in a bolt file's freed pages, and
+with it the env production's Secrets gave it (found live 2026-10-30). Anything
+short of either, and the volume goes with the rest.
 """
 import json
+import os
+import shutil
+import subprocess
 import time
+from pathlib import Path
 
 IMAGES_VOLUME = "txnet-staging-images"
 CONTAINERD_DIR = "/var/lib/rancher/k3s/agent/containerd"
@@ -22,6 +29,16 @@ SYSTEM_NAMESPACES = frozenset({"kube-system", "kube-public", "kube-node-lease", 
 # How long `down` waits for production's pods to leave the node before giving up the images.
 DRAIN_TRIES, DRAIN_POLL_S = 20, 3
 POD_NAMESPACE_LABEL = "io.kubernetes.pod.namespace"
+# containerd's bolt databases, relative to CONTAINERD_DIR: images, containers and
+# leases in the first, snapshot keys in the second.
+BOLT_FILES = ("io.containerd.metadata.v1.bolt/meta.db", "io.containerd.snapshotter.v1.overlayfs/metadata.db")
+CONTAINERD_LOG = "containerd.log"
+# The bbolt CLI that compacts them; the library containerd itself is built on.
+BBOLT_VERSION = "v1.4.3"
+BBOLT_PACKAGE = "go.etcd.io/bbolt/cmd/bbolt"
+BBOLT_DIR = Path("/var/cache/txnet-staging") / f"bbolt-{BBOLT_VERSION}"
+# The dev host's Go is not on PATH (it is installed under /usr/local/go).
+GO_FALLBACK = "/usr/local/go/bin/go"
 
 
 def mount_args() -> list[str]:
@@ -79,9 +96,50 @@ def keep(docker, node: str, sleep=time.sleep) -> bool:
     return proven
 
 
+def _mountpoint(docker) -> str | None:
+    inspected = docker(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", IMAGES_VOLUME], check=False)
+    return inspected.stdout.strip() if inspected.returncode == 0 else None
+
+
+def bbolt() -> Path:
+    """The pinned bbolt CLI, built once into the cache directory."""
+    tool = BBOLT_DIR / "bbolt"
+    if not tool.exists():
+        go = shutil.which("go") or GO_FALLBACK
+        subprocess.run([go, "install", f"{BBOLT_PACKAGE}@{BBOLT_VERSION}"], check=True, capture_output=True,
+                       env={**os.environ, "GOBIN": str(BBOLT_DIR)})
+    return tool
+
+
+def compact_bolt(src: str, dst: str) -> None:
+    """A fresh file with the live records only: freed pages are not copied."""
+    subprocess.run([str(bbolt()), "compact", "-o", dst, src], check=True, capture_output=True)
+
+
+def seal(docker, compact=compact_bolt) -> bool:
+    """After the node is gone: each bolt file replaced by its compaction, containerd's
+    log removed. True when the store stays; on any failure it is removed."""
+    try:
+        root = _mountpoint(docker)
+        if root is None:
+            return False
+        for rel in BOLT_FILES:
+            path = Path(root) / rel
+            if path.exists():
+                fresh = path.with_name(path.name + ".compact")
+                fresh.unlink(missing_ok=True)
+                compact(str(path), str(fresh))
+                os.replace(fresh, path)
+        (Path(root) / CONTAINERD_LOG).unlink(missing_ok=True)
+        return True
+    except Exception:  # noqa: BLE001 — any doubt means the images go, never production's env stays
+        docker(["docker", "volume", "rm", IMAGES_VOLUME], check=False)
+        return False
+
+
 def held_bytes(docker) -> int:
     """What the kept store takes on the disk now: part of staging's peak already."""
-    inspected = docker(["docker", "volume", "inspect", "-f", "{{.Mountpoint}}", IMAGES_VOLUME], check=False)
-    if inspected.returncode != 0:
+    root = _mountpoint(docker)
+    if root is None:
         return 0
-    return int(docker(["du", "-sb", inspected.stdout.strip()]).stdout.split()[0])
+    return int(docker(["du", "-sb", root]).stdout.split()[0])
