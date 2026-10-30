@@ -192,18 +192,25 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   6 of 10 panels pointed and collected from, roll 0 of 2803 failed, stores
   killed and back with their rows; 21 minutes.
 
-**R15 — A release is one command** (ADR-0166 point 5, OPS-1-ah-d).
-`scripts/release.sh [--until STEP] [--from REF]` (`tools/release.py`), as root
-on the dev host, runs in order and stops at the first failure: `clean` (no
-change `git status` shows, on master; production's checkout clean and an
-ancestor of HEAD), `checks` (AGENTS.md's seven), `disk` (build cache and
-dangling images freed, R14's room), `build` (R4, R12), `twin` (R14 from
-production's running commit, or `--from`; staging removed however it ends, the
-dev stack back), `push` (R10), `ship` (production's commit..master as a git
-bundle over ssh, `merge --ff-only` in its checkout), `deploy` (`prod.k8s.sh
-deploy` there, K10, K16). Nothing leaves the dev host before the twin passed.
-`--until twin` proves a release without sending it. A release is a batch of
-fixes, not one per change.
+**R15 — A release is one command to prove, one to send** (ADR-0166 point 5,
+OPS-1-ah-d). `scripts/release.sh [--until STEP] [--from REF]`
+(`tools/release.py`), as root on the dev host, runs in order and stops at the
+first failure: `clean` (no change `git status` shows, on master; production's
+checkout clean and an ancestor of HEAD), `checks` (AGENTS.md's seven), `disk`
+(build cache and dangling images freed, R14's room), `build` (R4, R12), `twin`
+(R14 from production's running commit, or `--from`). Then it stops (R19).
+`release.sh send` runs `push` (R10), `ship` (production's commit..master as a
+git bundle over ssh, `merge --ff-only` in its checkout), `deploy` (`prod.k8s.sh
+deploy` there, K10, K16), `close` (staging down, the dev stack back). Nothing
+leaves the dev host before the twin passed. A release is a batch of fixes.
+
+**R19 — Production waits for the owner** (ADR-0168 point 4, OPS-1-ah-k). A
+passed twin leaves staging up and writes `/var/lib/txnet/release.json`: HEAD
+and production's commit; a failed one takes staging down. `release.sh approve`
+adds the owner's name only in a terminal, with the commit's first 12 characters
+typed: an agent's shell has none, and never approves. `send` refuses unless the
+record names HEAD, is approved, and production has not moved since; a newer
+commit or a new prove needs a new approval, and `close` spends it.
 
 ## The real login (OPS-1-o-f, with the user)
 
@@ -224,6 +231,8 @@ a 300 MB layer pushed in 22s and pulled back from the dev host, an anonymous man
 R10, R11, 2026-10-24: `k8s_deploy_test.py` `test_push_names_an_unreachable_registry_first`;
 `k8s_release_test.py` `LoginRolesTest` (a quote and a backslash through stdin) and the
 order in `ScriptTest`; the dev path re-run on dev's Postgres, its logins unchanged.
+
+R19, 2026-10-30: `tools/release_test.py` `ApprovalTest`, `OrderTest`, `TwinStepTest`; not yet run live.
 
 R5–R9, 2026-10-24: `tools/k8s_release_test.py` — the probe and route plans,
 every one of the production model's IngressRoutes given a request, the record,

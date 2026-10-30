@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Spec for `scripts/release.sh` (OPS-1-ah-d, ADR-0166 point 5, hosting R15).
+"""Spec for `scripts/release.sh` (OPS-1-ah-d, -k; ADR-0166 point 5, ADR-0168 point 4; hosting R15).
 
     python3 tools/release_test.py
 """
@@ -17,41 +17,47 @@ PROD = Production("root@2.144.31.149", "/root/.ssh/key")
 
 
 class OrderTest(unittest.TestCase):
-    def steps(self, log, fail=None):
+    def steps(self, log, names=None, fail=None):
         def step(name):
             def run():
                 log.append(name)
                 if name == fail:
                     raise rl.ReleaseError(f"{name} broke")
             return rl.Step(name, run)
-        return [step(n) for n in rl.STEP_NAMES]
+        return [step(n) for n in names or rl.PROVE_STEPS]
 
-    def test_the_twin_comes_before_anything_leaves_this_host(self):
-        names = list(rl.STEP_NAMES)
-        self.assertLess(names.index("build"), names.index("twin"))
+    def test_proving_sends_nothing(self):
+        # ADR-0168 point 4: production never goes on its own.
+        self.assertEqual(rl.PROVE_STEPS[-1], "twin")
         for outward in ("push", "ship", "deploy"):
-            self.assertLess(names.index("twin"), names.index(outward), outward)
+            self.assertNotIn(outward, rl.PROVE_STEPS)
+            self.assertIn(outward, rl.SEND_STEPS)
+
+    def test_sending_checks_the_approval_first_and_frees_staging_last(self):
+        self.assertEqual(rl.SEND_STEPS[0], "approved")
+        self.assertEqual(rl.SEND_STEPS[-1], "close")
 
     def test_a_failed_step_stops_every_later_one(self):
         log = []
-        self.assertEqual(rl.run_steps(self.steps(log, fail="twin")), "twin")
-        self.assertEqual(log, ["clean", "checks", "disk", "build", "twin"])
+        self.assertEqual(rl.run_steps(self.steps(log, fail="build")), "build")
+        self.assertEqual(log, ["clean", "checks", "disk", "build"])
 
     def test_until_stops_after_the_named_step(self):
         log = []
-        self.assertIsNone(rl.run_steps(self.steps(log), until="twin"))
-        self.assertEqual(log[-1], "twin")
-        self.assertNotIn("push", log)
+        self.assertIsNone(rl.run_steps(self.steps(log), until="disk"))
+        self.assertEqual(log[-1], "disk")
+        self.assertNotIn("twin", log)
 
     def test_an_unknown_until_is_refused_before_any_step(self):
         log = []
         with self.assertRaises(rl.ReleaseError):
-            rl.run_steps(self.steps(log), until="deploi")
+            rl.run_steps(self.steps(log), until="deploy")
         self.assertEqual(log, [])
 
 
 class TwinStepTest(unittest.TestCase):
-    # ADR-0166 point 6: the dev stack is lent for the run and comes back however it ends.
+    # ADR-0166 point 6: the dev stack comes back when the twin fails; ADR-0168
+    # point 4: a passed twin leaves staging up for the owner to test.
     def test_staging_comes_down_when_the_twin_fails(self):
         calls = []
 
@@ -62,15 +68,55 @@ class TwinStepTest(unittest.TestCase):
             rl.twin_step(staging, prod_commit="abc", head="def", staging_up=False)
         self.assertEqual(calls, ["up", "twin", "down"])
 
-    def test_the_twin_starts_from_productions_running_commit(self):
+    def test_a_passed_twin_leaves_staging_up(self):
         seen = []
 
         def staging(*argv):
             seen.append(argv)
             return True
         rl.twin_step(staging, prod_commit="abc", head="def", staging_up=True)
-        self.assertEqual(seen[0], ("twin", "--from", "abc", "--to", "def"))
-        self.assertEqual(seen[-1], ("down",))
+        self.assertEqual(seen, [("twin", "--from", "abc", "--to", "def")])
+
+
+HEAD = "d" * 40
+PROD_AT = "a" * 40
+
+
+class ApprovalTest(unittest.TestCase):
+    def proved(self, **extra):
+        return {"commit": HEAD, "production": PROD_AT, **extra}
+
+    def test_the_owner_approves_in_a_terminal_by_typing_the_commit(self):
+        self.assertIsNone(rl.approval_problem(self.proved(), HEAD, HEAD[:12], is_tty=True))
+
+    def test_no_terminal_no_approval(self):
+        # An agent's shell has no terminal: the approval stays the owner's.
+        self.assertIn("terminal", rl.approval_problem(self.proved(), HEAD, HEAD[:12], is_tty=False))
+
+    def test_a_mistyped_commit_is_refused(self):
+        self.assertIn("not approved", rl.approval_problem(self.proved(), HEAD, "dddd", is_tty=True))
+
+    def test_only_a_commit_whose_twin_passed_can_be_approved(self):
+        self.assertIn("twin", rl.approval_problem(None, HEAD, HEAD[:12], is_tty=True))
+        self.assertIn("twin", rl.approval_problem(self.proved(commit="e" * 40), HEAD, HEAD[:12], is_tty=True))
+
+    def test_send_needs_the_approval_of_this_same_commit(self):
+        approved = self.proved(approved_by="root")
+        self.assertIsNone(rl.send_problem(approved, HEAD, PROD_AT))
+        self.assertIn("approve", rl.send_problem(self.proved(), HEAD, PROD_AT))
+        self.assertIn("twin", rl.send_problem(None, HEAD, PROD_AT))
+        # A newer commit needs a new approval (ADR-0168 point 4).
+        self.assertIn("twin", rl.send_problem(approved, "e" * 40, PROD_AT))
+
+    def test_send_refuses_when_production_moved_since_the_twin(self):
+        self.assertIn("production", rl.send_problem(self.proved(approved_by="root"), HEAD, "b" * 40))
+
+    def test_the_record_survives_a_round_trip(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, "sub", "release.json")
+            self.assertIsNone(rl.read_record(path))
+            rl.write_record(path, self.proved())
+            self.assertEqual(rl.read_record(path)["commit"], HEAD)
 
 
 class CleanTest(unittest.TestCase):
