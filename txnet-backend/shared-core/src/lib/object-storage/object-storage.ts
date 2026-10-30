@@ -6,6 +6,7 @@ import type { PrismaClient } from '@prisma/client';
 
 import { TenantContext, TenantScopeConflict } from '../tenant-context/tenant-context';
 import { isLogicalPath, objectKey, parseObjectKey } from './object-key';
+import { S3ObjectDriver, s3Sender } from './s3-driver';
 
 /**
  * Object storage (F-018-m, D-42 (3), `docs/platform/object-storage/`).
@@ -132,22 +133,50 @@ export class LocalObjectDriver implements ObjectDriver {
   }
 }
 
-/** The environment a driver is chosen from. */
+/** The environment a driver is chosen from (contract "Configuration"). */
 export interface ObjectStorageEnv {
   OBJECT_STORAGE_DRIVER?: string;
   OBJECT_STORAGE_LOCAL_ROOT?: string;
+  OBJECT_STORAGE_S3_ENDPOINT?: string;
+  OBJECT_STORAGE_S3_REGION?: string;
+  OBJECT_STORAGE_S3_BUCKET?: string;
+  OBJECT_STORAGE_S3_ACCESS_KEY_ID?: string;
+  OBJECT_STORAGE_S3_SECRET_ACCESS_KEY?: string;
+  OBJECT_STORAGE_S3_PATH_STYLE?: string;
 }
 
-/** The driver the environment names. An S3-compatible one arrives behind the same port. */
+/** The driver the environment names; a missing setting throws at boot, not on the first upload. */
 export function objectDriverFromEnv(env: ObjectStorageEnv): ObjectDriver {
   const driver = env.OBJECT_STORAGE_DRIVER ?? 'local';
+  if (driver === 's3') return s3DriverFromEnv(env);
   if (driver !== 'local') {
-    throw new Error(`OBJECT_STORAGE_DRIVER=${driver} is not built; only "local" is`);
+    throw new Error(`OBJECT_STORAGE_DRIVER=${driver} is not built; "local" and "s3" are`);
   }
   if (!env.OBJECT_STORAGE_LOCAL_ROOT) {
     throw new Error('OBJECT_STORAGE_LOCAL_ROOT must name the mounted volume for the local driver');
   }
   return new LocalObjectDriver(env.OBJECT_STORAGE_LOCAL_ROOT);
+}
+
+const S3_REQUIRED = [
+  'OBJECT_STORAGE_S3_ENDPOINT',
+  'OBJECT_STORAGE_S3_REGION',
+  'OBJECT_STORAGE_S3_BUCKET',
+  'OBJECT_STORAGE_S3_ACCESS_KEY_ID',
+  'OBJECT_STORAGE_S3_SECRET_ACCESS_KEY',
+] as const;
+
+function s3DriverFromEnv(env: ObjectStorageEnv): ObjectDriver {
+  const missing = S3_REQUIRED.filter((name) => !env[name]);
+  if (missing.length > 0) throw new Error(`the s3 object driver needs ${missing.join(', ')}`);
+  const sender = s3Sender({
+    endpoint: env.OBJECT_STORAGE_S3_ENDPOINT ?? '',
+    region: env.OBJECT_STORAGE_S3_REGION ?? '',
+    accessKeyId: env.OBJECT_STORAGE_S3_ACCESS_KEY_ID ?? '',
+    secretAccessKey: env.OBJECT_STORAGE_S3_SECRET_ACCESS_KEY ?? '',
+    forcePathStyle: env.OBJECT_STORAGE_S3_PATH_STYLE !== 'false',
+  });
+  return new S3ObjectDriver(sender, env.OBJECT_STORAGE_S3_BUCKET ?? '');
 }
 
 /** A `stored_object` row (rule 3). */

@@ -36,7 +36,8 @@ cite a key.
 
 `active`. Built by F-018-m: the port and the `local` driver in `shared-core`,
 `stored_object` in its own `storage` schema, and the public serving route in
-`tenant-service`. First consumer: tenant's branding (F-018-h).
+`tenant-service`. First consumer: tenant's branding (F-018-h). The `s3` driver
+(F-018-m2-a) is built and selectable; files still on the volume until F-018-m2-d.
 
 ## Changelog
 | Date | Change |

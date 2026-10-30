@@ -79,8 +79,13 @@ services:
       # `req.ip` is Traefik's without it, so every visitor would share one
       # bucket (F-018-al). One hop: Traefik, then this service.
       - TRUST_PROXY=${TRUST_PROXY}
-      # Object storage (F-018-m): only `local` is built; its root is the volume above.
+      # Object storage (F-018-m): `local` (the volume) or `s3` (F-018-m2-a, the bucket below).
       - OBJECT_STORAGE_DRIVER=${OBJECT_STORAGE_DRIVER:-local}
+      - OBJECT_STORAGE_S3_ENDPOINT=${OBJECT_STORAGE_S3_ENDPOINT:-}
+      - OBJECT_STORAGE_S3_REGION=${OBJECT_STORAGE_S3_REGION:-}
+      - OBJECT_STORAGE_S3_BUCKET=${OBJECT_STORAGE_S3_BUCKET:-}
+      - OBJECT_STORAGE_S3_ACCESS_KEY_ID=${OBJECT_STORAGE_S3_ACCESS_KEY_ID:-}
+      - OBJECT_STORAGE_S3_SECRET_ACCESS_KEY=${OBJECT_STORAGE_S3_SECRET_ACCESS_KEY:-}
       - OBJECT_STORAGE_LOCAL_ROOT=/data/objects
       # Verifies private files' signed URLs (F-033-c, ADR-0113); support-service signs with it.
       - OBJECT_STORAGE_SIGNING_SECRET=${OBJECT_STORAGE_SIGNING_SECRET}

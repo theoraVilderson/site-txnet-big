@@ -13,7 +13,8 @@ The shape decided by D-42 (3), built by F-018-m. First consumer: F-018-h.
 ## TL;DR
 
 One port in `shared-core` (`lib/object-storage/`). A driver is chosen by
-environment: `local` (a mounted volume) now, S3-compatible later. Callers hold a
+environment: `local` (a mounted volume) or `s3` (any S3-compatible bucket,
+F-018-m2-a). Callers hold a
 **key**, never a path or a URL, so changing the driver moves bytes and changes
 no row. One public route serves a public key to the tenant whose Host asked;
 a private key is served only through a 5-minute signed URL (ADR-0113).
@@ -61,7 +62,13 @@ does not own, which is a bug to surface.
    separate disks each hold a different subset of the files. Writes are a
    temporary file renamed into place, so a reader never sees half a file.
    On k3s that is one node: every pod mounting the volume is pinned to the
-   data node (hosting K17), until the S3 driver (F-018-m2) needs none.
+   data node (hosting K17), until the move to `s3` (F-018-m2-d) needs none.
+   **The `s3` driver** (`s3-driver.ts`, `@aws-sdk/client-s3`) puts with
+   Content-MD5, so the store refuses a damaged body; only `NoSuchKey` reads as
+   absent, an unreachable store is an error; the SDK's AWS-only CRC checksums are
+   off (`WHEN_REQUIRED`), path-style by default, 5 s connect / 120 s request, 3
+   attempts. Proven 2026-10-30 on Arvan `txnet-main-data`: 3 MiB written 0.8 s,
+   read back with the same sha256, removed.
 6. **A policy declares `visibility`** — never defaulted. A `private` file is
    never served by the public route; only `private-files` serves it, to an
    unexpired URL signed over key, expiry and file name. The owner's service
@@ -104,7 +111,9 @@ does not own, which is a bug to surface.
 
 | variable | meaning |
 |---|---|
-| `OBJECT_STORAGE_DRIVER` | `local` (the only one built) |
+| `OBJECT_STORAGE_DRIVER` | `local` or `s3`; a missing `s3` setting stops the service at boot, named |
+| `OBJECT_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | the `s3` driver's bucket (Arvan `hot.ir-central1.arvanstorage.ir`, `ir-central1`, `txnet-main-data`; no object lock, user 2026-10-30) |
+| `OBJECT_STORAGE_S3_PATH_STYLE` | `true` (default), `false` for AWS virtual-hosted buckets |
 | `OBJECT_STORAGE_LOCAL_ROOT` | the volume; `/data/objects`, mounted from `object_storage` in compose |
 | `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one. The three `OBJECT_STORAGE_*` and the scan variables are declared once, `OBJECT_STORAGE_ENV` / `VIRUS_SCAN_ENV` (`object-storage/env.ts`), and spread into each service's schema |
 | `VIRUS_SCAN_DRIVER` / `CLAMD_ADDR` / `CLAMD_TIMEOUT_MS` | in a service that takes uploads (support-service, billing-service); `none` is the default |
