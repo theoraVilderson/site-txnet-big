@@ -16,8 +16,10 @@ For a server that is already **lost**, this does not apply: bring up the
 newest backup bundle, `runbook-backup-bundle.md`.
 
 ```bash
-MOVE="python3 scripts/move/server_move.py --stack dev --to root@<new server> --monitor-project txnet_monitor_dev"
+MOVE="python3 scripts/move/server_move.py --stack dev --to root@<new server> --monitor-project txnet_monitor_dev --with-project paneltest"
 # prod: --stack prod. Drop --monitor-project to leave the history behind.
+# --with-project: another compose project, every volume and (outside the checkout) its
+# directory; paneltest's panels are what the twin joins (R14).
 ```
 
 ## Symptom
@@ -137,4 +139,8 @@ host and back by `rollback`): 242 tables, Redis and the queues matched; cutover
 2 min, rollback 1 min. It found three faults, fixed in `scripts/move/`: an image
 another service builds was pulled (`pulled_services`), dev's host node_modules
 were not installed (`node_trees`, `npm ci` in presync inside the tree's own
-image), and `up --wait` gave up on a first cold build (`wait_ready`).
+image), and `up --wait` gave up on a first cold build (`wait_ready`). The build
+host's own keys now move too (`build_host_files`: the registry login, `known_hosts`,
+`STAGING_PROD_SSH_KEY`), and paneltest with `--with-project`, so the new dev host
+can release; proven only once `release.sh --until twin` passes there (16 GB RAM:
+the twin needs production's 9.2 GB of requests, K19).

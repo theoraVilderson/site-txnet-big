@@ -20,6 +20,7 @@ import time
 import move_figures as mf
 import move_hosts as mh
 import move_plan as mp
+import move_projects as mj
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MOVE_DIR = ".move"
@@ -54,21 +55,17 @@ class Abort(Exception):
 class Move:
     """One move from `here` (this server) to `there` (a Host over ssh)."""
 
-    def __init__(self, here, there, monitor_project):
+    def __init__(self, here, there, projects=None):
         self.here, self.there = here, there
         self.root = here.root
         self.config = here.config()
-        self.monitor_project = monitor_project
+        self.projects = mj.Projects(here, projects or [])
 
     # -- what moves -------------------------------------------------------
 
     def volumes(self):
         """docker volume name -> its labels, for every volume holding state."""
-        names = list(mp.state_volumes(self.config).values())
-        if self.monitor_project:
-            labels = {n: self.here.volume_labels(n) for n in self.here.project_volumes(self.monitor_project)}
-            declared = {l.get("com.docker.compose.volume", n): {"name": n} for n, l in labels.items()}
-            names += mp.state_volumes({"volumes": declared}).values()
+        names = list(mp.state_volumes(self.config).values()) + self.projects.volumes()
         return {name: self.here.volume_labels(name) for name in names}
 
     def volume_pairs(self):
@@ -79,12 +76,22 @@ class Move:
         """(path here, path there) for every backup repository: the same path on both."""
         return [(d, d) for d in self.backup_dirs()]
 
+    def project_pairs(self):
+        """A side project's own directory where git does not carry it (paneltest): the same path."""
+        return [(d, d) for d in self.projects.dirs(self.root)]
+
     def directories(self):
-        return self.volume_pairs() + self.repository_pairs()
+        return self.volume_pairs() + self.project_pairs() + self.repository_pairs()
 
     def here_dirs(self):
         """The directories directories() pairs, from this side alone (no ssh)."""
-        return [self.here.volume_dir(n) for n in self.volumes()] + self.backup_dirs()
+        return [self.here.volume_dir(n) for n in self.volumes()] + [d for d, _ in self.project_pairs()] + self.backup_dirs()
+
+    def build_host_files(self):
+        """mp.build_host_files that exist here: a server that releases nothing has none of the keys."""
+        env_file = os.path.join(self.root, ".env." + self.here.stack)
+        env = mp.env_values(open(env_file).read()) if os.path.isfile(env_file) else {}
+        return [f for f in mp.build_host_files(env, os.path.expanduser("~")) if os.path.isfile(f)]
 
     def backup_dirs(self):
         return [d.rstrip("/") + "/" for d in mp.backup_dirs(self.config)]
@@ -149,7 +156,7 @@ class Move:
     def check(self):
         for here in self.here_dirs():
             say("moves %-60s %8d MB", here, self.here.used_bytes(here) >> 20)
-        for path in mp.present_carried(self.root):
+        for path in mp.present_carried(self.root) + self.build_host_files():
             say("moves %s", path)
         problems = self.problems()
         for problem in problems:
@@ -166,7 +173,8 @@ class Move:
         """Every volume in the pass volume_form builds; repositories always quick (write-once)."""
         for name, labels in self.volumes().items():
             self.there.ensure_volume(name, labels)
-        for pairs, form in ((self.volume_pairs(), volume_form), (self.repository_pairs(), mp.quick_rsync)):
+        for pairs, form in ((self.volume_pairs(), volume_form), (self.project_pairs(), volume_form),
+                            (self.repository_pairs(), mp.quick_rsync)):
             for here, there in pairs:
                 self.there.run(["mkdir", "-p", there])
                 self.rsync(form(here, self.there.address(there)))
@@ -176,6 +184,9 @@ class Move:
         os.makedirs(os.path.join(self.root, MOVE_DIR), exist_ok=True)
         carried = mp.present_carried(self.root) + [MOVE_DIR + "/"]
         self.rsync(mp.files_rsync(self.root + "/", self.there.address(self.root + "/")), stdin="\n".join(carried) + "\n")
+        outside = [f.lstrip("/") for f in self.build_host_files()]
+        if outside:
+            self.rsync(mp.files_rsync("/", self.there.address("/")), stdin="\n".join(outside) + "\n")
 
     def presync(self):
         self.refuse_if_blocked()
@@ -237,7 +248,7 @@ class Move:
     def save_services(self, running):
         os.makedirs(os.path.join(self.root, MOVE_DIR), exist_ok=True)
         with open(os.path.join(self.root, SERVICES_FILE), "w") as f:
-            json.dump({"services": running, "monitor": self.monitor_command()}, f, indent=1)
+            json.dump({"services": running, "projects": self.projects.up_commands()}, f, indent=1)
 
     def stop_here(self, running):
         """Stops writers, then the data services, cleanly; returns the figures at rest."""
@@ -250,9 +261,7 @@ class Move:
         say("read %d tables, %d+%d Redis keys, %d queued messages", len([k for k in figures if k.startswith("pg:")]),
             figures["redis:persistent"], figures["redis:volatile"], figures["mq:messages"])
         self.here.compose("stop", *mp.DATA_SERVICES)
-        running_monitor = self.monitor_containers("--filter", "status=running")
-        if running_monitor:
-            self.here.run(["docker", "stop", *running_monitor])
+        self.projects.stop()
         figures.update(self.digests(self.here))
         return figures
 
@@ -298,9 +307,8 @@ class Move:
         say("starting the other %d services on the new server", len(running) - len(data))
         self.there.compose("up", "-d", *running)
         self.wait_ready(running)
-        monitor = self.monitor_command()
-        if monitor:
-            self.there.run(monitor)
+        for command in self.saved()["projects"]:
+            self.there.run(command)
         if "pg-backup" in running:
             # a baseline taken on the new server, whatever the copied repository holds (runbook step 4)
             self.there.compose("exec", "-d", "pg-backup", "sh", "/usr/local/bin/pg-backup.sh", "full")
@@ -320,29 +328,14 @@ class Move:
                 raise Abort("not healthy after %ss on the new server: %s" % (WAIT_TIMEOUT_S, ", ".join(waiting)))
             time.sleep(READY_POLL_S)
 
-    def monitor_command(self):
-        """The `compose up` that started the monitoring stack here, rebuilt from its labels; None when it is not running."""
-        ids = self.monitor_containers()
-        if not ids:
-            return None
-        labels = json.loads(self.here.run(["docker", "inspect", "-f", "{{json .Config.Labels}}", ids[0]]))
-        argv = ["docker", "compose", "-p", self.monitor_project, "--project-directory", labels["com.docker.compose.project.working_dir"]]
-        argv += [a for f in labels["com.docker.compose.project.config_files"].split(",") for a in ("-f", f)]
-        env_files = labels.get("com.docker.compose.project.environment_file", "")
-        argv += [a for f in env_files.split(",") if f for a in ("--env-file", f)]
-        return argv + ["up", "-d"]
-
-    def monitor_containers(self, *filters):
-        if not self.monitor_project:
-            return []
-        label = "label=%s=%s" % (mh.VOLUME_LABEL_PROJECT, self.monitor_project)
-        return self.here.run(["docker", "ps", "-aq", "--filter", label, *filters]).split()
+    def saved(self):
+        with open(os.path.join(self.root, SERVICES_FILE)) as f:
+            return json.load(f)
 
     # -- rollback ---------------------------------------------------------
 
     def rollback(self):
-        with open(os.path.join(self.root, SERVICES_FILE)) as f:
-            saved = json.load(f)
+        saved = self.saved()
         say("stopping the stack on %s", self.there.ssh)
         self.there.compose("stop")
         marker = os.path.join(self.root, mp.MOVED_MARKER)
@@ -350,8 +343,8 @@ class Move:
             os.remove(marker)
         say("starting %d services here", len(saved["services"]))
         self.here.compose("start", *saved["services"])
-        if saved.get("monitor"):
-            self.here.run(saved["monitor"])
+        for command in saved.get("projects", []):
+            self.here.run(command)
         say("rolled back: this server serves again. Anything written on the new one since the cutover is not here.")
 
 
@@ -362,8 +355,11 @@ def main(argv=None):
     parser.add_argument("--to", required=True, help="the new server, as ssh reaches it: root@203.0.113.7")
     parser.add_argument("--stack", choices=stacks, required=True, help="the compose wrapper this server runs")
     parser.add_argument("--monitor-project", help="the monitoring stack's compose project, to move its history too")
+    parser.add_argument("--with-project", action="append", default=[],
+                        help="another compose project that moves beside the stack, all its volumes (paneltest)")
     args = parser.parse_args(argv)
-    move = Move(mh.Host(ROOT, args.stack), mh.Host(ROOT, args.stack, ssh=args.to), args.monitor_project)
+    projects = ([args.monitor_project] if args.monitor_project else []) + args.with_project
+    move = Move(mh.Host(ROOT, args.stack), mh.Host(ROOT, args.stack, ssh=args.to), projects)
     try:
         if args.command == "check":
             return 1 if move.check() else 0

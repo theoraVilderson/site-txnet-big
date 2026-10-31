@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 import move_figures as mf  # noqa: E402
 import move_hosts as mh  # noqa: E402
 import move_plan as mp  # noqa: E402
+import move_projects as mj  # noqa: E402
 import server_move as sm  # noqa: E402
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -289,9 +290,11 @@ FIGURES = {"pg:identity.user": 42, "redis:persistent": 3, "redis:volatile": 10, 
 class FakeHost:
     """Records what the move asks a server to do, in one log both sides share."""
 
-    def __init__(self, root, log, name, figures, digest="same"):
+    stack = "dev"
+
+    def __init__(self, root, log, name, figures, digest="same", project_ids=""):
         self.root, self.log, self.ssh, self.name = root, log, name, name
-        self.figures, self.digest_value = figures, digest
+        self.figures, self.digest_value, self.project_ids = figures, digest, project_ids
 
     def config(self):
         return CONFIG
@@ -308,7 +311,14 @@ class FakeHost:
 
     def run(self, argv, stdin=None):
         self.log.append((self.name, "run") + tuple(argv))
+        if argv[:3] == ["docker", "ps", "-aq"]:
+            return self.project_ids
+        if argv[:2] == ["docker", "inspect"]:
+            return json.dumps(LABELS)
         return ""
+
+    def project_volumes(self, project):
+        return []
 
     def sh(self, script, *args):
         return ""
@@ -348,10 +358,20 @@ class Cutover(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def move(self, there_figures=FIGURES, there_digest="same"):
-        here = FakeHost(self.root, self.log, "here", FIGURES)
+    def move(self, there_figures=FIGURES, there_digest="same", projects=None, project_ids=""):
+        here = FakeHost(self.root, self.log, "here", FIGURES, project_ids=project_ids)
         there = FakeHost(self.root, self.log, "new", there_figures, there_digest)
-        return sm.Move(here, there, None)
+        return sm.Move(here, there, projects)
+
+    # The command is saved before the project stops: stopped, nothing names how it ran.
+    def test_a_side_project_stops_here_and_starts_there_and_back_on_rollback(self):
+        move = self.move(projects=["paneltest"], project_ids="abc123")
+        move.cutover()
+        up = ("run",) + tuple(mj.up_command("paneltest", LABELS))
+        self.assertIn(("here", "run", "docker", "stop", "abc123"), self.log)
+        self.assertIn(("new",) + up, self.log)
+        move.rollback()
+        self.assertIn(("here",) + up, self.log)
 
     def index(self, *entry):
         return self.log.index(entry)
@@ -393,6 +413,36 @@ class Cutover(unittest.TestCase):
         self.move().rollback()
         self.assertLess(self.index("new", "stop"), self.index("here", "start", *RUNNING))
         self.assertFalse(os.path.exists(self.marker()))
+
+
+LABELS = {"com.docker.compose.project.working_dir": "/root/paneltest",
+          "com.docker.compose.project.config_files": "/root/paneltest/compose.yml",
+          "com.docker.compose.project.environment_file": ""}
+
+
+class Projects(unittest.TestCase):
+    # Rehearsal 2026-10-31: the twin joins paneltest's panels, and the move left them behind.
+    def test_a_project_starts_there_as_it_was_started_here(self):
+        self.assertEqual(mj.up_command("paneltest", LABELS),
+                         ["docker", "compose", "-p", "paneltest", "--project-directory", "/root/paneltest",
+                          "-f", "/root/paneltest/compose.yml", "up", "-d"])
+
+    def test_a_project_outside_the_checkout_moves_its_directory(self):
+        self.assertEqual(mj.outside_dir(LABELS, "/root/site-txnet-big"), "/root/paneltest/")
+        inside = {**LABELS, "com.docker.compose.project.working_dir": "/root/site-txnet-big/dev-docker/monitoring"}
+        self.assertIsNone(mj.outside_dir(inside, "/root/site-txnet-big"))
+
+
+class BuildHostFiles(unittest.TestCase):
+    # Rehearsal 2026-10-31: the twin reads production's bundle over ssh and `push`
+    # logs in to the registry; neither key is in the checkout, so neither moved.
+    def test_the_release_s_keys_move_with_the_build_host(self):
+        files = mp.build_host_files({"STAGING_PROD_SSH_KEY": "/root/.ssh/prod_key"}, "/root")
+        self.assertEqual(files, ["/root/.docker/config.json", "/root/.ssh/known_hosts",
+                                 "/root/.ssh/prod_key", "/root/.ssh/prod_key.pub"])
+
+    def test_a_server_that_releases_nothing_carries_only_its_logins(self):
+        self.assertEqual(mp.build_host_files({}, "/root"), ["/root/.docker/config.json", "/root/.ssh/known_hosts"])
 
 
 if __name__ == "__main__":

@@ -141,6 +141,27 @@ def not_ready(rows, services):
     return [s for s in services if s not in ready]
 
 
+def env_values(text):
+    """KEY=VALUE lines of an env file; a trailing ` # comment` and quotes dropped."""
+    values = {}
+    for line in text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and key and not key.startswith("#"):
+            values[key] = value.split(" #", 1)[0].strip().strip("'\"")
+    return values
+
+
+def build_host_files(env, home):
+    """What a release reads outside the checkout, so the dev host builds and twins
+    on the new server too: the registry login `push` uses, the hosts ssh already
+    trusts, and the key the twin reads production's bundle with (STAGING_PROD_SSH_KEY)."""
+    files = [os.path.join(home, ".docker", "config.json"), os.path.join(home, ".ssh", "known_hosts")]
+    key = env.get("STAGING_PROD_SSH_KEY")
+    if key:
+        files += [key, key + ".pub"]
+    return sorted(files)
+
+
 def rabbitmq_node(config):
     """The node name compose gives rabbitmq; its queues live in a directory of that name."""
     return service_environment(config, "rabbitmq").get("RABBITMQ_NODENAME", "")
