@@ -77,6 +77,16 @@ class Settings(unittest.TestCase):
         self.assertEqual(json.loads(dr.docker_conf("", dr.parse(FILE)))["dns"][0], "178.22.122.100")
 
 
+class DockerRestart(unittest.TestCase):
+    # a host running any container is not idle: the dev host keeps the live site and the bot up
+    def test_idle_means_no_container_runs(self):
+        from unittest import mock
+        with mock.patch.object(dr, "run", lambda argv, check=True: mock.Mock(returncode=0, stdout="3f2a\n")):
+            self.assertFalse(dr.docker_idle())
+        with mock.patch.object(dr, "run", lambda argv, check=True: mock.Mock(returncode=0, stdout="")):
+            self.assertTrue(dr.docker_idle())
+
+
 class Answers(unittest.TestCase):
     def test_a_query_is_one_question_for_an_a_record(self):
         query = dr.query("registry.mytxnet.ir", 7)

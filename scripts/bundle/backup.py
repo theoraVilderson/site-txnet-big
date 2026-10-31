@@ -23,6 +23,7 @@ import glob
 import os
 import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 import time
@@ -35,6 +36,9 @@ import bundle_restore as br  # noqa: E402
 import bundle_stack as bs  # noqa: E402
 import bundle_timers as bt  # noqa: E402
 import ship  # noqa: E402
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+import dns_resolvers as dr  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # the timer's ship may be sending this very bundle: wait for it rather than race it
@@ -163,7 +167,18 @@ def main(argv=None):
     return 0
 
 
+def dns_first():
+    """NIN-1-l: this server asks the domestic resolvers before the restore builds or starts anything.
+    Docker restarts for them only on an idle host, never beside the live site and the bot (the dev
+    host restores into a throwaway k3s); a refusal never stops a restore."""
+    try:
+        dr.apply_here(dr.parse(dr.FILE.read_text()), restart_docker="idle")
+    except (dr.DnsError, subprocess.CalledProcessError, OSError) as err:
+        say("WARNING: DNS left as it was (%s); `scripts/dns.sh apply` once it can be set", err)
+
+
 def restore(args, host, options):
+    dns_first()
     open_and(args, host, lambda work, manifest, pf: br.restore(host, args.checkout, work, manifest, pf, options, say))
     say(bt.after_restore(args.checkout, args.stack, args.no_timers))
 

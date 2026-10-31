@@ -40,6 +40,11 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(rl.SEND_STEPS[0], "approved")
         self.assertEqual(rl.SEND_STEPS[-1], "close")
 
+    def test_production_s_dns_follows_the_file_after_every_deploy(self):
+        # NIN-1-l: a changed resolvers.txt reaches production with the release, no step by hand
+        self.assertLess(rl.SEND_STEPS.index("deploy"), rl.SEND_STEPS.index("dns"))
+        self.assertIn("tools/dns_resolvers.py apply", rl.dns_command())
+
     def test_a_failed_step_stops_every_later_one(self):
         log = []
         self.assertEqual(rl.run_steps(self.steps(log, fail="build")), "build")

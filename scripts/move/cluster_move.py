@@ -32,6 +32,7 @@ import cluster_fence as cf
 import cluster_open as co
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+import dns_resolvers as dr  # noqa: E402
 import k8s_staging  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -129,6 +130,8 @@ def check(state, old, new):
 
 def mute(state, old, new):
     new.run("apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s >/dev/null" % " ".join(PACKAGES), timeout=LONG_S)
+    # NIN-1-l: the mute lets DNS out only to the resolvers it reads below, so the domestic ones first
+    dr.apply_remote(new.target, new.key)
     registry = old.run("python3 -c 'import sys, yaml; print(next(iter(yaml.safe_load(open(sys.argv[1]))[\"configs\"])))' "
                        "/etc/rancher/k3s/registries.yaml").strip()
     # the pull mirror for every image we do not build (redis, rabbitmq, grafana: DOCKER_REGISTRY in .env)

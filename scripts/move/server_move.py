@@ -197,6 +197,9 @@ class Move:
         self.refuse_if_blocked()
         self.there.sh('mkdir -p "$(dirname "$1")" && date -u > "$1"', os.path.join(self.root, PRESYNC_STAMP))
         self.copy_files()
+        # NIN-1-l: the domestic resolvers before anything is built or pulled there; its Docker
+        # restarts for them only while no container runs there
+        self.there.run(["python3", os.path.join(self.root, "tools", "dns_resolvers.py"), "apply", "--restart-docker=idle"])
         say("building and pulling the images on the new server, so the cutover does not wait for them")
         self.there.compose("build")
         pulled = mp.pulled_services(self.config)

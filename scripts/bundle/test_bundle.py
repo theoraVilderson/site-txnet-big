@@ -285,6 +285,27 @@ class NowAndShip(unittest.TestCase):
         self.assertEqual(len(calls), 2)
 
 
+class DnsFirst(unittest.TestCase):
+    # NIN-1-l: a server a bundle comes back on asks the domestic resolvers before it builds anything
+    def setUp(self):
+        import backup
+        self.backup = backup
+        self.calls = []
+
+    def test_docker_restarts_for_it_only_on_an_idle_host(self):
+        with mock.patch.object(self.backup.dr, "apply_here", lambda plan, restart_docker: self.calls.append(restart_docker)):
+            self.backup.dns_first()
+        self.assertEqual(self.calls, ["idle"])
+
+    def test_dns_that_cannot_be_set_never_stops_a_restore(self):
+        def refuse(plan, restart_docker):
+            raise self.backup.dr.DnsError("no domestic resolver answers")
+        with mock.patch.object(self.backup.dr, "apply_here", refuse), \
+                mock.patch.object(self.backup, "say", lambda m, *a: self.calls.append(m % a)):
+            self.backup.dns_first()
+        self.assertIn("left as it was", self.calls[0])
+
+
 class Timers(unittest.TestCase):
     # OPS-1-am-e: the server a bundle comes back on bundles and ships from then on, with no step to forget
     def setUp(self):

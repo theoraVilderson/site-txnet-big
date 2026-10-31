@@ -168,5 +168,12 @@ answers them itself, and every other name is forwarded to the host's upstreams.
 - **Refused before, undone after.** Nothing is written unless a domestic
   resolver answers every `check` name from that host; if the names then stop
   resolving through systemd-resolved, its old settings come back.
+- **On its own wherever a server starts serving**, so no step is remembered by
+  hand: a cluster move's `mute` (before it reads the resolvers it lets DNS out
+  to), a server move's `presync` (before anything is built there), `backup.py
+  restore` (first, and a refusal never stops it) and every release's `dns`
+  step after `deploy` (R15) — a changed file reaches production with the next
+  release. Docker restarts for it only on an idle host (`--restart-docker=idle`:
+  no container running), never beside the live site and the bot.
 - **The twin needs nothing**: R14's staging has no route out, so it resolves no
   outside name, and the k3s config it mounts is not changed by this.

@@ -8,15 +8,19 @@ them itself); every other name is forwarded to the host's upstreams.
 
     scripts/dns.sh check                 each resolver in the file, against each name it must answer
     scripts/dns.sh set A [B ...]         the domestic resolvers become A, B…, then `apply` here
-    scripts/dns.sh apply [--restart-docker]   this host: systemd-resolved, Docker, k3s's CoreDNS
+    scripts/dns.sh apply [--restart-docker[=idle]]   this host: systemd-resolved, Docker, k3s's CoreDNS
     scripts/dns.sh apply --prod          the same on production, over ssh (STAGING_PROD_SSH in .env.dev)
+
+It runs on its own wherever a server starts serving (NIN-1-l): a cluster move's
+`mute`, a server move's `presync`, `backup.py restore`, and every release's `dns` step.
 
 The file is dev-docker/dns/resolvers.txt: `domestic`, then `fallback`
 (asked only when no domestic one answers), then the `check` names. Nothing is
 written unless a domestic resolver answers every check name from this host,
 and a host whose names stop resolving after the change gets its old settings
 back. Docker's own setting takes effect when Docker restarts, which restarts
-every container: `--restart-docker` does it now, and is asked for by name.
+every container: `--restart-docker` does it now, and is asked for by name;
+`--restart-docker=idle` only when no container runs on the host (a new server).
 """
 import argparse
 import dataclasses
@@ -170,7 +174,14 @@ def apply_resolved(plan):
     raise DnsError("names stopped resolving through systemd-resolved; its old settings are back")
 
 
+def docker_idle():
+    """No container runs here, so restarting Docker stops nobody."""
+    done = run(["docker", "ps", "-q"], check=False)
+    return done.returncode != 0 or not done.stdout.strip()
+
+
 def apply_docker(plan, restart):
+    """restart: "yes", "idle" (only when docker_idle) or "" (written, applied at Docker's next start)."""
     current = DOCKER_CONF.read_text() if DOCKER_CONF.exists() else ""
     wanted = docker_conf(current, plan)
     if json.loads(wanted) == (json.loads(current) if current.strip() else {}):
@@ -178,7 +189,7 @@ def apply_docker(plan, restart):
         return
     DOCKER_CONF.parent.mkdir(parents=True, exist_ok=True)
     DOCKER_CONF.write_text(wanted)
-    if not restart:
+    if restart != "yes" and not (restart == "idle" and docker_idle()):
         say("Docker: written; it takes effect when Docker restarts (every container restarts): --restart-docker")
         return
     run(["systemctl", "restart", "docker"])
@@ -222,20 +233,19 @@ def prod_target():
     return target, key
 
 
-def apply_prod(restart_docker):
-    """This tool and the file, copied to a private directory there, run, removed: production's
-    checkout need not have them yet."""
-    target, key = prod_target()
+def apply_remote(target, key, restart_docker=""):
+    """`apply` on another server: this tool and the file copied to a private directory there,
+    run, removed, so its checkout need not have them (a move's new server, production)."""
     ssh = ["ssh", "-i", key, "-o", "BatchMode=yes", target]
     there = run(ssh + ["mktemp -d"]).stdout.strip()
     try:
         run(["scp", "-q", "-i", key, "-o", "BatchMode=yes", __file__, str(FILE), "%s:%s/" % (target, there)])
         argv = ["python3", "%s/dns_resolvers.py" % there, "apply", "--file", "%s/%s" % (there, FILE.name)]
-        done = subprocess.run(ssh + [shlex.join(argv + (["--restart-docker"] if restart_docker else []))],
+        done = subprocess.run(ssh + [shlex.join(argv + (["--restart-docker=" + restart_docker] if restart_docker else []))],
                               text=True, capture_output=True)
         print(done.stdout, end="")
         if done.returncode:
-            raise DnsError("production: %s" % (done.stderr.strip() or done.stdout.strip().splitlines()[-1]))
+            raise DnsError("%s: %s" % (target, done.stderr.strip() or done.stdout.strip().splitlines()[-1]))
     finally:
         run(ssh + ["rm -rf " + shlex.quote(there)], check=False)
 
@@ -246,7 +256,8 @@ def main(argv=None):
     parser.add_argument("servers", nargs="*", help="set: the domestic resolvers, in order")
     parser.add_argument("--file", default=str(FILE))
     parser.add_argument("--prod", action="store_true", help="apply on production instead of here")
-    parser.add_argument("--restart-docker", action="store_true", help="restart Docker now (every container)")
+    parser.add_argument("--restart-docker", nargs="?", const="yes", default="", choices=["yes", "idle"],
+                        help="restart Docker now (every container); =idle only when no container runs")
     args = parser.parse_args(argv)
     path = Path(args.file)
     try:
@@ -261,7 +272,7 @@ def main(argv=None):
         if args.command == "check":
             report(plan)
         elif args.prod:
-            apply_prod(args.restart_docker)
+            apply_remote(*prod_target(), restart_docker=args.restart_docker)
         else:
             apply_here(plan, args.restart_docker)
     except (DnsError, subprocess.CalledProcessError, OSError, ValueError) as err:

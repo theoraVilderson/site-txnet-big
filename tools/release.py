@@ -57,7 +57,7 @@ import release_reach as rr  # noqa: E402
 from bundle_plan import parse_env  # noqa: E402
 
 PROVE_STEPS = ("clean", "checks", "reach", "disk", "build", "twin")
-SEND_STEPS = ("approved", "push", "ship", "deploy", "close")
+SEND_STEPS = ("approved", "push", "ship", "deploy", "dns", "close")
 # What a passed twin proved, and the owner's approval of it; beside staging's own state.
 RECORD_FILE = ks.STATE_FILE.with_name("release.json")
 # How much of the commit the owner types to approve it: what `git log --oneline` shows, and more.
@@ -138,6 +138,11 @@ def merge_command(bundle: str, checkout: str = kd.PROD_CHECKOUT) -> str:
 def deploy_command(prod: kd.Production) -> str:
     """The deploy as it has always been run there: from its checkout, its own address for K3."""
     return f"cd {kd.PROD_CHECKOUT} && HOST_GATEWAY={prod.host.rpartition('@')[2]} scripts/prod.k8s.sh deploy"
+
+
+def dns_command() -> str:
+    """Production's resolvers from the file the release just shipped (NIN-1-l, hosting K22)."""
+    return f"cd {kd.PROD_CHECKOUT} && python3 tools/dns_resolvers.py apply"
 
 
 def lane_plan(reach: "rr.Reach | str", declared: dict, full: bool) -> LanePlan:
@@ -362,7 +367,8 @@ def send_steps(prod: kd.Production) -> list[Step]:
     prod_k8s = str(ROOT / "scripts" / "prod.k8s.sh")
     steps = {"approved": approved, "push": lambda: sh([prod_k8s, "push"]),
              "ship": lambda: ship(prod, known["prod"], head),
-             "deploy": lambda: sh(prod.ssh(deploy_command(prod))), "close": close}
+             "deploy": lambda: sh(prod.ssh(deploy_command(prod))),
+             "dns": lambda: sh(prod.ssh(dns_command())), "close": close}
     return [Step(name, steps[name]) for name in SEND_STEPS]
 
 

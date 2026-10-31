@@ -64,6 +64,28 @@ class OldAtZero(unittest.TestCase):
         self.assertIn("--no-timers", cf.restore_argv("/r", "/b", "/p"))
 
 
+class DnsBeforeTheMute(unittest.TestCase):
+    # NIN-1-l: the mute lets DNS out only to the resolvers it reads, so the domestic ones are set first
+    def test_the_new_server_s_resolvers_are_set_before_the_mute_reads_them(self):
+        from unittest import mock
+        import cluster_move as cm
+        log = []
+
+        class Fake:
+            def __init__(self, name):
+                self.name, self.target, self.key, self.address = name, "root@" + name, "/k", name
+
+            def run(self, command, timeout=0, check=True):
+                log.append((self.name, command))
+                if "registries.yaml" in command:
+                    return "registry.example\n"
+                return "200" if "http_code" in command else ""
+        with mock.patch.object(cm.dr, "apply_remote", lambda target, key, **kw: log.append(("dns", target))):
+            cm.mute({}, Fake("old"), Fake("new"))
+        reads = next(i for i, entry in enumerate(log) if "resolv.conf" in entry[1])
+        self.assertLess(log.index(("dns", "root@new")), reads)
+
+
 class BundleAfterTheStop(unittest.TestCase):
     STOP = 1793453400  # 2026-10-31T13:30:00Z
 

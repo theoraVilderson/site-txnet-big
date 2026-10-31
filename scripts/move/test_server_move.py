@@ -392,6 +392,18 @@ class Cutover(unittest.TestCase):
             move.install_build_tools()
         self.assertIn(("new", "run", os.path.join(self.root, "scripts", "prod.k8s.sh"), "install-tools"), self.log)
 
+    # NIN-1-l: the new server asks the domestic resolvers before it builds or pulls anything;
+    # its Docker restarts for them only while no container runs there
+    def test_presync_sets_the_new_server_s_dns_before_it_builds(self):
+        move = self.move()
+        for name in ("copy_files", "install_node_trees", "install_build_tools", "copy_dirs"):
+            patcher = mock.patch.object(sm.Move, name, lambda *a, **k: None)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        move.presync()
+        dns = ("new", "run", "python3", os.path.join(self.root, "tools", "dns_resolvers.py"), "apply", "--restart-docker=idle")
+        self.assertLess(self.index(*dns), self.index("new", "build"))
+
     def test_a_server_that_builds_nothing_gets_no_tools(self):
         move = self.move()
         with mock.patch.object(sm.os.path, "exists", lambda path: False):

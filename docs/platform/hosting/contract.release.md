@@ -209,7 +209,7 @@ twin's checks), `disk` (R21: earlier releases' images, build cache; R14's room),
 R12), `twin` (R14 from production's commit, or `--from`; R20's quick lane skips it).
 Then it stops (R19). `send` runs `push` (R10), `ship` (production's commit..master
 as a git bundle over ssh, `merge --ff-only` there), `deploy` (`prod.k8s.sh deploy`
-there, K10, K16), `close` (after a twin, staging down and the dev stack back). Nothing
+there, K10, K16), `dns` (the shipped resolvers file, K22), `close` (after a twin, staging down and the dev stack back). Nothing
 leaves the dev host unproved (R14 or R20's quick lane). A release is a batch of fixes.
 
 **R19 — Production waits for the owner** (ADR-0168 point 4, OPS-1-ah-k). A
