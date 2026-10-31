@@ -165,15 +165,21 @@ class KubectlTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cache = Path(tmp)
             saved = ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT
-            ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT = cache / "kc", cache / "kubectl", cache / "k3s"
+            ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT = cache / "kc", cache / "kubectl", cache / "bin" / "kubectl"
             try:
                 docker = Docker({f"docker exec {ks.CONTAINER} cat": (0, "server: https://127.0.0.1:6443\n")})
                 ks.write_kubeconfig(docker)
                 wrapper = ks.KUBECTL_WRAPPER.read_text()
             finally:
                 ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT = saved
-        self.assertEqual(docker.ran("docker cp"), [["docker", "cp", f"{ks.CONTAINER}:/bin/k3s", str(cache / "k3s")]])
-        self.assertIn(f"exec {cache / 'k3s'} kubectl", wrapper)
+        self.assertEqual(docker.ran("docker cp"), [["docker", "cp", f"{ks.CONTAINER}:/bin/k3s", str(cache / "bin" / "kubectl")]])
+        self.assertIn(f"exec {cache / 'bin' / 'kubectl'} --kubeconfig", wrapper)
+
+    # Rehearsal 3: the image's /bin/k3s is the unpacked multi-call binary, which picks its
+    # tool by its own name; called `k3s kubectl` it answered `unknown command "kubectl"`.
+    def test_the_copied_binary_is_named_for_the_tool_it_is(self):
+        self.assertEqual(ks.K3S_CLIENT.name, "kubectl")
+        self.assertNotEqual(ks.K3S_CLIENT, ks.KUBECTL_WRAPPER)
 
 
 class ImportTest(unittest.TestCase):
