@@ -205,7 +205,7 @@ OPS-1-ah-d). `scripts/release.sh [--until STEP] [--from REF] [--full]` (`tools/r
 as root on the dev host, runs in order, each step timed, stops at the first failure:
 `clean` (no change `git status` shows, on master; production's checkout clean and
 an ancestor of HEAD), `checks` (AGENTS.md's seven), `reach` (R20: the lane and the
-twin's checks), `disk` (build cache, dangling images freed, R14's room), `build` (R4,
+twin's checks), `disk` (R21: earlier releases' images, build cache; R14's room), `build` (R4,
 R12), `twin` (R14 from production's commit, or `--from`; R20's quick lane skips it).
 Then it stops (R19). `send` runs `push` (R10), `ship` (production's commit..master
 as a git bundle over ssh, `merge --ff-only` there), `deploy` (`prod.k8s.sh deploy`

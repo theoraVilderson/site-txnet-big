@@ -51,6 +51,7 @@ import k8s_staging as ks  # noqa: E402
 import k8s_staging_data as kd  # noqa: E402
 import k8s_release  # noqa: E402
 import k8s_render  # noqa: E402
+import release_disk  # noqa: E402
 import release_reach as rr  # noqa: E402
 from bundle_plan import parse_env  # noqa: E402
 
@@ -251,10 +252,8 @@ def run_checks() -> None:
 
 
 def free_disk() -> None:
-    """Never `docker volume prune`: the dev stack's and the panels' data live in volumes."""
-    for argv in (["docker", "builder", "prune", "-f"], ["docker", "image", "prune", "-f"]):
-        sh(argv, stdout=subprocess.DEVNULL)
-    problem = ks.room_problem(ks.docker_run)
+    """R21 (tools/release_disk.py), then R14's room."""
+    problem = release_disk.free_disk()
     if problem:
         raise ReleaseError(problem)
 
