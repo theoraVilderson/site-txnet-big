@@ -8,6 +8,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(__file__))
 import bundle_plan as bp  # noqa: E402
@@ -214,6 +215,59 @@ class S3Retention(unittest.TestCase):
         removed = bp.s3_to_remove(self.listing(bundles), WHEN, lock_days=20)
         self.assertTrue(removed)
         self.assertTrue(all(WHEN - bp.bundle_time(k) > datetime.timedelta(days=21) for k in removed if bp.bundle_time(k)))
+
+
+class NowAndShip(unittest.TestCase):
+    # OPS-1-ad-n (user 2026-10-31): one command, a whole backup in S3 at once, to bring up anywhere
+    def setUp(self):
+        import backup
+        self.backup = backup
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir)
+        self.name = bp.bundle_name("txnet", WHEN)
+        for target, attr, value in ((backup.bio, "BUNDLE_DIR", self.dir),
+                                    (backup, "make_now", lambda host: os.path.join(self.dir, self.name)),
+                                    (backup.ship, "read_settings", lambda rel: {"BACKUP_S3_BUCKET": "b",
+                                                                                "BACKUP_S3_PREFIX": "bundles/prod/"}),
+                                    (backup.time, "sleep", lambda s: None)):
+            patcher = mock.patch.object(target, attr, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.said = []
+        patcher = mock.patch.object(backup, "say", lambda m, *a: self.said.append(m % a if a else m))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def lands(self, host):
+        with open(os.path.join(self.dir, "shipped.log"), "a") as f:
+            f.write(bp.ledger_line(self.name, "ab" * 32, WHEN) + "\n")
+        return 1
+
+    def test_the_bundle_is_in_s3_when_it_returns_and_it_says_where(self):
+        with mock.patch.object(self.backup.ship, "ship", self.lands), \
+                mock.patch.object(self.backup.bio, "LEDGER", "shipped.log"):
+            self.backup.make_and_ship(host=None)
+        self.assertTrue(any("s3/b/bundles/prod/" + self.name in line for line in self.said))
+        self.assertTrue(any("restore" in line for line in self.said))
+
+    def test_made_but_not_sent_is_a_failure_not_a_success(self):
+        with mock.patch.object(self.backup.ship, "ship", lambda host: 0), \
+                mock.patch.object(self.backup.bio, "LEDGER", "shipped.log"):
+            with self.assertRaisesRegex(RuntimeError, "not in S3"):
+                self.backup.make_and_ship(host=None)
+
+    def test_the_timer_s_ship_holding_the_lock_is_waited_for(self):
+        calls = []
+
+        def busy_then_lands(host):
+            calls.append(1)
+            if len(calls) == 1:
+                raise self.backup.bio.Busy("another ship run holds the lock; wait for it")
+            return self.lands(host)
+        with mock.patch.object(self.backup.ship, "ship", busy_then_lands), \
+                mock.patch.object(self.backup.bio, "LEDGER", "shipped.log"):
+            self.backup.make_and_ship(host=None)
+        self.assertEqual(len(calls), 2)
 
 
 class Timers(unittest.TestCase):

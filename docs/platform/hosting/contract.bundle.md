@@ -53,6 +53,7 @@ the sealed secrets a restored checkout carries (S3). A wrong one is refused befo
 
 **B6 — Nightly and on demand.** `txnet-backup.timer` at 03:00 UTC (after
 pgBackRest 01:00 and the files' copy 23:00) and `backup.py now`; one at a time (a lock).
+`now --ship` sends it at once and fails unless it is in S3 (OPS-1-ad-n).
 Seven kept on disk; one not yet in S3 is never deleted while shipping is set up.
 `backup.py install-timers` writes both units from the checkout's own path.
 They follow the platform, with no step to remember (OPS-1-am-e): `restore`

@@ -67,6 +67,10 @@ def write_metrics(directory, name, metrics):
     os.replace(path + ".tmp", path)
 
 
+class Busy(RuntimeError):
+    """Another run holds the lock."""
+
+
 @contextlib.contextmanager
 def locked(directory, name):
     """One run at a time: a nightly bundle and a manual one never overlap."""
@@ -75,7 +79,7 @@ def locked(directory, name):
         try:
             fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise RuntimeError("another %s run holds the lock; wait for it" % name)
+            raise Busy("another %s run holds the lock; wait for it" % name)
         yield
 
 

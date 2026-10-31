@@ -2,6 +2,7 @@
 """The whole platform as one encrypted file, and back (OPS-1-ad, hosting contract.bundle.md).
 
   now                       make a bundle at once (the nightly timer runs the same)
+  now --ship                the same, then sent to S3 at once: it returns only once the bundle is there
   list                      the bundles on this server, and which reached S3
   inspect FILE              what a bundle holds: date, commit, counts
   verify FILE               restore it into throwaway containers and compare; touches nothing
@@ -33,8 +34,12 @@ import bundle_plan as bp  # noqa: E402
 import bundle_restore as br  # noqa: E402
 import bundle_stack as bs  # noqa: E402
 import bundle_timers as bt  # noqa: E402
+import ship  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# the timer's ship may be sending this very bundle: wait for it rather than race it
+SHIP_WAIT_S = 600
+SHIP_POLL_S = 5
 
 
 def say(message, *args):
@@ -56,6 +61,28 @@ def make_now(host):
             "txnet_backup_bundle_last_bytes": os.path.getsize(path)})
         left = bm.upkeep(ROOT, config)
         say("%d bundle(s) not yet in S3", len(left))
+    return path
+
+
+def make_and_ship(host):
+    """`now --ship`: a bundle, sent at once; a bundle made but not in S3 is a failure (OPS-1-ad-n)."""
+    name = os.path.basename(make_now(host))
+    deadline = time.monotonic() + SHIP_WAIT_S
+    while True:
+        try:
+            with bio.locked(bio.BUNDLE_DIR, "ship"):
+                ship.ship(host)
+            break
+        except bio.Busy:
+            if time.monotonic() > deadline:
+                raise
+            time.sleep(SHIP_POLL_S)
+    settings = ship.read_settings(bp.SHIP_ENV_FILE)
+    if name not in bp.parse_ledger(bio.read_ledger(bio.BUNDLE_DIR)) or settings is None:
+        raise RuntimeError("%s was made but is not in S3 (%s): it is only on this server" % (name, bp.SHIP_ENV_FILE))
+    say("in S3: %s", bp.s3_destination(settings, name))
+    say("to bring it up on another server: python3 scripts/bundle/backup.py --stack <dev|k8s> restore %s "
+        "--passphrase-file <the passphrase, kept off this server>", name)
 
 
 def list_bundles():
@@ -107,6 +134,7 @@ def main(argv=None):
     parser.add_argument("--replace", action="store_true", help="restore over this server's data (a safety bundle first)")
     parser.add_argument("--allow-newer-code", action="store_true", help="restore into a checkout newer than the bundle")
     parser.add_argument("--checkout", default=ROOT, help="restore: the checkout the stack runs from, when not this one")
+    parser.add_argument("--ship", action="store_true", help="now: send it to S3 at once and wait until it is there")
     parser.add_argument("--no-timers", action="store_true",
                         help="restore: leave the backup timers uninstalled (a cluster move installs them at `open`)")
     parser.add_argument("--scrub", help="restore: a command run after the stores and before any service starts; "
@@ -118,7 +146,7 @@ def main(argv=None):
     options = br.Options(replace_here=args.replace, allow_newer_code=args.allow_newer_code,
                          scrub=shlex.split(args.scrub or ""))
     actions = {
-        "now": lambda: make_now(host),
+        "now": lambda: make_and_ship(host) if args.ship else make_now(host),
         "list": list_bundles,
         "install-timers": lambda: say("enabled: %s", ", ".join(bt.install(ROOT, args.stack))),
         "inspect": lambda: open_and(args, host, lambda work, manifest, _: print_manifest(manifest)),
