@@ -20,8 +20,13 @@ BUNDLE_SUFFIX = ".tar.zst.gpg"
 CHECKSUM_SUFFIX = ".sha256"
 _TIME_FORMAT = "%Y-%m-%d_%H-%M-%SZ"
 _TIME_WIDTH = len("2026-10-23_15-30-12Z")
-# A week of nightly bundles on this disk; S3 keeps what its lifecycle rule says.
+# A week of nightly bundles on this disk.
 BUNDLES_KEPT = 7
+# S3 keeps by count, never by age alone (OPS-1-ad-s): a server dead for weeks
+# sends nothing new, so nothing of its ages out. The bucket's age rule is only a backstop.
+S3_KEEP_NEWEST = 7
+S3_KEEP_WEEKLY = 4
+S3_KEEP_MONTHLY = 3
 # The repo-relative passphrase the bundle is encrypted with. Kept off the
 # server too (a password manager): it is the one thing a restore needs besides the file.
 PASSPHRASE_FILE = mp.BUNDLE_PASSPHRASE_FILE
@@ -63,6 +68,35 @@ def to_prune(names, shipped, shipping_configured, kept=BUNDLES_KEPT):
     """Bundles beyond the newest `kept`; while shipping is on, never one not yet in S3."""
     old = oldest_first(names)[:-kept] if kept else oldest_first(names)
     return [n for n in old if n in shipped or not shipping_configured]
+
+
+def s3_keep(names):
+    """The newest S3_KEEP_NEWEST bundles, plus the newest of each of the last S3_KEEP_WEEKLY
+    ISO weeks and S3_KEEP_MONTHLY months that hold one: periods counted by bundle, not by calendar."""
+    ordered = sorted((n for n in names if bundle_time(n)), key=bundle_time, reverse=True)
+    keep = set(ordered[:S3_KEEP_NEWEST])
+    for period, count in ((lambda t: t.isocalendar()[:2], S3_KEEP_WEEKLY), (lambda t: (t.year, t.month), S3_KEEP_MONTHLY)):
+        seen = set()
+        for name in ordered:
+            if len(seen) == count:
+                break
+            if period(bundle_time(name)) not in seen:
+                seen.add(period(bundle_time(name)))
+                keep.add(name)
+    return keep
+
+
+def s3_to_remove(keys, now, lock_days):
+    """Keys under the S3 prefix to delete, oldest first, each checksum before its bundle (a checksum
+    in S3 means its bundle is whole). Never a kept bundle, and never one whose lock may still hold."""
+    keep = s3_keep(keys)
+    cutoff = now - datetime.timedelta(days=lock_days + 1)  # the lock starts at upload, after the stamp
+    present = set(keys)
+    removed = []
+    for name in oldest_first(keys):
+        if name not in keep and bundle_time(name) < cutoff:
+            removed += [k for k in (name + CHECKSUM_SUFFIX, name) if k in present]
+    return removed
 
 
 def ledger_line(name, sha256, when):
@@ -170,13 +204,18 @@ def mc_env(settings):
     return env
 
 
-def copy_args(settings, name):
-    """mc's argv sending name, locked in compliance mode for BACKUP_S3_LOCK_DAYS on the object itself:
-    a bucket's default retention is not applied by Arvan (NIN-1-i, 2026-10-30), so it is never relied on."""
+def lock_days(settings):
     days = settings["BACKUP_S3_LOCK_DAYS"].strip()
     if not days.isdigit():
         raise ValueError("BACKUP_S3_LOCK_DAYS must be a whole number of days, 0 for no lock: %r" % days)
-    lock = ["--retention-mode", "compliance", "--retention-duration", "%dd" % int(days)] if int(days) else []
+    return int(days)
+
+
+def copy_args(settings, name):
+    """mc's argv sending name, locked in compliance mode for BACKUP_S3_LOCK_DAYS on the object itself:
+    a bucket's default retention is not applied by Arvan (NIN-1-i, 2026-10-30), so it is never relied on."""
+    days = lock_days(settings)
+    lock = ["--retention-mode", "compliance", "--retention-duration", "%dd" % days] if days else []
     return ["cp", "--quiet", *lock, "%s/%s" % (SHIP_MOUNT, name), s3_destination(settings, name)]
 
 

@@ -44,8 +44,9 @@ S3 for an hour — shipping is failing, or was never set up (below).
 2. **`$BACKUP list`**: the bundles here, and which reached S3.
 3. **Shipping is set up** (once, B7): a bucket created with object lock
    (`txnet-backups` on Arvan `ir-central1`, versioning on), a lifecycle rule
-   expiring `bundles/` one day after the lock and noncurrent versions after one
-   day; then `dev-docker/secrets/backup-ship.env` (0600):
+   expiring `bundles/` after 180 days, a backstop only (`ship.py` removes by
+   count, B7: `mc ilm rule add --prefix bundles/ --expire-days 180`) and
+   noncurrent versions after one day; then `dev-docker/secrets/backup-ship.env` (0600):
    ```
    BACKUP_S3_ENDPOINT=https://hot.ir-central1.arvanstorage.ir
    BACKUP_S3_BUCKET=txnet-backups

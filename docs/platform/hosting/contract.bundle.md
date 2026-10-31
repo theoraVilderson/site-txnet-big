@@ -70,8 +70,13 @@ on the object itself, so whoever takes the server and its key cannot erase S3
 inside the window. Named even when unwanted (`0`): Arvan's key is all-access,
 and Arvan keeps a bucket's default retention without applying it to new
 objects, so an unset lock is no lock. The bucket (`txnet-backups`, Arvan
-`ir-central1`) has versioning and object lock; lifecycle expires `bundles/`
-after the lock + 1 day and noncurrent versions after 1 day. Prefix per stack:
+`ir-central1`) has versioning and object lock. **Removal follows a newer
+arrival, never age alone** (OPS-1-ad-s, user 2026-10-31): after a bundle lands,
+`ship.py` removes from its own prefix what `bundle_plan.s3_keep` does not keep
+— the newest 7, the newest of each of the last 4 weeks and 3 months that hold
+one — and only past the lock + 1 day, each checksum before its bundle. A
+server dead for weeks sends nothing, so its last bundles stay. The lifecycle
+rule is a backstop: `bundles/` after 180 days; noncurrent versions after 1 day. Prefix per stack:
 `bundles/dev/`, `bundles/prod/`.
 
 **B8 — Alerts** (`database.rules.yml`): `BackupBundleStale` — no bundle for

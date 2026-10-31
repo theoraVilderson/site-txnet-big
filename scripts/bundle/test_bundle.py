@@ -179,6 +179,43 @@ class Restore(unittest.TestCase):
             br.run_scrub([sys.executable, "-c", "raise SystemExit(1)"], "/w", say=lambda *a: None)
 
 
+class S3Retention(unittest.TestCase):
+    # OPS-1-ad-s: S3 removes a bundle only once a newer one has landed, so a dead server's last ones stay
+    def daily(self, count):
+        return [bp.bundle_name("txnet", WHEN - datetime.timedelta(days=d)) for d in range(count)]
+
+    def listing(self, bundles):
+        return [k for n in bundles for k in (n, n + bp.CHECKSUM_SUFFIX)] + ["notes.txt"]
+
+    def test_a_server_dead_for_weeks_keeps_its_last_bundles(self):
+        # five nights, then nothing for two weeks: nothing in S3 is old enough to matter
+        later = WHEN + datetime.timedelta(days=19)
+        self.assertEqual(bp.s3_to_remove(self.listing(self.daily(5)), later, lock_days=7), [])
+
+    def test_the_newest_seven_then_one_a_week_then_one_a_month_stay(self):
+        bundles = self.daily(120)
+        kept = bp.s3_keep(bundles)
+        self.assertTrue(set(bundles[:bp.S3_KEEP_NEWEST]) <= kept)
+        self.assertLessEqual(len(kept), bp.S3_KEEP_NEWEST + bp.S3_KEEP_WEEKLY + bp.S3_KEEP_MONTHLY)
+        months = {(bp.bundle_time(n).year, bp.bundle_time(n).month) for n in kept}
+        self.assertEqual(len(months), bp.S3_KEEP_MONTHLY)
+        self.assertNotIn(bundles[-1], kept)
+
+    def test_a_bundle_goes_with_its_checksum_first_and_nothing_else_is_touched(self):
+        bundles = self.daily(120)
+        removed = bp.s3_to_remove(self.listing(bundles), WHEN, lock_days=7)
+        oldest = bundles[-1]
+        self.assertLess(removed.index(oldest + bp.CHECKSUM_SUFFIX), removed.index(oldest))
+        self.assertNotIn("notes.txt", removed)
+        self.assertFalse(set(removed) & set(self.listing(sorted(bp.s3_keep(bundles)))))
+
+    def test_a_bundle_still_locked_is_never_asked_to_go(self):
+        bundles = self.daily(30)
+        removed = bp.s3_to_remove(self.listing(bundles), WHEN, lock_days=20)
+        self.assertTrue(removed)
+        self.assertTrue(all(WHEN - bp.bundle_time(k) > datetime.timedelta(days=21) for k in removed if bp.bundle_time(k)))
+
+
 class Timers(unittest.TestCase):
     # OPS-1-am-e: the server a bundle comes back on bundles and ships from then on, with no step to forget
     def setUp(self):

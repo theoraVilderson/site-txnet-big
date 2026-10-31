@@ -4,7 +4,9 @@
 Separate from the bundle on purpose: making a backup never depends on S3
 answering. Each object is sent in compliance mode for BACKUP_S3_LOCK_DAYS, so
 whoever takes the server and its S3 key still cannot delete a bundle inside
-that window (B7). Removal after it is the bucket's lifecycle rule.
+that window (B7). After a bundle lands, the older ones beyond bp.s3_keep go
+(OPS-1-ad-s): removal follows a newer arrival, so a dead server's last bundles
+stay. The bucket's lifecycle rule is a long backstop only.
 
 Run by txnet-backup-ship.timer every 10 minutes, or by hand:
     python3 scripts/bundle/ship.py [--stack dev|k8s]
@@ -15,6 +17,7 @@ it nothing is sent and it says so; the alert still counts what waits.
 """
 import argparse
 import datetime
+import json
 import os
 import shlex
 import sys
@@ -44,15 +47,29 @@ def read_settings(relative):
     return bp.parse_env(open(path).read()) if os.path.exists(path) else None
 
 
+def mc(host, box, settings, *args):
+    """mc's stdout, with the settings on stdin."""
+    assignments = "".join("%s=%s\n" % (k, shlex.quote(v)) for k, v in sorted(bp.mc_env(settings).items()))
+    return host.run(box.exec_argv("sh", "-c", MC_WITH_SETTINGS, "_", *args), stdin=assignments)
+
+
 def send(host, box, settings, name):
     """name, then its .sha256: a checksum in S3 means its bundle arrived whole."""
-    assignments = "".join("%s=%s\n" % (k, shlex.quote(v)) for k, v in sorted(bp.mc_env(settings).items()))
     for path in (name, name + bp.CHECKSUM_SUFFIX):
         try:
-            host.run(box.exec_argv("sh", "-c", MC_WITH_SETTINGS, "_", *bp.copy_args(settings, path)),
-                     stdin=assignments)
+            mc(host, box, settings, *bp.copy_args(settings, path))
         except RuntimeError as err:
             raise RuntimeError("%s: %s" % (path, err))
+
+
+def prune_s3(host, box, settings):
+    """Removes what bp.s3_to_remove names under this server's prefix; returns how many keys."""
+    listing = mc(host, box, settings, "ls", "--json", bp.s3_destination(settings, ""))
+    keys = [json.loads(line)["key"] for line in listing.splitlines() if line.strip()]
+    removed = bp.s3_to_remove(keys, datetime.datetime.now(datetime.timezone.utc), bp.lock_days(settings))
+    for key in removed:
+        mc(host, box, settings, "rm", "--quiet", bp.s3_destination(settings, key))
+    return len(removed)
 
 
 def registry(host):
@@ -91,6 +108,7 @@ def ship(host):
                     ledger.write(bp.ledger_line(name, digest, datetime.datetime.now(datetime.timezone.utc)) + "\n")
                 say("%s -> %s (%ds)", name, bp.s3_destination(settings, name), time.monotonic() - started)
                 sent += 1
+            say("S3: %d old key(s) removed", prune_s3(host, box, settings))
     bio.write_metrics(bio.textfile_dir(config), "backup_bundle_shipped",
                       {"txnet_backup_ship_last_success_timestamp_seconds": int(time.time())})
     bm.upkeep(ROOT, config)
