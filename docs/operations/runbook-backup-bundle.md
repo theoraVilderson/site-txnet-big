@@ -71,8 +71,8 @@ $BACKUP now --ship   # made, sent to S3 at once; returns only once it is there, 
 file kept here — when the bundle did not reach S3. Without it, `now` makes
 the file and the timer sends it within 10 minutes. 20s + 2s on dev, 2026-10-31.
 
-The timers do the same every night at 03:00 UTC (06:30 Tehran) and every 10
-minutes; `$BACKUP install-timers` installs them (done on this server 2026-10-23).
+The timers do the same every night at 03:00 UTC (06:30 Tehran) — on production
+every hour at :17 — and every 10 minutes; `$BACKUP install-timers` installs them (done on this server 2026-10-23).
 
 ### Prove a bundle comes back — touching nothing
 

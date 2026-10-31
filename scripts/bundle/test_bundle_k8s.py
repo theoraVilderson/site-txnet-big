@@ -131,5 +131,13 @@ class ShipRegistry(unittest.TestCase):
             self.assertEqual(ship.registry(Node()), "registry.example")
 
 
+class Cadence(unittest.TestCase):
+    # OPS-1-ad-h (user 2026-10-31): production bundles every hour, dev every night
+    def test_production_every_hour_and_dev_every_night(self):
+        import bundle_timers as bt
+        self.assertEqual(bt.bundle_schedule("k8s"), "OnCalendar=*-*-* *:17:00 UTC")
+        self.assertEqual(bt.bundle_schedule("dev"), "OnCalendar=*-*-* 03:00:00 UTC")
+
+
 if __name__ == "__main__":
     unittest.main()

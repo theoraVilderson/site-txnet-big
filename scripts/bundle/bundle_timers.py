@@ -11,6 +11,10 @@ import subprocess
 UNIT_DIR = "/etc/systemd/system"
 # 03:00 UTC: after pgBackRest (01:00) and restic (23:00), before the Sunday drill (06:00).
 BUNDLE_AT = "*-*-* 03:00:00 UTC"
+# Production every hour (OPS-1-ad-h, user 2026-10-31): a lost server loses an hour, not a day.
+# Off the hour, clear of every job that starts on it.
+BUNDLE_HOURLY_AT = "*-*-* *:17:00 UTC"
+HOURLY_STACKS = ("k8s",)
 SHIP_EVERY = "10min"
 
 _SERVICE = """[Unit]
@@ -37,7 +41,7 @@ Persistent=true
 WantedBy=timers.target
 """
 UNITS = {
-    "txnet-backup": ("Make the nightly TXNet backup bundle", "backup.py now", "OnCalendar=" + BUNDLE_AT),
+    "txnet-backup": ("Make the TXNet backup bundle", "backup.py now", None),
     "txnet-backup-ship": ("Send TXNet backup bundles to S3", "ship.py",
                           "OnBootSec=5min\nOnUnitActiveSec=" + SHIP_EVERY),
 }
@@ -73,10 +77,15 @@ def after_restore(root, stack, skip, unit_dir=UNIT_DIR, install_fn=None):
     return "backup timers enabled: %s" % ", ".join((install_fn or install)(root, stack))
 
 
+def bundle_schedule(stack):
+    return "OnCalendar=" + (BUNDLE_HOURLY_AT if stack in HOURLY_STACKS else BUNDLE_AT)
+
+
 def install(root, stack):
     """Writes both units and their timers, then enables and starts the timers; returns the timer names."""
     for name, (description, script, schedule) in UNITS.items():
-        fields = {"description": description, "root": root, "script": script, "stack": stack, "schedule": schedule}
+        fields = {"description": description, "root": root, "script": script, "stack": stack,
+                  "schedule": schedule or bundle_schedule(stack)}
         with open(os.path.join(UNIT_DIR, name + ".service"), "w") as f:
             f.write(_SERVICE.format(**fields))
         with open(os.path.join(UNIT_DIR, name + ".timer"), "w") as f:

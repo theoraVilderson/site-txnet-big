@@ -24,9 +24,19 @@ _TIME_WIDTH = len("2026-10-23_15-30-12Z")
 BUNDLES_KEPT = 7
 # S3 keeps by count, never by age alone (OPS-1-ad-s): a server dead for weeks
 # sends nothing new, so nothing of its ages out. The bucket's age rule is only a backstop.
+# Each window counts back from the newest bundle, not from now (OPS-1-ad-h: production is hourly).
 S3_KEEP_NEWEST = 7
+S3_KEEP_HOURLY = 24
+S3_KEEP_DAILY = 7
 S3_KEEP_WEEKLY = 4
 S3_KEEP_MONTHLY = 3
+# (period of a moment, how many, the window's length per period)
+_S3_PERIODS = (
+    (lambda t: (t.date(), t.hour), S3_KEEP_HOURLY, datetime.timedelta(hours=1)),
+    (lambda t: t.date(), S3_KEEP_DAILY, datetime.timedelta(days=1)),
+    (lambda t: t.isocalendar()[:2], S3_KEEP_WEEKLY, datetime.timedelta(weeks=1)),
+    (lambda t: (t.year, t.month), S3_KEEP_MONTHLY, datetime.timedelta(days=31)),
+)
 # The repo-relative passphrase the bundle is encrypted with. Kept off the
 # server too (a password manager): it is the one thing a restore needs besides the file.
 PASSPHRASE_FILE = mp.BUNDLE_PASSPHRASE_FILE
@@ -71,17 +81,18 @@ def to_prune(names, shipped, shipping_configured, kept=BUNDLES_KEPT):
 
 
 def s3_keep(names):
-    """The newest S3_KEEP_NEWEST bundles, plus the newest of each of the last S3_KEEP_WEEKLY
-    ISO weeks and S3_KEEP_MONTHLY months that hold one: periods counted by bundle, not by calendar."""
+    """The newest S3_KEEP_NEWEST bundles, plus the newest of each hour, day, week and month
+    that holds one, up to its count, within count x period of the newest bundle."""
     ordered = sorted((n for n in names if bundle_time(n)), key=bundle_time, reverse=True)
     keep = set(ordered[:S3_KEEP_NEWEST])
-    for period, count in ((lambda t: t.isocalendar()[:2], S3_KEEP_WEEKLY), (lambda t: (t.year, t.month), S3_KEEP_MONTHLY)):
+    for period, count, length in _S3_PERIODS:
         seen = set()
         for name in ordered:
-            if len(seen) == count:
+            when = bundle_time(name)
+            if len(seen) == count or bundle_time(ordered[0]) - when >= count * length:
                 break
-            if period(bundle_time(name)) not in seen:
-                seen.add(period(bundle_time(name)))
+            if period(when) not in seen:
+                seen.add(period(when))
                 keep.add(name)
     return keep
 

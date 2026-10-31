@@ -193,14 +193,29 @@ class S3Retention(unittest.TestCase):
         later = WHEN + datetime.timedelta(days=19)
         self.assertEqual(bp.s3_to_remove(self.listing(self.daily(5)), later, lock_days=7), [])
 
-    def test_the_newest_seven_then_one_a_week_then_one_a_month_stay(self):
+    def hourly(self, count):
+        return [bp.bundle_name("txnet", WHEN - datetime.timedelta(hours=h)) for h in range(count)]
+
+    def test_nightly_keeps_a_week_then_one_a_week_then_one_a_month(self):
         bundles = self.daily(120)
         kept = bp.s3_keep(bundles)
-        self.assertTrue(set(bundles[:bp.S3_KEEP_NEWEST]) <= kept)
-        self.assertLessEqual(len(kept), bp.S3_KEEP_NEWEST + bp.S3_KEEP_WEEKLY + bp.S3_KEEP_MONTHLY)
+        self.assertTrue(set(bundles[:7]) <= kept)
+        self.assertLessEqual(len(kept), 7 + bp.S3_KEEP_WEEKLY + bp.S3_KEEP_MONTHLY)
         months = {(bp.bundle_time(n).year, bp.bundle_time(n).month) for n in kept}
         self.assertEqual(len(months), bp.S3_KEEP_MONTHLY)
         self.assertNotIn(bundles[-1], kept)
+
+    def test_hourly_keeps_a_day_of_hours_then_one_a_day(self):
+        # production bundles every hour (OPS-1-ad-h): a day of them, then nightly's rule
+        bundles = self.hourly(24 * 40)
+        kept = bp.s3_keep(bundles)
+        self.assertTrue(set(bundles[:bp.S3_KEEP_HOURLY]) <= kept)
+        days = {bp.bundle_time(n).date() for n in kept}
+        self.assertGreaterEqual(len(days), bp.S3_KEEP_DAILY)
+        self.assertLessEqual(len(kept), bp.S3_KEEP_HOURLY + bp.S3_KEEP_DAILY + bp.S3_KEEP_WEEKLY + bp.S3_KEEP_MONTHLY)
+
+    def test_nightly_is_not_kept_for_24_nights_by_the_hourly_rule(self):
+        self.assertLessEqual(len(bp.s3_keep(self.daily(60))), 7 + bp.S3_KEEP_WEEKLY + bp.S3_KEEP_MONTHLY)
 
     def test_a_bundle_goes_with_its_checksum_first_and_nothing_else_is_touched(self):
         bundles = self.daily(120)

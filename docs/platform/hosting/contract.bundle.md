@@ -54,6 +54,8 @@ the sealed secrets a restored checkout carries (S3). A wrong one is refused befo
 **B6 — Nightly and on demand.** `txnet-backup.timer` at 03:00 UTC (after
 pgBackRest 01:00 and the files' copy 23:00) and `backup.py now`; one at a time (a lock).
 `now --ship` sends it at once and fails unless it is in S3 (OPS-1-ad-n).
+**Production (`--stack k8s`) bundles every hour**, at :17 UTC (OPS-1-ad-h, user
+2026-10-31): a lost server loses an hour, not a day. Dev stays nightly.
 Seven kept on disk; one not yet in S3 is never deleted while shipping is set up.
 `backup.py install-timers` writes both units from the checkout's own path.
 They follow the platform, with no step to remember (OPS-1-am-e): `restore`
@@ -74,8 +76,9 @@ objects, so an unset lock is no lock. The bucket (`txnet-backups`, Arvan
 `ir-central1`) has versioning and object lock. **Removal follows a newer
 arrival, never age alone** (OPS-1-ad-s, user 2026-10-31): after a bundle lands,
 `ship.py` removes from its own prefix what `bundle_plan.s3_keep` does not keep
-— the newest 7, the newest of each of the last 4 weeks and 3 months that hold
-one — and only past the lock + 1 day, each checksum before its bundle. A
+— the newest 7, then the newest of each hour (24), day (7), week (4) and month
+(3) that holds one, each window counted back from the newest bundle, not from
+now — and only past the lock + 1 day, each checksum before its bundle. A
 server dead for weeks sends nothing, so its last bundles stay. The lifecycle
 rule is a backstop: `bundles/` after 180 days; noncurrent versions after 1 day. Prefix per stack:
 `bundles/dev/`, `bundles/prod/`.
