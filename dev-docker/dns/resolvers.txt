@@ -1,0 +1,18 @@
+# The DNS resolvers every host asks (NIN-1-l, hosting contract.nodes.md "Domestic DNS").
+# Edit here, or `scripts/dns.sh set A B`; then `scripts/dns.sh apply` (this host) and
+# `scripts/dns.sh apply --prod`. Nothing is changed unless a domestic resolver answers
+# every `check` name from that host.
+
+# Asked first, in this order: inside Iran, so they answer through a cut of the
+# international internet. Two providers, so one failing is not a cut.
+domestic 178.22.122.100    # Shecan
+domestic 217.218.127.127   # the Telecommunication Infrastructure Company
+
+# Asked only when no domestic one answers.
+fallback 8.8.8.8
+fallback 8.8.4.4
+
+# Names the platform cannot run without; a resolver must answer all of them.
+check registry.mytxnet.ir                # the images
+check docker.arvancloud.ir               # the Docker Hub mirror
+check hot.ir-central1.arvanstorage.ir    # the backups' S3

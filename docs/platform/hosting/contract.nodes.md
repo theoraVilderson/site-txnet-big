@@ -148,3 +148,25 @@ UTC; stop 63s, a fresh bundle 69s, restore 210s (242 tables and Redis matched,
 17 queued messages back), fence 42s, open 25s at 12:38:28 — 7.6 min, as
 rehearsed. `repoint` waited 4 min for a permission and the site answered
 through both edges at 12:43. The dev host left the old cluster and joins none.
+
+**K22 — Domestic DNS on every host** (NIN-1-l, user 2026-10-31). In a cut of
+the international internet a host asking Google's resolvers finds no name at
+all, domestic ones included; cluster names still resolve, since CoreDNS
+answers them itself, and every other name is forwarded to the host's upstreams.
+
+- **One file.** `dev-docker/dns/resolvers.txt`: `domestic` resolvers in order
+  (two providers), `fallback` ones asked only when none answers (Google's), and
+  the `check` names a resolver must answer (registry, image mirror, backups' S3).
+  `scripts/dns.sh set A B` rewrites the domestic lines; nothing else holds an address.
+- **Applied the same way everywhere** (`scripts/dns.sh apply`, `tools/dns_resolvers.py`):
+  a systemd-resolved drop-in (`DNS=` domestic, `FallbackDNS=` fallback; the
+  datacenter's netplan file is left as it is), Docker's `dns` in `daemon.json`
+  (it applies when Docker restarts, which restarts every container: asked for
+  with `--restart-docker`), and on a k3s node CoreDNS restarted, with a second
+  replica first so a pod always answers. `--prod` copies the tool and the file
+  to production over ssh (`STAGING_PROD_SSH`) and runs it there.
+- **Refused before, undone after.** Nothing is written unless a domestic
+  resolver answers every `check` name from that host; if the names then stop
+  resolving through systemd-resolved, its old settings come back.
+- **The twin needs nothing**: R14's staging has no route out, so it resolves no
+  outside name, and the k3s config it mounts is not changed by this.
