@@ -388,6 +388,9 @@ rollback() {
   # shellcheck disable=SC2046
   [ -n "$tag" ] || tag="$(python3 "$ROOT_DIR/tools/k8s_release.py" previous $(release_field history))"
   [ -n "$tag" ] || die "no earlier release is recorded in configmap/$RELEASE_RECORD (K16)"
+  # shellcheck disable=SC2046
+  python3 "$ROOT_DIR/tools/k8s_release.py" restorable "$tag" $(release_field history) ||
+    die "$tag is not one of the last releases whose images the registry keeps (R22)"
   require_data_node
   open_sealed
   go_back "$tag" "$(release_field overlay)"

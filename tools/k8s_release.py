@@ -28,6 +28,8 @@ from k8srender.tables import NAMESPACE, STACKS, TRAEFIK  # noqa: E402
 
 # R8: enough to go back past a run of bad releases; the ConfigMap stays tiny.
 HISTORY_KEPT = 10
+# R22: the releases whose images the registry keeps, so the ones a rollback reaches.
+IMAGES_KEPT = 5
 # Traefik's entrypoints inside its pod (compose/edge.yml); the forward reaches them there.
 _DOORS = {"http": 80, "https": 443}
 _SECURE_ENTRYPOINT = "websecure"
@@ -148,6 +150,11 @@ def previous(history: list[str]) -> str:
     return history[-2] if len(history) > 1 else ""
 
 
+def restorable(history: list[str], tag: str) -> bool:
+    """R22: `tag` is one of the last IMAGES_KEPT releases, whose images the registry still holds."""
+    return tag in history[-IMAGES_KEPT:]
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
@@ -233,7 +240,7 @@ def smoke(manifest: Path, sealed: Path, kubectl: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("command", choices=("smoke", "history", "current", "previous"))
+    parser.add_argument("command", choices=("smoke", "history", "current", "previous", "restorable"))
     parser.add_argument("args", nargs="*")
     parser.add_argument("--sealed", type=Path, help="smoke: the opened sealed secrets (K5)")
     parser.add_argument("--kubectl", default="kubectl")
@@ -248,6 +255,8 @@ def main() -> int:
         step = after_deploy if args.args[0] == "deploy" else after_rollback
         print(" ".join(step(args.args[2:], args.args[1])))
         return 0
+    if args.command == "restorable":
+        return 0 if args.args and restorable(args.args[1:], args.args[0]) else 1
     print((current if args.command == "current" else previous)(args.args))
     return 0
 

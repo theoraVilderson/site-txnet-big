@@ -52,6 +52,7 @@ import k8s_staging_data as kd  # noqa: E402
 import k8s_release  # noqa: E402
 import k8s_render  # noqa: E402
 import release_disk  # noqa: E402
+import release_registry  # noqa: E402
 import release_reach as rr  # noqa: E402
 from bundle_plan import parse_env  # noqa: E402
 
@@ -356,6 +357,7 @@ def send_steps(prod: kd.Production) -> list[Step]:
     def close():
         close_staging(staging, read_record())
         RECORD_FILE.unlink(missing_ok=True)
+        release_registry.after_release(running_history(prod).split())
 
     prod_k8s = str(ROOT / "scripts" / "prod.k8s.sh")
     steps = {"approved": approved, "push": lambda: sh([prod_k8s, "push"]),
