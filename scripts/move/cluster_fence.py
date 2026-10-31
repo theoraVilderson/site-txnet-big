@@ -28,7 +28,7 @@ MUTE_TABLE = "txnet_move_mute"
 STEPS = {
     "rehearse": ("check", "mute", "install", "deploy", "bundle", "restore"),
     "move": ("check", "mute", "install", "deploy", "stop", "bundle", "restore",
-             "fence", "open", "repoint", "rejoin"),
+             "fence", "open", "repoint"),
 }
 
 

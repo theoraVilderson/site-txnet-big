@@ -51,7 +51,6 @@ $MOVE bundle; $MOVE restore
 $MOVE fence       # old: k3s stopped and disabled, data kept, marker written
 $MOVE open        # new: unmuted, the bot re-registers
 $MOVE repoint     # Cloudflare and Arvan to the new address
-MOVE_BUILD_HOST=193.151.131.201:49222 $MOVE rejoin
 ```
 
 Each step refuses out of order and says why; run it again after fixing that.

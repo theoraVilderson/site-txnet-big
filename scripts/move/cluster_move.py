@@ -16,7 +16,6 @@ Run on the build host (it reaches both servers), from the repo root:
       fence    OLD's stores to zero, the marker, k3s stopped and disabled
       open     only with OLD fenced, read again now: NEW unmuted, its bot re-registers
       repoint  both edges to NEW (edge_zone.py; mytxnet.ir refused without the user's word)
-      rejoin   the build host leaves OLD and joins NEW as its no-release agent
   cluster_move.py status
 
 Runbook: docs/operations/runbook-move-cluster.md

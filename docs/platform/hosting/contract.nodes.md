@@ -81,8 +81,9 @@ Postgres standby) build on it. Code: `scripts/k8s-add-node.sh`,
   edge list and the server's last good copies) on the node before k3s, since svclb binds 80/443 there too.
   Reaching both nodes is OPS-1-o-r's, with the standby, through
   `edge_zone.py repoint`.
-- **The dev host is the second node, carrying no release pod (user,
-  2026-10-29; a worker 2026-10-25 to 10-29).** It stays an agent for builds
+- **The dev host was the second node until the move (user, 2026-10-31: it
+  was a trial; it is no node now and joins none).** No release pod from
+  2026-10-29 (a worker 2026-10-25 to 10-29). It was an agent for builds
   (R4) and OPS-1-y's standby, and runs the dev stack again. Two nodes in
   different datacenters meet over the internet: network-service there read
   db-pool and the panels across it, ~57 MB/min (~80 GB/day each way). It
@@ -126,8 +127,8 @@ runs one step per command, each refused out of order:
   word) and stops and disables k3s; the data stays until the user says.
   `open` asks the old server again, unmutes, restarts the bot. `repoint` moves
   both edges with `edge_zone.py` and refuses `mytxnet.ir` without
-  `MOVE_LIVE_DOMAIN_OK`. `rejoin` makes the build host leave
-  (`k8s-add-node.sh leave`) and join the new server with `NODE_NO_RELEASE=1`.
+  `MOVE_LIVE_DOMAIN_OK`. A node of the old cluster leaves with
+  `k8s-add-node.sh leave`, run on it (its server is gone).
 - **A rehearsal** (`rehearse`) runs check…restore with production's newest
   nightly bundle: production is only read; the new server stays mute.
 
@@ -139,3 +140,9 @@ mirror `DOCKER_REGISTRY` beside the registry, the edges' cached ranges. Figures:
 install 386s, deploy 245s (images cold), bundle 98s on production, transfer 3s,
 restore 187s; the stop, the fence and the open unmeasured (no stop in a
 rehearsal). Downtime estimate: ~8 minutes.
+
+Moved 2026-10-31 (OPS-1-am-d, the user's word for each step): down at 12:30:51
+UTC; stop 63s, a fresh bundle 69s, restore 210s (242 tables and Redis matched,
+17 queued messages back), fence 42s, open 25s at 12:38:28 — 7.6 min, as
+rehearsed. `repoint` waited 4 min for a permission and the site answered
+through both edges at 12:43. The dev host left the old cluster and joins none.

@@ -117,7 +117,7 @@ class Order(unittest.TestCase):
 
     def test_a_rehearsal_never_stops_fences_or_repoints(self):
         state = {"mode": "rehearse", "done": {s: 1 for s in cf.STEPS["rehearse"]}}
-        for step in ("stop", "fence", "open", "repoint", "rejoin"):
+        for step in ("stop", "fence", "open", "repoint"):
             self.assertIn("rehearsal", cf.out_of_order(state, step))
 
     def test_open_needs_the_old_fenced_now(self):
