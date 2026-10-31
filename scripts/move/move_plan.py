@@ -3,6 +3,7 @@
 Pure: reads compose's resolved config and the repo tree, runs nothing.
 """
 import os
+import subprocess
 
 # Compose volumes that hold state no other copy has. A volume in neither set
 # stops the move (PlanError): a new volume is a decision, never a silent skip.
@@ -32,6 +33,8 @@ REQUIRED_FILES = (
 BUNDLE_PASSPHRASE_FILE = "dev-docker/secrets/backup-bundle-passphrase"
 # Where ship.py reads its write-only S3 key (OPS-1-ad).
 SHIP_ENV_FILE = "dev-docker/secrets/backup-ship.env"
+# The secrets directory: whatever git ignores in it moves (ignored_secrets).
+SECRETS_DIR = "dev-docker/secrets"
 # Git-ignored, so a checkout on the new server does not have them.
 CARRIED_FILES = REQUIRED_FILES + (
     BUNDLE_PASSPHRASE_FILE,
@@ -90,9 +93,18 @@ def missing_required(root):
     return [path for path in REQUIRED_FILES if not os.path.exists(os.path.join(root, path))]
 
 
+def ignored_secrets(root):
+    """Every file git ignores under SECRETS_DIR: a secret added later moves without a list
+    to keep (platform-owner-password, arvan-s3.env and arvan/ were missed, 2026-10-31)."""
+    listed = subprocess.run(["git", "-C", root, "ls-files", "--others", "--ignored", "--exclude-standard",
+                             "--", SECRETS_DIR], check=True, capture_output=True, text=True).stdout
+    return sorted(listed.split())
+
+
 def present_carried(root):
-    """CARRIED_FILES that exist under root, in the form rsync --files-from reads."""
-    return [path for path in CARRIED_FILES if os.path.exists(os.path.join(root, path))]
+    """CARRIED_FILES that exist under root, and every ignored secret, as rsync --files-from reads them."""
+    carried = [path for path in CARRIED_FILES if os.path.exists(os.path.join(root, path))]
+    return carried + [path for path in ignored_secrets(root) if not path.startswith(tuple(carried))]
 
 
 def service_environment(config, service):

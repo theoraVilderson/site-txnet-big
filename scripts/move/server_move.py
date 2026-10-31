@@ -35,6 +35,8 @@ DISK_HEADROOM = 1.2
 ARCHIVE_WAIT_S = 90
 WAIT_TIMEOUT_S = "600"
 READY_POLL_S = 5
+# What `prod.k8s.sh install-tools` puts in place: present here, this server builds and twins.
+BUILD_TOOL = "/usr/local/bin/sops"
 # Byte digests are compared before the new server starts, live figures after its data services do.
 BYTE_FIGURES = ("bytes:",)
 LIVE_FIGURES = ("pg:", "redis:", "mq:")
@@ -198,6 +200,8 @@ class Move:
         if pulled:  # `compose pull` with no names pulls every service
             self.there.compose("pull", "--quiet", *pulled)
         self.install_node_trees()
+        self.projects.copy_images(self.there)
+        self.install_build_tools()
         self.copy_dirs(mp.quick_rsync)
         say("presync done; the stack is still serving here. Repeat it, or run cutover.")
 
@@ -215,6 +219,13 @@ class Move:
             say("installing %s's node_modules on the new server (%s)", tree, script)
             self.there.run(["docker", "run", "--rm", "-v", "%s:%s" % (os.path.join(self.root, tree), target),
                             "-w", target, image, "sh", "-c", script])
+
+    def install_build_tools(self):
+        """sops and age-keygen there at k8s/versions.env's pins when this server has them:
+        the twin opens the sealed secrets with them (K5)."""
+        if os.path.exists(BUILD_TOOL):
+            say("installing the release's tools on the new server (prod.k8s.sh install-tools)")
+            self.there.run([os.path.join(self.root, "scripts", "prod.k8s.sh"), "install-tools"])
 
     def uninstalled_trees(self):
         return [tree for tree, _, _ in self.node_trees()
@@ -338,6 +349,7 @@ class Move:
         saved = self.saved()
         say("stopping the stack on %s", self.there.ssh)
         self.there.compose("stop")
+        mj.Projects(self.there, self.projects.names).stop()
         marker = os.path.join(self.root, mp.MOVED_MARKER)
         if os.path.exists(marker):
             os.remove(marker)

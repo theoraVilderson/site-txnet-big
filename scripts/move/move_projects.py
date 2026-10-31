@@ -5,6 +5,7 @@ copied, and started there with the `compose up` its own labels record.
 """
 import json
 import os
+import subprocess
 
 import move_hosts as mh
 
@@ -51,6 +52,30 @@ class Projects:
     def dirs(self, root):
         found = [outside_dir(labels, root) for labels in map(self.labels, self.names) if labels]
         return [d for d in found if d]
+
+    def images(self):
+        """Every image the projects' containers run, once each."""
+        ids = [c for name in self.names for c in self.containers(name)]
+        if not ids:
+            return []
+        return sorted(set(self.here.run(["docker", "inspect", "-f", "{{.Config.Image}}", *ids]).split()))
+
+    def copy_images(self, there):
+        """The images `there` lacks, copied rather than pulled: paneltest runs local builds
+        and tags (routeros-chr, marznode:pinned) and ghcr.io images."""
+        for image in self.images():
+            try:
+                there.run(["docker", "image", "inspect", image])
+            except RuntimeError:
+                self.copy_image(there, image)
+
+    def copy_image(self, there, image):
+        print("move: copying image %s to the new server" % image, flush=True)
+        save = subprocess.Popen(["docker", "save", image], stdout=subprocess.PIPE)
+        load = subprocess.run(mh.SSH + [there.ssh, "docker load"], stdin=save.stdout, capture_output=True, text=True)
+        save.stdout.close()
+        if save.wait() != 0 or load.returncode != 0:
+            raise RuntimeError("could not copy image %s: %s" % (image, load.stderr.strip()))
 
     def up_commands(self):
         """The commands that start the projects running here now, for `there` or a rollback."""

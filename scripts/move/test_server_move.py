@@ -142,6 +142,7 @@ class CarriedFiles(unittest.TestCase):
     def test_only_carried_paths_that_exist_are_sent(self):
         root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, root)
+        subprocess.run(["git", "init", "-q", root], check=True)
         open(os.path.join(root, ".env"), "w").close()
         self.assertEqual(mp.present_carried(root), [".env"])
 
@@ -242,6 +243,7 @@ class ComposeWrapper(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root)
+        subprocess.run(["git", "init", "-q", self.root], check=True)  # a move runs from a checkout
         os.makedirs(os.path.join(self.root, "scripts"))
         os.makedirs(os.path.join(self.root, "bin"))
         for script in ("dev.compose.sh", "moved-guard.sh"):
@@ -292,9 +294,10 @@ class FakeHost:
 
     stack = "dev"
 
-    def __init__(self, root, log, name, figures, digest="same", project_ids=""):
+    def __init__(self, root, log, name, figures, digest="same", project_ids="", missing=()):
         self.root, self.log, self.ssh, self.name = root, log, name, name
         self.figures, self.digest_value, self.project_ids = figures, digest, project_ids
+        self.missing = set(missing)
 
     def config(self):
         return CONFIG
@@ -313,8 +316,12 @@ class FakeHost:
         self.log.append((self.name, "run") + tuple(argv))
         if argv[:3] == ["docker", "ps", "-aq"]:
             return self.project_ids
+        if argv[:2] == ["docker", "inspect"] and "{{.Config.Image}}" in argv:
+            return "\n".join(PANEL_IMAGES)
         if argv[:2] == ["docker", "inspect"]:
             return json.dumps(LABELS)
+        if argv[:3] == ["docker", "image", "inspect"] and argv[3] in self.missing:
+            raise RuntimeError("%s: No such image: %s" % (self.name, argv[3]))
         return ""
 
     def project_volumes(self, project):
@@ -346,6 +353,7 @@ class Cutover(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root)
+        subprocess.run(["git", "init", "-q", self.root], check=True)  # a move runs from a checkout
         self.log = []
         # the preflight and the commands behind each figure are exercised on a
         # real stack by `check`; here only the order of the steps is under test
@@ -358,10 +366,40 @@ class Cutover(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def move(self, there_figures=FIGURES, there_digest="same", projects=None, project_ids=""):
+    def move(self, there_figures=FIGURES, there_digest="same", projects=None, project_ids="", missing=()):
         here = FakeHost(self.root, self.log, "here", FIGURES, project_ids=project_ids)
-        there = FakeHost(self.root, self.log, "new", there_figures, there_digest)
+        there = FakeHost(self.root, self.log, "new", there_figures, there_digest, project_ids=project_ids,
+                         missing=missing)
         return sm.Move(here, there, projects)
+
+    # Rehearsal 2 (2026-10-31): paneltest's images are local builds and tags
+    # (devtxnet-routeros-chr, marznode:pinned) and ghcr.io ones; `up` there pulled and failed.
+    def test_a_side_project_s_images_the_new_server_lacks_are_copied_not_pulled(self):
+        move = self.move(projects=["paneltest"], project_ids="abc123", missing=["local/chr:latest"])
+        copied = []
+        with mock.patch.object(mj.Projects, "copy_image", lambda p, there, image: copied.append(image)):
+            move.projects.copy_images(move.there)
+        self.assertEqual(copied, ["local/chr:latest"])
+
+    # Rehearsal 2 (2026-10-31): the twin opens the sealed secrets with sops; the new
+    # host had none, so `prod.k8s.sh install-tools` ran there by hand.
+    def test_a_build_host_s_tools_are_installed_there_at_their_pins(self):
+        move = self.move()
+        with mock.patch.object(sm.os.path, "exists", lambda path: path == sm.BUILD_TOOL):
+            move.install_build_tools()
+        self.assertIn(("new", "run", os.path.join(self.root, "scripts", "prod.k8s.sh"), "install-tools"), self.log)
+
+    def test_a_server_that_builds_nothing_gets_no_tools(self):
+        move = self.move()
+        with mock.patch.object(sm.os.path, "exists", lambda path: False):
+            move.install_build_tools()
+        self.assertFalse([e for e in self.log if "install-tools" in e])
+
+    def test_rollback_stops_the_side_projects_on_the_new_server_too(self):
+        move = self.move(projects=["paneltest"], project_ids="abc123")
+        move.cutover()
+        move.rollback()
+        self.assertIn(("new", "run", "docker", "stop", "abc123"), self.log)
 
     # The command is saved before the project stops: stopped, nothing names how it ran.
     def test_a_side_project_stops_here_and_starts_there_and_back_on_rollback(self):
@@ -415,6 +453,7 @@ class Cutover(unittest.TestCase):
         self.assertFalse(os.path.exists(self.marker()))
 
 
+PANEL_IMAGES = ["local/chr:latest", "mirror.example/marzban:v0.8.4", "local/chr:latest"]
 LABELS = {"com.docker.compose.project.working_dir": "/root/paneltest",
           "com.docker.compose.project.config_files": "/root/paneltest/compose.yml",
           "com.docker.compose.project.environment_file": ""}
@@ -431,6 +470,25 @@ class Projects(unittest.TestCase):
         self.assertEqual(mj.outside_dir(LABELS, "/root/site-txnet-big"), "/root/paneltest/")
         inside = {**LABELS, "com.docker.compose.project.working_dir": "/root/site-txnet-big/dev-docker/monitoring"}
         self.assertIsNone(mj.outside_dir(inside, "/root/site-txnet-big"))
+
+
+class SecretFiles(unittest.TestCase):
+    # Rehearsal 2 (2026-10-31): platform-owner-password, object-backup-password,
+    # arvan-s3.env and arvan/ were added after CARRIED_FILES was written, and stayed.
+    def test_every_file_git_ignores_under_secrets_is_carried(self):
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root)
+        secrets = os.path.join(root, mp.SECRETS_DIR)
+        os.makedirs(os.path.join(secrets, "arvan"))
+        for name, text in ((".gitignore", "*\n!.gitignore\n!README.md\n"), ("README.md", "x"),
+                           ("platform-owner-password", "x"), ("arvan/key", "x")):
+            with open(os.path.join(secrets, name), "w") as f:
+                f.write(text)
+        subprocess.run(["git", "init", "-q", root], check=True)
+        subprocess.run(["git", "-C", root, "add", "."], check=True)
+        self.assertEqual(mp.ignored_secrets(root), [mp.SECRETS_DIR + "/arvan/key",
+                                                    mp.SECRETS_DIR + "/platform-owner-password"])
+        self.assertIn(mp.SECRETS_DIR + "/platform-owner-password", mp.present_carried(root))
 
 
 class BuildHostFiles(unittest.TestCase):

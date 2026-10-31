@@ -54,6 +54,10 @@ CACHE_DIR = Path("/var/cache/txnet-staging")
 KUBECONFIG = CACHE_DIR / "kubeconfig.yaml"
 # prod.k8s.sh and backup.py run "$KUBECTL" as one program: this one aims at staging.
 KUBECTL_WRAPPER = CACHE_DIR / "kubectl"
+# The k3s binary the wrapper runs, copied out of the staging image (K3S_VERSION exactly):
+# a host that is no k3s node has none (move rehearsal 2026-10-31).
+K3S_CLIENT = CACHE_DIR / "k3s"
+K3S_IN_IMAGE = "/bin/k3s"
 # k3s's system images (pause, coredns, local-path, klipper-lb, metrics-server):
 # the node cannot pull them, so the release's air-gap archive is mounted where
 # k3s imports from at start.
@@ -254,12 +258,14 @@ def container_address(docker) -> str:
 
 def write_kubeconfig(docker) -> None:
     """The cluster's kubeconfig, its server the container's address, and KUBECTL_WRAPPER
-    using it with no proxy (the host's proxy answers a private address with EOF)."""
+    using it with no proxy (the host's proxy answers a private address with EOF), through
+    the staging image's own k3s."""
     config = docker(["docker", "exec", CONTAINER, "cat", "/etc/rancher/k3s/k3s.yaml"]).stdout
     KUBECONFIG.write_text(config.replace("https://127.0.0.1:6443", f"https://{container_address(docker)}:6443"))
     KUBECONFIG.chmod(0o600)
+    docker(["docker", "cp", f"{CONTAINER}:{K3S_IN_IMAGE}", str(K3S_CLIENT)])
     KUBECTL_WRAPPER.write_text("#!/bin/sh\nexport NO_PROXY='*' no_proxy='*'\n"
-                               f'exec k3s kubectl --kubeconfig {KUBECONFIG} "$@"\n')
+                               f'exec {K3S_CLIENT} kubectl --kubeconfig {KUBECONFIG} "$@"\n')
     KUBECTL_WRAPPER.chmod(0o700)
 
 

@@ -158,6 +158,24 @@ class DiskTest(unittest.TestCase):
         self.assertIsNone(ks.disk_problem(total, free=int(need) + 1 - 5 * self.GIB, held=5 * self.GIB))
 
 
+class KubectlTest(unittest.TestCase):
+    # Move rehearsal 2026-10-31: on a host that is no k3s node the wrapper's
+    # `exec k3s kubectl` found no k3s, and every deploy into staging failed.
+    def test_kubectl_is_the_staging_image_s_own_k3s_not_the_host_s(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp)
+            saved = ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT
+            ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT = cache / "kc", cache / "kubectl", cache / "k3s"
+            try:
+                docker = Docker({f"docker exec {ks.CONTAINER} cat": (0, "server: https://127.0.0.1:6443\n")})
+                ks.write_kubeconfig(docker)
+                wrapper = ks.KUBECTL_WRAPPER.read_text()
+            finally:
+                ks.KUBECONFIG, ks.KUBECTL_WRAPPER, ks.K3S_CLIENT = saved
+        self.assertEqual(docker.ran("docker cp"), [["docker", "cp", f"{ks.CONTAINER}:/bin/k3s", str(cache / "k3s")]])
+        self.assertIn(f"exec {cache / 'k3s'} kubectl", wrapper)
+
+
 class ImportTest(unittest.TestCase):
     # A second deploy named the same 36 images, and all were copied in again (~10 min).
     def test_an_image_staging_holds_is_not_copied_again(self):
