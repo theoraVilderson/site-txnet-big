@@ -100,5 +100,18 @@ class RestorableTest(unittest.TestCase):
         self.assertFalse(kr.restorable(HISTORY, "unknown"))
 
 
+class PushWindowTest(unittest.TestCase):
+    # The registry collects nightly at 00:30 UTC (dev-docker/registry/arvan-values.yaml);
+    # a collect during a push can remove layers not yet tagged.
+    def test_a_push_waits_out_the_nightly_collect(self):
+        self.assertIsNotNone(kr.push_problem(0, 25))
+        self.assertIsNotNone(kr.push_problem(0, 45))
+
+    def test_a_push_outside_it_goes(self):
+        self.assertIsNone(kr.push_problem(0, 15))
+        self.assertIsNone(kr.push_problem(0, 55))
+        self.assertIsNone(kr.push_problem(13, 30))
+
+
 if __name__ == "__main__":
     unittest.main()

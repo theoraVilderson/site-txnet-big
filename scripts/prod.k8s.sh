@@ -139,12 +139,18 @@ require_registry() {
   esac
 }
 
+# R22: never inside the registry's nightly garbage-collect (k8s_release.py push_problem).
+require_push_window() {
+  python3 "$ROOT_DIR/tools/k8s_release.py" push-window || die "nothing was pushed"
+}
+
 push() {
   local service local_image remote listed first
   listed="$(images)"
   first="${listed%%$'\n'*}"
   first="${first##*$'\t'}"
   require_registry "${first%%/*}" "nothing was pushed"
+  require_push_window
   while IFS=$'\t' read -r service local_image remote; do
     ! in_registry "$remote" </dev/null || continue
     echo "== push $service"

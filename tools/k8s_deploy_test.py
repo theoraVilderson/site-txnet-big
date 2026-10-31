@@ -391,7 +391,7 @@ class ScriptTest(unittest.TestCase):
     def test_an_image_the_registry_holds_is_neither_built_nor_pushed(self):
         script = (f'source "{REPO}/scripts/prod.k8s.sh"\nrequire_build_host() {{ :; }}\nrequire_clean() {{ :; }}\n'
                   "images() { printf 'api\\tl\\treg.example/txnet/api:new\\nweb\\tl\\treg.example/txnet/web:old\\n'; }\n"
-                  "require_registry() { :; }\ncompose() { echo \"compose $*\"; }\n"
+                  "require_registry() { :; }\nrequire_push_window() { :; }\ncompose() { echo \"compose $*\"; }\n"
                   'docker() { case "$*" in "buildx imagetools inspect reg.example/txnet/web:old") return 0 ;;'
                   ' "buildx imagetools inspect"*|"image inspect"*) return 1 ;; *) echo "docker $*" ;; esac; }\nbuild\npush')
         run = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env={**os.environ})

@@ -1,0 +1,49 @@
+# The registry production pulls from (hosting R22, OPS-1-ah-m): registry.mytxnet.ir
+# is ArvanCloud Cloud Container's docker-registry app, project `txnet-project`,
+# app `registry-2554e8efd1`. These are its Helm values as the Arvan panel shows
+# and edits them, copied here 2026-10-31 so a rebuild or a review has them.
+# The panel is the source of truth; edit there, then update this copy.
+#
+# Never paste this file whole into the panel: `secrets.htpasswd` is the push and
+# pull login, and the value below is a placeholder. Saving it would change the
+# password, and both `release.sh push` and production's pulls would fail (K14).
+#
+# The registry runs distribution v3: config at /etc/distribution/config.yml,
+# blobs under /var/lib/registry (REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY).
+# A garbage-collect by hand, in the panel's console for the app:
+#   registry garbage-collect --delete-untagged [--dry-run] /etc/distribution/config.yml
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 2500m
+  enabled: true
+  hosts:
+    - registry-2554e8efd1-txnet-project.apps.ir-central1.arvancaas.ir
+    - registry.mytxnet.ir
+persistence:
+  # R22 deletes tags through the API; without this the registry answers 405.
+  deleteEnabled: true
+  enabled: true
+  size: 50G
+resources:
+  limits:
+    cpu: "1"
+    ephemeral-storage: 1G
+    memory: 2G
+  requests:
+    cpu: "1"
+    ephemeral-storage: 1G
+    memory: 2G
+secrets:
+  htpasswd: SET-IN-ARVAN-PANEL-NEVER-HERE
+spec:
+  strategy:
+    type: Recreate
+updateStrategy:
+  type: Recreate
+# Added 2026-10-31: a delete frees no blob until garbage-collect runs. Nightly at
+# 00:30 UTC (04:00 Tehran); `release.sh` pushes outside that window, since a
+# collect during a push can remove layers not yet tagged.
+garbageCollect:
+  enabled: true
+  deleteUntagged: true
+  schedule: "30 0 * * *"

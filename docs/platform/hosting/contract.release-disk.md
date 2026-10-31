@@ -51,8 +51,11 @@ OPS-1-ah-m; `IMAGES_KEPT` in `k8s_release.py`).
   while planning, deletes nothing; one mid-way stops there. Either way `close`
   reports it and the release stands.
 - **`rollback [tag]`** refuses a tag outside the last 5 before rendering, naming R22.
-- **Space returns only on garbage-collect.** A delete frees no blob. By hand, in
-  Arvan's console for the registry app, with no push running:
+- **Space returns only on garbage-collect.** A delete frees no blob. The app's
+  Helm values (`dev-docker/registry/arvan-values.yaml`, a copy of the panel's,
+  login left out) run it nightly at 00:30 UTC; `prod.k8s.sh push` refuses to
+  start from 00:20 to 00:50 UTC, since a collect mid-push removes untagged layers.
+  By hand, in Arvan's console for the app, with no push running:
   `registry garbage-collect --delete-untagged /etc/distribution/config.yml`.
 - By hand: `python3 tools/release_registry.py [--dry-run] <history...>`. Measured
   2026-10-31 on production's history: 266 tags, the 5 releases' 26 images all

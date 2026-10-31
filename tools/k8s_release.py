@@ -17,6 +17,7 @@ import socket
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple
 
@@ -30,6 +31,11 @@ from k8srender.tables import NAMESPACE, STACKS, TRAEFIK  # noqa: E402
 HISTORY_KEPT = 10
 # R22: the releases whose images the registry keeps, so the ones a rollback reaches.
 IMAGES_KEPT = 5
+# R22: the registry's nightly garbage-collect (dev-docker/registry/arvan-values.yaml,
+# `30 0 * * *` UTC) and the minutes around it no push starts in.
+GC_AT_UTC_MIN = 30
+GC_WINDOW_BEFORE_MIN = 10
+GC_WINDOW_AFTER_MIN = 20
 # Traefik's entrypoints inside its pod (compose/edge.yml); the forward reaches them there.
 _DOORS = {"http": 80, "https": 443}
 _SECURE_ENTRYPOINT = "websecure"
@@ -150,6 +156,15 @@ def previous(history: list[str]) -> str:
     return history[-2] if len(history) > 1 else ""
 
 
+def push_problem(hour_utc: int, minute_utc: int) -> str | None:
+    """Why a push must wait now, or None: a collect during a push can remove its untagged layers."""
+    now = hour_utc * 60 + minute_utc
+    if GC_AT_UTC_MIN - GC_WINDOW_BEFORE_MIN <= now <= GC_AT_UTC_MIN + GC_WINDOW_AFTER_MIN:
+        return (f"the registry garbage-collects at 00:{GC_AT_UTC_MIN:02d} UTC; push after "
+                f"00:{GC_AT_UTC_MIN + GC_WINDOW_AFTER_MIN:02d} UTC (R22)")
+    return None
+
+
 def restorable(history: list[str], tag: str) -> bool:
     """R22: `tag` is one of the last IMAGES_KEPT releases, whose images the registry still holds."""
     return tag in history[-IMAGES_KEPT:]
@@ -240,7 +255,7 @@ def smoke(manifest: Path, sealed: Path, kubectl: str) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("command", choices=("smoke", "history", "current", "previous", "restorable"))
+    parser.add_argument("command", choices=("smoke", "history", "current", "previous", "restorable", "push-window"))
     parser.add_argument("args", nargs="*")
     parser.add_argument("--sealed", type=Path, help="smoke: the opened sealed secrets (K5)")
     parser.add_argument("--kubectl", default="kubectl")
@@ -255,6 +270,11 @@ def main() -> int:
         step = after_deploy if args.args[0] == "deploy" else after_rollback
         print(" ".join(step(args.args[2:], args.args[1])))
         return 0
+    if args.command == "push-window":
+        now = datetime.now(timezone.utc)
+        problem = push_problem(now.hour, now.minute)
+        print(problem or "", file=sys.stderr, end="\n" if problem else "")
+        return 1 if problem else 0
     if args.command == "restorable":
         return 0 if args.args and restorable(args.args[1:], args.args[0]) else 1
     print((current if args.command == "current" else previous)(args.args))
