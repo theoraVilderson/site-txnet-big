@@ -53,7 +53,7 @@ OPS-1-ah-m; `IMAGES_KEPT` in `k8s_release.py`).
 - **`rollback [tag]`** refuses a tag outside the last 5 before rendering, naming R22.
 - **Space returns only on garbage-collect.** A delete frees no blob. By hand, in
   Arvan's console for the registry app, with no push running:
-  `registry garbage-collect --delete-untagged /etc/docker/registry/config.yml`.
+  `registry garbage-collect --delete-untagged /etc/distribution/config.yml`.
 - By hand: `python3 tools/release_registry.py [--dry-run] <history...>`. Measured
   2026-10-31 on production's history: 266 tags, the 5 releases' 26 images all
   present, ~2.2 GB of 5.4 GB left after collection.

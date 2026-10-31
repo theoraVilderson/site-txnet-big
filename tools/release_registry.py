@@ -31,7 +31,7 @@ MANIFEST_TYPES = ", ".join(("application/vnd.oci.image.index.v1+json",
                             "application/vnd.docker.distribution.manifest.list.v2+json",
                             "application/vnd.oci.image.manifest.v1+json",
                             "application/vnd.docker.distribution.manifest.v2+json"))
-GC_COMMAND = "registry garbage-collect --delete-untagged /etc/docker/registry/config.yml"
+GC_COMMAND = "registry garbage-collect --delete-untagged /etc/distribution/config.yml"
 
 
 class Registry:
