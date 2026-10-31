@@ -55,6 +55,17 @@ def send(host, box, settings, name):
             raise RuntimeError("%s: %s" % (path, err))
 
 
+def registry(host):
+    """DOCKER_REGISTRY from the env files the stack runs with: a node holds them sealed, never as .env (NIN-1-i3)."""
+    paths = host.env_files() if host.stack == bs.K8S else [".env"]
+    merged = {}
+    for path in paths:  # a later file wins, as compose and the render read them
+        full = os.path.join(ROOT, path)
+        if os.path.exists(full):
+            merged.update(bp.parse_env(open(full).read()))
+    return merged["DOCKER_REGISTRY"]
+
+
 def ship(host):
     """Sends what waits, oldest first; records each in the ledger; returns how many."""
     config = host.config()
@@ -66,12 +77,12 @@ def ship(host):
     missing = bp.missing_ship_settings(settings)
     if missing:
         raise RuntimeError("%s lacks %s" % (bp.SHIP_ENV_FILE, ", ".join(missing)))
-    registry = bp.parse_env(open(os.path.join(ROOT, ".env")).read())["DOCKER_REGISTRY"]
+    registry_host = registry(host)
     shipped = bp.parse_ledger(bio.read_ledger(bio.BUNDLE_DIR))
     waiting = bp.unshipped(os.listdir(bio.BUNDLE_DIR), shipped)
     sent = 0
     if waiting:
-        with host.scratch("%s/%s" % (registry, MC_IMAGE), host_dir=(bio.BUNDLE_DIR, bp.SHIP_MOUNT), network=True) as box:
+        with host.scratch("%s/%s" % (registry_host, MC_IMAGE), host_dir=(bio.BUNDLE_DIR, bp.SHIP_MOUNT), network=True) as box:
             for name in waiting:
                 started = time.monotonic()
                 send(host, box, settings, name)

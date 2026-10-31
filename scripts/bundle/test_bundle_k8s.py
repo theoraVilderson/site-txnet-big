@@ -114,5 +114,22 @@ class RedisPassword(unittest.TestCase):
         self.assertEqual(mh.redis_password(config), "pw")
 
 
+class ShipRegistry(unittest.TestCase):
+    # NIN-1-i3: a node has no .env, only its sealed env files opened; ship.py read .env and stopped
+    def test_the_registry_comes_from_the_stack_s_own_env_files(self):
+        import ship
+        with tempfile.TemporaryDirectory() as d:
+            shared = os.path.join(d, ".env")
+            with open(shared, "w") as f:
+                f.write("DOCKER_REGISTRY=registry.example\n")
+
+            class Node:
+                stack = "k8s"
+
+                def env_files(self):
+                    return [shared, os.path.join(d, ".env.prod")]
+            self.assertEqual(ship.registry(Node()), "registry.example")
+
+
 if __name__ == "__main__":
     unittest.main()
