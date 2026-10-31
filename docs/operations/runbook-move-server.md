@@ -142,5 +142,10 @@ were not installed (`node_trees`, `npm ci` in presync inside the tree's own
 image), and `up --wait` gave up on a first cold build (`wait_ready`). The build
 host's own keys now move too (`build_host_files`: the registry login, `known_hosts`,
 `STAGING_PROD_SSH_KEY`), and paneltest with `--with-project`, so the new dev host
-can release; proven only once `release.sh --until twin` passes there (16 GB RAM:
-the twin needs production's 9.2 GB of requests, K19).
+can release. Proven 2026-10-31 on an 8-core 24 GB host: `release.sh --until twin`
+passed there (ready, panels, roll with 0 of 9662 requests failed, stores; 30 min
+cold). The new host needs 16 GB RAM or more (the twin: production's 9.2 GB of
+requests, K19). The twin needs no cutover: after `presync` it runs on the new host
+while dev serves here, which proves the release path without downtime. Rehearsal 2
+added: side projects' images copied, every git-ignored secret carried,
+`install-tools` run there, and the twin's kubectl taken from its own image.
