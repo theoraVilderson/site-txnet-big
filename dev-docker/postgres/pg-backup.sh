@@ -2,8 +2,8 @@
 # Postgres backups with pgBackRest (OPS-1-b, ADR-0126, hosting/contract.md H3).
 #
 # A full on Sunday and a differential every other day, both at PG_BACKUP_AT
-# (UTC, default 01:00). pgbackrest.conf keeps 2 fulls; each backup expires the
-# older ones and their WAL. After every run it writes txnet_pg_backup_* to
+# (UTC, default 01:00); a missed Sunday's full runs the next night (K20).
+# pgbackrest.conf keeps 2 fulls; each backup expires the older ones and their WAL. After every run it writes txnet_pg_backup_* to
 # node-exporter's textfile directory, which database.rules.yml alerts on (H5).
 #
 # pgBackRest runs as postgres (uid 70): it reads the data volume, mounted read
@@ -29,6 +29,8 @@ set -u
 
 AT="${PG_BACKUP_AT:-01:00}"
 FULL_WEEKDAY=7 # `date +%u`: Sunday
+FULL_MAX_AGE_DAYS=7
+SECONDS_PER_DAY=86400
 TEXTFILE_DIR="${TEXTFILE_DIR:-/textfile}"
 METRICS="$TEXTFILE_DIR/pg_backup.prom"
 DRILL_AT="${PG_RESTORE_DRILL_AT:-06:00}"
@@ -102,8 +104,30 @@ run() {
   [ "$ok" = 1 ]
 }
 
+# weekday today newest-full-day (YYYYMMDD, empty for none): a night whose
+# newest full is a week old takes a full, so a stack down on Sunday does not
+# keep every WAL segment for another week (contract.backup.md K20).
+backup_type() {
+  [ "$1" = "$FULL_WEEKDAY" ] && { echo full; return; }
+  [ -n "$3" ] || { echo full; return; }
+  full_day=$(echo "$3" | sed 's/^\(....\)\(..\)\(..\)$/\1-\2-\3/')
+  age=$((($(date -u -d "$2" +%s) - $(date -u -d "$full_day" +%s)) / SECONDS_PER_DAY))
+  if [ "$age" -ge "$FULL_MAX_AGE_DAYS" ]; then echo full; else echo diff; fi
+}
+
+newest_full_day() {
+  pgbr --repo="$1" info | sed -n 's/^ *full backup: \([0-9]\{8\}\)-.*/\1/p' | tail -1
+}
+
+# The stalest repository decides: a run backs up every repository with one type.
 todays_type() {
-  if [ "$(date -u +%u)" = "$FULL_WEEKDAY" ]; then echo full; else echo diff; fi
+  stalest=""
+  for repo in $(repos); do
+    day=$(newest_full_day "$repo")
+    [ -n "$day" ] || { stalest=""; break; }
+    [ -z "$stalest" ] || [ "$day" -lt "$stalest" ] && stalest=$day
+  done
+  backup_type "$(date -u +%u)" "$(date -u +%F)" "$stalest"
 }
 
 has_backup() { pgbr --repo="$1" info --output=json 2>/dev/null | grep -q '"label"'; }
@@ -198,6 +222,9 @@ drill() {
     return 1
   fi
 }
+
+# test_pg_backup.py sources the functions above without running anything below.
+[ -z "${PG_BACKUP_SOURCED:-}" ] || return 0
 
 sh /usr/local/bin/pgbackrest-repo.sh || exit 1
 

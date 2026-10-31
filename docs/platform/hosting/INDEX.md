@@ -31,7 +31,7 @@ connection pool, the log pipeline's bounds and format, healthchecks, and houseke
 | [contract.health.md](contract.health.md) | a healthcheck on a container that is not a Nest app: auth-handler, Traefik, the Next apps, guide-media, mailpit, the backup loops (OPS-1-aa) — rule H24 |
 | [contract.bundle.md](contract.bundle.md) | the whole platform as one encrypted file: made nightly or now, shipped to S3 each object locked, restored here, elsewhere or into the cluster (OPS-1-ad, -o-k, NIN-1-i1) — rules B1…B10 |
 | [contract.nodes.md](contract.nodes.md) | a second k3s node: joined or removed by one command from the server, WireGuard between nodes, K13's peers, the preflight that refuses a server (OPS-1-o-q) — rule K17 |
-| [contract.backup.md](contract.backup.md) | Postgres's second backup repository on S3 under object lock, and an S3 outage that never stops Postgres (OPS-1-o-o) — rule K15 |
+| [contract.backup.md](contract.backup.md) | Postgres's second backup repository on S3 under object lock, and an S3 outage that never stops Postgres (OPS-1-o-o) — rule K15; a missed Sunday full taken the next night — rule K20 |
 | [open-questions.md](open-questions.md) | production's starting data (OPS-1-p), the standby server (OPS-1-y), the two doors and the backup bucket (ADR-0165) |
 
 ## Status

@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-24
+updated: 2026-10-31
 ---
 
 # Contract — hosting: Postgres backups off the node
@@ -58,6 +58,13 @@ marker and removing it restored the object; with S3 stopped repo1 took the
 next segment while the archiver retried, and S3 back, repo2 caught up on its
 own; a new empty repo2 got its full at the loop's start, repo1 none. Test:
 `dev-docker/postgres/test_pgbackrest_repo.py` (the written settings).
+
+**K20 — A missed Sunday full is taken the next night.** H3's `diff` night
+becomes a `full` when any repository's newest full is 7 days old or more, or it
+has none. Retention counts fulls (`repo1-retention-full=2`), so a stack down on
+Sunday otherwise keeps every WAL segment for another week: dev, down
+2026-10-25..29, held three weeks of it, 5.2 GB at ~500 MB a day. Test:
+`dev-docker/postgres/test_pg_backup.py`.
 
 ## Consumes
 
