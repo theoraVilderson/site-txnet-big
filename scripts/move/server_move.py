@@ -33,6 +33,7 @@ DISK_HEADROOM = 1.2
 # archive_timeout is 60s (H1): one switched segment is out well inside this.
 ARCHIVE_WAIT_S = 90
 WAIT_TIMEOUT_S = "600"
+READY_POLL_S = 5
 # Byte digests are compared before the new server starts, live figures after its data services do.
 BYTE_FIGURES = ("bytes:",)
 LIVE_FIGURES = ("pg:", "redis:", "mq:")
@@ -182,9 +183,31 @@ class Move:
         self.copy_files()
         say("building and pulling the images on the new server, so the cutover does not wait for them")
         self.there.compose("build")
-        self.there.compose("pull", "--ignore-buildable", "--quiet")
+        pulled = mp.pulled_services(self.config)
+        if pulled:  # `compose pull` with no names pulls every service
+            self.there.compose("pull", "--quiet", *pulled)
+        self.install_node_trees()
         self.copy_dirs(mp.quick_rsync)
         say("presync done; the stack is still serving here. Repeat it, or run cutover.")
+
+    def node_trees(self):
+        """mp.node_trees with a package.json here: the trees whose node_modules npm installs."""
+        return [(tree, image, target) for tree, image, target in mp.node_trees(self.config, self.root)
+                if os.path.isfile(os.path.join(self.root, tree, "package.json"))]
+
+    def install_node_trees(self):
+        """npm ci on the new server inside the image the tree runs in, so native modules
+        (Prisma's engine, swc) are built for that runtime, not for whatever Node is there."""
+        for tree, image, target in self.node_trees():
+            with open(os.path.join(self.root, tree, "package.json")) as f:
+                script = mp.install_script(json.load(f))
+            say("installing %s's node_modules on the new server (%s)", tree, script)
+            self.there.run(["docker", "run", "--rm", "-v", "%s:%s" % (os.path.join(self.root, tree), target),
+                            "-w", target, image, "sh", "-c", script])
+
+    def uninstalled_trees(self):
+        return [tree for tree, _, _ in self.node_trees()
+                if self.there.sh('[ -d "$1" ] || echo missing', os.path.join(self.root, tree, "node_modules")).strip()]
 
     def refuse_if_blocked(self):
         problems = self.check()
@@ -199,6 +222,9 @@ class Move:
         absent = [s for s in mp.DATA_SERVICES if s not in running]
         if absent:
             raise Abort("%s not running here: nothing to read the figures from; nothing was stopped" % ", ".join(absent))
+        uninstalled = self.uninstalled_trees()
+        if uninstalled:
+            raise Abort("no node_modules on the new server for %s: run presync; nothing was stopped" % ", ".join(uninstalled))
         self.save_services(running)
         source = self.stop_here(running)
         self.copy_dirs(mp.checksum_rsync)
@@ -270,7 +296,8 @@ class Move:
         live = mh.live_figures(self.there, mh.redis_password(self.config))
         self.gate(source, live, LIVE_FIGURES)
         say("starting the other %d services on the new server", len(running) - len(data))
-        self.there.compose("up", "-d", "--wait", "--wait-timeout", WAIT_TIMEOUT_S, *running)
+        self.there.compose("up", "-d", *running)
+        self.wait_ready(running)
         monitor = self.monitor_command()
         if monitor:
             self.there.run(monitor)
@@ -278,6 +305,20 @@ class Move:
             # a baseline taken on the new server, whatever the copied repository holds (runbook step 4)
             self.there.compose("exec", "-d", "pg-backup", "sh", "/usr/local/bin/pg-backup.sh", "full")
         say("done: the platform runs on %s. Now point Cloudflare at it (runbook, 'After').", self.there.ssh)
+
+    def wait_ready(self, services):
+        """Every service running healthy within WAIT_TIMEOUT_S. Not `up --wait`: it gives up on
+        the first "unhealthy", and a dev service's first build on a cold server (air, webpack)
+        outlasts its healthcheck, then turns healthy."""
+        deadline = time.monotonic() + int(WAIT_TIMEOUT_S)
+        while True:
+            rows = [json.loads(line) for line in self.there.compose("ps", "--format", "json").splitlines() if line]
+            waiting = mp.not_ready(rows, services)
+            if not waiting:
+                return
+            if time.monotonic() > deadline:
+                raise Abort("not healthy after %ss on the new server: %s" % (WAIT_TIMEOUT_S, ", ".join(waiting)))
+            time.sleep(READY_POLL_S)
 
     def monitor_command(self):
         """The `compose up` that started the monitoring stack here, rebuilt from its labels; None when it is not running."""

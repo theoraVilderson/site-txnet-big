@@ -2,6 +2,7 @@
 
 Run: python3 -m unittest scripts/move/test_server_move.py
 """
+import json
 import os
 import shutil
 import subprocess
@@ -25,6 +26,69 @@ def compose_config(volumes, binds=None):
         for name, pairs in (binds or {}).items()
     }
     return {"name": "devtxnet", "volumes": {k: {"name": "devtxnet_" + k} for k in volumes}, "services": services}
+
+
+class PulledServices(unittest.TestCase):
+    # Rehearsal 2026-10-31: pg-backup runs main-db's built txnet/postgres:18, has
+    # no build: of its own, and `pull --ignore-buildable` asked Docker Hub for it.
+    def test_an_image_another_service_builds_is_not_pulled(self):
+        config = {"services": {
+            "main-db": {"image": "txnet/postgres:18", "build": {"context": "./postgres"}},
+            "pg-backup": {"image": "txnet/postgres:18"},
+            "auth-service": {"build": {"context": "../txnet-backend"}},
+            "rabbitmq": {"image": "mirror.example/rabbitmq:4.2"},
+        }}
+        self.assertEqual(mp.pulled_services(config), ["rabbitmq"])
+
+
+def bind(source, target):
+    return {"type": "bind", "source": source, "target": target}
+
+
+class NodeTrees(unittest.TestCase):
+    # Rehearsal 2026-10-31: dev's Nest services and site-pwa run on the host
+    # checkout's node_modules, which git does not hold; on the new server every
+    # one of them failed "Cannot find module 'webpack'".
+    def config(self, root):
+        node = "mirror.example/node:24-bookworm"
+        return {"services": {
+            "auth-service": {"image": node, "volumes": [bind(f"{root}/txnet-backend", "/app")]},
+            "bot-service": {"image": node, "volumes": [bind(f"{root}/txnet-backend", "/app")]},
+            "site-pwa": {"image": "dev_site-pwa", "build": {"context": "../site-pwa"}, "volumes": [
+                bind(f"{root}/site-pwa", "/app"), bind(f"{root}/site-pwa/node_modules", "/app/node_modules")]},
+            "coinsite": {"image": "dev_coinsite", "build": {"context": "../coinsite"}, "volumes": [
+                bind(f"{root}/coinsite", "/app"), {"type": "volume", "target": "/app/node_modules"}]},
+            "main-db": {"image": "txnet/postgres:18", "volumes": [bind("/var/lib/x", "/var/lib/postgresql")]},
+            "locale-service": {"build": {"context": "../i18n-platform"}, "volumes": [bind(f"{root}/locales", "/locales")]},
+        }}
+
+    def test_a_tree_running_on_the_host_s_node_modules_is_installed_in_its_own_image(self):
+        trees = mp.node_trees(self.config("/r"), "/r")
+        self.assertEqual(trees, [("site-pwa", "dev_site-pwa", "/app"),
+                                 ("txnet-backend", "mirror.example/node:24-bookworm", "/app")])
+
+    def test_a_tree_whose_node_modules_the_image_keeps_is_not(self):
+        self.assertNotIn("coinsite", [t for t, _, _ in mp.node_trees(self.config("/r"), "/r")])
+
+    def test_prisma_is_generated_only_where_the_package_names_a_schema(self):
+        self.assertEqual(mp.install_script({"prisma": {"schema": "prisma/domains"}}), "npm ci && npx prisma generate")
+        self.assertEqual(mp.install_script({"name": "site-pwa"}), "npm ci")
+
+
+class NotReady(unittest.TestCase):
+    # Rehearsal 2026-10-31: network-service's first `air` build on a server with no Go
+    # cache outlasted its healthcheck; `up --wait` gave up on "unhealthy" a minute
+    # before it listened. Not ready is waited on; only the timeout fails.
+    def rows(self, **health):
+        return [{"Service": s, "State": "running", "Health": h} for s, h in health.items()]
+
+    def test_unhealthy_and_starting_are_not_ready_yet(self):
+        rows = self.rows(api="healthy", net="unhealthy", web="starting", mail="")
+        self.assertEqual(mp.not_ready(rows, ["api", "net", "web", "mail"]), ["net", "web"])
+
+    def test_a_service_not_running_or_not_listed_is_not_ready(self):
+        rows = [{"Service": "api", "State": "restarting", "Health": ""}]
+        self.assertEqual(mp.not_ready(rows, ["api", "bot"]), ["api", "bot"])
 
 
 class StateVolumes(unittest.TestCase):
@@ -238,6 +302,8 @@ class FakeHost:
             return "\n".join(RUNNING)
         if args[:3] == ("exec", "-T", "main-db"):
             return "off"  # archive_mode: the WAL flush is H1's, not this test's
+        if args[:3] == ("ps", "--format", "json"):
+            return "\n".join(json.dumps({"Service": s, "State": "running", "Health": "healthy"}) for s in RUNNING)
         return ""
 
     def run(self, argv, stdin=None):
@@ -304,7 +370,8 @@ class Cutover(unittest.TestCase):
         self.move().cutover()
         wait = ("--wait", "--wait-timeout", sm.WAIT_TIMEOUT_S)
         start_data = self.index("new", "up", "-d", *wait, *mp.DATA_SERVICES)
-        self.assertLess(start_data, self.index("new", "up", "-d", *wait, *RUNNING))
+        self.assertLess(start_data, self.index("new", "up", "-d", *RUNNING))
+        self.assertLess(self.index("new", "up", "-d", *RUNNING), self.index("new", "ps", "--format", "json"))
         with open(self.marker()) as f:
             self.assertIn("new", f.read())
 

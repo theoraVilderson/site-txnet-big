@@ -103,6 +103,44 @@ def service_environment(config, service):
     return environment
 
 
+def pulled_services(config):
+    """Services whose image comes from a registry: neither built here nor built by another
+    service (pg-backup runs main-db's txnet/postgres:18, which no registry holds)."""
+    services = config["services"]
+    built = {s.get("image") for s in services.values() if s.get("build")}
+    return sorted(name for name, s in services.items() if not s.get("build") and s.get("image") not in built)
+
+
+def node_trees(config, root):
+    """(path under root, image, mount target) for each checkout tree a service runs on with
+    the host's own node_modules, which git does not hold. Either the service binds the
+    host's `<tree>/node_modules` (site-pwa), or it builds nothing and runs a stock image
+    on the tree (dev's Nest services). One with a build of its own that covers or ignores
+    node_modules (coinsite, locale-service) runs on what its image holds, and is skipped."""
+    prefix = root.rstrip("/") + "/"
+    trees = {}
+    for service in config["services"].values():
+        binds = {v["source"]: v["target"] for v in service.get("volumes") or []
+                 if v.get("type") == "bind" and (v.get("source") or "").startswith(prefix)}
+        for source, target in binds.items():
+            host_modules = binds.get(source + "/node_modules") == target + "/node_modules"
+            if host_modules or (not service.get("build") and service.get("image")):
+                trees.setdefault(os.path.relpath(source, root), (service.get("image"), target))
+    return sorted((tree, image, target) for tree, (image, target) in trees.items())
+
+
+def install_script(package):
+    """npm ci, then Prisma's client where the package names a schema (node_modules/.prisma)."""
+    return "npm ci && npx prisma generate" if "prisma" in package else "npm ci"
+
+
+def not_ready(rows, services):
+    """The services of `compose ps --format json` rows not yet running healthy. No
+    healthcheck (Health "") counts as ready once running; one not listed is not ready."""
+    ready = {r["Service"] for r in rows if r.get("State") == "running" and r.get("Health") in ("", "healthy")}
+    return [s for s in services if s not in ready]
+
+
 def rabbitmq_node(config):
     """The node name compose gives rabbitmq; its queues live in a directory of that name."""
     return service_environment(config, "rabbitmq").get("RABBITMQ_NODENAME", "")

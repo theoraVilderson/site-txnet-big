@@ -132,4 +132,9 @@ Move back instead, with this runbook in the other direction.
 
 `hosting` (`docs/platform/hosting/`). Built 2026-10-23 (OPS-1-ac). Rehearsed
 on dev: check 3 (RabbitMQ's node name), and every reader of `check` and `cutover` on the
-live stack; the copy between two servers is not yet rehearsed.
+live stack. Rehearsed between two servers 2026-10-31 (dev, to an empty 4-core
+host and back by `rollback`): 242 tables, Redis and the queues matched; cutover
+2 min, rollback 1 min. It found three faults, fixed in `scripts/move/`: an image
+another service builds was pulled (`pulled_services`), dev's host node_modules
+were not installed (`node_trees`, `npm ci` in presync inside the tree's own
+image), and `up --wait` gave up on a first cold build (`wait_ready`).
