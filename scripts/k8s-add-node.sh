@@ -11,6 +11,8 @@
 #                                                      registries.yaml (K14), then Ready and on WireGuard
 #   scripts/k8s-add-node.sh remove <host> [ssh-port]   drain and delete the node, uninstall k3s there,
 #                                                      both chains gone and its address out of the peers
+#   scripts/k8s-add-node.sh leave                      on the node: the same uninstall, for a node whose
+#                                                      server is gone (a cluster move, K21)
 #
 #   NODE_PRIVATE_IP    the other server's address on a private network shared with this one; then
 #   SERVER_PRIVATE_IP  this one's: the API and flannel go over it (K17). Unset: the public addresses
@@ -61,13 +63,13 @@ die() {
 }
 
 usage() {
-  sed -n '2,19p' "$0" >&2
+  sed -n '2,21p' "$0" >&2
   exit 2
 }
 
-[ $# -ge 2 ] || usage
+[ "${1:-}" = leave ] || [ $# -ge 2 ] || usage
 CMD="$1"
-HOST="$2"
+HOST="${2:-}"
 PORT="${3:-22}"
 SSH=(ssh -p "$PORT" -o BatchMode=yes -o ConnectTimeout=15)
 SCP=(scp -q -P "$PORT" -o BatchMode=yes)
@@ -157,6 +159,24 @@ peer_add() {
   install -d -m 0755 "$(dirname "$PEERS_FILE")"
   grep -qx "$1" "$PEERS_FILE" 2>/dev/null || echo "$1" >>"$PEERS_FILE"
   python3 "$ROOT_DIR/scripts/edge/k3s_ports.py" apply
+}
+
+# What a node runs to leave: k3s and both chains gone (remove sends it; leave runs it here,
+# for a node whose server is already fenced, OPS-1-am-a).
+leave_script() {
+  cat <<EOF
+set -euo pipefail
+[ ! -x /usr/local/bin/k3s-agent-uninstall.sh ] || /usr/local/bin/k3s-agent-uninstall.sh
+systemctl disable --now txnet-k3s-ports.timer txnet-k3s-ports.service 2>/dev/null || true
+rm -f /etc/systemd/system/txnet-k3s-ports.service /etc/systemd/system/txnet-k3s-ports.timer
+systemctl daemon-reload
+[ ! -e $EDGE_DIR/k3s_ports.py ] || python3 $EDGE_DIR/k3s_ports.py remove
+[ ! -e $EDGE_DIR/edge_firewall.py ] || python3 $EDGE_DIR/edge_firewall.py remove
+# A node joined before NIN-1-b2 runs the script under its former name.
+[ ! -e $EDGE_DIR/cloudflare_firewall.py ] || python3 $EDGE_DIR/cloudflare_firewall.py remove
+rm -rf $EDGE_DIR $PEERS_FILE $EDGE_RANGES $EDGE_RANGES_CRON $EDGE_FIREWALL_CRON /etc/cron.d/txnet-cloudflare-firewall \
+  /var/lib/txnet/cloudflare-ips.json /etc/sysctl.d/90-txnet-k3s.conf
+EOF
 }
 
 peer_remove() {
@@ -257,19 +277,7 @@ remove() {
     kubectl drain "$NODE_NAME" --ignore-daemonsets --delete-emptydir-data --timeout="$NODE_READY_TIMEOUT"
     kubectl delete node "$NODE_NAME"
   fi
-  remote "bash -s" <<EOF
-set -euo pipefail
-[ ! -x /usr/local/bin/k3s-agent-uninstall.sh ] || /usr/local/bin/k3s-agent-uninstall.sh
-systemctl disable --now txnet-k3s-ports.timer txnet-k3s-ports.service 2>/dev/null || true
-rm -f /etc/systemd/system/txnet-k3s-ports.service /etc/systemd/system/txnet-k3s-ports.timer
-systemctl daemon-reload
-[ ! -e $EDGE_DIR/k3s_ports.py ] || python3 $EDGE_DIR/k3s_ports.py remove
-[ ! -e $EDGE_DIR/edge_firewall.py ] || python3 $EDGE_DIR/edge_firewall.py remove
-# A node joined before NIN-1-b2 runs the script under its former name.
-[ ! -e $EDGE_DIR/cloudflare_firewall.py ] || python3 $EDGE_DIR/cloudflare_firewall.py remove
-rm -rf $EDGE_DIR $PEERS_FILE $EDGE_RANGES $EDGE_RANGES_CRON $EDGE_FIREWALL_CRON /etc/cron.d/txnet-cloudflare-firewall \
-  /var/lib/txnet/cloudflare-ips.json /etc/sysctl.d/90-txnet-k3s.conf
-EOF
+  leave_script | remote "bash -s"
   peer_remove "$NODE_ADDR"
   echo "$NODE_NAME has left the cluster"
 }
@@ -278,5 +286,6 @@ case "$CMD" in
   check) check ;;
   join) join ;;
   remove) remove ;;
+  leave) leave_script | bash -s ;;
   *) usage ;;
 esac

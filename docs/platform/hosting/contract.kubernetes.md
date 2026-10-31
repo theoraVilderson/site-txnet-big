@@ -239,7 +239,7 @@ pod holding state and the one Cloudflare entry kept on the server. Rules in `con
 **K18 — A move between servers.** With a second node: join it (K17), promote
 Postgres's standby there (H22), stop and copy Redis and RabbitMQ, move the data
 label, drain and remove the old node (OPS-1-o-r). Until then a move is a bundle
-restored into a new cluster (OPS-1-o-k, B9).
+restored into a new cluster (OPS-1-o-k, B9), fenced by K21.
 
 **K19 — The memory fit** (OPS-1-o-n). Each workload's compose file sets
 `mem_reservation`, its request (measured peak + headroom), and `mem_limit`, its

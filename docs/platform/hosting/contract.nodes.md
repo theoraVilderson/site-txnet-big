@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-24
+updated: 2026-10-31
 ---
 
 # Contract — hosting: more than one node
@@ -98,3 +98,35 @@ both nodes Ready in seconds at 1–2 ms; a pod on the new node resolved through
 CoreDNS on the server and pinged a pod there in 2.3 ms; the route to the
 server's pods left by `flannel-wg`, with no `flannel.1` on either node; the
 server reached the node's kubelet through the peer `ACCEPT`.
+
+**K21 — A cluster move has one writer at any moment** (OPS-1-am, user
+2026-10-31). Every dedupe table, the outbox and pgBackRest's stanza live per
+database, so two clusters holding the same data each send: a message, a
+notice, a charge, a WAL segment. `scripts/move/cluster_move.py` (build host,
+ssh to both; `cluster_fence.py` decides, `cluster_open.py` the second half)
+runs one step per command, each refused out of order:
+
+- **The new server is mute from the start.** Before k3s is installed, an nft
+  table drops everything it and its pods send out but replies, the registry's
+  addresses (443) and its resolvers (53); a systemd unit before `k3s.service`
+  reloads it at boot. The bot registers its webhook at boot, so a deploy that
+  could reach Telegram would take the webhook from production. k3s and the
+  age key come from the build host and the old server, never from GitHub.
+- **The old cluster at zero, checked.** `stop` scales every Deployment and
+  StatefulSet in both namespaces but the stores to zero (monitoring too: it
+  sends alerts), disables the bundle and ship timers (the same S3 bucket), and
+  waits until no pod but a store's or a DaemonSet's lives. `bundle` checks it
+  again, makes a fresh bundle, and refuses one older than the stop.
+- **Restored whole.** B10's restore with `--replace` and never `--scrub`;
+  refused under staging's `NODE_EXEC`. A bank callback lost in the stop is
+  settled on the new side by reconciliation (OPS-1-am-b, F-092-l).
+- **Opened only beside a fenced old server, read again then.** `fence` takes
+  the stores to zero, writes `/etc/txnet/moved-to` (`prod.k8s.sh` refuses
+  deploy, rollback and registries beside it; `TXNET_MOVED_OK=1` on the user's
+  word) and stops and disables k3s; the data stays until the user says.
+  `open` asks the old server again, unmutes, restarts the bot. `repoint` moves
+  both edges with `edge_zone.py` and refuses `mytxnet.ir` without
+  `MOVE_LIVE_DOMAIN_OK`. `rejoin` makes the build host leave
+  (`k8s-add-node.sh leave`) and join the new server with `NODE_NO_RELEASE=1`.
+- **A rehearsal** (`rehearse`) runs check…restore with production's newest
+  nightly bundle: production is only read; the new server stays mute.

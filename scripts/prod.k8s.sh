@@ -414,6 +414,16 @@ smoke() {
 # Sourced by tools/k8s_release_test.py, which drives deploy and rollback with a fake kubectl.
 [ "${BASH_SOURCE[0]}" = "$0" ] || return 0
 
+# K21: production moved off this server; a deploy here would be a second writer.
+# TXNET_MOVED_OK=1 is the rollback, on the user's word.
+MOVED_MARKER="${MOVED_MARKER:-/etc/txnet/moved-to}"
+case "${1:-}" in
+  deploy | rollback | registries)
+    if [ -f "$MOVED_MARKER" ] && [ "${TXNET_MOVED_OK:-}" != 1 ]; then
+      die "refused: production moved to $(cat "$MOVED_MARKER") — docs/operations/runbook-move-cluster.md"
+    fi ;;
+esac
+
 case "${1:-}" in
   build) build ;;
   push) push ;;
