@@ -78,7 +78,8 @@ $MOVE cutover
 
 In order, stopping at the first failure:
 
-1. stops every service but `main-db`, `memory-data`, `rabbitmq` (nothing writes);
+1. disables the bundle and ship timers here (one server ships to S3), then stops
+   every service but `main-db`, `memory-data`, `rabbitmq` (nothing writes);
 2. pushes the last WAL segment into the archive and waits for it;
 3. reads the figures: every table's row count, Redis keys with and without a
    TTL, queued messages; then stops the data services cleanly (Redis writes its
@@ -93,7 +94,8 @@ In order, stopping at the first failure:
    exactly, keys with no TTL exactly, keys with a TTL and queued messages may only
    be fewer (expired during the move), never zero and never more;
 8. starts everything that ran here; starts monitoring if it ran; starts a full
-   pgBackRest backup there as the new baseline.
+   pgBackRest backup there as the new baseline; installs the bundle and ship
+   timers there (`rollback` disables them there and installs them here again).
 
 ### 3. Switch the address
 

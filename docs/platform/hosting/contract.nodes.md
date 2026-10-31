@@ -125,7 +125,9 @@ runs one step per command, each refused out of order:
   the stores to zero, writes `/etc/txnet/moved-to` (`prod.k8s.sh` refuses
   deploy, rollback and registries beside it; `TXNET_MOVED_OK=1` on the user's
   word) and stops and disables k3s; the data stays until the user says.
-  `open` asks the old server again, unmutes, restarts the bot. `repoint` moves
+  `open` asks the old server again, unmutes, restarts the bot, and installs
+  the bundle and ship timers there — the restore ran with `--no-timers`, and
+  `open` fails if either is not active (OPS-1-am-e). `repoint` moves
   both edges with `edge_zone.py` and refuses `mytxnet.ir` without
   `MOVE_LIVE_DOMAIN_OK`. A node of the old cluster leaves with
   `k8s-add-node.sh leave`, run on it (its server is gone).

@@ -18,6 +18,9 @@ import move_plan as mp  # noqa: E402
 import move_projects as mj  # noqa: E402
 import server_move as sm  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "bundle"))
+import bundle_timers as bt  # noqa: E402
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -432,6 +435,23 @@ class Cutover(unittest.TestCase):
         self.assertLess(self.index("new", "up", "-d", *RUNNING), self.index("new", "ps", "--format", "json"))
         with open(self.marker()) as f:
             self.assertIn("new", f.read())
+
+    # OPS-1-am-e: the nightly bundle and the ship follow the platform: never on both servers, never on neither
+    def test_the_backup_timers_stop_here_before_the_stop_and_start_there_once_it_serves(self):
+        self.move().cutover()
+        self.assertLess(self.index("here", "run", *bt.DISABLE_ARGV),
+                        self.index("here", "stop", "auth-service", "gateway-handler"))
+        self.assertLess(self.index("new", "ps", "--format", "json"),
+                        self.index("new", "run", *bt.install_argv(self.root, "dev")))
+
+    def test_rollback_moves_the_backup_timers_back(self):
+        with self.assertRaises(sm.Abort):
+            self.move(there_figures={**FIGURES, "pg:identity.user": 41}).cutover()
+        self.assertFalse(any(e[:2] == ("new", "run") and "install-timers" in e for e in self.log))
+        self.log.clear()
+        self.move().rollback()
+        self.assertLess(self.index("new", "run", *bt.DISABLE_ARGV),
+                        self.index("here", "run", *bt.install_argv(self.root, "dev")))
 
     def test_a_copy_whose_bytes_differ_is_never_started_and_this_server_is_not_fenced(self):
         with self.assertRaises(sm.Abort):

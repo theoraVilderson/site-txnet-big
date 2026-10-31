@@ -60,9 +60,10 @@ def stale_bundle(created, stop_at):
 
 
 def restore_argv(root, bundle, passphrase):
-    """B10's restore over the new cluster's seeded data; never --scrub (that is staging's, R16)."""
+    """B10's restore over the new cluster's seeded data; never --scrub (that is staging's, R16).
+    No timers yet: the new server bundles and ships from `open`, once the old one is fenced."""
     return ["python3", os.path.join(root, "scripts/bundle/backup.py"), "--stack", "k8s",
-            "restore", bundle, "--replace", "--passphrase-file", passphrase]
+            "restore", bundle, "--replace", "--passphrase-file", passphrase, "--no-timers"]
 
 
 def refuse_scrub(env):

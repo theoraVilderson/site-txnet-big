@@ -4,11 +4,14 @@ Run: python3 -m unittest scripts/bundle/test_bundle.py
 """
 import datetime
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
 import bundle_plan as bp  # noqa: E402
+import bundle_timers as bt  # noqa: E402
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "move"))
 import move_figures as mf  # noqa: E402
@@ -174,6 +177,41 @@ class Restore(unittest.TestCase):
         br.run_scrub([sys.executable, "-c", sees_work], "/w", say=lambda *a: None)
         with self.assertRaisesRegex(br.Abort, "stays stopped"):
             br.run_scrub([sys.executable, "-c", "raise SystemExit(1)"], "/w", say=lambda *a: None)
+
+
+class Timers(unittest.TestCase):
+    # OPS-1-am-e: the server a bundle comes back on bundles and ships from then on, with no step to forget
+    def setUp(self):
+        self.units = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.units)
+        self.installed = []
+
+    def after(self, skip=False):
+        return bt.after_restore("/root/x", "k8s", skip, self.units, lambda root, stack: self.installed.append((root, stack)) or list(bt.TIMERS))
+
+    def test_a_restore_onto_a_server_without_them_installs_them_for_its_checkout_and_stack(self):
+        self.assertIn("enabled", self.after())
+        self.assertEqual(self.installed, [("/root/x", "k8s")])
+
+    def test_a_server_that_has_them_keeps_its_own(self):
+        # the dev host restoring into a throwaway k3s keeps bundling dev
+        open(os.path.join(self.units, bt.TIMERS[0]), "w").close()
+        self.assertIn("kept", self.after())
+        self.assertEqual(self.installed, [])
+
+    def test_a_cluster_move_defers_them_to_its_open(self):
+        self.assertIn("not installed", self.after(skip=True))
+        self.assertEqual(self.installed, [])
+
+    def test_the_install_command_runs_from_that_server_s_checkout(self):
+        self.assertEqual(bt.install_argv("/root/x", "dev"),
+                         ["python3", "/root/x/scripts/bundle/backup.py", "--stack", "dev", "install-timers"])
+
+    def test_a_timer_not_active_is_named(self):
+        # `systemctl is-active a b` answers one line per unit, in order
+        self.assertEqual(bt.inactive("active\ninactive\n"), [bt.TIMERS[1]])
+        self.assertEqual(bt.inactive("active\nactive\n"), [])
+        self.assertEqual(bt.inactive(""), list(bt.TIMERS))
 
 
 if __name__ == "__main__":

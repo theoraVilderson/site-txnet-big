@@ -55,6 +55,11 @@ the sealed secrets a restored checkout carries (S3). A wrong one is refused befo
 pgBackRest 01:00 and the files' copy 23:00) and `backup.py now`; one at a time (a lock).
 Seven kept on disk; one not yet in S3 is never deleted while shipping is set up.
 `backup.py install-timers` writes both units from the checkout's own path.
+They follow the platform, with no step to remember (OPS-1-am-e): `restore`
+installs them on a server that has none (`--no-timers` defers them; one that
+has its own keeps them), a server move disables them before its stop and
+installs them on the new server once it serves (rollback reverses both), and a
+cluster move installs them at `open` and refuses to finish if either is inactive.
 
 **B7 — Shipping is separate, and each object is locked as it lands** (user,
 2026-10-23; the lock replaced the write-only key 2026-10-30, NIN-1-i1). `ship.py`,

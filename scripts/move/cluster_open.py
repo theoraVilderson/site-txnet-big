@@ -1,10 +1,15 @@
 """The move's second half: the old cluster fenced, the new one opened, the edges moved
 (OPS-1-am-a, hosting K21). Each step takes (state, old, new) as cluster_move's do."""
 import os
+import shlex
 import subprocess
+import sys
 import time
 
 import cluster_fence as cf
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bundle"))
+import bundle_timers as bt  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CHECKOUT = "/root/site-txnet-big"
@@ -51,8 +56,13 @@ def open_(state, old, new):
     # the bot registered its webhook at boot, while mute (bot-webhook.registrar.ts)
     new.run("kubectl -n txnet rollout restart deployment/bot-service && "
             "kubectl -n txnet rollout status deployment/bot-service --timeout=600s", timeout=WAIT_S)
+    # the only writer now: it bundles and ships from here on (OPS-1-am-e)
+    new.run("cd %s && %s" % (CHECKOUT, shlex.join(bt.install_argv(CHECKOUT, "k8s"))))
+    left = bt.inactive(new.run("systemctl is-active %s" % " ".join(bt.TIMERS), check=False))
+    if left:
+        raise cf.MoveError("%s serves but takes no backup: %s not active" % (new.address, ", ".join(left)))
     state.setdefault("figures", {})["open_at"] = int(time.time())
-    say("%s sends again; the bot re-registered", new.address)
+    say("%s sends again; the bot re-registered; it bundles and ships", new.address)
 
 
 def edge_env():

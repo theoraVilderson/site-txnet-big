@@ -1,7 +1,9 @@
 """The two systemd timers: the nightly bundle and the ship every 10 minutes (OPS-1-ad).
 
 Written from this checkout's path and stack, so the units never name a path
-that is not there (scripts/dev-guard's units hardcode theirs).
+that is not there (scripts/dev-guard's units hardcode theirs). They follow the
+platform (OPS-1-am-e): a restore installs them, and a move stops them on the
+server it leaves and starts them on the one it opens.
 """
 import os
 import subprocess
@@ -39,6 +41,36 @@ UNITS = {
     "txnet-backup-ship": ("Send TXNet backup bundles to S3", "ship.py",
                           "OnBootSec=5min\nOnUnitActiveSec=" + SHIP_EVERY),
 }
+
+TIMERS = tuple(name + ".timer" for name in UNITS)
+# Stops and disables whichever of TIMERS this server has; a server that never had them is not an error.
+DISABLE_ARGV = ["sh", "-c", 'd=$1; shift; for t; do [ ! -e "$d/$t" ] || systemctl disable --now "$t" || exit 1; done',
+                "_", UNIT_DIR, *TIMERS]
+
+
+def install_argv(root, stack):
+    """`install-timers` run from the checkout at root, as a move sends it to the other server."""
+    return ["python3", os.path.join(root, "scripts/bundle/backup.py"), "--stack", stack, "install-timers"]
+
+
+def inactive(is_active_output):
+    """The timers `systemctl is-active <TIMERS>` did not answer `active` for."""
+    answers = is_active_output.split()
+    return [timer for i, timer in enumerate(TIMERS) if i >= len(answers) or answers[i] != "active"]
+
+
+def present(unit_dir=UNIT_DIR):
+    return any(os.path.exists(os.path.join(unit_dir, timer)) for timer in TIMERS)
+
+
+def after_restore(root, stack, skip, unit_dir=UNIT_DIR, install_fn=None):
+    """Installs the timers on a server a bundle just came back on; returns what to say.
+    One that has them keeps its own: the dev host restoring into a throwaway k3s still bundles dev."""
+    if skip:
+        return "backup timers not installed (--no-timers): the move's `open` installs them"
+    if present(unit_dir):
+        return "backup timers kept: this server already has its own"
+    return "backup timers enabled: %s" % ", ".join((install_fn or install)(root, stack))
 
 
 def install(root, stack):

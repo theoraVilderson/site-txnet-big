@@ -107,6 +107,8 @@ def main(argv=None):
     parser.add_argument("--replace", action="store_true", help="restore over this server's data (a safety bundle first)")
     parser.add_argument("--allow-newer-code", action="store_true", help="restore into a checkout newer than the bundle")
     parser.add_argument("--checkout", default=ROOT, help="restore: the checkout the stack runs from, when not this one")
+    parser.add_argument("--no-timers", action="store_true",
+                        help="restore: leave the backup timers uninstalled (a cluster move installs them at `open`)")
     parser.add_argument("--scrub", help="restore: a command run after the stores and before any service starts; "
                         "its failure leaves every service stopped")
     args = parser.parse_args(argv)
@@ -121,7 +123,7 @@ def main(argv=None):
         "install-timers": lambda: say("enabled: %s", ", ".join(bt.install(ROOT, args.stack))),
         "inspect": lambda: open_and(args, host, lambda work, manifest, _: print_manifest(manifest)),
         "verify": lambda: open_and(args, host, lambda work, manifest, _: [say(line) for line in br.drill(host, work, manifest)]),
-        "restore": lambda: open_and(args, host, lambda work, manifest, pf: br.restore(host, args.checkout, work, manifest, pf, options, say)),
+        "restore": lambda: restore(args, host, options),
     }
     try:
         actions[args.command]()
@@ -131,6 +133,11 @@ def main(argv=None):
     finally:
         host.close()
     return 0
+
+
+def restore(args, host, options):
+    open_and(args, host, lambda work, manifest, pf: br.restore(host, args.checkout, work, manifest, pf, options, say))
+    say(bt.after_restore(args.checkout, args.stack, args.no_timers))
 
 
 def print_manifest(manifest):

@@ -49,7 +49,7 @@ $MOVE check; $MOVE mute; $MOVE install; $MOVE deploy   # platform still up
 $MOVE stop        # down from here
 $MOVE bundle; $MOVE restore
 $MOVE fence       # old: k3s stopped and disabled, data kept, marker written
-$MOVE open        # new: unmuted, the bot re-registers
+$MOVE open        # new: unmuted, the bot re-registers, bundle + ship timers installed
 $MOVE repoint     # Cloudflare and Arvan to the new address
 ```
 

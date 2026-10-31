@@ -22,6 +22,9 @@ import move_hosts as mh
 import move_plan as mp
 import move_projects as mj
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bundle"))
+import bundle_timers as bt  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 MOVE_DIR = ".move"
 SERVICES_FILE = os.path.join(MOVE_DIR, "services.json")
@@ -248,6 +251,8 @@ class Move:
         if uninstalled:
             raise Abort("no node_modules on the new server for %s: run presync; nothing was stopped" % ", ".join(uninstalled))
         self.save_services(running)
+        # one server bundles and ships at a time (OPS-1-am-e); rollback starts them here again
+        self.here.run(bt.DISABLE_ARGV)
         source = self.stop_here(running)
         self.copy_dirs(mp.checksum_rsync)
         self.copy_files()
@@ -323,6 +328,7 @@ class Move:
         if "pg-backup" in running:
             # a baseline taken on the new server, whatever the copied repository holds (runbook step 4)
             self.there.compose("exec", "-d", "pg-backup", "sh", "/usr/local/bin/pg-backup.sh", "full")
+        self.there.run(bt.install_argv(self.root, self.there.stack))
         say("done: the platform runs on %s. Now point Cloudflare at it (runbook, 'After').", self.there.ssh)
 
     def wait_ready(self, services):
@@ -349,6 +355,7 @@ class Move:
         saved = self.saved()
         say("stopping the stack on %s", self.there.ssh)
         self.there.compose("stop")
+        self.there.run(bt.DISABLE_ARGV)
         mj.Projects(self.there, self.projects.names).stop()
         marker = os.path.join(self.root, mp.MOVED_MARKER)
         if os.path.exists(marker):
@@ -357,6 +364,7 @@ class Move:
         self.here.compose("start", *saved["services"])
         for command in saved.get("projects", []):
             self.here.run(command)
+        self.here.run(bt.install_argv(self.root, self.here.stack))
         say("rolled back: this server serves again. Anything written on the new one since the cutover is not here.")
 
 

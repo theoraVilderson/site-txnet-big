@@ -13,6 +13,9 @@ import unittest
 sys.path.insert(0, os.path.dirname(__file__))
 import cluster_fence as cf  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "bundle"))
+import bundle_timers as bt  # noqa: E402
+
 
 def pod(name, owner_kind, owner, phase="Running", namespace="txnet"):
     return {"metadata": {"name": name, "namespace": namespace,
@@ -54,7 +57,11 @@ class OldAtZero(unittest.TestCase):
 
     def test_the_host_timers_that_reach_outside_are_stopped(self):
         # the nightly bundle and the ship write to the same S3 bucket the new server will
-        self.assertEqual(cf.HOST_TIMERS, ("txnet-backup.timer", "txnet-backup-ship.timer"))
+        self.assertEqual(cf.HOST_TIMERS, bt.TIMERS)
+
+    def test_the_restore_leaves_the_timers_to_open(self):
+        # OPS-1-am-e: the new server bundles and ships once the old one is fenced, not while it is mute
+        self.assertIn("--no-timers", cf.restore_argv("/r", "/b", "/p"))
 
 
 class BundleAfterTheStop(unittest.TestCase):
