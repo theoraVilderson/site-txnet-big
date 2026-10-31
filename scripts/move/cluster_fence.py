@@ -103,7 +103,7 @@ def mute_ruleset(allowed, resolvers):
         body = "\n".join("    " + r for r in rules)
         return "  chain %s {\n    type filter hook %s priority -10; policy drop;\n%s\n  }" % (name, hook, body)
 
-    return "table inet %s {\n%s\n%s\n}\n" % (MUTE_TABLE, chain("out", "output"), chain("fwd", "forward"))
+    return "table inet %s {\n%s\n%s\n}\n" % (MUTE_TABLE, chain("mute_out", "output"), chain("mute_forward", "forward"))
 
 
 def out_of_order(state, step):

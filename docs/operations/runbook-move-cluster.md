@@ -30,6 +30,10 @@ $MOVE status          # figures: each step's seconds
 stops. The new server stays **mute** afterwards: leave it so until the real
 move restores over it.
 
+Rehearsed 2026-10-31: bundle 98s on production (13 MB), transfer 3s, restore
+187s — **~8 minutes down** with the stop and the open. Install 386s and deploy
+245s happen while production still runs.
+
 Downtime estimate = `stop` (scale to zero, from the twin) + a bundle made now
 (the nightly's duration in `journalctl -u txnet-backup`) + `bundle_total_s`
 less its make + `restore_s` + `open`.

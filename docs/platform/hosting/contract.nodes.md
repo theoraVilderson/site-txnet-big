@@ -130,3 +130,12 @@ runs one step per command, each refused out of order:
   (`k8s-add-node.sh leave`) and join the new server with `NODE_NO_RELEASE=1`.
 - **A rehearsal** (`rehearse`) runs check…restore with production's newest
   nightly bundle: production is only read; the new server stays mute.
+
+Rehearsed 2026-10-31 (OPS-1-am-c), test server -> 193.151.153.11 (8 cores,
+23 GB), production only read: the 03:00 bundle (13 MB) restored, 242 tables and
+Redis matched, 39 pods Running, egress still closed. It found what a mute server
+lacks: Ubuntu's `docker compose` (render), k3s's air-gap images, the image
+mirror `DOCKER_REGISTRY` beside the registry, the edges' cached ranges. Figures:
+install 386s, deploy 245s (images cold), bundle 98s on production, transfer 3s,
+restore 187s; the stop, the fence and the open unmeasured (no stop in a
+rehearsal). Downtime estimate: ~8 minutes.

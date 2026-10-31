@@ -4,7 +4,10 @@ Run: python3 -m unittest scripts/move/test_cluster_move.py
 """
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -91,6 +94,15 @@ class Mute(unittest.TestCase):
 
     def test_dns_only_to_the_resolvers(self):
         self.assertIn("ip daddr { 10.202.10.10 } udp dport 53 accept", self.RULES)
+
+    @unittest.skipUnless(shutil.which("nft"), "nft is not installed here")
+    def test_nft_accepts_it(self):
+        # rehearsal 2026-10-31: a chain named `fwd` (an nft keyword) failed at load on the new server
+        with tempfile.NamedTemporaryFile("w", suffix=".nft") as f:
+            f.write(self.RULES)
+            f.flush()
+            done = subprocess.run(["nft", "-c", "-f", f.name], capture_output=True, text=True)
+        self.assertEqual(done.returncode, 0, done.stderr)
 
     def test_a_name_is_not_an_address(self):
         with self.assertRaises(cf.MoveError):

@@ -32,6 +32,9 @@ import time
 import cluster_fence as cf
 import cluster_open as co
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+import k8s_staging  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, ".move", "cluster.json")
 CHECKOUT = "/root/site-txnet-big"
@@ -39,9 +42,14 @@ SHM = "/dev/shm/txnet-move"
 BUNDLE_DIR = "/var/backups/txnet/bundles"
 PASSPHRASE = "dev-docker/secrets/backup-bundle-passphrase"
 CARRIED = ("/etc/rancher/k3s/registries.yaml", "/etc/txnet/age.key",
-           "/usr/local/bin/sops", "/usr/local/bin/age", "/usr/local/bin/age-keygen")
+           "/usr/local/bin/sops", "/usr/local/bin/age-keygen",  # what `prod.k8s.sh install-tools` puts there
+           # the edges' last good ranges: a mute server cannot fetch them (edge_ranges.py, O8)
+           "/var/lib/txnet/edge-ranges/cloudflare.json", "/var/lib/txnet/edge-ranges/arvan.json")
 MUTE_FILE = "/etc/txnet/move-mute.nft"
 MUTE_UNIT = "txnet-move-mute"
+# What render and deploy run there (`docker compose config` renders, K2), installed before
+# the mute: a mute server reaches no apt mirror. The old server's are Ubuntu's own.
+PACKAGES = ("docker.io", "docker-compose-v2", "nftables")
 MAX_CLOCK_SKEW_S = 5
 DISK_HEADROOM = 1.2  # the data grows between the check and the move
 # kubectl waits and the bundle on an 8-core server at load 15 (2026-10-31)
@@ -73,7 +81,8 @@ class Server:
 
     def pull(self, remote, local):
         with open(local, "wb") as f:
-            subprocess.run(self.ssh("cat %s" % shlex.quote(remote)), stdout=f, check=True, timeout=LONG_S)
+            if subprocess.run(self.ssh("cat %s" % shlex.quote(remote)), stdout=f, timeout=LONG_S).returncode != 0:
+                raise cf.MoveError("%s: %s could not be read" % (self.address, remote))
 
     def push(self, local, remote, mode="0600"):
         with open(local, "rb") as f:
@@ -120,9 +129,13 @@ def check(state, old, new):
 
 
 def mute(state, old, new):
+    new.run("apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s >/dev/null" % " ".join(PACKAGES), timeout=LONG_S)
     registry = old.run("python3 -c 'import sys, yaml; print(next(iter(yaml.safe_load(open(sys.argv[1]))[\"configs\"])))' "
                        "/etc/rancher/k3s/registries.yaml").strip()
-    allowed = sorted(set(new.run("getent ahostsv4 %s | cut -d' ' -f1" % shlex.quote(registry)).split()))
+    # the pull mirror for every image we do not build (redis, rabbitmq, grafana: DOCKER_REGISTRY in .env)
+    mirror = old.run("sed -n 's/^DOCKER_REGISTRY=\\([^ #]*\\).*/\\1/p' %s/.env" % CHECKOUT).strip()
+    hosts = [h for h in (registry, mirror) if h]
+    allowed = sorted(set(new.run(" ; ".join("getent ahostsv4 %s | cut -d' ' -f1" % shlex.quote(h) for h in hosts)).split()))
     resolvers = sorted(set(new.run("awk '/^nameserver/{print $2}' /run/systemd/resolve/resolv.conf").split()))
     rules = cf.mute_ruleset(allowed, [r for r in resolvers if ":" not in r])
     unit = ("[Unit]\nDescription=TXNet move: this server sends nothing out (hosting K21)\n"
@@ -136,7 +149,8 @@ def mute(state, old, new):
     if new.run("curl --noproxy '*' -s -m 5 -o /dev/null https://1.1.1.1 && echo open", check=False).strip():
         raise cf.MoveError("%s still reaches 1.1.1.1 with the mute on" % new.address)
     code = new.run("curl --noproxy '*' -s -m 10 -o /dev/null -w '%%{http_code}' https://%s/v2/" % registry, check=False)
-    say("%s is mute: 1.1.1.1 unanswered, the registry %s answers %s (%s)", new.address, registry, code, ", ".join(allowed))
+    say("%s is mute: 1.1.1.1 unanswered, the registry %s answers %s; allowed %s (%s)", new.address, registry, code,
+        " and ".join(hosts), ", ".join(allowed))
 
 
 def install(state, old, new):
@@ -145,7 +159,7 @@ def install(state, old, new):
         for path in CARRIED:  # through memory only: the age key opens every sealed secret
             local = os.path.join(SHM, os.path.basename(path))
             old.pull(path, local)
-            new.push(local, path, "0755" if path.startswith("/usr/local/bin") else "0600")
+            new.push(local, path, "0755" if path.startswith("/usr/local/bin") else "0644" if path.endswith(".json") else "0600")
     finally:
         subprocess.run(["rm", "-rf", SHM], check=True)
     ref = "refs/move/at"
@@ -169,6 +183,9 @@ def install_k3s(new):
     sums = "%s  /usr/local/bin/k3s\n%s  %s\n" % (pins["K3S_SHA256"], pins["K3S_INSTALL_SHA256"], script)
     subprocess.run(["sha256sum", "-c", "--quiet"], input=sums, text=True, check=True)
     new.push("/usr/local/bin/k3s", "/usr/local/bin/k3s", "0755")
+    # k3s's own images (pause, coredns, local-path) come from Docker Hub: mute, the release's archive
+    airgap = k8s_staging.fetch_airgap(pins["K3S_VERSION"])
+    new.push(str(airgap), os.path.join(k8s_staging.AIRGAP_DIR, k8s_staging.AIRGAP_FILE), "0644")
     new.push(script, "/root/k3s-install.sh", "0700")
     new.run("install -m 0600 %s/k8s/k3s/config.yaml /etc/rancher/k3s/config.yaml && "
             "INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_VERSION='%s' sh /root/k3s-install.sh && rm /root/k3s-install.sh "
@@ -180,7 +197,8 @@ def install_k3s(new):
 
 
 def deploy(state, old, new):
-    new.run("cd %s && IMAGE_TAG=%s HOST_GATEWAY=%s scripts/prod.k8s.sh deploy" % (CHECKOUT, state["commit"], new.address),
+    # IMAGE_TAG is the checkout's HEAD, which install set to production's commit (K16)
+    new.run("cd %s && HOST_GATEWAY=%s scripts/prod.k8s.sh deploy" % (CHECKOUT, new.address),
             timeout=LONG_S)
     say("%s runs production's release at %s, empty and mute", new.address, state["commit"][:8])
 
