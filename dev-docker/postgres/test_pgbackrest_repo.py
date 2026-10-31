@@ -66,6 +66,11 @@ class Repo2(unittest.TestCase):
         self.assertEqual(got["repo2-s3-uri-style"], "path")
         self.assertEqual(got["repo2-retention-full"], "45")
 
+    def test_each_stack_has_its_own_path_in_the_bucket(self):
+        # OPS-1-ad-r: dev and production in one bucket must never share a stanza's files
+        self.assertEqual(settings(self.write(**REPO2)[1])["repo2-path"], "/txnet")
+        self.assertEqual(settings(self.write(**REPO2, PG_BACKUP_REPO2_S3_PATH="/dev")[1])["repo2-path"], "/dev")
+
     def test_a_half_set_repo2_is_refused_by_name(self):
         partial = {k: v for k, v in REPO2.items() if k != "PG_BACKUP_REPO2_S3_SECRET"}
         done, _ = self.write(**partial)

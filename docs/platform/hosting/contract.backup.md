@@ -19,7 +19,8 @@ and remains the restore of everything else. Restore steps:
 - **Where.** `repo2`, type `s3`, exists exactly when `PG_BACKUP_REPO2_S3_BUCKET`
   is set, beside whatever H2 made `repo1`: `_ENDPOINT`, `_REGION`, `_KEY`,
   `_SECRET`, `_URI_STYLE` (`host` default, `path` for MinIO and most non-AWS
-  stores), path `/txnet`, `aes-256-cbc` with H2's passphrase.
+  stores), `_PATH` (`/txnet` default; one per stack when stacks share a bucket,
+  OPS-1-ad-r), `aes-256-cbc` with H2's passphrase.
   `pgbackrest-repo.sh` writes it into `conf.d/repo.conf` in `main-db` and
   `pg-backup` alike; a repo2 missing a variable stops the container, naming it.
 - **What.** `archive-push` sends every WAL segment to both. `pg-backup.sh`
@@ -29,7 +30,12 @@ and remains the restore of everything else. Restore steps:
   so a repo2 added later does not wait for Sunday.
 - **The lock** (user, 2026-10-24). The bucket has versioning and object lock in
   compliance mode for `PG_BACKUP_REPO2_LOCK_DAYS` (30), and a lifecycle rule
-  that removes noncurrent versions after one day. pgBackRest must list and
+  that removes noncurrent versions after one day. **Where it runs** (OPS-1-ad-r,
+  user 2026-10-31): bucket `txnet-pgbackrest` (Arvan, versioned), its own so
+  its rule can differ from `txnet-backups`' — noncurrent versions kept **30
+  days**, so a delete is undone for a month, the lock's stand-in on Arvan.
+  Path `/dev` for dev (on since 2026-10-31), `/prod` for production (after a
+  day's measure on dev). pgBackRest must list and
   expire, so its key can delete: the lock, not the key, is what protects the
   data — B7's write-only rule does not hold for this repository.
   **On Arvan the lock does not hold either** (2026-10-30): Arvan keeps a

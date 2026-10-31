@@ -8,7 +8,7 @@
 #     sftp   PG_BACKUP_SFTP_HOST / _USER / _PATH, key in /run/secrets/pg-backup-sftp-key,
 #            the server's host key in /run/secrets/pg-backup-sftp-known-hosts
 #   PG_BACKUP_REPO2_S3_*  set the bucket and repo2 is S3 beside repo1 (K15, OPS-1-o-o):
-#     _ENDPOINT / _BUCKET / _REGION / _KEY / _SECRET, _URI_STYLE (host | path),
+#     _ENDPOINT / _BUCKET / _REGION / _KEY / _SECRET, _URI_STYLE (host | path), _PATH (/txnet),
 #     PG_BACKUP_REPO2_LOCK_DAYS the bucket's object-lock days (default 30)
 #   POSTGRES_USER         the superuser; pgBackRest connects as it over the socket
 #
@@ -68,7 +68,8 @@ repo_settings() {
 repo2_settings() {
   [ -n "${PG_BACKUP_REPO2_S3_BUCKET:-}" ] || return 0
   echo "repo2-type=s3"
-  echo "repo2-path=/txnet"
+  # its own path per stack: dev and production may share one bucket (OPS-1-ad-r)
+  echo "repo2-path=${PG_BACKUP_REPO2_S3_PATH:-/txnet}"
   echo "repo2-s3-endpoint=${PG_BACKUP_REPO2_S3_ENDPOINT:?PG_BACKUP_REPO2_S3_ENDPOINT is not set}"
   echo "repo2-s3-bucket=$PG_BACKUP_REPO2_S3_BUCKET"
   echo "repo2-s3-region=${PG_BACKUP_REPO2_S3_REGION:?PG_BACKUP_REPO2_S3_REGION is not set}"
