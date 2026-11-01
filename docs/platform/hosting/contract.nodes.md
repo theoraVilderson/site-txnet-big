@@ -3,7 +3,7 @@ id: hosting
 layer: platform
 status: active
 version: 1
-updated: 2026-10-31
+updated: 2026-11-01
 ---
 
 # Contract — hosting: more than one node
@@ -133,6 +133,18 @@ runs one step per command, each refused out of order:
   `k8s-add-node.sh leave`, run on it (its server is gone).
 - **A rehearsal** (`rehearse`) runs check…restore with production's newest
   nightly bundle: production is only read; the new server stays mute.
+- **One command** (`run [--rehearse]`, `cluster_run.py`, `move_access.py`;
+  OPS-1-am-g, user 2026-11-01). Production comes from `.env.dev`'s
+  `STAGING_PROD_SSH`; the new server is `--to root@<address>` with
+  `--to-port` and `--password` (asked once, never an argument, or
+  `TXNET_MOVE_PASSWORD`) or `--to-key`. The password installs production's key
+  and is used only while that key is refused; then password login goes off
+  (`00-txnet-key-only.conf`, decision 4: key only). A port other than 22 is a
+  managed block in `~/.ssh/config`, so dns_resolvers and the release reach it
+  unchanged. Every step runs in order; `stop` and `repoint` wait for a typed
+  `yes`; a refused or declined run continues at its next step when `run` is
+  given again for the same servers. After `repoint` the release's
+  `STAGING_PROD_SSH`/`_KEY` name the new server (OPS-1-am-f).
 
 Rehearsed 2026-10-31 (OPS-1-am-c), test server -> 193.151.153.11 (8 cores,
 23 GB), production only read: the 03:00 bundle (13 MB) restored, 242 tables and

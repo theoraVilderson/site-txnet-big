@@ -3,7 +3,12 @@
 
 Run on the build host (it reaches both servers), from the repo root:
 
-  cluster_move.py rehearse|move --from root@OLD --from-key K --to root@NEW --to-key K
+  cluster_move.py run [--rehearse] --to root@NEW [--to-port P] [--password | --to-key K]
+      every step below in one command (cluster_run.py, OPS-1-am-g): production from .env.dev's
+      STAGING_PROD_SSH unless --from is given; the password, asked once, installs production's key
+      there and password login goes off; `yes` typed before `stop` and before `repoint`; run again
+      to continue a run that stopped; after the move the release targets the new server
+  cluster_move.py rehearse|move --from root@OLD --from-key K --to root@NEW --to-key K [--to-port P]
       starts a run; `rehearse` reads production's newest bundle and never touches it
   cluster_move.py <step>     the next step of the run started; each refuses out of order:
       check    both servers, their clocks, the room, production's commit
@@ -21,6 +26,7 @@ Run on the build host (it reaches both servers), from the repo root:
 Runbook: docs/operations/runbook-move-cluster.md
 """
 import argparse
+import getpass
 import json
 import os
 import shlex
@@ -30,6 +36,8 @@ import time
 
 import cluster_fence as cf
 import cluster_open as co
+import cluster_run as cr
+import move_access as ma
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
 import dns_resolvers as dr  # noqa: E402
@@ -37,6 +45,8 @@ import k8s_staging  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, ".move", "cluster.json")
+ENV_DEV = os.path.join(ROOT, ".env.dev")  # the release's STAGING_PROD_SSH names production
+PASSWORD_ENV = "TXNET_MOVE_PASSWORD"  # for a run with no terminal; never an argument
 CHECKOUT = "/root/site-txnet-big"
 SHM = "/dev/shm/txnet-move"
 BUNDLE_DIR = "/var/backups/txnet/bundles"
@@ -294,21 +304,66 @@ def run_step(state, step):
     save_state(state)
 
 
+def fresh_state(mode, old, from_key, new, to_key):
+    return {"mode": mode, "from": old, "from_key": from_key, "to": new, "to_key": to_key, "done": {}, "figures": {}}
+
+
+def run(args, parser):
+    """`run`: the new server reachable by key, then every pending step (cluster_run.py)."""
+    mode = "rehearse" if args.rehearse else "move"
+    known_host, known_key = cr.release_env(ENV_DEV)
+    old, from_key = args.old or known_host, args.from_key or known_key
+    if not (old and from_key and args.new):
+        parser.error("run needs --to, and --from/--from-key unless %s names production" % ENV_DEV)
+    to_key = args.to_key or from_key  # production's own key, installed there by the password
+    password = None
+    if args.password:
+        password = os.environ.get(PASSWORD_ENV) or getpass.getpass("root password of %s: " % args.new)
+    ma.prepare(args.new, args.to_port, to_key, password)
+    say("%s takes %s by key, password login off", args.new, to_key)
+    try:
+        state = load_state()
+    except cf.MoveError:
+        state = None
+    if cr.continues(state, mode, old, args.new):
+        say("continuing the %s at `%s`", mode, cr.pending(state)[0])
+    else:
+        state = fresh_state(mode, old, from_key, args.new, to_key)
+        save_state(state)
+        say("a %s from %s to %s begins", mode, old, args.new)
+
+    def ask(step):
+        return input("cluster-move: %s. Type yes to go on: " % cr.QUESTIONS[step])
+
+    code = cr.run_all(state, ask, run_step)
+    if code == 0 and mode == "move":
+        cr.point_release_at(ENV_DEV, args.new, to_key)
+    if code == 0:
+        say("the %s is complete; figures: `status`", mode)
+    return code
+
+
 def main(argv=None):
     every = cf.STEPS["move"]
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=("rehearse", "move", "status") + every)
+    parser.add_argument("command", choices=("run", "rehearse", "move", "status") + every)
     parser.add_argument("--from", dest="old", help="production's server, root@address")
     parser.add_argument("--from-key", help="the identity that reaches it")
     parser.add_argument("--to", dest="new", help="the new server, root@address")
     parser.add_argument("--to-key", help="the identity that reaches it")
+    parser.add_argument("--to-port", type=int, default=ma.DEFAULT_PORT, help="its SSH port (default 22)")
+    parser.add_argument("--password", action="store_true",
+                        help="run: ask for its root password once, to install the key (or $%s)" % PASSWORD_ENV)
+    parser.add_argument("--rehearse", action="store_true", help="run: a rehearsal, production only read")
     args = parser.parse_args(argv)
     try:
+        if args.command == "run":
+            return run(args, parser)
         if args.command in cf.STEPS:
             if not all((args.old, args.from_key, args.new, args.to_key)):
                 parser.error("%s needs --from, --from-key, --to and --to-key" % args.command)
-            save_state({"mode": args.command, "from": args.old, "from_key": args.from_key,
-                        "to": args.new, "to_key": args.to_key, "done": {}, "figures": {}})
+            ma.set_port(args.new.split("@")[-1], args.to_port)
+            save_state(fresh_state(args.command, args.old, args.from_key, args.new, args.to_key))
             say("a %s from %s to %s begins: next `check`", args.command, args.old, args.new)
         elif args.command == "status":
             print(json.dumps(load_state(), indent=2))

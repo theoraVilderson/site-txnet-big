@@ -1,7 +1,7 @@
 ---
 id: runbook-move-cluster
 status: active
-updated: 2026-10-31
+updated: 2026-11-01
 ---
 
 # Runbook — move production's cluster to another server
@@ -17,6 +17,26 @@ MOVE="python3 scripts/move/cluster_move.py"
 FROM="--from root@2.144.31.149 --from-key ~/.ssh/txnet_test_ed25519"
 TO="--to root@<new> --to-key ~/.ssh/<its key>"
 ```
+
+## One command (OPS-1-am-g)
+
+On the dev host, as root, from `/root/site-txnet-big`:
+
+```bash
+# the rehearsal: production only read, nothing asked
+python3 scripts/move/cluster_move.py run --rehearse --to root@<new> --to-port <port> --password
+# the real move, in a quiet hour: types `yes` before `stop` and before `repoint`
+python3 scripts/move/cluster_move.py run --to root@<new> --to-port <port>
+```
+
+`--password` asks the new server's root password once and installs
+production's key there; password login is then off, so later runs need no
+password (giving it again is harmless). With a key already there, `--to-key`
+instead. A run that stops — refused, or a `yes` not typed — continues at its
+next step when the same command is given again. When the move ends,
+`.env.dev` names the new server for the next release.
+
+The steps below are what `run` walks; each still runs on its own.
 
 ## Rehearsal — production only read, DNS untouched
 
