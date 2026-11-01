@@ -113,7 +113,8 @@ while staging holds production's data:
   certificates are signed per run, in memory. Only that profile trusts it.
 - **The pull pair** opens with production's age key, linked only while staging
   holds its data (`restore`/`twin`), into `/dev/shm`, removed at exit. Without it,
-  `open` refuses.
+  `open` refuses. A passed twin keeps the key until `down` or send's `close`, so
+  the owner looks before `approve`; a failed one removes it at once (OPS-1-ah-n).
 - What the owner changes lives in the copy and goes at `down`.
 
 **R18 — Staging's one way out is the dev bots' gate** (ADR-0168 point 5,

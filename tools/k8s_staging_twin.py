@@ -16,8 +16,9 @@ ADR-0166 points 4, 5, OPS-1-ah-c).
    by production's drivers, K12's roll under load with no failed request, the
    stores killed and back with their data.
 
-Production's secrets leave this host when it ends, pass or fail; the cluster
-stays for its logs until `down`.
+Production's secrets leave this host when a check fails or a stage raises; a pass
+keeps them, in memory, until `down` or send's close, so the owner can `open` it
+before approving (R17, OPS-1-ah-n). The cluster stays for its logs until `down`.
 """
 import os
 import subprocess
@@ -61,6 +62,17 @@ def run(stages: Stages, from_ref: str | None, to_ref: str) -> dict[str, bool]:
     stages.deploy(to_ref)
     stages.guard()
     return {name: check() for name, check in stages.checks.items()}
+
+
+def kept_if_passed(results_of: Callable[[], dict[str, bool]], forget: Callable[[], None]) -> dict[str, bool]:
+    """results_of()'s checks; production's secrets forgotten unless every one passed."""
+    results: dict[str, bool] = {}
+    try:
+        results = results_of()
+    finally:
+        if not results or not all(results.values()):
+            forget()
+    return results
 
 
 def guard_again(docker) -> tuple[list[str], str]:
@@ -152,10 +164,7 @@ def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str, names=N
     checks = chosen(checks, checks if names is None else names)
     stages = Stages(restore=lambda ref: kd.restore_production(docker, prod, ref),
                     deploy=lambda ref: deploy_over(docker, ref), guard=do_guard, checks=checks)
-    try:
-        results = run(stages, from_ref, to_ref)
-    finally:
-        kd.forget(docker)
+    results = kept_if_passed(lambda: run(stages, from_ref, to_ref), lambda: kd.forget(docker))
     for name, ok in results.items():
         print(f"{'PASS' if ok else 'FAIL'}  {name}")
     return all(results.values())

@@ -193,7 +193,7 @@ on the dev host: `scripts/staging.sh up|import|status|down`
   and `stores`. K12's checks run in the node container (`NODE_EXEC`), never on
   the dev host's own k3s. A worktree left by an earlier run is moved to the
   commit asked; the kubelet evicts at 5% free and `up` refuses unless that plus
-  staging's peak (17 GiB) is free. Production's secrets go when the run ends.
+  staging's peak (17 GiB) is free. A fail takes production's secrets; a pass keeps them (R17).
   Until 21c9d8f8 reaches production, `--from` is it or later: before it the
   translator (OPS-1-ai) and locale-service's healthcheck need an outside DNS.
   Proven 2026-10-29, `--from 7e49eb78` over the 08:51 bundle: 35 of 35 ready,

@@ -29,6 +29,29 @@ class OrderTest(unittest.TestCase):
         self.assertEqual(results, {"ready": True, "roll": False, "panels": True})
 
 
+class SecretsTest(unittest.TestCase):
+    # R17, OPS-1-ah-n: `open` needs production's key; a passed twin keeps it (in memory)
+    # until `down` or send's close, so the owner can look before approving.
+    def test_a_passed_twin_keeps_productions_secrets(self):
+        forgot = []
+        results = kt.kept_if_passed(lambda: {"ready": True, "stores": True}, lambda: forgot.append(1))
+        self.assertEqual((results, forgot), ({"ready": True, "stores": True}, []))
+
+    def test_a_failed_check_takes_them_at_once(self):
+        forgot = []
+        kt.kept_if_passed(lambda: {"ready": True, "panels": False}, lambda: forgot.append(1))
+        self.assertEqual(forgot, [1])
+
+    def test_a_stage_that_raises_takes_them_and_still_raises(self):
+        forgot = []
+
+        def broken():
+            raise kt.ks.StagingError("restore failed")
+        with self.assertRaises(kt.ks.StagingError):
+            kt.kept_if_passed(broken, lambda: forgot.append(1))
+        self.assertEqual(forgot, [1])
+
+
 class ChosenTest(unittest.TestCase):
     # ADR-0169: the release asks for the checks its reach needs; `ready` is never left out.
     ALL = {name: (lambda: True) for name in ("ready", "panels", "roll", "stores")}
