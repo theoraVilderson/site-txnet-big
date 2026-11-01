@@ -116,5 +116,21 @@ class Refusal(unittest.TestCase):
         self.assertEqual(dr.usable(plan, probe=lambda s, n: (s, n) in good), ["217.218.127.127"])
 
 
+class Join(unittest.TestCase):
+    # K22: a node joining the cluster pulls every image through its own resolvers, and a
+    # CoreDNS pod there forwards to them; join applies the file before it changes anything
+    # on the server (its peers) or installs k3s there.
+    def test_join_applies_the_file_on_the_node_before_the_peers_and_k3s(self):
+        script = (Path(__file__).parent.parent / "scripts/k8s-add-node.sh").read_text()
+        stage = script[script.index("\nstage() {"):script.index("\ninstall_agent() {")]
+        self.assertIn("tools/dns_resolvers.py", stage)
+        self.assertIn("dev-docker/dns/resolvers.txt", stage)
+        join = script[script.index("\njoin() {"):script.index("\nremove() {")]
+        dns = join.index("dns_resolvers.py apply")
+        self.assertLess(dns, join.index("peer_add"))
+        self.assertLess(dns, join.index("install_agent"))
+        self.assertIn("--restart-docker=idle", join)
+
+
 if __name__ == "__main__":
     unittest.main()

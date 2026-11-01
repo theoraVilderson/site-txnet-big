@@ -4,11 +4,12 @@
 # reached over SSH as root, and nothing is copied to it but what k3s needs.
 #
 #   scripts/k8s-add-node.sh check  <host> [ssh-port]   what join would refuse, changing nothing
-#   scripts/k8s-add-node.sh join   <host> [ssh-port]   check, then: its address in K13's peers here, K13's
-#                                                      chain there with this node as its only peer, O7's
-#                                                      edge chain there (80/443), k3s agent at
-#                                                      k8s/versions.env's pin with this node's
-#                                                      registries.yaml (K14), then Ready and on WireGuard
+#   scripts/k8s-add-node.sh join   <host> [ssh-port]   check, then: the domestic DNS there (K22), its
+#                                                      address in K13's peers here, K13's chain there
+#                                                      with this node as its only peer, O7's edge chain
+#                                                      there (80/443), k3s agent at k8s/versions.env's
+#                                                      pin with this node's registries.yaml (K14), then
+#                                                      Ready and on WireGuard
 #   scripts/k8s-add-node.sh remove <host> [ssh-port]   drain and delete the node, uninstall k3s there,
 #                                                      both chains gone and its address out of the peers
 #   scripts/k8s-add-node.sh leave                      on the node: the same uninstall, for a node whose
@@ -199,7 +200,8 @@ stage() {
   install -m 0600 "$K3S_ETC/registries.yaml" "$work/registries.yaml"
   cp "$ROOT_DIR/scripts/edge/k3s_ports.py" "$ROOT_DIR/scripts/edge/edge_chain.py" \
     "$ROOT_DIR/scripts/edge/edge_firewall.py" "$ROOT_DIR/scripts/edge/edge_ranges.py" \
-    "$ROOT_DIR/scripts/edge/edges.json" "$work/"
+    "$ROOT_DIR/scripts/edge/edges.json" "$ROOT_DIR/tools/dns_resolvers.py" \
+    "$ROOT_DIR/dev-docker/dns/resolvers.txt" "$work/"
   [ ! -d "$EDGE_RANGES" ] || cp -r "$EDGE_RANGES" "$work/edge-ranges"
   echo "$SERVER_ADDR" >"$work/k3s-peers"
   {
@@ -260,9 +262,13 @@ join() {
   work="$(mktemp -d)"
   TEMPS+=("$work")
   stage "$work"
-  peer_add "$NODE_ADDR"
   remote "rm -rf $STAGE && install -d -m 0700 $STAGE"
   "${SCP[@]}" "$work"/* "root@$HOST:$STAGE/"
+  # K22: its images are pulled through its own resolvers; a refusal stops the join
+  # before the peers here or k3s there change. Docker restarts only while idle.
+  remote "python3 $STAGE/dns_resolvers.py apply --file $STAGE/resolvers.txt --restart-docker=idle" ||
+    die "the domestic resolvers do not answer from $HOST (K22): scripts/dns.sh check there"
+  peer_add "$NODE_ADDR"
   install_agent
   wait_ready
   kubectl label --overwrite "node/$(hostname)" "$DATA_LABEL" >/dev/null

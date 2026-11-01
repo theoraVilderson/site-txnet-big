@@ -170,7 +170,8 @@ answers them itself, and every other name is forwarded to the host's upstreams.
   resolving through systemd-resolved, its old settings come back.
 - **On its own wherever a server starts serving**, so no step is remembered by
   hand: a cluster move's `mute` (before it reads the resolvers it lets DNS out
-  to), a server move's `presync` (before anything is built there), `backup.py
+  to), a server move's `presync` (before anything is built there), a node's
+  `k8s-add-node.sh join` (before the peers or k3s; a refusal stops it), `backup.py
   restore` (first, and a refusal never stops it) and every release's `dns`
   step after `deploy` (R15) — a changed file reaches production with the next
   release. Docker restarts for it only on an idle host (`--restart-docker=idle`:
