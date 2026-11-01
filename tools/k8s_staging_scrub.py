@@ -5,7 +5,8 @@ ADR-0168 points 1, 2, OPS-1-ah-f).
 B10's restore runs this between the stores and the services (`backup.py restore
 --scrub`), so nothing of staging ever reads a real panel's row:
 
-    scrub --prod-host HOST   each panel on production's server pointed at its
+    scrub --panel-host HOST  each panel on the test panels' server (PANELTEST_HOST:
+                             a name or an address) pointed at its
                              local copy (/root/paneltest: same panels, same
                              logins); every other one wiped — addresses, login,
                              vault rows, OpenVPN file — and archived, which
@@ -23,6 +24,7 @@ either reaches nothing real.
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import urllib.parse
@@ -86,28 +88,37 @@ class Local:
         return cls.from_inspect(docker(["docker", "inspect", *names]).stdout)
 
 
-def repoint(url: str | None, prod_host: str, local: Local) -> str | None:
-    """url moved to its local copy, or None when it names no test panel of production's server."""
+def panel_hosts(name: str, resolve=socket.gethostbyname_ex) -> set[str]:
+    """The test panels' server as production's rows may name it: the name itself and,
+    for a domain, every address it resolves to now."""
+    try:
+        return {name, *resolve(name)[2]}
+    except OSError:
+        return {name}
+
+
+def repoint(url: str | None, hosts: set[str], local: Local) -> str | None:
+    """url moved to its local copy, or None when it names no panel of the test panels' server."""
     if not url:
         return None
     parts = urllib.parse.urlsplit(url)
-    if parts.scheme != "http" or parts.hostname != prod_host or str(parts.port) not in local.ports:
+    if parts.scheme != "http" or parts.hostname not in hosts or str(parts.port) not in local.ports:
         return None
     address, port = local.ports[str(parts.port)]
     return urllib.parse.urlunsplit(parts._replace(netloc=f"{address}:{port}"))
 
 
-def plan(rows: list[dict], prod_host: str, local: Local) -> tuple[dict[str, dict], list[str]]:
+def plan(rows: list[dict], hosts: set[str], local: Local) -> tuple[dict[str, dict], list[str]]:
     """({id: new address columns} of the panels pointed, [ids wiped]). An archived
     panel is wiped wherever it is: nothing in staging collects from it."""
     pointed, wiped = {}, []
     for row in rows:
-        api = None if row["retiredAt"] else repoint(row["apiBaseUrl"], prod_host, local)
+        api = None if row["retiredAt"] else repoint(row["apiBaseUrl"], hosts, local)
         if not api:
             wiped.append(row["id"])
             continue
         address = urllib.parse.urlsplit(api).hostname
-        pointed[row["id"]] = {"apiBaseUrl": api, "clientBaseUrl": repoint(row["clientBaseUrl"], prod_host, local),
+        pointed[row["id"]] = {"apiBaseUrl": api, "clientBaseUrl": repoint(row["clientBaseUrl"], hosts, local),
                               "ipAddress": address if row["ipAddress"] else None}
     return pointed, wiped
 
@@ -204,10 +215,10 @@ def guard(local: Local) -> bool:
     return not found
 
 
-def scrub_panels(docker, prod_host: str) -> Local:
+def scrub_panels(docker, panel_host: str) -> Local:
     local = Local.running(docker)
     rows = panel_rows()
-    pointed, wiped = plan(rows, prod_host, local)
+    pointed, wiped = plan(rows, panel_hosts(panel_host), local)
     psql(panels_sql(pointed))
     print(f"panels: {len(pointed)} pointed at their local copies, {len(wiped)} wiped and archived")
     return local
@@ -216,13 +227,13 @@ def scrub_panels(docker, prod_host: str) -> Local:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("command", choices=["scrub", "guard"])
-    parser.add_argument("--prod-host", help="scrub: production's server, whose test panels have local copies")
+    parser.add_argument("--panel-host", help="scrub: the test panels' server, whose panels have local copies")
     args = parser.parse_args(argv)
-    if args.command == "scrub" and not args.prod_host:
-        parser.error("scrub needs --prod-host")
+    if args.command == "scrub" and not args.panel_host:
+        parser.error("scrub needs --panel-host")
     try:
         if args.command == "scrub":
-            local = scrub_panels(ks.docker_run, args.prod_host)
+            local = scrub_panels(ks.docker_run, args.panel_host)
             work = os.environ.get(RESTORE_WORK)
             kp.scrub(psql, KUBECTL, Path(work) if work else None)
             kk.scrub(psql, KUBECTL)

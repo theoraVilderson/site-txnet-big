@@ -21,8 +21,13 @@ mistake in either reaches no real panel and no real person.
   still at zero, only the stores are up. If the scrub fails, the restore stops
   there and no service starts. `restore` and `twin` alike.
 - **Panels** (OPS-1-ah-f). A panel in service whose `apiBaseUrl` is plain http
-  on production's server (`STAGING_PROD_SSH`'s host) at a port a local panel
-  publishes (`/root/paneltest`) is pointed at that copy on staging's network:
+  on the test panels' server at a port a local panel publishes
+  (`/root/paneltest`) is pointed at that copy on staging's network. That server
+  is one setting, `PANELTEST_HOST` in `.env.dev` (default `STAGING_PROD_SSH`'s
+  host): a name or an address, and a name also matches every address it
+  resolves to, so a server that moves changes the setting, never the code
+  (production moved 2026-10-31, its test panels did not, and every panel was
+  wiped). Pointed:
   `apiBaseUrl`, `clientBaseUrl` (or null), `ipAddress`, with `knownAddresses`
   emptied. Its login stays, because the copies are the same panels with the
   same logins. Every other panel, archived or not, is wiped: its addresses

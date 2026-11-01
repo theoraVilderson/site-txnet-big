@@ -13,6 +13,8 @@ place sops reads it), the worktree with its rendered manifests and env files.
 
     STAGING_PROD_SSH      production's server, as ssh names it (root@host)
     STAGING_PROD_SSH_KEY  the identity that reaches it
+    PANELTEST_HOST        the server production's test panels name, a name or an
+                          address (default: production's); their copies run here
 """
 import os
 import shlex
@@ -34,6 +36,8 @@ from k8srender.tables import STACKS  # noqa: E402
 StagingError = ks.StagingError
 SHM_DIR = Path("/dev/shm/txnet-staging")
 HOST_VAR, KEY_VAR = "STAGING_PROD_SSH", "STAGING_PROD_SSH_KEY"
+# Its own setting: production moved server on 2026-10-31 and its test panels did not.
+PANELS_VAR = "PANELTEST_HOST"
 # Where production keeps its bundles (B1) and its checkout's passphrase (B5).
 PROD_BUNDLE_DIR = "/var/backups/txnet/bundles"
 # Production's checkout, where every release is deployed from (R5).
@@ -51,18 +55,24 @@ class Production:
     """How production's server is reached: read-only here, by ssh."""
     host: str
     key: str
+    panel_host: str = ""
 
     @classmethod
     def from_env(cls, env) -> "Production":
         missing = [v for v in (HOST_VAR, KEY_VAR) if not env.get(v)]
         if missing:
             raise StagingError(f"set {', '.join(missing)} (in .env.dev): production's server is reached by ssh")
-        return cls(env[HOST_VAR], env[KEY_VAR])
+        return cls(env[HOST_VAR], env[KEY_VAR], env.get(PANELS_VAR, ""))
 
     @property
     def address(self) -> str:
         """The server's own host, without ssh's user."""
         return self.host.rpartition("@")[2]
+
+    @property
+    def panels(self) -> str:
+        """The server production's test panels name, whose copies run beside staging."""
+        return self.panel_host or self.address
 
     def ssh(self, command: str) -> list[str]:
         return ["ssh", "-i", self.key, "-o", "BatchMode=yes", self.host, command]
@@ -139,14 +149,14 @@ def rendered_images(dirs) -> list[str]:
     return sorted(found)
 
 
-def restore_command(tree: Path, bundle: Path, passphrase: Path, memory: Path, prod_host: str,
+def restore_command(tree: Path, bundle: Path, passphrase: Path, memory: Path, panel_host: str,
                     newer_code: bool = False) -> tuple[list[str], dict]:
     """B10's restore into staging. --replace: the deploy seeded it, so it "holds data";
     the safety bundle that makes first stays in memory with the rest. `newer_code`:
     the tree is a later commit than the bundle's, which B9 allows only when asked.
     This checkout's restore, into the tree: its --scrub runs before any service
     starts (ADR-0168), and production's commit may predate it."""
-    scrub = shlex.join(["python3", f"{ROOT}/tools/k8s_staging_scrub.py", "scrub", "--prod-host", prod_host])
+    scrub = shlex.join(["python3", f"{ROOT}/tools/k8s_staging_scrub.py", "scrub", "--panel-host", panel_host])
     argv = ["python3", f"{ROOT}/scripts/bundle/backup.py", "restore", str(bundle),
             "--stack", "k8s", "--passphrase-file", str(passphrase), "--replace",
             "--checkout", str(tree), "--scrub", scrub]
@@ -221,7 +231,7 @@ def bring_production(docker, prod: Production, at: str | None) -> None:
     env = staging_env(docker)
     bring_images(docker, tree, env)
     subprocess.run([f"{tree}/scripts/prod.k8s.sh", "deploy"], env=env, check=True)
-    argv, extra = restore_command(tree, bundle, passphrase, SHM_DIR, prod.address, newer_code=bool(at))
+    argv, extra = restore_command(tree, bundle, passphrase, SHM_DIR, prod.panels, newer_code=bool(at))
     subprocess.run(argv, env={**env, **extra}, check=True)
 
 

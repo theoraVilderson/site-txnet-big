@@ -35,6 +35,13 @@ class SourceTest(unittest.TestCase):
         with self.assertRaisesRegex(kd.StagingError, kd.KEY_VAR):
             kd.Production.from_env({kd.HOST_VAR: "root@prod.example"})
 
+    # The test panels' server is its own setting (PANELTEST_HOST): production moved to a
+    # new server on 2026-10-31 and its test panels stayed where they were.
+    def test_the_test_panels_server_is_its_own_setting_and_defaults_to_productions(self):
+        env = {kd.HOST_VAR: "root@prod.example", kd.KEY_VAR: "/k"}
+        self.assertEqual(kd.Production.from_env(env).panels, "prod.example")
+        self.assertEqual(kd.Production.from_env({**env, kd.PANELS_VAR: "panels.example"}).panels, "panels.example")
+
 
 class AgeKeyTest(unittest.TestCase):
     """The key that opens production's sealed secrets stays in memory: the place
@@ -96,7 +103,7 @@ class RestoreTest(unittest.TestCase):
         argv, _ = kd.restore_command(Path("/shm/tree"), Path("/shm/b.gpg"), Path("/shm/p"), Path("/shm"), "2.144.31.149")
         self.assertEqual(argv[argv.index("--checkout") + 1], "/shm/tree")
         scrub = argv[argv.index("--scrub") + 1]
-        self.assertIn(f"{kd.ROOT}/tools/k8s_staging_scrub.py scrub --prod-host 2.144.31.149", scrub)
+        self.assertIn(f"{kd.ROOT}/tools/k8s_staging_scrub.py scrub --panel-host 2.144.31.149", scrub)
 
 
 class WorktreeTest(unittest.TestCase):

@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import k8s_staging_scrub as sc  # noqa: E402
 
 PROD = "2.144.31.149"
+HOSTS = {PROD}
 INSPECT = json.dumps([
     {"NetworkSettings": {"Networks": {"txnet-staging": {"IPAddress": "203.0.113.5"}}},
      "HostConfig": {"PortBindings": {"2053/tcp": [{"HostPort": "28200"}], "2096/tcp": [{"HostPort": "28201"}],
@@ -35,12 +36,25 @@ class LocalPanelsTest(unittest.TestCase):
         self.assertNotIn("24004", LOCAL.ports)
         self.assertEqual(LOCAL.addresses, {"203.0.113.5", "203.0.113.6"})
 
-    def test_a_url_on_productions_server_is_pointed_at_its_copy(self):
-        self.assertEqual(sc.repoint("http://2.144.31.149:28200/p2/", PROD, LOCAL), "http://203.0.113.5:2053/p2/")
+    def test_a_url_on_the_test_panels_server_is_pointed_at_its_copy(self):
+        self.assertEqual(sc.repoint("http://2.144.31.149:28200/p2/", HOSTS, LOCAL), "http://203.0.113.5:2053/p2/")
 
     def test_any_other_url_has_no_copy(self):
         for url in ("http://193.228.169.47/panel/x/", "http://2.144.31.149:29999/", "https://2.144.31.149:28200/", None):
-            self.assertIsNone(sc.repoint(url, PROD, LOCAL), url)
+            self.assertIsNone(sc.repoint(url, HOSTS, LOCAL), url)
+
+    # PANELTEST_HOST may be a name: production's rows may name the server by it or by an
+    # address it resolves to, and a server moving changes the setting, not the code.
+    def test_a_named_server_matches_its_name_and_every_address_it_resolves_to(self):
+        hosts = sc.panel_hosts("panels.example", resolve=lambda name: (name, [], ["2.144.31.149", "198.51.100.7"]))
+        self.assertEqual(hosts, {"panels.example", "2.144.31.149", "198.51.100.7"})
+        self.assertEqual(sc.repoint("http://panels.example:28000/", hosts, LOCAL), "http://203.0.113.6:8080/")
+        self.assertEqual(sc.repoint("http://198.51.100.7:28000/", hosts, LOCAL), "http://203.0.113.6:8080/")
+
+    def test_a_name_that_does_not_resolve_still_matches_itself(self):
+        def unresolved(name):
+            raise OSError("no such name")
+        self.assertEqual(sc.panel_hosts("panels.example", resolve=unresolved), {"panels.example"})
 
 
 class PlanTest(unittest.TestCase):
@@ -49,17 +63,17 @@ class PlanTest(unittest.TestCase):
     def test_a_test_panel_is_pointed_and_a_resellers_is_wiped(self):
         rows = [panel("test", "http://2.144.31.149:28200/p2/", ipAddress=PROD, knownAddresses=[PROD]),
                 panel("real", "http://193.228.169.47/panel/x/")]
-        pointed, wiped = sc.plan(rows, PROD, LOCAL)
+        pointed, wiped = sc.plan(rows, HOSTS, LOCAL)
         self.assertEqual(pointed, {"test": {"apiBaseUrl": "http://203.0.113.5:2053/p2/", "clientBaseUrl": None,
                                             "ipAddress": "203.0.113.5"}})
         self.assertEqual(wiped, ["real"])
 
     def test_a_retired_panel_is_wiped_even_on_the_test_server(self):
-        _, wiped = sc.plan([panel("old", "http://2.144.31.149:28200/", retiredAt="2026-10-01")], PROD, LOCAL)
+        _, wiped = sc.plan([panel("old", "http://2.144.31.149:28200/", retiredAt="2026-10-01")], HOSTS, LOCAL)
         self.assertEqual(wiped, ["old"])
 
     def test_no_local_panel_running_wipes_them_all(self):
-        pointed, wiped = sc.plan([panel("test", "http://2.144.31.149:28200/")], PROD, sc.Local({}))
+        pointed, wiped = sc.plan([panel("test", "http://2.144.31.149:28200/")], HOSTS, sc.Local({}))
         self.assertEqual((pointed, wiped), ({}, ["test"]))
 
     def test_the_sql_quotes_what_it_writes_and_keeps_only_the_pointed_logins(self):
