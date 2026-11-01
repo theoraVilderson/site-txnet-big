@@ -32,8 +32,11 @@ and remains the restore of everything else. Restore steps:
   compliance mode for `PG_BACKUP_REPO2_LOCK_DAYS` (30), and a lifecycle rule
   that removes noncurrent versions after one day. **Where it runs** (OPS-1-ad-r,
   user 2026-10-31): bucket `txnet-pgbackrest` (Arvan, versioned), its own so
-  its rule can differ from `txnet-backups`' — noncurrent versions kept **30
-  days**, so a delete is undone for a month, the lock's stand-in on Arvan.
+  its rule can differ from `txnet-backups`' — noncurrent versions kept **3
+  days**, so a delete is undone for three days, the lock's stand-in on Arvan
+  (user 2026-11-01: 30 cost ~40–75 GB at production's ~1.2 GB of WAL a day;
+  B7's locked hourly bundle covers older). `PG_BACKUP_REPO2_LOCK_DAYS=3` on
+  both stacks to match.
   Path `/dev` for dev (on since 2026-10-31), `/prod` for production (after a
   day's measure on dev). pgBackRest must list and
   expire, so its key can delete: the lock, not the key, is what protects the
