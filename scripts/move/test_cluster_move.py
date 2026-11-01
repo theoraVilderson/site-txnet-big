@@ -78,7 +78,7 @@ class DnsBeforeTheMute(unittest.TestCase):
             def run(self, command, timeout=0, check=True):
                 log.append((self.name, command))
                 if "registries.yaml" in command:
-                    return "registry.example\n"
+                    return '{"configs": {"registry.example": {}}}\n'
                 return "200" if "http_code" in command else ""
         with mock.patch.object(cm.dr, "apply_remote", lambda target, key, **kw: log.append(("dns", target))):
             cm.mute({}, Fake("old"), Fake("new"))
@@ -136,6 +136,20 @@ class Mute(unittest.TestCase):
     def test_a_name_is_not_an_address(self):
         with self.assertRaises(cf.MoveError):
             cf.mute_ruleset(["registry.mytxnet.ir"], [])
+
+    def test_the_new_server_reaches_where_production_pulls_from(self):
+        # rehearsal 2026-11-01: production keeps no plaintext .env, so DOCKER_REGISTRY was not
+        # readable there; what its pods run says the same thing, and nothing can drift from it
+        images = ["docker.arvancloud.ir/redis:8.8-alpine", "registry.mytxnet.ir/txnet/auth-service:1d62",
+                  "rancher/mirrored-coredns-coredns:1.12.3", "localhost:5000/x:1"]
+        registries = {"configs": {"registry.mytxnet.ir": {}},
+                      "mirrors": {"docker.io": {"endpoint": ["https://docker.arvancloud.ir"]}}}
+        self.assertEqual(cf.pull_hosts(images, registries),
+                         ["docker.arvancloud.ir", "localhost", "registry.mytxnet.ir"])
+
+    def test_an_image_with_no_registry_comes_from_the_airgap_archive(self):
+        # rancher/* is k3s's own, imported from the archive install_k3s pushes: no host to allow
+        self.assertEqual(cf.pull_hosts(["rancher/klipper-lb:v0.4.13", "nginx:1.27"], {}), [])
 
 
 class Order(unittest.TestCase):

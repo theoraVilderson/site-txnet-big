@@ -142,11 +142,13 @@ def mute(state, old, new):
     new.run("apt-get update -q >/dev/null && DEBIAN_FRONTEND=noninteractive apt-get install -y -q %s >/dev/null" % " ".join(PACKAGES), timeout=LONG_S)
     # NIN-1-l: the mute lets DNS out only to the resolvers it reads below, so the domestic ones first
     dr.apply_remote(new.target, new.key)
-    registry = old.run("python3 -c 'import sys, yaml; print(next(iter(yaml.safe_load(open(sys.argv[1]))[\"configs\"])))' "
-                       "/etc/rancher/k3s/registries.yaml").strip()
-    # the pull mirror for every image we do not build (redis, rabbitmq, grafana: DOCKER_REGISTRY in .env)
-    mirror = old.run("sed -n 's/^DOCKER_REGISTRY=\\([^ #]*\\).*/\\1/p' %s/.env" % CHECKOUT).strip()
-    hosts = [h for h in (registry, mirror) if h]
+    registries = json.loads(old.run("python3 -c 'import sys, json, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))' "
+                                    "/etc/rancher/k3s/registries.yaml"))
+    registry = next(iter(registries["configs"]))
+    # where production's pods pull from (our registry, the mirror): no plaintext .env to read there
+    images = old.run("kubectl get pods -A -o jsonpath='{range .items[*]}{range .spec.containers[*]}{.image}{\"\\n\"}{end}"
+                     "{range .spec.initContainers[*]}{.image}{\"\\n\"}{end}{end}'", timeout=300).split()
+    hosts = cf.pull_hosts(images, registries)
     allowed = sorted(set(new.run(" ; ".join("getent ahostsv4 %s | cut -d' ' -f1" % shlex.quote(h) for h in hosts)).split()))
     resolvers = sorted(set(new.run("awk '/^nameserver/{print $2}' /run/systemd/resolve/resolv.conf").split()))
     rules = cf.mute_ruleset(allowed, [r for r in resolvers if ":" not in r])

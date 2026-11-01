@@ -85,6 +85,21 @@ def _addresses(values, what):
         raise MoveError("%s: %s (an address, never a name: a name resolves anew)" % (what, err)) from err
 
 
+def pull_hosts(images, registries):
+    """The registries the new server pulls from, read from what production runs: each image's
+    own host, plus registries.yaml's configured registries and mirror endpoints. An image with
+    no host (rancher/*) is k3s's own and comes from the airgap archive, so it adds none."""
+    hosts = set()
+    for image in images:
+        first = image.split("/")[0]
+        if "/" in image and ("." in first or ":" in first or first == "localhost"):
+            hosts.add(first.split(":")[0])
+    hosts.update((registries or {}).get("configs", {}))
+    for mirror in (registries or {}).get("mirrors", {}).values():
+        hosts.update(e.split("://")[-1].split("/")[0].split(":")[0] for e in mirror.get("endpoint", []))
+    return sorted(hosts)
+
+
 def mute_ruleset(allowed, resolvers):
     """nft text that drops everything leaving this server, the host's and the pods', but
     replies, the allowed addresses (the registry) and DNS to the resolvers."""
