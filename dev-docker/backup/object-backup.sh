@@ -85,6 +85,9 @@ backup() {
   if looks_lost; then log "$SRC is empty and $DST is not: refusing to mark every copy deleted"; return 1; fi
   mc mirror --overwrite --remove --exclude '*.tmp' --quiet "$SRC" "$DST" || return 1
   [ "$OBJECT_BACKUP_S3_LOCK_DAYS" = 0 ] && return 0
+  # A stack with no file yet has nothing to lock, and mc fails on an empty prefix
+  # ("Unable to find any object"): that is a success, not a nightly false alarm.
+  [ -n "$(mc ls --recursive "$DST" 2>/dev/null | head -1)" ] || return 0
   mc retention set --recursive --quiet compliance "${OBJECT_BACKUP_S3_LOCK_DAYS}d" "$DST" >/dev/null || return 1
 }
 
