@@ -8,12 +8,16 @@ is stopped while staging is up. For as long as this runs, in the foreground as
 2. its updates long-polled from this host, and only those one of the owner's chats
    sent (STAGING_OWNER_CHATS) posted to staging's bot-service through a
    `kubectl port-forward`, with the bot's own webhook secret; the rest dropped;
-3. at Ctrl-C, or at `down` after a crash, the webhook set back as recorded.
+3. at Ctrl-C or SIGTERM, or at `down` after a crash, the webhook set back as recorded.
 A dev stack that starts with none registers its own (BOT_WEBHOOK_AUTO_REGISTER).
+A passed twin starts it on its own as the transient unit UNIT (`journalctl -u
+txnet-staging-bots`), and `down` (send's close too) stops it: nothing to remember.
 The scrub keeps the owner's chats real and the gate writes to no other chat.
 """
 import json
+import os
 import select
+import signal
 import subprocess
 import sys
 import threading
@@ -30,6 +34,9 @@ import k8s_staging_keys as kk  # noqa: E402
 import k8s_staging_scrub as sc  # noqa: E402
 
 STATE_FILE = ks.STATE_FILE.with_name("staging-bots.json")
+UNIT = "txnet-staging-bots"
+# A unit starts with an empty environment: the caller's way out to the bot API goes with it.
+PROXY_VARS = ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
 BOT_SERVICE = "bot-service"
 # Long poll: Telegram holds the request open up to this long when nothing comes.
 POLL_S = 25
@@ -106,6 +113,34 @@ def give_back_dev_bots() -> None:
         give_back(kk.dev_bots(env), api_caller(env))
 
 
+def unit_argv(root: Path, environ) -> list[str]:
+    """`bots` as a transient unit: only the proxy variables are carried; the tokens
+    stay in .env.dev, which it reads itself."""
+    carried = [f"--setenv={k}={environ[k]}" for k in PROXY_VARS if environ.get(k)]
+    return ["systemd-run", f"--unit={UNIT}", "--collect", f"--working-directory={root}", *carried,
+            "python3", f"{root}/tools/k8s_staging.py", "bots"]
+
+
+def start_background(owners: frozenset[tuple[str, str]], run=subprocess.run) -> None:
+    """After a passed twin: `bots` until `down`, when the owner has chats to talk from."""
+    if not owners:
+        print(f"bots: no {sc.kp.OWNERS_VAR} in .env.dev, so staging's bots talk to no one")
+        return
+    run(["systemctl", "stop", UNIT], check=False, capture_output=True)  # a stale one gives its bots back
+    done = run(unit_argv(ROOT, os.environ), check=False, capture_output=True, text=True)
+    print(f"bots: staging's bots answer the owner's chats until `down` (journalctl -u {UNIT})" if done.returncode == 0
+          else f"bots: did not start ({done.stderr.strip()}); `staging.sh bots` by hand")
+
+
+def stop_background(run=subprocess.run) -> None:
+    """`down`'s: the unit stopped; its SIGTERM gives the dev webhooks back."""
+    run(["systemctl", "stop", UNIT], check=False, capture_output=True)
+
+
+def _interrupted(*_):
+    raise KeyboardInterrupt
+
+
 def webhook_paths() -> dict[str, str]:
     """{platform: webhookPath} of staging's platform bots, the dev bots since the scrub."""
     rows = sc.psql(f"SELECT platform || ' ' || \"webhookPath\" FROM automation.bot_integration WHERE "
@@ -161,6 +196,7 @@ def serve_bots(docker) -> None:
         raise ks.StagingError(f"nothing to relay: set {sc.kp.OWNERS_VAR} and a dev bot in .env.dev, "
                               "and restore production's data (its platform bots become the dev bots)")
     call = api_caller(env)
+    signal.signal(signal.SIGTERM, _interrupted)  # systemctl stop: the same way out as Ctrl-C
     forwarding = {"proc": None, "port": 0}
     forwarding["proc"], forwarding["port"] = forward()
     take(bots, call)

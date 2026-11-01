@@ -167,4 +167,7 @@ def twin(docker, prod: kd.Production, from_ref: str | None, to_ref: str, names=N
     results = kept_if_passed(lambda: run(stages, from_ref, to_ref), lambda: kd.forget(docker))
     for name, ok in results.items():
         print(f"{'PASS' if ok else 'FAIL'}  {name}")
+    if results and all(results.values()):
+        import k8s_staging_bots as kb  # late: it imports what imports this module
+        kb.start_background(sc.owner_chats())  # OPS-1-ah-p: the owner talks to it, unasked
     return all(results.values())

@@ -194,6 +194,7 @@ def remove(docker, root: Path, state: Path) -> None:
     # Late: both import this module.
     import k8s_staging_bots
     import k8s_staging_data
+    k8s_staging_bots.stop_background()
     k8s_staging_bots.give_back_dev_bots()  # a `bots` that crashed left the dev webhooks taken
     k8s_staging_data.forget(docker)
     if state.exists():

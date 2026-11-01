@@ -136,11 +136,13 @@ OPS-1-ah-j, `tools/k8s_staging_gate.py`, `tools/staging_botgate.py`).
   but `get*`) goes out only when its `chat_id` (query, JSON, form or multipart)
   is one of `STAGING_OWNER_CHATS`, and a `send*`/`copy*`/`forward*` must name
   one: a real id the scrub missed is still never written to.
-- **The owner talks to it** (`staging.sh bots`, `tools/k8s_staging_bots.py`),
-  in the foreground like `open`: each dev bot's webhook recorded in
+- **The owner talks to it** (`staging.sh bots`, `tools/k8s_staging_bots.py`).
+  A passed twin starts it on its own as the transient unit `txnet-staging-bots`
+  (`journalctl -u`), and `down`, send's `close` too, stops it; by hand it runs in
+  the foreground like `open`. Each dev bot's webhook recorded in
   `/var/lib/txnet/staging-bots.json`, then removed; its updates long-polled from
   the host, and only the owner's chats' posted to staging's bot-service (a
-  `kubectl port-forward`, the bot's own webhook secret); the rest dropped. Ctrl-C,
+  `kubectl port-forward`, the bot's own webhook secret); the rest dropped. Ctrl-C, SIGTERM
   or `down` after a crash, sets the webhook back as recorded; a dev stack that
   starts with none registers its own (`BOT_WEBHOOK_AUTO_REGISTER`).
 - **The services.** The scrub (every service at zero) and the twin after its
@@ -158,7 +160,7 @@ OPS-1-ah-j, `tools/k8s_staging_gate.py`, `tools/staging_botgate.py`).
 
 `tools/k8s_staging_scrub_test.py` (16), `k8s_staging_people_test.py` (11),
 `k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_gate_test.py` (13),
-`k8s_staging_bots_test.py` (7), `k8s_staging_data_test.py`,
+`k8s_staging_bots_test.py` (10), `k8s_staging_data_test.py`,
 `k8s_staging_twin_test.py`, `scripts/bundle/test_bundle.py`
 (`test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services`).
 2026-10-29, the SQL run on dev's database inside a transaction that was rolled

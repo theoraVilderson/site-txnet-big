@@ -81,5 +81,32 @@ class DeliverTest(unittest.TestCase):
         self.assertEqual(headers["X-Telegram-Bot-Api-Secret-Token"], "s3cret")
 
 
+class BackgroundTest(unittest.TestCase):
+    """A passed twin starts `bots` on its own, as a transient unit `down` stops."""
+
+    def test_a_unit_from_the_checkout_with_the_callers_proxy_and_no_token(self):
+        argv = kb.unit_argv(Path("/repo"), {"https_proxy": "http://p:3128", "HOME": "/root", "TELEGRAM_BOT_TOKEN": "1:x"})
+        self.assertEqual(argv[:3], ["systemd-run", f"--unit={kb.UNIT}", "--collect"])
+        self.assertIn("--setenv=https_proxy=http://p:3128", argv)
+        self.assertNotIn("1:x", " ".join(argv))
+        self.assertEqual(argv[-3:], ["python3", "/repo/tools/k8s_staging.py", "bots"])
+
+    def test_started_only_when_the_owner_has_chats(self):
+        ran = []
+        kb.start_background(frozenset(), run=lambda argv, **_: ran.append(argv))
+        self.assertEqual(ran, [])
+        kb.start_background(OWNERS, run=lambda argv, **_: ran.append(argv) or Done())
+        self.assertEqual([a[0] for a in ran], ["systemctl", "systemd-run"])  # a stale one stopped first
+
+    def test_down_stops_it(self):
+        ran = []
+        kb.stop_background(run=lambda argv, **_: ran.append(argv))
+        self.assertEqual(ran, [["systemctl", "stop", kb.UNIT]])
+
+
+class Done:
+    returncode, stderr = 0, ""
+
+
 if __name__ == "__main__":
     unittest.main()
