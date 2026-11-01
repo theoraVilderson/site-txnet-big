@@ -14,16 +14,20 @@
 ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/alpine:latest
 ARG ROUTEROS_VERSION
-# APK_MIRROR (.env): an Alpine mirror every server we build on reaches; dl-cdn
-# stalls mid-TLS from Iranian datacenters (OPS-1-af). Empty keeps dl-cdn.
+# APK_MIRROR (mirrors.env, ADR-0170): an Alpine mirror every server we build on
+# reaches; dl-cdn stalls mid-TLS from Iranian datacenters (OPS-1-af) and is gone
+# in an outage. Empty keeps dl-cdn.
 ARG APK_MIRROR
+# PKG_MIRROR (mirrors.env): its mikrotik repo serves download.mikrotik.com's paths.
+ARG PKG_MIRROR
+ARG MIKROTIK_URL=${PKG_MIRROR:+${PKG_MIRROR}/mikrotik}
 RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org/alpine#$APK_MIRROR#" /etc/apk/repositories; fi \
  && apk add --no-cache qemu-system-x86_64 curl unzip busybox-extras freeradius freeradius-utils openvpn jq \
  && mkdir -p /opt/routeros \
- && curl -fsSL -o /tmp/chr.zip "https://download.mikrotik.com/routeros/${ROUTEROS_VERSION}/chr-${ROUTEROS_VERSION}.img.zip" \
+ && curl -fsSL -o /tmp/chr.zip "${MIKROTIK_URL:-https://download.mikrotik.com}/routeros/${ROUTEROS_VERSION}/chr-${ROUTEROS_VERSION}.img.zip" \
  && unzip -p /tmp/chr.zip > /opt/routeros/chr.img && rm /tmp/chr.zip \
  && curl -fsSL -o "/opt/routeros/user-manager-${ROUTEROS_VERSION}.npk" \
-      "https://download.mikrotik.com/routeros/${ROUTEROS_VERSION}/user-manager-${ROUTEROS_VERSION}.npk"
+      "${MIKROTIK_URL:-https://download.mikrotik.com}/routeros/${ROUTEROS_VERSION}/user-manager-${ROUTEROS_VERSION}.npk"
 ENV ROUTEROS_VERSION=${ROUTEROS_VERSION}
 COPY chr.sh bootstrap.sh probe.sh nas.sh /usr/local/bin/
 COPY acct-probe.conf /etc/raddb/acct-probe.conf

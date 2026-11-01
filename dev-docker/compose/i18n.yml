@@ -17,6 +17,7 @@ services:
         locales: ../locales
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        PKG_MIRROR: ${PKG_MIRROR:-}
     container_name: ${STACK_NAME:-txnet}-locale-service
     mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
     mem_limit: 128m

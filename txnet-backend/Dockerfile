@@ -19,7 +19,14 @@ FROM base AS dependencies
 COPY package.json package-lock.json ./
 # vendored tarball of the shared @txnet/locale-client (file: dependency)
 COPY vendor ./vendor
-RUN npm ci
+# PKG_MIRROR (mirrors.env, ADR-0170): npm packages and Prisma's engines (npm ci's postinstall and
+# `prisma generate` both fetch them) from the package mirror, so a build in an
+# outage needs nothing abroad. Empty keeps registry.npmjs.org and binaries.prisma.sh;
+# npm swaps the lockfile's registry.npmjs.org host for the configured one.
+ARG PKG_MIRROR
+ENV PRISMA_ENGINES_MIRROR=${PKG_MIRROR:+${PKG_MIRROR}/prisma}
+RUN if [ -n "$PKG_MIRROR" ]; then npm config set registry "$PKG_MIRROR/npm/"; fi \
+ && npm ci
 COPY . .
 # Prisma Client must be (re)generated AFTER the schema is in the image.
 RUN npx prisma generate

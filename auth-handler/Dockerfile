@@ -10,7 +10,10 @@
 # ---------- base: fetch deps ----------
 ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/golang:1.27-alpine AS base
-ENV GOPROXY="https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
+# PKG_MIRROR (mirrors.env, ADR-0170): the package mirror's go repo first, so a build in an
+# outage needs nothing abroad; empty keeps goproxy.io alone.
+ARG PKG_MIRROR
+ENV GOPROXY="${PKG_MIRROR:+${PKG_MIRROR}/go/,}https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
 WORKDIR /src
 COPY auth-handler/go.mod auth-handler/go.sum ./auth-handler/
 COPY i18n-platform/clients/go/ ./i18n-platform/clients/go/
@@ -32,7 +35,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /out/auth-handler ./cmd/server
 
 # ---------- prod: minimal image ----------
 FROM ${DOCKER_REGISTRY}/alpine:3.19 AS prod
-RUN apk --no-cache add ca-certificates
+# APK_MIRROR (mirrors.env, ADR-0170): Alpine's packages, from inside Iran when it is set.
+ARG APK_MIRROR
+RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org/alpine#$APK_MIRROR#" /etc/apk/repositories; fi \
+ && apk --no-cache add ca-certificates
 # Where compose's `working_dir` and PERMISSIONS_FILE_PATH say the gateway and
 # its configs are; dev mounts the source over the same path (K8).
 WORKDIR /src/auth-handler

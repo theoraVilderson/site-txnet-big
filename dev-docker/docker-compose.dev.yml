@@ -229,6 +229,7 @@ services:
       context: ./routeros
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        PKG_MIRROR: ${PKG_MIRROR:-}
         APK_MIRROR: ${APK_MIRROR:-}
         ROUTEROS_VERSION: ${ROUTEROS_VERSION:-7.24.5}
         HTTP_PROXY: ${HTTP_PROXY:-}
@@ -275,6 +276,7 @@ services:
       context: ./ibsng
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        PKG_MIRROR: ${PKG_MIRROR:-}
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
     container_name: ${STACK_NAME:-txnet}-ibsng

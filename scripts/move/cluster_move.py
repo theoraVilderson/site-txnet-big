@@ -42,6 +42,7 @@ import move_access as ma
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
 import dns_resolvers as dr  # noqa: E402
 import k8s_staging  # noqa: E402
+import pkg_mirror  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 STATE = os.path.join(ROOT, ".move", "cluster.json")
@@ -192,8 +193,8 @@ def install_k3s(new):
     pins = dict(line.split("=", 1) for line in open(os.path.join(ROOT, "k8s/versions.env")).read().split()
                 if "=" in line and not line.startswith("#"))
     script = os.path.join(ROOT, ".move", "k3s-install.sh")
-    subprocess.run(["curl", "-fsSL", "-o", script, "https://raw.githubusercontent.com/k3s-io/k3s/%s/install.sh"
-                    % pins["K3S_VERSION"]], check=True)
+    url = "https://raw.githubusercontent.com/k3s-io/k3s/%s/install.sh" % pins["K3S_VERSION"]
+    subprocess.run(["curl", "-fsSL", "-o", script, pkg_mirror.mirrored(url, pkg_mirror.configured())], check=True)
     sums = "%s  /usr/local/bin/k3s\n%s  %s\n" % (pins["K3S_SHA256"], pins["K3S_INSTALL_SHA256"], script)
     subprocess.run(["sha256sum", "-c", "--quiet"], input=sums, text=True, check=True)
     new.push("/usr/local/bin/k3s", "/usr/local/bin/k3s", "0755")

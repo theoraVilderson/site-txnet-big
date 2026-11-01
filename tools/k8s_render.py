@@ -34,7 +34,7 @@ from k8srender import RenderError, exposed_ports, render  # noqa: E402
 from k8srender.tags import content_tags  # noqa: E402
 from k8srender.container import built_images  # noqa: E402
 from k8srender.registries import registries_yaml  # noqa: E402
-from k8srender.tables import STACKS, Stack  # noqa: E402
+from k8srender.tables import MIRRORS_ENV, STACKS, Stack  # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
 # OPS-1-o-w: compose turns an unset `${DB_APP_PASSWORD}` into "", and every
@@ -44,7 +44,7 @@ DB_PASSWORD = re.compile(r"(^|_)DB_\w*PASSWORD$")
 
 def compose(stack: Stack, args: list[str], env_files: list[str], overrides: dict) -> str:
     cmd = ["docker", "compose", "-p", stack.project]
-    for env_file in env_files:
+    for env_file in (*env_files, MIRRORS_ENV):
         cmd += ["--env-file", str(REPO / env_file)]
     for profile in stack.profiles:
         cmd += ["--profile", profile]

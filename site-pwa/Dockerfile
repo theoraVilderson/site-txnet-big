@@ -27,7 +27,10 @@ ENV HTTP_PROXY="${BUILD_HTTP_PROXY}" \
 COPY package.json package-lock.json ./
 # vendored tarball of the shared @txnet/locale-client (file: dependency)
 COPY vendor ./vendor
-RUN npm install --legacy-peer-deps
+# PKG_MIRROR (mirrors.env, ADR-0170): npm packages from the package mirror; empty keeps registry.npmjs.org.
+ARG PKG_MIRROR
+RUN if [ -n "$PKG_MIRROR" ]; then npm config set registry "$PKG_MIRROR/npm/"; fi \
+ && npm install --legacy-peer-deps
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules

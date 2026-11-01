@@ -128,7 +128,11 @@ class ShipRegistry(unittest.TestCase):
 
                 def env_files(self):
                     return [shared, os.path.join(d, ".env.prod")]
-            self.assertEqual(ship.registry(Node()), "registry.example")
+            self.assertEqual(ship.registry(Node(), d), "registry.example")
+            # ADR-0170: the committed mirrors.env, read last, wins over a sealed env file's value
+            with open(os.path.join(d, "mirrors.env"), "w") as f:
+                f.write("DOCKER_REGISTRY=mirror.example\n")
+            self.assertEqual(ship.registry(Node(), d), "mirror.example")
 
 
 class Cadence(unittest.TestCase):

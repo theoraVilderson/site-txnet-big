@@ -98,19 +98,19 @@ start_independent() {
   # 1. Docker Registry
   log "▶ Starting Docker Registry..."
   (cd "${SCRIPT_DIR}/registry" && \
-     docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml "$action" $detach_flag)
+     docker compose --env-file .env --env-file ../../mirrors.env -p txnet-registry -f docker-compose.registry.yml "$action" $detach_flag)
   log "  ✓ Registry started"
 
   # 2. System Monitor (Prometheus, Grafana, Loki, etc.)
   log "▶ Starting System Monitor..."
   (cd "${SCRIPT_DIR}/monitoring" && \
-     docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml "$action" $detach_flag)
+     docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-monitor -f docker-compose.sys-monitor.yml "$action" $detach_flag)
   log "  ✓ System Monitor started"
 
   # 3. Bug Tracker (Glitchtip)
   log "▶ Starting Bug Tracker..."
   (cd "${SCRIPT_DIR}/bug-tracker" && \
-     docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml "$action" $detach_flag)
+     docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-bugtracker -f docker-compose.bug-tracker.yml "$action" $detach_flag)
   log "  ✓ Bug Tracker started"
 }
 
@@ -143,15 +143,15 @@ stop_all() {
 
   log "▶ Stopping Bug Tracker..."
   (cd "${SCRIPT_DIR}/bug-tracker" && \
-     docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml down) || true
+     docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-bugtracker -f docker-compose.bug-tracker.yml down) || true
 
   log "▶ Stopping System Monitor..."
   (cd "${SCRIPT_DIR}/monitoring" && \
-     docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml down) || true
+     docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-monitor -f docker-compose.sys-monitor.yml down) || true
 
   log "▶ Stopping Registry..."
   (cd "${SCRIPT_DIR}/registry" && \
-     docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml down) || true
+     docker compose --env-file .env --env-file ../../mirrors.env -p txnet-registry -f docker-compose.registry.yml down) || true
 
   log "All services stopped."
 }

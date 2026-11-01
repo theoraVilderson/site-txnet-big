@@ -5,7 +5,10 @@
 # build
 ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/golang:1.27-alpine AS build
-ENV GOPROXY="https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
+# PKG_MIRROR (mirrors.env, ADR-0170): the package mirror's go repo first, so a build in an
+# outage needs nothing abroad; empty keeps goproxy.io alone.
+ARG PKG_MIRROR
+ENV GOPROXY="${PKG_MIRROR:+${PKG_MIRROR}/go/,}https://goproxy.io,direct" GOSUMDB=off GOWORK=off GOFLAGS=-mod=mod
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

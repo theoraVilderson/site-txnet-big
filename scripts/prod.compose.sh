@@ -22,4 +22,5 @@ fi
 exec docker compose -p prodtxnet \
   --env-file "$ROOT_DIR/.env" \
   --env-file "$ROOT_DIR/.env.prod" \
+  --env-file "$ROOT_DIR/mirrors.env" \
   -f "$ROOT_DIR/dev-docker/docker-compose.main.yml" "$@"

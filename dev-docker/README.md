@@ -123,19 +123,19 @@ If you need to manage stacks individually:
 
 # Registry
 cd dev-docker/registry
-docker compose --env-file .env -p txnet-registry -f docker-compose.registry.yml up -d
+docker compose --env-file .env --env-file ../../mirrors.env -p txnet-registry -f docker-compose.registry.yml up -d
 
 # System Monitor
 cd dev-docker/monitoring
-docker compose --env-file .env.dev -p txnet-monitor -f docker-compose.sys-monitor.yml up -d
+docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-monitor -f docker-compose.sys-monitor.yml up -d
 
 # Bug Tracker
 cd dev-docker/bug-tracker
-docker compose --env-file .env.dev -p txnet-bugtracker -f docker-compose.bug-tracker.yml up -d
+docker compose --env-file .env.dev --env-file ../../mirrors.env -p txnet-bugtracker -f docker-compose.bug-tracker.yml up -d
 
 # ---- Main Stack (start LAST) ----
 cd /root/site-txnet-big
-docker compose --env-file .env -p txnet-main -f dev-docker/docker-compose.main.yml up -d --build
+docker compose --env-file .env --env-file mirrors.env -p txnet-main -f dev-docker/docker-compose.main.yml up -d --build
 ```
 
 ## Service URLs

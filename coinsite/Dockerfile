@@ -4,8 +4,9 @@ ARG DOCKER_REGISTRY
 # (Node security release 2026-10-21: Brotli RCE, TLS hostname bypass). Bump on the next one.
 FROM ${DOCKER_REGISTRY}/node:22.23.4-alpine AS base
 # پکیج libc6-compat برای سازگاری بهتر برخی ماژول‌های سیستمی C/C++ در آلپاین بسیار توصیه می‌شود
-# APK_MIRROR (.env): an Alpine mirror every server we build on reaches; dl-cdn
-# stalls mid-TLS from Iranian datacenters (OPS-1-af). Empty keeps dl-cdn.
+# APK_MIRROR (mirrors.env, ADR-0170): an Alpine mirror every server we build on
+# reaches; dl-cdn stalls mid-TLS from Iranian datacenters (OPS-1-af) and is gone
+# in an outage. Empty keeps dl-cdn.
 ARG APK_MIRROR
 RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org/alpine#$APK_MIRROR#" /etc/apk/repositories; fi \
  && apk add --no-cache libc6-compat
@@ -15,8 +16,11 @@ WORKDIR /app
 FROM base AS deps
 WORKDIR /app
 COPY package*.json ./
+# PKG_MIRROR (mirrors.env, ADR-0170): npm packages from the package mirror; empty keeps registry.npmjs.org.
+ARG PKG_MIRROR
 # استفاده از npm ci به جای npm install برای نصب دقیق و پایدار وابستگی‌ها
-RUN npm ci
+RUN if [ -n "$PKG_MIRROR" ]; then npm config set registry "$PKG_MIRROR/npm/"; fi \
+ && npm ci
 
 # ---------- Development ----------
 FROM base AS dev

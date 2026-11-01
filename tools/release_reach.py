@@ -27,6 +27,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_render  # noqa: E402
+import pkg_mirror  # noqa: E402
 from k8srender.tables import STACKS  # noqa: E402
 from k8s_staging_data import RENDERED_DIRS  # noqa: E402
 
@@ -154,8 +155,9 @@ def render_tree(tree: Path, out: Path) -> dict[str, str]:
     stacks = STACKS if "--stack" in render.read_text() else ("main",)
     for stack in stacks:
         chosen = ["--stack", stack] if len(stacks) > 1 else []
+        # both commits render with this checkout's mirrors.env, which an older one lacks (ADR-0170)
         subprocess.run(["python3", str(render), str(out / stack), *chosen, "--host-gateway", REACH_HOST_GATEWAY],
-                       check=True, stdout=subprocess.DEVNULL)
+                       env={**os.environ, **pkg_mirror.environ()}, check=True, stdout=subprocess.DEVNULL)
     return {path.relative_to(out).as_posix(): path.read_text() for path in sorted(out.rglob("*.yaml"))}
 
 

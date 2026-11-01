@@ -140,6 +140,8 @@ services:
         - "3eora-mitm-proxy:${MITM_PROXY_IP:-host-gateway}"
       args:
         DOCKER_REGISTRY: ${DOCKER_REGISTRY}
+        PKG_MIRROR: ${PKG_MIRROR:-}
+        APK_MIRROR: ${APK_MIRROR:-}
     container_name: ${STACK_NAME:-txnet}-auth-handler
     mem_reservation: 32m # the k8s request: measured peak + headroom (K19)
     mem_limit: 128m

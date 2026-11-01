@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT / "scripts" / "bundle"))
 import bundle_plan as bp  # noqa: E402
 import bundle_restore as br  # noqa: E402
 import k8s_staging as ks  # noqa: E402
+import pkg_mirror  # noqa: E402
 from k8s_secrets import AGE_KEY_FILE  # noqa: E402
 from k8srender.tables import STACKS  # noqa: E402
 
@@ -192,11 +193,12 @@ def bring_images(docker, tree: Path, env: dict) -> None:
     try:
         for link in links:
             link.symlink_to(ROOT / link.name)
-        subprocess.run([f"{tree}/scripts/prod.k8s.sh", "build"], check=True)
+        # production's commit may predate mirrors.env: its values ride in the environment (ADR-0170)
+        subprocess.run([f"{tree}/scripts/prod.k8s.sh", "build"], env={**os.environ, **pkg_mirror.environ()}, check=True)
     finally:
         for link in links:
             link.unlink(missing_ok=True)
-    subprocess.run([f"{tree}/scripts/prod.k8s.sh", "render"], env=env, check=True)
+    subprocess.run([f"{tree}/scripts/prod.k8s.sh", "render"], env={**env, **pkg_mirror.environ()}, check=True)
     images = rendered_images(tree / d for d in RENDERED_DIRS)
     for image in images:
         if docker(["docker", "image", "inspect", image], check=False).returncode != 0:

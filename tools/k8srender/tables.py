@@ -22,6 +22,10 @@ class Stack:
     peer: str | None = None
 
 
+# ADR-0170: where images and packages come from, committed in plain text (nothing
+# in it is secret) and read after every stack's env files, so it wins over them.
+MIRRORS_ENV = "mirrors.env"
+
 # K1: the namespace every platform object lives in, and K11's for monitoring.
 NAMESPACE = "txnet"
 MONITORING_NAMESPACE = "txnet-monitoring"

@@ -3,8 +3,9 @@
 # The pg-backup container (H3) runs this same image with its own entrypoint.
 ARG DOCKER_REGISTRY
 FROM ${DOCKER_REGISTRY}/postgres:18-alpine
-# APK_MIRROR (.env): an Alpine mirror every server we build on reaches; dl-cdn
-# stalls mid-TLS from Iranian datacenters (OPS-1-af). Empty keeps dl-cdn.
+# APK_MIRROR (mirrors.env, ADR-0170): an Alpine mirror every server we build on
+# reaches; dl-cdn stalls mid-TLS from Iranian datacenters (OPS-1-af) and is gone
+# in an outage. Empty keeps dl-cdn.
 ARG APK_MIRROR
 RUN if [ -n "$APK_MIRROR" ]; then sed -i "s#https\?://dl-cdn.alpinelinux.org/alpine#$APK_MIRROR#" /etc/apk/repositories; fi \
  && apk add --no-cache pgbackrest

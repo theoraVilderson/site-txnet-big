@@ -193,7 +193,7 @@ stage() {
   . "$ROOT_DIR/k8s/versions.env"
   tag="${K3S_VERSION//+/%2B}"
   install -m 0755 /usr/local/bin/k3s "$work/k3s"
-  curl -fsSL -o "$work/install.sh" "https://raw.githubusercontent.com/k3s-io/k3s/$tag/install.sh"
+  curl -fsSL -o "$work/install.sh" "$(python3 "$ROOT_DIR/tools/pkg_mirror.py" "https://raw.githubusercontent.com/k3s-io/k3s/$tag/install.sh")"
   printf '%s  %s\n' "$K3S_SHA256" "$work/k3s" "$K3S_INSTALL_SHA256" "$work/install.sh" | sha256sum -c --quiet ||
     die "this node's k3s or install.sh does not match k8s/versions.env"
   install -m 0600 "$NODE_TOKEN" "$work/token"

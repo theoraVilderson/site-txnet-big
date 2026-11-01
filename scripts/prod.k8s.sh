@@ -60,9 +60,10 @@ die() {
   exit 1
 }
 
-# The same project, env files and profile tools/k8s_render.py reads (K2).
+# The same project, env files and profile tools/k8s_render.py reads (K2); mirrors.env last (ADR-0170).
 compose() {
   ENVIRONMENT=prod docker compose -p txnet --env-file "$ROOT_DIR/.env" --env-file "$ROOT_DIR/.env.prod" \
+    --env-file "$ROOT_DIR/mirrors.env" \
     --profile migrate -f "$ROOT_DIR/dev-docker/docker-compose.main.yml" "$@"
 }
 
@@ -205,10 +206,11 @@ install_tools() {
   . "$ROOT_DIR/k8s/versions.env"
   work="$(mktemp -d)"
   TEMPS+=("$work")
+  # through the package mirror when .env names one (tools/pkg_mirror.py)
   curl -fsSL -o "$work/sops" \
-    "https://github.com/getsops/sops/releases/download/$SOPS_VERSION/sops-$SOPS_VERSION.linux.amd64"
+    "$(python3 "$ROOT_DIR/tools/pkg_mirror.py" "https://github.com/getsops/sops/releases/download/$SOPS_VERSION/sops-$SOPS_VERSION.linux.amd64")"
   curl -fsSL -o "$work/age.tar.gz" \
-    "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+    "$(python3 "$ROOT_DIR/tools/pkg_mirror.py" "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz")"
   printf '%s  %s\n' "$SOPS_SHA256" "$work/sops" "$AGE_SHA256" "$work/age.tar.gz" | sha256sum -c --quiet ||
     die "a download does not match k8s/versions.env"
   tar -xzf "$work/age.tar.gz" -C "$work" age/age-keygen

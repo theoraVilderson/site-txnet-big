@@ -5,7 +5,8 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=../versions.env
 . "$here/../versions.env"
-base="https://raw.githubusercontent.com/traefik/traefik/${TRAEFIK_CRD_VERSION}/docs/content/reference/dynamic-configuration"
+# through the package mirror when .env names one (tools/pkg_mirror.py)
+base="$(python3 "$here/../../tools/pkg_mirror.py" "https://raw.githubusercontent.com/traefik/traefik/${TRAEFIK_CRD_VERSION}/docs/content/reference/dynamic-configuration")"
 curl -fsSL --max-time 60 "$base/kubernetes-crd-definition-v1.yml" -o "$here/crds.yaml"
 curl -fsSL --max-time 60 "$base/kubernetes-crd-rbac.yml" -o "$here/rbac.yaml"
 echo "vendored Traefik ${TRAEFIK_CRD_VERSION} into $here"

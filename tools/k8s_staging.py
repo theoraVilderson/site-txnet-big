@@ -41,8 +41,10 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "scripts" / "bundle"))
 from bundle_plan import parse_env  # noqa: E402
 from k8s_memfit import K3S_BASE_MIB, K3S_PER_POD_MIB, repo_workloads  # noqa: E402
+from k8srender.tables import MIRRORS_ENV  # noqa: E402
 import k8s_staging_gate as kg  # noqa: E402
 import k8s_staging_images as ki  # noqa: E402
+import pkg_mirror  # noqa: E402
 
 CONTAINER = NETWORK = "txnet-staging"
 # TEST-NET-3 (RFC 5737): routed nowhere, and not private, so network-service's
@@ -229,17 +231,22 @@ def mem_available_mib() -> float:
     raise StagingError("/proc/meminfo has no MemAvailable")
 
 
+def release_url(tag: str, name: str) -> str:
+    """A k3s release asset, through the package mirror when .env names one."""
+    return pkg_mirror.mirrored(RELEASE_URL.format(tag=tag, name=name), pkg_mirror.configured())
+
+
 def fetch_airgap(version: str) -> Path:
     """The release's air-gap archive, downloaded once per K3S_VERSION and checked
     against the release's sum list every time it is used."""
     tag = urllib.parse.quote(version, safe="")
     target = CACHE_DIR / version / AIRGAP_FILE
     target.parent.mkdir(parents=True, exist_ok=True)
-    sums = subprocess.run(["curl", "-fsSL", RELEASE_URL.format(tag=tag, name=SUMS_FILE)],
+    sums = subprocess.run(["curl", "-fsSL", release_url(tag, SUMS_FILE)],
                           check=True, text=True, capture_output=True).stdout
     expected = airgap_sha256(sums)
     if not target.exists():
-        subprocess.run(["curl", "-fsSL", "-o", str(target), RELEASE_URL.format(tag=tag, name=AIRGAP_FILE)], check=True)
+        subprocess.run(["curl", "-fsSL", "-o", str(target), release_url(tag, AIRGAP_FILE)], check=True)
     actual = subprocess.run(["sha256sum", str(target)], check=True, text=True, capture_output=True).stdout.split()[0]
     if actual != expected:
         target.unlink()
@@ -284,7 +291,7 @@ def up(docker, root: Path, state: Path) -> None:
     if problem:
         raise StagingError(problem)
     versions = parse_env((root / "k8s" / "versions.env").read_text())
-    registry = parse_env((root / ".env").read_text())["DOCKER_REGISTRY"]
+    registry = parse_env((root / MIRRORS_ENV).read_text())["DOCKER_REGISTRY"]  # ADR-0170
     image = k3s_image(registry, versions["K3S_VERSION"])
     airgap = fetch_airgap(versions["K3S_VERSION"])
     docker(["docker", "pull", "-q", image])

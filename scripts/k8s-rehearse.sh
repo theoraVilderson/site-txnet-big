@@ -76,8 +76,9 @@ install_k3s() {
   tag="${K3S_VERSION//+/%2B}"
   work="$(mktemp -d)"
   TEMPS+=("$work")
-  curl -fsSL -o "$work/k3s" "https://github.com/k3s-io/k3s/releases/download/$tag/k3s"
-  curl -fsSL -o "$work/install.sh" "https://raw.githubusercontent.com/k3s-io/k3s/$tag/install.sh"
+  # through the package mirror when .env names one (tools/pkg_mirror.py)
+  curl -fsSL -o "$work/k3s" "$(python3 "$ROOT_DIR/tools/pkg_mirror.py" "https://github.com/k3s-io/k3s/releases/download/$tag/k3s")"
+  curl -fsSL -o "$work/install.sh" "$(python3 "$ROOT_DIR/tools/pkg_mirror.py" "https://raw.githubusercontent.com/k3s-io/k3s/$tag/install.sh")"
   printf '%s  %s\n' "$K3S_SHA256" "$work/k3s" "$K3S_INSTALL_SHA256" "$work/install.sh" | sha256sum -c --quiet ||
     die "a download does not match k8s/versions.env"
   install -m 0755 "$work/k3s" "$BIN_DIR/k3s"

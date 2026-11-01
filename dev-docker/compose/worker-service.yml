@@ -22,6 +22,7 @@ services:
       args:
         - APP_NAME=worker-service
         - DOCKER_REGISTRY=${DOCKER_REGISTRY}
+        - PKG_MIRROR=${PKG_MIRROR:-}
     container_name: ${STACK_NAME:-txnet}-worker-service
     mem_reservation: 160m # the k8s request: measured peak + headroom (K19)
     mem_limit: 512m

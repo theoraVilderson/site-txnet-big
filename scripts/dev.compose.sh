@@ -7,5 +7,6 @@ moved_guard "$ROOT_DIR" "${1:-}"
 exec docker compose -p devtxnet \
   --env-file "$ROOT_DIR/.env" \
   --env-file "$ROOT_DIR/.env.dev" \
+  --env-file "$ROOT_DIR/mirrors.env" \
   -f "$ROOT_DIR/dev-docker/docker-compose.main.yml" \
   -f "$ROOT_DIR/dev-docker/docker-compose.dev.yml" "$@"

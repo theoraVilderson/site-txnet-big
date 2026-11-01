@@ -29,6 +29,9 @@ import bundle_make as bm  # noqa: E402
 import bundle_plan as bp  # noqa: E402
 import bundle_stack as bs  # noqa: E402
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+from k8srender.tables import MIRRORS_ENV  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # Pulled through ${DOCKER_REGISTRY}, like every image (verified on the mirror 2026-10-30).
 # mc, not rclone: rclone cannot set an object's retention on upload (NIN-1-i).
@@ -72,12 +75,13 @@ def prune_s3(host, box, settings):
     return len(removed)
 
 
-def registry(host):
-    """DOCKER_REGISTRY from the env files the stack runs with: a node holds them sealed, never as .env (NIN-1-i3)."""
-    paths = host.env_files() if host.stack == bs.K8S else [".env"]
+def registry(host, root=ROOT):
+    """DOCKER_REGISTRY from the env files the stack runs with: a node holds them sealed, never as .env (NIN-1-i3),
+    and the committed mirrors.env after them (ADR-0170)."""
+    paths = (host.env_files() if host.stack == bs.K8S else [".env"]) + [MIRRORS_ENV]
     merged = {}
     for path in paths:  # a later file wins, as compose and the render read them
-        full = os.path.join(ROOT, path)
+        full = os.path.join(root, path)
         if os.path.exists(full):
             merged.update(bp.parse_env(open(full).read()))
     return merged["DOCKER_REGISTRY"]
