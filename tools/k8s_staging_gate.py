@@ -26,6 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import k8s_staging_keys as kk  # noqa: E402
+import k8s_staging_people as kp  # noqa: E402
 import staging_botgate as gate  # noqa: E402
 
 CONTAINER = "txnet-staging-botgate"
@@ -45,13 +46,16 @@ def b64(text: str) -> str:
     return base64.b64encode(text.encode()).decode()
 
 
-def run_argv(image: str, root: Path, upstreams: dict[str, str], tokens: dict[str, list[str]]) -> list[str]:
-    """The gate on the host's bridge (its route out): only the tokens' hashes go in."""
+def run_argv(image: str, root: Path, upstreams: dict[str, str], tokens: dict[str, list[str]],
+             owners: frozenset[tuple[str, str]] = frozenset()) -> list[str]:
+    """The gate on the host's bridge (its route out): only the tokens' hashes go in,
+    and the owner's chats, the only ones it writes to (OPS-1-ah-p)."""
     env = []
     for platform in gate.PLATFORMS:
         hashes = ",".join(hashlib.sha256(t.encode()).hexdigest() for t in tokens.get(platform, []))
+        chats = ",".join(sorted(chat for p, chat in owners if p == platform))
         env += ["-e", f"GATE_UPSTREAM_{platform.upper()}={upstreams[platform]}",
-                "-e", f"GATE_TOKENS_{platform.upper()}={hashes}"]
+                "-e", f"GATE_TOKENS_{platform.upper()}={hashes}", "-e", f"GATE_OWNERS_{platform.upper()}={chats}"]
     return ["docker", "run", "-d", "--name", CONTAINER, *env,
             "-v", f"{root}/tools/staging_botgate.py:/gate.py:ro", image, "python", "-u", "/gate.py"]
 
@@ -63,7 +67,7 @@ def start(docker, root: Path, registry: str, network: str) -> None:
     image = f"{registry}/{IMAGE}"
     if docker(["docker", "image", "inspect", image], check=False).returncode != 0:
         docker(["docker", "pull", "-q", image])
-    docker(run_argv(image, root, upstreams, tokens))
+    docker(run_argv(image, root, upstreams, tokens, kp.owner_chats(env.get(kp.OWNERS_VAR, ""))))
     docker(["docker", "network", "connect", "--ip", GATE_ADDRESS, network, CONTAINER])
     print(f"the dev bots' gate is up at {GATE_URL}: {', '.join(tokens) or 'no dev bot, so it refuses everything'}")
 

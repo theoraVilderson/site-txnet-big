@@ -206,13 +206,18 @@ def guard(local: Local) -> bool:
     """True when no panel row names a real address, every person's contact is a
     fake and every key staging's own; each finding said otherwise."""
     labels, sources = vault_logins()
-    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql) + kk.guard(psql) + kg.guard(KUBECTL)
+    found = offenders(panel_rows(), local, labels, sources) + kp.guard(psql, owner_chats()) + kk.guard(psql) + kg.guard(KUBECTL)
     for line in found:
         print(f"REAL  {line}")
     if found:
         print(f"{len(found)} real address(es), login(s), contact(s) or key(s) left in staging's copy: "
               "it does not start")
     return not found
+
+
+def owner_chats() -> frozenset[tuple[str, str]]:
+    """The owner's own chats from .env.dev (OPS-1-ah-p): kept real by the scrub and its guard."""
+    return kp.owner_chats(kk.dev_env().get(kp.OWNERS_VAR, ""))
 
 
 def scrub_panels(docker, panel_host: str) -> Local:
@@ -235,7 +240,7 @@ def main(argv=None) -> int:
         if args.command == "scrub":
             local = scrub_panels(ks.docker_run, args.panel_host)
             work = os.environ.get(RESTORE_WORK)
-            kp.scrub(psql, KUBECTL, Path(work) if work else None)
+            kp.scrub(psql, KUBECTL, Path(work) if work else None, owner_chats())
             kk.scrub(psql, KUBECTL)
             kg.aim(KUBECTL)
         else:

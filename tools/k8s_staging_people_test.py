@@ -32,6 +32,24 @@ class ColumnsTest(unittest.TestCase):
         self.assertIn(aside, sql)
         self.assertLess(sql.index(aside), sql.index('UPDATE identity."user" SET "phoneNumber" = \'+98912\''))
 
+    # OPS-1-ah-p: the owner's own chats keep their real id, in both places a chat is
+    # named, so staging's bot reaches them and an in-chat payment knows its payer.
+    def test_the_owners_chats_keep_their_real_id_and_no_one_elses_does(self):
+        owners = kp.owner_chats("telegram:5797569311, bale:1153674618")
+        self.assertEqual(owners, {("telegram", "5797569311"), ("bale", "1153674618")})
+        sql = kp.scrub_sql(owners)
+        keep = "(\"platform\"::text, \"platformUserId\") IN (('bale', '1153674618'), ('telegram', '5797569311'))"
+        self.assertEqual(sql.count(f"AND NOT {keep}"), 2)  # moved aside, then faked
+        self.assertIn("(\"payerChatPlatform\"::text, \"payerChatId\") IN (", sql)
+        self.assertNotIn("IN (", kp.scrub_sql(frozenset()))
+        self.assertIn(f"OR {keep}", kp.guard_sql(owners))
+
+    def test_an_owner_chat_that_is_not_platform_and_digits_is_refused(self):
+        for bad in ("whatsapp:1", "telegram:12a", "telegram"):
+            with self.assertRaises(ValueError):
+                kp.owner_chats(bad)
+        self.assertEqual(kp.owner_chats(""), frozenset())
+
     def test_otp_codes_are_deleted_and_it_is_one_transaction(self):
         sql = kp.scrub_sql()
         self.assertTrue(sql.startswith("BEGIN;") and sql.rstrip().endswith("COMMIT;"))

@@ -28,6 +28,10 @@ FAKE_WALLET = "staging-wallet-0000000000"
 # passes Luhn and the sheba mod 97, so an edit in staging validates.
 DESTINATION_FAKES = {"cardNumber": "6037990000000006", "sheba": "IR490000000000000000000000",
                      "holderName": "Staging Holder", "address": FAKE_WALLET, "memo": "staging"}
+# The owner's own chats (OPS-1-ah-p), `telegram:<id>,bale:<id>` in .env.dev: they keep
+# their real id, so staging's bot reaches the owner and no one else.
+OWNERS_VAR = "STAGING_OWNER_CHATS"
+CHAT_PLATFORMS = ("telegram", "bale")
 # The wiped panel address of R16 (k8s_staging_scrub.WIPED_ADDRESS), as an origin.
 WIPED_ORIGIN = "http://192.0.2.1"
 
@@ -62,6 +66,8 @@ class Column:
     fake: str
     is_fake: str
     unique: bool = False
+    # A chat column's platform column: an owner's chat there is kept (OPS-1-ah-p).
+    platform: str | None = None
 
     @property
     def name(self) -> str:
@@ -84,8 +90,10 @@ COLUMNS = (
     _phone('identity."user"', "phoneNumber", unique=True),
     _email('identity."user"', "email", unique=True),
     _phone("identity.linked_bot_account", "phoneNumber"),
-    Column("identity.linked_bot_account", "platformUserId", FAKE_CHAT, is_chat("platformUserId"), unique=True),
-    Column("billing.payment_transaction", "payerChatId", FAKE_CHAT, is_chat("payerChatId")),
+    Column("identity.linked_bot_account", "platformUserId", FAKE_CHAT, is_chat("platformUserId"), unique=True,
+           platform="platform"),
+    Column("billing.payment_transaction", "payerChatId", FAKE_CHAT, is_chat("payerChatId"),
+           platform="payerChatPlatform"),
     Column("billing.payment_transaction", "cardPanMasked", "'000000******0000'",
            "\"cardPanMasked\" = '000000******0000'"),
     _destination("billing.manual_destination", "fields"),
@@ -125,25 +133,49 @@ def qident(column: str) -> str:
     return f'"{column}"'
 
 
-def scrub_sql() -> str:
+def owner_chats(text: str) -> frozenset[tuple[str, str]]:
+    """OWNERS_VAR's `platform:id` list; anything else is refused, since it lands in SQL."""
+    found = set()
+    for item in filter(None, (part.strip() for part in text.split(","))):
+        platform, _, chat = item.partition(":")
+        if platform not in CHAT_PLATFORMS or not chat.isdigit():
+            raise ValueError(f"{OWNERS_VAR}: {item!r} is not <{'|'.join(CHAT_PLATFORMS)}>:<digits>")
+        found.add((platform, chat))
+    return frozenset(found)
+
+
+def owner_kept(c: Column, owners: frozenset[tuple[str, str]]) -> str | None:
+    """SQL true where c holds one of the owner's chats, or None when nothing is kept."""
+    if not c.platform or not owners:
+        return None
+    pairs = ", ".join(f"('{platform}', '{chat}')" for platform, chat in sorted(owners))
+    return f"({qident(c.platform)}::text, {qident(c.column)}) IN ({pairs})"
+
+
+def scrub_sql(owners: frozenset[tuple[str, str]] = frozenset()) -> str:
     """One transaction. A unique column is moved aside first (`~` + itself), so a
-    fake never meets a row not yet rewritten."""
+    fake never meets a row not yet rewritten. The owner's chats are left as they are."""
     lines = ["BEGIN;"]
     for c in COLUMNS:
         col = qident(c.column)
+        kept = owner_kept(c, owners)
+        where = f"{col} IS NOT NULL" + (f" AND NOT {kept}" if kept else "")
         if c.unique:
-            lines.append(f"UPDATE {c.table} SET {col} = '~' || {col} WHERE {col} IS NOT NULL;")
+            lines.append(f"UPDATE {c.table} SET {col} = '~' || {col} WHERE {where};")
         lines.append(f"UPDATE {c.table} SET {col} = {c.fake} FROM (SELECT ctid AS row, row_number() OVER () AS n "
-                     f"FROM {c.table} WHERE {col} IS NOT NULL) s WHERE {c.table}.ctid = s.row;")
+                     f"FROM {c.table} WHERE {where}) s WHERE {c.table}.ctid = s.row;")
     lines += [f"DELETE FROM {table};" for table in CLEARED]
     lines.append("COMMIT;")
     return "\n".join(lines) + "\n"
 
 
-def guard_sql() -> str:
-    """One row of JSON: {column or table: how many of its values are not ours}."""
+def guard_sql(owners: frozenset[tuple[str, str]] = frozenset()) -> str:
+    """One row of JSON: {column or table: how many of its values are neither ours nor the owner's}."""
+    def ours(c: Column) -> str:
+        kept = owner_kept(c, owners)
+        return c.is_fake + (f" OR {kept}" if kept else "")
     parts = [f"'{c.name}', (SELECT count(*) FROM {c.table} WHERE {qident(c.column)} IS NOT NULL "
-             f"AND NOT ({c.is_fake}))" for c in COLUMNS]
+             f"AND NOT ({ours(c)}))" for c in COLUMNS]
     parts += [f"'{table}', (SELECT count(*) FROM {table})" for table in CLEARED]
     return f"SELECT jsonb_build_object({', '.join(parts)});"
 
@@ -190,18 +222,18 @@ def redis(kubectl: list[str], script: str, stdin: str = "") -> str:
     return subprocess.run(argv, input=stdin, check=True, text=True, capture_output=True).stdout
 
 
-def scrub(psql, kubectl: list[str], work: Path | None) -> None:
-    psql(scrub_sql())
+def scrub(psql, kubectl: list[str], work: Path | None, owners: frozenset[tuple[str, str]] = frozenset()) -> None:
+    psql(scrub_sql(owners))
     keys = personal_keys(redis(kubectl, "redis-cli --no-auth-warning --scan").splitlines())
     if keys:
         redis(kubectl, "tr '\\n' '\\0' | xargs -0 -r -n 500 redis-cli --no-auth-warning unlink >/dev/null",
               stdin="\n".join(keys) + "\n")
     dropped = drop_queued(work) if work else 0
-    print(f"people: {len(COLUMNS)} columns faked, {len(CLEARED)} table emptied, "
-          f"{len(keys)} Redis keys and {dropped} queued messages dropped")
+    print(f"people: {len(COLUMNS)} columns faked ({len(owners)} owner chat(s) kept), {len(CLEARED)} table "
+          f"emptied, {len(keys)} Redis keys and {dropped} queued messages dropped")
 
 
-def guard(psql) -> list[str]:
-    counts = json.loads(psql(guard_sql()).strip())
+def guard(psql, owners: frozenset[tuple[str, str]] = frozenset()) -> list[str]:
+    counts = json.loads(psql(guard_sql(owners)).strip())
     columns = json.loads(psql(COLUMNS_SQL).strip() or "null") or []
     return findings(counts, unknown_columns(columns))

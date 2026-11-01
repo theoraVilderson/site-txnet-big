@@ -42,7 +42,9 @@ mistake in either reaches no real panel and no real person.
   `COLUMNS` table is rewritten, numbered row by row: phones become
   `+98912` + 7 digits (the ADR's 0912000xxxx, stored as E.164), emails
   `user<n>@staging.invalid`, Telegram and Bale chat ids `9000000000000000 + n`
-  (past Telegram's 52-bit ids, still a safe JS integer), a masked card
+  (past Telegram's 52-bit ids, still a safe JS integer) but the owner's own,
+  `STAGING_OWNER_CHATS` in `.env.dev` (`telegram:<id>,bale:<id>`, OPS-1-ah-p),
+  kept real in both chat columns and accepted by the guard, a masked card
   `000000******0000`. A manual destination's card, sheba, holder, wallet address
   and memo (in `fields` and every payment's `destinationSnapshot`) get fakes
   that pass the kinds' own checks (Luhn, mod 97), a deposit address
@@ -130,6 +132,17 @@ OPS-1-ah-j, `tools/k8s_staging_gate.py`, `tools/staging_botgate.py`).
   `createInvoiceLink`, `getMe`, `getFile`, `getChat*`, `getWebhookInfo`). `setWebhook`,
   `deleteWebhook`, `setMyCommands`, `getUpdates` and the rest get a 403 from the gate itself. So the
   dev bot's webhook stays dev's, whatever code runs in staging. `down` removes it.
+- **Only the owner's chats** (OPS-1-ah-p). A call that writes to a chat (any
+  but `get*`) goes out only when its `chat_id` (query, JSON, form or multipart)
+  is one of `STAGING_OWNER_CHATS`, and a `send*`/`copy*`/`forward*` must name
+  one: a real id the scrub missed is still never written to.
+- **The owner talks to it** (`staging.sh bots`, `tools/k8s_staging_bots.py`),
+  in the foreground like `open`: each dev bot's webhook recorded in
+  `/var/lib/txnet/staging-bots.json`, then removed; its updates long-polled from
+  the host, and only the owner's chats' posted to staging's bot-service (a
+  `kubectl port-forward`, the bot's own webhook secret); the rest dropped. Ctrl-C,
+  or `down` after a crash, sets the webhook back as recorded; a dev stack that
+  starts with none registers its own (`BOT_WEBHOOK_AUTO_REGISTER`).
 - **The services.** The scrub (every service at zero) and the twin after its
   deploy (then restarting them) patch every env Secret a Deployment loads that
   names a bot API: `TELEGRAM_API_BASE`, `BALE_API_BASE` to the gate,
@@ -143,8 +156,9 @@ OPS-1-ah-j, `tools/k8s_staging_gate.py`, `tools/staging_botgate.py`).
 
 ## Proof
 
-`tools/k8s_staging_scrub_test.py` (14), `k8s_staging_people_test.py` (9),
-`k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_gate_test.py` (9), `k8s_staging_data_test.py`,
+`tools/k8s_staging_scrub_test.py` (16), `k8s_staging_people_test.py` (11),
+`k8s_staging_keys_test.py` (16), `k8s_staging_open_test.py` (8), `k8s_staging_gate_test.py` (13),
+`k8s_staging_bots_test.py` (7), `k8s_staging_data_test.py`,
 `k8s_staging_twin_test.py`, `scripts/bundle/test_bundle.py`
 (`test_a_scrub_that_refuses_the_copy_stops_the_restore_before_the_services`).
 2026-10-29, the SQL run on dev's database inside a transaction that was rolled

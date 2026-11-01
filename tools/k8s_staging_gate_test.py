@@ -20,6 +20,7 @@ import staging_botgate as gate  # noqa: E402
 
 TOKEN = "123456:dev"
 HASHES = {"telegram": {hashlib.sha256(TOKEN.encode()).hexdigest()}, "bale": set()}
+OWNERS = {"telegram": {"1"}, "bale": set()}
 
 
 def b64(text: str) -> str:
@@ -68,7 +69,7 @@ class GateTest(unittest.TestCase):
 
         self.upstream = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Upstream)
         base = f"http://127.0.0.1:{self.upstream.server_address[1]}/host/api.telegram.org"
-        self.gate = gate.server(("127.0.0.1", 0), {"telegram": base, "bale": base}, HASHES)
+        self.gate = gate.server(("127.0.0.1", 0), {"telegram": base, "bale": base}, HASHES, OWNERS)
         for s in (self.upstream, self.gate):
             threading.Thread(target=s.serve_forever, daemon=True).start()
 
@@ -77,9 +78,9 @@ class GateTest(unittest.TestCase):
             s.shutdown()
             s.server_close()
 
-    def post(self, path: str) -> tuple[int, bytes]:
+    def post(self, path: str, body: bytes = b'{"chat_id":1}', ctype: str = "application/json") -> tuple[int, bytes]:
         request = urllib.request.Request(f"http://127.0.0.1:{self.gate.server_address[1]}{path}",
-                                         data=b'{"chat_id":1}', headers={"Content-Type": "application/json"})
+                                         data=body, headers={"Content-Type": ctype})
         try:
             with urllib.request.urlopen(request) as r:
                 return r.status, r.read()
@@ -96,6 +97,33 @@ class GateTest(unittest.TestCase):
         self.assertEqual(status, 403)
         self.assertFalse(json.loads(body)["ok"])
         self.assertEqual(self.seen, [])
+
+
+    # OPS-1-ah-p: a call that reaches a chat goes out only to one of the owner's own,
+    # so a real chat id the scrub missed is still never written to.
+    def test_a_send_to_any_other_chat_is_refused_here(self):
+        status, _ = self.post(f"/telegram/bot{TOKEN}/sendMessage", b'{"chat_id":9000000000000001}')
+        self.assertEqual(status, 403)
+        status, _ = self.post(f"/telegram/bot{TOKEN}/sendPhoto?chat_id=2", b"{}")
+        self.assertEqual(status, 403)
+        self.assertEqual(self.seen, [])
+
+    def test_a_send_with_no_chat_is_refused_and_a_read_is_not(self):
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/sendMessage", b'{"text":"x"}')[0], 403)
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/getMe", b"{}")[0], 200)
+        # a membership check names the channel: a read, so it goes out
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/getChatMember",
+                                   b'{"chat_id":"@txnet_channel","user_id":5797569311}')[0], 200)
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/editMessageText", b'{"chat_id":2,"text":"x"}')[0], 403)
+
+    def test_the_chat_is_read_from_a_form_and_from_multipart(self):
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/sendMessage", b"chat_id=1&text=x",
+                                   "application/x-www-form-urlencoded")[0], 200)
+        multipart = (b'--b\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n2\r\n'
+                     b'--b\r\nContent-Disposition: form-data; name="photo"; filename="a.png"\r\n'
+                     b'Content-Type: image/png\r\n\r\nPNG\r\n--b--\r\n')
+        self.assertEqual(self.post(f"/telegram/bot{TOKEN}/sendPhoto", multipart,
+                                   "multipart/form-data; boundary=b")[0], 403)
 
 
 class ServicesTest(unittest.TestCase):
@@ -129,6 +157,12 @@ class RunTest(unittest.TestCase):
         self.assertNotIn(TOKEN, " ".join(argv))
         self.assertIn(hashlib.sha256(TOKEN.encode()).hexdigest(), " ".join(argv))
         self.assertIn("/repo/tools/staging_botgate.py:/gate.py:ro", argv)
+
+    def test_the_owners_chats_are_given_to_it(self):
+        argv = kg.run_argv("img", Path("/repo"), {"telegram": "https://t", "bale": "https://b"},
+                           {"telegram": [TOKEN], "bale": []}, {("telegram", "11"), ("telegram", "12"), ("bale", "3")})
+        self.assertIn("GATE_OWNERS_TELEGRAM=11,12", argv)
+        self.assertIn("GATE_OWNERS_BALE=3", argv)
 
 
 if __name__ == "__main__":

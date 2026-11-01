@@ -16,6 +16,8 @@
     python3 tools/k8s_staging.py open [--port 8443]
                                            the owner's browser in staging, through ssh and a proxy
                                            presenting the origin-pull pair (tools/k8s_staging_open.py, OPS-1-ah-i)
+    python3 tools/k8s_staging.py bots      the owner's chats talk to staging's bots until Ctrl-C
+                                           (tools/k8s_staging_bots.py, OPS-1-ah-p)
     python3 tools/k8s_staging.py status    the container, the node, the egress check
     python3 tools/k8s_staging.py down      container, volume and network removed; the image store kept once
                                            proven to hold only images (tools/k8s_staging_images.py,
@@ -189,8 +191,10 @@ def remove(docker, root: Path, state: Path) -> None:
     for name in paneltest_containers(docker):
         docker(["docker", "network", "disconnect", "-f", NETWORK, name], check=False)
     docker(["docker", "network", "rm", NETWORK], check=False)
-    # Late: k8s_staging_data imports this module.
+    # Late: both import this module.
+    import k8s_staging_bots
     import k8s_staging_data
+    k8s_staging_bots.give_back_dev_bots()  # a `bots` that crashed left the dev webhooks taken
     k8s_staging_data.forget(docker)
     if state.exists():
         if json.loads(state.read_text()).get("devStackWasRunning"):
@@ -342,7 +346,7 @@ def status(docker) -> int:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["up", "import", "restore", "twin", "open", "status", "down"])
+    parser.add_argument("command", choices=["up", "import", "restore", "twin", "open", "bots", "status", "down"])
     parser.add_argument("images", nargs="*")
     parser.add_argument("--at", "--from", dest="at", help="restore, twin: production's data at this "
                         "commit, not the bundle's")
@@ -369,6 +373,9 @@ def main(argv=None) -> int:
         elif args.command == "open":
             import k8s_staging_open as ko  # late: it imports this module
             ko.open_staging(docker_run, args.port)
+        elif args.command == "bots":
+            import k8s_staging_bots as kb  # late: it imports this module
+            kb.serve_bots(docker_run)
         elif args.command == "status":
             return status(docker_run)
         else:
