@@ -87,7 +87,7 @@ does not own, which is a bug to surface.
 ## Backup and disk (F-414-m, ADR-0120)
 
 - **`object-backup`** (`dev-docker/compose/object-backup.yml`, `dev-docker/backup/object-backup.sh`; F-018-m2-c, replaced restic): nightly at `OBJECT_BACKUP_AT` (UTC, 23:00), `mc mirror --overwrite --remove` of the files — the volume on `local`, the bucket on `s3` — into `OBJECT_BACKUP_S3_BUCKET` (`txnet-backups`, B7's) under `objects/<stack>/`, `*.tmp` skipped; then every current copy's compliance lock renewed for `OBJECT_BACKUP_S3_LOCK_DAYS` (7), on each object since Arvan applies no bucket default. A deleted file's copy is a delete marker over a version locked at least 7 more days, then the bucket's noncurrent rule removes it. An empty source beside a full backup is refused, never mirrored; a stack with no file at all is a success with nothing to lock (production 2026-11-01 reported FAILED every night, `test_object_backup.py`). Unset `OBJECT_BACKUP_S3_*` fails every run, so the stale alert fires. Writes `txnet_object_backup_last_run_success` / `_last_success_timestamp_seconds` to node-exporter's textfile directory (`NODE_TEXTFILE_DIR`). A manual run: `docker exec txnet-object-backup sh /usr/local/bin/object-backup.sh --now`. Container check: the loop's heartbeat (hosting H24). Proven 2026-10-30 on dev: 10 files, 834 KiB, all `COMPLIANCE`, a delete refused, a second run copied nothing, an empty source refused.
-- **The bucket itself** (`txnet-main-data`, user 2026-10-30): versioning on, noncurrent versions kept 30 days (a file deleted or replaced by mistake comes back), unfinished multipart uploads aborted after a day; no object lock, so a user's delete is a real delete.
+- **The bucket itself** (`txnet-main-data` on dev, `txnet-prod-data` on production; user 2026-10-30, 2026-11-01): versioning on, noncurrent versions kept 30 days (a file deleted or replaced by mistake comes back), unfinished multipart uploads aborted after a day; no object lock, so a user's delete is a real delete.
 - **Restore:** `mc mirror` from `txnet-backups/objects/<stack>/` back into the volume or the bucket (`mc cp --rewind <time>` for an earlier state), and check files against `stored_object.sha256` — the same check a move to S3 makes.
 - **Alerts** (`monitoring/config-dev/storage.rules.yml`): `DiskSpaceLow` (< 15% free), `DiskSpaceCritical` (< 5%), `DiskWillFillIn24h`, `ObjectBackupStale` (no success in 36 h, or none on record), `ObjectBackupFailed`.
 
@@ -115,7 +115,7 @@ does not own, which is a bug to surface.
 | variable | meaning |
 |---|---|
 | `OBJECT_STORAGE_DRIVER` | `local` or `s3`; a missing `s3` setting stops the service at boot, named |
-| `OBJECT_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | the `s3` driver's bucket (Arvan `hot.ir-central1.arvanstorage.ir`, `ir-central1`, `txnet-main-data`; no object lock, user 2026-10-30) |
+| `OBJECT_STORAGE_S3_ENDPOINT` / `_REGION` / `_BUCKET` / `_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` | the `s3` driver's bucket (Arvan `hot.ir-central1.arvanstorage.ir`, `ir-central1`; no object lock, user 2026-10-30): `txnet-main-data` for dev, `txnet-prod-data` for production — one bucket per stack, so a test file never shares a key or a backup with a customer's (user 2026-11-01) |
 | `OBJECT_STORAGE_S3_PATH_STYLE` | `true` (default), `false` for AWS virtual-hosted buckets |
 | `OBJECT_STORAGE_LOCAL_ROOT` | the volume; `/data/objects`, mounted from `object_storage` in compose |
 | `OBJECT_STORAGE_SIGNING_SECRET` | HMAC key of signed URLs, ≥32 characters; the same in tenant-service and every service that mints one. The three `OBJECT_STORAGE_*` and the scan variables are declared once, `OBJECT_STORAGE_ENV` / `VIRUS_SCAN_ENV` (`object-storage/env.ts`), and spread into each service's schema |
@@ -128,7 +128,7 @@ tenant, support, billing, bot and object-backup; `copy` again; `verify --repair`
 against its sha256; a mismatch is copied again only from volume bytes that match the row; a row left
 unchecked is bad). No row changes; the volume is kept for a way back. Done on dev 2026-10-30: 10 rows, 10
 match; a ticket attachment read back through `private-files` with its row's sha256; the media route
-answers a signed Arvan URL. Production follows NIN-1-i3 (F-018-m2-d2); nginx, the volume mounts and the
+answers a signed Arvan URL. Production follows NIN-1-i3 (F-018-m2-d2) into its own bucket, `txnet-prod-data`; nginx, the volume mounts and the
 K17 pin go after it (F-018-m2-e).
 
 ## Not done here
